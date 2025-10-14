@@ -11,15 +11,10 @@ FROM python:3.9-slim AS backend-builder
 WORKDIR /app
 
 # Install build dependencies for psutil and other packages
-# Additional dependencies for ARM compilation (bcrypt, cryptography)
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     make \
-    automake \
-    autoconf \
-    libtool \
-    pkg-config \
     python3-dev \
     libffi-dev \
     libssl-dev \
@@ -30,9 +25,7 @@ RUN apt-get update && apt-get install -y \
 RUN pip install --upgrade pip setuptools wheel
 
 COPY requirements.txt .
-# Install packages
-# - uvloop removed to avoid ARM compilation issues
-# - Using older cryptography (3.4.8) and bcrypt (3.2.2) that don't require Rust on ARM v7
+# Install Python packages
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Production stage

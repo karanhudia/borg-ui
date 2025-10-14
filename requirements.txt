@@ -1,18 +1,16 @@
 fastapi==0.104.1
 pydantic==2.5.0
 pydantic-settings==2.1.0
-# Use uvicorn without uvloop on ARM to avoid compilation issues
-uvicorn==0.24.0
+uvicorn[standard]==0.24.0
 gunicorn==21.2.0
 python-multipart==0.0.6
-# Use older versions of cryptography/bcrypt that don't require Rust (ARM v7 compatibility)
-cryptography==3.4.8
-bcrypt==3.2.2
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
 sqlalchemy==2.0.23
 alembic==1.12.1
 structlog==23.2.0
+cryptography==41.0.7
 psutil==5.9.6
 pyyaml==6.0.1
 python-dotenv==1.0.0
