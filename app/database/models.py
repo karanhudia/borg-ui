@@ -38,6 +38,11 @@ class Repository(Base):
     username = Column(String, nullable=True)  # SSH username
     ssh_key_id = Column(Integer, ForeignKey("ssh_keys.id"), nullable=True)  # Associated SSH key
     
+    # New fields for authentication status
+    auth_status = Column(String, default="unknown")  # connected, failed, testing, unknown
+    last_auth_test = Column(DateTime, nullable=True)
+    auth_error_message = Column(Text, nullable=True)
+    
     # Relationships
     ssh_key = relationship("SSHKey", back_populates="repositories")
 
@@ -56,6 +61,25 @@ class SSHKey(Base):
     
     # Relationships
     repositories = relationship("Repository", back_populates="ssh_key")
+    connections = relationship("SSHConnection", back_populates="ssh_key", cascade="all, delete-orphan")
+
+class SSHConnection(Base):
+    __tablename__ = "ssh_connections"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    ssh_key_id = Column(Integer, ForeignKey("ssh_keys.id"))
+    host = Column(String)
+    username = Column(String)
+    port = Column(Integer, default=22)
+    status = Column(String, default="unknown")  # connected, failed, testing, unknown
+    last_test = Column(DateTime, nullable=True)
+    last_success = Column(DateTime, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    ssh_key = relationship("SSHKey", back_populates="connections")
 
 class BackupJob(Base):
     __tablename__ = "backup_jobs"

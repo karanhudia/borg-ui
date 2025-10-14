@@ -63,6 +63,8 @@ RUN apt-get update && apt-get install -y \
     # File system tools
     tree \
     ncdu \
+    # SSH deployment tools
+    sshpass \
     # Cleanup
     && rm -rf /var/lib/apt/lists/*
 

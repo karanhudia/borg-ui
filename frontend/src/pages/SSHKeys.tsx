@@ -1,109 +1,198 @@
-import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
+import React, { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from 'react-query'
 import { 
+  Key, 
   Plus, 
   Edit, 
   Trash2, 
-  Key,
-  Wifi,
-  Download,
-  Upload
-} from 'lucide-react';
-import { sshKeysAPI } from '../services/api';
-import { toast } from 'react-hot-toast';
-import { useAuth } from '../hooks/useAuth';
+  TestTube, 
+  Wifi, 
+  Clock,
+  CheckCircle,
+  AlertTriangle,
+  XCircle,
+  Settings,
+  Rocket
+} from 'lucide-react'
+import { toast } from 'react-hot-toast'
+import { sshKeysAPI } from '../services/api'
 
 interface SSHKey {
-  id: number;
-  name: string;
-  description: string | null;
-  key_type: string;
-  public_key: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string | null;
+  id: number
+  name: string
+  description: string | null
+  key_type: string
+  public_key: string
+  is_active: boolean
+  created_at: string
+  updated_at: string | null
+  connection_count: number
+  active_connections: number
 }
 
-const SSHKeys: React.FC = () => {
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showGenerateModal, setShowGenerateModal] = useState(false);
-  const [showTestModal, setShowTestModal] = useState(false);
-  const [editingKey, setEditingKey] = useState<SSHKey | null>(null);
+interface SSHConnection {
+  id: number
+  ssh_key_id: number
+  ssh_key_name: string
+  host: string
+  username: string
+  port: number
+  status: string
+  last_test: string | null
+  last_success: string | null
+  error_message: string | null
+  created_at: string
+}
 
-  // Get SSH keys
-  const { data: sshKeysData, isLoading } = useQuery({
+type TabType = 'keys' | 'connections' | 'quick-setup' | 'advanced'
+
+const SSHKeys: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<TabType>('keys')
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showGenerateModal, setShowGenerateModal] = useState(false)
+  const [showQuickSetupModal, setShowQuickSetupModal] = useState(false)
+  const [showDeployModal, setShowDeployModal] = useState(false)
+  const [showTestModal, setShowTestModal] = useState(false)
+  const [editingKey, setEditingKey] = useState<SSHKey | null>(null)
+  const [selectedKey, setSelectedKey] = useState<SSHKey | null>(null)
+
+  const queryClient = useQueryClient()
+
+  // Queries
+  const { data: sshKeysData, isLoading: loadingKeys } = useQuery({
     queryKey: ['ssh-keys'],
     queryFn: sshKeysAPI.getSSHKeys,
-  });
+  })
 
-  // Create SSH key mutation
+  const { data: connectionsData, isLoading: loadingConnections } = useQuery({
+    queryKey: ['ssh-connections'],
+    queryFn: sshKeysAPI.getSSHConnections,
+  })
+
+  // Mutations
   const createSSHKeyMutation = useMutation({
     mutationFn: sshKeysAPI.createSSHKey,
     onSuccess: () => {
-      toast.success('SSH key created successfully');
-      queryClient.invalidateQueries({ queryKey: ['ssh-keys'] });
-      setShowCreateModal(false);
+      queryClient.invalidateQueries(['ssh-keys'])
+      setShowCreateModal(false)
+      toast.success('SSH key created successfully!')
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to create SSH key');
+      toast.error(error.response?.data?.detail || 'Failed to create SSH key')
     },
-  });
+  })
 
-  // Generate SSH key mutation
   const generateSSHKeyMutation = useMutation({
     mutationFn: sshKeysAPI.generateSSHKey,
     onSuccess: () => {
-      toast.success('SSH key generated successfully');
-      queryClient.invalidateQueries({ queryKey: ['ssh-keys'] });
-      setShowGenerateModal(false);
+      queryClient.invalidateQueries(['ssh-keys'])
+      setShowGenerateModal(false)
+      toast.success('SSH key generated successfully!')
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to generate SSH key');
+      toast.error(error.response?.data?.detail || 'Failed to generate SSH key')
     },
-  });
+  })
 
-  // Update SSH key mutation
-  const updateSSHKeyMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) =>
-      sshKeysAPI.updateSSHKey(id, data),
-    onSuccess: () => {
-      toast.success('SSH key updated successfully');
-      queryClient.invalidateQueries({ queryKey: ['ssh-keys'] });
-      setEditingKey(null);
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to update SSH key');
-    },
-  });
-
-  // Delete SSH key mutation
-  const deleteSSHKeyMutation = useMutation({
-    mutationFn: sshKeysAPI.deleteSSHKey,
-    onSuccess: () => {
-      toast.success('SSH key deleted successfully');
-      queryClient.invalidateQueries({ queryKey: ['ssh-keys'] });
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to delete SSH key');
-    },
-  });
-
-  // Test SSH connection mutation
-  const testConnectionMutation = useMutation({
-    mutationFn: sshKeysAPI.testSSHConnection,
+  const quickSetupMutation = useMutation({
+    mutationFn: sshKeysAPI.quickSetup,
     onSuccess: (data: any) => {
-      if (data.data.connection_test.success) {
-        toast.success('SSH connection successful!');
+      queryClient.invalidateQueries(['ssh-keys'])
+      queryClient.invalidateQueries(['ssh-connections'])
+      setShowQuickSetupModal(false)
+      
+      // Show appropriate message based on the result
+      if (data.success) {
+        toast.success('SSH key generated and deployed successfully!')
       } else {
-        toast.error(`SSH connection failed: ${data.data.connection_test.error}`);
+        // Key was generated but deployment failed
+        toast.error(`SSH key generated but deployment failed: ${data.detail || 'Connection failed'}`)
+        // Show a more detailed message about what happened
+        setTimeout(() => {
+          toast.error('You can retry the connection from the Connections tab', { duration: 5000 })
+        }, 1000)
       }
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to test SSH connection');
+      toast.error(error.response?.data?.detail || 'Quick setup failed')
     },
-  });
+  })
+
+  const deploySSHKeyMutation = useMutation({
+    mutationFn: ({ keyId, data }: { keyId: number; data: any }) => 
+      sshKeysAPI.deploySSHKey(keyId, data),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries(['ssh-connections'])
+      setShowDeployModal(false)
+      if (data.success) {
+        toast.success('SSH key deployed successfully!')
+      } else {
+        toast.error('SSH key deployment failed')
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to deploy SSH key')
+    },
+  })
+
+  const testConnectionMutation = useMutation({
+    mutationFn: ({ keyId, data }: { keyId: number; data: any }) => 
+      sshKeysAPI.testSSHConnection(keyId, data),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries(['ssh-connections'])
+      setShowTestModal(false)
+      if (data.success) {
+        toast.success('SSH connection successful!')
+      } else {
+        toast.error(`SSH connection failed: ${data.connection?.error_message || 'Unknown error'}`)
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to test SSH connection')
+    },
+  })
+
+  const retryConnectionMutation = useMutation({
+    mutationFn: ({ keyId, data }: { keyId: number; data: any }) => 
+      sshKeysAPI.testSSHConnection(keyId, data),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries(['ssh-connections'])
+      if (data.success) {
+        toast.success('Connection re-established successfully!')
+      } else {
+        toast.error(`Connection retry failed: ${data.connection?.error_message || 'Unknown error'}`)
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to retry connection')
+    },
+  })
+
+  const updateSSHKeyMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => 
+      sshKeysAPI.updateSSHKey(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['ssh-keys'])
+      setShowCreateModal(false)
+      setEditingKey(null)
+      toast.success('SSH key updated successfully!')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to update SSH key')
+    },
+  })
+
+  const deleteSSHKeyMutation = useMutation({
+    mutationFn: sshKeysAPI.deleteSSHKey,
+    onSuccess: () => {
+      queryClient.invalidateQueries(['ssh-keys'])
+      queryClient.invalidateQueries(['ssh-connections'])
+      toast.success('SSH key deleted successfully!')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to delete SSH key')
+    },
+  })
 
   // Form states
   const [createForm, setCreateForm] = useState({
@@ -112,330 +201,672 @@ const SSHKeys: React.FC = () => {
     key_type: 'rsa',
     public_key: '',
     private_key: '',
-  });
+  })
 
   const [generateForm, setGenerateForm] = useState({
     name: '',
     description: '',
     key_type: 'rsa',
-  });
+  })
+
+  const [quickSetupForm, setQuickSetupForm] = useState({
+    name: '',
+    key_type: 'ed25519',
+    description: '',
+    comment: '',
+    host: '',
+    username: '',
+    port: 22,
+    password: '',
+    skip_deployment: false,
+  })
+
+  const [deployForm, setDeployForm] = useState({
+    host: '',
+    username: '',
+    port: 22,
+    password: '',
+  })
 
   const [testForm, setTestForm] = useState({
     host: '',
     username: '',
     port: 22,
-  });
+  })
 
   const [editForm, setEditForm] = useState({
     name: '',
     description: '',
     is_active: true,
-  });
+  })
 
+  // Event handlers
   const handleCreateSSHKey = (e: React.FormEvent) => {
-    e.preventDefault();
-    createSSHKeyMutation.mutate(createForm);
-  };
+    e.preventDefault()
+    createSSHKeyMutation.mutate(createForm)
+  }
 
   const handleGenerateSSHKey = (e: React.FormEvent) => {
-    e.preventDefault();
-    generateSSHKeyMutation.mutate(generateForm);
-  };
+    e.preventDefault()
+    generateSSHKeyMutation.mutate(generateForm)
+  }
+
+  const handleQuickSetup = (e: React.FormEvent) => {
+    e.preventDefault()
+    quickSetupMutation.mutate(quickSetupForm)
+  }
+
+  const handleDeploySSHKey = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (selectedKey) {
+      deploySSHKeyMutation.mutate({
+        keyId: selectedKey.id,
+        data: deployForm
+      })
+    }
+  }
+
+  const handleTestConnection = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (selectedKey) {
+      testConnectionMutation.mutate({
+        keyId: selectedKey.id,
+        data: testForm
+      })
+    }
+  }
+
+  const handleRetryConnection = (connection: SSHConnection) => {
+    // Find the SSH key for this connection
+    const sshKey = sshKeys.find((key: SSHKey) => key.id === connection.ssh_key_id)
+    if (sshKey) {
+      retryConnectionMutation.mutate({
+        keyId: connection.ssh_key_id,
+        data: {
+          host: connection.host,
+          username: connection.username,
+          port: connection.port
+        }
+      })
+    } else {
+      toast.error('SSH key not found for this connection')
+    }
+  }
 
   const handleUpdateSSHKey = (e: React.FormEvent) => {
-    e.preventDefault();
+    e.preventDefault()
     if (editingKey) {
       updateSSHKeyMutation.mutate({
         id: editingKey.id,
         data: editForm,
-      });
+      })
     }
-  };
+  }
 
   const handleDeleteSSHKey = (sshKey: SSHKey) => {
     if (window.confirm(`Are you sure you want to delete SSH key "${sshKey.name}"?`)) {
-      deleteSSHKeyMutation.mutate(sshKey.id);
+      deleteSSHKeyMutation.mutate(sshKey.id)
     }
-  };
+  }
 
-  const handleTestConnection = (keyId: number) => {
-    testConnectionMutation.mutate({
-      key_id: keyId,
-      host: testForm.host,
-      username: testForm.username,
-      port: testForm.port,
-    });
-  };
-
+  // Modal handlers
   const openCreateModal = () => {
-    setShowCreateModal(true);
+    setShowCreateModal(true)
     setCreateForm({
       name: '',
       description: '',
       key_type: 'rsa',
       public_key: '',
       private_key: '',
-    });
-  };
+    })
+  }
 
   const openGenerateModal = () => {
-    setShowGenerateModal(true);
+    setShowGenerateModal(true)
     setGenerateForm({
       name: '',
       description: '',
       key_type: 'rsa',
-    });
-  };
+    })
+  }
 
-  const openTestModal = () => {
-    setShowTestModal(true);
+  const openQuickSetupModal = () => {
+    setShowQuickSetupModal(true)
+    setQuickSetupForm({
+      name: '',
+      key_type: 'ed25519',
+      description: '',
+      comment: '',
+      host: '',
+      username: '',
+      port: 22,
+      password: '',
+      skip_deployment: false,
+    })
+  }
+
+  const openDeployModal = (sshKey: SSHKey) => {
+    setSelectedKey(sshKey)
+    setShowDeployModal(true)
+    setDeployForm({
+      host: '',
+      username: '',
+      port: 22,
+      password: '',
+    })
+  }
+
+  const openTestModal = (sshKey: SSHKey) => {
+    setSelectedKey(sshKey)
+    setShowTestModal(true)
     setTestForm({
       host: '',
       username: '',
       port: 22,
-    });
-  };
+    })
+  }
 
   const openEditModal = (sshKey: SSHKey) => {
-    setEditingKey(sshKey);
+    setEditingKey(sshKey)
     setEditForm({
       name: sshKey.name,
       description: sshKey.description || '',
       is_active: sshKey.is_active,
-    });
-  };
+    })
+  }
 
+  // Utility functions
   const getKeyTypeIcon = (keyType: string) => {
     switch (keyType) {
       case 'rsa':
-        return <Key className="w-4 h-4 text-blue-500" />;
+        return <Key className="w-4 h-4 text-blue-500" />
       case 'ed25519':
-        return <Key className="w-4 h-4 text-green-500" />;
+        return <Key className="w-4 h-4 text-green-500" />
       case 'ecdsa':
-        return <Key className="w-4 h-4 text-purple-500" />;
+        return <Key className="w-4 h-4 text-purple-500" />
       default:
-        return <Key className="w-4 h-4 text-gray-500" />;
+        return <Key className="w-4 h-4 text-gray-500" />
     }
-  };
+  }
 
   const getKeyTypeLabel = (keyType: string) => {
     switch (keyType) {
       case 'rsa':
-        return 'RSA';
+        return 'RSA'
       case 'ed25519':
-        return 'Ed25519';
+        return 'Ed25519'
       case 'ecdsa':
-        return 'ECDSA';
+        return 'ECDSA'
       default:
-        return keyType.toUpperCase();
+        return keyType.toUpperCase()
     }
-  };
+  }
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'connected':
+        return <CheckCircle className="w-4 h-4 text-green-500" />
+      case 'failed':
+        return <XCircle className="w-4 h-4 text-red-500" />
+      case 'testing':
+        return <Clock className="w-4 h-4 text-yellow-500" />
+      default:
+        return <AlertTriangle className="w-4 h-4 text-gray-500" />
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'connected':
+        return 'text-green-600 bg-green-100'
+      case 'failed':
+        return 'text-red-600 bg-red-100'
+      case 'testing':
+        return 'text-yellow-600 bg-yellow-100'
+      default:
+        return 'text-gray-600 bg-gray-100'
+    }
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString()
+  }
+
+  const sshKeys = sshKeysData?.data?.ssh_keys || []
+  const connections = connectionsData?.data?.connections || []
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">SSH Key Management</h1>
-          <p className="text-gray-600">Manage SSH keys for remote repository access</p>
+          <h1 className="text-2xl font-bold text-gray-900">SSH Keys Management</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Generate, manage, and deploy SSH keys for remote repository access
+          </p>
         </div>
-        {user?.is_admin && (
-          <div className="flex space-x-3">
-            <button
-              onClick={openGenerateModal}
-              className="flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Generate Key
-            </button>
-            <button
-              onClick={openCreateModal}
-              className="flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
-            >
-              <Upload className="w-4 h-4 mr-2" />
-              Import Key
-            </button>
-          </div>
-        )}
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={openQuickSetupModal}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            <Rocket className="w-4 h-4 mr-2" />
+            Quick Setup
+          </button>
+          <button
+            onClick={openGenerateModal}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Generate Key
+          </button>
+        </div>
       </div>
 
-      {/* SSH Keys List */}
-      {isLoading ? (
-        <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading SSH keys...</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {sshKeysData?.data?.ssh_keys?.map((sshKey: SSHKey) => (
-            <div key={sshKey.id} className="bg-white rounded-lg border shadow-sm">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-2">
-                    {getKeyTypeIcon(sshKey.key_type)}
-                    <h3 className="text-lg font-medium text-gray-900">{sshKey.name}</h3>
-                  </div>
-                  <div className="flex items-center space-x-1">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                      sshKey.is_active
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {sshKey.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-                </div>
+      {/* Tabs */}
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('keys')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'keys'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <Key className="w-4 h-4 inline mr-2" />
+            SSH Keys ({sshKeys.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('connections')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'connections'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <Wifi className="w-4 h-4 inline mr-2" />
+            Connections ({connections.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('advanced')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'advanced'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <Settings className="w-4 h-4 inline mr-2" />
+            Advanced
+          </button>
+        </nav>
+      </div>
 
-                <div className="space-y-3">
-                  {sshKey.description && (
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Description</label>
-                      <p className="text-sm text-gray-900">{sshKey.description}</p>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Key Type</label>
-                    <p className="text-sm text-gray-900">{getKeyTypeLabel(sshKey.key_type)}</p>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Public Key</label>
-                    <div className="flex items-center space-x-2">
-                      <p className="text-sm text-gray-900 font-mono truncate flex-1">
-                        {sshKey.public_key}
-                      </p>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(sshKey.public_key)}
-                        className="text-blue-600 hover:text-blue-800"
-                        title="Copy public key"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Created</label>
-                    <p className="text-sm text-gray-900">
-                      {new Date(sshKey.created_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                {user?.is_admin && (
-                  <div className="mt-6 pt-4 border-t border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => openTestModal()}
-                          disabled={testConnectionMutation.isLoading}
-                          className="flex items-center px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
-                        >
-                          <Wifi className="w-3 h-3 mr-1" />
-                          Test
-                        </button>
-                      </div>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => openEditModal(sshKey)}
-                          className="flex items-center px-2 py-1 text-xs font-medium text-gray-600 hover:text-gray-800"
-                        >
-                          <Edit className="w-3 h-3 mr-1" />
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteSSHKey(sshKey)}
-                          className="flex items-center px-2 py-1 text-xs font-medium text-red-600 hover:text-red-800"
-                        >
-                          <Trash2 className="w-3 h-3 mr-1" />
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+      {/* Tab Content */}
+      {activeTab === 'keys' && (
+        <div className="space-y-6">
+          {loadingKeys ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+              <p className="mt-2 text-gray-600">Loading SSH keys...</p>
             </div>
-          ))}
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {sshKeys.map((sshKey: SSHKey) => (
+                <div key={sshKey.id} className="bg-white rounded-lg border shadow-sm">
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-2">
+                        {getKeyTypeIcon(sshKey.key_type)}
+                        <h3 className="text-lg font-medium text-gray-900">{sshKey.name}</h3>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          sshKey.is_active
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {sshKey.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {sshKey.description && (
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">Description</label>
+                          <p className="text-sm text-gray-900">{sshKey.description}</p>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Key Type</label>
+                        <p className="text-sm text-gray-900">{getKeyTypeLabel(sshKey.key_type)}</p>
+                      </div>
+
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Connections</label>
+                        <p className="text-sm text-gray-900">
+                          {sshKey.active_connections} active / {sshKey.connection_count} total
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Created</label>
+                        <p className="text-sm text-gray-900">
+                          {formatDate(sshKey.created_at)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="mt-6 pt-4 border-t border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => openDeployModal(sshKey)}
+                            className="flex items-center px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-800"
+                          >
+                            <Rocket className="w-3 h-3 mr-1" />
+                            Deploy
+                          </button>
+                          <button
+                            onClick={() => openTestModal(sshKey)}
+                            className="flex items-center px-2 py-1 text-xs font-medium text-green-600 hover:text-green-800"
+                          >
+                            <TestTube className="w-3 h-3 mr-1" />
+                            Test
+                          </button>
+                        </div>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => openEditModal(sshKey)}
+                            className="flex items-center px-2 py-1 text-xs font-medium text-gray-600 hover:text-gray-800"
+                          >
+                            <Edit className="w-3 h-3 mr-1" />
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSSHKey(sshKey)}
+                            className="flex items-center px-2 py-1 text-xs font-medium text-red-600 hover:text-red-800"
+                          >
+                            <Trash2 className="w-3 h-3 mr-1" />
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Create SSH Key Modal */}
-      {showCreateModal && (
+      {activeTab === 'connections' && (
+        <div className="space-y-6">
+          {loadingConnections ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+              <p className="mt-2 text-gray-600">Loading connections...</p>
+            </div>
+          ) : (
+            <>
+              {connections.filter((c: SSHConnection) => c.status === 'failed').length > 0 && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                  <div className="flex">
+                    <AlertTriangle className="w-5 h-5 text-yellow-400 mr-2 mt-0.5" />
+                    <div>
+                      <h3 className="text-sm font-medium text-yellow-800">
+                        Failed Connections Detected
+                      </h3>
+                      <p className="text-sm text-yellow-700 mt-1">
+                        Some connections have failed. You can retry them using the "Retry" button next to each failed connection.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div className="space-y-4">
+                {connections.map((connection: SSHConnection) => (
+                  <div key={connection.id} className="bg-white rounded-lg border shadow-sm p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        {getStatusIcon(connection.status)}
+                        <div>
+                          <h3 className="text-lg font-medium text-gray-900">
+                            {connection.host}:{connection.port} ({connection.username})
+                          </h3>
+                          <p className="text-sm text-gray-500">
+                            Key: {connection.ssh_key_name}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(connection.status)}`}>
+                          {connection.status}
+                        </span>
+                        {connection.status === 'failed' && (
+                          <button
+                            onClick={() => handleRetryConnection(connection)}
+                            disabled={retryConnectionMutation.isLoading}
+                            className="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                          >
+                            {retryConnectionMutation.isLoading ? (
+                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-1"></div>
+                            ) : (
+                              <TestTube className="w-3 h-3 mr-1" />
+                            )}
+                            {retryConnectionMutation.isLoading ? 'Retrying...' : 'Retry'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <label className="text-gray-500">Last Test</label>
+                        <p className="font-medium text-gray-900">
+                          {connection.last_test ? formatDate(connection.last_test) : 'Never'}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-gray-500">Last Success</label>
+                        <p className="font-medium text-gray-900">
+                          {connection.last_success ? formatDate(connection.last_success) : 'Never'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {connection.error_message && (
+                      <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                        <label className="text-sm font-medium text-red-800">Error</label>
+                        <p className="text-sm text-red-700 mt-1">{connection.error_message}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'advanced' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-lg border shadow-sm p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Advanced Operations</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <button
+                onClick={openGenerateModal}
+                className="flex items-center p-4 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                <Plus className="w-6 h-6 text-blue-500 mr-3" />
+                <div className="text-left">
+                  <h4 className="font-medium text-gray-900">Generate New Key</h4>
+                  <p className="text-sm text-gray-500">Create a new SSH key pair</p>
+                </div>
+              </button>
+              <button
+                onClick={openCreateModal}
+                className="flex items-center p-4 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                <Key className="w-6 h-6 text-green-500 mr-3" />
+                <div className="text-left">
+                  <h4 className="font-medium text-gray-900">Import Key</h4>
+                  <p className="text-sm text-gray-500">Import existing SSH key</p>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg border shadow-sm p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Statistics</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-indigo-600">{sshKeys.length}</div>
+                <div className="text-sm text-gray-500">Total Keys</div>
+              </div>
+              <div className="text-center">
+                              <div className="text-2xl font-bold text-green-600">
+                {connections.filter((c: SSHConnection) => c.status === 'connected').length}
+              </div>
+              <div className="text-sm text-gray-500">Active Connections</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-red-600">
+                {connections.filter((c: SSHConnection) => c.status === 'failed').length}
+              </div>
+                <div className="text-sm text-gray-500">Failed Connections</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modals */}
+      {showQuickSetupModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
           <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
             <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Import SSH Key</h3>
-              <form onSubmit={handleCreateSSHKey} className="space-y-4">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">🚀 Quick SSH Setup</h3>
+              <form onSubmit={handleQuickSetup} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Key Name</label>
                   <input
                     type="text"
-                    value={createForm.name}
-                    onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    value={quickSetupForm.name}
+                    onChange={(e) => setQuickSetupForm({ ...quickSetupForm, name: e.target.value })}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="odroid-to-raspberry"
                     required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                  <input
-                    type="text"
-                    value={createForm.description}
-                    onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Key Type</label>
                   <select
-                    value={createForm.key_type}
-                    onChange={(e) => setCreateForm({ ...createForm, key_type: e.target.value })}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    value={quickSetupForm.key_type}
+                    onChange={(e) => setQuickSetupForm({ ...quickSetupForm, key_type: e.target.value })}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                   >
+                    <option value="ed25519">Ed25519 (Recommended)</option>
                     <option value="rsa">RSA</option>
-                    <option value="ed25519">Ed25519</option>
                     <option value="ecdsa">ECDSA</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Public Key</label>
-                  <textarea
-                    value={createForm.public_key}
-                    onChange={(e) => setCreateForm({ ...createForm, public_key: e.target.value })}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    rows={3}
-                    placeholder="ssh-rsa AAAAB3NzaC1yc2E..."
-                    required
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>
+                  <input
+                    type="text"
+                    value={quickSetupForm.description}
+                    onChange={(e) => setQuickSetupForm({ ...quickSetupForm, description: e.target.value })}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="Key for backup server"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Private Key</label>
-                  <textarea
-                    value={createForm.private_key}
-                    onChange={(e) => setCreateForm({ ...createForm, private_key: e.target.value })}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    rows={6}
-                    placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
-                    required
+                <div className="flex items-center pt-2">
+                  <input
+                    type="checkbox"
+                    checked={quickSetupForm.skip_deployment}
+                    onChange={(e) => setQuickSetupForm({ ...quickSetupForm, skip_deployment: e.target.checked })}
+                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                    id="skip-deployment"
                   />
+                  <label htmlFor="skip-deployment" className="ml-2 text-sm text-gray-700">
+                    Only generate key (skip deployment)
+                  </label>
                 </div>
+                {!quickSetupForm.skip_deployment && (
+                  <>
+                    <div className="pt-2 border-t border-gray-200">
+                      <p className="text-sm font-medium text-gray-700 mb-3">Deployment Settings</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Host</label>
+                      <input
+                        type="text"
+                        value={quickSetupForm.host}
+                        onChange={(e) => setQuickSetupForm({ ...quickSetupForm, host: e.target.value })}
+                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                        placeholder="192.168.1.250"
+                        required={!quickSetupForm.skip_deployment}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                      <input
+                        type="text"
+                        value={quickSetupForm.username}
+                        onChange={(e) => setQuickSetupForm({ ...quickSetupForm, username: e.target.value })}
+                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                        placeholder="karanhudia"
+                        required={!quickSetupForm.skip_deployment}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Port</label>
+                      <input
+                        type="number"
+                        value={quickSetupForm.port}
+                        onChange={(e) => setQuickSetupForm({ ...quickSetupForm, port: parseInt(e.target.value) })}
+                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                        min="1"
+                        max="65535"
+                        required={!quickSetupForm.skip_deployment}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                      <input
+                        type="password"
+                        value={quickSetupForm.password}
+                        onChange={(e) => setQuickSetupForm({ ...quickSetupForm, password: e.target.value })}
+                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                        placeholder="••••••••"
+                        required={!quickSetupForm.skip_deployment}
+                      />
+                    </div>
+                  </>
+                )}
                 <div className="flex justify-end space-x-3">
                   <button
                     type="button"
-                    onClick={() => setShowCreateModal(false)}
+                    onClick={() => setShowQuickSetupModal(false)}
                     className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    disabled={createSSHKeyMutation.isLoading}
-                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+                    disabled={quickSetupMutation.isLoading}
+                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
                   >
-                    {createSSHKeyMutation.isLoading ? 'Creating...' : 'Create'}
+                    {quickSetupMutation.isLoading
+                      ? 'Setting up...'
+                      : quickSetupForm.skip_deployment
+                        ? 'Generate Key'
+                        : 'Generate & Deploy'}
                   </button>
                 </div>
               </form>
@@ -444,7 +875,6 @@ const SSHKeys: React.FC = () => {
         </div>
       )}
 
-      {/* Generate SSH Key Modal */}
       {showGenerateModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
           <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
@@ -504,13 +934,85 @@ const SSHKeys: React.FC = () => {
         </div>
       )}
 
-      {/* Test Connection Modal */}
-      {showTestModal && (
+      {showDeployModal && selectedKey && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
           <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
             <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Test SSH Connection</h3>
-              <form onSubmit={(e) => { e.preventDefault(); handleTestConnection(1); }} className="space-y-4">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Deploy SSH Key: {selectedKey.name}</h3>
+              <form onSubmit={handleDeploySSHKey} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Host</label>
+                  <input
+                    type="text"
+                    value={deployForm.host}
+                    onChange={(e) => setDeployForm({ ...deployForm, host: e.target.value })}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="192.168.1.250"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                  <input
+                    type="text"
+                    value={deployForm.username}
+                    onChange={(e) => setDeployForm({ ...deployForm, username: e.target.value })}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="karanhudia"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Port</label>
+                  <input
+                    type="number"
+                    value={deployForm.port}
+                    onChange={(e) => setDeployForm({ ...deployForm, port: parseInt(e.target.value) })}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    min="1"
+                    max="65535"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                  <input
+                    type="password"
+                    value={deployForm.password}
+                    onChange={(e) => setDeployForm({ ...deployForm, password: e.target.value })}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+                <div className="flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeployModal(false)}
+                    className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={deploySSHKeyMutation.isLoading}
+                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {deploySSHKeyMutation.isLoading ? 'Deploying...' : 'Deploy'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTestModal && selectedKey && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Test Connection: {selectedKey.name}</h3>
+              <form onSubmit={handleTestConnection} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Host</label>
                   <input
@@ -518,7 +1020,7 @@ const SSHKeys: React.FC = () => {
                     value={testForm.host}
                     onChange={(e) => setTestForm({ ...testForm, host: e.target.value })}
                     className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="192.168.1.100"
+                    placeholder="192.168.1.250"
                     required
                   />
                 </div>
@@ -529,7 +1031,7 @@ const SSHKeys: React.FC = () => {
                     value={testForm.username}
                     onChange={(e) => setTestForm({ ...testForm, username: e.target.value })}
                     className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="user"
+                    placeholder="karanhudia"
                     required
                   />
                 </div>
@@ -556,7 +1058,7 @@ const SSHKeys: React.FC = () => {
                   <button
                     type="submit"
                     disabled={testConnectionMutation.isLoading}
-                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:opacity-50"
                   >
                     {testConnectionMutation.isLoading ? 'Testing...' : 'Test Connection'}
                   </button>
@@ -567,19 +1069,23 @@ const SSHKeys: React.FC = () => {
         </div>
       )}
 
-      {/* Edit SSH Key Modal */}
-      {editingKey && (
+      {showCreateModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
           <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
             <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Edit SSH Key</h3>
-              <form onSubmit={handleUpdateSSHKey} className="space-y-4">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                {editingKey ? 'Edit SSH Key' : 'Import SSH Key'}
+              </h3>
+              <form onSubmit={editingKey ? handleUpdateSSHKey : handleCreateSSHKey} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
                   <input
                     type="text"
-                    value={editForm.name}
-                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    value={editingKey ? editForm.name : createForm.name}
+                    onChange={(e) => editingKey 
+                      ? setEditForm({ ...editForm, name: e.target.value })
+                      : setCreateForm({ ...createForm, name: e.target.value })
+                    }
                     className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
@@ -588,34 +1094,83 @@ const SSHKeys: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                   <input
                     type="text"
-                    value={editForm.description}
-                    onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                    value={editingKey ? editForm.description : createForm.description}
+                    onChange={(e) => editingKey 
+                      ? setEditForm({ ...editForm, description: e.target.value })
+                      : setCreateForm({ ...createForm, description: e.target.value })
+                    }
                     className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={editForm.is_active}
-                    onChange={(e) => setEditForm({ ...editForm, is_active: e.target.checked })}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <label className="ml-2 text-sm text-gray-700">Active</label>
-                </div>
+                {!editingKey && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Key Type</label>
+                      <select
+                        value={createForm.key_type}
+                        onChange={(e) => setCreateForm({ ...createForm, key_type: e.target.value })}
+                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="rsa">RSA</option>
+                        <option value="ed25519">Ed25519</option>
+                        <option value="ecdsa">ECDSA</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Public Key</label>
+                      <textarea
+                        value={createForm.public_key}
+                        onChange={(e) => setCreateForm({ ...createForm, public_key: e.target.value })}
+                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        rows={3}
+                        placeholder="ssh-rsa AAAAB3NzaC1yc2E..."
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Private Key</label>
+                      <textarea
+                        value={createForm.private_key}
+                        onChange={(e) => setCreateForm({ ...createForm, private_key: e.target.value })}
+                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        rows={6}
+                        placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                        required
+                      />
+                    </div>
+                  </>
+                )}
+                {editingKey && (
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={editForm.is_active}
+                      onChange={(e) => setEditForm({ ...editForm, is_active: e.target.checked })}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <label className="ml-2 text-sm text-gray-700">Active</label>
+                  </div>
+                )}
                 <div className="flex justify-end space-x-3">
                   <button
                     type="button"
-                    onClick={() => setEditingKey(null)}
+                    onClick={() => {
+                      setShowCreateModal(false)
+                      setEditingKey(null)
+                    }}
                     className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    disabled={updateSSHKeyMutation.isLoading}
+                    disabled={editingKey ? updateSSHKeyMutation.isLoading : createSSHKeyMutation.isLoading}
                     className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
                   >
-                    {updateSSHKeyMutation.isLoading ? 'Updating...' : 'Update'}
+                    {editingKey 
+                      ? (updateSSHKeyMutation.isLoading ? 'Updating...' : 'Update')
+                      : (createSSHKeyMutation.isLoading ? 'Creating...' : 'Create')
+                    }
                   </button>
                 </div>
               </form>
@@ -624,7 +1179,7 @@ const SSHKeys: React.FC = () => {
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
-export default SSHKeys;
+export default SSHKeys

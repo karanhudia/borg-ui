@@ -127,7 +127,11 @@ export const healthAPI = {
 
 // Events API (Server-Sent Events)
 export const eventsAPI = {
-  streamEvents: () => new EventSource('/api/events/stream'),
+  streamEvents: () => {
+    const token = localStorage.getItem('access_token')
+    const url = `/api/events/stream${token ? `?token=${token}` : ''}`
+    return new EventSource(url)
+  },
   getConnectionCount: () => api.get('/events/connections'),
   sendBackupProgress: (data: any) => api.post('/events/backup-progress', data),
   sendSystemStatus: (data: any) => api.post('/events/system-status', data),
@@ -151,10 +155,13 @@ export const sshKeysAPI = {
   getSSHKeys: () => api.get('/ssh-keys'),
   createSSHKey: (data: any) => api.post('/ssh-keys', data),
   generateSSHKey: (data: any) => api.post('/ssh-keys/generate', data),
+  quickSetup: (data: any) => api.post('/ssh-keys/quick-setup', data),
   getSSHKey: (id: number) => api.get(`/ssh-keys/${id}`),
   updateSSHKey: (id: number, data: any) => api.put(`/ssh-keys/${id}`, data),
   deleteSSHKey: (id: number) => api.delete(`/ssh-keys/${id}`),
-  testSSHConnection: (data: any) => api.post(`/ssh-keys/${data.key_id}/test-connection`, data),
+  deploySSHKey: (id: number, data: any) => api.post(`/ssh-keys/${id}/deploy`, data),
+  testSSHConnection: (id: number, data: any) => api.post(`/ssh-keys/${id}/test-connection`, data),
+  getSSHConnections: () => api.get('/ssh-keys/connections'),
 }
 
 // Schedule API

@@ -5,8 +5,10 @@ import asyncio
 import json
 import structlog
 from datetime import datetime
+from sqlalchemy.orm import Session
 from app.core.security import get_current_user
 from app.database.models import User
+from app.database.database import get_db
 from app.core.borgmatic import BorgmaticInterface
 
 logger = structlog.get_logger()
@@ -108,12 +110,41 @@ async def event_generator(user_id: str) -> AsyncGenerator[str, None]:
 @router.get("/stream")
 async def stream_events(
     request: Request,
-    current_user: User = Depends(get_current_user)
+    token: str = None,
+    db: Session = Depends(get_db)
 ):
     """Stream real-time events via Server-Sent Events"""
     try:
+        # Try to get user from token query parameter (for EventSource)
+        # or from Authorization header
+        from app.core.security import verify_token
+        from app.database.database import get_db as get_db_dep
+
+        token_str = None
+        if token:
+            # Token from query parameter
+            token_str = token
+        else:
+            # Try to get from Authorization header
+            auth_header = request.headers.get("Authorization")
+            if auth_header and auth_header.startswith("Bearer "):
+                token_str = auth_header.split(" ")[1]
+
+        if not token_str:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+
+        # Verify token and get username
+        username = verify_token(token_str)
+        if not username:
+            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+
+        # Get user from database
+        user = db.query(User).filter(User.username == username).first()
+        if not user or not user.is_active:
+            raise HTTPException(status_code=401, detail="User not found or inactive")
+
         return StreamingResponse(
-            event_generator(str(current_user.id)),
+            event_generator(str(user.id)),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
@@ -122,8 +153,10 @@ async def stream_events(
                 "Access-Control-Allow-Headers": "Cache-Control"
             }
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error("Failed to start event stream", user_id=current_user.id, error=str(e))
+        logger.error("Failed to start event stream", error=str(e))
         raise HTTPException(status_code=500, detail="Failed to start event stream")
 
 @router.post("/backup-progress")
