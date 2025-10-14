@@ -20,8 +20,8 @@ services:
 
     # Port mapping
     # Note: Not needed when using network_mode: "host"
-    ports:
-      - "8000:8000"
+    # ports:
+    #   - "8000:8000"
 
     volumes:
       # Configuration and data volumes
@@ -55,8 +55,8 @@ services:
       
       # Cron settings
       - ENABLE_CRON_BACKUPS=${ENABLE_CRON_BACKUPS:-false}
-      
-      # Database settings (if using PostgreSQL)
+
+      # Database settings (SQLite - persists in ./data directory)
       - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/borgmatic.db}
       
       # CORS settings
@@ -64,16 +64,9 @@ services:
     
     restart: unless-stopped
 
-    # Network mode - choose based on your environment:
-    #
-    # Option 1: Host network (recommended for Linux, direct network access)
-    # network_mode: "host"
-    #
-    # Option 2: Bridge network (for macOS/Windows/Colima) - DEFAULT
-    networks:
-      - borgmatic-network
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    # Use host network for direct access to host network interfaces
+    # Allows the container to access SSH servers on the host and local network
+    network_mode: "host"
 
     # Health check
     healthcheck:
@@ -92,8 +85,3 @@ services:
         reservations:
           memory: 512M
           cpus: '0.5'
-
-networks:
-  borgmatic-network:
-    driver: bridge
-    name: borgmatic-network 
