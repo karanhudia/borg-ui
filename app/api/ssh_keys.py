@@ -14,6 +14,7 @@ from app.database.database import get_db
 from app.database.models import User, SSHKey, SSHConnection
 from app.core.security import get_current_user
 from app.config import settings
+import hashlib
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["ssh-keys"])
@@ -692,7 +693,10 @@ async def generate_ssh_key_pair(key_type: str) -> Dict[str, Any]:
             
             # Build ssh-keygen command
             cmd = ["ssh-keygen", "-t", key_type, "-f", key_file, "-N", ""]
-            
+
+            cmd_str = " ".join(cmd)
+            logger.info("ssh_key_generation_started", key_type=key_type, command=cmd_str)
+
             # Execute command
             process = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -703,9 +707,17 @@ async def generate_ssh_key_pair(key_type: str) -> Dict[str, Any]:
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
             
             if process.returncode != 0:
+                error_msg = stderr.decode() if stderr else "Unknown error"
+                logger.error(
+                    "ssh_key_generation_failed",
+                    key_type=key_type,
+                    command=cmd_str,
+                    return_code=process.returncode,
+                    error=error_msg
+                )
                 return {
                     "success": False,
-                    "error": stderr.decode() if stderr else "Unknown error"
+                    "error": f"Failed to generate {key_type} SSH key pair: {error_msg}"
                 }
             
             # Read generated keys
@@ -728,64 +740,152 @@ async def generate_ssh_key_pair(key_type: str) -> Dict[str, Any]:
         }
 
 async def deploy_ssh_key_with_copy_id(
-    ssh_key: SSHKey, 
-    host: str, 
-    username: str, 
-    password: str, 
+    ssh_key: SSHKey,
+    host: str,
+    username: str,
+    password: str,
     port: int = 22
 ) -> Dict[str, Any]:
-    """Deploy SSH key using ssh-copy-id equivalent"""
+    """Deploy SSH key using ssh-copy-id"""
     try:
         # Decrypt private key
         encryption_key = settings.secret_key.encode()[:32]
         cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
         private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
-        
-        # Create temporary key file
-        with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+
+        # Ensure SSH keys directory exists
+        os.makedirs(settings.ssh_keys_dir, mode=0o700, exist_ok=True)
+
+        # Generate unique filename based on key ID and hash
+        key_hash = hashlib.md5(f"{ssh_key.id}_{host}_{username}".encode()).hexdigest()[:8]
+        key_filename = f"key_{ssh_key.id}_{key_hash}"
+        key_file_path = os.path.join(settings.ssh_keys_dir, key_filename)
+
+        # Write private key to persistent directory
+        with open(key_file_path, 'w') as f:
             f.write(private_key)
-            temp_key_file = f.name
-        
-        try:
-            # Use sshpass with ssh-copy-id equivalent
-            # First, copy the public key to the remote server
-            cmd = [
-                "sshpass", "-p", password, "ssh",
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "ConnectTimeout=10",
-                "-p", str(port),
-                f"{username}@{host}",
-                f"mkdir -p ~/.ssh && echo '{ssh_key.public_key}' >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys"
-            ]
-            
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+        os.chmod(key_file_path, 0o600)
+
+        # Write public key (ssh-copy-id needs both)
+        pub_file_path = f"{key_file_path}.pub"
+        with open(pub_file_path, 'w') as f:
+            f.write(ssh_key.public_key)
+        os.chmod(pub_file_path, 0o644)
+
+        logger.info(
+            "ssh_key_files_created",
+            key_id=ssh_key.id,
+            key_file=key_file_path,
+            pub_file=pub_file_path
+        )
+
+        # Use sshpass with ssh-copy-id
+        cmd = [
+            "sshpass", "-p", password,
+            "ssh-copy-id",
+            "-i", key_file_path,
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "ConnectTimeout=10",
+            "-p", str(port),
+            f"{username}@{host}"
+        ]
+
+        # Sanitized command for logging (hide password)
+        safe_cmd = " ".join(cmd[0:2] + ["***"] + cmd[3:])
+        logger.info("ssh_key_deployment_started", host=host, username=username, port=port, command=safe_cmd)
+
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+
+        if process.returncode == 0:
+            logger.info(
+                "ssh_key_deployed",
+                host=host,
+                username=username,
+                port=port,
+                key_file=key_file_path
             )
-            
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
-            
-            if process.returncode == 0:
-                return {
-                    "success": True,
-                    "output": stdout.decode(),
-                    "error": None
-                }
+            return {
+                "success": True,
+                "output": stdout.decode(),
+                "error": None,
+                "key_file": key_file_path
+            }
+        else:
+            stdout_str = stdout.decode() if stdout else ""
+            stderr_str = stderr.decode() if stderr else ""
+            error_msg = stderr_str or "Deployment failed"
+
+            # Parse common SSH errors for better user feedback
+            if "Connection refused" in error_msg:
+                error_summary = f"Cannot connect to {host}:{port} - SSH service may not be running"
+                helpful_hint = "Check if SSH server is running and firewall allows connections"
+            elif "Permission denied" in error_msg:
+                error_summary = f"Authentication failed for {username}@{host} - incorrect password"
+                helpful_hint = "Verify the password is correct and user exists on remote system"
+            elif "Host key verification failed" in error_msg:
+                error_summary = f"Host key verification failed for {host}"
+                helpful_hint = "Remove old host key or disable StrictHostKeyChecking"
+            elif "timeout" in error_msg.lower() or "timed out" in error_msg.lower():
+                error_summary = f"Connection timeout to {host}:{port}"
+                helpful_hint = "Check network connectivity and firewall rules"
+            elif "No route to host" in error_msg:
+                error_summary = f"Network unreachable - cannot route to {host}"
+                helpful_hint = "Verify the host IP address and network configuration"
             else:
-                return {
-                    "success": False,
-                    "output": stdout.decode(),
-                    "error": stderr.decode() if stderr else "Deployment failed"
-                }
-        finally:
-            # Clean up temporary key file
-            os.unlink(temp_key_file)
-    except Exception as e:
-        logger.error("Failed to deploy SSH key", error=str(e))
+                error_summary = "SSH key deployment failed"
+                helpful_hint = "Check SSH server logs for more details"
+
+            logger.error(
+                "ssh_key_deployment_failed",
+                host=host,
+                username=username,
+                port=port,
+                command=safe_cmd,
+                key_file=key_file_path,
+                return_code=process.returncode,
+                error_summary=error_summary,
+                helpful_hint=helpful_hint,
+                stdout=stdout_str[:500] if stdout_str else None,
+                stderr=stderr_str[:500] if stderr_str else None,
+                full_error=error_msg
+            )
+            return {
+                "success": False,
+                "output": stdout_str,
+                "error": f"{error_summary}. {helpful_hint}\n\nDetails: {error_msg}",
+                "key_file": key_file_path
+            }
+    except asyncio.TimeoutError:
+        logger.error(
+            "ssh_key_deployment_timeout",
+            host=host,
+            username=username,
+            port=port,
+            timeout=30
+        )
         return {
             "success": False,
-            "error": str(e)
+            "error": f"SSH key deployment timed out after 30 seconds. Server may be slow or unresponsive."
+        }
+    except Exception as e:
+        logger.error(
+            "ssh_key_deployment_exception",
+            host=host,
+            username=username,
+            port=port,
+            error_type=type(e).__name__,
+            error_message=str(e),
+            error_details=repr(e)
+        )
+        return {
+            "success": False,
+            "error": f"Unexpected error during SSH key deployment: {str(e)}"
         }
 
 async def test_ssh_key_connection(ssh_key: SSHKey, host: str, username: str, port: int) -> Dict[str, Any]:
@@ -795,20 +895,40 @@ async def test_ssh_key_connection(ssh_key: SSHKey, host: str, username: str, por
         encryption_key = settings.secret_key.encode()[:32]
         cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
         private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
-        
-        # Create temporary key file
-        with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+
+        # Ensure SSH keys directory exists
+        os.makedirs(settings.ssh_keys_dir, mode=0o700, exist_ok=True)
+
+        # Generate unique filename based on key ID and hash
+        key_hash = hashlib.md5(f"{ssh_key.id}_{host}_{username}".encode()).hexdigest()[:8]
+        key_filename = f"key_{ssh_key.id}_{key_hash}"
+        key_file_path = os.path.join(settings.ssh_keys_dir, key_filename)
+
+        # Write private key to persistent directory
+        with open(key_file_path, 'w') as f:
             f.write(private_key)
-            temp_key_file = f.name
-        
+
+        # Set correct permissions for SSH private key
+        os.chmod(key_file_path, 0o600)
+
+        logger.info(
+            "ssh_key_file_created_for_test",
+            key_id=ssh_key.id,
+            key_file=key_file_path
+        )
+
+        # Test SSH connection
+        cmd = [
+            "ssh", "-i", key_file_path, "-o", "StrictHostKeyChecking=no",
+            "-o", "ConnectTimeout=10", "-p", str(port),
+            f"{username}@{host}", "echo 'SSH connection successful'"
+        ]
+
+        cmd_str = " ".join(cmd)
+        logger.info("ssh_connection_test_started", host=host, username=username, port=port, command=cmd_str)
+
         try:
-            # Test SSH connection
-            cmd = [
-                "ssh", "-i", temp_key_file, "-o", "StrictHostKeyChecking=no",
-                "-o", "ConnectTimeout=10", "-p", str(port),
-                f"{username}@{host}", "echo 'SSH connection successful'"
-            ]
-            
+
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
@@ -818,23 +938,102 @@ async def test_ssh_key_connection(ssh_key: SSHKey, host: str, username: str, por
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=15)
             
             if process.returncode == 0:
+                logger.info(
+                    "ssh_connection_test_successful",
+                    host=host,
+                    username=username,
+                    port=port,
+                    key_file=key_file_path
+                )
                 return {
                     "success": True,
                     "message": "SSH connection successful",
-                    "output": stdout.decode().strip()
+                    "output": stdout.decode().strip(),
+                    "key_file": key_file_path
                 }
             else:
+                stdout_str = stdout.decode() if stdout else ""
+                stderr_str = stderr.decode() if stderr else ""
+                error_msg = stderr_str or "SSH connection failed"
+
+                # Parse common errors with helpful hints
+                if "Connection refused" in error_msg:
+                    error_summary = f"Cannot connect to {host}:{port} - SSH service not accessible"
+                    helpful_hint = "Verify SSH server is running and port is correct"
+                elif "Permission denied" in error_msg:
+                    if "publickey" in error_msg:
+                        error_summary = f"SSH key not authorized on {host}"
+                        helpful_hint = "The public key is not in ~/.ssh/authorized_keys on the remote server"
+                    else:
+                        error_summary = f"Authentication failed on {host}"
+                        helpful_hint = "Key-based authentication rejected by server"
+                elif "Host key verification failed" in error_msg:
+                    error_summary = f"Host key verification failed for {host}"
+                    helpful_hint = "Host key has changed - remove from known_hosts or disable verification"
+                elif "timeout" in error_msg.lower() or "timed out" in error_msg.lower():
+                    error_summary = f"Connection timeout to {host}:{port}"
+                    helpful_hint = "Check network connectivity, firewall rules, and host is reachable"
+                elif "No route to host" in error_msg:
+                    error_summary = f"Cannot route to {host}"
+                    helpful_hint = "Host is unreachable - check IP address and routing"
+                elif "Load key" in error_msg and "error in libcrypto" in error_msg:
+                    error_summary = "Invalid SSH key format or permissions"
+                    helpful_hint = "Key file may be corrupted or have incorrect permissions"
+                else:
+                    error_summary = "SSH connection test failed"
+                    helpful_hint = "Check SSH server configuration and logs"
+
+                logger.error(
+                    "ssh_connection_test_failed",
+                    host=host,
+                    username=username,
+                    port=port,
+                    command=cmd_str,
+                    key_file=key_file_path,
+                    return_code=process.returncode,
+                    error_summary=error_summary,
+                    helpful_hint=helpful_hint,
+                    stdout=stdout_str[:500] if stdout_str else None,
+                    stderr=stderr_str[:500] if stderr_str else None,
+                    full_error=error_msg
+                )
                 return {
                     "success": False,
-                    "error": stderr.decode() if stderr else "SSH connection failed",
-                    "return_code": process.returncode
+                    "error": f"{error_summary}. {helpful_hint}\n\nDetails: {error_msg}",
+                    "return_code": process.returncode,
+                    "key_file": key_file_path
                 }
-        finally:
-            # Clean up temporary key file
-            os.unlink(temp_key_file)
-    except Exception as e:
-        logger.error("Failed to test SSH connection", error=str(e))
+        except Exception as inner_error:
+            logger.error(
+                "ssh_connection_test_inner_exception",
+                error_type=type(inner_error).__name__,
+                error=str(inner_error),
+                key_file=key_file_path
+            )
+            raise
+    except asyncio.TimeoutError:
+        logger.error(
+            "ssh_connection_test_timeout",
+            host=host,
+            username=username,
+            port=port,
+            timeout=15
+        )
         return {
             "success": False,
-            "error": str(e)
+            "error": f"SSH connection test timed out after 15 seconds. Host may be unreachable or very slow."
+        }
+    except Exception as e:
+        logger.error(
+            "ssh_connection_test_exception",
+            host=host,
+            username=username,
+            port=port,
+            error_type=type(e).__name__,
+            error_message=str(e),
+            error_details=repr(e)
+        )
+        return {
+            "success": False,
+            "error": f"Unexpected error during SSH connection test: {str(e)}"
         }

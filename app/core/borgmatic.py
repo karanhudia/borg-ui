@@ -12,11 +12,15 @@ logger = structlog.get_logger()
 
 class BorgmaticInterface:
     """Interface for interacting with Borgmatic CLI"""
-    
+
+    _validated = False  # Class variable to track if validation has run
+
     def __init__(self, config_path: str = None):
         self.config_path = config_path or settings.borgmatic_config_path
         self.borgmatic_cmd = "borgmatic"
-        self._validate_borgmatic_installation()
+        if not BorgmaticInterface._validated:
+            self._validate_borgmatic_installation()
+            BorgmaticInterface._validated = True
     
     def _validate_borgmatic_installation(self):
         """Validate that borgmatic is installed and accessible"""

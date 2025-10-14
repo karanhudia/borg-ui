@@ -15,9 +15,16 @@ from app.core.security import create_first_user
 load_dotenv()
 
 # Configure structured logging
+import logging
+
+# Set log level based on environment
+log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(level=getattr(logging, log_level, logging.INFO))
+
 structlog.configure(
     processors=[
         structlog.stdlib.filter_by_level,
+        structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
         structlog.stdlib.PositionalArgumentsFormatter(),
@@ -25,7 +32,7 @@ structlog.configure(
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
-        structlog.processors.JSONRenderer()
+        structlog.dev.ConsoleRenderer() if log_level == "DEBUG" else structlog.processors.JSONRenderer()
     ],
     context_class=dict,
     logger_factory=structlog.stdlib.LoggerFactory(),
@@ -130,21 +137,36 @@ async def api_info():
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log all requests"""
-    logger.info(
-        "Request",
-        method=request.method,
-        url=str(request.url),
-        client_ip=request.client.host if request.client else None
-    )
-    
+    """Log all requests (except static assets, health checks, and SSE streams)"""
+    # Skip logging for static assets, health checks, and SSE streams to reduce noise
+    skip_paths = ["/assets/", "/static/", "/api/health/", "/api/events/stream"]
+    should_log = not any(request.url.path.startswith(path) for path in skip_paths)
+
+    if should_log:
+        logger.info(
+            "request_received",
+            method=request.method,
+            path=request.url.path,
+            client_ip=request.client.host if request.client else None
+        )
+
     response = await call_next(request)
-    
-    logger.info(
-        "Response",
-        method=request.method,
-        url=str(request.url),
-        status_code=response.status_code
-    )
-    
+
+    if should_log:
+        # Log errors and warnings with more detail
+        if response.status_code >= 400:
+            logger.warning(
+                "request_failed",
+                method=request.method,
+                path=request.url.path,
+                status_code=response.status_code
+            )
+        else:
+            logger.info(
+                "request_completed",
+                method=request.method,
+                path=request.url.path,
+                status_code=response.status_code
+            )
+
     return response 

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Viewer - Borgmatic UI</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 { margin-bottom: 20px; color: #4ecca3; }
+        .controls {
+            background: #16213e;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        select, input, button {
+            padding: 10px;
+            margin: 5px;
+            border-radius: 5px;
+            border: 1px solid #4ecca3;
+            background: #0f3460;
+            color: #eee;
+            font-size: 14px;
+        }
+        button {
+            background: #4ecca3;
+            color: #1a1a2e;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        button:hover { background: #45b393; }
+        .table-container {
+            background: #16213e;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #0f3460;
+        }
+        th {
+            background: #0f3460;
+            color: #4ecca3;
+            font-weight: bold;
+        }
+        tr:hover { background: #0f3460; }
+        .info {
+            background: #16213e;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #4ecca3;
+        }
+        .error {
+            background: #c0392b;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #4ecca3;
+            background: #0f3460;
+            color: #eee;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗄️ SQLite Database Viewer</h1>
+
+        <div class="info">
+            <strong>Database:</strong> <span id="dbPath">Loading...</span><br>
+            <strong>Tables:</strong> <span id="tableCount">-</span>
+        </div>
+
+        <div class="controls">
+            <label><strong>Select Table:</strong></label><br>
+            <select id="tableSelect">
+                <option value="">-- Select a table --</option>
+                <option value="users">users</option>
+                <option value="ssh_keys">ssh_keys</option>
+                <option value="ssh_connections">ssh_connections</option>
+                <option value="repositories">repositories</option>
+                <option value="backup_jobs">backup_jobs</option>
+            </select>
+            <button onclick="loadTable()">Load Table</button>
+            <button onclick="loadAll()">Load All Tables</button>
+
+            <hr style="margin: 15px 0; border-color: #0f3460;">
+
+            <label><strong>Custom SQL Query (SELECT only):</strong></label><br>
+            <textarea id="customQuery" placeholder="SELECT * FROM ssh_keys WHERE is_active = 1"></textarea>
+            <button onclick="runQuery()">Run Query</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/settings/debug/database';
+
+        async function fetchData(params = {}) {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                showError('Not authenticated. Please login first.');
+                return null;
+            }
+
+            const url = new URL(API_BASE, window.location.origin);
+            Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    if (response.status === 403) {
+                        showError('Access denied. Admin access required.');
+                    } else {
+                        showError(`Error: ${response.status} ${response.statusText}`);
+                    }
+                    return null;
+                }
+
+                return await response.json();
+            } catch (error) {
+                showError('Failed to fetch data: ' + error.message);
+                return null;
+            }
+        }
+
+        async function loadTable() {
+            const table = document.getElementById('tableSelect').value;
+            if (!table) {
+                alert('Please select a table');
+                return;
+            }
+
+            const data = await fetchData({ table });
+            if (data && data.success) {
+                displayResults(data);
+            }
+        }
+
+        async function loadAll() {
+            const data = await fetchData();
+            if (data && data.success) {
+                displayResults(data);
+            }
+        }
+
+        async function runQuery() {
+            const query = document.getElementById('customQuery').value.trim();
+            if (!query) {
+                alert('Please enter a SQL query');
+                return;
+            }
+
+            const data = await fetchData({ query });
+            if (data && data.success) {
+                displayResults(data);
+            }
+        }
+
+        function displayResults(data) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '';
+
+            if (data.database) {
+                document.getElementById('dbPath').textContent = data.database;
+            }
+
+            if (data.tables) {
+                document.getElementById('tableCount').textContent = Object.keys(data.tables).length;
+
+                Object.keys(data.tables).forEach(tableName => {
+                    const tableData = data.tables[tableName];
+
+                    const container = document.createElement('div');
+                    container.className = 'table-container';
+
+                    const title = document.createElement('h2');
+                    title.textContent = `${tableName} (${tableData.count} rows)`;
+                    title.style.color = '#4ecca3';
+                    container.appendChild(title);
+
+                    if (tableData.error) {
+                        const error = document.createElement('div');
+                        error.className = 'error';
+                        error.textContent = `Error: ${tableData.error}`;
+                        container.appendChild(error);
+                    } else if (tableData.data && tableData.data.length > 0) {
+                        const table = createTable(tableData.data);
+                        container.appendChild(table);
+                    } else {
+                        const emptyMsg = document.createElement('p');
+                        emptyMsg.textContent = 'No data in this table';
+                        emptyMsg.style.color = '#888';
+                        container.appendChild(emptyMsg);
+                    }
+
+                    resultsDiv.appendChild(container);
+                });
+            }
+        }
+
+        function createTable(data) {
+            const table = document.createElement('table');
+
+            // Create header
+            const thead = document.createElement('thead');
+            const headerRow = document.createElement('tr');
+            Object.keys(data[0]).forEach(key => {
+                const th = document.createElement('th');
+                th.textContent = key;
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+
+            // Create body
+            const tbody = document.createElement('tbody');
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                Object.values(row).forEach(value => {
+                    const td = document.createElement('td');
+                    td.textContent = value === null ? 'NULL' : value;
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+            table.appendChild(tbody);
+
+            return table;
+        }
+
+        function showError(message) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = `<div class="error">${message}</div>`;
+        }
+
+        // Load all tables on page load
+        window.addEventListener('load', () => {
+            loadAll();
+        });
+    </script>
+</body>
+</html>

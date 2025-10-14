@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     # Borgmatic settings
     borgmatic_config_path: str = "/app/config/borgmatic.yaml"
     borgmatic_backup_path: str = "/backups"
+
+    # SSH keys directory (persistent storage for key files)
+    ssh_keys_dir: str = "/app/data/ssh_keys"
     
     # Logging settings
     log_level: str = "INFO"

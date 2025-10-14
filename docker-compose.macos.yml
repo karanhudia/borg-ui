@@ -1,0 +1,23 @@
+# Docker Compose override for macOS/Windows/Colima
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.macos.yml up -d
+
+services:
+  borgmatic-ui:
+    # Remove host network mode (override)
+    network_mode: null
+
+    # Enable port mapping
+    ports:
+      - "8000:8000"
+
+    # Add networks
+    networks:
+      - borgmatic-network
+
+    # Allow access to host
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+networks:
+  borgmatic-network:
+    driver: bridge

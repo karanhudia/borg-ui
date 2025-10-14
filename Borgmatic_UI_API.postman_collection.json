@@ -1,0 +1,293 @@
+{
+	"info": {
+		"name": "Borgmatic UI API",
+		"description": "API collection for testing Borgmatic UI endpoints",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{access_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set(\"access_token\", jsonData.access_token);",
+									"    console.log(\"Token saved:\", jsonData.access_token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "username",
+									"value": "admin",
+									"type": "text"
+								},
+								{
+									"key": "password",
+									"value": "admin123",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "login"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "SSH Keys",
+			"item": [
+				{
+					"name": "List SSH Keys",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/ssh-keys",
+							"host": ["{{base_url}}"],
+							"path": ["api", "ssh-keys"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Generate SSH Key",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"test-key\",\n  \"key_type\": \"rsa\",\n  \"description\": \"Test key generated via Postman\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/ssh-keys/generate",
+							"host": ["{{base_url}}"],
+							"path": ["api", "ssh-keys", "generate"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Quick SSH Setup (Generate & Deploy)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"quick-setup-key\",\n  \"key_type\": \"rsa\",\n  \"description\": \"Quick setup test\",\n  \"host\": \"192.168.1.150\",\n  \"username\": \"karanhudia\",\n  \"port\": 22,\n  \"password\": \"your-password-here\",\n  \"skip_deployment\": false\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/ssh-keys/quick-setup",
+							"host": ["{{base_url}}"],
+							"path": ["api", "ssh-keys", "quick-setup"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Deploy SSH Key",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"host\": \"192.168.1.150\",\n  \"username\": \"karanhudia\",\n  \"port\": 22,\n  \"password\": \"your-password-here\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/ssh-keys/:key_id/deploy",
+							"host": ["{{base_url}}"],
+							"path": ["api", "ssh-keys", ":key_id", "deploy"],
+							"variable": [
+								{
+									"key": "key_id",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Test SSH Connection",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"host\": \"192.168.1.150\",\n  \"username\": \"karanhudia\",\n  \"port\": 22\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/ssh-keys/:key_id/test-connection",
+							"host": ["{{base_url}}"],
+							"path": ["api", "ssh-keys", ":key_id", "test-connection"],
+							"variable": [
+								{
+									"key": "key_id",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get SSH Connections",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/ssh-keys/connections",
+							"host": ["{{base_url}}"],
+							"path": ["api", "ssh-keys", "connections"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get SSH Key Details",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/ssh-keys/:key_id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "ssh-keys", ":key_id"],
+							"variable": [
+								{
+									"key": "key_id",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete SSH Key",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/ssh-keys/:key_id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "ssh-keys", ":key_id"],
+							"variable": [
+								{
+									"key": "key_id",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Settings & Debug",
+			"item": [
+				{
+					"name": "Get Database Debug Info",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/settings/debug/database",
+							"host": ["{{base_url}}"],
+							"path": ["api", "settings", "debug", "database"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Specific Table Data",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/settings/debug/database?table=ssh_keys",
+							"host": ["{{base_url}}"],
+							"path": ["api", "settings", "debug", "database"],
+							"query": [
+								{
+									"key": "table",
+									"value": "ssh_keys"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

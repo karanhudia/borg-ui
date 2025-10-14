@@ -10,6 +10,7 @@ import Restore from './pages/Restore'
 import Schedule from './pages/Schedule'
 import Repositories from './pages/Repositories'
 import SSHKeys from './pages/SSHKeys'
+import Connections from './pages/Connections'
 import Logs from './pages/Logs'
 import Settings from './pages/Settings'
 import Health from './pages/Health'
@@ -44,8 +45,9 @@ function App() {
         <Route path="/archives" element={<Archives />} />
         <Route path="/restore" element={<Restore />} />
         <Route path="/schedule" element={<Schedule />} />
-                  <Route path="/repositories" element={<Repositories />} />
-          <Route path="/ssh-keys" element={<SSHKeys />} />
+        <Route path="/repositories" element={<Repositories />} />
+        <Route path="/ssh-keys" element={<SSHKeys />} />
+        <Route path="/connections" element={<Connections />} />
         <Route path="/logs" element={<Logs />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/health" element={<Health />} />

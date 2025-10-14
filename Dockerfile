@@ -81,6 +81,7 @@ RUN mkdir -p \
     /app/logs \
     /app/config \
     /app/data \
+    /app/data/ssh_keys \
     /backups \
     /var/log/borgmatic \
     /etc/borgmatic
@@ -116,7 +117,7 @@ RUN mkdir -p /etc/cron.d && \
 RUN echo '#!/bin/bash\n\
 echo "[$(date)] Starting Borgmatic Web UI..."\n\
 cd /app\n\
-exec gunicorn app.main:app --bind 0.0.0.0:8000 --workers 2 --worker-class uvicorn.workers.UvicornWorker --access-logfile /app/logs/access.log --error-logfile /app/logs/error.log\n\
+exec gunicorn app.main:app --bind 0.0.0.0:8000 --workers 1 --worker-class uvicorn.workers.UvicornWorker --access-logfile /app/logs/access.log --error-logfile /app/logs/error.log\n\
 ' > /app/start.sh && \
     chmod +x /app/start.sh && \
     chown borgmatic:borgmatic /app/start.sh

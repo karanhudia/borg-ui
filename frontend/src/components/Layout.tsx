@@ -16,6 +16,7 @@ import {
   User,
   Database,
   Key,
+  Wifi,
 } from 'lucide-react'
 
 const navigation = [
@@ -27,6 +28,7 @@ const navigation = [
   { name: 'Schedule', href: '/schedule', icon: Clock },
   { name: 'Repositories', href: '/repositories', icon: Database },
   { name: 'SSH Keys', href: '/ssh-keys', icon: Key },
+  { name: 'Connections', href: '/connections', icon: Wifi },
   { name: 'Logs', href: '/logs', icon: Activity },
   { name: 'Health', href: '/health', icon: Heart },
 ]

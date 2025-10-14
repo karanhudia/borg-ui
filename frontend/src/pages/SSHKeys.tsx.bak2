@@ -1,11 +1,15 @@
 import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
-import {
-  Key,
-  Plus,
-  Edit,
-  Trash2,
+import { 
+  Key, 
+  Plus, 
+  Edit, 
+  Trash2, 
   TestTube,
+  Clock,
+  CheckCircle,
+  AlertTriangle,
+  XCircle,
   Settings,
   Rocket
 } from 'lucide-react'
@@ -348,32 +352,32 @@ const SSHKeys: React.FC = () => {
     }
   }
 
-//   const getStatusIcon = (status: string) => {
-//     switch (status) {
-//       case 'connected':
-//         return <CheckCircle className="w-4 h-4 text-green-500" />
-//       case 'failed':
-//         return <XCircle className="w-4 h-4 text-red-500" />
-//       case 'testing':
-//         return <Clock className="w-4 h-4 text-yellow-500" />
-//       default:
-//         return <AlertTriangle className="w-4 h-4 text-gray-500" />
-//     }
-//   }
-// 
-//   const getStatusColor = (status: string) => {
-//     switch (status) {
-//       case 'connected':
-//         return 'text-green-600 bg-green-100'
-//       case 'failed':
-//         return 'text-red-600 bg-red-100'
-//       case 'testing':
-//         return 'text-yellow-600 bg-yellow-100'
-//       default:
-//         return 'text-gray-600 bg-gray-100'
-//     }
-//   }
-// 
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'connected':
+        return <CheckCircle className="w-4 h-4 text-green-500" />
+      case 'failed':
+        return <XCircle className="w-4 h-4 text-red-500" />
+      case 'testing':
+        return <Clock className="w-4 h-4 text-yellow-500" />
+      default:
+        return <AlertTriangle className="w-4 h-4 text-gray-500" />
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'connected':
+        return 'text-green-600 bg-green-100'
+      case 'failed':
+        return 'text-red-600 bg-red-100'
+      case 'testing':
+        return 'text-yellow-600 bg-yellow-100'
+      default:
+        return 'text-gray-600 bg-gray-100'
+    }
+  }
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString()
   }
