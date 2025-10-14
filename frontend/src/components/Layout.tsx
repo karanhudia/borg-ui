@@ -8,8 +8,6 @@ import {
   Archive,
   RotateCcw,
   Clock,
-  Activity,
-  Heart,
   Menu,
   X,
   LogOut,
@@ -29,8 +27,6 @@ const navigation = [
   { name: 'Repositories', href: '/repositories', icon: Database },
   { name: 'SSH Keys', href: '/ssh-keys', icon: Key },
   { name: 'Connections', href: '/connections', icon: Wifi },
-  { name: 'Logs', href: '/logs', icon: Activity },
-  { name: 'Health', href: '/health', icon: Heart },
 ]
 
 export default function Layout({ children }: { children: React.ReactNode }) {

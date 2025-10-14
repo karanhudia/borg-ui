@@ -6,7 +6,7 @@ import structlog
 import os
 from dotenv import load_dotenv
 
-from app.api import auth, dashboard, config, backup, archives, restore, schedule, logs, settings as settings_api, health, events, repositories, ssh_keys
+from app.api import auth, dashboard, config, backup, archives, restore, schedule, settings as settings_api, events, repositories, ssh_keys
 from app.database.database import engine
 from app.database.models import Base
 from app.core.security import create_first_user
@@ -76,9 +76,7 @@ app.include_router(backup.router, prefix="/api/backup", tags=["Backup"])
 app.include_router(archives.router, prefix="/api/archives", tags=["Archives"])
 app.include_router(restore.router, prefix="/api/restore", tags=["Restore"])
 app.include_router(schedule.router, prefix="/api/schedule", tags=["Schedule"])
-app.include_router(logs.router, prefix="/api/logs", tags=["Logs"])
 app.include_router(settings_api.router, prefix="/api/settings", tags=["Settings"])
-app.include_router(health.router, prefix="/api/health", tags=["Health"])
 app.include_router(events.router, prefix="/api/events", tags=["Events"])
 app.include_router(repositories.router, prefix="/api/repositories", tags=["Repositories"])
 app.include_router(ssh_keys.router, prefix="/api/ssh-keys", tags=["SSH Keys"])
@@ -137,9 +135,9 @@ async def api_info():
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log all requests (except static assets, health checks, and SSE streams)"""
-    # Skip logging for static assets, health checks, and SSE streams to reduce noise
-    skip_paths = ["/assets/", "/static/", "/api/health/", "/api/events/stream"]
+    """Log all requests (except static assets and SSE streams)"""
+    # Skip logging for static assets and SSE streams to reduce noise
+    skip_paths = ["/assets/", "/static/", "/api/events/stream"]
     should_log = not any(request.url.path.startswith(path) for path in skip_paths)
 
     if should_log:
