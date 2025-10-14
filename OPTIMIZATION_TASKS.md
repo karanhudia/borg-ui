@@ -120,13 +120,46 @@
 ## NEW UX Improvements (User Feedback)
 
 ### 9. Merge SSH Keys & Connections into Single Tab
-- **Current Problem:** SSH Keys and Connections are separate tabs, but they're related
+- **Current Problem:** SSH Keys (1019 lines) and Connections (487 lines) are separate tabs
 - **User Insight:** "The only reason we need a SSH key is to connect to a machine"
 - **Solution:**
-  - Merge into single "SSH Connections" tab
+  - ⏳ Create unified "SSH Connections" page using MUI components
   - Think of SSH connections as "users" that can connect to multiple machines
   - One SSH key → Many machines (reusable)
   - Simpler, more intuitive workflow
+
+**Implementation Plan:**
+1. Create new `SSHConnectionsUnified.tsx` page with MUI components:
+   - MUI Card for SSH keys (left panel)
+   - MUI Table/DataGrid for connections per key (right panel)
+   - MUI Dialog for modals (Quick Setup, Generate, Test, etc.)
+   - MUI Button, TextField, Select for forms
+   - MUI Chip for status badges
+   - MUI Alert for error/success messages
+
+2. Page Structure:
+   - Header with MUI Typography and Button (Quick Setup primary action)
+   - Grid layout: 40% SSH Keys | 60% Connections
+   - When key selected → show its connections in right panel
+   - Empty state: Friendly MUI Card encouraging first setup
+
+3. Features to keep from SSHKeys.tsx:
+   - Quick Setup (generate + deploy in one step)
+   - Generate Key (just create key)
+   - Deploy Key (to new machine)
+   - Test Connection
+   - Edit/Delete keys
+
+4. Features to keep from Connections.tsx:
+   - Connection status monitoring (connected/failed/testing)
+   - Retry failed connections
+   - Auto-refresh every 30s
+   - Statistics cards (total, active, failed)
+
+5. Remove/Simplify:
+   - Remove "Advanced" tab from SSHKeys
+   - Remove separate "Import Key" flow (rarely used)
+   - Consolidate modals (too many separate ones)
 
 ### 10. Repository Creation UX Improvements
 - **✅ Allow any path for repositories** (Backend: path restrictions removed)
