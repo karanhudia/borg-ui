@@ -117,6 +117,54 @@
   - Improve error message display
 - **Status:** Pending
 
+## NEW UX Improvements (User Feedback)
+
+### 9. Merge SSH Keys & Connections into Single Tab
+- **Current Problem:** SSH Keys and Connections are separate tabs, but they're related
+- **User Insight:** "The only reason we need a SSH key is to connect to a machine"
+- **Solution:**
+  - Merge into single "SSH Connections" tab
+  - Think of SSH connections as "users" that can connect to multiple machines
+  - One SSH key → Many machines (reusable)
+  - Simpler, more intuitive workflow
+
+### 10. Repository Creation UX Improvements
+- **Allow any path for repositories** (not just /backups)
+- **Two repository types:**
+  1. **SSH Repository:** `borg init --encryption=repokey ssh://user@host/path`
+     - Dropdown to select from existing SSH connections
+     - If SSH connection exists, use path inside that machine
+     - Example: `ssh://karanhudia@192.168.1.250/mnt/mydisk/data/immich-backup`
+  2. **Local Repository:** `borg init -e repokey /srv/borg_backup`
+     - Any path on local filesystem
+     - Not restricted to /backups directory
+- **Auto-create directories:** User shouldn't need to manually create directories
+
+### 11. Configuration-First Workflow
+- **Everything disabled until valid config saved and selected**
+- **Configuration contains:**
+  - Source directories (what to backup)
+  - Repository (where to backup)
+  - Schedule (when to backup)
+  - Retention rules
+- **Config storage:**
+  - User can specify: `/home/karanhudia/borg-ui/config`
+  - If not specified: Auto-use Docker var directory
+  - Persisted in `/data/config/` by default
+- **Borgmatic YAML auto-generation** from UI settings
+
+### Implementation Priority (Updated)
+1. ✅ Backend: Port 8081, /data structure, database persistence
+2. ⏳ Backend: Fix SSH commands (current)
+3. ⏳ Backend: Test thoroughly
+4. ⏳ Frontend: Merge SSH Keys + Connections tab
+5. ⏳ Frontend: Improve repository creation (any path, SSH dropdown)
+6. ⏳ Frontend: Configuration-first workflow
+7. ⏳ Frontend: Install MUI and modernize
+8. ⏳ Frontend: Fix alignments and responsive design
+9. ⏳ Final testing
+10. ⏳ Delete this document
+
 ## Implementation Order
 
 1. ✅ Document all tasks (this file)
