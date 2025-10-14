@@ -10,7 +10,6 @@ import Restore from './pages/Restore'
 import Schedule from './pages/Schedule'
 import Repositories from './pages/Repositories'
 import SSHKeys from './pages/SSHKeys'
-import Connections from './pages/Connections'
 import Settings from './pages/Settings'
 
 function App() {
@@ -44,8 +43,9 @@ function App() {
         <Route path="/restore" element={<Restore />} />
         <Route path="/schedule" element={<Schedule />} />
         <Route path="/repositories" element={<Repositories />} />
-        <Route path="/ssh-keys" element={<SSHKeys />} />
-        <Route path="/connections" element={<Connections />} />
+        <Route path="/ssh-connections" element={<SSHKeys />} />
+        <Route path="/ssh-keys" element={<Navigate to="/ssh-connections" replace />} />
+        <Route path="/connections" element={<Navigate to="/ssh-connections" replace />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
     </Layout>

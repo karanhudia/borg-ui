@@ -44,8 +44,7 @@ const navigation = [
   { name: 'Restore', href: '/restore', icon: RotateCcw },
   { name: 'Schedule', href: '/schedule', icon: Clock },
   { name: 'Repositories', href: '/repositories', icon: Database },
-  { name: 'SSH Keys', href: '/ssh-keys', icon: Key },
-  { name: 'Connections', href: '/connections', icon: Wifi },
+  { name: 'SSH Connections', href: '/ssh-connections', icon: Wifi },
 ]
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -91,15 +90,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 selected={isActive}
                 sx={{
                   '&.Mui-selected': {
-                    backgroundColor: 'primary.light',
-                    color: 'primary.main',
+                    backgroundColor: 'primary.main',
+                    color: 'white',
                     '&:hover': {
-                      backgroundColor: 'primary.light',
+                      backgroundColor: 'primary.dark',
+                    },
+                    '& .MuiListItemIcon-root': {
+                      color: 'white',
                     },
                   },
                 }}
               >
-                <ListItemIcon sx={{ color: isActive ? 'primary.main' : 'text.secondary' }}>
+                <ListItemIcon sx={{ color: isActive ? 'white' : 'text.secondary' }}>
                   <Icon size={20} />
                 </ListItemIcon>
                 <ListItemText
@@ -107,6 +109,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   primaryTypographyProps={{
                     fontSize: '0.875rem',
                     fontWeight: isActive ? 600 : 400,
+                    color: isActive ? 'white' : 'inherit',
                   }}
                 />
               </ListItemButton>
