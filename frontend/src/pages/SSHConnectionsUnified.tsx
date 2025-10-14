@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from 'react-query'
 import { toast } from 'react-hot-toast'
 import {
   Box,
-  Grid,
   Card,
   CardContent,
   Typography,
@@ -27,10 +26,10 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   Checkbox,
   FormControlLabel,
   Tooltip,
+  Stack,
 } from '@mui/material'
 import {
   Key,
@@ -384,8 +383,8 @@ export default function SSHConnectionsUnified() {
       </Box>
 
       {/* Statistics Cards */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} md={4}>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} sx={{ mb: 3 }}>
+        <Box sx={{ flex: 1 }}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -401,8 +400,8 @@ export default function SSHConnectionsUnified() {
               </Box>
             </CardContent>
           </Card>
-        </Grid>
-        <Grid item xs={12} md={4}>
+        </Box>
+        <Box sx={{ flex: 1 }}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -418,8 +417,8 @@ export default function SSHConnectionsUnified() {
               </Box>
             </CardContent>
           </Card>
-        </Grid>
-        <Grid item xs={12} md={4}>
+        </Box>
+        <Box sx={{ flex: 1 }}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -435,8 +434,8 @@ export default function SSHConnectionsUnified() {
               </Box>
             </CardContent>
           </Card>
-        </Grid>
-      </Grid>
+        </Box>
+      </Stack>
 
       {/* Failed Connections Alert */}
       {failedCount > 0 && (
@@ -451,9 +450,9 @@ export default function SSHConnectionsUnified() {
       )}
 
       {/* Main Content Grid */}
-      <Grid container spacing={3}>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={3}>
         {/* SSH Keys Panel (Left 40%) */}
-        <Grid item xs={12} md={5}>
+        <Box sx={{ flex: { xs: 1, md: '0 0 42%' } }}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -589,10 +588,10 @@ export default function SSHConnectionsUnified() {
               )}
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
         {/* Connections Panel (Right 60%) */}
-        <Grid item xs={12} md={7}>
+        <Box sx={{ flex: { xs: 1, md: '0 0 58%' } }}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -705,8 +704,8 @@ export default function SSHConnectionsUnified() {
               )}
             </CardContent>
           </Card>
-        </Grid>
-      </Grid>
+        </Box>
+      </Stack>
 
       {/* Quick Setup Dialog */}
       <Dialog open={showQuickSetupDialog} onClose={() => setShowQuickSetupDialog(false)} maxWidth="sm" fullWidth>
