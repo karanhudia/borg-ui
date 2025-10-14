@@ -871,7 +871,7 @@
 			]
 		},
 		{
-			"name": "12. Settings & Debug",
+			"name": "12. Settings",
 			"item": [
 				{
 					"name": "Get Profile",
@@ -912,32 +912,6 @@
 							"path": ["api", "settings", "system", "cleanup"]
 						},
 						"description": "Run system cleanup tasks"
-					}
-				},
-				{
-					"name": "Network Debug",
-					"request": {
-						"method": "GET",
-						"url": {
-							"raw": "{{base_url}}/api/settings/debug/network?host=192.168.1.100",
-							"host": ["{{base_url}}"],
-							"path": ["api", "settings", "debug", "network"],
-							"query": [{"key": "host", "value": "192.168.1.100"}]
-						},
-						"description": "Test network connectivity"
-					}
-				},
-				{
-					"name": "Database Debug",
-					"request": {
-						"method": "GET",
-						"url": {
-							"raw": "{{base_url}}/api/settings/debug/database?table=ssh_keys",
-							"host": ["{{base_url}}"],
-							"path": ["api", "settings", "debug", "database"],
-							"query": [{"key": "table", "value": "ssh_keys"}]
-						},
-						"description": "Get database debug information"
 					}
 				}
 			]
