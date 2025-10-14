@@ -1,17 +1,21 @@
 import os
+import secrets
 from typing import List
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     """Application settings"""
-    
+
     # Application settings
     app_name: str = "Borgmatic Web UI"
     app_version: str = "1.0.0"
     debug: bool = False
-    
+    environment: str = "development"
+
     # Security settings
-    secret_key: str = "your-secret-key-change-this-in-production"
+    # WARNING: NEVER use default secret_key in production!
+    # Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+    secret_key: str = "INSECURE-CHANGE-THIS-IN-PRODUCTION"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     
@@ -69,8 +73,56 @@ elif os.getenv("ENVIRONMENT") == "development":
     settings.log_level = "DEBUG"
 
 # Override with environment variables if present
+settings.environment = os.getenv("ENVIRONMENT", settings.environment)
 settings.secret_key = os.getenv("SECRET_KEY", settings.secret_key)
 settings.borgmatic_config_path = os.getenv("BORGMATIC_CONFIG_PATH", settings.borgmatic_config_path)
 settings.borgmatic_backup_path = os.getenv("BORGMATIC_BACKUP_PATH", settings.borgmatic_backup_path)
 settings.log_level = os.getenv("LOG_LEVEL", settings.log_level)
-settings.database_url = os.getenv("DATABASE_URL", settings.database_url) 
+settings.database_url = os.getenv("DATABASE_URL", settings.database_url)
+
+# Security validation
+def validate_security_settings():
+    """Validate critical security settings"""
+    issues = []
+
+    # Check for insecure secret key in production
+    if settings.environment == "production":
+        if settings.secret_key in [
+            "INSECURE-CHANGE-THIS-IN-PRODUCTION",
+            "your-secret-key-change-this-in-production",
+            "change-me",
+            "secret",
+            "password"
+        ]:
+            issues.append(
+                "CRITICAL: Insecure SECRET_KEY detected in production! "
+                "Generate a secure key with: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+            )
+
+        if len(settings.secret_key) < 32:
+            issues.append(
+                "WARNING: SECRET_KEY is too short (< 32 characters). "
+                "Use a longer, randomly generated key for better security."
+            )
+
+        if settings.debug:
+            issues.append(
+                "WARNING: Debug mode is enabled in production. "
+                "Set DEBUG=false or ENVIRONMENT=production to disable."
+            )
+
+    # Log warnings
+    if issues:
+        import logging
+        logger = logging.getLogger(__name__)
+        for issue in issues:
+            if "CRITICAL" in issue:
+                logger.critical(issue)
+                # In strict mode, raise an exception
+                if os.getenv("STRICT_SECURITY", "false").lower() == "true":
+                    raise ValueError(issue)
+            else:
+                logger.warning(issue)
+
+# Run validation
+validate_security_settings() 

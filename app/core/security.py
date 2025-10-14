@@ -118,7 +118,9 @@ async def create_first_user():
         user_count = db.query(User).count()
         if user_count == 0:
             # Create default admin user
-            default_password = "admin123"  # Should be changed on first login
+            # Use environment variable if set, otherwise use default
+            import os
+            default_password = os.getenv("INITIAL_ADMIN_PASSWORD", "admin123")
             hashed_password = get_password_hash(default_password)
             
             admin_user = User(
@@ -131,12 +133,19 @@ async def create_first_user():
             
             db.add(admin_user)
             db.commit()
-            
+
             logger.info("Created default admin user", username="admin")
-            logger.warning(
-                "Default admin password is 'admin123'. Please change it immediately!",
-                username="admin"
-            )
+            if default_password == "admin123":
+                logger.warning(
+                    "⚠️  SECURITY: Using default admin password 'admin123'. "
+                    "CHANGE IT IMMEDIATELY or set INITIAL_ADMIN_PASSWORD env var!",
+                    username="admin"
+                )
+            else:
+                logger.info(
+                    "Using custom initial admin password from INITIAL_ADMIN_PASSWORD env var",
+                    username="admin"
+                )
     except Exception as e:
         # Check if it's a duplicate key error
         if "UNIQUE constraint failed" in str(e) or "duplicate key" in str(e).lower():

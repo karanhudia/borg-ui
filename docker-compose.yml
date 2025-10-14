@@ -42,11 +42,16 @@ services:
     
     environment:
       # Application settings
+      - ENVIRONMENT=${ENVIRONMENT:-production}
       - BORGMATIC_CONFIG_PATH=/app/config/borgmatic.yaml
       - BORGMATIC_BACKUP_PATH=/backups
-      - LOG_LEVEL=INFO
-      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-this-in-production}
-      - ENVIRONMENT=production
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # Security settings (⚠️ MUST set in .env file!)
+      - SECRET_KEY=${SECRET_KEY:?ERROR: SECRET_KEY is required! Set it in .env file}
+      - ALGORITHM=${ALGORITHM:-HS256}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      - STRICT_SECURITY=${STRICT_SECURITY:-false}
       
       # Cron settings
       - ENABLE_CRON_BACKUPS=${ENABLE_CRON_BACKUPS:-false}

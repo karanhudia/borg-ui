@@ -29,12 +29,43 @@ error.log
 app.log
 borgmatic.log
 
-# Environment files
+# Environment files (NEVER commit these!)
 .env
 .env.local
+.env.development
 .env.development.local
+.env.test
 .env.test.local
+.env.production
 .env.production.local
+.env.*.local
+
+# SSH Keys and Certificates (NEVER commit these!)
+*.key
+*.pem
+*.p12
+*.pfx
+*.cer
+*.crt
+*_rsa
+*_rsa.pub
+*_dsa
+*_ecdsa
+*_ed25519
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+authorized_keys
+known_hosts
+
+# Secrets and credentials
+secrets/
+credentials/
+*.secret
+*.password
+.secrets
+config/secrets.yaml
 
 # IDE
 .vscode/

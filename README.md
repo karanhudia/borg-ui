@@ -75,59 +75,32 @@ open http://localhost:8000
 
 ## Installation
 
+**⭐ Complete installation guide:** [INSTALL.md](INSTALL.md)
+
 ### Supported Platforms
 
-| Platform | Architecture | Status | Install Time |
-|----------|-------------|--------|--------------|
-| **Raspberry Pi** | arm64, armv7 | ✅ Supported | ~45 seconds |
-| **Linux x86** | amd64 | ✅ Supported | ~30 seconds |
-| **macOS** | amd64, arm64 | ✅ Supported | ~30 seconds |
-| **Windows** | amd64 | ✅ Supported | ~30 seconds |
-| **Synology NAS** | Various | ✅ Supported | ~60 seconds |
+Works on any platform with Docker:
+- ✅ Linux (amd64, arm64, armv7)
+- ✅ macOS (Intel & Apple Silicon)
+- ✅ Windows
+- ✅ Raspberry Pi, NAS devices
 
-### Detailed Installation Guides
+### Docker Images
 
-- **[Raspberry Pi Installation](docs/installation/INSTALL_RASPBERRY_PI.md)** - Optimized for ARM devices
-- **[Quick Start Guide](docs/installation/QUICK_START.md)** - Platform-specific instructions
-- **[Network Setup](docs/installation/NETWORK_SETUP.md)** - Network configuration for remote backups
-- **[Deployment Patterns](docs/deployment/DEPLOYMENT_PATTERNS.md)** - Choose the right deployment strategy
+Pre-built multi-arch images: [`ainullcode/borgmatic-ui:latest`](https://hub.docker.com/r/ainullcode/borgmatic-ui)
 
-### Docker Image
-
-Pre-built images available at: [`ainullcode/borgmatic-ui:latest`](https://hub.docker.com/r/ainullcode/borgmatic-ui)
-
-**Supported architectures:**
-- `linux/amd64` - Intel/AMD 64-bit
-- `linux/arm64` - ARM 64-bit (Raspberry Pi 4/5, Apple M1/M2)
-- `linux/arm/v7` - ARM 32-bit (Raspberry Pi 3)
+**Install time:** 30-60 seconds (pulling image only)
 
 ---
 
 ## Documentation
 
-### For Users
-
-- **Installation**
-  - [Quick Start Guide](docs/installation/QUICK_START.md)
-  - [Raspberry Pi Installation](docs/installation/INSTALL_RASPBERRY_PI.md)
-  - [Network Setup Guide](docs/installation/NETWORK_SETUP.md)
-
-- **Deployment**
-  - [Deployment Patterns](docs/deployment/DEPLOYMENT_PATTERNS.md)
-  - [Docker Hub Setup](docs/deployment/DOCKER_HUB_SETUP.md)
-  - [Performance Comparison](docs/deployment/QUICK_START_COMPARISON.md)
-
-### For Developers
-
-- **Development**
-  - [Contributing Guidelines](.github/CONTRIBUTING.md)
-  - [GitHub Settings](docs/development/GITHUB_SETTINGS.md)
-  - [Build Status](docs/development/PI_BUILD_STATUS.md)
-
-- **Specifications**
-  - [Project Specifications](docs/specifications/)
-  - [Future Enhancements](docs/specifications/FUTURE_ENHANCEMENTS.md)
-  - [Implementation Summary](docs/specifications/IMPLEMENTATION_SUMMARY.md)
+- **[Installation Guide](INSTALL.md)** - Complete setup instructions
+- **[Security Guide](SECURITY.md)** - Security best practices
+- **[API Documentation](http://localhost:8000/api/docs)** - Interactive API docs (after install)
+- **[Contributing](.github/CONTRIBUTING.md)** - How to contribute
+- **[Specification](docs/SPECIFICATION.md)** - Technical specification
+- **[Future Plans](docs/FUTURE_ENHANCEMENTS.md)** - Planned features
 
 ---
 
