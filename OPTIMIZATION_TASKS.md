@@ -129,16 +129,16 @@
   - Simpler, more intuitive workflow
 
 ### 10. Repository Creation UX Improvements
-- **Allow any path for repositories** (not just /backups)
+- **✅ Allow any path for repositories** (Backend: path restrictions removed)
 - **Two repository types:**
   1. **SSH Repository:** `borg init --encryption=repokey ssh://user@host/path`
-     - Dropdown to select from existing SSH connections
-     - If SSH connection exists, use path inside that machine
+     - ⏳ Dropdown to select from existing SSH connections (Frontend pending)
+     - Backend supports SSH repos with any path
      - Example: `ssh://karanhudia@192.168.1.250/mnt/mydisk/data/immich-backup`
   2. **Local Repository:** `borg init -e repokey /srv/borg_backup`
-     - Any path on local filesystem
-     - Not restricted to /backups directory
-- **Auto-create directories:** User shouldn't need to manually create directories
+     - ✅ Any path on local filesystem (Backend: restriction removed)
+     - ✅ Auto-create directories (Backend: already implemented)
+- **✅ Auto-create directories:** Already implemented in backend
 
 ### 11. Configuration-First Workflow
 - **Everything disabled until valid config saved and selected**

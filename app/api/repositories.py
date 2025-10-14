@@ -99,30 +99,13 @@ async def create_repository(
         repo_path = repo_data.path.strip()
         
         if repo_data.repository_type == "local":
-            # For local repositories, ensure path is absolute and within allowed directories
+            # For local repositories, ensure path is absolute
             if not os.path.isabs(repo_path):
                 # If relative path, make it relative to backup path
                 repo_path = os.path.join(settings.borgmatic_backup_path, repo_path)
-            
-            # Security check: ensure path is within allowed directories
-            allowed_dirs = [
-                settings.borgmatic_backup_path,
-                "/backups",
-                "/app/backups",
-                "/tmp/backups"
-            ]
-            
-            path_allowed = False
-            for allowed_dir in allowed_dirs:
-                if os.path.abspath(repo_path).startswith(os.path.abspath(allowed_dir)):
-                    path_allowed = True
-                    break
-            
-            if not path_allowed:
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"Repository path must be within allowed directories: {', '.join(allowed_dirs)}"
-                )
+
+            # Validate that the path is a valid absolute path
+            repo_path = os.path.abspath(repo_path)
         elif repo_data.repository_type in ["ssh", "sftp"]:
             # For SSH repositories, validate required fields
             if not repo_data.host:

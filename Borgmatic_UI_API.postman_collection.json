@@ -2,7 +2,7 @@
 	"info": {
 		"name": "Borgmatic UI API - Complete",
 		"description": "Comprehensive API collection for Borgmatic UI\n\nFeatures:\n- Authentication & User Management\n- Dashboard & Metrics\n- Backup Operations\n- Repository Management (Local & SSH)\n- SSH Key Management\n- Archive Management\n- Real-time Updates (SSE)\n- Configuration Management\n\nNote: Logs and Health endpoints have been removed - logs are printed to console",
-		"version": "2.1.0",
+		"version": "2.2.0",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"auth": {
@@ -370,14 +370,14 @@
 						"header": [{"key": "Content-Type", "value": "application/json"}],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"name\": \"My Backup Repo\",\n  \"path\": \"/backups/repo1\",\n  \"encryption\": \"repokey\",\n  \"compression\": \"lz4\",\n  \"passphrase\": \"my-secure-passphrase\",\n  \"repository_type\": \"local\"\n}"
+							"raw": "{\n  \"name\": \"My Backup Repo\",\n  \"path\": \"/srv/borg_backup\",\n  \"encryption\": \"repokey\",\n  \"compression\": \"lz4\",\n  \"passphrase\": \"my-secure-passphrase\",\n  \"repository_type\": \"local\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/repositories",
+							"raw": "{{base_url}}/api/repositories/",
 							"host": ["{{base_url}}"],
-							"path": ["api", "repositories"]
+							"path": ["api", "repositories", ""]
 						},
-						"description": "Create a new local repository"
+						"description": "Create a new local repository at any path (directory will be created automatically)"
 					}
 				},
 				{
@@ -387,14 +387,14 @@
 						"header": [{"key": "Content-Type", "value": "application/json"}],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"name\": \"Remote Backup Repo\",\n  \"path\": \"/mnt/backup/repo\",\n  \"encryption\": \"repokey\",\n  \"compression\": \"lz4\",\n  \"passphrase\": \"my-secure-passphrase\",\n  \"repository_type\": \"ssh\",\n  \"host\": \"192.168.1.100\",\n  \"port\": 22,\n  \"username\": \"backup_user\",\n  \"ssh_key_id\": 1\n}"
+							"raw": "{\n  \"name\": \"Remote Backup Repo\",\n  \"path\": \"/mnt/mydisk/data/immich-backup\",\n  \"encryption\": \"repokey\",\n  \"compression\": \"lz4\",\n  \"passphrase\": \"my-secure-passphrase\",\n  \"repository_type\": \"ssh\",\n  \"host\": \"192.168.1.250\",\n  \"port\": 22,\n  \"username\": \"karanhudia\",\n  \"ssh_key_id\": 1\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/repositories",
+							"raw": "{{base_url}}/api/repositories/",
 							"host": ["{{base_url}}"],
-							"path": ["api", "repositories"]
+							"path": ["api", "repositories", ""]
 						},
-						"description": "Create a new SSH repository"
+						"description": "Create a new SSH repository (will be formatted as ssh://username@host:port/path)"
 					}
 				},
 				{
