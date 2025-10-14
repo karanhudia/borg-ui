@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { Play, Square, Clock, CheckCircle, AlertCircle, RefreshCw, FileText, HardDrive } from 'lucide-react';
-import { backupAPI } from '../services/api';
+import { backupAPI, repositoriesAPI } from '../services/api';
 import { toast } from 'react-hot-toast';
 import { useBackupProgress } from '../hooks/useSSE';
 
@@ -32,6 +32,12 @@ const Backup: React.FC = () => {
     queryKey: ['backup-status'],
     queryFn: backupAPI.getAllJobs,
     refetchInterval: realtimeProgress ? 0 : 5000 // Use real-time updates if available, otherwise poll
+  });
+
+  // Get repositories
+  const { data: repositoriesData, isLoading: loadingRepositories } = useQuery({
+    queryKey: ['repositories'],
+    queryFn: repositoriesAPI.getRepositories,
   });
 
   // Start backup mutation
@@ -184,11 +190,16 @@ const Backup: React.FC = () => {
                 value={selectedRepository}
                 onChange={(e) => setSelectedRepository(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                disabled={loadingRepositories}
               >
-                <option value="">Select a repository...</option>
-                <option value="default">Default Repository</option>
-                <option value="backup1">Backup Repository 1</option>
-                <option value="backup2">Backup Repository 2</option>
+                <option value="">
+                  {loadingRepositories ? 'Loading repositories...' : 'Select a repository...'}
+                </option>
+                {repositoriesData?.data?.repositories?.map((repo: any) => (
+                  <option key={repo.id} value={repo.path}>
+                    {repo.name} ({repo.path})
+                  </option>
+                ))}
               </select>
             </div>
             
