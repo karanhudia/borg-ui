@@ -1,7 +1,8 @@
 {
 	"info": {
-		"name": "Borgmatic UI API",
-		"description": "API collection for testing Borgmatic UI endpoints",
+		"name": "Borgmatic UI API - Complete",
+		"description": "Comprehensive API collection for Borgmatic UI with all endpoints",
+		"version": "2.0.0",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"auth": {
@@ -28,7 +29,7 @@
 	],
 	"item": [
 		{
-			"name": "Authentication",
+			"name": "1. Authentication",
 			"item": [
 				{
 					"name": "Login",
@@ -40,7 +41,7 @@
 									"if (pm.response.code === 200) {",
 									"    var jsonData = pm.response.json();",
 									"    pm.collectionVariables.set(\"access_token\", jsonData.access_token);",
-									"    console.log(\"Token saved:\", jsonData.access_token);",
+									"    console.log(\"✅ Token saved:\", jsonData.access_token);",
 									"}"
 								],
 								"type": "text/javascript"
@@ -48,244 +49,896 @@
 						}
 					],
 					"request": {
-						"auth": {
-							"type": "noauth"
-						},
+						"auth": {"type": "noauth"},
 						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/x-www-form-urlencoded"
-							}
-						],
+						"header": [{"key": "Content-Type", "value": "application/x-www-form-urlencoded"}],
 						"body": {
 							"mode": "urlencoded",
 							"urlencoded": [
-								{
-									"key": "username",
-									"value": "admin",
-									"type": "text"
-								},
-								{
-									"key": "password",
-									"value": "admin123",
-									"type": "text"
-								}
+								{"key": "username", "value": "admin", "type": "text"},
+								{"key": "password", "value": "admin123", "type": "text"}
 							]
 						},
 						"url": {
 							"raw": "{{base_url}}/api/auth/login",
 							"host": ["{{base_url}}"],
 							"path": ["api", "auth", "login"]
+						},
+						"description": "Authenticate and receive JWT token"
+					}
+				},
+				{
+					"name": "Get Current User",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/auth/me",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "me"]
+						},
+						"description": "Get currently authenticated user info"
+					}
+				},
+				{
+					"name": "Refresh Token",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{base_url}}/api/auth/refresh",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "refresh"]
+						},
+						"description": "Refresh JWT token"
+					}
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{base_url}}/api/auth/logout",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "logout"]
 						}
-					},
-					"response": []
+					}
+				},
+				{
+					"name": "Change Password",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"old_password\": \"admin123\",\n  \"new_password\": \"newpassword123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/change-password",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "change-password"]
+						}
+					}
+				},
+				{
+					"name": "List Users (Admin)",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/auth/users",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "users"]
+						}
+					}
+				},
+				{
+					"name": "Create User (Admin)",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"newuser\",\n  \"email\": \"newuser@example.com\",\n  \"password\": \"password123\",\n  \"is_admin\": false\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/users",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "users"]
+						}
+					}
+				},
+				{
+					"name": "Update User (Admin)",
+					"request": {
+						"method": "PUT",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"updated@example.com\",\n  \"is_admin\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/users/:user_id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "users", ":user_id"],
+							"variable": [{"key": "user_id", "value": "2"}]
+						}
+					}
+				},
+				{
+					"name": "Delete User (Admin)",
+					"request": {
+						"method": "DELETE",
+						"url": {
+							"raw": "{{base_url}}/api/auth/users/:user_id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "users", ":user_id"],
+							"variable": [{"key": "user_id", "value": "2"}]
+						}
+					}
 				}
 			]
 		},
 		{
-			"name": "SSH Keys",
+			"name": "2. Dashboard",
+			"item": [
+				{
+					"name": "Get Dashboard Status",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/dashboard/status",
+							"host": ["{{base_url}}"],
+							"path": ["api", "dashboard", "status"]
+						},
+						"description": "Get overall backup status and quick stats"
+					}
+				},
+				{
+					"name": "Get Metrics",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/dashboard/metrics",
+							"host": ["{{base_url}}"],
+							"path": ["api", "dashboard", "metrics"]
+						},
+						"description": "Get system metrics and performance data"
+					}
+				},
+				{
+					"name": "Get Schedule",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/dashboard/schedule",
+							"host": ["{{base_url}}"],
+							"path": ["api", "dashboard", "schedule"]
+						},
+						"description": "Get upcoming scheduled backups"
+					}
+				},
+				{
+					"name": "Get Health",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/dashboard/health",
+							"host": ["{{base_url}}"],
+							"path": ["api", "dashboard", "health"]
+						},
+						"description": "Get system health status"
+					}
+				}
+			]
+		},
+		{
+			"name": "3. Backup Operations",
+			"item": [
+				{
+					"name": "Start Backup",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"repository_id\": 1,\n  \"options\": {\n    \"dry_run\": false,\n    \"verbosity\": 1\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/backup/start",
+							"host": ["{{base_url}}"],
+							"path": ["api", "backup", "start"]
+						},
+						"description": "Start a new backup job"
+					}
+				},
+				{
+					"name": "Get Backup Status",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/backup/status/:job_id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "backup", "status", ":job_id"],
+							"variable": [{"key": "job_id", "value": "1"}]
+						},
+						"description": "Get status of a backup job"
+					}
+				},
+				{
+					"name": "Cancel Backup",
+					"request": {
+						"method": "DELETE",
+						"url": {
+							"raw": "{{base_url}}/api/backup/cancel/:job_id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "backup", "cancel", ":job_id"],
+							"variable": [{"key": "job_id", "value": "1"}]
+						},
+						"description": "Cancel a running backup job"
+					}
+				},
+				{
+					"name": "Get Backup Logs",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/backup/logs/:job_id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "backup", "logs", ":job_id"],
+							"variable": [{"key": "job_id", "value": "1"}]
+						},
+						"description": "Get logs for a backup job"
+					}
+				}
+			]
+		},
+		{
+			"name": "4. Archives",
+			"item": [
+				{
+					"name": "List Archives",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/archives/list?repository_id=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "archives", "list"],
+							"query": [{"key": "repository_id", "value": "1"}]
+						},
+						"description": "List all archives in a repository"
+					}
+				},
+				{
+					"name": "Get Archive Info",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/archives/:archive_id/info",
+							"host": ["{{base_url}}"],
+							"path": ["api", "archives", ":archive_id", "info"],
+							"variable": [{"key": "archive_id", "value": "1"}]
+						},
+						"description": "Get detailed information about an archive"
+					}
+				},
+				{
+					"name": "Get Archive Contents",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/archives/:archive_id/contents?path=/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "archives", ":archive_id", "contents"],
+							"variable": [{"key": "archive_id", "value": "1"}],
+							"query": [{"key": "path", "value": "/"}]
+						},
+						"description": "Browse contents of an archive"
+					}
+				},
+				{
+					"name": "Delete Archive",
+					"request": {
+						"method": "DELETE",
+						"url": {
+							"raw": "{{base_url}}/api/archives/:archive_id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "archives", ":archive_id"],
+							"variable": [{"key": "archive_id", "value": "1"}]
+						},
+						"description": "Delete an archive"
+					}
+				}
+			]
+		},
+		{
+			"name": "5. Repositories",
+			"item": [
+				{
+					"name": "List Repositories",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/repositories",
+							"host": ["{{base_url}}"],
+							"path": ["api", "repositories"]
+						},
+						"description": "List all configured repositories"
+					}
+				},
+				{
+					"name": "Create Repository",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"My Backup Repo\",\n  \"location\": \"/backups/repo1\",\n  \"type\": \"local\",\n  \"encryption\": \"repokey\",\n  \"passphrase\": \"my-secure-passphrase\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/repositories",
+							"host": ["{{base_url}}"],
+							"path": ["api", "repositories"]
+						},
+						"description": "Create a new repository"
+					}
+				},
+				{
+					"name": "Get Repository",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/repositories/:repo_id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "repositories", ":repo_id"],
+							"variable": [{"key": "repo_id", "value": "1"}]
+						},
+						"description": "Get repository details"
+					}
+				},
+				{
+					"name": "Update Repository",
+					"request": {
+						"method": "PUT",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Updated Repo Name\",\n  \"description\": \"Updated description\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/repositories/:repo_id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "repositories", ":repo_id"],
+							"variable": [{"key": "repo_id", "value": "1"}]
+						},
+						"description": "Update repository settings"
+					}
+				},
+				{
+					"name": "Delete Repository",
+					"request": {
+						"method": "DELETE",
+						"url": {
+							"raw": "{{base_url}}/api/repositories/:repo_id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "repositories", ":repo_id"],
+							"variable": [{"key": "repo_id", "value": "1"}]
+						},
+						"description": "Delete a repository"
+					}
+				},
+				{
+					"name": "Check Repository",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{base_url}}/api/repositories/:repo_id/check",
+							"host": ["{{base_url}}"],
+							"path": ["api", "repositories", ":repo_id", "check"],
+							"variable": [{"key": "repo_id", "value": "1"}]
+						},
+						"description": "Run integrity check on repository"
+					}
+				},
+				{
+					"name": "Compact Repository",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{base_url}}/api/repositories/:repo_id/compact",
+							"host": ["{{base_url}}"],
+							"path": ["api", "repositories", ":repo_id", "compact"],
+							"variable": [{"key": "repo_id", "value": "1"}]
+						},
+						"description": "Compact repository to free space"
+					}
+				},
+				{
+					"name": "Get Repository Stats",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/repositories/:repo_id/stats",
+							"host": ["{{base_url}}"],
+							"path": ["api", "repositories", ":repo_id", "stats"],
+							"variable": [{"key": "repo_id", "value": "1"}]
+						},
+						"description": "Get repository statistics"
+					}
+				}
+			]
+		},
+		{
+			"name": "6. SSH Keys",
 			"item": [
 				{
 					"name": "List SSH Keys",
 					"request": {
 						"method": "GET",
-						"header": [],
 						"url": {
 							"raw": "{{base_url}}/api/ssh-keys",
 							"host": ["{{base_url}}"],
 							"path": ["api", "ssh-keys"]
-						}
-					},
-					"response": []
+						},
+						"description": "List all SSH keys"
+					}
 				},
 				{
 					"name": "Generate SSH Key",
 					"request": {
 						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
+						"header": [{"key": "Content-Type", "value": "application/json"}],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"name\": \"test-key\",\n  \"key_type\": \"rsa\",\n  \"description\": \"Test key generated via Postman\"\n}"
+							"raw": "{\n  \"name\": \"my-backup-key\",\n  \"key_type\": \"rsa\",\n  \"description\": \"SSH key for backup server\",\n  \"passphrase\": \"\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/ssh-keys/generate",
 							"host": ["{{base_url}}"],
 							"path": ["api", "ssh-keys", "generate"]
-						}
-					},
-					"response": []
+						},
+						"description": "Generate a new SSH key pair"
+					}
 				},
 				{
-					"name": "Quick SSH Setup (Generate & Deploy)",
+					"name": "Quick SSH Setup",
 					"request": {
 						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
+						"header": [{"key": "Content-Type", "value": "application/json"}],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"name\": \"quick-setup-key\",\n  \"key_type\": \"rsa\",\n  \"description\": \"Quick setup test\",\n  \"host\": \"192.168.1.150\",\n  \"username\": \"karanhudia\",\n  \"port\": 22,\n  \"password\": \"your-password-here\",\n  \"skip_deployment\": false\n}"
+							"raw": "{\n  \"name\": \"quick-key\",\n  \"key_type\": \"rsa\",\n  \"host\": \"192.168.1.100\",\n  \"username\": \"backup_user\",\n  \"port\": 22,\n  \"password\": \"ssh-password\",\n  \"skip_deployment\": false\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/ssh-keys/quick-setup",
 							"host": ["{{base_url}}"],
 							"path": ["api", "ssh-keys", "quick-setup"]
-						}
-					},
-					"response": []
+						},
+						"description": "Generate and deploy SSH key in one step"
+					}
 				},
 				{
 					"name": "Deploy SSH Key",
 					"request": {
 						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
+						"header": [{"key": "Content-Type", "value": "application/json"}],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"host\": \"192.168.1.150\",\n  \"username\": \"karanhudia\",\n  \"port\": 22,\n  \"password\": \"your-password-here\"\n}"
+							"raw": "{\n  \"host\": \"192.168.1.100\",\n  \"username\": \"backup_user\",\n  \"port\": 22,\n  \"password\": \"ssh-password\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/ssh-keys/:key_id/deploy",
 							"host": ["{{base_url}}"],
 							"path": ["api", "ssh-keys", ":key_id", "deploy"],
-							"variable": [
-								{
-									"key": "key_id",
-									"value": "1"
-								}
-							]
-						}
-					},
-					"response": []
+							"variable": [{"key": "key_id", "value": "1"}]
+						},
+						"description": "Deploy SSH key to remote server"
+					}
 				},
 				{
 					"name": "Test SSH Connection",
 					"request": {
 						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
+						"header": [{"key": "Content-Type", "value": "application/json"}],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"host\": \"192.168.1.150\",\n  \"username\": \"karanhudia\",\n  \"port\": 22\n}"
+							"raw": "{\n  \"host\": \"192.168.1.100\",\n  \"username\": \"backup_user\",\n  \"port\": 22\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/ssh-keys/:key_id/test-connection",
 							"host": ["{{base_url}}"],
 							"path": ["api", "ssh-keys", ":key_id", "test-connection"],
-							"variable": [
-								{
-									"key": "key_id",
-									"value": "1"
-								}
-							]
-						}
-					},
-					"response": []
+							"variable": [{"key": "key_id", "value": "1"}]
+						},
+						"description": "Test SSH connection with key"
+					}
 				},
 				{
 					"name": "Get SSH Connections",
 					"request": {
 						"method": "GET",
-						"header": [],
 						"url": {
 							"raw": "{{base_url}}/api/ssh-keys/connections",
 							"host": ["{{base_url}}"],
 							"path": ["api", "ssh-keys", "connections"]
-						}
-					},
-					"response": []
+						},
+						"description": "Get list of SSH connections"
+					}
 				},
 				{
 					"name": "Get SSH Key Details",
 					"request": {
 						"method": "GET",
-						"header": [],
 						"url": {
 							"raw": "{{base_url}}/api/ssh-keys/:key_id",
 							"host": ["{{base_url}}"],
 							"path": ["api", "ssh-keys", ":key_id"],
-							"variable": [
-								{
-									"key": "key_id",
-									"value": "1"
-								}
-							]
-						}
-					},
-					"response": []
+							"variable": [{"key": "key_id", "value": "1"}]
+						},
+						"description": "Get SSH key details"
+					}
+				},
+				{
+					"name": "Update SSH Key",
+					"request": {
+						"method": "PUT",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"updated-key-name\",\n  \"description\": \"Updated description\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/ssh-keys/:key_id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "ssh-keys", ":key_id"],
+							"variable": [{"key": "key_id", "value": "1"}]
+						},
+						"description": "Update SSH key metadata"
+					}
 				},
 				{
 					"name": "Delete SSH Key",
 					"request": {
 						"method": "DELETE",
-						"header": [],
 						"url": {
 							"raw": "{{base_url}}/api/ssh-keys/:key_id",
 							"host": ["{{base_url}}"],
 							"path": ["api", "ssh-keys", ":key_id"],
-							"variable": [
-								{
-									"key": "key_id",
-									"value": "1"
-								}
-							]
-						}
-					},
-					"response": []
+							"variable": [{"key": "key_id", "value": "1"}]
+						},
+						"description": "Delete an SSH key"
+					}
 				}
 			]
 		},
 		{
-			"name": "Settings & Debug",
+			"name": "7. Configuration",
 			"item": [
 				{
-					"name": "Get Database Debug Info",
+					"name": "Get Current Config",
 					"request": {
 						"method": "GET",
-						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/settings/debug/database",
+							"raw": "{{base_url}}/api/config/current",
 							"host": ["{{base_url}}"],
-							"path": ["api", "settings", "debug", "database"]
-						}
-					},
-					"response": []
+							"path": ["api", "config", "current"]
+						},
+						"description": "Get current Borgmatic configuration"
+					}
 				},
 				{
-					"name": "Get Specific Table Data",
+					"name": "Update Config",
+					"request": {
+						"method": "PUT",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"location\": {\n    \"source_directories\": [\"/home\", \"/etc\"],\n    \"repositories\": [\"/backups/repo1\"]\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/config/update",
+							"host": ["{{base_url}}"],
+							"path": ["api", "config", "update"]
+						},
+						"description": "Update Borgmatic configuration"
+					}
+				},
+				{
+					"name": "Validate Config",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"config\": {}\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/config/validate",
+							"host": ["{{base_url}}"],
+							"path": ["api", "config", "validate"]
+						},
+						"description": "Validate configuration before saving"
+					}
+				},
+				{
+					"name": "Get Config Templates",
 					"request": {
 						"method": "GET",
-						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/config/templates",
+							"host": ["{{base_url}}"],
+							"path": ["api", "config", "templates"]
+						},
+						"description": "Get available configuration templates"
+					}
+				},
+				{
+					"name": "Backup Config",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{base_url}}/api/config/backup",
+							"host": ["{{base_url}}"],
+							"path": ["api", "config", "backup"]
+						},
+						"description": "Create backup of current configuration"
+					}
+				},
+				{
+					"name": "List Config Backups",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/config/backups",
+							"host": ["{{base_url}}"],
+							"path": ["api", "config", "backups"]
+						},
+						"description": "List configuration backups"
+					}
+				},
+				{
+					"name": "Get Config Backup",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/config/backups/:backup_id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "config", "backups", ":backup_id"],
+							"variable": [{"key": "backup_id", "value": "1"}]
+						},
+						"description": "Get specific configuration backup"
+					}
+				},
+				{
+					"name": "Restore Config Backup",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{base_url}}/api/config/restore/:backup_id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "config", "restore", ":backup_id"],
+							"variable": [{"key": "backup_id", "value": "1"}]
+						},
+						"description": "Restore configuration from backup"
+					}
+				}
+			]
+		},
+		{
+			"name": "8. Restore Operations",
+			"item": [
+				{
+					"name": "Preview Restore",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"archive_id\": 1,\n  \"paths\": [\"/home/user/documents\"],\n  \"destination\": \"/restore\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/restore/preview",
+							"host": ["{{base_url}}"],
+							"path": ["api", "restore", "preview"]
+						},
+						"description": "Preview restore operation (dry run)"
+					}
+				}
+			]
+		},
+		{
+			"name": "9. Health & Monitoring",
+			"item": [
+				{
+					"name": "System Health",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/health/system",
+							"host": ["{{base_url}}"],
+							"path": ["api", "health", "system"]
+						},
+						"description": "Get system health status"
+					}
+				},
+				{
+					"name": "Repositories Health",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/health/repositories",
+							"host": ["{{base_url}}"],
+							"path": ["api", "health", "repositories"]
+						},
+						"description": "Get repositories health status"
+					}
+				},
+				{
+					"name": "Backups Health",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/health/backups",
+							"host": ["{{base_url}}"],
+							"path": ["api", "health", "backups"]
+						},
+						"description": "Get backups health status"
+					}
+				}
+			]
+		},
+		{
+			"name": "10. Logs",
+			"item": [
+				{
+					"name": "Get Logs",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/logs?level=INFO&limit=100",
+							"host": ["{{base_url}}"],
+							"path": ["api", "logs"],
+							"query": [
+								{"key": "level", "value": "INFO"},
+								{"key": "limit", "value": "100"}
+							]
+						},
+						"description": "Get application logs"
+					}
+				},
+				{
+					"name": "Get Log Types",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/logs/types",
+							"host": ["{{base_url}}"],
+							"path": ["api", "logs", "types"]
+						},
+						"description": "Get available log types"
+					}
+				},
+				{
+					"name": "Get Log Stats",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/logs/stats",
+							"host": ["{{base_url}}"],
+							"path": ["api", "logs", "stats"]
+						},
+						"description": "Get log statistics"
+					}
+				},
+				{
+					"name": "Clear Logs",
+					"request": {
+						"method": "DELETE",
+						"url": {
+							"raw": "{{base_url}}/api/logs/clear",
+							"host": ["{{base_url}}"],
+							"path": ["api", "logs", "clear"]
+						},
+						"description": "Clear all logs"
+					}
+				}
+			]
+		},
+		{
+			"name": "11. Events (SSE)",
+			"item": [
+				{
+					"name": "Event Stream",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/events/stream",
+							"host": ["{{base_url}}"],
+							"path": ["api", "events", "stream"]
+						},
+						"description": "Server-Sent Events stream for real-time updates"
+					}
+				},
+				{
+					"name": "Get Active Connections",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/events/connections",
+							"host": ["{{base_url}}"],
+							"path": ["api", "events", "connections"]
+						},
+						"description": "Get active SSE connections"
+					}
+				}
+			]
+		},
+		{
+			"name": "12. Settings & Debug",
+			"item": [
+				{
+					"name": "Get Profile",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/settings/profile",
+							"host": ["{{base_url}}"],
+							"path": ["api", "settings", "profile"]
+						},
+						"description": "Get user profile"
+					}
+				},
+				{
+					"name": "Update Profile",
+					"request": {
+						"method": "PUT",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"newemail@example.com\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/settings/profile",
+							"host": ["{{base_url}}"],
+							"path": ["api", "settings", "profile"]
+						},
+						"description": "Update user profile"
+					}
+				},
+				{
+					"name": "System Cleanup",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{base_url}}/api/settings/system/cleanup",
+							"host": ["{{base_url}}"],
+							"path": ["api", "settings", "system", "cleanup"]
+						},
+						"description": "Run system cleanup tasks"
+					}
+				},
+				{
+					"name": "Network Debug",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/settings/debug/network?host=192.168.1.100",
+							"host": ["{{base_url}}"],
+							"path": ["api", "settings", "debug", "network"],
+							"query": [{"key": "host", "value": "192.168.1.100"}]
+						},
+						"description": "Test network connectivity"
+					}
+				},
+				{
+					"name": "Database Debug",
+					"request": {
+						"method": "GET",
 						"url": {
 							"raw": "{{base_url}}/api/settings/debug/database?table=ssh_keys",
 							"host": ["{{base_url}}"],
 							"path": ["api", "settings", "debug", "database"],
-							"query": [
-								{
-									"key": "table",
-									"value": "ssh_keys"
-								}
-							]
-						}
-					},
-					"response": []
+							"query": [{"key": "table", "value": "ssh_keys"}]
+						},
+						"description": "Get database debug information"
+					}
 				}
 			]
 		}

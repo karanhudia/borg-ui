@@ -1,17 +1,24 @@
 import { useQuery } from 'react-query';
 import { dashboardAPI } from '../services/api';
-import { Activity, HardDrive, MemoryStick, Cpu, Clock, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
-import { useSystemStatus, useBackupProgress } from '../hooks/useSSE';
-import RealTimeStatus from '../components/RealTimeStatus';
+import { Activity, HardDrive, MemoryStick, Cpu, Clock, AlertTriangle } from 'lucide-react';
 
 export default function Dashboard() {
-  const { data: status, isLoading: statusLoading } = useQuery('dashboard-status', dashboardAPI.getStatus);
-  const { data: metrics, isLoading: metricsLoading } = useQuery('dashboard-metrics', dashboardAPI.getMetrics);
-  const { data: health, isLoading: healthLoading } = useQuery('dashboard-health', dashboardAPI.getHealth);
-  
-  // Real-time updates
-  const { isConnected } = useSystemStatus();
-  const { progress: backupProgress } = useBackupProgress();
+  // Poll data every 30 seconds for fresh data
+  const { data: status, isLoading: statusLoading } = useQuery(
+    'dashboard-status',
+    dashboardAPI.getStatus,
+    { refetchInterval: 30000 }
+  );
+  const { data: metrics, isLoading: metricsLoading } = useQuery(
+    'dashboard-metrics',
+    dashboardAPI.getMetrics,
+    { refetchInterval: 30000 }
+  );
+  const { data: health, isLoading: healthLoading } = useQuery(
+    'dashboard-health',
+    dashboardAPI.getHealth,
+    { refetchInterval: 30000 }
+  );
 
   const isLoading = statusLoading || metricsLoading || healthLoading;
 
@@ -31,21 +38,6 @@ export default function Dashboard() {
           <p className="mt-1 text-sm text-gray-500">
             Overview of your backup system status and performance
           </p>
-        </div>
-        
-        {/* Real-time connection status */}
-        <div className="flex items-center space-x-2">
-          {isConnected ? (
-            <div className="flex items-center text-green-600">
-              <Wifi className="w-4 h-4 mr-1" />
-              <span className="text-sm font-medium">Live Updates</span>
-            </div>
-          ) : (
-            <div className="flex items-center text-gray-500">
-              <WifiOff className="w-4 h-4 mr-1" />
-              <span className="text-sm font-medium">Offline</span>
-            </div>
-          )}
         </div>
       </div>
 
@@ -116,46 +108,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Real-time Backup Progress */}
-      {backupProgress && (
-        <div className="card">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Active Backup</h3>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-700">Job #{backupProgress.job_id}</span>
-              <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                backupProgress.status === 'completed' ? 'bg-green-100 text-green-800' :
-                backupProgress.status === 'failed' ? 'bg-red-100 text-red-800' :
-                'bg-blue-100 text-blue-800'
-              }`}>
-                {backupProgress.status}
-              </span>
-            </div>
-            
-            {backupProgress.progress !== undefined && (
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Progress</span>
-                  <span className="font-medium">{backupProgress.progress}%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${backupProgress.progress}%` }}
-                  ></div>
-                </div>
-              </div>
-            )}
-            
-            {backupProgress.message && (
-              <p className="text-sm text-gray-600">{backupProgress.message}</p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Real-Time Status Component */}
-      <RealTimeStatus />
 
       {/* Health Status */}
       <div className="card">

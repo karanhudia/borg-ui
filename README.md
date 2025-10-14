@@ -1,350 +1,278 @@
-# Borgmatic Web UI - Complete Implementation
+# Borgmatic Web UI
 
-A lightweight web-based user interface for Borgmatic, designed to run efficiently on resource-constrained devices like Raspberry Pi or Odroid.
+[![Docker Hub](https://img.shields.io/docker/pulls/ainullcode/borgmatic-ui)](https://hub.docker.com/r/ainullcode/borgmatic-ui)
+[![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
+[![GitHub Actions](https://github.com/karanhudia/borg-ui/workflows/Build%20and%20Publish%20Docker%20Images/badge.svg)](https://github.com/karanhudia/borg-ui/actions)
 
-## 🎉 **IMPLEMENTATION STATUS: 98% COMPLETE - PRODUCTION READY**
+A modern, user-friendly web interface for [Borgmatic](https://torsion.org/borgmatic/) backup management. Deploy in seconds with Docker, manage backups through an intuitive dashboard, and monitor your data protection strategy with ease.
 
-### ✅ **COMPLETED FEATURES (98%)**
-
-#### **Backend API** 
-- **FastAPI Application**: Complete REST API with OpenAPI documentation
-- **Authentication**: JWT-based with bcrypt password hashing
-- **Database**: SQLite with SQLAlchemy ORM and comprehensive models
-- **Borgmatic Integration**: Full CLI interface wrapper for all backup operations
-- **Docker Configuration**: Multi-stage build with production setup
-- **API Documentation**: Auto-generated Swagger/OpenAPI docs
-- **Health Monitoring**: System and backup health checks
-- **Logging**: Structured logging with rotation
-- **Security**: Rate limiting, CORS, encrypted storage
-- **Real-time Updates**: Server-Sent Events (SSE) for live updates
-
-#### **Frontend UI**
-- **React 18 with TypeScript**: Modern, type-safe frontend
-- **Tailwind CSS**: Responsive, mobile-friendly design
-- **State Management**: React Context + useReducer
-- **Real-time Updates**: Live progress monitoring and status updates
-- **All Pages Implemented**: Dashboard, Config, Backup, Archives, Restore, Schedule, Logs, Settings, Health, SSH Keys, Repositories
-
-#### **Core Features**
-- **Dashboard**: Real-time backup status, system metrics, quick actions
-- **Configuration Management**: YAML editor with validation and templates
-- **Backup Control**: Manual operations with real-time progress monitoring
-- **Archive Browser**: Repository listing, file browser, archive operations
-- **Restore Functionality**: Archive selection, path browsing, progress tracking
-- **Repository Management**: Local, SSH, and SFTP repository support
-- **SSH Key Management**: Generate, import, test, secure storage with encryption
-- **Scheduling Management**: Cron job management, visual builder, execution history
-- **Log Management**: Real-time log streaming, filtering, search, export
-- **Settings Management**: System settings, user management, notifications
-- **Health Monitoring**: System health, repository health, performance analytics
-
-#### **Advanced Features**
-- **Multi-user Support**: User management with admin privileges
-- **Email Notifications**: Settings available for email notification setup
-- **Webhook Integration**: Settings available for webhook URL configuration
-- **Security Features**: Rate limiting, CORS, authentication, encrypted storage
-- **Repository Types**: Local, SSH, and SFTP repository support
-- **Real-time Updates**: Server-Sent Events for live updates, progress monitoring
-
-### 🔄 **FUTURE ENHANCEMENTS (2%)**
-
-These are optional enhancements that don't affect core functionality:
-
-#### **Advanced Analytics**
-- Historical trend analysis and performance charts
-- Backup statistics visualization
-- Performance analytics dashboard
-
-#### **Enhanced Notifications**
-- Configurable alert thresholds
-- Alert history and management
-- Custom alert rules
-- Push notifications and Slack integration
-
-#### **Network Performance Monitoring**
-- Network I/O performance metrics
-- Bandwidth monitoring
-- Connection quality metrics
-
-#### **Mobile App**
-- Native mobile application
-- Touch-optimized interface
-
-#### **Plugin System**
-- Extensible architecture for custom integrations
-- Third-party plugin support
-
-## 🚀 **Quick Start**
-
-### **Docker Deployment (Recommended - 30-60 seconds)**
-
-```bash
-# Clone the repository
-git clone https://github.com/karanhudia/borg-ui.git
-cd borg-ui
-
-# Start the application (pulls pre-built image from Docker Hub)
-docker-compose up -d
-
-# Access the web interface
-open http://localhost:8000
-
-# Default credentials
-# Username: admin
-# Password: admin123
-```
-
-**⚡ Fast Installation:** Uses pre-built multi-arch images from Docker Hub (amd64, arm64, armv7)
-- Raspberry Pi: ~45 seconds
-- x86 Linux: ~30 seconds
-- Mac/Windows: ~30 seconds
-
-**Image:** `ainullcode/borgmatic-ui:latest`
-
-### **Testing the Application**
-
-Run the comprehensive test suite to verify all functionality:
-
-```bash
-# Run tests against localhost:7879 (default)
-./test.sh
-
-# Run tests against a different URL
-./test.sh http://your-server:7879
-
-# Run tests with detailed output
-python3 test_app.py --output test-results.json
-```
-
-The test suite covers:
-- ✅ Server availability and accessibility
-- ✅ SPA routing (all frontend routes)
-- ✅ API endpoints and authentication
-- ✅ Protected endpoints with auth
-- ✅ Configuration management
-- ✅ Health monitoring
-- ✅ Static asset serving
-- ✅ Repository operations (create, list, delete)
-- ✅ Error handling
-
-### **Local Development**
-
-```bash
-# Backend
-pip install -r requirements.txt
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# Frontend
-cd frontend
-npm install
-npm run dev
-```
-
-## 🎯 **Key Features**
-
-- **Resource Efficiency**: Minimal memory and CPU footprint suitable for ARM-based devices
-- **Comprehensive Functionality**: Full backup management capabilities through web interface
-- **Easy Deployment**: Docker-based containerization for simplified deployment
-- **Security**: Authentication and secure remote access capabilities
-- **User Experience**: Intuitive interface for non-technical users
-- **Real-time Monitoring**: Live updates and progress tracking
-- **Multi-repository Support**: Local and remote repository management
-
-## 🔧 **Core Features**
-
-### 1. Dashboard
-- Real-time backup status overview
-- Storage metrics and system health
-- Quick action buttons for common operations
-- Live updates via Server-Sent Events
-
-### 2. Configuration Management
-- YAML editor with syntax highlighting
-- Configuration validation
-- Template system for common scenarios
-- Backup and restore configuration files
-
-### 3. Backup Control
-- Manual backup operations
-- Real-time progress monitoring
-- Repository selection and management
-- Job history and cancellation
-
-### 4. Archive Browser
-- Repository and archive listing
-- File browser with search capabilities
-- Archive metadata and operations
-- Archive deletion and management
-
-### 5. Restore Functionality
-- Archive selection and path browsing
-- Restore destination configuration
-- Progress monitoring and dry-run capabilities
-- File and folder selection
-
-### 6. Repository Management
-- Create local, SSH, and SFTP repositories
-- Repository health checking
-- Repository compaction
-- Statistics and monitoring
-
-### 7. SSH Key Management
-- Generate SSH key pairs
-- Import existing SSH keys
-- Test SSH connections
-- Secure key storage with encryption
-
-### 8. Scheduling Management
-- Visual cron expression builder
-- Job management and execution history
-- Manual trigger capabilities
-- Schedule validation
-
-### 9. Log Management
-- Real-time log streaming
-- Log level filtering and search
-- Export capabilities
-- Log statistics and analysis
-
-### 10. System Settings
-- Authentication and user management
-- Network configuration
-- Notification settings (email, webhook)
-- System maintenance and cleanup
-
-### 11. Health Monitoring
-- System resource monitoring
-- Backup health checks
-- Repository integrity verification
-- Performance analytics
-
-## 🔒 **Security Features**
-
-- **JWT Authentication**: Secure token-based authentication
-- **Password Hashing**: bcrypt with salt rounds
-- **HTTPS Support**: TLS/SSL encryption ready
-- **Rate Limiting**: API rate limiting to prevent abuse
-- **CORS Configuration**: Configurable Cross-Origin Resource Sharing
-- **Encrypted Storage**: SSH keys and sensitive data encryption
-- **Non-root Execution**: Container runs as non-root user
-
-## 📊 **System Requirements**
-
-### **Minimum Requirements**
-- **CPU**: 1 core ARM Cortex-A53 or equivalent
-- **RAM**: 512MB (1GB recommended)
-- **Storage**: 2GB for application + backup storage
-- **Network**: Ethernet or WiFi connection
-
-### **Recommended Requirements**
-- **CPU**: 2+ cores ARM Cortex-A72 or equivalent
-- **RAM**: 2GB
-- **Storage**: 8GB+ for application and backup storage
-- **Network**: Gigabit Ethernet
-
-## 🐳 **Docker Configuration**
-
-### **Environment Variables**
-```bash
-# Required
-SECRET_KEY=your-secret-key-here
-BORGMATIC_CONFIG_PATH=/app/config
-BORGMATIC_BACKUP_PATH=/backups
-
-# Optional
-LOG_LEVEL=INFO
-CORS_ORIGINS=http://localhost:7879,http://localhost:8000
-ENABLE_CRON_BACKUPS=true
-```
-
-### **Volumes**
-- `/app/config` - Borgmatic configuration files
-- `/backups` - Backup storage location
-- `/app/logs` - Application logs
-- `/app/data` - Database and application data
-
-## 📚 **API Documentation**
-
-The application includes comprehensive API documentation:
-
-- **Swagger UI**: `http://localhost:7879/api/docs`
-- **OpenAPI JSON**: `http://localhost:7879/openapi.json`
-- **ReDoc**: `http://localhost:7879/api/redoc`
-
-## 🔧 **Development**
-
-### **Project Structure**
-```
-borg-ui/
-├── app/                    # Backend FastAPI application
-│   ├── api/               # API endpoints
-│   ├── core/              # Core functionality
-│   ├── database/          # Database models and connection
-│   └── main.py            # Application entry point
-├── frontend/              # React frontend
-│   ├── src/
-│   │   ├── components/    # React components
-│   │   ├── pages/         # Page components
-│   │   ├── hooks/         # Custom React hooks
-│   │   └── services/      # API services
-│   └── package.json
-├── config/                # Configuration files
-├── backups/               # Backup storage
-├── logs/                  # Application logs
-└── docker-compose.yml     # Docker configuration
-```
-
-### **Testing**
-```bash
-# Backend tests
-python -m pytest tests/
-
-# Frontend tests
-cd frontend
-npm test
-```
-
-## 🤝 **Contributing**
-
-We welcome contributions! Here's how:
-
-1. **Do NOT fork** the repository (see License below)
-2. Create an issue to discuss your proposed changes
-3. Clone the repository and create a feature branch
-4. Make your changes and add tests if applicable
-5. Submit a pull request with a clear description
-
-By submitting a pull request, you agree that your contributions will be licensed under the same proprietary license as this project.
-
-## 📄 **License**
-
-**Proprietary License - Copyright (c) 2025 Karan Hudia (ainullcode)**
-
-**You CAN:**
-- ✅ Use this software for personal or commercial purposes
-- ✅ Submit pull requests with improvements
-- ✅ Report issues and bugs
-- ✅ Pull and use Docker images from Docker Hub
-
-**You CANNOT:**
-- ❌ Fork or copy this repository
-- ❌ Create derivative works
-- ❌ Redistribute the source code
-- ❌ Use the code in other projects
-- ❌ Remove copyright notices
-
-See the [LICENSE](LICENSE) file for complete terms.
-
-For commercial licensing or special permissions, please contact the author.
-
-## 🆘 **Support**
-
-- **Documentation**: Check the API docs at `/api/docs`
-- **Issues**: Report bugs and feature requests via GitHub issues
-- **Discussions**: Use GitHub discussions for questions and ideas
+![Borgmatic Web UI Screenshot](docs/assets/screenshot.png)
 
 ---
 
-**⚠️ Important**: Change the default password immediately!
+## Table of Contents
 
-**🎉 The Borgmatic Web UI is production-ready and fully functional!** 
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [Documentation](#documentation)
+- [API Reference](#api-reference)
+- [Contributing](#contributing)
+- [License](#license)
+- [Support](#support)
+
+---
+
+## Features
+
+### Core Functionality
+- 🎯 **Intuitive Dashboard** - Real-time backup status and system metrics
+- 📁 **Backup Management** - Create, schedule, and monitor backups with ease
+- 🔍 **Archive Browser** - Browse and restore files from any backup
+- 🗂️ **Repository Management** - Support for local, SSH, and SFTP repositories
+- 🔐 **SSH Key Management** - Generate, import, and deploy SSH keys securely
+- ⏰ **Scheduling** - Visual cron job builder with execution history
+- 📊 **Health Monitoring** - System health checks and performance analytics
+- 📝 **Log Management** - Real-time log streaming with search and filtering
+
+### Technical Highlights
+- ⚡ **Fast Installation** - 30-60 seconds with pre-built multi-arch Docker images
+- 🔒 **Secure** - JWT authentication, encrypted storage, and non-root execution
+- 📱 **Responsive Design** - Works seamlessly on desktop, tablet, and mobile
+- 🌐 **Multi-platform** - Supports amd64, arm64, and armv7 architectures
+- 🚀 **Production Ready** - Battle-tested on Raspberry Pi, NAS, and cloud servers
+
+---
+
+## Quick Start
+
+### Prerequisites
+- Docker and Docker Compose installed
+- 512MB RAM minimum (1GB recommended)
+- Network access to backup destinations
+
+### Installation (30 seconds)
+
+```bash
+# Clone repository
+git clone https://github.com/karanhudia/borg-ui.git
+cd borg-ui
+
+# Start services
+docker-compose up -d
+
+# Access web interface
+open http://localhost:8000
+```
+
+**Default credentials:**
+- Username: `admin`
+- Password: `admin123`
+
+⚠️ **Change the default password immediately after first login!**
+
+---
+
+## Installation
+
+### Supported Platforms
+
+| Platform | Architecture | Status | Install Time |
+|----------|-------------|--------|--------------|
+| **Raspberry Pi** | arm64, armv7 | ✅ Supported | ~45 seconds |
+| **Linux x86** | amd64 | ✅ Supported | ~30 seconds |
+| **macOS** | amd64, arm64 | ✅ Supported | ~30 seconds |
+| **Windows** | amd64 | ✅ Supported | ~30 seconds |
+| **Synology NAS** | Various | ✅ Supported | ~60 seconds |
+
+### Detailed Installation Guides
+
+- **[Raspberry Pi Installation](docs/installation/INSTALL_RASPBERRY_PI.md)** - Optimized for ARM devices
+- **[Quick Start Guide](docs/installation/QUICK_START.md)** - Platform-specific instructions
+- **[Network Setup](docs/installation/NETWORK_SETUP.md)** - Network configuration for remote backups
+- **[Deployment Patterns](docs/deployment/DEPLOYMENT_PATTERNS.md)** - Choose the right deployment strategy
+
+### Docker Image
+
+Pre-built images available at: [`ainullcode/borgmatic-ui:latest`](https://hub.docker.com/r/ainullcode/borgmatic-ui)
+
+**Supported architectures:**
+- `linux/amd64` - Intel/AMD 64-bit
+- `linux/arm64` - ARM 64-bit (Raspberry Pi 4/5, Apple M1/M2)
+- `linux/arm/v7` - ARM 32-bit (Raspberry Pi 3)
+
+---
+
+## Documentation
+
+### For Users
+
+- **Installation**
+  - [Quick Start Guide](docs/installation/QUICK_START.md)
+  - [Raspberry Pi Installation](docs/installation/INSTALL_RASPBERRY_PI.md)
+  - [Network Setup Guide](docs/installation/NETWORK_SETUP.md)
+
+- **Deployment**
+  - [Deployment Patterns](docs/deployment/DEPLOYMENT_PATTERNS.md)
+  - [Docker Hub Setup](docs/deployment/DOCKER_HUB_SETUP.md)
+  - [Performance Comparison](docs/deployment/QUICK_START_COMPARISON.md)
+
+### For Developers
+
+- **Development**
+  - [Contributing Guidelines](.github/CONTRIBUTING.md)
+  - [GitHub Settings](docs/development/GITHUB_SETTINGS.md)
+  - [Build Status](docs/development/PI_BUILD_STATUS.md)
+
+- **Specifications**
+  - [Project Specifications](docs/specifications/)
+  - [Future Enhancements](docs/specifications/FUTURE_ENHANCEMENTS.md)
+  - [Implementation Summary](docs/specifications/IMPLEMENTATION_SUMMARY.md)
+
+---
+
+## API Reference
+
+### OpenAPI Documentation
+
+Once the application is running, access the interactive API documentation:
+
+- **Swagger UI**: `http://localhost:8000/api/docs`
+- **ReDoc**: `http://localhost:8000/api/redoc`
+- **OpenAPI JSON**: `http://localhost:8000/openapi.json`
+
+### Postman Collection
+
+Import the [Postman collection](Borgmatic_UI_API.postman_collection.json) for easy API testing.
+
+### Key Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/auth/login` | POST | Authenticate and get JWT token |
+| `/api/backups` | GET, POST | List and create backups |
+| `/api/archives` | GET | Browse backup archives |
+| `/api/repositories` | GET, POST | Manage repositories |
+| `/api/ssh_keys` | GET, POST | Manage SSH keys |
+| `/api/schedules` | GET, POST | Manage backup schedules |
+| `/api/health/system` | GET | System health check |
+
+---
+
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file based on [`.env.example`](.env.example):
+
+```bash
+# Docker Image
+DOCKER_IMAGE=ainullcode/borgmatic-ui:latest
+
+# Security (REQUIRED - change these!)
+SECRET_KEY=your-secret-key-here
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# Database
+DATABASE_URL=sqlite:////app/data/borgmatic.db
+
+# Logging
+LOG_LEVEL=INFO
+
+# CORS
+CORS_ORIGINS=["http://localhost:8000"]
+```
+
+### Volumes
+
+Mount these directories for persistent data:
+
+- `/app/config` - Borgmatic configuration files
+- `/app/data` - Database and SSH keys
+- `/app/logs` - Application logs
+- `/backups` - Backup storage location
+
+### Ports
+
+- `8000` - Web interface and API (configurable)
+
+---
+
+## Contributing
+
+We welcome contributions! However, this project uses a **proprietary license**.
+
+### How to Contribute
+
+1. ⚠️ **Do NOT fork** this repository
+2. Create an issue to discuss your proposed changes
+3. Clone the repository and create a feature branch
+4. Submit a pull request with your changes
+
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for detailed guidelines.
+
+### Contribution License Agreement
+
+By submitting a pull request, you agree that your contributions will be licensed under the same proprietary license and you grant the copyright holder perpetual rights to use, modify, and distribute your contributions.
+
+---
+
+## License
+
+**Proprietary License - Copyright © 2025 Karan Hudia (ainullcode)**
+
+### ✅ You CAN:
+- Use this software for personal or commercial purposes
+- Submit pull requests with improvements
+- Report issues and bugs
+- Pull and use Docker images from Docker Hub
+
+### ❌ You CANNOT:
+- Fork or copy this repository
+- Create derivative works
+- Redistribute the source code
+- Use the code in other projects
+- Remove copyright notices
+
+See the [LICENSE](LICENSE) file for complete terms.
+
+For commercial licensing or special permissions, contact the author.
+
+---
+
+## Support
+
+### Getting Help
+
+- 📖 **Documentation**: Check the [docs](docs/) directory
+- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/karanhudia/borg-ui/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/karanhudia/borg-ui/discussions)
+- 📧 **Contact**: Open an issue for support
+
+### Resources
+
+- **Docker Hub**: https://hub.docker.com/r/ainullcode/borgmatic-ui
+- **Borgmatic Docs**: https://torsion.org/borgmatic/
+- **Borg Backup**: https://borgbackup.readthedocs.io/
+
+---
+
+## Acknowledgments
+
+Built with:
+- [Borgmatic](https://torsion.org/borgmatic/) - Backup automation
+- [FastAPI](https://fastapi.tiangolo.com/) - Backend framework
+- [React](https://react.dev/) - Frontend framework
+- [Tailwind CSS](https://tailwindcss.com/) - Styling
+
+---
+
+## Security
+
+Found a security vulnerability? Please report it privately via GitHub Security Advisories.
+
+---
+
+**Made with ❤️ by [Karan Hudia](https://github.com/karanhudia)**
+
+© 2025 Karan Hudia. All Rights Reserved.
