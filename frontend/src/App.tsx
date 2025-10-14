@@ -9,7 +9,7 @@ import Archives from './pages/Archives'
 import Restore from './pages/Restore'
 import Schedule from './pages/Schedule'
 import Repositories from './pages/Repositories'
-import SSHKeys from './pages/SSHKeys'
+import SSHConnectionsUnified from './pages/SSHConnectionsUnified'
 import Settings from './pages/Settings'
 
 function App() {
@@ -43,7 +43,7 @@ function App() {
         <Route path="/restore" element={<Restore />} />
         <Route path="/schedule" element={<Schedule />} />
         <Route path="/repositories" element={<Repositories />} />
-        <Route path="/ssh-connections" element={<SSHKeys />} />
+        <Route path="/ssh-connections" element={<SSHConnectionsUnified />} />
         <Route path="/ssh-keys" element={<Navigate to="/ssh-connections" replace />} />
         <Route path="/connections" element={<Navigate to="/ssh-connections" replace />} />
         <Route path="/settings" element={<Settings />} />
