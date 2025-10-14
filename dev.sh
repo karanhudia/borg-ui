@@ -32,57 +32,57 @@ print_warning() {
 # Commands
 cmd_start() {
     print_info "Starting development environment..."
-    docker-compose -f docker-compose.dev.yml up -d
+    docker-compose up -d
     print_success "Development environment started"
-    print_info "Access the application at: http://localhost:7879"
-    print_info "API documentation at: http://localhost:7879/api/docs"
+    print_info "Access the application at: http://localhost:8000"
+    print_info "API documentation at: http://localhost:8000/api/docs"
     echo ""
     print_info "Use './dev.sh logs' to view logs"
 }
 
 cmd_stop() {
     print_info "Stopping development environment..."
-    docker-compose -f docker-compose.dev.yml down
+    docker-compose down
     print_success "Development environment stopped"
 }
 
 cmd_restart() {
     print_info "Restarting development environment..."
-    docker-compose -f docker-compose.dev.yml restart
+    docker-compose restart
     print_success "Development environment restarted"
 }
 
 cmd_rebuild() {
     print_info "Rebuilding containers..."
-    docker-compose -f docker-compose.dev.yml build --no-cache
-    docker-compose -f docker-compose.dev.yml up -d
+    docker-compose build --no-cache
+    docker-compose up -d
     print_success "Containers rebuilt and started"
 }
 
 cmd_build() {
     print_info "Building containers (with cache)..."
-    docker-compose -f docker-compose.dev.yml build
+    docker-compose build
     print_success "Build complete"
 }
 
 cmd_logs() {
     print_info "Showing logs (Ctrl+C to exit)..."
-    docker-compose -f docker-compose.dev.yml logs -f --tail=100
+    docker-compose logs -f --tail=100
 }
 
 cmd_shell() {
     print_info "Opening shell in container..."
-    docker-compose -f docker-compose.dev.yml exec borgmatic-ui bash
+    docker-compose exec borgmatic-ui bash
 }
 
 cmd_test() {
     print_info "Running tests..."
     if [ -f "./test.sh" ]; then
-        ./test.sh http://localhost:7879
+        ./test.sh http://localhost:8000
     else
         print_warning "test.sh not found, running Python tests directly..."
         if [ -f "./test_app.py" ]; then
-            python3 test_app.py http://localhost:7879
+            python3 test_app.py http://localhost:8000
         else
             print_error "No test files found"
             exit 1
@@ -96,7 +96,7 @@ cmd_clean() {
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         print_info "Cleaning up..."
-        docker-compose -f docker-compose.dev.yml down -v
+        docker-compose down -v
         docker system prune -f
         print_success "Cleanup complete"
     else
@@ -106,10 +106,10 @@ cmd_clean() {
 
 cmd_status() {
     print_info "Container status:"
-    docker-compose -f docker-compose.dev.yml ps
+    docker-compose ps
     echo ""
     print_info "Docker stats:"
-    docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}" $(docker-compose -f docker-compose.dev.yml ps -q) 2>/dev/null || print_warning "No containers running"
+    docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}" $(docker-compose ps -q) 2>/dev/null || print_warning "No containers running"
 }
 
 cmd_frontend() {
@@ -123,18 +123,18 @@ cmd_frontend() {
     cd ..
     print_success "Frontend built successfully"
     print_info "Restarting container to pick up changes..."
-    docker-compose -f docker-compose.dev.yml restart
+    docker-compose restart
 }
 
 cmd_backend() {
     print_info "Restarting backend (hot-reload should pick up changes)..."
-    docker-compose -f docker-compose.dev.yml restart
+    docker-compose restart
     print_success "Backend restarted"
 }
 
 cmd_db() {
     print_info "Opening database shell..."
-    docker-compose -f docker-compose.dev.yml exec borgmatic-ui bash -c "cd /app/data && sqlite3 borgmatic.db"
+    docker-compose exec borgmatic-ui bash -c "cd /app/data && sqlite3 borgmatic.db"
 }
 
 cmd_init() {
@@ -165,13 +165,13 @@ cmd_init() {
 
     # Build and start containers
     print_info "Building containers..."
-    docker-compose -f docker-compose.dev.yml build
+    docker-compose build
 
     print_info "Starting containers..."
-    docker-compose -f docker-compose.dev.yml up -d
+    docker-compose up -d
 
     print_success "Development environment initialized!"
-    print_info "Access at: http://localhost:7879"
+    print_info "Access at: http://localhost:8000"
     print_info "Default credentials: admin / admin123"
 }
 
