@@ -128,25 +128,92 @@ EOF
 
 ---
 
-## Step 5: Start Borgmatic UI
+## Step 5: Configure Docker Image
+
+**IMPORTANT:** Choose between pre-built image (fast) or local build (slow):
+
+### Option A: Pre-built Image (RECOMMENDED - 30-60 seconds)
+
+```bash
+# Create .env file
+cp .env.example .env
+
+# Edit .env and set your Docker Hub image
+nano .env
+
+# Change this line to use the official pre-built image:
+DOCKER_IMAGE=yourusername/borgmatic-ui:latest
+```
+
+**Result:** Installation completes in under 2 minutes! ✨
+
+### Option B: Build Locally (20-40 minutes)
+
+Only use this if you're developing or can't access Docker Hub:
+
+```bash
+# Edit docker-compose.yml
+nano docker-compose.yml
+
+# Comment out the 'image' line and uncomment 'build':
+# image: ${DOCKER_IMAGE:-yourusername/borgmatic-ui:latest}
+build: .
+```
+
+**Note:** First build on Raspberry Pi takes **20-40 minutes**:
+- Pi 3: ~40 minutes
+- Pi 4: ~25 minutes
+- Pi 5: ~15 minutes
+
+This is because Docker must compile Python packages for ARM architecture.
+
+### Monitor Build Progress
+
+```bash
+# Watch the build (you'll see progress bars)
+docker-compose up --build
+
+# Or build in background and monitor logs
+docker-compose up -d --build
+docker-compose logs -f
+```
 
 ### Using standard docker-compose:
 
 ```bash
-docker-compose up -d
+# First time (will take 20-40 minutes)
+docker-compose up -d --build
+
+# Check logs
+docker-compose logs -f
 ```
 
 ### Or using the Raspberry Pi override:
 
 ```bash
-docker-compose -f docker-compose.yml -f docker-compose.raspberry-pi.yml up -d
+docker-compose -f docker-compose.yml -f docker-compose.raspberry-pi.yml up -d --build
 ```
 
-### Check logs:
+### 🚀 Optional: Use Optimized Dockerfile (Faster Build)
+
+For faster builds, use the Pi-optimized Dockerfile:
 
 ```bash
-docker-compose logs -f
+# Edit docker-compose.yml
+nano docker-compose.yml
+
+# Change this line:
+#   build: .
+# To:
+#   build:
+#     context: .
+#     dockerfile: Dockerfile.pi-optimized
+
+# Then build
+docker-compose up -d --build
 ```
+
+The optimized version uses system packages instead of compiling from source, reducing build time by ~50%.
 
 ---
 

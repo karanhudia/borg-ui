@@ -1,10 +1,14 @@
-version: '3.8'
-
 services:
   borgmatic-ui:
-    build: .
+    # Use pre-built image from Docker Hub (RECOMMENDED - instant startup!)
+    # Replace 'ainullcode' with your actual Docker Hub username if different
+    image: ${DOCKER_IMAGE:-ainullcode/borgmatic-ui:latest}
+
+    # OR build locally (only for development - takes 20-40 mins on Pi)
+    # Uncomment the line below and comment out 'image' above to build locally:
+    # build: .
+
     container_name: borgmatic-web-ui
-    image: borgmatic-web-ui:latest
     
     # Portainer-friendly labels
     labels:
