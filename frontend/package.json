@@ -4,19 +4,23 @@
   "description": "React frontend for Borgmatic Web UI",
   "private": true,
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.4",
+    "@mui/material": "^7.3.4",
     "@types/node": "^20.0.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
+    "axios": "^1.6.0",
+    "clsx": "^2.0.0",
+    "lucide-react": "^0.294.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.8.0",
-    "react-query": "^3.39.0",
-    "axios": "^1.6.0",
-    "lucide-react": "^0.294.0",
-    "recharts": "^2.8.0",
     "react-hook-form": "^7.48.0",
     "react-hot-toast": "^2.4.0",
-    "clsx": "^2.0.0",
+    "react-query": "^3.39.0",
+    "react-router-dom": "^6.8.0",
+    "recharts": "^2.8.0",
     "tailwind-merge": "^2.0.0"
   },
   "devDependencies": {
@@ -50,4 +54,4 @@
       "last 1 safari version"
     ]
   }
-} 
+}
