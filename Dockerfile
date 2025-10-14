@@ -84,11 +84,13 @@ COPY app/ ./app/
 COPY --from=frontend-builder /app/frontend/build ./app/static
 
 # Create necessary directories with proper permissions
+# /data - main data directory for all persistent data (database, ssh keys, logs, configs)
+# /backups - for actual backup storage
 RUN mkdir -p \
-    /app/logs \
-    /app/config \
-    /app/data \
-    /app/data/ssh_keys \
+    /data \
+    /data/ssh_keys \
+    /data/logs \
+    /data/config \
     /backups \
     /var/log/borgmatic \
     /etc/borgmatic
@@ -102,8 +104,9 @@ RUN groupadd -g 1001 borgmatic && \
     echo "borgmatic ALL=(ALL) NOPASSWD: /usr/bin/borg, /usr/bin/borgmatic, /usr/bin/crontab" >> /etc/sudoers
 
 # Set proper ownership and permissions
-RUN chown -R borgmatic:borgmatic /app /backups /var/log/borgmatic /etc/borgmatic && \
+RUN chown -R borgmatic:borgmatic /app /data /backups /var/log/borgmatic /etc/borgmatic && \
     chmod -R 755 /app && \
+    chmod -R 755 /data && \
     chmod -R 755 /backups && \
     chmod -R 755 /var/log/borgmatic && \
     chmod -R 755 /etc/borgmatic
@@ -124,7 +127,8 @@ RUN mkdir -p /etc/cron.d && \
 RUN echo '#!/bin/bash\n\
 echo "[$(date)] Starting Borgmatic Web UI..."\n\
 cd /app\n\
-exec gunicorn app.main:app --bind 0.0.0.0:8000 --workers 1 --worker-class uvicorn.workers.UvicornWorker --access-logfile /app/logs/access.log --error-logfile /app/logs/error.log\n\
+PORT=${PORT:-8081}\n\
+exec gunicorn app.main:app --bind 0.0.0.0:${PORT} --workers 1 --worker-class uvicorn.workers.UvicornWorker --access-logfile - --error-logfile -\n\
 ' > /app/start.sh && \
     chmod +x /app/start.sh && \
     chown borgmatic:borgmatic /app/start.sh
@@ -134,16 +138,19 @@ USER borgmatic
 
 # Set environment variables
 ENV PYTHONPATH=/app
-ENV BORGMATIC_CONFIG_PATH=/app/config/borgmatic.yaml
+ENV DATA_DIR=/data
+ENV DATABASE_URL=sqlite:////data/borgmatic.db
+ENV BORGMATIC_CONFIG_PATH=/data/config/borgmatic.yaml
 ENV BORGMATIC_BACKUP_PATH=/backups
 ENV ENABLE_CRON_BACKUPS=false
+ENV PORT=8081
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8081
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/ || exit 1
+    CMD curl -f http://localhost:${PORT:-8081}/ || exit 1
 
 # Start application using the startup script
 CMD ["/app/start.sh"] 

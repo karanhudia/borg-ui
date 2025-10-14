@@ -1,44 +1,8 @@
-# Borgmatic Configuration
-# This is a sample configuration file for Borgmatic Web UI
+repositories:
+  - path: /path/to/repository
 
-# Repository configuration
-# Add repositories here as needed
-repositories: []
+storage:
+  compression: lz4
 
-# Retention policy
 retention:
   keep_daily: 7
-  keep_weekly: 4
-  keep_monthly: 6
-  keep_yearly: 1
-
-# Backup sources
-source_directories:
-  - /home
-  - /etc
-  - /var/log
-
-# Exclude patterns
-exclude_patterns:
-  - /home/*/.cache
-  - /home/*/.local/share/Trash
-  - /var/log/*.log.*
-  - /tmp
-  - /var/tmp
-
-# Hooks (optional)
-hooks:
-  before_backup:
-    - echo "Starting backup at $(date)"
-  after_backup:
-    - echo "Backup completed at $(date)"
-  on_error:
-    - echo "Backup failed at $(date)"
-
-# Consistency checks
-consistency:
-  checks:
-    - repository
-    - archives
-  check_last: 3
-  prefix: "{hostname}-" 

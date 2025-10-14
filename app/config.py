@@ -20,19 +20,22 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
 
+    # Data directory (for all persistent data)
+    data_dir: str = "/data"
+
     # Database settings
-    database_url: str = "sqlite:///./borgmatic.db"
+    database_url: str = "sqlite:////data/borgmatic.db"
 
     # Borgmatic settings
-    borgmatic_config_path: str = "/app/config/borgmatic.yaml"
+    borgmatic_config_path: str = "/data/config/borgmatic.yaml"
     borgmatic_backup_path: str = "/backups"
 
     # SSH keys directory (persistent storage for key files)
-    ssh_keys_dir: str = "/app/data/ssh_keys"
+    ssh_keys_dir: str = "/data/ssh_keys"
 
     # Logging settings
     log_level: str = "INFO"
-    log_file: str = "/app/logs/borgmatic-ui.log"
+    log_file: str = "/data/logs/borgmatic-ui.log"
 
     # CORS settings - comma-separated string that gets parsed to list
     _cors_origins_str: str = "http://localhost:7879,http://localhost:8000"
@@ -52,7 +55,7 @@ class Settings(BaseSettings):
     
     # Server settings
     host: str = "0.0.0.0"
-    port: int = 8000
+    port: int = 8081
     workers: int = 2
     
     # Cache settings
@@ -91,10 +94,12 @@ elif os.getenv("ENVIRONMENT") == "development":
 # Override with environment variables if present
 settings.environment = os.getenv("ENVIRONMENT", settings.environment)
 settings.secret_key = os.getenv("SECRET_KEY", settings.secret_key)
+settings.data_dir = os.getenv("DATA_DIR", settings.data_dir)
+settings.database_url = os.getenv("DATABASE_URL", settings.database_url)
 settings.borgmatic_config_path = os.getenv("BORGMATIC_CONFIG_PATH", settings.borgmatic_config_path)
 settings.borgmatic_backup_path = os.getenv("BORGMATIC_BACKUP_PATH", settings.borgmatic_backup_path)
 settings.log_level = os.getenv("LOG_LEVEL", settings.log_level)
-settings.database_url = os.getenv("DATABASE_URL", settings.database_url)
+settings.port = int(os.getenv("PORT", settings.port))
 
 # Security validation
 def validate_security_settings():

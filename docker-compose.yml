@@ -16,19 +16,21 @@ services:
       - "com.docker.compose.service=borgmatic-ui"
       - "traefik.enable=true"
       - "traefik.http.routers.borgmatic-ui.rule=Host(`borgmatic.local`)"
-      - "traefik.http.services.borgmatic-ui.loadbalancer.server.port=8000"
+      - "traefik.http.services.borgmatic-ui.loadbalancer.server.port=8081"
 
     # Port mapping
     # Note: Not needed when using network_mode: "host"
+    # When using network_mode: host, app will listen on port 8081
     # ports:
-    #   - "8000:8000"
+    #   - "8081:8081"
 
     volumes:
-      # Configuration and data volumes
-      - ./config:/app/config:rw
+      # Data directory - contains all persistent data (database, SSH keys, logs, configs)
+      # This single volume ensures data persists across container restarts
+      - ./data:/data:rw
+
+      # Backup storage - mount to external storage or NAS
       - ./backups:/backups:rw
-      - ./logs:/app/logs:rw
-      - ./data:/app/data:rw
 
       # System volumes for cron and SSH
       - /etc/cron.d:/etc/cron.d:ro
@@ -36,28 +38,30 @@ services:
 
       # SSH socket forwarding (for accessing host SSH keys if needed)
       # - ~/.ssh:/root/.ssh:ro
-      
+
       # Optional: Mount host directories for backup sources
       # - /path/to/backup/source:/backup-source:ro
     
     environment:
       # Application settings
       - ENVIRONMENT=${ENVIRONMENT:-production}
-      - BORGMATIC_CONFIG_PATH=/app/config/borgmatic.yaml
-      - BORGMATIC_BACKUP_PATH=/backups
+      - PORT=8081
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # Data persistence
+      - DATA_DIR=/data
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////data/borgmatic.db}
+      - BORGMATIC_CONFIG_PATH=/data/config/borgmatic.yaml
+      - BORGMATIC_BACKUP_PATH=/backups
 
       # Security settings (⚠️ MUST set in .env file!)
       - SECRET_KEY=${SECRET_KEY}
       - ALGORITHM=${ALGORITHM:-HS256}
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
       - STRICT_SECURITY=${STRICT_SECURITY:-false}
-      
+
       # Cron settings
       - ENABLE_CRON_BACKUPS=${ENABLE_CRON_BACKUPS:-false}
-
-      # Database settings (SQLite - persists in ./data directory)
-      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/borgmatic.db}
     
     restart: unless-stopped
 
@@ -67,7 +71,7 @@ services:
 
     # Health check
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8081/"]
       interval: 30s
       timeout: 10s
       retries: 3
