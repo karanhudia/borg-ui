@@ -1,8 +1,8 @@
 {
 	"info": {
 		"name": "Borgmatic UI API - Complete",
-		"description": "Comprehensive API collection for Borgmatic UI with all endpoints",
-		"version": "2.0.0",
+		"description": "Comprehensive API collection for Borgmatic UI\n\nFeatures:\n- Authentication & User Management\n- Dashboard & Metrics\n- Backup Operations\n- Repository Management (Local & SSH)\n- SSH Key Management\n- Archive Management\n- Real-time Updates (SSE)\n- Configuration Management\n\nNote: Logs and Health endpoints have been removed - logs are printed to console",
+		"version": "2.1.0",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"auth": {
@@ -364,20 +364,37 @@
 					}
 				},
 				{
-					"name": "Create Repository",
+					"name": "Create Local Repository",
 					"request": {
 						"method": "POST",
 						"header": [{"key": "Content-Type", "value": "application/json"}],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"name\": \"My Backup Repo\",\n  \"location\": \"/backups/repo1\",\n  \"type\": \"local\",\n  \"encryption\": \"repokey\",\n  \"passphrase\": \"my-secure-passphrase\"\n}"
+							"raw": "{\n  \"name\": \"My Backup Repo\",\n  \"path\": \"/backups/repo1\",\n  \"encryption\": \"repokey\",\n  \"compression\": \"lz4\",\n  \"passphrase\": \"my-secure-passphrase\",\n  \"repository_type\": \"local\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/repositories",
 							"host": ["{{base_url}}"],
 							"path": ["api", "repositories"]
 						},
-						"description": "Create a new repository"
+						"description": "Create a new local repository"
+					}
+				},
+				{
+					"name": "Create SSH Repository",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Remote Backup Repo\",\n  \"path\": \"/mnt/backup/repo\",\n  \"encryption\": \"repokey\",\n  \"compression\": \"lz4\",\n  \"passphrase\": \"my-secure-passphrase\",\n  \"repository_type\": \"ssh\",\n  \"host\": \"192.168.1.100\",\n  \"port\": 22,\n  \"username\": \"backup_user\",\n  \"ssh_key_id\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/repositories",
+							"host": ["{{base_url}}"],
+							"path": ["api", "repositories"]
+						},
+						"description": "Create a new SSH repository"
 					}
 				},
 				{
@@ -744,105 +761,7 @@
 			]
 		},
 		{
-			"name": "9. Health & Monitoring",
-			"item": [
-				{
-					"name": "System Health",
-					"request": {
-						"method": "GET",
-						"url": {
-							"raw": "{{base_url}}/api/health/system",
-							"host": ["{{base_url}}"],
-							"path": ["api", "health", "system"]
-						},
-						"description": "Get system health status"
-					}
-				},
-				{
-					"name": "Repositories Health",
-					"request": {
-						"method": "GET",
-						"url": {
-							"raw": "{{base_url}}/api/health/repositories",
-							"host": ["{{base_url}}"],
-							"path": ["api", "health", "repositories"]
-						},
-						"description": "Get repositories health status"
-					}
-				},
-				{
-					"name": "Backups Health",
-					"request": {
-						"method": "GET",
-						"url": {
-							"raw": "{{base_url}}/api/health/backups",
-							"host": ["{{base_url}}"],
-							"path": ["api", "health", "backups"]
-						},
-						"description": "Get backups health status"
-					}
-				}
-			]
-		},
-		{
-			"name": "10. Logs",
-			"item": [
-				{
-					"name": "Get Logs",
-					"request": {
-						"method": "GET",
-						"url": {
-							"raw": "{{base_url}}/api/logs?level=INFO&limit=100",
-							"host": ["{{base_url}}"],
-							"path": ["api", "logs"],
-							"query": [
-								{"key": "level", "value": "INFO"},
-								{"key": "limit", "value": "100"}
-							]
-						},
-						"description": "Get application logs"
-					}
-				},
-				{
-					"name": "Get Log Types",
-					"request": {
-						"method": "GET",
-						"url": {
-							"raw": "{{base_url}}/api/logs/types",
-							"host": ["{{base_url}}"],
-							"path": ["api", "logs", "types"]
-						},
-						"description": "Get available log types"
-					}
-				},
-				{
-					"name": "Get Log Stats",
-					"request": {
-						"method": "GET",
-						"url": {
-							"raw": "{{base_url}}/api/logs/stats",
-							"host": ["{{base_url}}"],
-							"path": ["api", "logs", "stats"]
-						},
-						"description": "Get log statistics"
-					}
-				},
-				{
-					"name": "Clear Logs",
-					"request": {
-						"method": "DELETE",
-						"url": {
-							"raw": "{{base_url}}/api/logs/clear",
-							"host": ["{{base_url}}"],
-							"path": ["api", "logs", "clear"]
-						},
-						"description": "Clear all logs"
-					}
-				}
-			]
-		},
-		{
-			"name": "11. Events (SSE)",
+			"name": "9. Events (SSE)",
 			"item": [
 				{
 					"name": "Event Stream",
@@ -853,7 +772,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "events", "stream"]
 						},
-						"description": "Server-Sent Events stream for real-time updates"
+						"description": "Server-Sent Events stream for real-time updates (backup progress, etc.)"
 					}
 				},
 				{
@@ -865,13 +784,13 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "events", "connections"]
 						},
-						"description": "Get active SSE connections"
+						"description": "Get active SSE connections count"
 					}
 				}
 			]
 		},
 		{
-			"name": "12. Settings",
+			"name": "10. Settings",
 			"item": [
 				{
 					"name": "Get Profile",
