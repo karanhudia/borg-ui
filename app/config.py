@@ -1,6 +1,7 @@
 import os
 import secrets
-from typing import List
+from typing import List, Union
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
@@ -18,23 +19,36 @@ class Settings(BaseSettings):
     secret_key: str = "INSECURE-CHANGE-THIS-IN-PRODUCTION"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
-    
+
     # Database settings
     database_url: str = "sqlite:///./borgmatic.db"
-    
+
     # Borgmatic settings
     borgmatic_config_path: str = "/app/config/borgmatic.yaml"
     borgmatic_backup_path: str = "/backups"
 
     # SSH keys directory (persistent storage for key files)
     ssh_keys_dir: str = "/app/data/ssh_keys"
-    
+
     # Logging settings
     log_level: str = "INFO"
     log_file: str = "/app/logs/borgmatic-ui.log"
-    
-    # CORS settings
-    cors_origins: List[str] = ["http://localhost:7879", "http://localhost:8000"]
+
+    # CORS settings - comma-separated string that gets parsed to list
+    _cors_origins_str: str = "http://localhost:7879,http://localhost:8000"
+
+    @property
+    def cors_origins(self) -> List[str]:
+        """Get CORS origins as list"""
+        return [origin.strip() for origin in self._cors_origins_str.split(",") if origin.strip()]
+
+    @cors_origins.setter
+    def cors_origins(self, value: Union[str, List[str]]):
+        """Set CORS origins from string or list"""
+        if isinstance(value, list):
+            self._cors_origins_str = ",".join(value)
+        else:
+            self._cors_origins_str = value
     
     # Server settings
     host: str = "0.0.0.0"
@@ -57,6 +71,12 @@ class Settings(BaseSettings):
         env_file = ".env"
         case_sensitive = False
         extra = "ignore"
+        # Map CORS_ORIGINS env var to _cors_origins_str field
+        fields = {
+            "_cors_origins_str": {
+                "env": "CORS_ORIGINS"
+            }
+        }
 
 # Create settings instance
 settings = Settings()
@@ -64,10 +84,6 @@ settings = Settings()
 # Environment-specific overrides
 if os.getenv("ENVIRONMENT") == "production":
     settings.debug = False
-    # Handle CORS_ORIGINS as comma-separated string
-    cors_origins_env = os.getenv("CORS_ORIGINS", "")
-    if cors_origins_env:
-        settings.cors_origins = [origin.strip() for origin in cors_origins_env.split(",")]
 elif os.getenv("ENVIRONMENT") == "development":
     settings.debug = True
     settings.log_level = "DEBUG"

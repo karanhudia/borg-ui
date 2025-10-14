@@ -2,11 +2,11 @@ services:
   borgmatic-ui:
     # Use pre-built image from Docker Hub (RECOMMENDED - instant startup!)
     # Replace 'ainullcode' with your actual Docker Hub username if different
-    image: ${DOCKER_IMAGE:-ainullcode/borgmatic-ui:latest}
+    # image: ${DOCKER_IMAGE:-ainullcode/borgmatic-ui:latest}
 
     # OR build locally (only for development - takes 20-40 mins on Pi)
     # Uncomment the line below and comment out 'image' above to build locally:
-    # build: .
+    build: .
 
     container_name: borgmatic-web-ui
     
@@ -48,7 +48,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
 
       # Security settings (⚠️ MUST set in .env file!)
-      - SECRET_KEY=${SECRET_KEY:?ERROR: SECRET_KEY is required! Set it in .env file}
+      - SECRET_KEY=${SECRET_KEY}
       - ALGORITHM=${ALGORITHM:-HS256}
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
       - STRICT_SECURITY=${STRICT_SECURITY:-false}
@@ -58,9 +58,6 @@ services:
 
       # Database settings (SQLite - persists in ./data directory)
       - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/borgmatic.db}
-      
-      # CORS settings
-      - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:7879","http://localhost:8000"]}
     
     restart: unless-stopped
 
@@ -70,7 +67,7 @@ services:
 
     # Health check
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/system"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 30s
       timeout: 10s
       retries: 3

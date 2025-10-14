@@ -118,8 +118,8 @@ RUN mkdir -p /home/borgmatic/.ssh && \
     chown -R borgmatic:borgmatic /home/borgmatic/.ssh && \
     chmod 700 /home/borgmatic/.ssh
 
-# Create borgmatic configuration template
-COPY config/borgmatic.yaml.template /etc/borgmatic/config.yaml.template
+# Create borgmatic configuration template (optional - can be mounted via volume)
+# COPY config/borgmatic.yaml.template /etc/borgmatic/config.yaml.template
 
 # Set up cron directory
 RUN mkdir -p /etc/cron.d && \
@@ -148,7 +148,7 @@ EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/api/health/system || exit 1
+    CMD curl -f http://localhost:8000/ || exit 1
 
 # Start application using the startup script
 CMD ["/app/start.sh"] 
