@@ -76,22 +76,30 @@ These are optional enhancements that don't affect core functionality:
 
 ## 🚀 **Quick Start**
 
-### **Docker Deployment (Recommended)**
+### **Docker Deployment (Recommended - 30-60 seconds)**
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/karanhudia/borg-ui.git
 cd borg-ui
 
-# Start the application
+# Start the application (pulls pre-built image from Docker Hub)
 docker-compose up -d
 
 # Access the web interface
-open http://localhost:7879
+open http://localhost:8000
 
 # Default credentials
 # Username: admin
 # Password: admin123
+```
+
+**⚡ Fast Installation:** Uses pre-built multi-arch images from Docker Hub (amd64, arm64, armv7)
+- Raspberry Pi: ~45 seconds
+- x86 Linux: ~30 seconds
+- Mac/Windows: ~30 seconds
+
+**Image:** `ainullcode/borgmatic-ui:latest`
 
 ### **Testing the Application**
 
@@ -298,15 +306,36 @@ npm test
 
 ## 🤝 **Contributing**
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+We welcome contributions! Here's how:
+
+1. **Do NOT fork** the repository (see License below)
+2. Create an issue to discuss your proposed changes
+3. Clone the repository and create a feature branch
+4. Make your changes and add tests if applicable
+5. Submit a pull request with a clear description
+
+By submitting a pull request, you agree that your contributions will be licensed under the same proprietary license as this project.
 
 ## 📄 **License**
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+**Proprietary License - Copyright (c) 2025 Karan Hudia (ainullcode)**
+
+**You CAN:**
+- ✅ Use this software for personal or commercial purposes
+- ✅ Submit pull requests with improvements
+- ✅ Report issues and bugs
+- ✅ Pull and use Docker images from Docker Hub
+
+**You CANNOT:**
+- ❌ Fork or copy this repository
+- ❌ Create derivative works
+- ❌ Redistribute the source code
+- ❌ Use the code in other projects
+- ❌ Remove copyright notices
+
+See the [LICENSE](LICENSE) file for complete terms.
+
+For commercial licensing or special permissions, please contact the author.
 
 ## 🆘 **Support**
 
