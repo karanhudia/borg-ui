@@ -93,7 +93,7 @@ export default function Dashboard() {
       </Box>
 
       {/* Status Cards */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 3, mb: 4 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 3, mb: 4, '& > *': { mb: { xs: 2, sm: 0 } } }}>
         {/* Borgmatic Status Card */}
         <Card>
           <CardContent>
