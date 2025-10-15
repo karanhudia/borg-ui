@@ -143,7 +143,21 @@ async def create_repository(
             # Skip directory creation if path is within /local mount (host filesystem)
             # User must ensure parent directory exists with proper permissions
             if not repo_path.startswith("/local/"):
-                os.makedirs(repo_path, exist_ok=True)
+                # Paths without /local/ prefix are inside the container
+                # Try to create the directory, but provide helpful error if permission denied
+                try:
+                    os.makedirs(repo_path, exist_ok=True)
+                except PermissionError as e:
+                    logger.error("Permission denied creating repository directory",
+                               path=repo_path,
+                               error=str(e))
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Permission denied: Cannot create directory at '{repo_path}'. "
+                               f"To store repositories on your host machine, use paths starting with '/local/' "
+                               f"(e.g., '/local{repo_path}' for accessing your host filesystem). "
+                               f"The container's root filesystem (/) is mapped to /local/ inside the container."
+                    )
             else:
                 # Verify parent directory exists and is writable
                 parent_dir = os.path.dirname(repo_path)
