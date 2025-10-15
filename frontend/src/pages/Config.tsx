@@ -301,20 +301,6 @@ const Config: React.FC = () => {
     }
   }
 
-  // Handle file download
-  const handleDownload = () => {
-    const blob = new Blob([configContent], { type: 'text/yaml' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${configName || 'borgmatic'}.yaml`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-    toast.success('Configuration downloaded!')
-  }
-
   // Handle file upload
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
