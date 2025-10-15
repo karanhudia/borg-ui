@@ -32,14 +32,17 @@ class BackupService:
         job.started_at = datetime.utcnow()
         db.commit()
 
-        # Build command
-        cmd = ["borgmatic", "create", "--verbosity", "1", "--files"]
-        if repository:
-            cmd.extend(["--repository", repository])
+        # Build command - borgmatic uses config file for repository info
+        # The repository parameter is stored in the job for reference but not passed to borgmatic
+        cmd = ["borgmatic", "create", "--verbosity", "1", "--progress", "--stats"]
+
+        # Use specified config file or default
         if config_file:
             cmd.extend(["--config", config_file])
         elif settings.borgmatic_config_path:
             cmd.extend(["--config", settings.borgmatic_config_path])
+
+        logger.info("Starting backup", job_id=job_id, command=" ".join(cmd))
 
         try:
             # Execute command and stream to log file
