@@ -34,10 +34,10 @@ services:
       - /etc/localtime:/etc/localtime:ro
 
       # Host filesystem mount for local-style repository access
-      # Maps your host machine's directories into the container at /local
-      # Default: /Users (macOS) - customize via LOCAL_STORAGE_PATH in .env
-      # Create repositories at /local/your-username/backups/repo-name
-      - ${LOCAL_STORAGE_PATH:-/Users}:/local:rw
+      # Maps your host machine's root filesystem into the container at /local
+      # Default: / (entire host filesystem) - customize via LOCAL_STORAGE_PATH in .env
+      # Create repositories at /local/Users/username/backups (macOS) or /local/home/username/backups (Linux)
+      - ${LOCAL_STORAGE_PATH:-/}:/local:rw
 
     environment:
       # Optional overrides (all have smart defaults)

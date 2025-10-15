@@ -70,7 +70,7 @@ services:
       - "8081:8081"
     volumes:
       - borg_data:/data
-      - ${LOCAL_STORAGE_PATH:-/Users}:/local:rw  # Access host filesystem
+      - ${LOCAL_STORAGE_PATH:-/}:/local:rw  # Access host filesystem
 
 volumes:
   borg_data:
@@ -118,7 +118,7 @@ services:
 
     volumes:
       - borg_data:/data
-      - ${LOCAL_STORAGE_PATH:-/Users}:/local:rw
+      - ${LOCAL_STORAGE_PATH:-/}:/local:rw
 
 volumes:
   borg_data:
@@ -153,7 +153,7 @@ docker run -d \
   --restart unless-stopped \
   -p 8081:8081 \
   -v borg_data:/data \
-  -v /Users:/local:rw \
+  -v /:/local:rw \
   ainullcode/borgmatic-ui:latest
 ```
 
@@ -196,7 +196,7 @@ services:
 
     volumes:
       - borg_data:/data
-      - ${LOCAL_STORAGE_PATH:-/Users}:/local:rw
+      - ${LOCAL_STORAGE_PATH:-/}:/local:rw
 
     # Optional: Override defaults
     # environment:
@@ -284,9 +284,8 @@ No need for a separate `borg_backups` volume!
 #### Default Configuration
 
 By default, the container mounts:
-- **macOS**: `/Users` → `/local` in container
-- **Linux**: Change to `/home` via `.env` file
-- **Custom**: Any directory via `LOCAL_STORAGE_PATH` environment variable
+- **All Systems**: `/` (root filesystem) → `/local` in container
+- **Custom**: Any directory via `LOCAL_STORAGE_PATH` environment variable (e.g., `/Users`, `/home`, `/mnt/nas`)
 
 #### Setup Instructions
 
@@ -294,9 +293,13 @@ By default, the container mounts:
 
 ```bash
 # .env
-LOCAL_STORAGE_PATH=/Users  # macOS
-# LOCAL_STORAGE_PATH=/home   # Linux
-# LOCAL_STORAGE_PATH=/mnt/nas  # NAS mount
+# Default: Entire filesystem (/)
+# LOCAL_STORAGE_PATH=/
+
+# Custom examples:
+# LOCAL_STORAGE_PATH=/Users        # Only user directories (macOS)
+# LOCAL_STORAGE_PATH=/home          # Only user directories (Linux)
+# LOCAL_STORAGE_PATH=/mnt/nas       # Only NAS mount point
 ```
 
 **Step 2**: Restart the container (only if you changed the mount path):
@@ -308,10 +311,11 @@ docker compose up -d
 
 **Step 3**: Create repositories in the UI using `/local/` prefix:
 
-Examples:
-- `/local/your-username/backups/my-repo`
-- `/local/external-drive/backups/important-data`
-- `/local/nas-mount/borg-backups/project-repo`
+Examples (with default `/` mount):
+- **macOS**: `/local/Users/your-username/backups/my-repo`
+- **Linux**: `/local/home/your-username/backups/my-repo`
+- **External Drive**: `/local/mnt/external-drive/backups/important-data`
+- **NAS**: `/local/mnt/nas-mount/borg-backups/project-repo`
 
 #### For Remote Storage (Raspberry Pi, NAS)
 
