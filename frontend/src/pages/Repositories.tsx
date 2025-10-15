@@ -1,113 +1,153 @@
-import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
-import { 
-  Plus, 
-  Edit, 
-  Trash2, 
-  CheckCircle, 
-  AlertTriangle, 
-  Database,
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from 'react-query'
+import { toast } from 'react-hot-toast'
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Button,
+  IconButton,
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Alert,
+  Divider,
+  Stack,
+  Checkbox,
+  FormControlLabel,
+  Autocomplete,
+} from '@mui/material'
+import {
+  Add,
+  Edit,
+  Delete,
+  CheckCircle as CheckCircleIcon,
+  Refresh,
+  Storage,
   Shield,
-  RefreshCw,
-  FileText
-} from 'lucide-react';
-import { repositoriesAPI, sshKeysAPI } from '../services/api';
-import { toast } from 'react-hot-toast';
-import { useAuth } from '../hooks/useAuth';
+  Description,
+  Warning,
+} from '@mui/icons-material'
+import { repositoriesAPI, sshKeysAPI } from '../services/api'
+import { useAuth } from '../hooks/useAuth'
 
 interface Repository {
-  id: number;
-  name: string;
-  path: string;
-  encryption: string;
-  compression: string;
-  last_backup: string | null;
-  total_size: string | null;
-  archive_count: number;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string | null;
+  id: number
+  name: string
+  path: string
+  encryption: string
+  compression: string
+  last_backup: string | null
+  total_size: string | null
+  archive_count: number
+  is_active: boolean
+  created_at: string
+  updated_at: string | null
 }
 
-const Repositories: React.FC = () => {
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editingRepository, setEditingRepository] = useState<Repository | null>(null);
+interface SSHKey {
+  id: number
+  name: string
+  key_type: string
+  is_active: boolean
+}
 
+interface SSHConnection {
+  id: number
+  ssh_key_id: number
+  ssh_key_name: string
+  host: string
+  username: string
+  port: number
+  status: string
+}
 
-  // Get repositories
+export default function Repositories() {
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [editingRepository, setEditingRepository] = useState<Repository | null>(null)
+
+  // Queries
   const { data: repositoriesData, isLoading } = useQuery({
     queryKey: ['repositories'],
     queryFn: repositoriesAPI.getRepositories,
-  });
+  })
 
-  // Get SSH keys for remote repositories
   const { data: sshKeysData } = useQuery({
     queryKey: ['ssh-keys'],
     queryFn: sshKeysAPI.getSSHKeys,
-  });
+  })
 
-  // Create repository mutation
+  const { data: connectionsData } = useQuery({
+    queryKey: ['ssh-connections'],
+    queryFn: sshKeysAPI.getSSHConnections,
+  })
+
+  // Mutations
   const createRepositoryMutation = useMutation({
     mutationFn: repositoriesAPI.createRepository,
     onSuccess: () => {
-      toast.success('Repository created successfully');
-      queryClient.invalidateQueries({ queryKey: ['repositories'] });
-      setShowCreateModal(false);
+      toast.success('Repository created successfully')
+      queryClient.invalidateQueries({ queryKey: ['repositories'] })
+      setShowCreateModal(false)
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to create repository');
+      toast.error(error.response?.data?.detail || 'Failed to create repository')
     },
-  });
+  })
 
-  // Update repository mutation
   const updateRepositoryMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) =>
       repositoriesAPI.updateRepository(id, data),
     onSuccess: () => {
-      toast.success('Repository updated successfully');
-      queryClient.invalidateQueries({ queryKey: ['repositories'] });
-      setEditingRepository(null);
+      toast.success('Repository updated successfully')
+      queryClient.invalidateQueries({ queryKey: ['repositories'] })
+      setEditingRepository(null)
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to update repository');
+      toast.error(error.response?.data?.detail || 'Failed to update repository')
     },
-  });
+  })
 
-  // Delete repository mutation
   const deleteRepositoryMutation = useMutation({
     mutationFn: repositoriesAPI.deleteRepository,
     onSuccess: () => {
-      toast.success('Repository deleted successfully');
-      queryClient.invalidateQueries({ queryKey: ['repositories'] });
+      toast.success('Repository deleted successfully')
+      queryClient.invalidateQueries({ queryKey: ['repositories'] })
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to delete repository');
+      toast.error(error.response?.data?.detail || 'Failed to delete repository')
     },
-  });
+  })
 
-  // Check repository mutation
   const checkRepositoryMutation = useMutation({
     mutationFn: repositoriesAPI.checkRepository,
     onSuccess: () => {
-      toast.success('Repository check completed');
+      toast.success('Repository check completed')
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to check repository');
+      toast.error(error.response?.data?.detail || 'Failed to check repository')
     },
-  });
+  })
 
-  // Compact repository mutation
   const compactRepositoryMutation = useMutation({
     mutationFn: repositoriesAPI.compactRepository,
     onSuccess: () => {
-      toast.success('Repository compaction completed');
+      toast.success('Repository compaction completed')
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to compact repository');
+      toast.error(error.response?.data?.detail || 'Failed to compact repository')
     },
-  });
+  })
 
   // Form states
   const [createForm, setCreateForm] = useState({
@@ -121,48 +161,63 @@ const Repositories: React.FC = () => {
     port: 22,
     username: '',
     ssh_key_id: null as number | null,
-  });
+    connection_id: null as number | null,
+  })
 
   const [editForm, setEditForm] = useState({
     name: '',
     path: '',
     compression: 'lz4',
     is_active: true,
-  });
+  })
 
+  // Event handlers
   const handleCreateRepository = (e: React.FormEvent) => {
-    e.preventDefault();
-    createRepositoryMutation.mutate(createForm);
-  };
+    e.preventDefault()
+    createRepositoryMutation.mutate(createForm)
+  }
 
   const handleUpdateRepository = (e: React.FormEvent) => {
-    e.preventDefault();
+    e.preventDefault()
     if (editingRepository) {
       updateRepositoryMutation.mutate({
         id: editingRepository.id,
         data: editForm,
-      });
+      })
     }
-  };
+  }
 
   const handleDeleteRepository = (repository: Repository) => {
     if (window.confirm(`Are you sure you want to delete repository "${repository.name}"?`)) {
-      deleteRepositoryMutation.mutate(repository.id);
+      deleteRepositoryMutation.mutate(repository.id)
     }
-  };
+  }
 
   const handleCheckRepository = (repository: Repository) => {
-    checkRepositoryMutation.mutate(repository.id);
-  };
+    checkRepositoryMutation.mutate(repository.id)
+  }
 
   const handleCompactRepository = (repository: Repository) => {
     if (window.confirm(`Are you sure you want to compact repository "${repository.name}"?`)) {
-      compactRepositoryMutation.mutate(repository.id);
+      compactRepositoryMutation.mutate(repository.id)
     }
-  };
+  }
+
+  const handleConnectionSelect = (connection: SSHConnection | null) => {
+    if (connection) {
+      setCreateForm({
+        ...createForm,
+        connection_id: connection.id,
+        ssh_key_id: connection.ssh_key_id,
+        host: connection.host,
+        username: connection.username,
+        port: connection.port,
+      })
+    }
+  }
 
   const openCreateModal = () => {
-    setShowCreateModal(true);
+    setShowCreateModal(true)
     setCreateForm({
       name: '',
       path: '',
@@ -174,405 +229,443 @@ const Repositories: React.FC = () => {
       port: 22,
       username: '',
       ssh_key_id: null,
-    });
-  };
+      connection_id: null,
+    })
+  }
 
   const openEditModal = (repository: Repository) => {
-    setEditingRepository(repository);
+    setEditingRepository(repository)
     setEditForm({
       name: repository.name,
       path: repository.path,
       compression: repository.compression,
       is_active: repository.is_active,
-    });
-  };
+    })
+  }
 
+  // Utility functions
   const getEncryptionIcon = (encryption: string) => {
     switch (encryption) {
       case 'repokey':
-        return <Shield className="w-4 h-4 text-green-500" />;
+        return <Shield sx={{ fontSize: 20, color: 'success.main' }} />
       case 'keyfile':
-        return <FileText className="w-4 h-4 text-blue-500" />;
+        return <Description sx={{ fontSize: 20, color: 'primary.main' }} />
       case 'none':
-        return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
+        return <Warning sx={{ fontSize: 20, color: 'warning.main' }} />
       default:
-        return <Shield className="w-4 h-4 text-gray-500" />;
+        return <Shield sx={{ fontSize: 20, color: 'text.disabled' }} />
     }
-  };
+  }
 
   const getCompressionLabel = (compression: string) => {
     switch (compression) {
       case 'lz4':
-        return 'LZ4 (Fast)';
+        return 'LZ4 (Fast)'
       case 'zstd':
-        return 'Zstandard';
+        return 'Zstandard'
       case 'zlib':
-        return 'Zlib';
+        return 'Zlib'
       case 'none':
-        return 'None';
+        return 'None'
       default:
-        return compression;
+        return compression
     }
-  };
+  }
+
+  const repositories = repositoriesData?.data?.repositories || []
+  const sshKeys = sshKeysData?.data?.ssh_keys || []
+  const connections = connectionsData?.data?.connections || []
+  const connectedConnections = connections.filter((c: SSHConnection) => c.status === 'connected')
 
   return (
-    <div className="space-y-6">
+    <Box>
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Repository Management</h1>
-          <p className="text-gray-600">Create and manage Borg repositories</p>
-        </div>
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box>
+          <Typography variant="h4" fontWeight={600} gutterBottom>
+            Repository Management
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Create and manage Borg repositories
+          </Typography>
+        </Box>
         {user?.is_admin && (
-          <button
+          <Button
+            variant="contained"
+            startIcon={<Add />}
             onClick={openCreateModal}
-            className="flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
           >
-            <Plus className="w-4 h-4 mr-2" />
             Create Repository
-          </button>
+          </Button>
         )}
-      </div>
+      </Box>
 
-      {/* Repositories List */}
+      {/* Repositories Grid */}
       {isLoading ? (
-        <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading repositories...</p>
-        </div>
+        <Box sx={{ textAlign: 'center', py: 8 }}>
+          <Typography variant="body2" color="text.secondary">
+            Loading repositories...
+          </Typography>
+        </Box>
+      ) : repositories.length === 0 ? (
+        <Card>
+          <CardContent sx={{ textAlign: 'center', py: 8 }}>
+            <Storage sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
+            <Typography variant="h6" gutterBottom>
+              No Repositories Yet
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Create your first Borg repository to start backing up your data
+            </Typography>
+            {user?.is_admin && (
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={openCreateModal}
+              >
+                Create Repository
+              </Button>
+            )}
+          </CardContent>
+        </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {repositoriesData?.data?.repositories?.map((repository: Repository) => (
-            <div key={repository.id} className="bg-white rounded-lg border shadow-sm">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-2">
-                    <Database className="w-5 h-5 text-blue-500" />
-                    <h3 className="text-lg font-medium text-gray-900">{repository.name}</h3>
-                  </div>
-                  <div className="flex items-center space-x-1">
-                    {getEncryptionIcon(repository.encryption)}
-                    <span className="text-xs text-gray-500">{repository.encryption}</span>
-                  </div>
-                </div>
+        <Stack direction={{ xs: 'column', md: 'row' }} flexWrap="wrap" spacing={3}>
+          {repositories.map((repository: Repository) => (
+            <Box key={repository.id} sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(33.333% - 16px)' }, minWidth: 300 }}>
+              <Card>
+                <CardContent>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Storage color="primary" />
+                      <Typography variant="h6" fontWeight={600}>
+                        {repository.name}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      {getEncryptionIcon(repository.encryption)}
+                      <Typography variant="caption" color="text.secondary">
+                        {repository.encryption}
+                      </Typography>
+                    </Box>
+                  </Box>
 
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Path</label>
-                    <p className="text-sm text-gray-900 font-mono">{repository.path}</p>
-                  </div>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      Path
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                      {repository.path}
+                    </Typography>
+                  </Box>
 
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Compression</label>
-                    <p className="text-sm text-gray-900">{getCompressionLabel(repository.compression)}</p>
-                  </div>
+                  <Stack spacing={1.5}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Compression
+                      </Typography>
+                      <Typography variant="body2">
+                        {getCompressionLabel(repository.compression)}
+                      </Typography>
+                    </Box>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Archives</label>
-                      <p className="text-sm text-gray-900">{repository.archive_count}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Status</label>
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        repository.is_active
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {repository.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </div>
-                  </div>
+                    <Stack direction="row" spacing={2}>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Archives
+                        </Typography>
+                        <Typography variant="body2" fontWeight={500}>
+                          {repository.archive_count}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Status
+                        </Typography>
+                        <Chip
+                          label={repository.is_active ? 'Active' : 'Inactive'}
+                          size="small"
+                          color={repository.is_active ? 'success' : 'default'}
+                        />
+                      </Box>
+                    </Stack>
 
-                  {repository.last_backup && (
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Last Backup</label>
-                      <p className="text-sm text-gray-900">
-                        {new Date(repository.last_backup).toLocaleDateString()}
-                      </p>
-                    </div>
+                    {repository.last_backup && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Last Backup
+                        </Typography>
+                        <Typography variant="body2">
+                          {new Date(repository.last_backup).toLocaleDateString()}
+                        </Typography>
+                      </Box>
+                    )}
+
+                    {repository.total_size && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Total Size
+                        </Typography>
+                        <Typography variant="body2">{repository.total_size}</Typography>
+                      </Box>
+                    )}
+                  </Stack>
+
+                  {user?.is_admin && (
+                    <>
+                      <Divider sx={{ my: 2 }} />
+                      <Stack direction="row" spacing={1} justifyContent="space-between">
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                          <Button
+                            size="small"
+                            startIcon={<CheckCircleIcon />}
+                            onClick={() => handleCheckRepository(repository)}
+                            disabled={checkRepositoryMutation.isLoading}
+                          >
+                            Check
+                          </Button>
+                          <Button
+                            size="small"
+                            startIcon={<Refresh />}
+                            onClick={() => handleCompactRepository(repository)}
+                            disabled={compactRepositoryMutation.isLoading}
+                            color="warning"
+                          >
+                            Compact
+                          </Button>
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                          <IconButton
+                            size="small"
+                            onClick={() => openEditModal(repository)}
+                          >
+                            <Edit fontSize="small" />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => handleDeleteRepository(repository)}
+                          >
+                            <Delete fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      </Stack>
+                    </>
                   )}
-
-                  {repository.total_size && (
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Total Size</label>
-                      <p className="text-sm text-gray-900">{repository.total_size}</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Actions */}
-                {user?.is_admin && (
-                  <div className="mt-6 pt-4 border-t border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleCheckRepository(repository)}
-                          disabled={checkRepositoryMutation.isLoading}
-                          className="flex items-center px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
-                        >
-                          <CheckCircle className="w-3 h-3 mr-1" />
-                          Check
-                        </button>
-                        <button
-                          onClick={() => handleCompactRepository(repository)}
-                          disabled={compactRepositoryMutation.isLoading}
-                          className="flex items-center px-2 py-1 text-xs font-medium text-yellow-600 hover:text-yellow-800 disabled:opacity-50"
-                        >
-                          <RefreshCw className="w-3 h-3 mr-1" />
-                          Compact
-                        </button>
-                      </div>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => openEditModal(repository)}
-                          className="flex items-center px-2 py-1 text-xs font-medium text-gray-600 hover:text-gray-800"
-                        >
-                          <Edit className="w-3 h-3 mr-1" />
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteRepository(repository)}
-                          className="flex items-center px-2 py-1 text-xs font-medium text-red-600 hover:text-red-800"
-                        >
-                          <Trash2 className="w-3 h-3 mr-1" />
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+                </CardContent>
+              </Card>
+            </Box>
           ))}
-        </div>
+        </Stack>
       )}
 
-      {/* Create Repository Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Create Repository</h3>
-              <form onSubmit={handleCreateRepository} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                  <input
-                    type="text"
-                    value={createForm.name}
-                    onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    required
+      {/* Create Repository Dialog */}
+      <Dialog open={showCreateModal} onClose={() => setShowCreateModal(false)} maxWidth="sm" fullWidth>
+        <form onSubmit={handleCreateRepository}>
+          <DialogTitle>Create Repository</DialogTitle>
+          <DialogContent>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+              <TextField
+                label="Name"
+                value={createForm.name}
+                onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                required
+                fullWidth
+              />
+
+              <FormControl fullWidth>
+                <InputLabel>Repository Type</InputLabel>
+                <Select
+                  value={createForm.repository_type}
+                  label="Repository Type"
+                  onChange={(e) => setCreateForm({ ...createForm, repository_type: e.target.value })}
+                >
+                  <MenuItem value="local">Local</MenuItem>
+                  <MenuItem value="ssh">SSH</MenuItem>
+                  <MenuItem value="sftp">SFTP</MenuItem>
+                </Select>
+              </FormControl>
+
+              {createForm.repository_type !== 'local' && (
+                <>
+                  <Alert severity="info">
+                    Select an existing SSH connection or enter connection details manually
+                  </Alert>
+
+                  <Autocomplete
+                    options={connectedConnections}
+                    getOptionLabel={(option) => `${option.username}@${option.host}:${option.port} (${option.ssh_key_name})`}
+                    onChange={(_, value) => handleConnectionSelect(value)}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="SSH Connection (Optional)"
+                        placeholder="Select a connection to auto-fill"
+                      />
+                    )}
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Repository Type</label>
-                  <select
-                    value={createForm.repository_type}
-                    onChange={(e) => setCreateForm({ ...createForm, repository_type: e.target.value })}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="local">Local</option>
-                    <option value="ssh">SSH</option>
-                    <option value="sftp">SFTP</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Path</label>
-                  <input
-                    type="text"
-                    value={createForm.path}
-                    onChange={(e) => setCreateForm({ ...createForm, path: e.target.value })}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder={createForm.repository_type === 'local' ? '/path/to/repository' : '/mnt/backup/repo'}
+
+                  <Divider>OR enter manually</Divider>
+
+                  <TextField
+                    label="Host"
+                    value={createForm.host}
+                    onChange={(e) => setCreateForm({ ...createForm, host: e.target.value })}
+                    placeholder="192.168.1.100"
                     required
+                    fullWidth
                   />
-                </div>
-                {createForm.repository_type !== 'local' && (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Host</label>
-                      <input
-                        type="text"
-                        value={createForm.host}
-                        onChange={(e) => setCreateForm({ ...createForm, host: e.target.value })}
-                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="192.168.1.100"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
-                      <input
-                        type="text"
-                        value={createForm.username}
-                        onChange={(e) => setCreateForm({ ...createForm, username: e.target.value })}
-                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="user"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Port</label>
-                      <input
-                        type="number"
-                        value={createForm.port}
-                        onChange={(e) => setCreateForm({ ...createForm, port: parseInt(e.target.value) })}
-                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                        min="1"
-                        max="65535"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">SSH Key</label>
-                      <select
-                        value={createForm.ssh_key_id || ''}
-                        onChange={(e) => setCreateForm({ ...createForm, ssh_key_id: e.target.value ? parseInt(e.target.value) : null })}
-                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                        required
-                      >
-                        <option value="">Select SSH Key</option>
-                        {sshKeysData?.data?.ssh_keys?.map((key: any) => (
-                          <option key={key.id} value={key.id}>
+
+                  <TextField
+                    label="Username"
+                    value={createForm.username}
+                    onChange={(e) => setCreateForm({ ...createForm, username: e.target.value })}
+                    placeholder="user"
+                    required
+                    fullWidth
+                  />
+
+                  <TextField
+                    label="Port"
+                    type="number"
+                    value={createForm.port}
+                    onChange={(e) => setCreateForm({ ...createForm, port: parseInt(e.target.value) })}
+                    required
+                    fullWidth
+                  />
+
+                  <FormControl fullWidth required>
+                    <InputLabel>SSH Key</InputLabel>
+                    <Select
+                      value={createForm.ssh_key_id || ''}
+                      label="SSH Key"
+                      onChange={(e) => setCreateForm({ ...createForm, ssh_key_id: e.target.value ? parseInt(e.target.value as string) : null })}
+                    >
+                      <MenuItem value="">Select SSH Key</MenuItem>
+                      {sshKeys
+                        .filter((key: SSHKey) => key.is_active)
+                        .map((key: SSHKey) => (
+                          <MenuItem key={key.id} value={key.id}>
                             {key.name} ({key.key_type})
-                          </option>
+                          </MenuItem>
                         ))}
-                      </select>
-                    </div>
-                  </>
-                )}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Encryption</label>
-                  <select
-                    value={createForm.encryption}
-                    onChange={(e) => setCreateForm({ ...createForm, encryption: e.target.value })}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="repokey">Repokey (Recommended)</option>
-                    <option value="keyfile">Keyfile</option>
-                    <option value="none">None (Unencrypted)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Compression</label>
-                  <select
-                    value={createForm.compression}
-                    onChange={(e) => setCreateForm({ ...createForm, compression: e.target.value })}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="lz4">LZ4 (Fast)</option>
-                    <option value="zstd">Zstandard</option>
-                    <option value="zlib">Zlib</option>
-                    <option value="none">None</option>
-                  </select>
-                </div>
-                {createForm.encryption !== 'none' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Passphrase</label>
-                    <input
-                      type="password"
-                      value={createForm.passphrase}
-                      onChange={(e) => setCreateForm({ ...createForm, passphrase: e.target.value })}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Enter passphrase"
-                    />
-                  </div>
-                )}
-                <div className="flex justify-end space-x-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowCreateModal(false)}
-                    className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={createRepositoryMutation.isLoading}
-                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {createRepositoryMutation.isLoading ? 'Creating...' : 'Create'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
+                    </Select>
+                  </FormControl>
+                </>
+              )}
 
-      {/* Edit Repository Modal */}
-      {editingRepository && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Edit Repository</h3>
-              <form onSubmit={handleUpdateRepository} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                  <input
-                    type="text"
-                    value={editForm.name}
-                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Path</label>
-                  <input
-                    type="text"
-                    value={editForm.path}
-                    onChange={(e) => setEditForm({ ...editForm, path: e.target.value })}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Compression</label>
-                  <select
-                    value={editForm.compression}
-                    onChange={(e) => setEditForm({ ...editForm, compression: e.target.value })}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="lz4">LZ4 (Fast)</option>
-                    <option value="zstd">Zstandard</option>
-                    <option value="zlib">Zlib</option>
-                    <option value="none">None</option>
-                  </select>
-                </div>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
+              <TextField
+                label="Path"
+                value={createForm.path}
+                onChange={(e) => setCreateForm({ ...createForm, path: e.target.value })}
+                placeholder={createForm.repository_type === 'local' ? '/path/to/repository' : '/mnt/backup/repo'}
+                required
+                fullWidth
+                helperText="Any path is allowed. Directory will be created automatically."
+              />
+
+              <FormControl fullWidth>
+                <InputLabel>Encryption</InputLabel>
+                <Select
+                  value={createForm.encryption}
+                  label="Encryption"
+                  onChange={(e) => setCreateForm({ ...createForm, encryption: e.target.value })}
+                >
+                  <MenuItem value="repokey">Repokey (Recommended)</MenuItem>
+                  <MenuItem value="keyfile">Keyfile</MenuItem>
+                  <MenuItem value="none">None (Unencrypted)</MenuItem>
+                </Select>
+              </FormControl>
+
+              <FormControl fullWidth>
+                <InputLabel>Compression</InputLabel>
+                <Select
+                  value={createForm.compression}
+                  label="Compression"
+                  onChange={(e) => setCreateForm({ ...createForm, compression: e.target.value })}
+                >
+                  <MenuItem value="lz4">LZ4 (Fast)</MenuItem>
+                  <MenuItem value="zstd">Zstandard</MenuItem>
+                  <MenuItem value="zlib">Zlib</MenuItem>
+                  <MenuItem value="none">None</MenuItem>
+                </Select>
+              </FormControl>
+
+              {createForm.encryption !== 'none' && (
+                <TextField
+                  label="Passphrase"
+                  type="password"
+                  value={createForm.passphrase}
+                  onChange={(e) => setCreateForm({ ...createForm, passphrase: e.target.value })}
+                  placeholder="Enter passphrase"
+                  fullWidth
+                />
+              )}
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setShowCreateModal(false)}>Cancel</Button>
+            <Button type="submit" variant="contained" disabled={createRepositoryMutation.isLoading}>
+              {createRepositoryMutation.isLoading ? 'Creating...' : 'Create'}
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+
+      {/* Edit Repository Dialog */}
+      <Dialog open={!!editingRepository} onClose={() => setEditingRepository(null)} maxWidth="sm" fullWidth>
+        <form onSubmit={handleUpdateRepository}>
+          <DialogTitle>Edit Repository</DialogTitle>
+          <DialogContent>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+              <TextField
+                label="Name"
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                required
+                fullWidth
+              />
+
+              <TextField
+                label="Path"
+                value={editForm.path}
+                onChange={(e) => setEditForm({ ...editForm, path: e.target.value })}
+                required
+                fullWidth
+              />
+
+              <FormControl fullWidth>
+                <InputLabel>Compression</InputLabel>
+                <Select
+                  value={editForm.compression}
+                  label="Compression"
+                  onChange={(e) => setEditForm({ ...editForm, compression: e.target.value })}
+                >
+                  <MenuItem value="lz4">LZ4 (Fast)</MenuItem>
+                  <MenuItem value="zstd">Zstandard</MenuItem>
+                  <MenuItem value="zlib">Zlib</MenuItem>
+                  <MenuItem value="none">None</MenuItem>
+                </Select>
+              </FormControl>
+
+              <FormControlLabel
+                control={
+                  <Checkbox
                     checked={editForm.is_active}
                     onChange={(e) => setEditForm({ ...editForm, is_active: e.target.checked })}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
-                  <label className="ml-2 text-sm text-gray-700">Active</label>
-                </div>
-                <div className="flex justify-end space-x-3">
-                  <button
-                    type="button"
-                    onClick={() => setEditingRepository(null)}
-                    className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={updateRepositoryMutation.isLoading}
-                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {updateRepositoryMutation.isLoading ? 'Updating...' : 'Update'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default Repositories;
+                }
+                label="Active"
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setEditingRepository(null)}>Cancel</Button>
+            <Button type="submit" variant="contained" disabled={updateRepositoryMutation.isLoading}>
+              {updateRepositoryMutation.isLoading ? 'Updating...' : 'Update'}
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+    </Box>
+  )
+}
