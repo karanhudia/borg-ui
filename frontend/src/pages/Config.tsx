@@ -339,17 +339,31 @@ const Config: React.FC = () => {
               No Configurations Yet
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
-              Start by generating a configuration template. This will create a default borgmatic config that you can customize for your backup needs.
+              {configContent.trim()
+                ? 'Great! Now save your configuration by clicking the button below.'
+                : 'Start by generating a configuration template. This will create a default borgmatic config that you can customize for your backup needs.'}
             </Typography>
-            <Button
-              variant="contained"
-              size="large"
-              startIcon={isGenerating ? <CircularProgress size={20} color="inherit" /> : <FileText size={20} />}
-              onClick={handleGenerateTemplate}
-              disabled={isGenerating}
-            >
-              {isGenerating ? 'Generating Template...' : 'Generate Configuration Template'}
-            </Button>
+            {!configContent.trim() ? (
+              <Button
+                variant="contained"
+                size="large"
+                startIcon={isGenerating ? <CircularProgress size={20} color="inherit" /> : <FileText size={20} />}
+                onClick={handleGenerateTemplate}
+                disabled={isGenerating}
+              >
+                {isGenerating ? 'Generating Template...' : 'Generate Configuration Template'}
+              </Button>
+            ) : (
+              <Button
+                variant="contained"
+                size="large"
+                color="success"
+                startIcon={<Save size={20} />}
+                onClick={() => setShowCreateDialog(true)}
+              >
+                Save Configuration
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}
