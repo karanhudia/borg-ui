@@ -1,137 +1,328 @@
-import { useQuery } from 'react-query';
-import { dashboardAPI } from '../services/api';
-import { Activity, HardDrive, MemoryStick, Cpu, Clock } from 'lucide-react';
+import { useQuery } from 'react-query'
+import { dashboardAPI } from '../services/api'
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  CircularProgress,
+  Stack,
+  LinearProgress,
+  Chip,
+} from '@mui/material'
+import {
+  Activity,
+  HardDrive,
+  MemoryStick,
+  Cpu,
+  Clock,
+  CheckCircle,
+} from 'lucide-react'
+
+interface SystemMetrics {
+  cpu_usage: number
+  memory_total: number
+  memory_available: number
+  memory_usage: number
+  disk_total: number
+  disk_free: number
+  disk_usage: number
+}
+
+interface BackupJob {
+  id: string | number
+  repository: string
+  status: string
+  progress?: number
+  started_at?: string
+}
+
+interface DashboardStatus {
+  system_metrics?: SystemMetrics
+  recent_jobs?: BackupJob[]
+}
 
 export default function Dashboard() {
   // Poll data every 30 seconds for fresh data
-  const { data: status, isLoading } = useQuery(
+  const { data: status, isLoading } = useQuery<{ data: DashboardStatus }>(
     'dashboard-status',
     dashboardAPI.getStatus,
     { refetchInterval: 30000 }
-  );
+  )
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600"></div>
-      </div>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+        <CircularProgress size={60} />
+      </Box>
     )
   }
 
+  const metrics = status?.data?.system_metrics
+
+  const formatBytes = (bytes: number): string => {
+    return (bytes / 1024 / 1024 / 1024).toFixed(1)
+  }
+
+  const getStatusColor = (status: string): 'success' | 'error' | 'warning' | 'info' => {
+    switch (status.toLowerCase()) {
+      case 'completed':
+      case 'success':
+        return 'success'
+      case 'failed':
+      case 'error':
+        return 'error'
+      case 'running':
+      case 'in_progress':
+        return 'info'
+      default:
+        return 'warning'
+    }
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Overview of your backup system status and performance
-          </p>
-        </div>
-      </div>
+    <Box>
+      {/* Header */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" fontWeight={600} gutterBottom>
+          Dashboard
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Overview of your backup system status and performance
+        </Typography>
+      </Box>
 
       {/* Status Cards */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="card">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <Activity className="h-8 w-8 text-primary-600" />
-            </div>
-            <div className="ml-5 w-0 flex-1">
-              <dl>
-                <dt className="text-sm font-medium text-gray-500 truncate">Borgmatic Status</dt>
-                <dd className="text-lg font-medium text-gray-900">
-                  Running
-                </dd>
-              </dl>
-            </div>
-          </div>
-        </div>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} sx={{ mb: 4 }} flexWrap="wrap">
+        {/* Borgmatic Status Card */}
+        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', lg: '1 1 calc(25% - 12px)' }, minWidth: 240 }}>
+          <Card>
+            <CardContent>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Box
+                  sx={{
+                    backgroundColor: 'primary.light',
+                    borderRadius: 2,
+                    p: 1.5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Activity size={28} color="primary" />
+                </Box>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" color="text.secondary" noWrap>
+                    Borgmatic Status
+                  </Typography>
+                  <Typography variant="h6" fontWeight={600} sx={{ mt: 0.5 }}>
+                    Running
+                  </Typography>
+                  <Chip
+                    label="Active"
+                    size="small"
+                    color="success"
+                    icon={<CheckCircle size={14} />}
+                    sx={{ mt: 1, height: 24 }}
+                  />
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Box>
 
-        {status?.data?.system_metrics && (
-          <>
-            <div className="card">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <Cpu className="h-8 w-8 text-blue-600" />
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">CPU Usage</dt>
-                    <dd className="text-lg font-medium text-gray-900">
-                      {status.data.system_metrics.cpu_usage.toFixed(1)}%
-                    </dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-
-            <div className="card">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <MemoryStick className="h-8 w-8 text-green-600" />
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Memory</dt>
-                    <dd className="text-lg font-medium text-gray-900">
-                      {(status.data.system_metrics.memory_total / 1024 / 1024 / 1024 - status.data.system_metrics.memory_available / 1024 / 1024 / 1024).toFixed(1)} GB / {(status.data.system_metrics.memory_total / 1024 / 1024 / 1024).toFixed(1)} GB
-                    </dd>
-                    <dd className="text-xs text-gray-500 mt-1">
-                      {status.data.system_metrics.memory_usage.toFixed(1)}% used
-                    </dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-
-            <div className="card">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <HardDrive className="h-8 w-8 text-orange-600" />
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Disk Space</dt>
-                    <dd className="text-lg font-medium text-gray-900">
-                      {((status.data.system_metrics.disk_total - status.data.system_metrics.disk_free) / 1024 / 1024 / 1024).toFixed(1)} GB / {(status.data.system_metrics.disk_total / 1024 / 1024 / 1024).toFixed(1)} GB
-                    </dd>
-                    <dd className="text-xs text-gray-500 mt-1">
-                      {status.data.system_metrics.disk_usage.toFixed(1)}% used
-                    </dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </>
+        {/* CPU Usage Card */}
+        {metrics && (
+          <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', lg: '1 1 calc(25% - 12px)' }, minWidth: 240 }}>
+            <Card>
+              <CardContent>
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <Box
+                    sx={{
+                      backgroundColor: 'info.light',
+                      borderRadius: 2,
+                      p: 1.5,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Cpu size={28} color="#0288d1" />
+                  </Box>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="body2" color="text.secondary" noWrap>
+                      CPU Usage
+                    </Typography>
+                    <Typography variant="h6" fontWeight={600} sx={{ mt: 0.5 }}>
+                      {metrics.cpu_usage.toFixed(1)}%
+                    </Typography>
+                    <LinearProgress
+                      variant="determinate"
+                      value={Math.min(metrics.cpu_usage, 100)}
+                      sx={{ mt: 1, height: 6, borderRadius: 1 }}
+                      color={metrics.cpu_usage > 80 ? 'error' : metrics.cpu_usage > 60 ? 'warning' : 'info'}
+                    />
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Box>
         )}
-      </div>
 
+        {/* Memory Card */}
+        {metrics && (
+          <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', lg: '1 1 calc(25% - 12px)' }, minWidth: 240 }}>
+            <Card>
+              <CardContent>
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <Box
+                    sx={{
+                      backgroundColor: 'success.light',
+                      borderRadius: 2,
+                      p: 1.5,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <MemoryStick size={28} color="#2e7d32" />
+                  </Box>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="body2" color="text.secondary" noWrap>
+                      Memory
+                    </Typography>
+                    <Typography variant="h6" fontWeight={600} sx={{ mt: 0.5, fontSize: '1rem' }}>
+                      {formatBytes(metrics.memory_total - metrics.memory_available)} GB / {formatBytes(metrics.memory_total)} GB
+                    </Typography>
+                    <LinearProgress
+                      variant="determinate"
+                      value={Math.min(metrics.memory_usage, 100)}
+                      sx={{ mt: 1, height: 6, borderRadius: 1 }}
+                      color={metrics.memory_usage > 80 ? 'error' : metrics.memory_usage > 60 ? 'warning' : 'success'}
+                    />
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Box>
+        )}
+
+        {/* Disk Space Card */}
+        {metrics && (
+          <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', lg: '1 1 calc(25% - 12px)' }, minWidth: 240 }}>
+            <Card>
+              <CardContent>
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <Box
+                    sx={{
+                      backgroundColor: 'warning.light',
+                      borderRadius: 2,
+                      p: 1.5,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <HardDrive size={28} color="#ed6c02" />
+                  </Box>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="body2" color="text.secondary" noWrap>
+                      Disk Space
+                    </Typography>
+                    <Typography variant="h6" fontWeight={600} sx={{ mt: 0.5, fontSize: '1rem' }}>
+                      {formatBytes(metrics.disk_total - metrics.disk_free)} GB / {formatBytes(metrics.disk_total)} GB
+                    </Typography>
+                    <LinearProgress
+                      variant="determinate"
+                      value={Math.min(metrics.disk_usage, 100)}
+                      sx={{ mt: 1, height: 6, borderRadius: 1 }}
+                      color={metrics.disk_usage > 80 ? 'error' : metrics.disk_usage > 60 ? 'warning' : 'warning'}
+                    />
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Box>
+        )}
+      </Stack>
 
       {/* Recent Backup Jobs */}
       {status?.data?.recent_jobs && status.data.recent_jobs.length > 0 && (
-        <div className="card">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Backup Jobs</h3>
-          <div className="space-y-3">
-            {status.data.recent_jobs.map((job: any) => (
-              <div key={job.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
-                <div className="flex items-center">
-                  <Clock className="h-4 w-4 text-gray-400 mr-3" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{job.repository}</p>
-                    <p className="text-xs text-gray-500">
-                      Status: {job.status}
-                      {job.progress && ` (${job.progress}%)`}
-                    </p>
-                  </div>
-                </div>
-                <span className="text-xs text-gray-500">
-                  {job.started_at ? new Date(job.started_at).toLocaleString() : 'N/A'}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+        <Card>
+          <CardContent>
+            <Typography variant="h6" fontWeight={600} gutterBottom>
+              Recent Backup Jobs
+            </Typography>
+            <Stack spacing={2} sx={{ mt: 3 }}>
+              {status.data.recent_jobs.map((job: BackupJob) => (
+                <Box
+                  key={job.id}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    py: 2,
+                    borderBottom: 1,
+                    borderColor: 'divider',
+                    '&:last-child': { borderBottom: 0 },
+                  }}
+                >
+                  <Stack direction="row" spacing={2} alignItems="center" sx={{ flex: 1 }}>
+                    <Box
+                      sx={{
+                        backgroundColor: 'grey.100',
+                        borderRadius: 1.5,
+                        p: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Clock size={20} />
+                    </Box>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="body1" fontWeight={500} noWrap>
+                        {job.repository}
+                      </Typography>
+                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+                        <Chip
+                          label={job.status}
+                          size="small"
+                          color={getStatusColor(job.status)}
+                          sx={{ height: 20, fontSize: '0.75rem' }}
+                        />
+                        {job.progress !== undefined && (
+                          <Typography variant="caption" color="text.secondary">
+                            {job.progress}%
+                          </Typography>
+                        )}
+                      </Stack>
+                    </Box>
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary" sx={{ ml: 2, whiteSpace: 'nowrap' }}>
+                    {job.started_at ? new Date(job.started_at).toLocaleString() : 'N/A'}
+                  </Typography>
+                </Box>
+              ))}
+            </Stack>
+          </CardContent>
+        </Card>
       )}
-    </div>
+
+      {/* Empty State for Recent Jobs */}
+      {status?.data?.recent_jobs && status.data.recent_jobs.length === 0 && (
+        <Card>
+          <CardContent sx={{ textAlign: 'center', py: 6 }}>
+            <Clock size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
+            <Typography variant="h6" gutterBottom>
+              No Recent Backup Jobs
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Your recent backup jobs will appear here once you start running backups
+            </Typography>
+          </CardContent>
+        </Card>
+      )}
+    </Box>
   )
-} 
+}
