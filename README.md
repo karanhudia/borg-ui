@@ -19,11 +19,11 @@ A modern, user-friendly web interface for [Borgmatic](https://torsion.org/borgma
   - [Method 2: Docker Run](#method-2-docker-run)
   - [Method 3: Docker Compose](#method-3-docker-compose)
 - [Configuration](#configuration)
-- [How to Use with Different Systems](#how-to-use-with-different-systems)
-  - [Raspberry Pi Setup](#raspberry-pi-setup)
-  - [macOS Setup](#macos-setup)
-  - [Linux Setup](#linux-ubuntudebian-setup)
-  - [NAS Setup](#nas-synologyqnap-setup)
+- [User Guide: Setting Up Borgmatic UI](#user-guide-setting-up-borgmatic-ui)
+  - [Understanding Permissions](#understanding-permissions)
+  - [Step-by-Step Setup](#step-by-step-setup)
+  - [Platform-Specific Examples](#platform-specific-examples)
+  - [Troubleshooting Permissions](#troubleshooting-permissions)
 - [Troubleshooting](#troubleshooting)
 - [Documentation](#documentation)
 - [API Reference](#api-reference)
@@ -344,215 +344,248 @@ Repositories created at `/local/backups/repo-name` will actually be stored on yo
 
 ---
 
-## How to Use with Different Systems
+## User Guide: Setting Up Borgmatic UI
 
-### Raspberry Pi Setup
+### Understanding Permissions
 
-**Complete workflow for Raspberry Pi users:**
+**Why permissions matter:**
+- Borg needs to read files you want to back up and write to backup repositories
+- Docker containers run as a specific user (default: UID 1001)
+- Your host system has its own user (typically UID 1000 on Linux/Pi, UID 501 on macOS)
+- **Mismatched UIDs = "Permission denied" errors**
 
-#### Step 1: Deploy on Raspberry Pi
+**The solution:** Configure the container to run as your host user by setting `PUID` and `PGID`.
 
-1. **Pull the latest Docker image:**
+### Step-by-Step Setup
+
+#### Step 1: Find Your User ID
+
+On your host machine, run:
+```bash
+id -u && id -g
+```
+
+This will output two numbers:
+- **First number (UID)**: Your user ID
+- **Second number (GID)**: Your group ID
+
+**Common values by platform:**
+- **Raspberry Pi / Linux**: `1000` and `1000`
+- **macOS**: `501` and `20` (varies by system)
+- **Synology NAS**: `1024` and `100` (or higher)
+- **QNAP NAS**: `500` and `100` (or higher)
+
+#### Step 2: Create Configuration Files
+
+**Create `.env` file:**
+```bash
+mkdir -p ~/borgmatic-ui && cd ~/borgmatic-ui
+
+cat > .env << 'EOF'
+# Set to match your host user (from 'id -u && id -g')
+PUID=1000  # Replace with your UID
+PGID=1000  # Replace with your GID
+
+# Where to mount your filesystem (optional, defaults to /)
+# Examples:
+#   Raspberry Pi: LOCAL_STORAGE_PATH=/home/pi
+#   macOS:        LOCAL_STORAGE_PATH=/Users
+#   Linux:        LOCAL_STORAGE_PATH=/home
+#   NAS:          LOCAL_STORAGE_PATH=/volume1
+LOCAL_STORAGE_PATH=/home  # Customize as needed
+EOF
+```
+
+**Create `docker-compose.yml`:**
+```bash
+cat > docker-compose.yml << 'EOF'
+version: '3.8'
+
+services:
+  app:
+    image: ainullcode/borgmatic-ui:latest
+    container_name: borgmatic-web-ui
+    restart: unless-stopped
+
+    build:
+      args:
+        - PUID=${PUID:-1001}
+        - PGID=${PGID:-1001}
+
+    ports:
+      - "8081:8081"
+
+    volumes:
+      - borg_data:/data
+      - ${LOCAL_STORAGE_PATH:-/}:/local:rw
+
+volumes:
+  borg_data:
+    name: borg_data
+EOF
+```
+
+#### Step 3: Deploy Container
+
+```bash
+# Pull latest image
+docker pull ainullcode/borgmatic-ui:latest
+
+# Start container
+docker-compose up -d
+
+# Verify it's running
+docker ps | grep borgmatic-web-ui
+docker logs borgmatic-web-ui
+```
+
+#### Step 4: Access Web Interface
+
+1. Open browser: `http://your-server-ip:8081` (or `http://localhost:8081`)
+2. Login with default credentials:
+   - Username: `admin`
+   - Password: `admin123`
+3. **Change password immediately** in Settings!
+
+#### Step 5: Create Your First Configuration
+
+1. **Go to Config tab**
+2. Click **"Generate Template"** to get a borgmatic config template
+3. Edit the configuration:
+   - Set repository location (e.g., `/local/backups/my-repo`)
+   - Configure what to back up (source directories)
+   - Set retention policies, encryption, etc.
+4. **Save Configuration**
+
+#### Step 6: Create Repository & Backup
+
+1. **Go to Repositories tab**
+2. **Create repository** at `/local/backups/my-repo`
+   - The `/local` path maps to your `LOCAL_STORAGE_PATH` on the host
+   - Example: If `LOCAL_STORAGE_PATH=/home`, then `/local/backups/my-repo` → `/home/backups/my-repo` on host
+3. **Go to Backup tab**
+4. **Run your first backup**
+5. **Verify on host:**
    ```bash
-   docker pull ainullcode/borgmatic-ui:latest
+   ls -la /your/mount/point/backups/my-repo
+   # Should be owned by your user, not root!
    ```
 
-2. **Find your Raspberry Pi user's UID/GID:**
+### Platform-Specific Examples
+
+**Repository Path Mapping:**
+
+The `/local` path in the UI maps to `LOCAL_STORAGE_PATH` on your host:
+
+| Platform | LOCAL_STORAGE_PATH | UI Path | Actual Host Path |
+|----------|-------------------|---------|------------------|
+| **Raspberry Pi** | `/home/pi` | `/local/backups/repo` | `/home/pi/backups/repo` |
+| **Linux** | `/home` | `/local/username/backups/repo` | `/home/username/backups/repo` |
+| **macOS** | `/Users` | `/local/username/backups/repo` | `/Users/username/backups/repo` |
+| **Synology NAS** | `/volume1` | `/local/backups/repo` | `/volume1/backups/repo` |
+| **QNAP NAS** | `/share` | `/local/backups/repo` | `/share/backups/repo` |
+| **External Drive** | `/mnt/external` | `/local/backups/repo` | `/mnt/external/backups/repo` |
+
+**Example Configurations:**
+
+<details>
+<summary><b>Raspberry Pi</b></summary>
+
+```bash
+# .env file
+PUID=1000
+PGID=1000
+LOCAL_STORAGE_PATH=/home/pi
+```
+
+**Repository in UI:** `/local/backups/my-repo`
+**Actual location:** `/home/pi/backups/my-repo`
+</details>
+
+<details>
+<summary><b>Linux (Ubuntu/Debian)</b></summary>
+
+```bash
+# .env file
+PUID=1000
+PGID=1000
+LOCAL_STORAGE_PATH=/home
+```
+
+**Repository in UI:** `/local/myusername/backups/my-repo`
+**Actual location:** `/home/myusername/backups/my-repo`
+</details>
+
+<details>
+<summary><b>macOS</b></summary>
+
+```bash
+# .env file
+PUID=501    # Check with 'id -u'
+PGID=20     # Check with 'id -g'
+LOCAL_STORAGE_PATH=/Users
+```
+
+**Repository in UI:** `/local/myusername/backups/my-repo`
+**Actual location:** `/Users/myusername/backups/my-repo`
+</details>
+
+<details>
+<summary><b>Synology NAS</b></summary>
+
+```bash
+# .env file
+PUID=1024   # Check with 'id -u' via SSH
+PGID=100    # Check with 'id -g' via SSH
+LOCAL_STORAGE_PATH=/volume1
+```
+
+**Repository in UI:** `/local/backups/my-repo`
+**Actual location:** `/volume1/backups/my-repo`
+</details>
+
+### Troubleshooting Permissions
+
+**✅ Verify Setup:**
+
+```bash
+# 1. Create test repository in UI at /local/backups/test-repo
+# 2. Check ownership on host:
+ls -la /your/mount/point/backups/test-repo
+
+# Should show YOUR username, not root or wrong UID
+```
+
+**❌ If You See "Permission Denied":**
+
+1. **Verify UID/GID matches:**
    ```bash
+   # On host
    id -u && id -g
-   # Usually outputs: 1000 and 1000
+
+   # In container
+   docker exec borgmatic-web-ui id
+
+   # These should match!
    ```
 
-3. **Create `.env` file in your project directory:**
+2. **Rebuild with correct values:**
    ```bash
-   mkdir -p ~/borgmatic-ui && cd ~/borgmatic-ui
-   cat > .env << 'EOF'
-   # Raspberry Pi user (usually 1000:1000)
-   PUID=1000
-   PGID=1000
-
-   # Mount your home directory for easy access
-   LOCAL_STORAGE_PATH=/home/pi
-   EOF
+   # Update .env file with correct PUID/PGID
+   docker-compose down
+   docker-compose up -d --build
    ```
 
-4. **Create docker-compose.yml:**
+3. **Check container logs:**
    ```bash
-   cat > docker-compose.yml << 'EOF'
-   version: '3.8'
-
-   services:
-     app:
-       image: ainullcode/borgmatic-ui:latest
-       container_name: borgmatic-web-ui
-       restart: unless-stopped
-
-       build:
-         args:
-           - PUID=${PUID:-1001}
-           - PGID=${PGID:-1001}
-
-       ports:
-         - "8081:8081"
-
-       volumes:
-         - borg_data:/data
-         - ${LOCAL_STORAGE_PATH:-/}:/local:rw
-
-   volumes:
-     borg_data:
-       name: borg_data
-   EOF
-   ```
-
-5. **Start the container:**
-   ```bash
-   docker-compose up -d
-   ```
-
-6. **Verify it's running:**
-   ```bash
-   docker ps | grep borgmatic-web-ui
    docker logs borgmatic-web-ui
    ```
 
-#### Step 2: Create Repositories in the UI
-
-1. **Access the web interface:** `http://raspberry-pi-ip:8081`
-
-2. **Login with default credentials:**
-   - Username: `admin`
-   - Password: `admin123`
-
-3. **Go to Config tab** and create your borgmatic configuration
-
-4. **Create a repository** at `/local/backups/my-repo`
-   - Since `LOCAL_STORAGE_PATH=/home/pi`, this creates the repo at `/home/pi/backups/my-repo` on your Raspberry Pi
-   - The container user (UID 1000) matches your Pi user (UID 1000), so no permission errors!
-
-#### Step 3: Test Backup
-
-1. **Go to Backup tab**
-2. **Run your first backup**
-3. **Check the repository** on your Pi:
+4. **Verify volume mount:**
    ```bash
-   ls -la /home/pi/backups/my-repo
+   docker exec borgmatic-web-ui ls -la /local
+   # Should show your host files
    ```
-
-### macOS Setup
-
-**For macOS users:**
-
-1. **Find your macOS user's UID/GID:**
-   ```bash
-   id -u && id -g
-   # Usually outputs: 501 and 20
-   ```
-
-2. **Create `.env` file:**
-   ```bash
-   # macOS user (varies by system)
-   PUID=501
-   PGID=20
-
-   # Mount only your user directory
-   LOCAL_STORAGE_PATH=/Users
-   ```
-
-3. **Follow the same docker-compose.yml setup as Raspberry Pi**
-
-4. **Create repositories at:** `/local/your-username/backups/my-repo`
-   - This maps to `/Users/your-username/backups/my-repo` on your Mac
-
-### Linux (Ubuntu/Debian) Setup
-
-**For Linux users:**
-
-1. **Find your user's UID/GID:**
-   ```bash
-   id -u && id -g
-   # Usually outputs: 1000 and 1000
-   ```
-
-2. **Create `.env` file:**
-   ```bash
-   # Linux user (usually 1000:1000)
-   PUID=1000
-   PGID=1000
-
-   # Mount home directories
-   LOCAL_STORAGE_PATH=/home
-   ```
-
-3. **Follow the same docker-compose.yml setup**
-
-4. **Create repositories at:** `/local/username/backups/my-repo`
-
-### NAS (Synology/QNAP) Setup
-
-**For NAS users:**
-
-1. **Find your NAS user's UID/GID:**
-   ```bash
-   # SSH into your NAS
-   id -u && id -g
-   ```
-
-2. **Create `.env` file:**
-   ```bash
-   # Match your NAS user
-   PUID=1024  # Example Synology UID
-   PGID=100   # Example Synology GID
-
-   # Mount your volume
-   LOCAL_STORAGE_PATH=/volume1
-   ```
-
-3. **Deploy via Portainer or Docker CLI**
-
-4. **Create repositories at:** `/local/backups/my-repo`
-
-### Common Patterns
-
-**Repository Locations:**
-
-| System | LOCAL_STORAGE_PATH | Repository Path in UI | Actual Path on Host |
-|--------|-------------------|----------------------|---------------------|
-| **Raspberry Pi** | `/home/pi` | `/local/backups/repo` | `/home/pi/backups/repo` |
-| **macOS** | `/Users` | `/local/username/backups/repo` | `/Users/username/backups/repo` |
-| **Linux** | `/home` | `/local/username/backups/repo` | `/home/username/backups/repo` |
-| **NAS** | `/volume1` | `/local/backups/repo` | `/volume1/backups/repo` |
-| **External Drive** | `/mnt/external` | `/local/backups/repo` | `/mnt/external/backups/repo` |
-
-**UID/GID Reference:**
-
-| System | Typical UID | Typical GID |
-|--------|------------|-------------|
-| **Raspberry Pi** | 1000 | 1000 |
-| **Linux (Ubuntu/Debian)** | 1000 | 1000 |
-| **macOS** | 501 | 20 |
-| **Synology NAS** | 1024+ | 100 |
-| **QNAP NAS** | 500+ | 100 |
-
-### Testing Your Setup
-
-**Verify permissions are correct:**
-
-```bash
-# Create a test repository in the UI at /local/backups/test-repo
-
-# Check ownership on host
-ls -la /your/mount/point/backups/test-repo
-
-# Should be owned by your user, not root or a mismatched UID
-```
-
-**If you see "Permission denied" errors:**
-
-1. **Check your UID/GID in `.env` matches your host user**
-2. **Rebuild the container:** `docker-compose down && docker-compose up -d --build`
-3. **Verify container user:** `docker exec borgmatic-web-ui id`
-4. **Check file ownership:** `ls -la /your/mount/point`
 
 ---
 
