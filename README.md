@@ -197,9 +197,11 @@ git clone https://github.com/ainullcode/borgmatic-ui.git
 cd borgmatic-ui
 ```
 
-Or create the files manually:
+Or create the files manually in a new directory.
 
-#### Step 2: Create `.env` File
+#### Step 2: Create `.env` File (for local development only)
+
+**Note**: The `.env` file is **only needed for local development with docker-compose**. Production deployments (Portainer, Kubernetes, etc.) should use their native environment variable systems.
 
 Create a `.env` file with the following content:
 
