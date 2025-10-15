@@ -1,6 +1,37 @@
 import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
-import { Save, Download, Upload, CheckCircle, AlertCircle, FileText } from 'lucide-react'
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Button,
+  TextField,
+  Alert,
+  AlertTitle,
+  CircularProgress,
+  Stack,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  List,
+  ListItem,
+  ListItemText,
+  Divider,
+  Chip,
+} from '@mui/material'
+import {
+  Save,
+  Download,
+  Upload,
+  CheckCircle,
+  AlertCircle,
+  FileText,
+  Check,
+  X,
+  Info,
+} from 'lucide-react'
 import { configAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 
@@ -61,7 +92,7 @@ const Config: React.FC = () => {
       } else {
         setIsValid(false)
         setValidationMessage('Configuration validation failed')
-        
+
         // Handle different error formats
         let errors = []
         if (data.errors && Array.isArray(data.errors)) {
@@ -71,16 +102,16 @@ const Config: React.FC = () => {
         } else {
           errors = ['Configuration validation failed']
         }
-        
+
         setValidationErrors(errors)
         setValidationWarnings(data.warnings || [])
         toast.error('Configuration validation failed')
       }
     },
-        onError: (error: any) => {
+    onError: (error: any) => {
       setIsValid(false)
       setValidationMessage('Configuration validation failed')
-      
+
       // Handle different error formats
       let errors = []
       if (error.response?.data?.detail) {
@@ -90,7 +121,7 @@ const Config: React.FC = () => {
       } else {
         errors = ['Configuration validation failed']
       }
-      
+
       setValidationErrors(errors)
       setValidationWarnings([])
       toast.error('Configuration validation failed')
@@ -151,200 +182,243 @@ const Config: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <Box>
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Configuration Management</h1>
-          <p className="text-gray-600">Manage your Borgmatic configuration files</p>
-        </div>
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => setShowTemplates(!showTemplates)}
-            className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            <FileText className="h-4 w-4 mr-2" />
-            Templates
-          </button>
-        </div>
-      </div>
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <Box>
+          <Typography variant="h4" fontWeight={600} gutterBottom>
+            Configuration Management
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Manage your Borgmatic configuration files
+          </Typography>
+        </Box>
+        <Button
+          variant="outlined"
+          startIcon={<FileText size={18} />}
+          onClick={() => setShowTemplates(true)}
+        >
+          Templates
+        </Button>
+      </Box>
 
-      {/* Templates Modal */}
-      {showTemplates && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Configuration Templates</h3>
-              {loadingTemplates ? (
-                <div className="text-center py-4">Loading templates...</div>
-              ) : (
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {templates?.data?.map((template: ConfigTemplate) => (
-                    <div
-                      key={template.id}
-                      className="p-3 border rounded-lg cursor-pointer hover:bg-gray-50"
-                      onClick={() => handleTemplateSelect(template)}
-                    >
-                      <h4 className="font-medium text-gray-900">{template.name}</h4>
-                      <p className="text-sm text-gray-600">{template.description}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div className="mt-4 flex justify-end">
-                <button
-                  onClick={() => setShowTemplates(false)}
-                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Templates Dialog */}
+      <Dialog
+        open={showTemplates}
+        onClose={() => setShowTemplates(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Configuration Templates</DialogTitle>
+        <DialogContent>
+          {loadingTemplates ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <List sx={{ pt: 0 }}>
+              {templates?.data?.map((template: ConfigTemplate, index: number) => (
+                <React.Fragment key={template.id}>
+                  {index > 0 && <Divider />}
+                  <ListItem
+                    sx={{
+                      cursor: 'pointer',
+                      '&:hover': { backgroundColor: 'action.hover' },
+                      borderRadius: 1,
+                      my: 0.5,
+                    }}
+                    onClick={() => handleTemplateSelect(template)}
+                  >
+                    <ListItemText
+                      primary={template.name}
+                      secondary={template.description}
+                      primaryTypographyProps={{ fontWeight: 500 }}
+                    />
+                  </ListItem>
+                </React.Fragment>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowTemplates(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Action Buttons */}
-      <div className="flex items-center justify-between bg-white p-4 rounded-lg shadow">
-        <div className="flex items-center space-x-4">
-          <button
-            onClick={handleValidate}
-            disabled={validateMutation.isLoading}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={2}
+            justifyContent="space-between"
+            alignItems={{ xs: 'stretch', sm: 'center' }}
           >
-            {validateMutation.isLoading ? (
-              'Validating...'
-            ) : (
-              <>
-                <CheckCircle className="h-4 w-4 mr-2" />
-                Validate
-              </>
-            )}
-          </button>
+            <Stack direction="row" spacing={2}>
+              <Button
+                variant="contained"
+                color="info"
+                startIcon={validateMutation.isLoading ? <CircularProgress size={16} color="inherit" /> : <CheckCircle size={18} />}
+                onClick={handleValidate}
+                disabled={validateMutation.isLoading}
+              >
+                {validateMutation.isLoading ? 'Validating...' : 'Validate'}
+              </Button>
 
-          <button
-            onClick={handleSave}
-            disabled={saveMutation.isLoading}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
-          >
-            {saveMutation.isLoading ? (
-              'Saving...'
-            ) : (
-              <>
-                <Save className="h-4 w-4 mr-2" />
-                Save Configuration
-              </>
-            )}
-          </button>
-        </div>
+              <Button
+                variant="contained"
+                color="success"
+                startIcon={saveMutation.isLoading ? <CircularProgress size={16} color="inherit" /> : <Save size={18} />}
+                onClick={handleSave}
+                disabled={saveMutation.isLoading}
+              >
+                {saveMutation.isLoading ? 'Saving...' : 'Save'}
+              </Button>
+            </Stack>
 
-        <div className="flex items-center space-x-2">
-          <label className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 cursor-pointer">
-            <Upload className="h-4 w-4 mr-2" />
-            Upload
-            <input
-              type="file"
-              accept=".yaml,.yml"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-          </label>
+            <Stack direction="row" spacing={2}>
+              <Button
+                variant="outlined"
+                component="label"
+                startIcon={<Upload size={18} />}
+              >
+                Upload
+                <input
+                  type="file"
+                  accept=".yaml,.yml"
+                  onChange={handleFileUpload}
+                  hidden
+                />
+              </Button>
 
-          <button
-            onClick={handleDownload}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Download
-          </button>
-        </div>
-      </div>
+              <Button
+                variant="outlined"
+                startIcon={<Download size={18} />}
+                onClick={handleDownload}
+              >
+                Download
+              </Button>
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
 
       {/* Validation Status */}
       {isValid !== null && (
-        <div className={`p-4 rounded-lg ${
-          isValid ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
-        }`}>
-          <div className="flex items-center mb-2">
-            {isValid ? (
-              <CheckCircle className="h-5 w-5 text-green-400 mr-2" />
-            ) : (
-              <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
-            )}
-            <span className={`text-sm font-medium ${
-              isValid ? 'text-green-800' : 'text-red-800'
-            }`}>
-              {validationMessage}
-            </span>
-          </div>
-          
+        <Alert
+          severity={isValid ? 'success' : 'error'}
+          icon={isValid ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+          sx={{ mb: 3 }}
+        >
+          <AlertTitle sx={{ fontWeight: 600 }}>
+            {validationMessage}
+          </AlertTitle>
+
           {/* Display Errors */}
           {validationErrors.length > 0 && (
-            <div className="mt-3">
-              <h4 className="text-sm font-medium text-red-800 mb-2">Validation Errors:</h4>
-              <div className="bg-red-100 border border-red-300 rounded p-3">
-                <ul className="space-y-1">
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" fontWeight={600} gutterBottom>
+                Validation Errors:
+              </Typography>
+              <Box
+                sx={{
+                  backgroundColor: 'error.lighter',
+                  border: 1,
+                  borderColor: 'error.light',
+                  borderRadius: 1,
+                  p: 2,
+                }}
+              >
+                <Stack spacing={0.5}>
                   {validationErrors.map((error, index) => (
-                    <li key={index} className="text-sm text-red-800 font-mono">
+                    <Typography
+                      key={index}
+                      variant="body2"
+                      sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}
+                    >
                       • {error}
-                    </li>
+                    </Typography>
                   ))}
-                </ul>
-              </div>
-            </div>
+                </Stack>
+              </Box>
+            </Box>
           )}
-          
+
           {/* Display Warnings */}
           {validationWarnings.length > 0 && (
-            <div className="mt-3">
-              <h4 className="text-sm font-medium text-yellow-800 mb-2">Validation Warnings:</h4>
-              <div className="bg-yellow-100 border border-yellow-300 rounded p-3">
-                <ul className="space-y-1">
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" fontWeight={600} gutterBottom>
+                Validation Warnings:
+              </Typography>
+              <Box
+                sx={{
+                  backgroundColor: 'warning.lighter',
+                  border: 1,
+                  borderColor: 'warning.light',
+                  borderRadius: 1,
+                  p: 2,
+                }}
+              >
+                <Stack spacing={0.5}>
                   {validationWarnings.map((warning, index) => (
-                    <li key={index} className="text-sm text-yellow-800 font-mono">
+                    <Typography
+                      key={index}
+                      variant="body2"
+                      sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}
+                    >
                       • {warning}
-                    </li>
+                    </Typography>
                   ))}
-                </ul>
-              </div>
-            </div>
+                </Stack>
+              </Box>
+            </Box>
           )}
-          
-          {/* Help for fixing errors - Show actual error messages */}
+
+          {/* Help for fixing errors */}
           {!isValid && validationErrors.length > 0 && (
-            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
-              <h4 className="text-sm font-medium text-blue-800 mb-1">How to fix:</h4>
-              <ul className="text-xs text-blue-700 space-y-1">
-                <li>• Check the error messages above for specific issues</li>
-                <li>• Ensure YAML syntax is correct (proper indentation, no typos)</li>
-                <li>• Verify that values match expected types (integers, strings, etc.)</li>
-                <li>• Remove any unsupported configuration sections</li>
-                <li>• Use the templates as a starting point for valid configurations</li>
-                <li>• If you see Python traceback errors, check for malformed YAML or invalid configuration structure</li>
-              </ul>
-            </div>
+            <Alert severity="info" icon={<Info size={20} />} sx={{ mt: 2 }}>
+              <AlertTitle sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                How to fix:
+              </AlertTitle>
+              <Stack spacing={0.5} sx={{ fontSize: '0.75rem' }}>
+                <Typography variant="caption">• Check the error messages above for specific issues</Typography>
+                <Typography variant="caption">• Ensure YAML syntax is correct (proper indentation, no typos)</Typography>
+                <Typography variant="caption">• Verify that values match expected types (integers, strings, etc.)</Typography>
+                <Typography variant="caption">• Remove any unsupported configuration sections</Typography>
+                <Typography variant="caption">• Use the templates as a starting point for valid configurations</Typography>
+                <Typography variant="caption">• If you see Python traceback errors, check for malformed YAML or invalid configuration structure</Typography>
+              </Stack>
+            </Alert>
           )}
-        </div>
+        </Alert>
       )}
 
       {/* Configuration Editor */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-4 py-3 border-b border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900">Configuration Editor</h3>
-          <p className="text-sm text-gray-600">Edit your Borgmatic configuration in YAML format</p>
-        </div>
-        
-        <div className="p-4">
+      <Card>
+        <CardContent>
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="h6" fontWeight={600} gutterBottom>
+              Configuration Editor
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Edit your Borgmatic configuration in YAML format
+            </Typography>
+          </Box>
+
           {loadingConfig ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-              <p className="mt-2 text-gray-600">Loading configuration...</p>
-            </div>
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
+              <CircularProgress size={48} />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                Loading configuration...
+              </Typography>
+            </Box>
           ) : (
-            <textarea
+            <TextField
+              multiline
+              fullWidth
               value={configContent}
               onChange={(e) => setConfigContent(e.target.value)}
-              placeholder="# Borgmatic Configuration
+              placeholder={`# Borgmatic Configuration
 # Edit your configuration here...
 
 repositories:
@@ -364,27 +438,43 @@ hooks:
   before_backup:
     - echo 'Starting backup...'
   after_backup:
-    - echo 'Backup completed!'"
-              className="w-full h-96 p-4 border border-gray-300 rounded-md font-mono text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+    - echo 'Backup completed!'`}
+              rows={20}
+              sx={{
+                '& .MuiInputBase-input': {
+                  fontFamily: 'monospace',
+                  fontSize: '0.875rem',
+                },
+              }}
               spellCheck={false}
             />
           )}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Help Section */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="text-lg font-medium text-blue-900 mb-2">Configuration Help</h3>
-        <div className="text-sm text-blue-800 space-y-2">
-          <p><strong>Repositories:</strong> Define the paths to your Borg repositories</p>
-          <p><strong>Storage:</strong> Configure compression and encryption settings</p>
-          <p><strong>Retention:</strong> Set how long to keep backups</p>
-          <p><strong>Hooks:</strong> Add scripts to run before/after backups</p>
-          <p><strong>Validation:</strong> Always validate your configuration before saving</p>
-        </div>
-      </div>
-    </div>
+      <Alert severity="info" icon={<Info size={20} />} sx={{ mt: 3 }}>
+        <AlertTitle sx={{ fontWeight: 600 }}>Configuration Help</AlertTitle>
+        <Stack spacing={1}>
+          <Typography variant="body2">
+            <strong>Repositories:</strong> Define the paths to your Borg repositories
+          </Typography>
+          <Typography variant="body2">
+            <strong>Storage:</strong> Configure compression and encryption settings
+          </Typography>
+          <Typography variant="body2">
+            <strong>Retention:</strong> Set how long to keep backups
+          </Typography>
+          <Typography variant="body2">
+            <strong>Hooks:</strong> Add scripts to run before/after backups
+          </Typography>
+          <Typography variant="body2">
+            <strong>Validation:</strong> Always validate your configuration before saving
+          </Typography>
+        </Stack>
+      </Alert>
+    </Box>
   )
 }
 
-export default Config 
+export default Config
