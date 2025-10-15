@@ -47,9 +47,9 @@ interface BackupJob {
   status: 'running' | 'completed' | 'failed' | 'cancelled'
   started_at: string
   completed_at?: string
-  progress: number
+  progress?: number
   total_files?: number
-  processed_files: number
+  processed_files?: number
   total_size?: string
   processed_size?: string
   error_message?: string
@@ -309,7 +309,7 @@ const Backup: React.FC = () => {
                   <Box sx={{ mb: 2 }}>
                     <Stack direction="row" justifyContent="space-between" sx={{ mb: 1 }}>
                       <Typography variant="body2" color="text.secondary">
-                        Progress: {job.progress}%
+                        Progress: {job.progress || 0}%
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
                         {formatDuration(job.started_at)}
@@ -317,7 +317,7 @@ const Backup: React.FC = () => {
                     </Stack>
                     <LinearProgress
                       variant="determinate"
-                      value={job.progress}
+                      value={job.progress || 0}
                       sx={{ height: 8, borderRadius: 1 }}
                     />
                   </Box>
@@ -329,7 +329,7 @@ const Backup: React.FC = () => {
                         Files:
                       </Typography>
                       <Typography variant="body2" fontWeight={500}>
-                        {job.processed_files.toLocaleString()}
+                        {job.processed_files?.toLocaleString() || 'N/A'}
                         {job.total_files && ` / ${job.total_files.toLocaleString()}`}
                       </Typography>
                     </Box>
