@@ -23,8 +23,8 @@ export default function ProtectedRoute({ children, requiredTab }: ProtectedRoute
         duration: 4000,
       })
 
-      // Redirect to configuration page (where users can set up prerequisites)
-      navigate('/config', { replace: true })
+      // Redirect to dashboard
+      navigate('/dashboard', { replace: true })
     }
   }, [isEnabled, requiredTab, navigate, location.pathname])
 
