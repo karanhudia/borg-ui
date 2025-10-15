@@ -30,48 +30,47 @@ class BackupService:
                 logger.error("Job not found", job_id=job_id)
                 return
 
-        # Create log file
-        log_file = self.log_dir / f"backup_{job_id}.log"
-        job.log_file_path = str(log_file)
-        job.status = "running"
-        job.started_at = datetime.utcnow()
-        db.commit()
+            # Create log file
+            log_file = self.log_dir / f"backup_{job_id}.log"
+            job.log_file_path = str(log_file)
+            job.status = "running"
+            job.started_at = datetime.utcnow()
+            db.commit()
 
-        # Build borg create command directly
-        # Format: borg create --progress --stats --list REPOSITORY::ARCHIVE PATH
-        archive_name = f"manual-backup-{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')}"
+            # Build borg create command directly
+            # Format: borg create --progress --stats --list REPOSITORY::ARCHIVE PATH
+            archive_name = f"manual-backup-{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')}"
 
-        cmd = [
-            "borg", "create",
-            "--progress",
-            "--stats",
-            "--list",
-            "--compression", "lz4",
-            f"{repository}::{archive_name}",
-            "/data"  # Default backup path - could be made configurable
-        ]
+            cmd = [
+                "borg", "create",
+                "--progress",
+                "--stats",
+                "--list",
+                "--compression", "lz4",
+                f"{repository}::{archive_name}",
+                "/data"  # Default backup path - could be made configurable
+            ]
 
-        # Set environment variables for borg
-        env = os.environ.copy()
+            # Set environment variables for borg
+            env = os.environ.copy()
 
-        # Skip interactive prompts (auto-accept for unencrypted repos, etc.)
-        env['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes'
-        env['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes'
+            # Skip interactive prompts (auto-accept for unencrypted repos, etc.)
+            env['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes'
+            env['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes'
 
-        # Look up repository record to get passphrase
-        try:
-            repo_record = db.query(Repository).filter(Repository.path == repository).first()
-            if repo_record and repo_record.passphrase:
-                env['BORG_PASSPHRASE'] = repo_record.passphrase
-                logger.info("Using passphrase from repository record", repository=repository)
-            else:
-                logger.warning("No passphrase found for repository", repository=repository)
-        except Exception as e:
-            logger.warning("Could not look up repository passphrase", error=str(e))
+            # Look up repository record to get passphrase
+            try:
+                repo_record = db.query(Repository).filter(Repository.path == repository).first()
+                if repo_record and repo_record.passphrase:
+                    env['BORG_PASSPHRASE'] = repo_record.passphrase
+                    logger.info("Using passphrase from repository record", repository=repository)
+                else:
+                    logger.warning("No passphrase found for repository", repository=repository)
+            except Exception as e:
+                logger.warning("Could not look up repository passphrase", error=str(e))
 
-        logger.info("Starting borg backup", job_id=job_id, repository=repository, archive=archive_name, command=" ".join(cmd))
+            logger.info("Starting borg backup", job_id=job_id, repository=repository, archive=archive_name, command=" ".join(cmd))
 
-        try:
             # Execute command and stream to log file
             with open(log_file, 'w') as f:
                 process = await asyncio.create_subprocess_exec(
