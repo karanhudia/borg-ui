@@ -4,7 +4,6 @@ import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
-import Config from './pages/Config'
 import Backup from './pages/Backup'
 import Archives from './pages/Archives'
 import Restore from './pages/Restore'
@@ -38,7 +37,6 @@ function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/config" element={<Config />} />
         <Route
           path="/backup"
           element={

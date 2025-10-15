@@ -1,9 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { useQuery } from 'react-query'
-import { configAPI, repositoriesAPI, sshKeysAPI, archivesAPI } from '../services/api'
+import { repositoriesAPI, sshKeysAPI, archivesAPI } from '../services/api'
 
 interface AppState {
-  hasValidConfig: boolean
   hasSSHKey: boolean
   hasRepositories: boolean
   hasArchives: boolean
@@ -13,7 +12,6 @@ interface AppState {
 
 interface TabEnablement {
   dashboard: boolean
-  configuration: boolean
   sshKeys: boolean
   connections: boolean
   repositories: boolean
@@ -34,31 +32,11 @@ const AppContext = createContext<AppContextValue | undefined>(undefined)
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [appState, setAppState] = useState<AppState>({
-    hasValidConfig: false,
     hasSSHKey: false,
     hasRepositories: false,
     hasArchives: false,
     isLoading: true,
     refetch: () => {},
-  })
-
-  // Check for default configuration
-  const { data: defaultConfig, isLoading: loadingConfig, refetch: refetchConfig } = useQuery({
-    queryKey: ['app-default-config'],
-    queryFn: async () => {
-      try {
-        const response = await configAPI.getDefaultConfig()
-        return response.data
-      } catch (error: any) {
-        if (error.response?.status === 404) {
-          return { is_valid: false, content: null }
-        }
-        throw error
-      }
-    },
-    retry: false,
-    refetchInterval: 30000, // Refetch every 30 seconds in background
-    // Use global defaults for staleTime/cacheTime (SWR strategy)
   })
 
   // Check for SSH keys
@@ -117,34 +95,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Update app state based on queries
   useEffect(() => {
-    const isLoading = loadingConfig || loadingSSH || loadingRepos || loadingArchives
+    const isLoading = loadingSSH || loadingRepos || loadingArchives
 
     setAppState({
-      hasValidConfig: !!(defaultConfig && defaultConfig.is_valid),
       hasSSHKey: !!(sshKeys && sshKeys.length > 0),
       hasRepositories: !!(repositories && repositories.length > 0),
       hasArchives: !!(archiveCheck?.hasArchives),
       isLoading,
       refetch: () => {
-        refetchConfig()
         refetchSSH()
         refetchRepos()
         refetchArchives()
       },
     })
-  }, [defaultConfig, sshKeys, repositories, archiveCheck, loadingConfig, loadingSSH, loadingRepos, loadingArchives])
+  }, [sshKeys, repositories, archiveCheck, loadingSSH, loadingRepos, loadingArchives])
 
   // Calculate tab enablement based on app state
+  // Simplified: Only need SSH key + repositories for all features
   const tabEnablement: TabEnablement = {
     dashboard: true,
-    configuration: true,
-    sshKeys: appState.hasValidConfig,
-    connections: appState.hasValidConfig,
-    repositories: appState.hasValidConfig,
-    backups: appState.hasValidConfig && appState.hasRepositories,
-    archives: appState.hasValidConfig && appState.hasRepositories,
-    restore: appState.hasValidConfig && appState.hasArchives,
-    schedule: appState.hasValidConfig,
+    sshKeys: true, // Always accessible
+    connections: appState.hasSSHKey,
+    repositories: appState.hasSSHKey,
+    backups: appState.hasSSHKey && appState.hasRepositories,
+    archives: appState.hasSSHKey && appState.hasRepositories,
+    restore: appState.hasSSHKey && appState.hasArchives,
+    schedule: appState.hasSSHKey && appState.hasRepositories,
     settings: true,
   }
 
@@ -155,23 +131,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
 
     switch (tab) {
-      case 'sshKeys':
       case 'connections':
       case 'repositories':
-      case 'schedule':
-        return 'Please set a valid default configuration first'
+        return 'Please generate or upload an SSH key first'
       case 'backups':
       case 'archives':
-        if (!appState.hasValidConfig) {
-          return 'Please set a valid default configuration first'
+      case 'schedule':
+        if (!appState.hasSSHKey) {
+          return 'Please generate or upload an SSH key first'
         }
         if (!appState.hasRepositories) {
           return 'Please create a repository first'
         }
         return null
       case 'restore':
-        if (!appState.hasValidConfig) {
-          return 'Please set a valid default configuration first'
+        if (!appState.hasSSHKey) {
+          return 'Please generate or upload an SSH key first'
         }
         if (!appState.hasArchives) {
           return 'Please create a backup first to have archives available'
