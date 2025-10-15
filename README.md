@@ -116,21 +116,12 @@ services:
     container_name: borgmatic-web-ui
     restart: unless-stopped
 
-    build:
-      args:
-        - PUID=${PUID:-1001}
-        - PGID=${PGID:-1001}
-
     ports:
       - "8081:8081"
 
     volumes:
       - borg_data:/data
       - ${LOCAL_STORAGE_PATH:-/}:/local:rw
-
-    # Optional: Set PUID/PGID in Portainer stack environment variables
-    # PUID=1000
-    # PGID=1000
 
 volumes:
   borg_data:
@@ -203,11 +194,6 @@ services:
     container_name: borgmatic-web-ui
     restart: unless-stopped
 
-    build:
-      args:
-        - PUID=${PUID:-1001}
-        - PGID=${PGID:-1001}
-
     ports:
       - "${PORT:-8081}:8081"
 
@@ -218,8 +204,6 @@ services:
     # Optional: Override defaults (create .env file)
     # PORT=8082
     # LOG_LEVEL=DEBUG
-    # PUID=1000  # Your user ID (run: id -u)
-    # PGID=1000  # Your group ID (run: id -g)
 
 volumes:
   borg_data:
@@ -458,7 +442,9 @@ The container runs as user `borgmatic` with **configurable UID/GID** (default: 1
 
 #### Quick Fix: Match your host user
 
-**Option 1: Use .env file (Recommended)**
+**Option 1: Build from source with custom UID/GID**
+
+If you have the source code, you can build with your UID/GID:
 
 1. Find your UID/GID:
    ```bash
@@ -472,24 +458,13 @@ The container runs as user `borgmatic` with **configurable UID/GID** (default: 1
    PGID=1000
    ```
 
-3. Rebuild container:
+3. Build and run:
    ```bash
    docker-compose down
    docker-compose up -d --build
    ```
 
-**Option 2: Docker Compose with build args**
-
-```yaml
-services:
-  app:
-    build:
-      args:
-        - PUID=1000  # Your user ID
-        - PGID=1000  # Your group ID
-```
-
-**Option 3: Fix permissions on host**
+**Option 2: Fix permissions on host (Quick workaround)**
 
 If you can't rebuild, fix permissions on the host:
 ```bash
