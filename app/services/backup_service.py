@@ -33,17 +33,24 @@ class BackupService:
         db.commit()
 
         # Build borg create command directly
-        # Format: borg create --progress --stats REPOSITORY::ARCHIVE PATH
-        archive_name = f"manual-backup-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
+        # Format: borg create --progress --stats --list REPOSITORY::ARCHIVE PATH
+        archive_name = f"manual-backup-{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')}"
 
         cmd = [
             "borg", "create",
             "--progress",
             "--stats",
+            "--list",
             "--compression", "lz4",
             f"{repository}::{archive_name}",
-            "/data"  # Default backup path
+            "/data"  # Default backup path - could be made configurable
         ]
+
+        # Set environment variable for borg passphrase if needed
+        # This is typically set via encryption_passphrase in borgmatic config
+        env = os.environ.copy()
+        # If you have a passphrase stored somewhere, set it here:
+        # env['BORG_PASSPHRASE'] = 'your-passphrase'
 
         logger.info("Starting borg backup", job_id=job_id, repository=repository, archive=archive_name, command=" ".join(cmd))
 
@@ -54,6 +61,7 @@ class BackupService:
                     *cmd,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.STDOUT,  # Merge stderr into stdout
+                    env=env
                 )
 
                 # Stream output line by line
