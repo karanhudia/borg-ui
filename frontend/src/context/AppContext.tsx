@@ -57,9 +57,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     },
     retry: false,
-    refetchInterval: 30000, // Refetch every 30 seconds
-    staleTime: 0, // Always treat data as stale to ensure fresh data on mount
-    cacheTime: 0, // Don't cache the result
+    refetchInterval: 30000, // Refetch every 30 seconds in background
+    // Use global defaults for staleTime/cacheTime (SWR strategy)
   })
 
   // Check for SSH keys
@@ -75,8 +74,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     },
     retry: false,
     refetchInterval: 30000,
-    staleTime: 0,
-    cacheTime: 0,
+    // Use global defaults for staleTime/cacheTime (SWR strategy)
   })
 
   // Check for repositories
@@ -92,8 +90,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     },
     retry: false,
     refetchInterval: 30000,
-    staleTime: 0,
-    cacheTime: 0,
+    // Use global defaults for staleTime/cacheTime (SWR strategy)
   })
 
   // Check for archives (simplified - just check if we have repositories)

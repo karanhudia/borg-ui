@@ -16,6 +16,9 @@ const queryClient = new QueryClient({
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
+      // SWR caching strategy: data stays fresh for 30s, cached for 5min
+      staleTime: 30 * 1000, // 30 seconds - data considered fresh
+      cacheTime: 5 * 60 * 1000, // 5 minutes - data kept in cache
     },
   },
 })
