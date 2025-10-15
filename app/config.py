@@ -1,6 +1,7 @@
 import os
 import secrets
 from typing import List, Union
+from pathlib import Path
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
@@ -13,29 +14,27 @@ class Settings(BaseSettings):
     debug: bool = False
     environment: str = "development"
 
-    # Security settings
-    # WARNING: NEVER use default secret_key in production!
-    # Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
-    secret_key: str = "INSECURE-CHANGE-THIS-IN-PRODUCTION"
+    # Data directory (for all persistent data) - this is the ONLY path users need to configure
+    data_dir: str = "/data"
+
+    # Security settings - auto-generated if not provided
+    secret_key: str = ""  # Will be auto-generated on first run
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
 
-    # Data directory (for all persistent data)
-    data_dir: str = "/data"
+    # Database settings - auto-derived from data_dir
+    database_url: str = ""  # Will be auto-derived from data_dir
 
-    # Database settings
-    database_url: str = "sqlite:////data/borgmatic.db"
+    # Borgmatic settings - auto-derived from data_dir
+    borgmatic_config_path: str = ""  # Will be auto-derived from data_dir
+    borgmatic_backup_path: str = ""  # Deprecated - not needed anymore
 
-    # Borgmatic settings
-    borgmatic_config_path: str = "/data/config/borgmatic.yaml"
-    borgmatic_backup_path: str = "/backups"
-
-    # SSH keys directory (persistent storage for key files)
-    ssh_keys_dir: str = "/data/ssh_keys"
+    # SSH keys directory - auto-derived from data_dir
+    ssh_keys_dir: str = ""  # Will be auto-derived from data_dir
 
     # Logging settings
     log_level: str = "INFO"
-    log_file: str = "/data/logs/borgmatic-ui.log"
+    log_file: str = ""  # Will be auto-derived from data_dir
 
     # CORS settings - comma-separated string that gets parsed to list
     _cors_origins_str: str = "http://localhost:7879,http://localhost:8000"
@@ -84,46 +83,77 @@ class Settings(BaseSettings):
 # Create settings instance
 settings = Settings()
 
-# Environment-specific overrides
-if os.getenv("ENVIRONMENT") == "production":
-    settings.debug = False
-elif os.getenv("ENVIRONMENT") == "development":
-    settings.debug = True
-    settings.log_level = "DEBUG"
-
-# Override with environment variables if present
-settings.environment = os.getenv("ENVIRONMENT", settings.environment)
-settings.secret_key = os.getenv("SECRET_KEY", settings.secret_key)
+# Override data_dir from environment if provided
 settings.data_dir = os.getenv("DATA_DIR", settings.data_dir)
-settings.database_url = os.getenv("DATABASE_URL", settings.database_url)
-settings.borgmatic_config_path = os.getenv("BORGMATIC_CONFIG_PATH", settings.borgmatic_config_path)
-settings.borgmatic_backup_path = os.getenv("BORGMATIC_BACKUP_PATH", settings.borgmatic_backup_path)
+
+# AUTO-DERIVE all paths from data_dir
+# Users only need to configure data_dir (via volume mount), everything else is automatic
+
+# 1. Database URL - always derived from data_dir
+env_database_url = os.getenv("DATABASE_URL")
+if env_database_url:
+    settings.database_url = env_database_url
+else:
+    # Auto-derive: sqlite:////data/borgmatic.db
+    settings.database_url = f"sqlite:///{settings.data_dir}/borgmatic.db"
+
+# 2. Borgmatic config path - always derived from data_dir
+env_borgmatic_config = os.getenv("BORGMATIC_CONFIG_PATH")
+if env_borgmatic_config:
+    settings.borgmatic_config_path = env_borgmatic_config
+else:
+    settings.borgmatic_config_path = f"{settings.data_dir}/config/borgmatic.yaml"
+
+# 3. SSH keys directory - always derived from data_dir
+settings.ssh_keys_dir = f"{settings.data_dir}/ssh_keys"
+
+# 4. Log file - always derived from data_dir
+settings.log_file = f"{settings.data_dir}/logs/borgmatic-ui.log"
+
+# 5. SECRET_KEY - auto-generate on first run if not provided
+secret_key_file = Path(settings.data_dir) / ".secret_key"
+env_secret_key = os.getenv("SECRET_KEY")
+
+if env_secret_key:
+    # Use environment variable if provided
+    settings.secret_key = env_secret_key
+elif secret_key_file.exists():
+    # Load from persistent file
+    settings.secret_key = secret_key_file.read_text().strip()
+else:
+    # Auto-generate and persist
+    settings.secret_key = secrets.token_urlsafe(32)
+    # Create data directory if it doesn't exist
+    secret_key_file.parent.mkdir(parents=True, exist_ok=True)
+    secret_key_file.write_text(settings.secret_key)
+    secret_key_file.chmod(0o600)  # Secure permissions
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Auto-generated SECRET_KEY and saved to {secret_key_file}")
+
+# Other environment overrides
+settings.environment = os.getenv("ENVIRONMENT", settings.environment)
 settings.log_level = os.getenv("LOG_LEVEL", settings.log_level)
 settings.port = int(os.getenv("PORT", settings.port))
+
+# Environment-specific overrides
+if settings.environment == "production":
+    settings.debug = False
+elif settings.environment == "development":
+    settings.debug = True
+    settings.log_level = os.getenv("LOG_LEVEL", "DEBUG")
 
 # Security validation
 def validate_security_settings():
     """Validate critical security settings"""
     issues = []
 
-    # Check for insecure secret key in production
+    # Minimal validation - most security concerns are now auto-handled
     if settings.environment == "production":
-        if settings.secret_key in [
-            "INSECURE-CHANGE-THIS-IN-PRODUCTION",
-            "your-secret-key-change-this-in-production",
-            "change-me",
-            "secret",
-            "password"
-        ]:
-            issues.append(
-                "CRITICAL: Insecure SECRET_KEY detected in production! "
-                "Generate a secure key with: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
-            )
-
         if len(settings.secret_key) < 32:
             issues.append(
                 "WARNING: SECRET_KEY is too short (< 32 characters). "
-                "Use a longer, randomly generated key for better security."
+                "Auto-generation failed or manual override is weak."
             )
 
         if settings.debug:
@@ -137,13 +167,7 @@ def validate_security_settings():
         import logging
         logger = logging.getLogger(__name__)
         for issue in issues:
-            if "CRITICAL" in issue:
-                logger.critical(issue)
-                # In strict mode, raise an exception
-                if os.getenv("STRICT_SECURITY", "false").lower() == "true":
-                    raise ValueError(issue)
-            else:
-                logger.warning(issue)
+            logger.warning(issue)
 
 # Run validation
 validate_security_settings() 

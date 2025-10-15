@@ -1,6 +1,13 @@
-# Docker Compose with Docker-managed volumes (like Portainer)
-# This approach creates named volumes managed by Docker instead of bind mounts
-# Useful for: Production deployments, Portainer, Docker Swarm, easier backups
+# Simplified Docker Compose - Zero Configuration Required!
+#
+# Auto-configured settings:
+# - SECRET_KEY: Auto-generated on first run and persisted
+# - DATABASE_URL: Auto-derived from data_dir (/data)
+# - BORGMATIC_CONFIG_PATH: Auto-derived from data_dir
+# - LOG_LEVEL: Defaults to INFO
+#
+# Users configure backup repositories in borgmatic config (local or SSH)
+# No need for borg_backups volume - repositories can be anywhere!
 
 version: '3.8'
 
@@ -17,25 +24,20 @@ services:
       - "${PORT:-8081}:8081"
 
     volumes:
-      # Docker-managed volumes (automatically created by Docker)
+      # Single data volume for all persistent data
       - borg_data:/data:rw
-      - borg_backups:/backups:rw
 
       # System volumes (read-only)
       - /etc/cron.d:/etc/cron.d:ro
       - /etc/localtime:/etc/localtime:ro
 
     environment:
-      - DATA_DIR=/data
-      - DATABASE_URL=${DATABASE_URL:-sqlite:////data/borgmatic.db}
-      - BORGMATIC_CONFIG_PATH=/data/config/borgmatic.yaml
-      - BORGMATIC_BACKUP_PATH=/backups
-      - SECRET_KEY=${SECRET_KEY:-change-this-secret-key-in-production}
+      # Optional overrides (all have smart defaults)
       - ENVIRONMENT=${ENVIRONMENT:-production}
-      - DEBUG=${DEBUG:-false}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - ENABLE_CRON_BACKUPS=${ENABLE_CRON_BACKUPS:-false}
-      - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:7879"]}
+      - PORT=${PORT:-8081}
+      # Uncomment to override defaults:
+      # - SECRET_KEY=your-custom-secret-key
+      # - LOG_LEVEL=DEBUG
 
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/"]
@@ -52,22 +54,13 @@ networks:
     name: borg_network
     driver: bridge
 
-# Named volumes - Docker creates and manages these
+# Single volume for all persistent data
 volumes:
   borg_data:
     name: borg_data
     driver: local
-    # Optional: Use a specific mount point on host
+    # Optional: Mount to custom location on host
     # driver_opts:
     #   type: none
     #   o: bind
     #   device: /mnt/storage/borg-data
-
-  borg_backups:
-    name: borg_backups
-    driver: local
-    # Optional: Mount to external storage
-    # driver_opts:
-    #   type: none
-    #   o: bind
-    #   device: /mnt/nas/borg-backups
