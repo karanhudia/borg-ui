@@ -24,6 +24,11 @@ import {
   Checkbox,
   FormControlLabel,
   Autocomplete,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  Paper,
 } from '@mui/material'
 import {
   Add,
@@ -35,8 +40,12 @@ import {
   Shield,
   Description,
   Warning,
+  Folder,
+  Info,
+  Computer,
+  Wifi,
 } from '@mui/icons-material'
-import { repositoriesAPI, sshKeysAPI } from '../services/api'
+import { repositoriesAPI, sshKeysAPI, configAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 
 interface Repository {
@@ -90,6 +99,20 @@ export default function Repositories() {
   const { data: connectionsData } = useQuery({
     queryKey: ['ssh-connections'],
     queryFn: sshKeysAPI.getSSHConnections,
+  })
+
+  // Get default configuration to show source directories
+  const { data: defaultConfigData } = useQuery({
+    queryKey: ['default-config'],
+    queryFn: async () => {
+      try {
+        const response = await configAPI.getDefaultConfig()
+        return response.data
+      } catch (error) {
+        return null
+      }
+    },
+    retry: false,
   })
 
   // Mutations
@@ -243,6 +266,46 @@ export default function Repositories() {
     })
   }
 
+  // Parse source directories from configuration (simple regex-based extraction)
+  const getSourceDirectories = () => {
+    if (!defaultConfigData || !defaultConfigData.content) {
+      return []
+    }
+    try {
+      // Simple extraction from YAML content - look for source_directories section
+      const content = defaultConfigData.content
+      const sourceMatch = content.match(/source_directories:\s*\n((?:\s+-\s+.+\n?)+)/)
+      if (!sourceMatch) return []
+
+      // Extract paths from the matched lines
+      const paths = sourceMatch[1]
+        .split('\n')
+        .map((line: string) => line.trim())
+        .filter((line: string) => line.startsWith('- '))
+        .map((line: string) => line.substring(2).trim())
+        .filter((path: string) => path && path !== '')
+
+      return paths
+    } catch (error) {
+      console.error('Failed to parse source directories:', error)
+      return []
+    }
+  }
+
+  // Generate borg init command preview
+  const getBorgInitCommand = () => {
+    let repoPath = createForm.path || '/path/to/repository'
+
+    // Build full path for remote repository
+    if (createForm.repository_type === 'ssh' && createForm.host && createForm.username) {
+      repoPath = `ssh://${createForm.username}@${createForm.host}:${createForm.port}${repoPath.startsWith('/') ? '' : '/'}${repoPath}`
+    } else if (createForm.repository_type === 'local') {
+      repoPath = repoPath || '/path/to/local/repository'
+    }
+
+    return `borg init --encryption ${createForm.encryption} ${repoPath}`
+  }
+
   // Utility functions
   const getEncryptionIcon = (encryption: string) => {
     switch (encryption) {
@@ -276,27 +339,74 @@ export default function Repositories() {
   const sshKeys = sshKeysData?.data?.ssh_keys || []
   const connections = connectionsData?.data?.connections || []
   const connectedConnections = connections.filter((c: SSHConnection) => c.status === 'connected')
+  const sourceDirectories = getSourceDirectories()
 
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
-          <Typography variant="h4" fontWeight={600} gutterBottom>
-            Repository Management
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Create and manage Borg repositories
-          </Typography>
+      <Box sx={{ mb: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+          <Box sx={{ flex: 1, mr: 2 }}>
+            <Typography variant="h4" fontWeight={600} gutterBottom>
+              Repository Management
+            </Typography>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              A repository is where your backed-up data will be stored. The files from your configured sources will be backed up here.
+            </Typography>
+          </Box>
+          {user?.is_admin && (
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={openCreateModal}
+              sx={{ flexShrink: 0 }}
+            >
+              Create Repository
+            </Button>
+          )}
         </Box>
-        {user?.is_admin && (
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={openCreateModal}
-          >
-            Create Repository
-          </Button>
+
+        {/* Source Directories Info */}
+        {sourceDirectories.length > 0 && (
+          <Paper sx={{ p: 2, bgcolor: 'primary.50', border: '1px solid', borderColor: 'primary.200' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
+              <Info sx={{ fontSize: 20, color: 'primary.600', mr: 1 }} />
+              <Typography variant="subtitle2" fontWeight={600} color="primary.700">
+                Configured Source Directories
+              </Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+              These directories will be backed up to your repository:
+            </Typography>
+            <List dense disablePadding>
+              {sourceDirectories.slice(0, 5).map((dir: string, index: number) => (
+                <ListItem key={index} disablePadding sx={{ py: 0.5 }}>
+                  <ListItemIcon sx={{ minWidth: 32 }}>
+                    <Folder sx={{ fontSize: 18, color: 'primary.600' }} />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={dir}
+                    primaryTypographyProps={{
+                      variant: 'body2',
+                      sx: { fontFamily: 'monospace', color: 'primary.900' }
+                    }}
+                  />
+                </ListItem>
+              ))}
+              {sourceDirectories.length > 5 && (
+                <ListItem disablePadding>
+                  <ListItemText
+                    primary={`... and ${sourceDirectories.length - 5} more`}
+                    primaryTypographyProps={{
+                      variant: 'caption',
+                      color: 'text.secondary',
+                      sx: { pl: 4 }
+                    }}
+                  />
+                </ListItem>
+              )}
+            </List>
+          </Paper>
         )}
       </Box>
 
@@ -314,17 +424,35 @@ export default function Repositories() {
             <Typography variant="h6" gutterBottom>
               No Repositories Yet
             </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+              Create your first Borg repository to start backing up your data.
+            </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Create your first Borg repository to start backing up your data
+              Choose between a local repository on this machine or a remote repository via SSH.
             </Typography>
             {user?.is_admin && (
-              <Button
-                variant="contained"
-                startIcon={<Add />}
-                onClick={openCreateModal}
-              >
-                Create Repository
-              </Button>
+              <Stack direction="row" spacing={2} justifyContent="center">
+                <Button
+                  variant="contained"
+                  startIcon={<Computer />}
+                  onClick={() => {
+                    openCreateModal()
+                    setCreateForm({ ...createForm, repository_type: 'local' })
+                  }}
+                >
+                  Create Local Repository
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<Wifi />}
+                  onClick={() => {
+                    openCreateModal()
+                    setCreateForm({ ...createForm, repository_type: 'ssh' })
+                  }}
+                >
+                  Create Remote Repository (SSH)
+                </Button>
+              </Stack>
             )}
           </CardContent>
         </Card>
@@ -463,6 +591,24 @@ export default function Repositories() {
         <form onSubmit={handleCreateRepository}>
           <DialogTitle>Create Repository</DialogTitle>
           <DialogContent>
+            {/* Command Preview */}
+            <Alert severity="info" icon={<Info />} sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Command Preview
+              </Typography>
+              <Box sx={{
+                bgcolor: 'grey.900',
+                color: 'grey.100',
+                p: 1.5,
+                borderRadius: 1,
+                fontFamily: 'monospace',
+                fontSize: '0.875rem',
+                overflow: 'auto'
+              }}>
+                {getBorgInitCommand()}
+              </Box>
+            </Alert>
+
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
               <TextField
                 label="Name"
