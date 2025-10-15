@@ -123,7 +123,8 @@ export default function Repositories() {
     onSuccess: () => {
       toast.success('Repository created successfully')
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
-      // Also refresh AppContext to update tab enablement
+      // Invalidate AppContext query to update tab enablement
+      queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
       appState.refetch()
       setShowCreateModal(false)
     },
@@ -138,7 +139,8 @@ export default function Repositories() {
     onSuccess: () => {
       toast.success('Repository updated successfully')
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
-      // Also refresh AppContext to update tab enablement
+      // Invalidate AppContext query to update tab enablement
+      queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
       appState.refetch()
       setEditingRepository(null)
     },
@@ -152,7 +154,8 @@ export default function Repositories() {
     onSuccess: () => {
       toast.success('Repository deleted successfully')
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
-      // Also refresh AppContext to update tab enablement
+      // Invalidate AppContext query to update tab enablement
+      queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
       appState.refetch()
     },
     onError: (error: any) => {
