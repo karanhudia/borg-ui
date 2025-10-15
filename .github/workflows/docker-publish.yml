@@ -49,8 +49,12 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             # Tag with version on git tags (v1.0.0 -> 1.0.0)
             type=semver,pattern={{version}}
-            # Tag with short SHA
-            type=sha,prefix={{branch}}-
+            # Tag with major.minor (v1.2.3 -> 1.2)
+            type=semver,pattern={{major}}.{{minor}}
+            # Tag with major version (v1.2.3 -> 1)
+            type=semver,pattern={{major}}
+            # Tag with short SHA for branch commits only
+            type=sha,prefix=sha-,enable={{is_default_branch}}
             # Tag with branch name
             type=ref,event=branch
 
