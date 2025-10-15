@@ -130,9 +130,25 @@ async def create_repository(
         if existing_path:
             raise HTTPException(status_code=400, detail="Repository path already exists")
         
-        # Create repository directory if local
+        # Create repository directory if local (but not if using /local mount)
         if repo_data.repository_type == "local":
-            os.makedirs(repo_path, exist_ok=True)
+            # Skip directory creation if path is within /local mount (host filesystem)
+            # User must ensure parent directory exists with proper permissions
+            if not repo_path.startswith("/local/"):
+                os.makedirs(repo_path, exist_ok=True)
+            else:
+                # Verify parent directory exists and is writable
+                parent_dir = os.path.dirname(repo_path)
+                if not os.path.exists(parent_dir):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Parent directory does not exist: {parent_dir}. Please create it on your host machine first."
+                    )
+                if not os.access(parent_dir, os.W_OK):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Parent directory is not writable: {parent_dir}. Please check permissions on your host machine."
+                    )
         
         # Initialize Borg repository
         init_result = await initialize_borg_repository(
