@@ -51,13 +51,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return response.data
       } catch (error: any) {
         if (error.response?.status === 404) {
-          return null
+          return { is_valid: false, content: null }
         }
         throw error
       }
     },
     retry: false,
     refetchInterval: 30000, // Refetch every 30 seconds
+    staleTime: 0, // Always treat data as stale to ensure fresh data on mount
+    cacheTime: 0, // Don't cache the result
   })
 
   // Check for SSH keys
@@ -73,6 +75,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     },
     retry: false,
     refetchInterval: 30000,
+    staleTime: 0,
+    cacheTime: 0,
   })
 
   // Check for repositories
@@ -88,6 +92,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     },
     retry: false,
     refetchInterval: 30000,
+    staleTime: 0,
+    cacheTime: 0,
   })
 
   // Check for archives (simplified - just check if we have repositories)
