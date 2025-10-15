@@ -373,6 +373,9 @@ async def generate_config_template(
         with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as temp_file:
             temp_path = temp_file.name
 
+        # Delete the file so borgmatic can create it fresh
+        os.unlink(temp_path)
+
         try:
             # Run borgmatic config generate command
             result = subprocess.run(
