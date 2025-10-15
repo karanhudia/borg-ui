@@ -1,5 +1,6 @@
 import asyncio
 import os
+import yaml
 from datetime import datetime
 from pathlib import Path
 import structlog
@@ -53,8 +54,17 @@ class BackupService:
         env['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes'
         env['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes'
 
-        # If you have a passphrase stored somewhere, set it here:
-        # env['BORG_PASSPHRASE'] = 'your-passphrase'
+        # Try to read passphrase from default borgmatic config
+        try:
+            default_config_path = Path("/data/borgmatic/default.yaml")
+            if default_config_path.exists():
+                with open(default_config_path, 'r') as f:
+                    config = yaml.safe_load(f)
+                    if config and 'encryption_passphrase' in config:
+                        env['BORG_PASSPHRASE'] = str(config['encryption_passphrase'])
+                        logger.info("Using passphrase from borgmatic config")
+        except Exception as e:
+            logger.warning("Could not read passphrase from config", error=str(e))
 
         logger.info("Starting borg backup", job_id=job_id, repository=repository, archive=archive_name, command=" ".join(cmd))
 
