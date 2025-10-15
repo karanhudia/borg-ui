@@ -47,6 +47,7 @@ import {
 } from '@mui/icons-material'
 import { repositoriesAPI, sshKeysAPI, configAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
+import { useAppState } from '../context/AppContext'
 
 interface Repository {
   id: number
@@ -82,6 +83,7 @@ interface SSHConnection {
 export default function Repositories() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
+  const appState = useAppState()
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingRepository, setEditingRepository] = useState<Repository | null>(null)
 
@@ -121,6 +123,8 @@ export default function Repositories() {
     onSuccess: () => {
       toast.success('Repository created successfully')
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
+      // Also refresh AppContext to update tab enablement
+      appState.refetch()
       setShowCreateModal(false)
     },
     onError: (error: any) => {
@@ -134,6 +138,8 @@ export default function Repositories() {
     onSuccess: () => {
       toast.success('Repository updated successfully')
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
+      // Also refresh AppContext to update tab enablement
+      appState.refetch()
       setEditingRepository(null)
     },
     onError: (error: any) => {
@@ -146,6 +152,8 @@ export default function Repositories() {
     onSuccess: () => {
       toast.success('Repository deleted successfully')
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
+      // Also refresh AppContext to update tab enablement
+      appState.refetch()
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to delete repository')
