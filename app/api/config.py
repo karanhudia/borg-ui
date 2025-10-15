@@ -321,6 +321,11 @@ async def set_default_configuration(
 
         # Write this config to borgmatic config file
         config_path = settings.borgmatic_config_path
+
+        # Ensure directory exists
+        import os
+        os.makedirs(os.path.dirname(config_path), exist_ok=True)
+
         with open(config_path, 'w') as f:
             f.write(config.content)
 
