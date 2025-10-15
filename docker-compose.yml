@@ -33,12 +33,11 @@ services:
       - /etc/cron.d:/etc/cron.d:ro
       - /etc/localtime:/etc/localtime:ro
 
-      # Optional: Mount remote storage for local-style repository access
-      # Uncomment and configure based on your setup:
-      # For NFS-mounted Raspberry Pi storage:
-      # - /mnt/raspberry-pi:/mnt/remote:rw
-      # For direct host directory access:
-      # - ${REMOTE_STORAGE_PATH:-/path/to/storage}:/mnt/remote:rw
+      # Optional: Mount host filesystem for local-style repository access
+      # This maps your host machine's directories into the container
+      # Uncomment to access host storage (e.g., external drives, NAS mounts):
+      # - ${LOCAL_STORAGE_PATH:-/Users}:/local:rw
+      # Then create repositories at /local/your-username/backups/repo-name
 
     environment:
       # Optional overrides (all have smart defaults)

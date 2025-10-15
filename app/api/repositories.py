@@ -403,7 +403,14 @@ async def get_repository_statistics(
 
 async def initialize_borg_repository(path: str, encryption: str, passphrase: str = None, ssh_key_id: int = None) -> Dict[str, Any]:
     """Initialize a new Borg repository"""
+    temp_key_file = None
     try:
+        logger.info("Starting repository initialization",
+                   path=path,
+                   encryption=encryption,
+                   has_passphrase=bool(passphrase),
+                   ssh_key_id=ssh_key_id)
+
         # Check if borg is available
         try:
             # Test if borg command exists
@@ -412,86 +419,127 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            await test_process.communicate()
+            borg_stdout, borg_stderr = await test_process.communicate()
             if test_process.returncode != 0:
                 raise FileNotFoundError("borg command not found")
+            logger.info("Borg version check passed", version=borg_stdout.decode().strip())
         except (FileNotFoundError, OSError) as e:
             logger.error("Borg not available", error=str(e))
             return {
                 "success": False,
                 "error": f"Borg not available: {str(e)}"
             }
-        
+
         # Build borg init command
         cmd = ["borg", "init", "--encryption", encryption]
-        
+        logger.info("Built borg init command", command=" ".join(cmd))
+
         # Set up environment
         env = os.environ.copy()
         if passphrase:
             env["BORG_PASSPHRASE"] = passphrase
-        
+            logger.info("Passphrase added to environment")
+
         # Handle SSH key for remote repositories
         if ssh_key_id and path.startswith("ssh://"):
+            logger.info("Repository is SSH type, loading SSH key", ssh_key_id=ssh_key_id, path=path)
+
             # Get SSH key from database
             from app.database.models import SSHKey
             from app.database.database import get_db
             from cryptography.fernet import Fernet
             import base64
-            
+
             db = next(get_db())
             ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
             if not ssh_key:
+                logger.error("SSH key not found in database", ssh_key_id=ssh_key_id)
                 return {
                     "success": False,
                     "error": "SSH key not found"
                 }
-            
+
+            logger.info("SSH key found", name=ssh_key.name, fingerprint=ssh_key.fingerprint[:20] + "...")
+
             # Decrypt private key
             encryption_key = settings.secret_key.encode()[:32]
             cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
             private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
-            
+            logger.info("SSH private key decrypted successfully")
+
             # Create temporary key file
             import tempfile
             with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
                 f.write(private_key)
                 temp_key_file = f.name
 
+            logger.info("Created temporary SSH key file", path=temp_key_file)
+
             # Set restrictive permissions on private key file (required by SSH)
             os.chmod(temp_key_file, 0o600)
+            logger.info("Set SSH key file permissions to 600")
 
             # Set SSH key environment variable
-            env["BORG_RSH"] = f"ssh -i {temp_key_file} -o StrictHostKeyChecking=no"
-        
+            borg_rsh = f"ssh -i {temp_key_file} -o StrictHostKeyChecking=no"
+            env["BORG_RSH"] = borg_rsh
+            logger.info("Set BORG_RSH environment variable", borg_rsh=borg_rsh)
+
         # Add repository path
         cmd.append(path)
-        
+        logger.info("Full borg init command prepared", command=" ".join(cmd), path=path)
+
         # Execute command
+        logger.info("Executing borg init command...")
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=env
         )
-        
+
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
-        
+        stdout_str = stdout.decode() if stdout else ""
+        stderr_str = stderr.decode() if stderr else ""
+
+        logger.info("Borg init command completed",
+                   returncode=process.returncode,
+                   stdout=stdout_str[:500] if stdout_str else "(empty)",
+                   stderr=stderr_str[:500] if stderr_str else "(empty)")
+
         if process.returncode == 0:
+            logger.info("Repository initialized successfully", path=path)
             return {
                 "success": True,
                 "message": "Repository initialized successfully"
             }
         else:
+            logger.error("Repository initialization failed",
+                        returncode=process.returncode,
+                        stderr=stderr_str,
+                        stdout=stdout_str)
             return {
                 "success": False,
-                "error": stderr.decode() if stderr else "Unknown error"
+                "error": stderr_str if stderr_str else "Unknown error"
             }
     except Exception as e:
-        logger.error("Failed to initialize repository", error=str(e))
+        logger.error("Failed to initialize repository",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    path=path)
         return {
             "success": False,
             "error": str(e)
         }
+    finally:
+        # Clean up temporary SSH key file
+        if temp_key_file and os.path.exists(temp_key_file):
+            try:
+                os.unlink(temp_key_file)
+                logger.info("Cleaned up temporary SSH key file", path=temp_key_file)
+            except Exception as e:
+                logger.warning("Failed to clean up temporary SSH key file",
+                             path=temp_key_file,
+                             error=str(e))
 
 async def get_repository_stats(path: str) -> Dict[str, Any]:
     """Get repository statistics"""

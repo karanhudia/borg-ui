@@ -265,6 +265,71 @@ Repositories can be:
 
 No need for a separate `borg_backups` volume!
 
+### Accessing Host Filesystem for Repositories
+
+**Recommended Setup**: Mount your host machine's filesystem to create repositories that persist outside the container.
+
+#### Why Mount Host Filesystem?
+
+- Repositories survive container rebuilds
+- Access external drives, NAS mounts, or network storage
+- Simpler than SSH for local or network-attached storage
+- Better performance for local/LAN storage
+
+#### Setup Instructions
+
+**Step 1**: Edit `docker-compose.yml` and uncomment the `/local` volume mount:
+
+```yaml
+volumes:
+  - borg_data:/data:rw
+  - /etc/cron.d:/etc/cron.d:ro
+  - /etc/localtime:/etc/localtime:ro
+  - ${LOCAL_STORAGE_PATH:-/Users}:/local:rw  # <-- Uncomment this line
+```
+
+**Step 2**: (Optional) Create `.env` file to customize the mount path:
+
+```bash
+# .env
+LOCAL_STORAGE_PATH=/Users  # macOS
+# LOCAL_STORAGE_PATH=/home   # Linux
+# LOCAL_STORAGE_PATH=/mnt/nas  # NAS mount
+```
+
+**Step 3**: Restart the container:
+
+```bash
+docker compose down
+docker compose up -d
+```
+
+**Step 4**: Create repositories in the UI using `/local/` prefix:
+
+Examples:
+- `/local/your-username/backups/my-repo`
+- `/local/external-drive/backups/important-data`
+- `/local/nas-mount/borg-backups/project-repo`
+
+#### For Remote Storage (Raspberry Pi, NAS)
+
+If your Raspberry Pi or NAS is already mounted on your host machine via NFS/CIFS/SMB:
+
+```bash
+# Example: Mount Raspberry Pi via NFS (on host machine)
+sudo mount -t nfs 192.168.1.250:/home/pi /mnt/raspberry-pi
+
+# Or mount via SMB/CIFS
+sudo mount -t cifs //192.168.1.250/share /mnt/raspberry-pi -o username=pi
+```
+
+Then set in `.env`:
+```bash
+LOCAL_STORAGE_PATH=/mnt/raspberry-pi
+```
+
+Repositories created at `/local/backups/repo-name` will actually be stored on your Raspberry Pi!
+
 ---
 
 ## Data Persistence
