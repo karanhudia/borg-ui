@@ -1,17 +1,42 @@
 import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
-import { 
-  Search, 
-  Folder, 
-  File, 
-  HardDrive, 
-  Calendar, 
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Button,
+  TextField,
+  InputAdornment,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Checkbox,
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Breadcrumbs,
+  Link,
+  Stack,
+  Alert,
+  AlertTitle,
+} from '@mui/material'
+import {
+  Search,
+  Folder,
+  File,
+  HardDrive,
+  Calendar,
   Eye,
   ChevronRight,
   RefreshCw,
   CheckCircle,
   Play,
-  MapPin
+  MapPin,
 } from 'lucide-react'
 import { restoreAPI, archivesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
@@ -32,13 +57,6 @@ interface ArchiveFile {
   path: string
   selected?: boolean
 }
-
-// interface RestorePreview {
-//   files: string[]
-//   total_size: string
-//   file_count: number
-//   estimated_time: string
-// }
 
 const Restore: React.FC = () => {
   const [selectedRepository, setSelectedRepository] = useState<string>('')
@@ -67,7 +85,7 @@ const Restore: React.FC = () => {
 
   // Preview restore mutation
   const previewMutation = useMutation({
-    mutationFn: (paths: string[]) => 
+    mutationFn: (paths: string[]) =>
       restoreAPI.previewRestore(selectedRepository, selectedArchive, paths),
     onSuccess: () => {
       setShowPreview(true)
@@ -132,9 +150,13 @@ const Restore: React.FC = () => {
 
   // Handle navigation breadcrumb
   const handleBreadcrumbClick = (index: number) => {
-    const pathParts = currentPath.split('/')
-    const newPath = pathParts.slice(0, index + 1).join('/')
-    setCurrentPath(newPath)
+    if (index === 0) {
+      setCurrentPath('')
+    } else {
+      const pathParts = currentPath.split('/')
+      const newPath = pathParts.slice(0, index).join('/')
+      setCurrentPath(newPath)
+    }
   }
 
   // Handle preview restore
@@ -187,355 +209,393 @@ const Restore: React.FC = () => {
   ]
 
   return (
-    <div className="space-y-6">
+    <Box>
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Restore Operations</h1>
-          <p className="text-gray-600">Restore files and folders from backup archives</p>
-        </div>
-        <button
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <Box>
+          <Typography variant="h4" fontWeight={600} gutterBottom>
+            Restore Operations
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Restore files and folders from backup archives
+          </Typography>
+        </Box>
+        <Button
+          variant="outlined"
+          startIcon={<RefreshCw size={18} />}
           onClick={() => queryClient.invalidateQueries({ queryKey: ['restore-archives', selectedRepository] })}
-          className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
         >
-          <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
-        </button>
-      </div>
+        </Button>
+      </Box>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <Stack direction={{ xs: 'column', lg: 'row' }} spacing={3}>
         {/* Repository and Archive Selection */}
-        <div className="lg:col-span-1 space-y-6">
-          {/* Repository Selection */}
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-4 py-3 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">Repository</h3>
-            </div>
-            <div className="p-4">
-              {mockRepositories.map((repo) => (
-                <div
-                  key={repo.id}
-                  onClick={() => handleRepositorySelect(repo.id)}
-                  className={`p-3 rounded-lg cursor-pointer transition-colors ${
-                    selectedRepository === repo.id
-                      ? 'bg-indigo-50 border border-indigo-200'
-                      : 'hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center">
-                    <HardDrive className="h-5 w-5 text-gray-400 mr-3" />
-                    <div>
-                      <h4 className="font-medium text-gray-900">{repo.name}</h4>
-                      <p className="text-sm text-gray-600">{repo.path}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+        <Box sx={{ flex: { xs: '1 1 100%', lg: '0 0 350px' } }}>
+          <Stack spacing={3}>
+            {/* Repository Selection */}
+            <Card>
+              <CardContent>
+                <Typography variant="h6" fontWeight={600} gutterBottom>
+                  Repository
+                </Typography>
+                <List>
+                  {mockRepositories.map((repo) => (
+                    <ListItem key={repo.id} disablePadding sx={{ mb: 1 }}>
+                      <ListItemButton
+                        selected={selectedRepository === repo.id}
+                        onClick={() => handleRepositorySelect(repo.id)}
+                        sx={{
+                          borderRadius: 1,
+                          '&.Mui-selected': {
+                            backgroundColor: 'primary.lighter',
+                          },
+                        }}
+                      >
+                        <ListItemIcon>
+                          <HardDrive size={20} />
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={repo.name}
+                          secondary={repo.path}
+                          primaryTypographyProps={{ fontWeight: 500, fontSize: '0.875rem' }}
+                          secondaryTypographyProps={{ fontSize: '0.75rem' }}
+                        />
+                      </ListItemButton>
+                    </ListItem>
+                  ))}
+                </List>
+              </CardContent>
+            </Card>
 
-          {/* Archive Selection */}
-          {selectedRepository && (
-            <div className="bg-white rounded-lg shadow">
-              <div className="px-4 py-3 border-b border-gray-200">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-medium text-gray-900">Archive</h3>
-                  <div className="relative">
-                    <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="Search archives..."
+            {/* Archive Selection */}
+            {selectedRepository && (
+              <Card>
+                <CardContent>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                    <Typography variant="h6" fontWeight={600}>
+                      Archive
+                    </Typography>
+                    <TextField
+                      size="small"
+                      placeholder="Search..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <Search size={16} />
+                          </InputAdornment>
+                        ),
+                      }}
+                      sx={{ width: 150 }}
                     />
-                  </div>
-                </div>
-              </div>
-              <div className="p-4">
-                {loadingArchives ? (
-                  <div className="text-center py-4">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600 mx-auto"></div>
-                    <p className="mt-2 text-sm text-gray-600">Loading archives...</p>
-                  </div>
-                ) : filteredArchives.length === 0 ? (
-                  <div className="text-center py-4">
-                    <Folder className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                    <p className="text-sm text-gray-600">No archives found</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {filteredArchives.map((archive: Archive) => (
-                      <div
-                        key={archive.id}
-                        onClick={() => handleArchiveSelect(archive.name)}
-                        className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                          selectedArchive === archive.name
-                            ? 'border-indigo-300 bg-indigo-50'
-                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                        }`}
-                      >
-                        <div className="flex items-center space-x-3">
-                          <Folder className="h-4 w-4 text-blue-500" />
-                          <div>
-                            <h4 className="font-medium text-gray-900 text-sm">{archive.name}</h4>
-                            <div className="text-xs text-gray-600">
-                              <span className="flex items-center">
-                                <Calendar className="h-3 w-3 mr-1" />
-                                {formatTimestamp(archive.timestamp)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+                  </Stack>
+
+                  {loadingArchives ? (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
+                      <CircularProgress size={32} />
+                      <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                        Loading archives...
+                      </Typography>
+                    </Box>
+                  ) : filteredArchives.length === 0 ? (
+                    <Box sx={{ textAlign: 'center', py: 4 }}>
+                      <Folder size={32} color="rgba(0,0,0,0.3)" style={{ marginBottom: 8 }} />
+                      <Typography variant="caption" color="text.secondary">
+                        No archives found
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <Stack spacing={1}>
+                      {filteredArchives.map((archive: Archive) => (
+                        <Card
+                          key={archive.id}
+                          variant="outlined"
+                          sx={{
+                            cursor: 'pointer',
+                            borderColor: selectedArchive === archive.name ? 'primary.main' : 'divider',
+                            backgroundColor: selectedArchive === archive.name ? 'primary.lighter' : 'background.paper',
+                            '&:hover': { borderColor: 'primary.main' },
+                          }}
+                          onClick={() => handleArchiveSelect(archive.name)}
+                        >
+                          <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <Folder size={16} color="#1976d2" />
+                              <Box>
+                                <Typography variant="body2" fontWeight={500}>
+                                  {archive.name}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                  <Calendar size={12} />
+                                  {formatTimestamp(archive.timestamp)}
+                                </Typography>
+                              </Box>
+                            </Stack>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </Stack>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </Stack>
+        </Box>
 
         {/* File Browser and Selection */}
-        <div className="lg:col-span-2">
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-4 py-3 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">File Selection</h3>
+        <Box sx={{ flex: 1 }}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" fontWeight={600} gutterBottom>
+                File Selection
+              </Typography>
               {selectedArchive && (
-                <p className="text-sm text-gray-600">Select files and folders to restore from {selectedArchive}</p>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Select files and folders to restore from {selectedArchive}
+                </Typography>
               )}
-            </div>
-            
-            <div className="p-4">
+
               {!selectedArchive ? (
-                <div className="text-center py-8">
-                  <Folder className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">Select an archive to browse files</p>
-                </div>
+                <Box sx={{ textAlign: 'center', py: 8 }}>
+                  <Folder size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
+                  <Typography variant="body1" color="text.secondary">
+                    Select an archive to browse files
+                  </Typography>
+                </Box>
               ) : (
                 <>
                   {/* Breadcrumb */}
-                  <div className="flex items-center space-x-2 mb-4 text-sm">
+                  <Breadcrumbs separator={<ChevronRight size={16} />} sx={{ mb: 2, fontSize: '0.875rem' }}>
                     {breadcrumbParts.map((part, index) => (
-                      <React.Fragment key={index}>
-                        {index > 0 && <ChevronRight className="h-4 w-4 text-gray-400" />}
-                        <button
-                          onClick={() => handleBreadcrumbClick(index)}
-                          className={`hover:text-indigo-600 ${
-                            index === breadcrumbParts.length - 1 ? 'text-gray-900 font-medium' : 'text-gray-600'
-                          }`}
-                        >
-                          {part}
-                        </button>
-                      </React.Fragment>
+                      <Link
+                        key={index}
+                        component="button"
+                        variant="body2"
+                        onClick={() => handleBreadcrumbClick(index)}
+                        sx={{
+                          textDecoration: 'none',
+                          color: index === breadcrumbParts.length - 1 ? 'text.primary' : 'text.secondary',
+                          fontWeight: index === breadcrumbParts.length - 1 ? 600 : 400,
+                          '&:hover': { color: 'primary.main' },
+                        }}
+                      >
+                        {part}
+                      </Link>
                     ))}
-                  </div>
+                  </Breadcrumbs>
 
                   {/* File List */}
                   {loadingContents ? (
-                    <div className="text-center py-8">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-                      <p className="mt-2 text-gray-600">Loading contents...</p>
-                    </div>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
+                      <CircularProgress size={48} />
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                        Loading contents...
+                      </Typography>
+                    </Box>
                   ) : archiveContents?.data?.length === 0 ? (
-                    <div className="text-center py-8">
-                      <Folder className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-gray-600">This directory is empty</p>
-                    </div>
+                    <Box sx={{ textAlign: 'center', py: 8 }}>
+                      <Folder size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
+                      <Typography variant="body1" color="text.secondary">
+                        This directory is empty
+                      </Typography>
+                    </Box>
                   ) : (
-                    <div className="space-y-1">
+                    <List>
                       {archiveContents?.data?.map((item: ArchiveFile, index: number) => {
                         const fullPath = currentPath ? `${currentPath}/${item.name}` : item.name
                         const isSelected = selectedFiles.includes(fullPath)
-                        
+
                         return (
-                          <div
+                          <ListItem
                             key={index}
-                            className="flex items-center p-2 rounded-md hover:bg-gray-50"
+                            disablePadding
+                            secondaryAction={
+                              item.size && (
+                                <Typography variant="caption" color="text.secondary">
+                                  {formatFileSize(item.size)}
+                                </Typography>
+                              )
+                            }
                           >
-                            <input
-                              type="checkbox"
+                            <Checkbox
                               checked={isSelected}
                               onChange={() => handleFileSelect(fullPath)}
-                              className="mr-3 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                              sx={{ mr: 1 }}
                             />
-                            <div
-                              onClick={() => handleItemClick(item)}
-                              className="flex items-center flex-1 cursor-pointer"
-                            >
-                              {item.type === 'directory' ? (
-                                <Folder className="h-4 w-4 text-blue-500 mr-3" />
-                              ) : (
-                                <File className="h-4 w-4 text-gray-500 mr-3" />
-                              )}
-                              <span className="text-sm text-gray-900">{item.name}</span>
-                            </div>
-                            {item.size && (
-                              <span className="text-sm text-gray-600">{formatFileSize(item.size)}</span>
-                            )}
-                          </div>
+                            <ListItemButton onClick={() => handleItemClick(item)} disabled={item.type !== 'directory'} sx={{ borderRadius: 1 }}>
+                              <ListItemIcon>
+                                {item.type === 'directory' ? (
+                                  <Folder size={20} color="#1976d2" />
+                                ) : (
+                                  <File size={20} color="rgba(0,0,0,0.5)" />
+                                )}
+                              </ListItemIcon>
+                              <ListItemText primary={item.name} primaryTypographyProps={{ fontSize: '0.875rem' }} />
+                            </ListItemButton>
+                          </ListItem>
                         )
                       })}
-                    </div>
+                    </List>
                   )}
                 </>
               )}
-            </div>
-          </div>
-        </div>
-      </div>
+            </CardContent>
+          </Card>
+        </Box>
+      </Stack>
 
       {/* Restore Configuration */}
       {selectedFiles.length > 0 && (
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-4 py-3 border-b border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900">Restore Configuration</h3>
-          </div>
-          <div className="p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card sx={{ mt: 3 }}>
+          <CardContent>
+            <Typography variant="h6" fontWeight={600} gutterBottom>
+              Restore Configuration
+            </Typography>
+
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={3}>
               {/* Selected Files */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="body2" fontWeight={500} gutterBottom>
                   Selected Files ({selectedFiles.length})
-                </label>
-                <div className="max-h-32 overflow-y-auto border border-gray-300 rounded-md p-3 bg-gray-50">
+                </Typography>
+                <Box
+                  sx={{
+                    maxHeight: 120,
+                    overflowY: 'auto',
+                    border: 1,
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                    p: 2,
+                    backgroundColor: 'grey.50',
+                  }}
+                >
                   {selectedFiles.map((file, index) => (
-                    <div key={index} className="text-sm text-gray-700 mb-1">
+                    <Typography key={index} variant="caption" display="block" sx={{ mb: 0.5 }}>
                       {file}
-                    </div>
+                    </Typography>
                   ))}
-                </div>
-              </div>
+                </Box>
+              </Box>
 
               {/* Destination Path */}
-              <div>
-                <label htmlFor="destination" className="block text-sm font-medium text-gray-700 mb-2">
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="body2" fontWeight={500} gutterBottom>
                   Destination Path
-                </label>
-                <div className="relative">
-                  <MapPin className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    id="destination"
-                    value={destinationPath}
-                    onChange={(e) => setDestinationPath(e.target.value)}
-                    placeholder="/path/to/restore/destination"
-                    className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-              </div>
-            </div>
+                </Typography>
+                <TextField
+                  fullWidth
+                  value={destinationPath}
+                  onChange={(e) => setDestinationPath(e.target.value)}
+                  placeholder="/path/to/restore/destination"
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <MapPin size={18} />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              </Box>
+            </Stack>
 
             {/* Action Buttons */}
-            <div className="flex items-center space-x-4 mt-6">
-              <button
+            <Stack direction="row" spacing={2} sx={{ mt: 3 }}>
+              <Button
+                variant="contained"
+                color="info"
+                startIcon={previewMutation.isLoading ? <CircularProgress size={16} color="inherit" /> : <Eye size={18} />}
                 onClick={handlePreviewRestore}
                 disabled={previewMutation.isLoading}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
-                {previewMutation.isLoading ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Generating Preview...
-                  </>
-                ) : (
-                  <>
-                    <Eye className="h-4 w-4 mr-2" />
-                    Preview Restore
-                  </>
-                )}
-              </button>
+                {previewMutation.isLoading ? 'Generating Preview...' : 'Preview Restore'}
+              </Button>
 
-              <button
+              <Button
+                variant="contained"
+                color="success"
+                startIcon={startRestoreMutation.isLoading ? <CircularProgress size={16} color="inherit" /> : <Play size={18} />}
                 onClick={handleStartRestore}
                 disabled={startRestoreMutation.isLoading || !destinationPath.trim()}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
               >
-                {startRestoreMutation.isLoading ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Starting Restore...
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-4 w-4 mr-2" />
-                    Start Restore
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
+                {startRestoreMutation.isLoading ? 'Starting Restore...' : 'Start Restore'}
+              </Button>
+            </Stack>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Restore Preview Modal */}
-      {showPreview && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Restore Preview</h3>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <span className="text-sm font-medium text-gray-600">Files to restore:</span>
-                    <p className="text-sm text-gray-900">{selectedFiles.length}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-600">Destination:</span>
-                    <p className="text-sm text-gray-900">{destinationPath || 'Not specified'}</p>
-                  </div>
-                </div>
-                
-                <div>
-                  <span className="text-sm font-medium text-gray-600">Selected files:</span>
-                  <div className="mt-2 max-h-32 overflow-y-auto border border-gray-300 rounded-md p-3 bg-gray-50">
-                    {selectedFiles.map((file, index) => (
-                      <div key={index} className="text-sm text-gray-700 mb-1">
-                        {file}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                
-                <div className="flex justify-end space-x-3">
-                  <button
-                    onClick={() => setShowPreview(false)}
-                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
-                  >
-                    Close
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowPreview(false)
-                      handleStartRestore()
-                    }}
-                    disabled={!destinationPath.trim()}
-                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
-                  >
-                    Start Restore
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Restore Preview Dialog */}
+      <Dialog open={showPreview} onClose={() => setShowPreview(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Restore Preview</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <Stack direction="row" flexWrap="wrap" spacing={2}>
+              <Box sx={{ flex: '1 1 45%', minWidth: 150 }}>
+                <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                  Files to restore
+                </Typography>
+                <Typography variant="body2">{selectedFiles.length}</Typography>
+              </Box>
+              <Box sx={{ flex: '1 1 45%', minWidth: 150 }}>
+                <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                  Destination
+                </Typography>
+                <Typography variant="body2">{destinationPath || 'Not specified'}</Typography>
+              </Box>
+            </Stack>
+
+            <Box>
+              <Typography variant="caption" color="text.secondary" fontWeight={600} gutterBottom>
+                Selected files
+              </Typography>
+              <Box
+                sx={{
+                  maxHeight: 120,
+                  overflowY: 'auto',
+                  border: 1,
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  p: 2,
+                  backgroundColor: 'grey.50',
+                }}
+              >
+                {selectedFiles.map((file, index) => (
+                  <Typography key={index} variant="caption" display="block" sx={{ mb: 0.5 }}>
+                    {file}
+                  </Typography>
+                ))}
+              </Box>
+            </Box>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowPreview(false)}>Close</Button>
+          <Button
+            variant="contained"
+            color="success"
+            onClick={() => {
+              setShowPreview(false)
+              handleStartRestore()
+            }}
+            disabled={!destinationPath.trim()}
+          >
+            Start Restore
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Restore Job Status */}
       {restoreJobId && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="flex items-center">
-            <CheckCircle className="h-5 w-5 text-green-400 mr-2" />
-            <div>
-              <h3 className="text-sm font-medium text-green-800">Restore Job Started</h3>
-              <p className="text-sm text-green-700">Job ID: {restoreJobId}</p>
-              <p className="text-sm text-green-700">Check the Backup page to monitor progress</p>
-            </div>
-          </div>
-        </div>
+        <Alert severity="success" icon={<CheckCircle size={20} />} sx={{ mt: 3 }}>
+          <AlertTitle fontWeight={600}>Restore Job Started</AlertTitle>
+          <Typography variant="body2">Job ID: {restoreJobId}</Typography>
+          <Typography variant="body2">Check the Backup page to monitor progress</Typography>
+        </Alert>
       )}
-    </div>
+    </Box>
   )
 }
 
-export default Restore 
+export default Restore
