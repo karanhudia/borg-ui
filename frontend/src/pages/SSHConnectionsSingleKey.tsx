@@ -43,21 +43,6 @@ import {
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 
-interface SSHKey {
-  id: number
-  name: string
-  description?: string
-  key_type: string
-  public_key: string
-  fingerprint?: string
-  is_system_key: boolean
-  is_active: boolean
-  created_at: string
-  updated_at?: string
-  connection_count: number
-  active_connections: number
-}
-
 interface SSHConnection {
   id: number
   ssh_key_id: number
@@ -647,6 +632,7 @@ export default function SSHConnectionsSingleKey() {
                 setConnectionForm({ ...connectionForm, host: e.target.value })
               }
               placeholder="192.168.1.100 or example.com"
+              InputLabelProps={{ shrink: true }}
             />
             <TextField
               label="Username"
@@ -656,6 +642,7 @@ export default function SSHConnectionsSingleKey() {
                 setConnectionForm({ ...connectionForm, username: e.target.value })
               }
               placeholder="root"
+              InputLabelProps={{ shrink: true }}
             />
             <TextField
               label="Port"
@@ -668,6 +655,7 @@ export default function SSHConnectionsSingleKey() {
                   port: parseInt(e.target.value),
                 })
               }
+              InputLabelProps={{ shrink: true }}
             />
             <TextField
               label="Password"
@@ -678,6 +666,7 @@ export default function SSHConnectionsSingleKey() {
                 setConnectionForm({ ...connectionForm, password: e.target.value })
               }
               placeholder="Server password (for initial deployment)"
+              InputLabelProps={{ shrink: true }}
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
