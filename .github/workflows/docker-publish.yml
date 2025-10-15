@@ -81,6 +81,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
+            APP_VERSION=${{ steps.version.outputs.version || steps.meta.outputs.version || 'dev' }}
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
             VCS_REF=${{ github.sha }}
             VERSION=${{ steps.meta.outputs.version }}

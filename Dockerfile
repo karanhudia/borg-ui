@@ -30,6 +30,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Production stage
 FROM python:3.9-slim AS production
+
+# Build arguments
+ARG APP_VERSION=dev
+ENV APP_VERSION=${APP_VERSION}
+
 WORKDIR /app
 
 # Install system dependencies including borg and related packages

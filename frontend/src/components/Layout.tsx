@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth.tsx'
 import { useTabEnablement } from '../context/AppContext'
@@ -34,7 +34,9 @@ import {
   LogOut,
   User,
   Lock,
+  Info,
 } from 'lucide-react'
+import { api } from '../services/api'
 
 const drawerWidth = 240
 
@@ -50,12 +52,32 @@ const navigationWithKeys = [
   { name: 'SSH Connections', href: '/ssh-connections', icon: Wifi, key: 'connections' as const },
 ]
 
+interface SystemInfo {
+  app_version: string
+  borg_version: string | null
+  borgmatic_version: string | null
+}
+
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
+  const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
   const location = useLocation()
   const { user, logout } = useAuth()
   const { tabEnablement, getTabDisabledReason } = useTabEnablement()
+
+  useEffect(() => {
+    // Fetch system info
+    const fetchSystemInfo = async () => {
+      try {
+        const response = await api.get('/api/system/info')
+        setSystemInfo(response.data)
+      } catch (error) {
+        console.error('Failed to fetch system info:', error)
+      }
+    }
+    fetchSystemInfo()
+  }, [])
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen)
@@ -84,73 +106,108 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }
 
   const drawer = (
-    <Box>
-      <Toolbar>
-        <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 600 }}>
-          Borgmatic UI
-        </Typography>
-      </Toolbar>
-      <Divider />
-      <List>
-        {navigationWithKeys.map((item) => {
-          const isActive = location.pathname === item.href
-          const isEnabled = tabEnablement[item.key]
-          const disabledReason = getTabDisabledReason(item.key)
-          const Icon = item.icon
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <Box>
+        <Toolbar>
+          <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 600 }}>
+            Borgmatic UI
+          </Typography>
+        </Toolbar>
+        <Divider />
+        <List>
+          {navigationWithKeys.map((item) => {
+            const isActive = location.pathname === item.href
+            const isEnabled = tabEnablement[item.key]
+            const disabledReason = getTabDisabledReason(item.key)
+            const Icon = item.icon
 
-          const listItemButton = (
-            <ListItemButton
-              component={isEnabled ? Link : 'div'}
-              to={isEnabled ? item.href : undefined}
-              selected={isActive}
-              disabled={!isEnabled}
-              onClick={(e: React.MouseEvent<HTMLDivElement>) => handleNavClick(e, item)}
-              sx={{
-                '&.Mui-selected': {
-                  backgroundColor: 'primary.main',
-                  color: 'white',
-                  '&:hover': {
-                    backgroundColor: 'primary.dark',
-                  },
-                  '& .MuiListItemIcon-root': {
+            const listItemButton = (
+              <ListItemButton
+                component={isEnabled ? Link : 'div'}
+                to={isEnabled ? item.href : undefined}
+                selected={isActive}
+                disabled={!isEnabled}
+                onClick={(e: React.MouseEvent<HTMLDivElement>) => handleNavClick(e, item)}
+                sx={{
+                  '&.Mui-selected': {
+                    backgroundColor: 'primary.main',
                     color: 'white',
+                    '&:hover': {
+                      backgroundColor: 'primary.dark',
+                    },
+                    '& .MuiListItemIcon-root': {
+                      color: 'white',
+                    },
                   },
-                },
-                '&.Mui-disabled': {
-                  opacity: 0.5,
-                  cursor: 'not-allowed',
-                },
-              }}
-            >
-              <ListItemIcon sx={{ color: isActive ? 'white' : 'text.secondary' }}>
-                {isEnabled ? <Icon size={20} /> : <Lock size={20} />}
-              </ListItemIcon>
-              <ListItemText
-                primary={item.name}
-                primaryTypographyProps={{
-                  fontSize: '0.875rem',
-                  fontWeight: isActive ? 600 : 400,
-                  color: isActive ? 'white' : isEnabled ? 'inherit' : 'text.disabled',
+                  '&.Mui-disabled': {
+                    opacity: 0.5,
+                    cursor: 'not-allowed',
+                  },
                 }}
-              />
-            </ListItemButton>
-          )
+              >
+                <ListItemIcon sx={{ color: isActive ? 'white' : 'text.secondary' }}>
+                  {isEnabled ? <Icon size={20} /> : <Lock size={20} />}
+                </ListItemIcon>
+                <ListItemText
+                  primary={item.name}
+                  primaryTypographyProps={{
+                    fontSize: '0.875rem',
+                    fontWeight: isActive ? 600 : 400,
+                    color: isActive ? 'white' : isEnabled ? 'inherit' : 'text.disabled',
+                  }}
+                />
+              </ListItemButton>
+            )
 
-          return (
-            <ListItem key={item.name} disablePadding>
-              {!isEnabled && disabledReason ? (
-                <Tooltip title={disabledReason} arrow placement="right">
-                  <Box sx={{ width: '100%' }}>
-                    {listItemButton}
-                  </Box>
-                </Tooltip>
-              ) : (
-                listItemButton
-              )}
-            </ListItem>
-          )
-        })}
-      </List>
+            return (
+              <ListItem key={item.name} disablePadding>
+                {!isEnabled && disabledReason ? (
+                  <Tooltip title={disabledReason} arrow placement="right">
+                    <Box sx={{ width: '100%' }}>
+                      {listItemButton}
+                    </Box>
+                  </Tooltip>
+                ) : (
+                  listItemButton
+                )}
+              </ListItem>
+            )
+          })}
+        </List>
+      </Box>
+
+      {/* System Info at bottom */}
+      <Box sx={{ mt: 'auto', p: 2, borderTop: 1, borderColor: 'divider' }}>
+        <Tooltip title="System Information" arrow placement="right">
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+            <Info size={16} style={{ marginRight: 8, color: '#666' }} />
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+              Version Info
+            </Typography>
+          </Box>
+        </Tooltip>
+        {systemInfo ? (
+          <Box sx={{ ml: 3 }}>
+            <Typography variant="caption" display="block" color="text.secondary" sx={{ lineHeight: 1.5 }}>
+              App: {systemInfo.app_version}
+            </Typography>
+            {systemInfo.borg_version && (
+              <Typography variant="caption" display="block" color="text.secondary" sx={{ lineHeight: 1.5 }}>
+                {systemInfo.borg_version}
+              </Typography>
+            )}
+            {systemInfo.borgmatic_version && (
+              <Typography variant="caption" display="block" color="text.secondary" sx={{ lineHeight: 1.5 }}>
+                {systemInfo.borgmatic_version}
+              </Typography>
+            )}
+          </Box>
+        ) : (
+          <Typography variant="caption" display="block" color="text.secondary" sx={{ ml: 3 }}>
+            Loading...
+          </Typography>
+        )}
+      </Box>
     </Box>
   )
 
