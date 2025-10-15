@@ -50,6 +50,10 @@ export const dashboardAPI = {
   getHealth: () => api.get('/dashboard/health'),
 }
 
+// Configuration API - DEPRECATED (removed from UI)
+// We now use borg directly with per-repository passphrases
+// Keeping this commented out for reference
+/*
 export const configAPI = {
   // List all configurations
   listConfigurations: () => api.get('/config/'),
@@ -78,6 +82,7 @@ export const configAPI = {
   getConfig: () => api.get('/config/current'),
   updateConfig: (config: string) => api.put('/config/update', { content: config }),
 }
+*/
 
 export const backupAPI = {
   startBackup: (repository?: string) => api.post('/backup/start', { repository }),

@@ -23,7 +23,6 @@ import {
 } from '@mui/material'
 import {
   Home,
-  Settings,
   FileText,
   Archive,
   RotateCcw,
