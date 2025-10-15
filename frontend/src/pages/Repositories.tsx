@@ -104,18 +104,19 @@ export default function Repositories() {
   })
 
   // Get default configuration to show source directories
-  const { data: defaultConfigData } = useQuery({
-    queryKey: ['default-config'],
-    queryFn: async () => {
-      try {
-        const response = await configAPI.getDefaultConfig()
-        return response.data
-      } catch (error) {
-        return null
-      }
-    },
-    retry: false,
-  })
+  // REMOVED: Config dependency no longer needed
+  // const { data: defaultConfigData } = useQuery({
+  //   queryKey: ['default-config'],
+  //   queryFn: async () => {
+  //     try {
+  //       const response = await configAPI.getDefaultConfig()
+  //       return response.data
+  //     } catch (error) {
+  //       return null
+  //     }
+  //   },
+  //   retry: false,
+  // })
 
   // Mutations
   const createRepositoryMutation = useMutation({
@@ -278,30 +279,31 @@ export default function Repositories() {
   }
 
   // Parse source directories from configuration (simple regex-based extraction)
-  const getSourceDirectories = () => {
-    if (!defaultConfigData || !defaultConfigData.content) {
-      return []
-    }
-    try {
-      // Simple extraction from YAML content - look for source_directories section
-      const content = defaultConfigData.content
-      const sourceMatch = content.match(/source_directories:\s*\n((?:\s+-\s+.+\n?)+)/)
-      if (!sourceMatch) return []
+  // REMOVED: Config dependency no longer needed
+  // const getSourceDirectories = () => {
+  //   if (!defaultConfigData || !defaultConfigData.content) {
+  //     return []
+  //   }
+  //   try {
+  //     // Simple extraction from YAML content - look for source_directories section
+  //     const content = defaultConfigData.content
+  //     const sourceMatch = content.match(/source_directories:\s*\n((?:\s+-\s+.+\n?)+)/)
+  //     if (!sourceMatch) return []
 
-      // Extract paths from the matched lines
-      const paths: string[] = sourceMatch[1]
-        .split('\n')
-        .map((line: string) => line.trim())
-        .filter((line: string) => line.startsWith('- '))
-        .map((line: string) => line.substring(2).trim())
-        .filter((path: string) => path && path !== '')
+  //     // Extract paths from the matched lines
+  //     const paths: string[] = sourceMatch[1]
+  //       .split('\n')
+  //       .map((line: string) => line.trim())
+  //       .filter((line: string) => line.startsWith('- '))
+  //       .map((line: string) => line.substring(2).trim())
+  //       .filter((path: string) => path && path !== '')
 
-      return paths
-    } catch (error) {
-      console.error('Failed to parse source directories:', error)
-      return []
-    }
-  }
+  //     return paths
+  //   } catch (error) {
+  //     console.error('Failed to parse source directories:', error)
+  //     return []
+  //   }
+  // }
 
   // Generate borg init command preview
   const getBorgInitCommand = () => {
@@ -350,7 +352,8 @@ export default function Repositories() {
   const sshKeys = sshKeysData?.data?.ssh_keys || []
   const connections = connectionsData?.data?.connections || []
   const connectedConnections = connections.filter((c: SSHConnection) => c.status === 'connected')
-  const sourceDirectories = getSourceDirectories()
+  // REMOVED: Config dependency no longer needed
+  // const sourceDirectories = getSourceDirectories()
 
   return (
     <Box>
@@ -378,7 +381,8 @@ export default function Repositories() {
         </Box>
 
         {/* Source Directories Info */}
-        {sourceDirectories.length > 0 && (
+        {/* REMOVED: Config dependency no longer needed */}
+        {/* {sourceDirectories.length > 0 && (
           <Paper sx={{ p: 2, bgcolor: 'primary.50', border: '1px solid', borderColor: 'primary.200' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
               <Info sx={{ fontSize: 20, color: 'primary.600', mr: 1 }} />
@@ -418,7 +422,7 @@ export default function Repositories() {
               )}
             </List>
           </Paper>
-        )}
+        )} */}
       </Box>
 
       {/* Repositories Grid */}
