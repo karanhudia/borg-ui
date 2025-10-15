@@ -82,13 +82,50 @@ class SSHConnectionInfo(BaseModel):
     error_message: Optional[str]
     created_at: str
 
+@router.get("/system-key")
+async def get_system_key(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get the system SSH key (there can be only one)"""
+    try:
+        system_key = db.query(SSHKey).filter(SSHKey.is_system_key == True).first()
+
+        if not system_key:
+            return {
+                "success": True,
+                "exists": False,
+                "ssh_key": None
+            }
+
+        return {
+            "success": True,
+            "exists": True,
+            "ssh_key": {
+                "id": system_key.id,
+                "name": system_key.name,
+                "description": system_key.description,
+                "key_type": system_key.key_type,
+                "public_key": system_key.public_key,
+                "fingerprint": system_key.fingerprint,
+                "is_active": system_key.is_active,
+                "created_at": system_key.created_at.isoformat(),
+                "updated_at": system_key.updated_at.isoformat() if system_key.updated_at else None,
+                "connection_count": len(system_key.connections),
+                "active_connections": len([c for c in system_key.connections if c.status == "connected"])
+            }
+        }
+    except Exception as e:
+        logger.error("Failed to get system SSH key", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve system SSH key: {str(e)}")
+
 @router.get("")
 @router.get("/")
 async def get_ssh_keys(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get all SSH keys with connection status"""
+    """Get all SSH keys with connection status (deprecated - use /system-key)"""
     try:
         ssh_keys = db.query(SSHKey).all()
         return {
@@ -100,6 +137,8 @@ async def get_ssh_keys(
                     "description": key.description,
                     "key_type": key.key_type,
                     "public_key": key.public_key,
+                    "fingerprint": key.fingerprint,
+                    "is_system_key": key.is_system_key,
                     "is_active": key.is_active,
                     "created_at": key.created_at.isoformat(),
                     "updated_at": key.updated_at.isoformat() if key.updated_at else None,
@@ -184,65 +223,75 @@ async def generate_ssh_key(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Generate a new SSH key pair"""
+    """Generate the system SSH key (one-time only)"""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     try:
-        # Check if SSH key name already exists
-        existing_key = db.query(SSHKey).filter(SSHKey.name == key_data.name).first()
-        if existing_key:
-            raise HTTPException(status_code=400, detail="SSH key name already exists")
-        
+        # Check if system key already exists
+        existing_system_key = db.query(SSHKey).filter(SSHKey.is_system_key == True).first()
+        if existing_system_key:
+            raise HTTPException(
+                status_code=400,
+                detail="System SSH key already exists. Only one system key is allowed. Delete the existing key first if you want to generate a new one."
+            )
+
         # Validate key type
         valid_types = ["rsa", "ed25519", "ecdsa"]
         if key_data.key_type not in valid_types:
             raise HTTPException(status_code=400, detail=f"Invalid key type. Must be one of: {', '.join(valid_types)}")
-        
+
         # Generate SSH key pair
         key_result = await generate_ssh_key_pair(key_data.key_type)
-        
+
         if not key_result["success"]:
             raise HTTPException(status_code=500, detail=f"Failed to generate SSH key: {key_result['error']}")
-        
+
+        # Generate fingerprint
+        fingerprint = await generate_ssh_key_fingerprint(key_result["public_key"])
+
         # Encrypt private key
         encryption_key = settings.secret_key.encode()[:32]
         cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
         encrypted_private_key = cipher.encrypt(key_result["private_key"].encode()).decode()
-        
-        # Create SSH key record
+
+        # Create system SSH key record
         ssh_key = SSHKey(
-            name=key_data.name,
-            description=key_data.description,
+            name=key_data.name or "System SSH Key",
+            description=key_data.description or "System SSH key for all remote connections",
             key_type=key_data.key_type,
             public_key=key_result["public_key"],
             private_key=encrypted_private_key,
+            fingerprint=fingerprint,
+            is_system_key=True,
             is_active=True
         )
-        
+
         db.add(ssh_key)
         db.commit()
         db.refresh(ssh_key)
-        
-        logger.info("SSH key generated", name=key_data.name, key_type=key_data.key_type, user=current_user.username)
-        
+
+        logger.info("System SSH key generated", name=ssh_key.name, key_type=key_data.key_type, fingerprint=fingerprint, user=current_user.username)
+
         return {
             "success": True,
-            "message": "SSH key generated successfully",
+            "message": "System SSH key generated successfully",
             "ssh_key": {
                 "id": ssh_key.id,
                 "name": ssh_key.name,
                 "description": ssh_key.description,
                 "key_type": ssh_key.key_type,
                 "public_key": ssh_key.public_key,
+                "fingerprint": ssh_key.fingerprint,
+                "is_system_key": ssh_key.is_system_key,
                 "is_active": ssh_key.is_active
             }
         }
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to generate SSH key", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to generate SSH key: {str(e)}")
+        logger.error("Failed to generate system SSH key", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to generate system SSH key: {str(e)}")
 
 @router.post("/quick-setup")
 async def quick_ssh_setup(
@@ -652,28 +701,35 @@ async def delete_ssh_key(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Delete SSH key"""
+    """Delete SSH key (system key cannot be deleted via this endpoint)"""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     try:
         ssh_key = db.query(SSHKey).filter(SSHKey.id == key_id).first()
         if not ssh_key:
             raise HTTPException(status_code=404, detail="SSH key not found")
-        
+
+        # Prevent deletion of system key
+        if ssh_key.is_system_key:
+            raise HTTPException(
+                status_code=403,
+                detail="Cannot delete the system SSH key. This is the primary key used for all remote connections."
+            )
+
         # Check if key is used by any repositories
         if ssh_key.repositories:
             raise HTTPException(
-                status_code=400, 
+                status_code=400,
                 detail="Cannot delete SSH key that is used by repositories. Remove from repositories first."
             )
-        
+
         key_name = ssh_key.name
         db.delete(ssh_key)
         db.commit()
-        
+
         logger.info("SSH key deleted", name=key_name, user=current_user.username)
-        
+
         return {
             "success": True,
             "message": "SSH key deleted successfully"
@@ -683,6 +739,45 @@ async def delete_ssh_key(
     except Exception as e:
         logger.error("Failed to delete SSH key", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to delete SSH key: {str(e)}")
+
+async def generate_ssh_key_fingerprint(public_key: str) -> str:
+    """Generate SSH key fingerprint (SHA256)"""
+    try:
+        # Write public key to temporary file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.pub', delete=False) as f:
+            f.write(public_key)
+            temp_pub_file = f.name
+
+        try:
+            # Use ssh-keygen to generate fingerprint
+            cmd = ["ssh-keygen", "-lf", temp_pub_file, "-E", "sha256"]
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=10)
+
+            if process.returncode == 0:
+                # Parse fingerprint from output: "2048 SHA256:xxxxx user@host (RSA)"
+                output = stdout.decode().strip()
+                parts = output.split()
+                if len(parts) >= 2:
+                    # Return just the hash part (SHA256:xxxxx)
+                    return parts[1]
+                return output
+            else:
+                logger.error("Failed to generate fingerprint", error=stderr.decode())
+                return "Unknown"
+        finally:
+            # Clean up temp file
+            if os.path.exists(temp_pub_file):
+                os.unlink(temp_pub_file)
+
+    except Exception as e:
+        logger.error("Failed to generate SSH key fingerprint", error=str(e))
+        return "Unknown"
 
 async def generate_ssh_key_pair(key_type: str) -> Dict[str, Any]:
     """Generate SSH key pair using ssh-keygen"""
