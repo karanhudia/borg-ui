@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
 [![GitHub Actions](https://github.com/ainullcode/borgmatic-ui/workflows/Build%20and%20Publish%20Docker%20Images/badge.svg)](https://github.com/ainullcode/borgmatic-ui/actions)
 
-A modern, user-friendly web interface for [Borgmatic](https://torsion.org/borgmatic/) backup management. Deploy in seconds with Docker, manage backups through an intuitive dashboard, and monitor your data protection strategy with ease.
+A modern, user-friendly web interface for [Borgmatic](https://torsion.org/borgmatic/) backup management. **Zero-configuration deployment** - just run `docker compose up` and you're done!
 
 **Official Repository**: https://github.com/ainullcode/borgmatic-ui
 
@@ -18,7 +18,7 @@ A modern, user-friendly web interface for [Borgmatic](https://torsion.org/borgma
   - [Method 1: Portainer](#method-1-portainer-recommended)
   - [Method 2: Docker Run](#method-2-docker-run)
   - [Method 3: Docker Compose](#method-3-docker-compose)
-- [Environment Variables](#environment-variables)
+- [Configuration](#configuration)
 - [Documentation](#documentation)
 - [API Reference](#api-reference)
 - [License](#license)
@@ -39,8 +39,8 @@ A modern, user-friendly web interface for [Borgmatic](https://torsion.org/borgma
 - 📝 **Log Management** - Real-time log streaming with search and filtering
 
 ### Technical Highlights
-- ⚡ **Fast Installation** - 30-60 seconds with pre-built multi-arch Docker images
-- 🔒 **Secure** - JWT authentication, encrypted storage, and non-root execution
+- ⚡ **Zero Configuration** - No manual SECRET_KEY generation or environment setup required!
+- 🔒 **Auto-Secured** - SECRET_KEY automatically generated and persisted on first run
 - 📱 **Responsive Design** - Works seamlessly on desktop, tablet, and mobile
 - 🌐 **Multi-platform** - Supports amd64, arm64, and armv7 architectures
 - 🚀 **Production Ready** - Battle-tested on Raspberry Pi, NAS, and cloud servers
@@ -54,8 +54,35 @@ A modern, user-friendly web interface for [Borgmatic](https://torsion.org/borgma
 - 512MB RAM minimum (1GB recommended)
 - Network access to backup destinations
 
+### 30-Second Deployment
+
+```bash
+# Create docker-compose.yml
+cat > docker-compose.yml << 'EOF'
+version: '3.8'
+
+services:
+  app:
+    image: ainullcode/borgmatic-ui:latest
+    container_name: borgmatic-web-ui
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    volumes:
+      - borg_data:/data
+
+volumes:
+  borg_data:
+EOF
+
+# Start the container
+docker compose up -d
+
+# That's it! Everything else is auto-configured.
+```
+
 ### Default Credentials
-After installation, access the web interface at `http://localhost:8081`
+Access the web interface at `http://localhost:8081`
 
 - **Username**: `admin`
 - **Password**: `admin123`
@@ -68,13 +95,13 @@ After installation, access the web interface at `http://localhost:8081`
 
 ### Method 1: Portainer (Recommended)
 
-Portainer is the easiest way to deploy this application with a visual interface.
+Portainer is the easiest way to deploy with a visual interface.
 
 #### Step 1: Add Stack in Portainer
 
 1. Go to **Stacks** > **Add Stack**
 2. Name your stack: `borgmatic-ui`
-3. Paste the following docker-compose configuration:
+3. Paste the following:
 
 ```yaml
 version: '3.8'
@@ -90,46 +117,17 @@ services:
 
     volumes:
       - borg_data:/data
-      - borg_backups:/backups
-
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=sqlite:////data/borgmatic.db
-      - BORGMATIC_CONFIG_PATH=/data/config/borgmatic.yaml
-      - BORGMATIC_BACKUP_PATH=/backups
-      - ENVIRONMENT=production
-      - PORT=8081
-      - LOG_LEVEL=INFO
-
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
 volumes:
   borg_data:
     name: borg_data
-  borg_backups:
-    name: borg_backups
 ```
 
-#### Step 2: Set Environment Variables
+#### Step 2: Deploy Stack
 
-In Portainer's "Environment variables" section, add:
+Click **Deploy the stack** and wait 30-60 seconds. That's it!
 
-| Variable | Value | Required |
-|----------|-------|----------|
-| `SECRET_KEY` | Generate with: `openssl rand -base64 32` | ✅ Yes |
-| `PORT` | `8081` (or any available port) | Optional |
-| `LOG_LEVEL` | `INFO` | Optional |
-
-#### Step 3: Deploy Stack
-
-Click **Deploy the stack** and wait for the container to start (30-60 seconds).
-
-#### Step 4: Access Application
+#### Step 3: Access Application
 
 Open `http://your-server-ip:8081` and login with default credentials.
 
@@ -139,22 +137,13 @@ Open `http://your-server-ip:8081` and login with default credentials.
 
 For quick deployment using Docker CLI.
 
-#### Step 1: Generate Secret Key
-
-```bash
-export SECRET_KEY=$(openssl rand -base64 32)
-echo "Your SECRET_KEY: $SECRET_KEY"
-# Save this key for future use!
-```
-
-#### Step 2: Create Docker Volumes
+#### Step 1: Create Docker Volume
 
 ```bash
 docker volume create borg_data
-docker volume create borg_backups
 ```
 
-#### Step 3: Run Container
+#### Step 2: Run Container
 
 ```bash
 docker run -d \
@@ -162,25 +151,17 @@ docker run -d \
   --restart unless-stopped \
   -p 8081:8081 \
   -v borg_data:/data \
-  -v borg_backups:/backups \
-  -e SECRET_KEY="$SECRET_KEY" \
-  -e DATABASE_URL="sqlite:////data/borgmatic.db" \
-  -e BORGMATIC_CONFIG_PATH="/data/config/borgmatic.yaml" \
-  -e BORGMATIC_BACKUP_PATH="/backups" \
-  -e ENVIRONMENT="production" \
-  -e PORT="8081" \
-  -e LOG_LEVEL="INFO" \
   ainullcode/borgmatic-ui:latest
 ```
 
-#### Step 4: Verify Container is Running
+#### Step 3: Verify Container is Running
 
 ```bash
 docker ps | grep borgmatic-web-ui
 docker logs borgmatic-web-ui
 ```
 
-#### Step 5: Access Application
+#### Step 4: Access Application
 
 Open `http://localhost:8081` and login.
 
@@ -198,8 +179,6 @@ mkdir borgmatic-ui && cd borgmatic-ui
 
 #### Step 2: Create `docker-compose.yml`
 
-Create a file named `docker-compose.yml` with the following content:
-
 ```yaml
 version: '3.8'
 
@@ -213,147 +192,101 @@ services:
       - "${PORT:-8081}:8081"
 
     volumes:
-      - borg_data:/data:rw
-      - borg_backups:/backups:rw
+      - borg_data:/data
 
-    environment:
-      - DATA_DIR=/data
-      - DATABASE_URL=${DATABASE_URL:-sqlite:////data/borgmatic.db}
-      - BORGMATIC_CONFIG_PATH=/data/config/borgmatic.yaml
-      - BORGMATIC_BACKUP_PATH=/backups
-      - SECRET_KEY=${SECRET_KEY:-change-this-secret-key-in-production}
-      - ENVIRONMENT=${ENVIRONMENT:-production}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - PORT=${PORT:-8081}
-
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-    networks:
-      - borg_network
-
-networks:
-  borg_network:
-    name: borg_network
-    driver: bridge
+    # Optional: Override defaults
+    # environment:
+    #   - PORT=8082
+    #   - LOG_LEVEL=DEBUG
 
 volumes:
   borg_data:
     name: borg_data
-  borg_backups:
-    name: borg_backups
 ```
 
-#### Step 3: Generate Secret Key
+#### Step 3: Start Services
 
-```bash
-export SECRET_KEY=$(openssl rand -base64 32)
-echo "Save this SECRET_KEY for Step 4: $SECRET_KEY"
-```
-
-#### Step 4: Update Environment Variables
-
-In the `docker-compose.yml` file you created, replace:
-- `change-this-secret-key-in-production` with your generated SECRET_KEY from Step 3
-
-#### Step 5: Start Services
-
-```bash
-docker-compose up -d
-```
-
-Or if using Docker Compose v2:
 ```bash
 docker compose up -d
 ```
 
-#### Step 6: View Logs (Optional)
+#### Step 4: View Logs (Optional)
 
 ```bash
-docker-compose logs -f app
+docker compose logs -f app
 ```
 
-#### Step 7: Access Application
+#### Step 5: Access Application
 
-Open `http://localhost:8081` and login with default credentials.
+Open `http://localhost:8081` and login.
 
 ---
 
-## Environment Variables
+## Configuration
 
-All environment variables are optional except `SECRET_KEY`.
+### Auto-Configured Settings
 
-### Required Variables
+The following are **automatically configured** on first run:
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `SECRET_KEY` | JWT signing key (generate with `openssl rand -base64 32`) | `xK8j3mP9...` |
+| Setting | Auto-Configuration |
+|---------|-------------------|
+| **SECRET_KEY** | Randomly generated (32 bytes), persisted to `/data/.secret_key` |
+| **DATABASE_URL** | Auto-derived as `sqlite:///data/borgmatic.db` |
+| **BORGMATIC_CONFIG_PATH** | Auto-derived as `/data/config/borgmatic.yaml` |
+| **LOG_FILE** | Auto-derived as `/data/logs/borgmatic-ui.log` |
+| **SSH_KEYS_DIR** | Auto-derived as `/data/ssh_keys` |
 
-### Application Settings
+### Optional Environment Variables
+
+You can override defaults if needed:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `PORT` | Application port | `8081` |
 | `ENVIRONMENT` | Environment mode | `production` |
 | `LOG_LEVEL` | Logging level | `INFO` |
-| `HOST` | Bind address | `0.0.0.0` |
 
-### Database Settings
+Example with overrides:
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DATABASE_URL` | Database connection URL | `sqlite:////data/borgmatic.db` |
-| `DATA_DIR` | Data directory path | `/data` |
+```yaml
+environment:
+  - PORT=8082
+  - LOG_LEVEL=DEBUG
+```
 
-### Borgmatic Settings
+### Backup Repository Configuration
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `BORGMATIC_CONFIG_PATH` | Borgmatic config file path | `/data/config/borgmatic.yaml` |
-| `BORGMATIC_BACKUP_PATH` | Backup storage path | `/backups` |
-| `ENABLE_CRON_BACKUPS` | Enable automatic backups | `false` |
+**Important**: You configure backup repositories in the borgmatic config file through the web UI, not via Docker volumes!
 
-### Security Settings
+Repositories can be:
+- **Local paths**: `/mnt/backup`, `/external-drive/backups`
+- **SSH/SFTP**: `user@host:/path/to/repo`
+- **Cloud storage**: S3, Azure, Google Cloud (via rclone)
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `ALGORITHM` | JWT algorithm | `HS256` |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | Token expiration time | `30` |
-| `CORS_ORIGINS` | Allowed CORS origins | `["http://localhost:7879"]` |
+No need for a separate `borg_backups` volume!
 
 ---
 
 ## Data Persistence
 
-### Docker Volumes
+### Single Volume for Everything
 
-Two volumes are created automatically:
+Only one volume is needed:
 
-1. **`borg_data`** - Contains:
-   - SQLite database (`borgmatic.db`)
-   - SSH keys
-   - Configuration files
-   - Application logs
-
-2. **`borg_backups`** - Contains:
-   - Backup repositories
-   - Backup archives
+**`borg_data`** - Contains:
+- SQLite database (`borgmatic.db`)
+- Auto-generated SECRET_KEY (`.secret_key`)
+- SSH keys
+- Configuration files
+- Application logs
 
 ### Viewing Volume Data
 
 ```bash
-# Inspect borg_data volume
 docker run --rm -v borg_data:/data alpine ls -la /data
-
-# Inspect borg_backups volume
-docker run --rm -v borg_backups:/backups alpine ls -la /backups
 ```
 
-### Backup and Restore Volumes
+### Backup and Restore Volume
 
 ```bash
 # Backup borg_data to tar file
@@ -361,6 +294,18 @@ docker run --rm -v borg_data:/data -v $(pwd):/backup alpine tar czf /backup/borg
 
 # Restore borg_data from tar file
 docker run --rm -v borg_data:/data -v $(pwd):/backup alpine tar xzf /backup/borg_data_backup.tar.gz -C /data
+```
+
+### Mounting to Custom Location
+
+```yaml
+volumes:
+  borg_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/storage/borgmatic-data
 ```
 
 ---
@@ -378,7 +323,7 @@ docker run --rm -v borg_data:/data -v $(pwd):/backup alpine tar xzf /backup/borg
 
 ### OpenAPI Documentation
 
-Once the application is running, access the interactive API documentation:
+Once running, access interactive API documentation:
 
 - **Swagger UI**: `http://localhost:8081/api/docs`
 - **ReDoc**: `http://localhost:8081/api/redoc`
@@ -392,7 +337,7 @@ Once the application is running, access the interactive API documentation:
 | `/api/backups` | GET, POST | List and create backups |
 | `/api/archives` | GET | Browse backup archives |
 | `/api/repositories` | GET, POST | Manage repositories |
-| `/api/ssh_keys` | GET, POST | Manage SSH keys |
+| `/api/ssh-keys` | GET, POST | Manage SSH keys |
 | `/api/schedules` | GET, POST | Manage backup schedules |
 | `/api/health/system` | GET | System health check |
 
@@ -409,21 +354,32 @@ docker logs borgmatic-web-ui
 
 ### Port Already in Use
 
-Change the port in `.env` or use a different port:
-```bash
-docker run -p 8082:8081 ...
+Change the port:
+```yaml
+environment:
+  - PORT=8082
 ```
 
 ### Data Lost After Container Removal
 
-Ensure you're using Docker volumes (not bind mounts) and verify `DATABASE_URL` points to `/data/borgmatic.db` (inside the volume).
+Ensure you're using a Docker volume (not bind mount). The database must be at `/data/borgmatic.db` inside the volume.
 
 ### Permission Issues
 
-The container runs as user `borgmatic` (UID 1001). If mounting host directories, ensure proper permissions:
+The container runs as user `borgmatic` (UID 1001). If mounting host directories:
 ```bash
 chown -R 1001:1001 /path/to/host/directory
 ```
+
+### SECRET_KEY Rotation
+
+To rotate the SECRET_KEY:
+```bash
+docker exec borgmatic-web-ui rm /data/.secret_key
+docker restart borgmatic-web-ui
+```
+
+A new SECRET_KEY will be generated automatically. Note: This will invalidate all existing user sessions.
 
 ---
 
@@ -445,23 +401,17 @@ chown -R 1001:1001 /path/to/host/directory
    cd borgmatic-ui
    ```
 
-2. **Copy environment file:**
+2. **Copy environment file (optional for local dev):**
    ```bash
    cp .env.example .env
    ```
 
-3. **Edit `.env` and set your SECRET_KEY:**
+3. **Start development environment:**
    ```bash
-   openssl rand -base64 32
-   # Copy the output and paste it as SECRET_KEY in .env
+   docker compose up -d --build
    ```
 
-4. **Start development environment:**
-   ```bash
-   docker-compose up -d --build
-   ```
-
-5. **Access the application:**
+4. **Access the application:**
    - Frontend: `http://localhost:8081`
    - API Docs: `http://localhost:8081/api/docs`
 
@@ -470,13 +420,13 @@ chown -R 1001:1001 /path/to/host/directory
 **Backend Development:**
 ```bash
 # View backend logs
-docker-compose logs -f app
+docker compose logs -f app
 
 # Run backend tests
-docker-compose exec app pytest
+docker compose exec app pytest
 
 # Access Python shell
-docker-compose exec app python
+docker compose exec app python
 ```
 
 **Frontend Development:**
@@ -502,7 +452,8 @@ borgmatic-ui/
 │   ├── api/               # API endpoints
 │   ├── database/          # Database models
 │   ├── services/          # Business logic
-│   └── main.py           # Application entry point
+│   ├── config.py          # Auto-configuration logic
+│   └── main.py            # Application entry point
 ├── frontend/              # Frontend (React + TypeScript)
 │   ├── src/
 │   │   ├── components/   # Reusable components
@@ -510,9 +461,9 @@ borgmatic-ui/
 │   │   ├── services/     # API clients
 │   │   └── App.tsx       # Root component
 │   └── package.json
-├── docker-compose.yml     # Docker Compose configuration
-├── Dockerfile            # Multi-stage Docker build
-└── .env.example          # Environment variables template
+├── docker-compose.yml     # Simplified Docker Compose
+├── Dockerfile             # Multi-stage Docker build
+└── .env.example           # Development-only template
 ```
 
 ### Contributing
