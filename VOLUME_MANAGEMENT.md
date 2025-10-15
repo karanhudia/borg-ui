@@ -87,7 +87,81 @@ chmod 700 ./data/ssh_keys  # Restricted for security
 docker-compose up -d
 ```
 
-### Method 3: Custom Mount Points
+### Method 3: Docker-managed Volumes (Portainer-style)
+
+Use Docker-managed volumes instead of bind mounts (recommended for production/Portainer):
+
+**Use the provided `docker-compose.volumes.yml`:**
+
+```bash
+# Start with Docker-managed volumes
+docker-compose -f docker-compose.volumes.yml up -d
+```
+
+**Or create your own configuration:**
+
+```yaml
+services:
+  app:
+    # ... service configuration ...
+    volumes:
+      # Docker-managed volumes (auto-created by Docker)
+      - borg_data:/data:rw
+      - borg_backups:/backups:rw
+
+# Volume definitions
+volumes:
+  borg_data:
+    name: borg_data
+    driver: local
+
+  borg_backups:
+    name: borg_backups
+    driver: local
+```
+
+**What happens:**
+1. Docker automatically creates named volumes on first run
+2. Volumes are stored in Docker's internal storage
+3. Managed through Docker commands or Portainer UI
+4. No need to manually create directories
+
+**Advantages:**
+- ✅ Automatically created by Docker
+- ✅ Works seamlessly with Portainer
+- ✅ Better for Docker Swarm/production
+- ✅ Portable across Docker environments
+- ✅ Easier backup/restore with Docker tools
+- ✅ Better performance on non-Linux systems
+
+**Volume Management Commands:**
+
+```bash
+# List volumes
+docker volume ls | grep borg
+
+# Inspect volume
+docker volume inspect borg_data
+
+# Backup volume to tar
+docker run --rm \
+  -v borg_data:/source:ro \
+  -v $(pwd):/backup \
+  alpine tar czf /backup/borg-data-backup.tar.gz -C /source .
+
+# Restore volume from tar
+docker run --rm \
+  -v borg_data:/target \
+  -v $(pwd):/backup \
+  alpine sh -c "rm -rf /target/* && tar xzf /backup/borg-data-backup.tar.gz -C /target"
+
+# Browse volume contents
+docker run --rm -it \
+  -v borg_data:/data \
+  alpine sh -c "ls -lah /data"
+```
+
+### Method 4: Custom Mount Points
 
 To use different host directories (e.g., external storage):
 

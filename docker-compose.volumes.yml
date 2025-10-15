@@ -1,0 +1,73 @@
+# Docker Compose with Docker-managed volumes (like Portainer)
+# This approach creates named volumes managed by Docker instead of bind mounts
+# Useful for: Production deployments, Portainer, Docker Swarm, easier backups
+
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: borg-ui
+    restart: unless-stopped
+
+    ports:
+      - "${PORT:-7879}:8000"
+
+    volumes:
+      # Docker-managed volumes (automatically created by Docker)
+      - borg_data:/data:rw
+      - borg_backups:/backups:rw
+
+      # System volumes (read-only)
+      - /etc/cron.d:/etc/cron.d:ro
+      - /etc/localtime:/etc/localtime:ro
+
+    environment:
+      - DATA_DIR=/data
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////data/borgmatic.db}
+      - BORGMATIC_CONFIG_PATH=/data/config/borgmatic.yaml
+      - BORGMATIC_BACKUP_PATH=/backups
+      - SECRET_KEY=${SECRET_KEY:-change-this-secret-key-in-production}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ENABLE_CRON_BACKUPS=${ENABLE_CRON_BACKUPS:-false}
+      - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:7879"]}
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/system"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    networks:
+      - borg_network
+
+networks:
+  borg_network:
+    name: borg_network
+    driver: bridge
+
+# Named volumes - Docker creates and manages these
+volumes:
+  borg_data:
+    name: borg_data
+    driver: local
+    # Optional: Use a specific mount point on host
+    # driver_opts:
+    #   type: none
+    #   o: bind
+    #   device: /mnt/storage/borg-data
+
+  borg_backups:
+    name: borg_backups
+    driver: local
+    # Optional: Mount to external storage
+    # driver_opts:
+    #   type: none
+    #   o: bind
+    #   device: /mnt/nas/borg-backups
