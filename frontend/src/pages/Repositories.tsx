@@ -45,7 +45,7 @@ import {
   Computer,
   Wifi,
 } from '@mui/icons-material'
-import { repositoriesAPI, sshKeysAPI, configAPI } from '../services/api'
+import { repositoriesAPI, sshKeysAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { useAppState } from '../context/AppContext'
 
