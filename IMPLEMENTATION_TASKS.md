@@ -158,78 +158,83 @@ Settings: true (always)
 ---
 
 ### Task 1.5: Repository Creation with Context
-**Status**: 🔴 TODO
+**Status**: ✅ COMPLETE
 **Files**:
 - `app/api/repositories.py`
 - `frontend/src/pages/Repositories.tsx`
 
 **Backend Changes**:
-- [ ] Add repository initialization endpoint
-- [ ] Support two types: local and remote (SSH)
-- [ ] For remote: validate SSH connection exists
-- [ ] Execute `borg init` command
-- [ ] Return detailed error messages
-- [ ] Add repository to configuration after creation
+- [x] Add repository initialization endpoint
+- [x] Support two types: local and remote (SSH)
+- [x] For remote: validate SSH connection exists
+- [x] Execute `borg init` command
+- [x] Return detailed error messages
+- [x] Add repository to configuration after creation
 
 **Frontend Changes**:
-- [ ] Add explanatory header:
+- [x] Add explanatory header:
   ```
   "A repository is where your backed-up data will be stored.
    The files from your configured sources will be backed up here."
   ```
-- [ ] Show configured source directories from default config
-- [ ] Add two prominent buttons:
+- [x] Show configured source directories from default config
+- [x] Add two prominent buttons:
   - "Create Local Repository"
   - "Create Remote Repository (SSH)"
 
-- [ ] **Local Repository Form**:
+- [x] **Local Repository Form**:
   - Path input
   - Validation: path must be valid
   - Show `borg init` command preview
 
-- [ ] **Remote Repository Form**:
+- [x] **Remote Repository Form**:
   - SSH Connection dropdown (from existing connections)
   - Show warning if no connections exist
   - Remote path input
   - Show `borg init` command preview
 
-- [ ] Show success message with full path
-- [ ] Update configuration with new repository
+- [x] Show success message with full path
+- [x] Update configuration with new repository
 
 **Acceptance Criteria**:
-- Clear explanation of what repository is
-- Users understand where backups will be stored
-- Easy choice between local/remote
-- Validation prevents invalid repositories
-- Success feedback is clear
+- ✅ Clear explanation of what repository is
+- ✅ Users understand where backups will be stored
+- ✅ Easy choice between local/remote
+- ✅ Validation prevents invalid repositories
+- ✅ Success feedback is clear
 
 ---
 
 ### Task 1.6: Backup Execution with Real-time Logging
-**Status**: 🔴 TODO
+**Status**: ✅ COMPLETE
 **Files**:
-- `app/api/backups.py`
+- `app/api/backup.py`
 - `app/services/backup_service.py`
+- `app/database/models.py`
 - `frontend/src/pages/Backup.tsx`
+- `frontend/src/components/TerminalLogViewer.tsx`
+- `frontend/src/services/api.ts`
 
 **Backend Changes**:
-- [ ] Create backup execution service
-- [ ] Execute `borgmatic --verbosity 1 --files`
-- [ ] Stream output to log file
-- [ ] Create endpoint: `POST /api/backups/start`
-- [ ] Create endpoint: `GET /api/backups/{id}/logs` (returns new log entries)
-- [ ] Track backup status: running, completed, failed
-- [ ] **Show exact error messages** - no interpretation
+- [x] Create backup execution service (BackupService)
+- [x] Execute `borgmatic create --verbosity 1 --files`
+- [x] Stream output to log file (`/data/logs/backup_{job_id}.log`)
+- [x] Create endpoint: `POST /api/backup/start`
+- [x] Create endpoint: `GET /api/backup/logs/{job_id}/stream` (returns new log entries with offset)
+- [x] Track backup status: pending, running, completed, failed, cancelled
+- [x] Update BackupJob model with log_file_path, progress, logs fields
+- [x] **Show exact error messages** - no interpretation
 
 **Frontend Changes**:
-- [ ] Add "Start Backup" button (disabled if no repository)
-- [ ] Show terminal-style log viewer
-- [ ] Poll `/logs` endpoint every 2-3 seconds
-- [ ] Auto-scroll to latest log entry
-- [ ] Show backup status (running/completed/failed)
-- [ ] Add "Copy Logs" button
-- [ ] Display timestamps
-- [ ] **Show errors exactly as returned** - no friendly messages
+- [x] Add "Start Backup" button (disabled if no repository)
+- [x] Show terminal-style log viewer (TerminalLogViewer component)
+- [x] Poll `/logs/{id}/stream` endpoint every 2 seconds while running
+- [x] Auto-scroll to latest log entry with manual scroll detection
+- [x] Show backup status (pending/running/completed/failed)
+- [x] Add "Copy Logs" and "Download" buttons
+- [x] Display timestamps and line numbers
+- [x] Dark terminal theme (#1e1e1e background, #d4d4d4 text)
+- [x] **Show errors exactly as returned** - no friendly messages
 
 **Log Display Example**:
 ```
@@ -242,11 +247,13 @@ Settings: true (always)
 ```
 
 **Acceptance Criteria**:
-- Backups run with verbose logging
-- Logs stream in real-time
-- Errors are shown exactly as returned
-- Status updates are clear
-- User can copy logs for debugging
+- ✅ Backups run with verbose logging
+- ✅ Logs stream in real-time with offset-based polling
+- ✅ Errors are shown exactly as returned
+- ✅ Status updates are clear (pending/running/completed/failed)
+- ✅ User can copy logs for debugging and download as file
+- ✅ Terminal-style UI with dark theme
+- ✅ Auto-scroll with manual override capability
 
 ---
 
@@ -442,17 +449,17 @@ graph TD
 
 ## Progress Tracking
 
-**Phase 1**: 4/6 tasks completed (67%)
+**Phase 1**: 6/6 tasks completed (100%) ✅ COMPLETE
 - ✅ Task 1.1: Configuration Management Enhancement
 - ✅ Task 1.2: Tab Enablement System
 - ✅ Task 1.3: SSH Key Management (Single Key System)
 - ✅ Task 1.4: SSH Connections with Auto-Key Assignment (merged with 1.3)
-- 🔴 Task 1.5: Repository Creation with Context
-- 🔴 Task 1.6: Backup Execution with Real-time Logging
+- ✅ Task 1.5: Repository Creation with Context
+- ✅ Task 1.6: Backup Execution with Real-time Logging
 
 **Phase 2**: 0/5 tasks completed (0%)
 **Phase 3**: 0/3 tasks completed (0%)
-**Overall**: 4/14 tasks completed (29%)
+**Overall**: 6/14 tasks completed (43%)
 
 ---
 
@@ -461,15 +468,17 @@ graph TD
 1. ✅ ~~Review SYSTEM_DESIGN.md and this task breakdown~~
 2. ✅ ~~Approve overall approach~~
 3. ✅ ~~Begin with Task 1.1 (Configuration Management)~~
-4. **Current**: Continue with Task 1.5 (Repository Creation with Context)
-5. Next: Task 1.6 (Backup Execution with Real-time Logging)
-6. Complete Phase 1, then move to Phase 2 enhancements
+4. ✅ ~~Complete all Phase 1 tasks (Tasks 1.1-1.6)~~
+5. **Current**: Phase 1 is COMPLETE! Ready to start Phase 2 enhancements
+6. Next: Begin Phase 2 with Task 2.1 (Tab Order Reorganization) or other enhancements
 
-**Recent Completions**:
-- Task 1.1: Multi-configuration management with borgmatic CLI generator
-- Task 1.2: Tab enablement system with AppContext and route guards
-- Task 1.3: Single-key SSH system with deploy and test functionality
-- Task 1.4: Auto-key assignment (merged with Task 1.3)
+**Phase 1 Completions** (All Done!):
+- ✅ Task 1.1: Multi-configuration management with borgmatic CLI generator
+- ✅ Task 1.2: Tab enablement system with AppContext and route guards
+- ✅ Task 1.3: Single-key SSH system with deploy and test functionality
+- ✅ Task 1.4: Auto-key assignment (merged with Task 1.3)
+- ✅ Task 1.5: Repository creation with context and source directory display
+- ✅ Task 1.6: Backup execution with real-time terminal-style logging
 
 ---
 
