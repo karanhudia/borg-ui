@@ -2,11 +2,11 @@
 
 [![Docker Hub](https://img.shields.io/docker/pulls/ainullcode/borgmatic-ui)](https://hub.docker.com/r/ainullcode/borgmatic-ui)
 [![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
-[![GitHub Actions](https://github.com/ainullcode/borgmatic-ui/workflows/Build%20and%20Publish%20Docker%20Images/badge.svg)](https://github.com/ainullcode/borgmatic-ui/actions)
+[![GitHub Actions](https://github.com/karanhudia/borg-ui/workflows/Build%20and%20Publish%20Docker%20Images/badge.svg)](https://github.com/karanhudia/borg-ui/actions)
 
 A modern, user-friendly web interface for [Borgmatic](https://torsion.org/borgmatic/) backup management. **Zero-configuration deployment** - just run `docker compose up` and you're done!
 
-**Official Repository**: https://github.com/ainullcode/borgmatic-ui
+**Official Repository**: https://github.com/karanhudia/borg-ui
 
 ---
 
@@ -397,8 +397,8 @@ A new SECRET_KEY will be generated automatically. Note: This will invalidate all
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/ainullcode/borgmatic-ui.git
-   cd borgmatic-ui
+   git clone https://github.com/karanhudia/borg-ui.git
+   cd borg-ui
    ```
 
 2. **Copy environment file (optional for local dev):**
@@ -498,13 +498,13 @@ See the [LICENSE](LICENSE) file for complete terms.
 ### Getting Help
 
 - 📖 **Documentation**: Check the [docs](docs/) directory
-- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/ainullcode/borgmatic-ui/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/ainullcode/borgmatic-ui/discussions)
+- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/karanhudia/borg-ui/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/karanhudia/borg-ui/discussions)
 - 📧 **Contact**: Open an issue for support
 
 ### Resources
 
-- **Official Repository**: https://github.com/ainullcode/borgmatic-ui
+- **Official Repository**: https://github.com/karanhudia/borg-ui
 - **Docker Hub**: https://hub.docker.com/r/ainullcode/borgmatic-ui
 - **Borgmatic Docs**: https://torsion.org/borgmatic/
 - **Borg Backup**: https://borgbackup.readthedocs.io/
