@@ -85,6 +85,9 @@ export const backupAPI = {
   getAllJobs: () => api.get('/backup/jobs'),
   cancelJob: (jobId: string) => api.post(`/backup/cancel/${jobId}`),
   getLogs: (jobId: string) => api.get(`/backup/logs/${jobId}`),
+  // NEW: Stream logs incrementally
+  streamLogs: (jobId: string, offset: number) =>
+    api.get(`/backup/logs/${jobId}/stream`, { params: { offset } }),
 }
 
 export const archivesAPI = {

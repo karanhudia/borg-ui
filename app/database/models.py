@@ -101,9 +101,12 @@ class BackupJob(Base):
     __tablename__ = "backup_jobs"
 
     id = Column(Integer, primary_key=True, index=True)
-    repository_id = Column(Integer, ForeignKey("repositories.id"))
+    repository = Column(String)  # Repository path/name
     status = Column(String, default="pending")  # pending, running, completed, failed
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
+    progress = Column(Integer, default=0)
     error_message = Column(Text, nullable=True)
+    logs = Column(Text, nullable=True)  # Full logs (stored after completion)
+    log_file_path = Column(String, nullable=True)  # Path to streaming log file
     created_at = Column(DateTime, default=datetime.utcnow) 

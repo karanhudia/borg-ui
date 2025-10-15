@@ -2,13 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import structlog
+import asyncio
+import os
 from typing import List, Dict, Any
 
 from app.database.database import get_db
 from app.database.models import User, BackupJob
 from app.core.security import get_current_user
-from app.core.borgmatic import borgmatic
-from app.api.events import event_manager
+from app.services.backup_service import backup_service
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -34,78 +35,34 @@ async def start_backup(
         # Create backup job record
         backup_job = BackupJob(
             repository=backup_request.repository or "default",
-            status="running"
+            status="pending"
         )
         db.add(backup_job)
         db.commit()
         db.refresh(backup_job)
-        
-        # Send initial progress update
-        await event_manager.broadcast_event(
-            "backup_progress",
-            {
-                "job_id": str(backup_job.id),
-                "progress": 0,
-                "status": "starting",
-                "message": "Backup job started"
-            },
-            str(current_user.id)
-        )
-        
-        # Execute backup
-        result = await borgmatic.run_backup(
-            repository=backup_request.repository,
-            config_file=backup_request.config_file
-        )
-        
-        # Update job status
-        if result["success"]:
-            backup_job.status = "completed"
-            backup_job.progress = 100
-            backup_job.logs = result["stdout"]
-            
-            # Send completion update
-            await event_manager.broadcast_event(
-                "backup_progress",
-                {
-                    "job_id": str(backup_job.id),
-                    "progress": 100,
-                    "status": "completed",
-                    "message": "Backup completed successfully"
-                },
-                str(current_user.id)
+
+        # Execute backup asynchronously (non-blocking)
+        asyncio.create_task(
+            backup_service.execute_backup(
+                backup_job.id,
+                backup_request.repository,
+                backup_request.config_file,
+                db
             )
-        else:
-            backup_job.status = "failed"
-            backup_job.error_message = result["stderr"]
-            backup_job.logs = result["stdout"]
-            
-            # Send failure update
-            await event_manager.broadcast_event(
-                "backup_progress",
-                {
-                    "job_id": str(backup_job.id),
-                    "progress": 0,
-                    "status": "failed",
-                    "message": f"Backup failed: {result['stderr']}"
-                },
-                str(current_user.id)
-            )
-        
-        db.commit()
-        
-        logger.info("Backup completed", job_id=backup_job.id, user=current_user.username)
-        
+        )
+
+        logger.info("Backup job created", job_id=backup_job.id, user=current_user.username)
+
         return BackupResponse(
             job_id=backup_job.id,
-            status=backup_job.status,
-            message="Backup completed successfully" if result["success"] else "Backup failed"
+            status="pending",
+            message="Backup job started"
         )
     except Exception as e:
         logger.error("Failed to start backup", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to start backup"
+            detail=f"Failed to start backup: {str(e)}"
         )
 
 @router.get("/status/{job_id}")
@@ -187,7 +144,7 @@ async def get_backup_logs(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Backup job not found"
             )
-        
+
         return {
             "job_id": job.id,
             "logs": job.logs or "",
@@ -198,4 +155,56 @@ async def get_backup_logs(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get backup logs"
+        )
+
+@router.get("/logs/{job_id}/stream")
+async def stream_backup_logs(
+    job_id: int,
+    offset: int = 0,  # Line number to start from
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get incremental backup logs (for real-time streaming)"""
+    try:
+        job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Backup job not found"
+            )
+
+        # If no log file yet, return empty
+        if not job.log_file_path or not os.path.exists(job.log_file_path):
+            return {
+                "job_id": job.id,
+                "status": job.status,
+                "lines": [],
+                "total_lines": 0,
+                "has_more": job.status == "running"
+            }
+
+        # Read log file from offset
+        lines = []
+        with open(job.log_file_path, 'r') as f:
+            all_lines = f.readlines()
+            total_lines = len(all_lines)
+
+            # Get lines from offset onwards
+            if offset < total_lines:
+                lines = [{"line_number": offset + i + 1, "content": line.rstrip('\n')}
+                         for i, line in enumerate(all_lines[offset:])]
+
+        return {
+            "job_id": job.id,
+            "status": job.status,
+            "lines": lines,
+            "total_lines": total_lines,
+            "has_more": job.status == "running"
+        }
+
+    except Exception as e:
+        logger.error("Failed to stream backup logs", error=str(e), job_id=job_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch logs: {str(e)}"
         ) 
