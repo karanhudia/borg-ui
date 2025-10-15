@@ -24,11 +24,6 @@ import {
   Checkbox,
   FormControlLabel,
   Autocomplete,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  Paper,
 } from '@mui/material'
 import {
   Add,
@@ -40,8 +35,6 @@ import {
   Shield,
   Description,
   Warning,
-  Folder,
-  Info,
   Computer,
   Wifi,
 } from '@mui/icons-material'
