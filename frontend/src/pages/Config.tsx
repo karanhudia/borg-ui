@@ -15,10 +15,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  List,
-  ListItem,
-  ListItemText,
-  Divider,
   Select,
   MenuItem,
   FormControl,
@@ -56,13 +52,6 @@ interface Configuration {
   updated_at: string
 }
 
-interface ConfigTemplate {
-  id: string
-  name: string
-  description: string
-  content: string
-}
-
 const Config: React.FC = () => {
   const [selectedConfigId, setSelectedConfigId] = useState<number | null>(null)
   const [configContent, setConfigContent] = useState('')
@@ -72,12 +61,12 @@ const Config: React.FC = () => {
   const [validationMessage, setValidationMessage] = useState('')
   const [validationErrors, setValidationErrors] = useState<string[]>([])
   const [validationWarnings, setValidationWarnings] = useState<string[]>([])
-  const [showTemplates, setShowTemplates] = useState(false)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showRenameDialog, setShowRenameDialog] = useState(false)
   const [newConfigName, setNewConfigName] = useState('')
   const [newConfigDescription, setNewConfigDescription] = useState('')
+  const [isGenerating, setIsGenerating] = useState(false)
   const queryClient = useQueryClient()
 
   // Load all configurations
@@ -129,12 +118,6 @@ const Config: React.FC = () => {
     }
   }, [selectedConfigId, configurations])
 
-  // Load templates
-  const { data: templates, isLoading: loadingTemplates } = useQuery({
-    queryKey: ['config-templates'],
-    queryFn: configAPI.getTemplates,
-    enabled: showTemplates
-  })
 
   // Create configuration mutation
   const createMutation = useMutation({
@@ -305,11 +288,18 @@ const Config: React.FC = () => {
     deleteMutation.mutate(selectedConfigId)
   }
 
-  // Handle template selection
-  const handleTemplateSelect = (template: ConfigTemplate) => {
-    setConfigContent(template.content)
-    setShowTemplates(false)
-    toast.success(`Loaded template: ${template.name}`)
+  // Handle generate template from borgmatic CLI
+  const handleGenerateTemplate = async () => {
+    setIsGenerating(true)
+    try {
+      const response = await configAPI.generateTemplate()
+      setConfigContent(response.data.content)
+      toast.success('Configuration template generated successfully using borgmatic CLI!')
+    } catch (error: any) {
+      toast.error(`Failed to generate template: ${error.response?.data?.detail || error.message}`)
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   // Handle file download
@@ -357,10 +347,11 @@ const Config: React.FC = () => {
         </Box>
         <Button
           variant="outlined"
-          startIcon={<FileText size={18} />}
-          onClick={() => setShowTemplates(true)}
+          startIcon={isGenerating ? <CircularProgress size={16} color="inherit" /> : <FileText size={18} />}
+          onClick={handleGenerateTemplate}
+          disabled={isGenerating}
         >
-          Templates
+          {isGenerating ? 'Generating...' : 'Generate Template'}
         </Button>
       </Box>
 
@@ -472,49 +463,6 @@ const Config: React.FC = () => {
           </Stack>
         </CardContent>
       </Card>
-
-      {/* Templates Dialog */}
-      <Dialog
-        open={showTemplates}
-        onClose={() => setShowTemplates(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Configuration Templates</DialogTitle>
-        <DialogContent>
-          {loadingTemplates ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-              <CircularProgress />
-            </Box>
-          ) : (
-            <List sx={{ pt: 0 }}>
-              {templates?.data?.map((template: ConfigTemplate, index: number) => (
-                <React.Fragment key={template.id}>
-                  {index > 0 && <Divider />}
-                  <ListItem
-                    sx={{
-                      cursor: 'pointer',
-                      '&:hover': { backgroundColor: 'action.hover' },
-                      borderRadius: 1,
-                      my: 0.5,
-                    }}
-                    onClick={() => handleTemplateSelect(template)}
-                  >
-                    <ListItemText
-                      primary={template.name}
-                      secondary={template.description}
-                      primaryTypographyProps={{ fontWeight: 500 }}
-                    />
-                  </ListItem>
-                </React.Fragment>
-              ))}
-            </List>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowTemplates(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
 
       {/* Create Configuration Dialog */}
       <Dialog
@@ -843,7 +791,7 @@ hooks:
             <strong>Validation:</strong> Always validate before setting as default
           </Typography>
           <Typography variant="body2">
-            <strong>Templates:</strong> Use templates as starting points for your configurations
+            <strong>Generate Template:</strong> Use "Generate Template" to create a configuration using borgmatic CLI - always up-to-date with the latest borgmatic version
           </Typography>
         </Stack>
       </Alert>
