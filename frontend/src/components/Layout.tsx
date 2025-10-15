@@ -43,13 +43,12 @@ const drawerWidth = 240
 // Map navigation items to tab enablement keys
 const navigationWithKeys = [
   { name: 'Dashboard', href: '/dashboard', icon: Home, key: 'dashboard' as const },
-  { name: 'Configuration', href: '/config', icon: Settings, key: 'configuration' as const },
+  { name: 'SSH Connections', href: '/ssh-connections', icon: Wifi, key: 'connections' as const },
+  { name: 'Repositories', href: '/repositories', icon: Database, key: 'repositories' as const },
   { name: 'Backup', href: '/backup', icon: FileText, key: 'backups' as const },
   { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },
   { name: 'Restore', href: '/restore', icon: RotateCcw, key: 'restore' as const },
   { name: 'Schedule', href: '/schedule', icon: Clock, key: 'schedule' as const },
-  { name: 'Repositories', href: '/repositories', icon: Database, key: 'repositories' as const },
-  { name: 'SSH Connections', href: '/ssh-connections', icon: Wifi, key: 'connections' as const },
 ]
 
 interface SystemInfo {
