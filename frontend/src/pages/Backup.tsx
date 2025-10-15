@@ -177,8 +177,8 @@ const Backup: React.FC = () => {
     }
   }
 
-  const runningJobs = backupStatus?.data?.filter((job: BackupJob) => job.status === 'running') || []
-  const recentJobs = backupStatus?.data?.slice(0, 10) || []
+  const runningJobs = backupStatus?.data?.jobs?.filter((job: BackupJob) => job.status === 'running') || []
+  const recentJobs = backupStatus?.data?.jobs?.slice(0, 10) || []
   const selectedJob = recentJobs.find((j: BackupJob) => j.id === showJobDetails)
 
   return (
