@@ -278,7 +278,7 @@ export default function Repositories() {
       if (!sourceMatch) return []
 
       // Extract paths from the matched lines
-      const paths = sourceMatch[1]
+      const paths: string[] = sourceMatch[1]
         .split('\n')
         .map((line: string) => line.trim())
         .filter((line: string) => line.startsWith('- '))

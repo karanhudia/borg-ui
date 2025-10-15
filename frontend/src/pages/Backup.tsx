@@ -24,7 +24,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Alert,
   Paper,
 } from '@mui/material'
 import {
@@ -40,6 +39,7 @@ import {
 import { backupAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useBackupProgress } from '../hooks/useSSE'
+import TerminalLogViewer from '../components/TerminalLogViewer'
 
 interface BackupJob {
   id: string
@@ -112,6 +112,12 @@ const Backup: React.FC = () => {
   // Handle cancel backup
   const handleCancelBackup = (jobId: string) => {
     cancelBackupMutation.mutate(jobId)
+  }
+
+  // Fetch logs for TerminalLogViewer
+  const fetchJobLogs = async (jobId: string, offset: number) => {
+    const response = await backupAPI.streamLogs(jobId, offset)
+    return response.data
   }
 
   // Get status color for Chip
@@ -454,84 +460,29 @@ const Backup: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Job Details Dialog */}
-      <Dialog
-        open={!!showJobDetails}
-        onClose={() => setShowJobDetails(null)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Job Details</DialogTitle>
-        <DialogContent>
-          {selectedJob && (
-            <Stack spacing={3} sx={{ pt: 1 }}>
-              <Stack direction="row" flexWrap="wrap" spacing={2}>
-                <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Job ID:
-                  </Typography>
-                  <Typography variant="body2">{selectedJob.id}</Typography>
-                </Box>
-                <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Repository:
-                  </Typography>
-                  <Typography variant="body2">{selectedJob.repository}</Typography>
-                </Box>
-                <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Status:
-                  </Typography>
-                  <Chip
-                    label={selectedJob.status}
-                    color={getStatusColor(selectedJob.status)}
-                    size="small"
-                    sx={{ mt: 0.5 }}
-                  />
-                </Box>
-                <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Started:
-                  </Typography>
-                  <Typography variant="body2">
-                    {new Date(selectedJob.started_at).toLocaleString()}
-                  </Typography>
-                </Box>
-                {selectedJob.completed_at && (
-                  <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Completed:
-                    </Typography>
-                    <Typography variant="body2">
-                      {new Date(selectedJob.completed_at).toLocaleString()}
-                    </Typography>
-                  </Box>
-                )}
-                <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Duration:
-                  </Typography>
-                  <Typography variant="body2">
-                    {formatDuration(selectedJob.started_at, selectedJob.completed_at)}
-                  </Typography>
-                </Box>
-              </Stack>
-
-              {selectedJob.error_message && (
-                <Alert severity="error">
-                  <Typography variant="body2" fontWeight={600} gutterBottom>
-                    Error:
-                  </Typography>
-                  <Typography variant="body2">{selectedJob.error_message}</Typography>
-                </Alert>
-              )}
-            </Stack>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowJobDetails(null)}>Close</Button>
-        </DialogActions>
-      </Dialog>
+      {/* Log Viewer Dialog */}
+      {showJobDetails && selectedJob && (
+        <Dialog
+          open={!!showJobDetails}
+          onClose={() => setShowJobDetails(null)}
+          maxWidth="lg"
+          fullWidth
+        >
+          <DialogTitle>
+            Backup Job {selectedJob.id} Logs
+          </DialogTitle>
+          <DialogContent>
+            <TerminalLogViewer
+              jobId={selectedJob.id}
+              status={selectedJob.status}
+              onFetchLogs={(offset) => fetchJobLogs(selectedJob.id, offset)}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setShowJobDetails(null)}>Close</Button>
+          </DialogActions>
+        </Dialog>
+      )}
     </Box>
   )
 }
