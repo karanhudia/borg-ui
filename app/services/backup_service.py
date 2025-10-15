@@ -46,9 +46,13 @@ class BackupService:
             "/data"  # Default backup path - could be made configurable
         ]
 
-        # Set environment variable for borg passphrase if needed
-        # This is typically set via encryption_passphrase in borgmatic config
+        # Set environment variables for borg
         env = os.environ.copy()
+
+        # Skip interactive prompts (auto-accept for unencrypted repos, etc.)
+        env['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes'
+        env['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes'
+
         # If you have a passphrase stored somewhere, set it here:
         # env['BORG_PASSPHRASE'] = 'your-passphrase'
 
