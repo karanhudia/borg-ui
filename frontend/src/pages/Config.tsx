@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import {
   Box,
@@ -19,6 +19,13 @@ import {
   ListItem,
   ListItemText,
   Divider,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Chip,
+  IconButton,
+  Tooltip,
 } from '@mui/material'
 import {
   Save,
@@ -28,9 +35,26 @@ import {
   AlertCircle,
   FileText,
   Info,
+  Plus,
+  Trash2,
+  Star,
+  Edit,
 } from 'lucide-react'
 import { configAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
+
+interface Configuration {
+  id: number
+  name: string
+  description?: string
+  content: string
+  is_default: boolean
+  is_valid: boolean
+  validation_errors?: string[]
+  validation_warnings?: string[]
+  created_at: string
+  updated_at: string
+}
 
 interface ConfigTemplate {
   id: string
@@ -40,22 +64,70 @@ interface ConfigTemplate {
 }
 
 const Config: React.FC = () => {
+  const [selectedConfigId, setSelectedConfigId] = useState<number | null>(null)
   const [configContent, setConfigContent] = useState('')
+  const [configName, setConfigName] = useState('')
+  const [configDescription, setConfigDescription] = useState('')
   const [isValid, setIsValid] = useState<boolean | null>(null)
   const [validationMessage, setValidationMessage] = useState('')
   const [validationErrors, setValidationErrors] = useState<string[]>([])
   const [validationWarnings, setValidationWarnings] = useState<string[]>([])
   const [showTemplates, setShowTemplates] = useState(false)
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [showRenameDialog, setShowRenameDialog] = useState(false)
+  const [newConfigName, setNewConfigName] = useState('')
+  const [newConfigDescription, setNewConfigDescription] = useState('')
   const queryClient = useQueryClient()
 
-  // Load current configuration
-  const { isLoading: loadingConfig } = useQuery({
-    queryKey: ['config'],
-    queryFn: configAPI.getConfig,
-    onSuccess: (data: any) => {
-      setConfigContent(data.content || '')
+  // Load all configurations
+  const { data: configurations, isLoading: loadingConfigs } = useQuery<Configuration[]>({
+    queryKey: ['configurations'],
+    queryFn: async () => {
+      const response = await configAPI.listConfigurations()
+      return response.data
+    },
+  })
+
+  // Load default configuration on mount
+  useQuery({
+    queryKey: ['default-config'],
+    queryFn: async () => {
+      try {
+        const response = await configAPI.getDefaultConfig()
+        const defaultConfig = response.data
+        setSelectedConfigId(defaultConfig.id)
+        setConfigContent(defaultConfig.content)
+        setConfigName(defaultConfig.name)
+        setConfigDescription(defaultConfig.description || '')
+        return defaultConfig
+      } catch (error: any) {
+        if (error.response?.status === 404) {
+          // No default config
+          return null
+        }
+        throw error
+      }
+    },
+    onError: () => {
+      // Silently handle no default config
     }
   })
+
+  // Load selected configuration
+  useEffect(() => {
+    if (selectedConfigId && configurations) {
+      const config = configurations.find(c => c.id === selectedConfigId)
+      if (config) {
+        setConfigContent(config.content)
+        setConfigName(config.name)
+        setConfigDescription(config.description || '')
+        setIsValid(config.is_valid)
+        setValidationErrors(config.validation_errors || [])
+        setValidationWarnings(config.validation_warnings || [])
+      }
+    }
+  }, [selectedConfigId, configurations])
 
   // Load templates
   const { data: templates, isLoading: loadingTemplates } = useQuery({
@@ -64,22 +136,70 @@ const Config: React.FC = () => {
     enabled: showTemplates
   })
 
-  // Save configuration mutation
-  const saveMutation = useMutation({
-    mutationFn: configAPI.updateConfig,
-    onSuccess: () => {
-      toast.success('Configuration saved successfully!')
-      queryClient.invalidateQueries({ queryKey: ['config'] })
+  // Create configuration mutation
+  const createMutation = useMutation({
+    mutationFn: (data: { name: string; description?: string; content: string }) =>
+      configAPI.createConfiguration(data),
+    onSuccess: (response) => {
+      toast.success('Configuration created successfully!')
+      queryClient.invalidateQueries({ queryKey: ['configurations'] })
+      setSelectedConfigId(response.data.id)
+      setShowCreateDialog(false)
+      setNewConfigName('')
+      setNewConfigDescription('')
     },
     onError: (error: any) => {
-      toast.error(`Failed to save configuration: ${error.response?.data?.detail || error.message}`)
+      toast.error(`Failed to create configuration: ${error.response?.data?.detail || error.message}`)
+    }
+  })
+
+  // Update configuration mutation
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) =>
+      configAPI.updateConfiguration(id, data),
+    onSuccess: () => {
+      toast.success('Configuration updated successfully!')
+      queryClient.invalidateQueries({ queryKey: ['configurations'] })
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to update configuration: ${error.response?.data?.detail || error.message}`)
+    }
+  })
+
+  // Delete configuration mutation
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => configAPI.deleteConfiguration(id),
+    onSuccess: () => {
+      toast.success('Configuration deleted successfully!')
+      queryClient.invalidateQueries({ queryKey: ['configurations'] })
+      setSelectedConfigId(null)
+      setConfigContent('')
+      setConfigName('')
+      setConfigDescription('')
+      setShowDeleteDialog(false)
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to delete configuration: ${error.response?.data?.detail || error.message}`)
+    }
+  })
+
+  // Set default configuration mutation
+  const setDefaultMutation = useMutation({
+    mutationFn: (id: number) => configAPI.setDefaultConfiguration(id),
+    onSuccess: () => {
+      toast.success('Default configuration set successfully!')
+      queryClient.invalidateQueries({ queryKey: ['configurations'] })
+      queryClient.invalidateQueries({ queryKey: ['default-config'] })
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to set default configuration: ${error.response?.data?.detail || error.message}`)
     }
   })
 
   // Validate configuration mutation
   const validateMutation = useMutation({
     mutationFn: configAPI.validateConfig,
-    onSuccess: ({data}: any) => {
+    onSuccess: ({ data }: any) => {
       if (data.valid) {
         setIsValid(true)
         setValidationMessage('Configuration is valid!')
@@ -89,18 +209,7 @@ const Config: React.FC = () => {
       } else {
         setIsValid(false)
         setValidationMessage('Configuration validation failed')
-
-        // Handle different error formats
-        let errors = []
-        if (data.errors && Array.isArray(data.errors)) {
-          errors = data.errors.filter((error: string) => error && error.trim() !== '')
-        } else if (data.error) {
-          errors = [data.error]
-        } else {
-          errors = ['Configuration validation failed']
-        }
-
-        setValidationErrors(errors)
+        setValidationErrors(data.errors || ['Configuration validation failed'])
         setValidationWarnings(data.warnings || [])
         toast.error('Configuration validation failed')
       }
@@ -108,22 +217,30 @@ const Config: React.FC = () => {
     onError: (error: any) => {
       setIsValid(false)
       setValidationMessage('Configuration validation failed')
-
-      // Handle different error formats
-      let errors = []
-      if (error.response?.data?.detail) {
-        errors = [error.response.data.detail]
-      } else if (error.response?.data?.errors && Array.isArray(error.response.data.errors)) {
-        errors = error.response.data.errors.filter((error: string) => error && error.trim() !== '')
-      } else {
-        errors = ['Configuration validation failed']
-      }
-
+      const errors = error.response?.data?.detail
+        ? [error.response.data.detail]
+        : ['Configuration validation failed']
       setValidationErrors(errors)
       setValidationWarnings([])
       toast.error('Configuration validation failed')
     }
   })
+
+  // Handle configuration save
+  const handleSave = () => {
+    if (!selectedConfigId) {
+      toast.error('Please select a configuration first')
+      return
+    }
+    if (!configContent.trim()) {
+      toast.error('Please enter configuration content first')
+      return
+    }
+    updateMutation.mutate({
+      id: selectedConfigId,
+      data: { content: configContent }
+    })
+  }
 
   // Handle configuration validation
   const handleValidate = () => {
@@ -134,13 +251,58 @@ const Config: React.FC = () => {
     validateMutation.mutate(configContent)
   }
 
-  // Handle configuration save
-  const handleSave = () => {
+  // Handle create new configuration
+  const handleCreate = () => {
+    if (!newConfigName.trim()) {
+      toast.error('Please enter a configuration name')
+      return
+    }
     if (!configContent.trim()) {
       toast.error('Please enter configuration content first')
       return
     }
-    saveMutation.mutate(configContent)
+    createMutation.mutate({
+      name: newConfigName,
+      description: newConfigDescription,
+      content: configContent
+    })
+  }
+
+  // Handle rename configuration
+  const handleRename = () => {
+    if (!selectedConfigId) {
+      toast.error('Please select a configuration first')
+      return
+    }
+    if (!newConfigName.trim()) {
+      toast.error('Please enter a new name')
+      return
+    }
+    updateMutation.mutate({
+      id: selectedConfigId,
+      data: { name: newConfigName, description: newConfigDescription }
+    })
+    setShowRenameDialog(false)
+    setNewConfigName('')
+    setNewConfigDescription('')
+  }
+
+  // Handle set as default
+  const handleSetDefault = () => {
+    if (!selectedConfigId) {
+      toast.error('Please select a configuration first')
+      return
+    }
+    setDefaultMutation.mutate(selectedConfigId)
+  }
+
+  // Handle delete
+  const handleDelete = () => {
+    if (!selectedConfigId) {
+      toast.error('Please select a configuration first')
+      return
+    }
+    deleteMutation.mutate(selectedConfigId)
   }
 
   // Handle template selection
@@ -156,7 +318,7 @@ const Config: React.FC = () => {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'borgmatic.yaml'
+    a.download = `${configName || 'borgmatic'}.yaml`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -178,6 +340,9 @@ const Config: React.FC = () => {
     reader.readAsText(file)
   }
 
+  const selectedConfig = configurations?.find(c => c.id === selectedConfigId)
+  const hasDefault = configurations?.some(c => c.is_default)
+
   return (
     <Box>
       {/* Header */}
@@ -187,7 +352,7 @@ const Config: React.FC = () => {
             Configuration Management
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Manage your Borgmatic configuration files
+            Manage multiple Borgmatic configurations with default selection
           </Typography>
         </Box>
         <Button
@@ -198,6 +363,115 @@ const Config: React.FC = () => {
           Templates
         </Button>
       </Box>
+
+      {/* No Default Warning */}
+      {!hasDefault && configurations && configurations.length > 0 && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          <AlertTitle sx={{ fontWeight: 600 }}>No Default Configuration Set</AlertTitle>
+          <Typography variant="body2">
+            Please select a configuration and set it as default to enable other features.
+          </Typography>
+        </Alert>
+      )}
+
+      {/* Configuration Selector */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Stack spacing={2}>
+            <Stack direction="row" spacing={2} alignItems="center">
+              <FormControl fullWidth>
+                <InputLabel>Select Configuration</InputLabel>
+                <Select
+                  value={selectedConfigId || ''}
+                  onChange={(e) => setSelectedConfigId(e.target.value as number)}
+                  label="Select Configuration"
+                  disabled={loadingConfigs}
+                >
+                  {configurations?.map((config) => (
+                    <MenuItem key={config.id} value={config.id}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                        <Typography>{config.name}</Typography>
+                        {config.is_default && (
+                          <Chip
+                            label="Default"
+                            size="small"
+                            color="primary"
+                            icon={<Star size={14} />}
+                          />
+                        )}
+                        {config.is_valid ? (
+                          <Chip label="Valid" size="small" color="success" />
+                        ) : (
+                          <Chip label="Invalid" size="small" color="error" />
+                        )}
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <Tooltip title="Create New Configuration">
+                <IconButton
+                  color="primary"
+                  onClick={() => setShowCreateDialog(true)}
+                >
+                  <Plus size={20} />
+                </IconButton>
+              </Tooltip>
+
+              {selectedConfigId && (
+                <>
+                  <Tooltip title="Rename Configuration">
+                    <IconButton
+                      color="info"
+                      onClick={() => {
+                        setNewConfigName(configName)
+                        setNewConfigDescription(configDescription)
+                        setShowRenameDialog(true)
+                      }}
+                    >
+                      <Edit size={20} />
+                    </IconButton>
+                  </Tooltip>
+
+                  <Tooltip title="Delete Configuration">
+                    <IconButton
+                      color="error"
+                      onClick={() => setShowDeleteDialog(true)}
+                      disabled={selectedConfig?.is_default}
+                    >
+                      <Trash2 size={20} />
+                    </IconButton>
+                  </Tooltip>
+                </>
+              )}
+            </Stack>
+
+            {selectedConfig && (
+              <Box>
+                {selectedConfig.description && (
+                  <Typography variant="body2" color="text.secondary">
+                    {selectedConfig.description}
+                  </Typography>
+                )}
+                {!selectedConfig.is_default && selectedConfig.is_valid && (
+                  <Button
+                    variant="contained"
+                    color="warning"
+                    size="small"
+                    startIcon={<Star size={16} />}
+                    onClick={handleSetDefault}
+                    disabled={setDefaultMutation.isLoading}
+                    sx={{ mt: 1 }}
+                  >
+                    Set as Default
+                  </Button>
+                )}
+              </Box>
+            )}
+          </Stack>
+        </CardContent>
+      </Card>
 
       {/* Templates Dialog */}
       <Dialog
@@ -242,6 +516,109 @@ const Config: React.FC = () => {
         </DialogActions>
       </Dialog>
 
+      {/* Create Configuration Dialog */}
+      <Dialog
+        open={showCreateDialog}
+        onClose={() => setShowCreateDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Create New Configuration</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="Configuration Name"
+              value={newConfigName}
+              onChange={(e) => setNewConfigName(e.target.value)}
+              fullWidth
+              required
+            />
+            <TextField
+              label="Description (Optional)"
+              value={newConfigDescription}
+              onChange={(e) => setNewConfigDescription(e.target.value)}
+              fullWidth
+              multiline
+              rows={2}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowCreateDialog(false)}>Cancel</Button>
+          <Button
+            onClick={handleCreate}
+            variant="contained"
+            disabled={createMutation.isLoading || !newConfigName.trim()}
+          >
+            Create
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Rename Configuration Dialog */}
+      <Dialog
+        open={showRenameDialog}
+        onClose={() => setShowRenameDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Rename Configuration</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="Configuration Name"
+              value={newConfigName}
+              onChange={(e) => setNewConfigName(e.target.value)}
+              fullWidth
+              required
+            />
+            <TextField
+              label="Description (Optional)"
+              value={newConfigDescription}
+              onChange={(e) => setNewConfigDescription(e.target.value)}
+              fullWidth
+              multiline
+              rows={2}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowRenameDialog(false)}>Cancel</Button>
+          <Button
+            onClick={handleRename}
+            variant="contained"
+            disabled={updateMutation.isLoading || !newConfigName.trim()}
+          >
+            Rename
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={showDeleteDialog}
+        onClose={() => setShowDeleteDialog(false)}
+        maxWidth="sm"
+      >
+        <DialogTitle>Delete Configuration?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete the configuration "{configName}"? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowDeleteDialog(false)}>Cancel</Button>
+          <Button
+            onClick={handleDelete}
+            variant="contained"
+            color="error"
+            disabled={deleteMutation.isLoading}
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Action Buttons */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
@@ -257,7 +634,7 @@ const Config: React.FC = () => {
                 color="info"
                 startIcon={validateMutation.isLoading ? <CircularProgress size={16} color="inherit" /> : <CheckCircle size={18} />}
                 onClick={handleValidate}
-                disabled={validateMutation.isLoading}
+                disabled={validateMutation.isLoading || !configContent.trim()}
               >
                 {validateMutation.isLoading ? 'Validating...' : 'Validate'}
               </Button>
@@ -265,11 +642,11 @@ const Config: React.FC = () => {
               <Button
                 variant="contained"
                 color="success"
-                startIcon={saveMutation.isLoading ? <CircularProgress size={16} color="inherit" /> : <Save size={18} />}
+                startIcon={updateMutation.isLoading ? <CircularProgress size={16} color="inherit" /> : <Save size={18} />}
                 onClick={handleSave}
-                disabled={saveMutation.isLoading}
+                disabled={updateMutation.isLoading || !selectedConfigId}
               >
-                {saveMutation.isLoading ? 'Saving...' : 'Save'}
+                {updateMutation.isLoading ? 'Saving...' : 'Save'}
               </Button>
             </Stack>
 
@@ -292,6 +669,7 @@ const Config: React.FC = () => {
                 variant="outlined"
                 startIcon={<Download size={18} />}
                 onClick={handleDownload}
+                disabled={!configContent.trim()}
               >
                 Download
               </Button>
@@ -383,7 +761,6 @@ const Config: React.FC = () => {
                 <Typography variant="caption">• Verify that values match expected types (integers, strings, etc.)</Typography>
                 <Typography variant="caption">• Remove any unsupported configuration sections</Typography>
                 <Typography variant="caption">• Use the templates as a starting point for valid configurations</Typography>
-                <Typography variant="caption">• If you see Python traceback errors, check for malformed YAML or invalid configuration structure</Typography>
               </Stack>
             </Alert>
           )}
@@ -398,15 +775,17 @@ const Config: React.FC = () => {
               Configuration Editor
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Edit your Borgmatic configuration in YAML format
+              {selectedConfig
+                ? `Editing: ${configName}`
+                : 'Select or create a configuration to start editing'}
             </Typography>
           </Box>
 
-          {loadingConfig ? (
+          {loadingConfigs ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
               <CircularProgress size={48} />
               <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                Loading configuration...
+                Loading configurations...
               </Typography>
             </Box>
           ) : (
@@ -444,6 +823,7 @@ hooks:
                 },
               }}
               spellCheck={false}
+              disabled={!selectedConfigId && configurations && configurations.length > 0}
             />
           )}
         </CardContent>
@@ -454,19 +834,16 @@ hooks:
         <AlertTitle sx={{ fontWeight: 600 }}>Configuration Help</AlertTitle>
         <Stack spacing={1}>
           <Typography variant="body2">
-            <strong>Repositories:</strong> Define the paths to your Borg repositories
+            <strong>Multiple Configurations:</strong> Create different configs for different backup scenarios
           </Typography>
           <Typography variant="body2">
-            <strong>Storage:</strong> Configure compression and encryption settings
+            <strong>Default Configuration:</strong> Set one config as default - it will be used for all backup operations
           </Typography>
           <Typography variant="body2">
-            <strong>Retention:</strong> Set how long to keep backups
+            <strong>Validation:</strong> Always validate before setting as default
           </Typography>
           <Typography variant="body2">
-            <strong>Hooks:</strong> Add scripts to run before/after backups
-          </Typography>
-          <Typography variant="body2">
-            <strong>Validation:</strong> Always validate your configuration before saving
+            <strong>Templates:</strong> Use templates as starting points for your configurations
           </Typography>
         </Stack>
       </Alert>

@@ -51,10 +51,30 @@ export const dashboardAPI = {
 }
 
 export const configAPI = {
+  // List all configurations
+  listConfigurations: () => api.get('/config/'),
+  // Get default configuration
+  getDefaultConfig: () => api.get('/config/default'),
+  // Get specific configuration
+  getConfiguration: (id: number) => api.get(`/config/${id}`),
+  // Create new configuration
+  createConfiguration: (data: { name: string; description?: string; content: string }) =>
+    api.post('/config/', data),
+  // Update configuration
+  updateConfiguration: (id: number, data: { name?: string; description?: string; content?: string }) =>
+    api.put(`/config/${id}`, data),
+  // Delete configuration
+  deleteConfiguration: (id: number) => api.delete(`/config/${id}`),
+  // Set as default
+  setDefaultConfiguration: (id: number) => api.post(`/config/${id}/set-default`),
+  // Validate configuration content
+  validateConfig: (config: string) => api.post('/config/validate', { content: config }),
+  // Get templates
+  getTemplates: () => api.get('/config/templates'),
+
+  // Legacy endpoints (keep for backward compatibility)
   getConfig: () => api.get('/config/current'),
   updateConfig: (config: string) => api.put('/config/update', { content: config }),
-  validateConfig: (config: string) => api.post('/config/validate', { content: config }),
-  getTemplates: () => api.get('/config/templates'),
 }
 
 export const backupAPI = {
