@@ -67,7 +67,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     queryFn: async () => {
       try {
         const response = await sshKeysAPI.getSSHKeys()
-        return response.data
+        // Extract ssh_keys array from response
+        return response.data?.ssh_keys || []
       } catch (error) {
         return []
       }
@@ -83,7 +84,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     queryFn: async () => {
       try {
         const response = await repositoriesAPI.getRepositories()
-        return response.data
+        // Extract repositories array from response
+        return response.data?.repositories || []
       } catch (error) {
         return []
       }

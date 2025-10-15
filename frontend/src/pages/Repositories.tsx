@@ -123,7 +123,7 @@ export default function Repositories() {
     onSuccess: () => {
       toast.success('Repository created successfully')
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
-      // Invalidate AppContext query to update tab enablement
+      // Invalidate AppContext query to update tab enablement immediately
       queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
       appState.refetch()
       setShowCreateModal(false)
