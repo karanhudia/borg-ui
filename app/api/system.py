@@ -3,6 +3,7 @@ System information API endpoints
 """
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from typing import Optional
 import subprocess
 import os
 import structlog
@@ -14,11 +15,11 @@ router = APIRouter()
 class SystemInfo(BaseModel):
     """System information model"""
     app_version: str
-    borg_version: str | None
-    borgmatic_version: str | None
+    borg_version: Optional[str]
+    borgmatic_version: Optional[str]
 
 
-def get_command_version(command: str) -> str | None:
+def get_command_version(command: str) -> Optional[str]:
     """Get version of a command line tool"""
     try:
         result = subprocess.run(
