@@ -95,9 +95,17 @@ async def create_repository(
         raise HTTPException(status_code=403, detail="Admin access required")
     
     try:
+        # Validate passphrase for encrypted repositories
+        if repo_data.encryption in ["repokey", "keyfile", "repokey-blake2", "keyfile-blake2"]:
+            if not repo_data.passphrase or repo_data.passphrase.strip() == "":
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Passphrase is required for encryption mode '{repo_data.encryption}'. Use encryption='none' for unencrypted repositories."
+                )
+
         # Validate repository type and path
         repo_path = repo_data.path.strip()
-        
+
         if repo_data.repository_type == "local":
             # For local repositories, ensure path is absolute
             if not os.path.isabs(repo_path):
