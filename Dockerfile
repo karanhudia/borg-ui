@@ -33,7 +33,11 @@ FROM python:3.9-slim AS production
 
 # Build arguments
 ARG APP_VERSION=dev
+ARG PUID=1001
+ARG PGID=1001
 ENV APP_VERSION=${APP_VERSION}
+ENV PUID=${PUID}
+ENV PGID=${PGID}
 
 WORKDIR /app
 
@@ -100,12 +104,14 @@ RUN mkdir -p \
     /var/log/borgmatic \
     /etc/borgmatic
 
-# Create non-root user with UID 1001 (Portainer recommended)
-RUN groupadd -g 1001 borgmatic && \
-    useradd -m -u 1001 -g 1001 -s /bin/bash borgmatic && \
+# Create non-root user with configurable UID/GID
+# Default: 1001:1001 (Portainer recommended)
+# Can be overridden via build args: --build-arg PUID=1000 --build-arg PGID=1000
+RUN groupadd -g ${PGID} borgmatic && \
+    useradd -m -u ${PUID} -g ${PGID} -s /bin/bash borgmatic && \
     # Add user to necessary groups
     usermod -a -G sudo borgmatic && \
-    # Set up sudo access for borgmatic user (needed for cron jobs)
+    # Set up sudo access for borgmatic user (needed for cron jobs and borg operations)
     echo "borgmatic ALL=(ALL) NOPASSWD: /usr/bin/borg, /usr/bin/borgmatic, /usr/bin/crontab" >> /etc/sudoers
 
 # Set proper ownership and permissions

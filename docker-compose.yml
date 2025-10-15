@@ -19,6 +19,8 @@ services:
       target: production
       args:
         - APP_VERSION=${APP_VERSION:-local-dev}
+        - PUID=${PUID:-1001}
+        - PGID=${PGID:-1001}
     container_name: borgmatic-web-ui
     restart: unless-stopped
 

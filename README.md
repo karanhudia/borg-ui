@@ -437,10 +437,65 @@ Ensure you're using a Docker volume (not bind mount). The database must be at `/
 
 ### Permission Issues
 
-The container runs as user `borgmatic` (UID 1001). If mounting host directories:
-```bash
-chown -R 1001:1001 /path/to/host/directory
+The container runs as user `borgmatic` with **configurable UID/GID** (default: 1001:1001).
+
+#### Quick Fix: Match your host user
+
+**Option 1: Use .env file (Recommended)**
+
+1. Find your UID/GID:
+   ```bash
+   id -u && id -g
+   ```
+
+2. Create `.env` file:
+   ```bash
+   # Raspberry Pi / Linux (usually 1000:1000)
+   PUID=1000
+   PGID=1000
+   ```
+
+3. Rebuild container:
+   ```bash
+   docker-compose down
+   docker-compose up -d --build
+   ```
+
+**Option 2: Docker Compose with build args**
+
+```yaml
+services:
+  app:
+    build:
+      args:
+        - PUID=1000  # Your user ID
+        - PGID=1000  # Your group ID
 ```
+
+**Option 3: Fix permissions on host**
+
+If you can't rebuild, fix permissions on the host:
+```bash
+# For specific directory
+sudo chown -R 1001:1001 /local/home/karanhudia
+
+# Or match container user to your user
+docker exec borgmatic-web-ui id  # Check container UID/GID
+```
+
+#### Why This Matters
+
+- Borg often needs access to system files (owned by root or other users)
+- Container user must match host user for `/local` mount permissions
+- Wrong UID/GID = "Permission denied" errors when creating repositories
+
+#### For System-Wide Backups
+
+If you need to back up files owned by multiple users or root:
+
+1. **Run container with matching UID** (recommended above)
+2. **Use SSH repositories** to backup remote systems
+3. **Grant sudo access** to container user on specific borg commands (already configured)
 
 ### SECRET_KEY Rotation
 
