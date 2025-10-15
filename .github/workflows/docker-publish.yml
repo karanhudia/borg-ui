@@ -39,6 +39,16 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Generate version number
+        id: version
+        run: |
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            # Auto-generate alpha version: 0.1.0-alpha.YYYYMMDD.HHMMSS
+            VERSION="0.1.0-alpha.$(date -u +%Y%m%d.%H%M%S)"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "Generated version: $VERSION"
+          fi
+
       - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v5
@@ -47,6 +57,8 @@ jobs:
           tags: |
             # Tag with 'latest' on main branch
             type=raw,value=latest,enable={{is_default_branch}}
+            # Auto-generated alpha version on main branch
+            type=raw,value=${{ steps.version.outputs.version }},enable={{is_default_branch}}
             # Tag with version on git tags (v1.0.0 -> 1.0.0)
             type=semver,pattern={{version}}
             # Tag with major.minor (v1.2.3 -> 1.2)
