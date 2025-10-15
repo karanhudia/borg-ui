@@ -65,6 +65,37 @@ async def start_backup(
             detail=f"Failed to start backup: {str(e)}"
         )
 
+@router.get("/jobs")
+async def get_all_backup_jobs(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    limit: int = 50
+):
+    """Get all backup jobs (most recent first)"""
+    try:
+        jobs = db.query(BackupJob).order_by(BackupJob.id.desc()).limit(limit).all()
+
+        return {
+            "jobs": [
+                {
+                    "id": job.id,
+                    "repository": job.repository,
+                    "status": job.status,
+                    "started_at": job.started_at.isoformat() if job.started_at else None,
+                    "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                    "progress": job.progress,
+                    "error_message": job.error_message
+                }
+                for job in jobs
+            ]
+        }
+    except Exception as e:
+        logger.error("Failed to get backup jobs", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get backup jobs"
+        )
+
 @router.get("/status/{job_id}")
 async def get_backup_status(
     job_id: int,
@@ -79,7 +110,7 @@ async def get_backup_status(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Backup job not found"
             )
-        
+
         return {
             "id": job.id,
             "repository": job.repository,
