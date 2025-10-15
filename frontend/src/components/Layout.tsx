@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth.tsx'
 import { useTabEnablement } from '../context/AppContext'
 import {
@@ -104,7 +104,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               to={isEnabled ? item.href : undefined}
               selected={isActive}
               disabled={!isEnabled}
-              onClick={(e) => handleNavClick(e, item)}
+              onClick={(e: React.MouseEvent<HTMLDivElement>) => handleNavClick(e, item)}
               sx={{
                 '&.Mui-selected': {
                   backgroundColor: 'primary.main',
