@@ -19,7 +19,6 @@ import {
   ListItem,
   ListItemText,
   Divider,
-  Chip,
 } from '@mui/material'
 import {
   Save,
@@ -28,8 +27,6 @@ import {
   CheckCircle,
   AlertCircle,
   FileText,
-  Check,
-  X,
   Info,
 } from 'lucide-react'
 import { configAPI } from '../services/api'

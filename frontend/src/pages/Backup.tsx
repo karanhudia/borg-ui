@@ -26,7 +26,6 @@ import {
   DialogActions,
   Alert,
   Paper,
-  Grid,
 } from '@mui/material'
 import {
   Play,
@@ -318,8 +317,8 @@ const Backup: React.FC = () => {
                   </Box>
 
                   {/* Job Details */}
-                  <Grid container spacing={2}>
-                    <Grid item xs={6}>
+                  <Stack direction="row" spacing={2}>
+                    <Box sx={{ flex: 1 }}>
                       <Typography variant="body2" color="text.secondary">
                         Files:
                       </Typography>
@@ -327,8 +326,8 @@ const Backup: React.FC = () => {
                         {job.processed_files.toLocaleString()}
                         {job.total_files && ` / ${job.total_files.toLocaleString()}`}
                       </Typography>
-                    </Grid>
-                    <Grid item xs={6}>
+                    </Box>
+                    <Box sx={{ flex: 1 }}>
                       <Typography variant="body2" color="text.secondary">
                         Size:
                       </Typography>
@@ -336,8 +335,8 @@ const Backup: React.FC = () => {
                         {formatFileSize(job.processed_size)}
                         {job.total_size && ` / ${formatFileSize(job.total_size)}`}
                       </Typography>
-                    </Grid>
-                  </Grid>
+                    </Box>
+                  </Stack>
                 </Paper>
               ))}
             </Stack>
@@ -466,20 +465,20 @@ const Backup: React.FC = () => {
         <DialogContent>
           {selectedJob && (
             <Stack spacing={3} sx={{ pt: 1 }}>
-              <Grid container spacing={2}>
-                <Grid item xs={6}>
+              <Stack direction="row" flexWrap="wrap" spacing={2}>
+                <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
                   <Typography variant="body2" color="text.secondary">
                     Job ID:
                   </Typography>
                   <Typography variant="body2">{selectedJob.id}</Typography>
-                </Grid>
-                <Grid item xs={6}>
+                </Box>
+                <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
                   <Typography variant="body2" color="text.secondary">
                     Repository:
                   </Typography>
                   <Typography variant="body2">{selectedJob.repository}</Typography>
-                </Grid>
-                <Grid item xs={6}>
+                </Box>
+                <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
                   <Typography variant="body2" color="text.secondary">
                     Status:
                   </Typography>
@@ -489,34 +488,34 @@ const Backup: React.FC = () => {
                     size="small"
                     sx={{ mt: 0.5 }}
                   />
-                </Grid>
-                <Grid item xs={6}>
+                </Box>
+                <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
                   <Typography variant="body2" color="text.secondary">
                     Started:
                   </Typography>
                   <Typography variant="body2">
                     {new Date(selectedJob.started_at).toLocaleString()}
                   </Typography>
-                </Grid>
+                </Box>
                 {selectedJob.completed_at && (
-                  <Grid item xs={6}>
+                  <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
                     <Typography variant="body2" color="text.secondary">
                       Completed:
                     </Typography>
                     <Typography variant="body2">
                       {new Date(selectedJob.completed_at).toLocaleString()}
                     </Typography>
-                  </Grid>
+                  </Box>
                 )}
-                <Grid item xs={6}>
+                <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
                   <Typography variant="body2" color="text.secondary">
                     Duration:
                   </Typography>
                   <Typography variant="body2">
                     {formatDuration(selectedJob.started_at, selectedJob.completed_at)}
                   </Typography>
-                </Grid>
-              </Grid>
+                </Box>
+              </Stack>
 
               {selectedJob.error_message && (
                 <Alert severity="error">

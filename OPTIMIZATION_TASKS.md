@@ -21,24 +21,51 @@
    - Statistics cards with MUI components
    - Responsive Stack/Box layout
 
+10. ✅ **Repositories Page Modernization** - Complete MUI rewrite with SSH connection dropdown
+    - Auto-fill host, username, port from SSH connections
+    - MUI Autocomplete for connection selection
+    - Repository cards with Stack layout
+    - Empty state with encouraging message
+    - All CRUD operations with MUI Dialogs
+
+11. ✅ **Dashboard Page Modernization** - System metrics and backup jobs with MUI
+    - LinearProgress bars for CPU, Memory, Disk usage
+    - Color-coded progress indicators
+    - MUI Chip components for status
+    - Responsive metric cards (4 → 2 → 1 columns)
+    - Recent backup jobs section
+
+12. ✅ **Config Page Modernization** - Configuration management with MUI
+    - MUI Dialog for templates modal
+    - MUI Alert for validation status
+    - TextField multiline for YAML editor
+    - Nested alerts for errors/warnings/help
+    - Responsive action buttons
+
+13. ✅ **Backup Page Modernization** - Backup operations with MUI
+    - MUI Table for job history
+    - MUI Dialog for job details
+    - MUI LinearProgress for backup progress
+    - MUI Select for repository selection
+    - Real-time status Chip (Live Updates / Polling)
+    - Running jobs with Paper cards
+
 ---
 
 ## 🔄 Remaining Tasks
 
 ### Frontend Tasks
 
-### 1. Improve Repository Creation Form
+### 1. Modernize Remaining Pages
 **Priority: Medium**
-- Add dropdown to select from existing SSH connections
-- Two repository types:
-  1. **SSH Repository**: `ssh://user@host/path`
-     - Dropdown populated from active SSH connections
-     - Auto-fill username, host, port from selected connection
-  2. **Local Repository**: `/any/local/path`
-     - Already supports any path
-     - Auto-creates directories
-- Better form validation and user feedback
-- **Files**: `frontend/src/pages/Repositories.tsx`
+- **Archives.tsx** - Archive browsing and management
+- **Restore.tsx** - Restore operations and file browser
+- **Schedule.tsx** - Cron scheduling interface
+- **Settings.tsx** - User settings and preferences
+- Replace all Tailwind classes with MUI components
+- Consistent spacing (8px baseline)
+- Responsive breakpoints
+- Loading states and skeleton loaders
 
 ### 2. Configuration-First Workflow
 **Priority: Low**
@@ -52,23 +79,8 @@
 - Persist in `/data/config/` by default
 - **Files**: Multiple - requires architectural changes
 
-### 3. Modernize Remaining Components with MUI
-**Priority: Medium**
-- **Dashboard.tsx** - Statistics, recent backups, system status
-- **Config.tsx** - Configuration forms
-- **Backup.tsx** - Backup operations
-- **Archives.tsx** - Archive browsing
-- **Restore.tsx** - Restore operations
-- **Schedule.tsx** - Cron scheduling
-- **Repositories.tsx** - Repository management
-- **Settings.tsx** - User settings
-- Replace all Tailwind classes with MUI components
-- Consistent spacing (8px baseline)
-- Responsive breakpoints
-- Loading states and skeleton loaders
-
-### 4. Fix UI Alignments and Overall Design
-**Priority: Medium**
+### 3. Fix UI Alignments and Overall Design
+**Priority: Low**
 - Consistent spacing across all pages
 - Better mobile responsiveness
 - Improved form layouts
@@ -82,31 +94,37 @@
 ## 📊 Progress Summary
 
 **Backend**: ✅ 100% Complete (6/6 tasks)
-**Frontend**: ⏳ 35% Complete (3/8 tasks)
-**Overall**: ⏳ 64% Complete (9/14 tasks)
+**Frontend**: ⏳ 78% Complete (7/9 tasks)
+**Overall**: ⏳ 87% Complete (13/15 tasks)
 
 ---
 
 ## 🚀 Current State
 
 The application is now running at **http://localhost:8081** with:
-- Material-UI theme and components
-- Modern navigation layout
-- Unified SSH Connections page
+- Material-UI theme and components throughout
+- Modern navigation layout with AppBar and Drawer
+- Unified SSH Connections page with real-time monitoring
+- Modernized Dashboard with system metrics and LinearProgress
+- Modernized Config page with YAML editor and validation
+- Modernized Backup page with real-time progress tracking
+- Modernized Repositories page with SSH connection dropdown
 - Database persistence in `/data` volume
 - Environment variable configuration
 
-**Bundle size**: 726 kB (gzipped: 211 kB)
+**Pages Modernized**: Dashboard, Config, Backup, Repositories, SSH Connections, Layout
+**Pages Remaining**: Archives, Restore, Schedule, Settings
 
 ---
 
 ## 📝 Next Steps
 
-1. **Test the unified SSH Connections page** - Verify all functionality works
-2. **Add SSH connection dropdown to Repository form** - Quick win for better UX
-3. **Modernize remaining pages** - Dashboard, Config, Backup, etc.
-4. **Polish UI design** - Spacing, responsiveness, loading states
-5. **Consider Configuration-First workflow** - If time permits
+1. **Modernize Archives page** - Archive browsing and management UI
+2. **Modernize Restore page** - File restoration interface
+3. **Modernize Schedule page** - Cron scheduling UI
+4. **Modernize Settings page** - User preferences UI
+5. **Final polish** - UI alignment, spacing, responsive design
+6. **Consider Configuration-First workflow** - If time permits
 
 ---
 
