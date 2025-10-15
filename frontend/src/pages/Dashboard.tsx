@@ -98,34 +98,36 @@ export default function Dashboard() {
         <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', lg: '1 1 calc(25% - 12px)' }, minWidth: 240 }}>
           <Card>
             <CardContent>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Box
-                  sx={{
-                    backgroundColor: 'primary.light',
-                    borderRadius: 2,
-                    p: 1.5,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Activity size={28} color="primary" />
-                </Box>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body2" color="text.secondary" noWrap>
-                    Borgmatic Status
-                  </Typography>
-                  <Typography variant="h6" fontWeight={600} sx={{ mt: 0.5 }}>
-                    Running
-                  </Typography>
-                  <Chip
-                    label="Active"
-                    size="small"
-                    color="success"
-                    icon={<CheckCircle size={14} />}
-                    sx={{ mt: 1, height: 24 }}
-                  />
-                </Box>
+              <Stack spacing={2}>
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <Box
+                    sx={{
+                      backgroundColor: 'primary.light',
+                      borderRadius: 2,
+                      p: 1.5,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Activity size={28} color="primary" />
+                  </Box>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="body2" color="text.secondary" noWrap>
+                      Borgmatic Status
+                    </Typography>
+                    <Typography variant="h6" fontWeight={600} sx={{ mt: 0.5 }}>
+                      Running
+                    </Typography>
+                  </Box>
+                </Stack>
+                <Chip
+                  label="Active"
+                  size="small"
+                  color="success"
+                  icon={<CheckCircle size={14} />}
+                  sx={{ height: 24, width: 'fit-content' }}
+                />
               </Stack>
             </CardContent>
           </Card>

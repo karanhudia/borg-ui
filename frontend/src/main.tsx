@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast'
 import { ThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import { AuthProvider } from './hooks/useAuth.tsx'
+import { AppProvider } from './context/AppContext'
 import App from './App.tsx'
 import { theme } from './theme'
 import './index.css'
@@ -26,8 +27,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <AuthProvider>
-            <App />
-            <Toaster position="top-right" />
+            <AppProvider>
+              <App />
+              <Toaster position="top-right" />
+            </AppProvider>
           </AuthProvider>
         </BrowserRouter>
       </QueryClientProvider>
