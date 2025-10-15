@@ -70,6 +70,7 @@ services:
       - "8081:8081"
     volumes:
       - borg_data:/data
+      - ${LOCAL_STORAGE_PATH:-/Users}:/local:rw  # Access host filesystem
 
 volumes:
   borg_data:
@@ -117,6 +118,7 @@ services:
 
     volumes:
       - borg_data:/data
+      - ${LOCAL_STORAGE_PATH:-/Users}:/local:rw
 
 volumes:
   borg_data:
@@ -151,6 +153,7 @@ docker run -d \
   --restart unless-stopped \
   -p 8081:8081 \
   -v borg_data:/data \
+  -v /Users:/local:rw \
   ainullcode/borgmatic-ui:latest
 ```
 
@@ -193,11 +196,13 @@ services:
 
     volumes:
       - borg_data:/data
+      - ${LOCAL_STORAGE_PATH:-/Users}:/local:rw
 
     # Optional: Override defaults
     # environment:
     #   - PORT=8082
     #   - LOG_LEVEL=DEBUG
+    #   - LOCAL_STORAGE_PATH=/home  # Linux users
 
 volumes:
   borg_data:
@@ -267,28 +272,25 @@ No need for a separate `borg_backups` volume!
 
 ### Accessing Host Filesystem for Repositories
 
-**Recommended Setup**: Mount your host machine's filesystem to create repositories that persist outside the container.
+**Built-in Feature**: The container automatically mounts your host filesystem at `/local` for easy repository access.
 
-#### Why Mount Host Filesystem?
+#### Why Host Filesystem Mount?
 
 - Repositories survive container rebuilds
 - Access external drives, NAS mounts, or network storage
 - Simpler than SSH for local or network-attached storage
 - Better performance for local/LAN storage
 
+#### Default Configuration
+
+By default, the container mounts:
+- **macOS**: `/Users` → `/local` in container
+- **Linux**: Change to `/home` via `.env` file
+- **Custom**: Any directory via `LOCAL_STORAGE_PATH` environment variable
+
 #### Setup Instructions
 
-**Step 1**: Edit `docker-compose.yml` and uncomment the `/local` volume mount:
-
-```yaml
-volumes:
-  - borg_data:/data:rw
-  - /etc/cron.d:/etc/cron.d:ro
-  - /etc/localtime:/etc/localtime:ro
-  - ${LOCAL_STORAGE_PATH:-/Users}:/local:rw  # <-- Uncomment this line
-```
-
-**Step 2**: (Optional) Create `.env` file to customize the mount path:
+**Step 1**: (Optional) Customize the mount path by creating `.env` file:
 
 ```bash
 # .env
@@ -297,14 +299,14 @@ LOCAL_STORAGE_PATH=/Users  # macOS
 # LOCAL_STORAGE_PATH=/mnt/nas  # NAS mount
 ```
 
-**Step 3**: Restart the container:
+**Step 2**: Restart the container (only if you changed the mount path):
 
 ```bash
 docker compose down
 docker compose up -d
 ```
 
-**Step 4**: Create repositories in the UI using `/local/` prefix:
+**Step 3**: Create repositories in the UI using `/local/` prefix:
 
 Examples:
 - `/local/your-username/backups/my-repo`

@@ -33,11 +33,11 @@ services:
       - /etc/cron.d:/etc/cron.d:ro
       - /etc/localtime:/etc/localtime:ro
 
-      # Optional: Mount host filesystem for local-style repository access
-      # This maps your host machine's directories into the container
-      # Uncomment to access host storage (e.g., external drives, NAS mounts):
-      # - ${LOCAL_STORAGE_PATH:-/Users}:/local:rw
-      # Then create repositories at /local/your-username/backups/repo-name
+      # Host filesystem mount for local-style repository access
+      # Maps your host machine's directories into the container at /local
+      # Default: /Users (macOS) - customize via LOCAL_STORAGE_PATH in .env
+      # Create repositories at /local/your-username/backups/repo-name
+      - ${LOCAL_STORAGE_PATH:-/Users}:/local:rw
 
     environment:
       # Optional overrides (all have smart defaults)
