@@ -81,9 +81,23 @@ class SSHConnection(Base):
     # Relationships
     ssh_key = relationship("SSHKey", back_populates="connections")
 
+class Configuration(Base):
+    __tablename__ = "configurations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
+    description = Column(Text, nullable=True)
+    content = Column(Text)  # YAML content
+    is_default = Column(Boolean, default=False, index=True)
+    is_valid = Column(Boolean, default=False)  # Validation status
+    validation_errors = Column(Text, nullable=True)  # JSON string of errors
+    validation_warnings = Column(Text, nullable=True)  # JSON string of warnings
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class BackupJob(Base):
     __tablename__ = "backup_jobs"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     repository_id = Column(Integer, ForeignKey("repositories.id"))
     status = Column(String, default="pending")  # pending, running, completed, failed
