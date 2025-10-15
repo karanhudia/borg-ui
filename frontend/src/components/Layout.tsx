@@ -54,7 +54,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const location = useLocation()
-  const navigate = useNavigate()
   const { user, logout } = useAuth()
   const { tabEnablement, getTabDisabledReason } = useTabEnablement()
 
@@ -75,7 +74,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     logout()
   }
 
-  const handleNavClick = (e: React.MouseEvent, item: typeof navigationWithKeys[0]) => {
+  const handleNavClick = (e: React.MouseEvent<HTMLDivElement>, item: typeof navigationWithKeys[0]) => {
     const isEnabled = tabEnablement[item.key]
     if (!isEnabled) {
       e.preventDefault()
