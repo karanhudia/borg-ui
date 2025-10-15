@@ -682,7 +682,7 @@ export default function Repositories() {
                   <FormControl fullWidth required>
                     <InputLabel>SSH Key</InputLabel>
                     <Select
-                      value={createForm.ssh_key_id || ''}
+                      value={createForm.ssh_key_id ?? ''}
                       label="SSH Key"
                       onChange={(e) => setCreateForm({ ...createForm, ssh_key_id: e.target.value ? Number(e.target.value) : null })}
                     >
@@ -690,7 +690,7 @@ export default function Repositories() {
                       {sshKeys
                         .filter((key: SSHKey) => key.is_active)
                         .map((key: SSHKey) => (
-                          <MenuItem key={key.id} value={key.id}>
+                          <MenuItem key={key.id} value={key.id.toString()}>
                             {key.name} ({key.key_type})
                           </MenuItem>
                         ))}
