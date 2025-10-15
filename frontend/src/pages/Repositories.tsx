@@ -600,7 +600,7 @@ export default function Repositories() {
           <DialogTitle>Create Repository</DialogTitle>
           <DialogContent>
             {/* Command Preview */}
-            <Alert severity="info" icon={<Info />} sx={{ mb: 2 }}>
+            <Alert severity="info" sx={{ mb: 2 }}>
               <Typography variant="subtitle2" gutterBottom>
                 Command Preview
               </Typography>
