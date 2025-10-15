@@ -33,11 +33,7 @@ FROM python:3.9-slim AS production
 
 # Build arguments
 ARG APP_VERSION=dev
-ARG PUID=1001
-ARG PGID=1001
 ENV APP_VERSION=${APP_VERSION}
-ENV PUID=${PUID}
-ENV PGID=${PGID}
 
 WORKDIR /app
 
@@ -49,6 +45,7 @@ RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
     lsb-release \
+    gosu \
     # Borg and related packages
     borgbackup \
     borgbackup-doc \
@@ -104,11 +101,10 @@ RUN mkdir -p \
     /var/log/borgmatic \
     /etc/borgmatic
 
-# Create non-root user with configurable UID/GID
-# Default: 1001:1001 (Portainer recommended)
-# Can be overridden via build args: --build-arg PUID=1000 --build-arg PGID=1000
-RUN groupadd -g ${PGID} borgmatic && \
-    useradd -m -u ${PUID} -g ${PGID} -s /bin/bash borgmatic && \
+# Create non-root user with default UID/GID 1001:1001
+# Runtime UID/GID can be changed via PUID/PGID environment variables
+RUN groupadd -g 1001 borgmatic && \
+    useradd -m -u 1001 -g 1001 -s /bin/bash borgmatic && \
     # Add user to necessary groups
     usermod -a -G sudo borgmatic && \
     # Set up sudo access for borgmatic user (needed for cron jobs and borg operations)
@@ -134,18 +130,11 @@ RUN mkdir -p /home/borgmatic/.ssh && \
 RUN mkdir -p /etc/cron.d && \
     chown -R borgmatic:borgmatic /etc/cron.d
 
-# Create startup script
-RUN echo '#!/bin/bash\n\
-echo "[$(date)] Starting Borgmatic Web UI..."\n\
-cd /app\n\
-PORT=${PORT:-8081}\n\
-exec gunicorn app.main:app --bind 0.0.0.0:${PORT} --workers 1 --worker-class uvicorn.workers.UvicornWorker --access-logfile - --error-logfile -\n\
-' > /app/start.sh && \
-    chmod +x /app/start.sh && \
-    chown borgmatic:borgmatic /app/start.sh
+# Copy entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-# Switch to non-root user
-USER borgmatic
+# Stay as root - entrypoint will handle UID/GID changes and switch to borgmatic user
 
 # Set environment variables
 ENV PYTHONPATH=/app
@@ -163,5 +152,5 @@ EXPOSE 8081
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8081}/ || exit 1
 
-# Start application using the startup script
-CMD ["/app/start.sh"] 
+# Use entrypoint that handles UID/GID changes
+ENTRYPOINT ["/entrypoint.sh"] 

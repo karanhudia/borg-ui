@@ -123,6 +123,10 @@ services:
       - borg_data:/data
       - ${LOCAL_STORAGE_PATH:-/}:/local:rw
 
+    environment:
+      - PUID=1000  # Optional: Your user ID (run: id -u)
+      - PGID=1000  # Optional: Your group ID (run: id -g)
+
 volumes:
   borg_data:
     name: borg_data
@@ -201,9 +205,12 @@ services:
       - borg_data:/data
       - ${LOCAL_STORAGE_PATH:-/}:/local:rw
 
-    # Optional: Override defaults (create .env file)
-    # PORT=8082
-    # LOG_LEVEL=DEBUG
+    environment:
+      - PUID=${PUID:-1001}  # Your user ID (run: id -u)
+      - PGID=${PGID:-1001}  # Your group ID (run: id -g)
+      # Optional: Override defaults (create .env file)
+      # - PORT=8082
+      # - LOG_LEVEL=DEBUG
 
 volumes:
   borg_data:
@@ -440,40 +447,46 @@ Ensure you're using a Docker volume (not bind mount). The database must be at `/
 
 The container runs as user `borgmatic` with **configurable UID/GID** (default: 1001:1001).
 
-#### Quick Fix: Match your host user
+#### Quick Fix: Match your host user (LinuxServer.io style)
 
-**Option 1: Build from source with custom UID/GID**
-
-If you have the source code, you can build with your UID/GID:
+Set PUID/PGID environment variables to match your host user:
 
 1. Find your UID/GID:
    ```bash
    id -u && id -g
    ```
 
-2. Create `.env` file:
-   ```bash
-   # Raspberry Pi / Linux (usually 1000:1000)
-   PUID=1000
-   PGID=1000
-   ```
+2. Set environment variables in your deployment:
 
-3. Build and run:
-   ```bash
-   docker-compose down
-   docker-compose up -d --build
-   ```
-
-**Option 2: Fix permissions on host (Quick workaround)**
-
-If you can't rebuild, fix permissions on the host:
-```bash
-# For specific directory
-sudo chown -R 1001:1001 /local/home/karanhudia
-
-# Or match container user to your user
-docker exec borgmatic-web-ui id  # Check container UID/GID
+**Portainer:**
+```yaml
+environment:
+  - PUID=1000  # Your user ID
+  - PGID=1000  # Your group ID
 ```
+
+**Docker Compose (.env file):**
+```bash
+# Raspberry Pi / Linux (usually 1000:1000)
+PUID=1000
+PGID=1000
+```
+
+**Docker Run:**
+```bash
+docker run -d \
+  -e PUID=1000 \
+  -e PGID=1000 \
+  ainullcode/borgmatic-ui:latest
+```
+
+3. Restart container:
+   ```bash
+   docker-compose down && docker-compose up -d
+   # or for Portainer: Update Stack
+   ```
+
+The container will automatically update the internal user's UID/GID on startup!
 
 #### Why This Matters
 

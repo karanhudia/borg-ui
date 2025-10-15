@@ -19,8 +19,6 @@ services:
       target: production
       args:
         - APP_VERSION=${APP_VERSION:-local-dev}
-        - PUID=${PUID:-1001}
-        - PGID=${PGID:-1001}
     container_name: borgmatic-web-ui
     restart: unless-stopped
 
@@ -45,6 +43,9 @@ services:
       # Optional overrides (all have smart defaults)
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - PORT=${PORT:-8081}
+      # User/Group ID for file permissions (LinuxServer.io style)
+      - PUID=${PUID:-1001}
+      - PGID=${PGID:-1001}
       # Uncomment to override defaults:
       # - SECRET_KEY=your-custom-secret-key
       # - LOG_LEVEL=DEBUG
