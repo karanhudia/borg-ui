@@ -17,6 +17,8 @@ services:
       context: .
       dockerfile: Dockerfile
       target: production
+      args:
+        - APP_VERSION=${APP_VERSION:-local-dev}
     container_name: borgmatic-web-ui
     restart: unless-stopped
 
