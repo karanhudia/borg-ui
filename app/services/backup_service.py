@@ -17,7 +17,7 @@ class BackupService:
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
     async def execute_backup(self, job_id: int, repository: str, config_file: str, db: Session):
-        """Execute backup with real-time log streaming"""
+        """Execute backup using borg directly for better control"""
 
         # Get job
         job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
@@ -32,17 +32,20 @@ class BackupService:
         job.started_at = datetime.utcnow()
         db.commit()
 
-        # Build command - borgmatic uses config file for repository info
-        # The repository parameter is stored in the job for reference but not passed to borgmatic
-        cmd = ["borgmatic", "create", "--verbosity", "1", "--progress", "--stats"]
+        # Build borg create command directly
+        # Format: borg create --progress --stats REPOSITORY::ARCHIVE PATH
+        archive_name = f"manual-backup-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
 
-        # Use specified config file or default
-        if config_file:
-            cmd.extend(["--config", config_file])
-        elif settings.borgmatic_config_path:
-            cmd.extend(["--config", settings.borgmatic_config_path])
+        cmd = [
+            "borg", "create",
+            "--progress",
+            "--stats",
+            "--compression", "lz4",
+            f"{repository}::{archive_name}",
+            "/data"  # Default backup path
+        ]
 
-        logger.info("Starting backup", job_id=job_id, command=" ".join(cmd))
+        logger.info("Starting borg backup", job_id=job_id, repository=repository, archive=archive_name, command=" ".join(cmd))
 
         try:
             # Execute command and stream to log file
