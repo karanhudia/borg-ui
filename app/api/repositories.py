@@ -122,7 +122,37 @@ async def create_repository(
                 raise HTTPException(status_code=400, detail="Username is required for SSH repositories")
             if not repo_data.ssh_key_id:
                 raise HTTPException(status_code=400, detail="SSH key is required for SSH repositories")
-            
+
+            # Check if borg is installed on remote machine
+            logger.info("Checking if borg/borgmatic is installed on remote machine",
+                       host=repo_data.host,
+                       username=repo_data.username)
+
+            remote_check = await check_remote_borg_installation(
+                repo_data.host,
+                repo_data.username,
+                repo_data.port,
+                repo_data.ssh_key_id
+            )
+
+            if not remote_check.get("has_borg"):
+                install_cmd = "apt-get install borgbackup" if "debian" in remote_check.get("error", "").lower() else "yum install borgbackup"
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Borg Backup is not installed on {repo_data.username}@{repo_data.host}. "
+                           f"Please install it first:\n\n"
+                           f"Ubuntu/Debian: sudo apt-get update && sudo apt-get install borgbackup\n"
+                           f"Fedora/RHEL: sudo dnf install borgbackup\n"
+                           f"Arch: sudo pacman -S borg\n\n"
+                           f"Or visit: https://borgbackup.readthedocs.io/en/stable/installation.html"
+                )
+
+            logger.info("Remote borg check passed",
+                       host=repo_data.host,
+                       has_borg=remote_check.get("has_borg"),
+                       has_borgmatic=remote_check.get("has_borgmatic"),
+                       borg_path=remote_check.get("borg_path"))
+
             # Build SSH repository path
             repo_path = f"ssh://{repo_data.username}@{repo_data.host}:{repo_data.port}/{repo_path.lstrip('/')}"
         else:
@@ -467,6 +497,117 @@ async def get_repository_statistics(
         logger.error("Failed to get repository statistics", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to get repository statistics: {str(e)}")
 
+async def check_remote_borg_installation(host: str, username: str, port: int, ssh_key_id: int) -> Dict[str, Any]:
+    """Check if borg/borgmatic is installed on remote machine"""
+    temp_key_file = None
+    try:
+        logger.info("Checking remote borg installation", host=host, username=username, port=port)
+
+        # Get SSH key from database
+        from app.database.models import SSHKey
+        from app.database.database import get_db
+        from cryptography.fernet import Fernet
+        import base64
+        import tempfile
+
+        db = next(get_db())
+        ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
+        if not ssh_key:
+            return {
+                "success": False,
+                "error": "SSH key not found",
+                "has_borg": False,
+                "has_borgmatic": False
+            }
+
+        # Decrypt private key
+        encryption_key = settings.secret_key.encode()[:32]
+        cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
+        private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+
+        # Ensure private key ends with newline
+        if not private_key.endswith('\n'):
+            private_key += '\n'
+
+        # Create temporary key file
+        with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+            f.write(private_key)
+            temp_key_file = f.name
+
+        os.chmod(temp_key_file, 0o600)
+
+        # Check for borg
+        borg_cmd = [
+            "ssh", "-i", temp_key_file,
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "ConnectTimeout=10",
+            "-p", str(port),
+            f"{username}@{host}",
+            "which borg"
+        ]
+
+        borg_process = await asyncio.create_subprocess_exec(
+            *borg_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        borg_stdout, borg_stderr = await asyncio.wait_for(borg_process.communicate(), timeout=15)
+        has_borg = borg_process.returncode == 0
+
+        # Check for borgmatic
+        borgmatic_cmd = [
+            "ssh", "-i", temp_key_file,
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "ConnectTimeout=10",
+            "-p", str(port),
+            f"{username}@{host}",
+            "which borgmatic"
+        ]
+
+        borgmatic_process = await asyncio.create_subprocess_exec(
+            *borgmatic_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        borgmatic_stdout, borgmatic_stderr = await asyncio.wait_for(borgmatic_process.communicate(), timeout=15)
+        has_borgmatic = borgmatic_process.returncode == 0
+
+        logger.info("Remote borg check completed",
+                   host=host,
+                   has_borg=has_borg,
+                   has_borgmatic=has_borgmatic)
+
+        return {
+            "success": True,
+            "has_borg": has_borg,
+            "has_borgmatic": has_borgmatic,
+            "borg_path": borg_stdout.decode().strip() if has_borg else None,
+            "borgmatic_path": borgmatic_stdout.decode().strip() if has_borgmatic else None
+        }
+
+    except asyncio.TimeoutError:
+        logger.error("Remote borg check timed out", host=host)
+        return {
+            "success": False,
+            "error": "Connection timeout while checking remote borg installation",
+            "has_borg": False,
+            "has_borgmatic": False
+        }
+    except Exception as e:
+        logger.error("Failed to check remote borg installation", host=host, error=str(e))
+        return {
+            "success": False,
+            "error": str(e),
+            "has_borg": False,
+            "has_borgmatic": False
+        }
+    finally:
+        if temp_key_file and os.path.exists(temp_key_file):
+            try:
+                os.unlink(temp_key_file)
+            except Exception as e:
+                logger.warning("Failed to clean up temp SSH key", error=str(e))
+
 async def initialize_borg_repository(path: str, encryption: str, passphrase: str = None, ssh_key_id: int = None) -> Dict[str, Any]:
     """Initialize a new Borg repository"""
     temp_key_file = None
@@ -477,7 +618,7 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
                    has_passphrase=bool(passphrase),
                    ssh_key_id=ssh_key_id)
 
-        # Check if borg is available
+        # Check if borg is available locally
         try:
             # Test if borg command exists
             test_process = await asyncio.create_subprocess_exec(
@@ -493,7 +634,7 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
             logger.error("Borg not available", error=str(e))
             return {
                 "success": False,
-                "error": f"Borg not available: {str(e)}"
+                "error": f"Borg not available on this system: {str(e)}"
             }
 
         # Build borg init command
