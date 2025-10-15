@@ -37,6 +37,7 @@ import {
 } from 'lucide-react'
 import { configAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
+import { useAppState } from '../context/AppContext'
 
 interface Configuration {
   id: number
@@ -67,6 +68,7 @@ const Config: React.FC = () => {
   const [newConfigDescription, setNewConfigDescription] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
   const queryClient = useQueryClient()
+  const appState = useAppState()
 
   // Load all configurations
   const { data: configurations, isLoading: loadingConfigs } = useQuery<Configuration[]>({
@@ -172,6 +174,8 @@ const Config: React.FC = () => {
       toast.success('Default configuration set successfully!')
       queryClient.invalidateQueries({ queryKey: ['configurations'] })
       queryClient.invalidateQueries({ queryKey: ['default-config'] })
+      // Refresh AppContext to update tab enablement immediately
+      appState.refetch()
     },
     onError: (error: any) => {
       toast.error(`Failed to set default configuration: ${error.response?.data?.detail || error.message}`)
