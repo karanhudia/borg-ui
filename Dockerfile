@@ -127,7 +127,7 @@ RUN mkdir -p /etc/cron.d && \
 RUN echo '#!/bin/bash\n\
 echo "[$(date)] Starting Borgmatic Web UI..."\n\
 cd /app\n\
-PORT=${PORT:-8081}\n\
+PORT=${PORT:-8000}\n\
 exec gunicorn app.main:app --bind 0.0.0.0:${PORT} --workers 1 --worker-class uvicorn.workers.UvicornWorker --access-logfile - --error-logfile -\n\
 ' > /app/start.sh && \
     chmod +x /app/start.sh && \
@@ -143,14 +143,14 @@ ENV DATABASE_URL=sqlite:////data/borgmatic.db
 ENV BORGMATIC_CONFIG_PATH=/data/config/borgmatic.yaml
 ENV BORGMATIC_BACKUP_PATH=/backups
 ENV ENABLE_CRON_BACKUPS=false
-ENV PORT=8081
+ENV PORT=8000
 
 # Expose port
-EXPOSE 8081
+EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8081}/ || exit 1
+    CMD curl -f http://localhost:${PORT:-8000}/api/health/system || exit 1
 
 # Start application using the startup script
 CMD ["/app/start.sh"] 
