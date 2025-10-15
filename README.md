@@ -116,12 +116,21 @@ services:
     container_name: borgmatic-web-ui
     restart: unless-stopped
 
+    build:
+      args:
+        - PUID=${PUID:-1001}
+        - PGID=${PGID:-1001}
+
     ports:
       - "8081:8081"
 
     volumes:
       - borg_data:/data
       - ${LOCAL_STORAGE_PATH:-/}:/local:rw
+
+    # Optional: Set PUID/PGID in Portainer stack environment variables
+    # PUID=1000
+    # PGID=1000
 
 volumes:
   borg_data:
@@ -194,6 +203,11 @@ services:
     container_name: borgmatic-web-ui
     restart: unless-stopped
 
+    build:
+      args:
+        - PUID=${PUID:-1001}
+        - PGID=${PGID:-1001}
+
     ports:
       - "${PORT:-8081}:8081"
 
@@ -201,11 +215,11 @@ services:
       - borg_data:/data
       - ${LOCAL_STORAGE_PATH:-/}:/local:rw
 
-    # Optional: Override defaults
-    # environment:
-    #   - PORT=8082
-    #   - LOG_LEVEL=DEBUG
-    #   - LOCAL_STORAGE_PATH=/home  # Linux users
+    # Optional: Override defaults (create .env file)
+    # PORT=8082
+    # LOG_LEVEL=DEBUG
+    # PUID=1000  # Your user ID (run: id -u)
+    # PGID=1000  # Your group ID (run: id -g)
 
 volumes:
   borg_data:
