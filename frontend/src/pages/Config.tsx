@@ -25,7 +25,6 @@ import {
 } from '@mui/material'
 import {
   Save,
-  Download,
   Upload,
   CheckCircle,
   AlertCircle,
@@ -336,133 +335,157 @@ const Config: React.FC = () => {
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <Box>
-          <Typography variant="h4" fontWeight={600} gutterBottom>
-            Configuration Management
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Manage multiple Borgmatic configurations with default selection
-          </Typography>
-        </Box>
-        <Button
-          variant="outlined"
-          startIcon={isGenerating ? <CircularProgress size={16} color="inherit" /> : <FileText size={18} />}
-          onClick={handleGenerateTemplate}
-          disabled={isGenerating}
-        >
-          {isGenerating ? 'Generating...' : 'Generate Template'}
-        </Button>
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" fontWeight={600} gutterBottom>
+          Backup Configuration
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Configure what to backup, where to store it, and how long to keep it
+        </Typography>
       </Box>
 
-      {/* No Default Warning */}
-      {!hasDefault && configurations && configurations.length > 0 && (
-        <Alert severity="warning" sx={{ mb: 3 }}>
-          <AlertTitle sx={{ fontWeight: 600 }}>No Default Configuration Set</AlertTitle>
-          <Typography variant="body2">
-            Please select a configuration and set it as default to enable other features.
-          </Typography>
-        </Alert>
+      {/* Empty State - No Configurations */}
+      {!loadingConfigs && configurations && configurations.length === 0 && (
+        <Card sx={{ mb: 3, textAlign: 'center', py: 6 }}>
+          <CardContent>
+            <FileText size={64} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
+            <Typography variant="h6" fontWeight={600} gutterBottom>
+              No Configurations Yet
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
+              Start by generating a configuration template. This will create a default borgmatic config that you can customize for your backup needs.
+            </Typography>
+            <Button
+              variant="contained"
+              size="large"
+              startIcon={isGenerating ? <CircularProgress size={20} color="inherit" /> : <FileText size={20} />}
+              onClick={handleGenerateTemplate}
+              disabled={isGenerating}
+            >
+              {isGenerating ? 'Generating Template...' : 'Generate Configuration Template'}
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Configuration Selector */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Stack spacing={2}>
-            <Stack direction="row" spacing={2} alignItems="center">
-              <FormControl fullWidth>
-                <InputLabel>Select Configuration</InputLabel>
-                <Select
-                  value={selectedConfigId || ''}
-                  onChange={(e) => setSelectedConfigId(e.target.value as number)}
-                  label="Select Configuration"
-                  disabled={loadingConfigs}
-                >
-                  {configurations?.map((config) => (
-                    <MenuItem key={config.id} value={config.id}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                        <Typography>{config.name}</Typography>
-                        {config.is_default && (
-                          <Chip
-                            label="Default"
-                            size="small"
-                            color="primary"
-                            icon={<Star size={14} />}
-                          />
-                        )}
-                        {config.is_valid ? (
-                          <Chip label="Valid" size="small" color="success" />
-                        ) : (
-                          <Chip label="Invalid" size="small" color="error" />
-                        )}
-                      </Box>
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+      {/* Configuration Management - When configs exist */}
+      {configurations && configurations.length > 0 && (
+        <>
+          {/* No Default Warning */}
+          {!hasDefault && (
+            <Alert severity="warning" sx={{ mb: 3 }}>
+              <AlertTitle sx={{ fontWeight: 600 }}>No Default Configuration Set</AlertTitle>
+              <Typography variant="body2">
+                Please set a configuration as default to enable backup operations. Create and validate a configuration, then click "Set as Default".
+              </Typography>
+            </Alert>
+          )}
 
-              <Tooltip title="Create New Configuration">
-                <IconButton
-                  color="primary"
-                  onClick={() => setShowCreateDialog(true)}
-                >
-                  <Plus size={20} />
-                </IconButton>
-              </Tooltip>
-
-              {selectedConfigId && (
-                <>
-                  <Tooltip title="Rename Configuration">
-                    <IconButton
-                      color="info"
-                      onClick={() => {
-                        setNewConfigName(configName)
-                        setNewConfigDescription(configDescription)
-                        setShowRenameDialog(true)
-                      }}
-                    >
-                      <Edit size={20} />
-                    </IconButton>
-                  </Tooltip>
-
-                  <Tooltip title="Delete Configuration">
-                    <IconButton
-                      color="error"
-                      onClick={() => setShowDeleteDialog(true)}
-                      disabled={selectedConfig?.is_default}
-                    >
-                      <Trash2 size={20} />
-                    </IconButton>
-                  </Tooltip>
-                </>
-              )}
-            </Stack>
-
-            {selectedConfig && (
-              <Box>
-                {selectedConfig.description && (
-                  <Typography variant="body2" color="text.secondary">
-                    {selectedConfig.description}
+          {/* Configuration Selector */}
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Stack spacing={2}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                  <Typography variant="h6" fontWeight={600}>
+                    Manage Configurations
                   </Typography>
-                )}
-                {!selectedConfig.is_default && selectedConfig.is_valid && (
                   <Button
                     variant="contained"
-                    color="warning"
                     size="small"
-                    startIcon={<Star size={16} />}
-                    onClick={handleSetDefault}
-                    disabled={setDefaultMutation.isLoading}
-                    sx={{ mt: 1 }}
+                    startIcon={<Plus size={16} />}
+                    onClick={() => setShowCreateDialog(true)}
                   >
-                    Set as Default
+                    New Configuration
                   </Button>
+                </Box>
+
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <FormControl fullWidth>
+                    <InputLabel>Select Configuration</InputLabel>
+                    <Select
+                      value={selectedConfigId || ''}
+                      onChange={(e) => setSelectedConfigId(e.target.value as number)}
+                      label="Select Configuration"
+                      disabled={loadingConfigs}
+                    >
+                      {configurations?.map((config) => (
+                        <MenuItem key={config.id} value={config.id}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                            <Typography>{config.name}</Typography>
+                            {config.is_default && (
+                              <Chip
+                                label="Default"
+                                size="small"
+                                color="primary"
+                                icon={<Star size={14} />}
+                              />
+                            )}
+                            {config.is_valid ? (
+                              <Chip label="Valid" size="small" color="success" />
+                            ) : (
+                              <Chip label="Invalid" size="small" color="error" />
+                            )}
+                          </Box>
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+
+                  {selectedConfigId && (
+                    <>
+                      <Tooltip title="Rename">
+                        <IconButton
+                          color="info"
+                          onClick={() => {
+                            setNewConfigName(configName)
+                            setNewConfigDescription(configDescription)
+                            setShowRenameDialog(true)
+                          }}
+                        >
+                          <Edit size={20} />
+                        </IconButton>
+                      </Tooltip>
+
+                      <Tooltip title="Delete">
+                        <IconButton
+                          color="error"
+                          onClick={() => setShowDeleteDialog(true)}
+                          disabled={selectedConfig?.is_default}
+                        >
+                          <Trash2 size={20} />
+                        </IconButton>
+                      </Tooltip>
+                    </>
+                  )}
+                </Stack>
+
+                {selectedConfig && (
+                  <Box>
+                    {selectedConfig.description && (
+                      <Typography variant="body2" color="text.secondary">
+                        {selectedConfig.description}
+                      </Typography>
+                    )}
+                    {!selectedConfig.is_default && selectedConfig.is_valid && (
+                      <Button
+                        variant="contained"
+                        color="warning"
+                        size="small"
+                        startIcon={<Star size={16} />}
+                        onClick={handleSetDefault}
+                        disabled={setDefaultMutation.isLoading}
+                        sx={{ mt: 1 }}
+                      >
+                        Set as Default
+                      </Button>
+                    )}
+                  </Box>
                 )}
-              </Box>
-            )}
-          </Stack>
-        </CardContent>
-      </Card>
+              </Stack>
+            </CardContent>
+          </Card>
+        </>
+      )}
 
       {/* Create Configuration Dialog */}
       <Dialog
@@ -568,63 +591,65 @@ const Config: React.FC = () => {
       </Dialog>
 
       {/* Action Buttons */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            spacing={2}
-            justifyContent="space-between"
-            alignItems={{ xs: 'stretch', sm: 'center' }}
-          >
-            <Stack direction="row" spacing={2}>
-              <Button
-                variant="contained"
-                color="info"
-                startIcon={validateMutation.isLoading ? <CircularProgress size={16} color="inherit" /> : <CheckCircle size={18} />}
-                onClick={handleValidate}
-                disabled={validateMutation.isLoading || !configContent.trim()}
-              >
-                {validateMutation.isLoading ? 'Validating...' : 'Validate'}
-              </Button>
+      {configurations && configurations.length > 0 && (
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={2}
+              justifyContent="space-between"
+              alignItems={{ xs: 'stretch', sm: 'center' }}
+            >
+              <Stack direction="row" spacing={2}>
+                <Button
+                  variant="contained"
+                  color="info"
+                  startIcon={validateMutation.isLoading ? <CircularProgress size={16} color="inherit" /> : <CheckCircle size={18} />}
+                  onClick={handleValidate}
+                  disabled={validateMutation.isLoading || !configContent.trim()}
+                >
+                  {validateMutation.isLoading ? 'Validating...' : 'Validate Configuration'}
+                </Button>
 
-              <Button
-                variant="contained"
-                color="success"
-                startIcon={updateMutation.isLoading ? <CircularProgress size={16} color="inherit" /> : <Save size={18} />}
-                onClick={handleSave}
-                disabled={updateMutation.isLoading || !selectedConfigId}
-              >
-                {updateMutation.isLoading ? 'Saving...' : 'Save'}
-              </Button>
+                <Button
+                  variant="contained"
+                  color="success"
+                  startIcon={updateMutation.isLoading ? <CircularProgress size={16} color="inherit" /> : <Save size={18} />}
+                  onClick={handleSave}
+                  disabled={updateMutation.isLoading || !selectedConfigId}
+                >
+                  {updateMutation.isLoading ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </Stack>
+
+              <Stack direction="row" spacing={2}>
+                <Button
+                  variant="outlined"
+                  startIcon={isGenerating ? <CircularProgress size={16} color="inherit" /> : <FileText size={18} />}
+                  onClick={handleGenerateTemplate}
+                  disabled={isGenerating}
+                >
+                  {isGenerating ? 'Generating...' : 'Generate New Template'}
+                </Button>
+
+                <Button
+                  variant="outlined"
+                  component="label"
+                  startIcon={<Upload size={18} />}
+                >
+                  Import File
+                  <input
+                    type="file"
+                    accept=".yaml,.yml"
+                    onChange={handleFileUpload}
+                    hidden
+                  />
+                </Button>
+              </Stack>
             </Stack>
-
-            <Stack direction="row" spacing={2}>
-              <Button
-                variant="outlined"
-                component="label"
-                startIcon={<Upload size={18} />}
-              >
-                Upload
-                <input
-                  type="file"
-                  accept=".yaml,.yml"
-                  onChange={handleFileUpload}
-                  hidden
-                />
-              </Button>
-
-              <Button
-                variant="outlined"
-                startIcon={<Download size={18} />}
-                onClick={handleDownload}
-                disabled={!configContent.trim()}
-              >
-                Download
-              </Button>
-            </Stack>
-          </Stack>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Validation Status */}
       {isValid !== null && (
@@ -779,19 +804,19 @@ hooks:
 
       {/* Help Section */}
       <Alert severity="info" icon={<Info size={20} />} sx={{ mt: 3 }}>
-        <AlertTitle sx={{ fontWeight: 600 }}>Configuration Help</AlertTitle>
+        <AlertTitle sx={{ fontWeight: 600 }}>Getting Started</AlertTitle>
         <Stack spacing={1}>
           <Typography variant="body2">
-            <strong>Multiple Configurations:</strong> Create different configs for different backup scenarios
+            <strong>1. Generate a Template:</strong> Click "Generate Configuration Template" to create a starter config
           </Typography>
           <Typography variant="body2">
-            <strong>Default Configuration:</strong> Set one config as default - it will be used for all backup operations
+            <strong>2. Customize:</strong> Edit the YAML configuration to specify what files/directories to backup
           </Typography>
           <Typography variant="body2">
-            <strong>Validation:</strong> Always validate before setting as default
+            <strong>3. Validate:</strong> Always validate your configuration before using it
           </Typography>
           <Typography variant="body2">
-            <strong>Generate Template:</strong> Use "Generate Template" to create a configuration using borgmatic CLI - always up-to-date with the latest borgmatic version
+            <strong>4. Set as Default:</strong> Mark your configuration as default to enable backup operations
           </Typography>
         </Stack>
       </Alert>
