@@ -818,9 +818,10 @@ async def generate_ssh_key_pair(key_type: str) -> Dict[str, Any]:
             # Read generated keys
             with open(f"{key_file}.pub", "r") as f:
                 public_key = f.read().strip()
-            
+
             with open(key_file, "r") as f:
-                private_key = f.read().strip()
+                # Don't strip private key - preserve exact format including trailing newline
+                private_key = f.read()
             
             return {
                 "success": True,
@@ -847,6 +848,10 @@ async def deploy_ssh_key_with_copy_id(
         encryption_key = settings.secret_key.encode()[:32]
         cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
         private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+
+        # Ensure private key ends with newline (required by SSH)
+        if not private_key.endswith('\n'):
+            private_key += '\n'
 
         # Ensure SSH keys directory exists
         os.makedirs(settings.ssh_keys_dir, mode=0o700, exist_ok=True)
@@ -990,6 +995,10 @@ async def test_ssh_key_connection(ssh_key: SSHKey, host: str, username: str, por
         encryption_key = settings.secret_key.encode()[:32]
         cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
         private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+
+        # Ensure private key ends with newline (required by SSH)
+        if not private_key.endswith('\n'):
+            private_key += '\n'
 
         # Ensure SSH keys directory exists
         os.makedirs(settings.ssh_keys_dir, mode=0o700, exist_ok=True)
