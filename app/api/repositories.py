@@ -159,17 +159,45 @@ async def create_repository(
                                f"The container's root filesystem (/) is mapped to /local/ inside the container."
                     )
             else:
-                # Verify parent directory exists and is writable
+                # For /local/ paths, we need to ensure the parent directory exists
+                # Let's try to create the full path up to the repository directory
                 parent_dir = os.path.dirname(repo_path)
-                if not os.path.exists(parent_dir):
+                logger.info("Checking /local mount path",
+                          repo_path=repo_path,
+                          parent_dir=parent_dir,
+                          parent_exists=os.path.exists(parent_dir))
+
+                # Try to create parent directories if they don't exist
+                try:
+                    os.makedirs(parent_dir, exist_ok=True)
+                    logger.info("Created parent directories", parent_dir=parent_dir)
+                except PermissionError as e:
+                    logger.error("Permission denied creating parent directories",
+                               parent_dir=parent_dir,
+                               error=str(e))
                     raise HTTPException(
                         status_code=400,
-                        detail=f"Parent directory does not exist: {parent_dir}. Please create it on your host machine first."
+                        detail=f"Permission denied: Cannot create parent directory '{parent_dir}'. "
+                               f"Please ensure the directory exists on your host machine and has proper permissions. "
+                               f"On your host: sudo mkdir -p {parent_dir.replace('/local', '')} && sudo chown -R $(whoami) {parent_dir.replace('/local', '')}"
                     )
-                if not os.access(parent_dir, os.W_OK):
+                except Exception as e:
+                    logger.error("Failed to create parent directories",
+                               parent_dir=parent_dir,
+                               error=str(e))
                     raise HTTPException(
                         status_code=400,
-                        detail=f"Parent directory is not writable: {parent_dir}. Please check permissions on your host machine."
+                        detail=f"Failed to create parent directory: {str(e)}"
+                    )
+
+                # Verify parent directory is writable
+                if not os.access(parent_dir, os.W_OK):
+                    logger.error("Parent directory is not writable",
+                               parent_dir=parent_dir)
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Parent directory is not writable: {parent_dir}. "
+                               f"On your host machine, run: sudo chown -R $(whoami) {parent_dir.replace('/local', '')}"
                     )
         
         # Initialize Borg repository
