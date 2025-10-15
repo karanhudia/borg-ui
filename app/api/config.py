@@ -359,12 +359,82 @@ async def validate_config(
             detail="Failed to validate configuration"
         )
 
+@router.post("/generate-template")
+async def generate_config_template(
+    current_user: User = Depends(get_current_user)
+):
+    """Generate a sample configuration using borgmatic CLI"""
+    import tempfile
+    import os
+    import subprocess
+
+    try:
+        # Create a temporary file for borgmatic to write to
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as temp_file:
+            temp_path = temp_file.name
+
+        try:
+            # Run borgmatic config generate command
+            result = subprocess.run(
+                ['borgmatic', 'config', 'generate', '--destination', temp_path],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode != 0:
+                logger.error("Borgmatic config generate failed",
+                           stderr=result.stderr,
+                           stdout=result.stdout,
+                           returncode=result.returncode)
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to generate config template: {result.stderr}"
+                )
+
+            # Read the generated config
+            with open(temp_path, 'r') as f:
+                generated_content = f.read()
+
+            logger.info("Config template generated", user=current_user.username)
+
+            return {
+                "success": True,
+                "content": generated_content,
+                "message": "Configuration template generated successfully using borgmatic CLI"
+            }
+
+        finally:
+            # Clean up temp file
+            try:
+                os.unlink(temp_path)
+            except:
+                pass
+
+    except subprocess.TimeoutExpired:
+        logger.error("Borgmatic config generate timed out")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Configuration generation timed out"
+        )
+    except Exception as e:
+        logger.error("Failed to generate config template", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate configuration template: {str(e)}"
+        )
+
 @router.get("/templates")
 async def get_config_templates(
     current_user: User = Depends(get_current_user)
 ):
-    """Get available configuration templates"""
+    """Get available configuration templates (DEPRECATED - use /generate-template instead)"""
     templates = [
+        ConfigTemplate(
+            name="borgmatic-default",
+            description="Generate using borgmatic CLI (recommended)",
+            content="# Use the 'Generate from Template' button to create a configuration using borgmatic config generate"
+        ),
         ConfigTemplate(
             name="basic",
             description="Basic backup configuration",
@@ -388,29 +458,6 @@ consistency:
   check_last: 3"""
         ),
         ConfigTemplate(
-            name="encrypted",
-            description="Encrypted backup configuration",
-            content="""repositories:
-  - path: /path/to/encrypted/repository
-    label: encrypted-backup
-
-storage:
-  compression: zstd
-  encryption: repokey-blake2
-
-retention:
-  keep_daily: 7
-  keep_weekly: 4
-  keep_monthly: 12
-  keep_yearly: 3
-
-consistency:
-  checks:
-    - repository
-    - archives
-  check_last: 3"""
-        ),
-        ConfigTemplate(
             name="minimal",
             description="Minimal backup configuration",
             content="""repositories:
@@ -423,7 +470,7 @@ retention:
   keep_daily: 7"""
         )
     ]
-    
+
     return templates
 
 @router.post("/backup")

@@ -69,7 +69,9 @@ export const configAPI = {
   setDefaultConfiguration: (id: number) => api.post(`/config/${id}/set-default`),
   // Validate configuration content
   validateConfig: (config: string) => api.post('/config/validate', { content: config }),
-  // Get templates
+  // Generate template using borgmatic CLI (recommended)
+  generateTemplate: () => api.post('/config/generate-template'),
+  // Get templates (deprecated - use generateTemplate instead)
   getTemplates: () => api.get('/config/templates'),
 
   // Legacy endpoints (keep for backward compatibility)
