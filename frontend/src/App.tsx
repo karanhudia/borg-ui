@@ -10,7 +10,7 @@ import Archives from './pages/Archives'
 import Restore from './pages/Restore'
 import Schedule from './pages/Schedule'
 import Repositories from './pages/Repositories'
-import SSHConnectionsUnified from './pages/SSHConnectionsUnified'
+import SSHConnectionsSingleKey from './pages/SSHConnectionsSingleKey'
 import Settings from './pages/Settings'
 
 function App() {
@@ -83,7 +83,7 @@ function App() {
           path="/ssh-connections"
           element={
             <ProtectedRoute requiredTab="connections">
-              <SSHConnectionsUnified />
+              <SSHConnectionsSingleKey />
             </ProtectedRoute>
           }
         />

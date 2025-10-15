@@ -172,13 +172,19 @@ export const repositoriesAPI = {
 
 // SSH Keys API
 export const sshKeysAPI = {
+  // Single-key system
+  getSystemKey: () => api.get('/ssh-keys/system-key'),
+  generateSSHKey: (data: any) => api.post('/ssh-keys/generate', data),
+
+  // Legacy multi-key endpoints (deprecated)
   getSSHKeys: () => api.get('/ssh-keys'),
   createSSHKey: (data: any) => api.post('/ssh-keys', data),
-  generateSSHKey: (data: any) => api.post('/ssh-keys/generate', data),
   quickSetup: (data: any) => api.post('/ssh-keys/quick-setup', data),
   getSSHKey: (id: number) => api.get(`/ssh-keys/${id}`),
   updateSSHKey: (id: number, data: any) => api.put(`/ssh-keys/${id}`, data),
   deleteSSHKey: (id: number) => api.delete(`/ssh-keys/${id}`),
+
+  // Connection management
   deploySSHKey: (id: number, data: any) => api.post(`/ssh-keys/${id}/deploy`, data),
   testSSHConnection: (id: number, data: any) => api.post(`/ssh-keys/${id}/test-connection`, data),
   getSSHConnections: () => api.get('/ssh-keys/connections'),
