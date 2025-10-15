@@ -491,10 +491,10 @@ export default function Repositories() {
                     Select an existing SSH connection or enter connection details manually
                   </Alert>
 
-                  <Autocomplete
+                  <Autocomplete<SSHConnection>
                     options={connectedConnections}
-                    getOptionLabel={(option) => `${option.username}@${option.host}:${option.port} (${option.ssh_key_name})`}
-                    onChange={(_, value) => handleConnectionSelect(value)}
+                    getOptionLabel={(option: SSHConnection) => `${option.username}@${option.host}:${option.port} (${option.ssh_key_name})`}
+                    onChange={(_, value: SSHConnection | null) => handleConnectionSelect(value)}
                     renderInput={(params) => (
                       <TextField
                         {...params}
@@ -538,7 +538,7 @@ export default function Repositories() {
                     <Select
                       value={createForm.ssh_key_id || ''}
                       label="SSH Key"
-                      onChange={(e) => setCreateForm({ ...createForm, ssh_key_id: e.target.value ? parseInt(e.target.value as string) : null })}
+                      onChange={(e) => setCreateForm({ ...createForm, ssh_key_id: e.target.value ? Number(e.target.value) : null })}
                     >
                       <MenuItem value="">Select SSH Key</MenuItem>
                       {sshKeys
