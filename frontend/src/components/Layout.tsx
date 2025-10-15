@@ -70,7 +70,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     // Fetch system info
     const fetchSystemInfo = async () => {
       try {
-        const response = await api.get('/api/system/info')
+        const response = await api.get('/system/info')
         setSystemInfo(response.data)
       } catch (error) {
         console.error('Failed to fetch system info:', error)

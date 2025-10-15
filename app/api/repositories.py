@@ -456,7 +456,10 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
             with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
                 f.write(private_key)
                 temp_key_file = f.name
-            
+
+            # Set restrictive permissions on private key file (required by SSH)
+            os.chmod(temp_key_file, 0o600)
+
             # Set SSH key environment variable
             env["BORG_RSH"] = f"ssh -i {temp_key_file} -o StrictHostKeyChecking=no"
         
