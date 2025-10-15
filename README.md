@@ -190,44 +190,15 @@ Open `http://localhost:8081` and login.
 
 For infrastructure-as-code deployments.
 
-#### Step 1: Clone Repository (Optional)
+#### Step 1: Create Project Directory
 
 ```bash
-git clone https://github.com/ainullcode/borgmatic-ui.git
-cd borgmatic-ui
+mkdir borgmatic-ui && cd borgmatic-ui
 ```
 
-Or create the files manually in a new directory.
+#### Step 2: Create `docker-compose.yml`
 
-#### Step 2: Create `.env` File (for local development only)
-
-**Note**: The `.env` file is **only needed for local development with docker-compose**. Production deployments (Portainer, Kubernetes, etc.) should use their native environment variable systems.
-
-Create a `.env` file with the following content:
-
-```bash
-# Security (REQUIRED)
-SECRET_KEY=your-secret-key-change-this-in-production
-
-# Database
-DATABASE_URL=sqlite:////data/borgmatic.db
-
-# Borgmatic Configuration
-BORGMATIC_CONFIG_PATH=/data/config/borgmatic.yaml
-BORGMATIC_BACKUP_PATH=/backups
-
-# Application Settings
-ENVIRONMENT=production
-PORT=8081
-LOG_LEVEL=INFO
-```
-
-**Generate a secure SECRET_KEY:**
-```bash
-openssl rand -base64 32
-```
-
-#### Step 3: Create `docker-compose.yml`
+Create a file named `docker-compose.yml` with the following content:
 
 ```yaml
 version: '3.8'
@@ -277,7 +248,19 @@ volumes:
     name: borg_backups
 ```
 
-#### Step 4: Start Services
+#### Step 3: Generate Secret Key
+
+```bash
+export SECRET_KEY=$(openssl rand -base64 32)
+echo "Save this SECRET_KEY for Step 4: $SECRET_KEY"
+```
+
+#### Step 4: Update Environment Variables
+
+In the `docker-compose.yml` file you created, replace:
+- `change-this-secret-key-in-production` with your generated SECRET_KEY from Step 3
+
+#### Step 5: Start Services
 
 ```bash
 docker-compose up -d
@@ -288,15 +271,15 @@ Or if using Docker Compose v2:
 docker compose up -d
 ```
 
-#### Step 5: View Logs
+#### Step 6: View Logs (Optional)
 
 ```bash
 docker-compose logs -f app
 ```
 
-#### Step 6: Access Application
+#### Step 7: Access Application
 
-Open `http://localhost:8081` and login.
+Open `http://localhost:8081` and login with default credentials.
 
 ---
 
@@ -441,6 +424,100 @@ The container runs as user `borgmatic` (UID 1001). If mounting host directories,
 ```bash
 chown -R 1001:1001 /path/to/host/directory
 ```
+
+---
+
+## Development
+
+**For developers who want to contribute or modify the code.**
+
+### Prerequisites
+
+- Docker and Docker Compose
+- Node.js 18+ (for frontend development)
+- Python 3.9+ (for backend development)
+
+### Setup
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/ainullcode/borgmatic-ui.git
+   cd borgmatic-ui
+   ```
+
+2. **Copy environment file:**
+   ```bash
+   cp .env.example .env
+   ```
+
+3. **Edit `.env` and set your SECRET_KEY:**
+   ```bash
+   openssl rand -base64 32
+   # Copy the output and paste it as SECRET_KEY in .env
+   ```
+
+4. **Start development environment:**
+   ```bash
+   docker-compose up -d --build
+   ```
+
+5. **Access the application:**
+   - Frontend: `http://localhost:8081`
+   - API Docs: `http://localhost:8081/api/docs`
+
+### Development Workflow
+
+**Backend Development:**
+```bash
+# View backend logs
+docker-compose logs -f app
+
+# Run backend tests
+docker-compose exec app pytest
+
+# Access Python shell
+docker-compose exec app python
+```
+
+**Frontend Development:**
+```bash
+# Install dependencies
+cd frontend && npm install
+
+# Start dev server (with hot reload)
+npm run dev
+
+# Build for production
+npm run build
+
+# Run tests
+npm test
+```
+
+### Project Structure
+
+```
+borgmatic-ui/
+├── app/                    # Backend (FastAPI)
+│   ├── api/               # API endpoints
+│   ├── database/          # Database models
+│   ├── services/          # Business logic
+│   └── main.py           # Application entry point
+├── frontend/              # Frontend (React + TypeScript)
+│   ├── src/
+│   │   ├── components/   # Reusable components
+│   │   ├── pages/        # Page components
+│   │   ├── services/     # API clients
+│   │   └── App.tsx       # Root component
+│   └── package.json
+├── docker-compose.yml     # Docker Compose configuration
+├── Dockerfile            # Multi-stage Docker build
+└── .env.example          # Environment variables template
+```
+
+### Contributing
+
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for guidelines.
 
 ---
 
