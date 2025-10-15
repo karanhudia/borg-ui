@@ -1,15 +1,40 @@
 import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
-import { 
-  Search, 
-  Folder, 
-  File, 
-  HardDrive, 
-  Calendar, 
-  Trash2, 
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Button,
+  TextField,
+  InputAdornment,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Breadcrumbs,
+  Link,
+  Stack,
+  IconButton,
+  Alert,
+} from '@mui/material'
+import {
+  Search,
+  Folder,
+  File,
+  HardDrive,
+  Calendar,
+  Trash2,
   ChevronRight,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  FolderOpen,
 } from 'lucide-react'
 import { archivesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
@@ -40,13 +65,6 @@ const Archives: React.FC = () => {
   const [currentPath, setCurrentPath] = useState<string>('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
   const queryClient = useQueryClient()
-
-  // Get repositories (placeholder for future implementation)
-  // const { data: repositories, isLoading: loadingRepos } = useQuery({
-  //   queryKey: ['repositories'],
-  //   queryFn: () => archivesAPI.listArchives(''),
-  //   enabled: false
-  // })
 
   // Get archives for selected repository
   const { data: archives, isLoading: loadingArchives } = useQuery({
@@ -96,17 +114,6 @@ const Archives: React.FC = () => {
     setCurrentPath('')
   }
 
-  // Handle folder expansion (placeholder for future implementation)
-  // const handleFolderToggle = (folderPath: string) => {
-  //   const newExpanded = new Set(expandedFolders)
-  //   if (newExpanded.has(folderPath)) {
-  //     newExpanded.delete(folderPath)
-  //   } else {
-  //     newExpanded.add(folderPath)
-  //   }
-  //   setExpandedFolders(newExpanded)
-  // }
-
   // Handle file/folder click
   const handleItemClick = (item: ArchiveFile) => {
     if (item.type === 'directory') {
@@ -117,9 +124,13 @@ const Archives: React.FC = () => {
 
   // Handle navigation breadcrumb
   const handleBreadcrumbClick = (index: number) => {
-    const pathParts = currentPath.split('/')
-    const newPath = pathParts.slice(0, index + 1).join('/')
-    setCurrentPath(newPath)
+    if (index === 0) {
+      setCurrentPath('')
+    } else {
+      const pathParts = currentPath.split('/')
+      const newPath = pathParts.slice(0, index).join('/')
+      setCurrentPath(newPath)
+    }
   }
 
   // Handle archive deletion
@@ -156,286 +167,385 @@ const Archives: React.FC = () => {
   ]
 
   return (
-    <div className="space-y-6">
+    <Box>
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Archive Management</h1>
-          <p className="text-gray-600">Browse and manage your backup archives</p>
-        </div>
-        <button
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <Box>
+          <Typography variant="h4" fontWeight={600} gutterBottom>
+            Archive Management
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Browse and manage your backup archives
+          </Typography>
+        </Box>
+        <Button
+          variant="outlined"
+          startIcon={<RefreshCw size={18} />}
           onClick={() => queryClient.invalidateQueries({ queryKey: ['archives', selectedRepository] })}
-          className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
         >
-          <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
-        </button>
-      </div>
+        </Button>
+      </Box>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <Stack direction={{ xs: 'column', lg: 'row' }} spacing={3}>
         {/* Repository Selection */}
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-4 py-3 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">Repositories</h3>
-            </div>
-            <div className="p-4">
-              {mockRepositories.map((repo) => (
-                <div
-                  key={repo.id}
-                  onClick={() => handleRepositorySelect(repo.id)}
-                  className={`p-3 rounded-lg cursor-pointer transition-colors ${
-                    selectedRepository === repo.id
-                      ? 'bg-indigo-50 border border-indigo-200'
-                      : 'hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center">
-                    <HardDrive className="h-5 w-5 text-gray-400 mr-3" />
-                    <div>
-                      <h4 className="font-medium text-gray-900">{repo.name}</h4>
-                      <p className="text-sm text-gray-600">{repo.path}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <Box sx={{ flex: { xs: '1 1 100%', lg: '0 0 300px' } }}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" fontWeight={600} gutterBottom>
+                Repositories
+              </Typography>
+              <List sx={{ pt: 2 }}>
+                {mockRepositories.map((repo) => (
+                  <ListItem key={repo.id} disablePadding sx={{ mb: 1 }}>
+                    <ListItemButton
+                      selected={selectedRepository === repo.id}
+                      onClick={() => handleRepositorySelect(repo.id)}
+                      sx={{
+                        borderRadius: 1,
+                        '&.Mui-selected': {
+                          backgroundColor: 'primary.lighter',
+                          borderLeft: 3,
+                          borderColor: 'primary.main',
+                          '&:hover': {
+                            backgroundColor: 'primary.lighter',
+                          },
+                        },
+                      }}
+                    >
+                      <ListItemIcon>
+                        <HardDrive size={20} />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={repo.name}
+                        secondary={repo.path}
+                        primaryTypographyProps={{ fontWeight: 500, fontSize: '0.875rem' }}
+                        secondaryTypographyProps={{ fontSize: '0.75rem' }}
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                ))}
+              </List>
+            </CardContent>
+          </Card>
+        </Box>
 
         {/* Archives List */}
-        <div className="lg:col-span-2">
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-4 py-3 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium text-gray-900">Archives</h3>
+        <Box sx={{ flex: 1 }}>
+          <Card>
+            <CardContent>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+                <Typography variant="h6" fontWeight={600}>
+                  Archives
+                </Typography>
                 {selectedRepository && (
-                  <div className="flex items-center space-x-2">
-                    <div className="relative">
-                      <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder="Search archives..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                      />
-                    </div>
-                  </div>
+                  <TextField
+                    size="small"
+                    placeholder="Search archives..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Search size={18} />
+                        </InputAdornment>
+                      ),
+                    }}
+                    sx={{ width: 250 }}
+                  />
                 )}
-              </div>
-            </div>
-            
-            <div className="p-4">
+              </Stack>
+
               {!selectedRepository ? (
-                <div className="text-center py-8">
-                  <HardDrive className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">Select a repository to view archives</p>
-                </div>
+                <Box sx={{ textAlign: 'center', py: 8 }}>
+                  <HardDrive size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
+                  <Typography variant="body1" color="text.secondary">
+                    Select a repository to view archives
+                  </Typography>
+                </Box>
               ) : loadingArchives ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-                  <p className="mt-2 text-gray-600">Loading archives...</p>
-                </div>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
+                  <CircularProgress size={48} />
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                    Loading archives...
+                  </Typography>
+                </Box>
               ) : filteredArchives.length === 0 ? (
-                <div className="text-center py-8">
-                  <Folder className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">
+                <Box sx={{ textAlign: 'center', py: 8 }}>
+                  <Folder size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
+                  <Typography variant="body1" color="text.secondary">
                     {searchQuery ? 'No archives found matching your search' : 'No archives found in this repository'}
-                  </p>
-                </div>
+                  </Typography>
+                </Box>
               ) : (
-                <div className="space-y-3">
+                <Stack spacing={2}>
                   {filteredArchives.map((archive: Archive) => (
-                    <div
+                    <Card
                       key={archive.id}
+                      variant="outlined"
+                      sx={{
+                        cursor: 'pointer',
+                        border: selectedArchive === archive.name ? 2 : 1,
+                        borderColor: selectedArchive === archive.name ? 'primary.main' : 'divider',
+                        backgroundColor: selectedArchive === archive.name ? 'primary.lighter' : 'background.paper',
+                        '&:hover': {
+                          borderColor: 'primary.main',
+                          backgroundColor: 'action.hover',
+                        },
+                      }}
                       onClick={() => handleArchiveSelect(archive.name)}
-                      className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                        selectedArchive === archive.name
-                          ? 'border-indigo-300 bg-indigo-50'
-                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                      }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <Folder className="h-5 w-5 text-blue-500" />
-                          <div>
-                            <h4 className="font-medium text-gray-900">{archive.name}</h4>
-                            <div className="flex items-center space-x-4 text-sm text-gray-600">
-                              <span className="flex items-center">
-                                <Calendar className="h-4 w-4 mr-1" />
-                                {formatTimestamp(archive.timestamp)}
-                              </span>
-                              <span>{formatFileSize(archive.size)}</span>
-                              <span>{archive.file_count.toLocaleString()} files</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <button
+                      <CardContent>
+                        <Stack direction="row" justifyContent="space-between" alignItems="center">
+                          <Stack direction="row" spacing={2} alignItems="center" sx={{ flex: 1 }}>
+                            <FolderOpen size={24} color="#1976d2" />
+                            <Box>
+                              <Typography variant="body1" fontWeight={500}>
+                                {archive.name}
+                              </Typography>
+                              <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                  <Calendar size={14} />
+                                  {formatTimestamp(archive.timestamp)}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {formatFileSize(archive.size)}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {archive.file_count.toLocaleString()} files
+                                </Typography>
+                              </Stack>
+                            </Box>
+                          </Stack>
+                          <IconButton
+                            color="error"
+                            size="small"
                             onClick={(e) => {
                               e.stopPropagation()
                               setShowDeleteConfirm(archive.name)
                             }}
-                            className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md"
                           >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+                            <Trash2 size={18} />
+                          </IconButton>
+                        </Stack>
+                      </CardContent>
+                    </Card>
                   ))}
-                </div>
+                </Stack>
               )}
-            </div>
-          </div>
-        </div>
-      </div>
+            </CardContent>
+          </Card>
+        </Box>
+      </Stack>
 
       {/* Archive Details and File Browser */}
       {selectedArchive && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Stack direction={{ xs: 'column', lg: 'row' }} spacing={3} sx={{ mt: 3 }}>
           {/* Archive Details */}
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-4 py-3 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">Archive Details</h3>
-            </div>
-            <div className="p-4">
-              {loadingDetails ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-                  <p className="mt-2 text-gray-600">Loading details...</p>
-                </div>
-              ) : archiveDetails?.data ? (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Name:</span>
-                      <p className="text-sm text-gray-900">{archiveDetails.data.name}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Created:</span>
-                      <p className="text-sm text-gray-900">{formatTimestamp(archiveDetails.data.timestamp)}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Size:</span>
-                      <p className="text-sm text-gray-900">{formatFileSize(archiveDetails.data.size)}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Compressed:</span>
-                      <p className="text-sm text-gray-900">{formatFileSize(archiveDetails.data.compressed_size)}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Deduplicated:</span>
-                      <p className="text-sm text-gray-900">{formatFileSize(archiveDetails.data.deduplicated_size)}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Files:</span>
-                      <p className="text-sm text-gray-900">{archiveDetails.data.file_count?.toLocaleString() || 'Unknown'}</p>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">No details available</p>
-                </div>
-              )}
-            </div>
-          </div>
+          <Box sx={{ flex: 1 }}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" fontWeight={600} gutterBottom>
+                  Archive Details
+                </Typography>
+                {loadingDetails ? (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
+                    <CircularProgress size={48} />
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                      Loading details...
+                    </Typography>
+                  </Box>
+                ) : archiveDetails?.data ? (
+                  <Stack direction="row" flexWrap="wrap" spacing={2} sx={{ mt: 2 }}>
+                    <Box sx={{ flex: '1 1 45%', minWidth: 150 }}>
+                      <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                        Name
+                      </Typography>
+                      <Typography variant="body2">{archiveDetails.data.name}</Typography>
+                    </Box>
+                    <Box sx={{ flex: '1 1 45%', minWidth: 150 }}>
+                      <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                        Created
+                      </Typography>
+                      <Typography variant="body2">{formatTimestamp(archiveDetails.data.timestamp)}</Typography>
+                    </Box>
+                    <Box sx={{ flex: '1 1 45%', minWidth: 150 }}>
+                      <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                        Size
+                      </Typography>
+                      <Typography variant="body2">{formatFileSize(archiveDetails.data.size)}</Typography>
+                    </Box>
+                    <Box sx={{ flex: '1 1 45%', minWidth: 150 }}>
+                      <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                        Compressed
+                      </Typography>
+                      <Typography variant="body2">{formatFileSize(archiveDetails.data.compressed_size)}</Typography>
+                    </Box>
+                    <Box sx={{ flex: '1 1 45%', minWidth: 150 }}>
+                      <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                        Deduplicated
+                      </Typography>
+                      <Typography variant="body2">{formatFileSize(archiveDetails.data.deduplicated_size)}</Typography>
+                    </Box>
+                    <Box sx={{ flex: '1 1 45%', minWidth: 150 }}>
+                      <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                        Files
+                      </Typography>
+                      <Typography variant="body2">{archiveDetails.data.file_count?.toLocaleString() || 'Unknown'}</Typography>
+                    </Box>
+                  </Stack>
+                ) : (
+                  <Box sx={{ textAlign: 'center', py: 8 }}>
+                    <AlertCircle size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
+                    <Typography variant="body1" color="text.secondary">
+                      No details available
+                    </Typography>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          </Box>
 
           {/* File Browser */}
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-4 py-3 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">File Browser</h3>
-            </div>
-            <div className="p-4">
-              {/* Breadcrumb */}
-              <div className="flex items-center space-x-2 mb-4 text-sm">
-                {breadcrumbParts.map((part, index) => (
-                  <React.Fragment key={index}>
-                    {index > 0 && <ChevronRight className="h-4 w-4 text-gray-400" />}
-                    <button
+          <Box sx={{ flex: 1 }}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" fontWeight={600} gutterBottom>
+                  File Browser
+                </Typography>
+
+                {/* Breadcrumb */}
+                <Breadcrumbs
+                  separator={<ChevronRight size={16} />}
+                  sx={{ my: 2, fontSize: '0.875rem' }}
+                >
+                  {breadcrumbParts.map((part, index) => (
+                    <Link
+                      key={index}
+                      component="button"
+                      variant="body2"
                       onClick={() => handleBreadcrumbClick(index)}
-                      className={`hover:text-indigo-600 ${
-                        index === breadcrumbParts.length - 1 ? 'text-gray-900 font-medium' : 'text-gray-600'
-                      }`}
+                      sx={{
+                        textDecoration: 'none',
+                        color: index === breadcrumbParts.length - 1 ? 'text.primary' : 'text.secondary',
+                        fontWeight: index === breadcrumbParts.length - 1 ? 600 : 400,
+                        '&:hover': {
+                          color: 'primary.main',
+                        },
+                      }}
                     >
                       {part}
-                    </button>
-                  </React.Fragment>
-                ))}
-              </div>
-
-              {loadingContents ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-                  <p className="mt-2 text-gray-600">Loading contents...</p>
-                </div>
-              ) : archiveContents?.data?.length === 0 ? (
-                <div className="text-center py-8">
-                  <Folder className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">This directory is empty</p>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  {archiveContents?.data?.map((item: ArchiveFile, index: number) => (
-                    <div
-                      key={index}
-                      onClick={() => handleItemClick(item)}
-                      className="flex items-center p-2 rounded-md hover:bg-gray-50 cursor-pointer"
-                    >
-                      {item.type === 'directory' ? (
-                        <Folder className="h-4 w-4 text-blue-500 mr-3" />
-                      ) : (
-                        <File className="h-4 w-4 text-gray-500 mr-3" />
-                      )}
-                      <span className="flex-1 text-sm text-gray-900">{item.name}</span>
-                      {item.size && (
-                        <span className="text-sm text-gray-600">{formatFileSize(item.size)}</span>
-                      )}
-                    </div>
+                    </Link>
                   ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+                </Breadcrumbs>
+
+                {loadingContents ? (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
+                    <CircularProgress size={48} />
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                      Loading contents...
+                    </Typography>
+                  </Box>
+                ) : archiveContents?.data?.length === 0 ? (
+                  <Box sx={{ textAlign: 'center', py: 8 }}>
+                    <Folder size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
+                    <Typography variant="body1" color="text.secondary">
+                      This directory is empty
+                    </Typography>
+                  </Box>
+                ) : (
+                  <List>
+                    {archiveContents?.data?.map((item: ArchiveFile, index: number) => (
+                      <ListItem
+                        key={index}
+                        disablePadding
+                        secondaryAction={
+                          item.size && (
+                            <Typography variant="caption" color="text.secondary">
+                              {formatFileSize(item.size)}
+                            </Typography>
+                          )
+                        }
+                      >
+                        <ListItemButton
+                          onClick={() => handleItemClick(item)}
+                          disabled={item.type !== 'directory'}
+                          sx={{ borderRadius: 1 }}
+                        >
+                          <ListItemIcon>
+                            {item.type === 'directory' ? (
+                              <Folder size={20} color="#1976d2" />
+                            ) : (
+                              <File size={20} color="rgba(0,0,0,0.5)" />
+                            )}
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={item.name}
+                            primaryTypographyProps={{ fontSize: '0.875rem' }}
+                          />
+                        </ListItemButton>
+                      </ListItem>
+                    ))}
+                  </List>
+                )}
+              </CardContent>
+            </Card>
+          </Box>
+        </Stack>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full">
-                <AlertCircle className="h-6 w-6 text-red-600" />
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mt-4 text-center">Delete Archive</h3>
-              <p className="text-sm text-gray-600 mt-2 text-center">
-                Are you sure you want to delete the archive "{showDeleteConfirm}"? This action cannot be undone.
-              </p>
-              <div className="flex justify-end space-x-3 mt-4">
-                <button
-                  onClick={() => setShowDeleteConfirm(null)}
-                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleDeleteArchive(showDeleteConfirm)}
-                  disabled={deleteArchiveMutation.isLoading}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
-                >
-                  {deleteArchiveMutation.isLoading ? 'Deleting...' : 'Delete'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={!!showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <Box
+              sx={{
+                width: 48,
+                height: 48,
+                borderRadius: '50%',
+                backgroundColor: 'error.lighter',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <AlertCircle size={24} color="#d32f2f" />
+            </Box>
+            <Typography variant="h6" fontWeight={600}>
+              Delete Archive
+            </Typography>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            This action cannot be undone!
+          </Alert>
+          <Typography variant="body2">
+            Are you sure you want to delete the archive <strong>"{showDeleteConfirm}"</strong>?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowDeleteConfirm(null)}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => handleDeleteArchive(showDeleteConfirm!)}
+            disabled={deleteArchiveMutation.isLoading}
+            startIcon={deleteArchiveMutation.isLoading ? <CircularProgress size={16} color="inherit" /> : <Trash2 size={16} />}
+          >
+            {deleteArchiveMutation.isLoading ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   )
 }
 
-export default Archives 
+export default Archives
