@@ -128,7 +128,7 @@ async def get_backup_status(
             detail="Failed to get backup status"
         )
 
-@router.delete("/cancel/{job_id}")
+@router.post("/cancel/{job_id}")
 async def cancel_backup(
     job_id: int,
     current_user: User = Depends(get_current_user),
