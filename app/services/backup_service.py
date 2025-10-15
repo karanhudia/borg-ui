@@ -1,11 +1,10 @@
 import asyncio
 import os
-import yaml
 from datetime import datetime
 from pathlib import Path
 import structlog
 from sqlalchemy.orm import Session
-from app.database.models import BackupJob
+from app.database.models import BackupJob, Repository
 from app.config import settings
 
 logger = structlog.get_logger()
@@ -54,17 +53,16 @@ class BackupService:
         env['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes'
         env['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes'
 
-        # Try to read passphrase from default borgmatic config
+        # Look up repository record to get passphrase
         try:
-            default_config_path = Path("/data/borgmatic/default.yaml")
-            if default_config_path.exists():
-                with open(default_config_path, 'r') as f:
-                    config = yaml.safe_load(f)
-                    if config and 'encryption_passphrase' in config:
-                        env['BORG_PASSPHRASE'] = str(config['encryption_passphrase'])
-                        logger.info("Using passphrase from borgmatic config")
+            repo_record = db.query(Repository).filter(Repository.path == repository).first()
+            if repo_record and repo_record.passphrase:
+                env['BORG_PASSPHRASE'] = repo_record.passphrase
+                logger.info("Using passphrase from repository record", repository=repository)
+            else:
+                logger.warning("No passphrase found for repository", repository=repository)
         except Exception as e:
-            logger.warning("Could not read passphrase from config", error=str(e))
+            logger.warning("Could not look up repository passphrase", error=str(e))
 
         logger.info("Starting borg backup", job_id=job_id, repository=repository, archive=archive_name, command=" ".join(cmd))
 

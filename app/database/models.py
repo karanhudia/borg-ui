@@ -18,31 +18,32 @@ class User(Base):
 
 class Repository(Base):
     __tablename__ = "repositories"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
     path = Column(String, unique=True, index=True)
     encryption = Column(String, default="repokey")
     compression = Column(String, default="lz4")
+    passphrase = Column(String, nullable=True)  # Borg repository passphrase (for encrypted repos)
     is_active = Column(Boolean, default=True)
     last_backup = Column(DateTime, nullable=True)
     total_size = Column(String, nullable=True)
     archive_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # New fields for remote repositories
     repository_type = Column(String, default="local")  # local, ssh, sftp
     host = Column(String, nullable=True)  # For SSH repositories
     port = Column(Integer, default=22)  # SSH port
     username = Column(String, nullable=True)  # SSH username
     ssh_key_id = Column(Integer, ForeignKey("ssh_keys.id"), nullable=True)  # Associated SSH key
-    
+
     # New fields for authentication status
     auth_status = Column(String, default="unknown")  # connected, failed, testing, unknown
     last_auth_test = Column(DateTime, nullable=True)
     auth_error_message = Column(Text, nullable=True)
-    
+
     # Relationships
     ssh_key = relationship("SSHKey", back_populates="repositories")
 

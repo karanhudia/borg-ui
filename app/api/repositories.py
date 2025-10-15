@@ -247,6 +247,7 @@ async def create_repository(
             path=repo_path,
             encryption=repo_data.encryption,
             compression=repo_data.compression,
+            passphrase=repo_data.passphrase,  # Store passphrase for backups
             is_active=True,
             repository_type=repo_data.repository_type,
             host=repo_data.host,
