@@ -5,6 +5,7 @@ from pathlib import Path
 import structlog
 from sqlalchemy.orm import Session
 from app.database.models import BackupJob, Repository
+from app.database.database import SessionLocal
 from app.config import settings
 
 logger = structlog.get_logger()
@@ -16,14 +17,18 @@ class BackupService:
         self.log_dir = Path("/data/logs")
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
-    async def execute_backup(self, job_id: int, repository: str, config_file: str, db: Session):
+    async def execute_backup(self, job_id: int, repository: str, config_file: str, db: Session = None):
         """Execute backup using borg directly for better control"""
 
-        # Get job
-        job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
-        if not job:
-            logger.error("Job not found", job_id=job_id)
-            return
+        # Create a new database session for this background task
+        db = SessionLocal()
+
+        try:
+            # Get job
+            job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
+            if not job:
+                logger.error("Job not found", job_id=job_id)
+                return
 
         # Create log file
         log_file = self.log_dir / f"backup_{job_id}.log"
@@ -110,6 +115,9 @@ class BackupService:
             job.error_message = str(e)
             job.completed_at = datetime.utcnow()
             db.commit()
+        finally:
+            # Close the database session
+            db.close()
 
 # Global instance
 backup_service = BackupService()
