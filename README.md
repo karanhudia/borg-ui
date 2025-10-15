@@ -95,6 +95,7 @@ Pre-built multi-arch images: [`ainullcode/borgmatic-ui:latest`](https://hub.dock
 
 ## Documentation
 
+- **[System Design](SYSTEM_DESIGN.md)** - 🆕 Architecture and workflow design
 - **[Installation Guide](INSTALL.md)** - Complete setup instructions
 - **[Security Guide](SECURITY.md)** - Security best practices
 - **[API Documentation](http://localhost:8000/api/docs)** - Interactive API docs (after install)
