@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth.tsx'
 import Layout from './components/Layout'
+import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Config from './pages/Config'
@@ -38,12 +39,54 @@ function App() {
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/config" element={<Config />} />
-        <Route path="/backup" element={<Backup />} />
-        <Route path="/archives" element={<Archives />} />
-        <Route path="/restore" element={<Restore />} />
-        <Route path="/schedule" element={<Schedule />} />
-        <Route path="/repositories" element={<Repositories />} />
-        <Route path="/ssh-connections" element={<SSHConnectionsUnified />} />
+        <Route
+          path="/backup"
+          element={
+            <ProtectedRoute requiredTab="backups">
+              <Backup />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/archives"
+          element={
+            <ProtectedRoute requiredTab="archives">
+              <Archives />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/restore"
+          element={
+            <ProtectedRoute requiredTab="restore">
+              <Restore />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/schedule"
+          element={
+            <ProtectedRoute requiredTab="schedule">
+              <Schedule />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/repositories"
+          element={
+            <ProtectedRoute requiredTab="repositories">
+              <Repositories />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ssh-connections"
+          element={
+            <ProtectedRoute requiredTab="connections">
+              <SSHConnectionsUnified />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/ssh-keys" element={<Navigate to="/ssh-connections" replace />} />
         <Route path="/connections" element={<Navigate to="/ssh-connections" replace />} />
         <Route path="/settings" element={<Settings />} />

@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth.tsx'
+import { useTabEnablement } from '../context/AppContext'
 import {
   Box,
   Drawer,
@@ -18,6 +19,7 @@ import {
   Menu as MuiMenu,
   MenuItem,
   Container,
+  Tooltip,
 } from '@mui/material'
 import {
   Home,
@@ -31,26 +33,30 @@ import {
   Wifi,
   LogOut,
   User,
+  Lock,
 } from 'lucide-react'
 
 const drawerWidth = 240
 
-const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: Home },
-  { name: 'Configuration', href: '/config', icon: Settings },
-  { name: 'Backup', href: '/backup', icon: FileText },
-  { name: 'Archives', href: '/archives', icon: Archive },
-  { name: 'Restore', href: '/restore', icon: RotateCcw },
-  { name: 'Schedule', href: '/schedule', icon: Clock },
-  { name: 'Repositories', href: '/repositories', icon: Database },
-  { name: 'SSH Connections', href: '/ssh-connections', icon: Wifi },
+// Map navigation items to tab enablement keys
+const navigationWithKeys = [
+  { name: 'Dashboard', href: '/dashboard', icon: Home, key: 'dashboard' as const },
+  { name: 'Configuration', href: '/config', icon: Settings, key: 'configuration' as const },
+  { name: 'Backup', href: '/backup', icon: FileText, key: 'backups' as const },
+  { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },
+  { name: 'Restore', href: '/restore', icon: RotateCcw, key: 'restore' as const },
+  { name: 'Schedule', href: '/schedule', icon: Clock, key: 'schedule' as const },
+  { name: 'Repositories', href: '/repositories', icon: Database, key: 'repositories' as const },
+  { name: 'SSH Connections', href: '/ssh-connections', icon: Wifi, key: 'connections' as const },
 ]
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const location = useLocation()
+  const navigate = useNavigate()
   const { user, logout } = useAuth()
+  const { tabEnablement, getTabDisabledReason } = useTabEnablement()
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen)
@@ -69,6 +75,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     logout()
   }
 
+  const handleNavClick = (e: React.MouseEvent, item: typeof navigationWithKeys[0]) => {
+    const isEnabled = tabEnablement[item.key]
+    if (!isEnabled) {
+      e.preventDefault()
+      // Optionally, you could show a toast here
+      return false
+    }
+  }
+
   const drawer = (
     <Box>
       <Toolbar>
@@ -78,40 +93,61 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </Toolbar>
       <Divider />
       <List>
-        {navigation.map((item) => {
+        {navigationWithKeys.map((item) => {
           const isActive = location.pathname === item.href
+          const isEnabled = tabEnablement[item.key]
+          const disabledReason = getTabDisabledReason(item.key)
           const Icon = item.icon
+
+          const listItemButton = (
+            <ListItemButton
+              component={isEnabled ? Link : 'div'}
+              to={isEnabled ? item.href : undefined}
+              selected={isActive}
+              disabled={!isEnabled}
+              onClick={(e) => handleNavClick(e, item)}
+              sx={{
+                '&.Mui-selected': {
+                  backgroundColor: 'primary.main',
+                  color: 'white',
+                  '&:hover': {
+                    backgroundColor: 'primary.dark',
+                  },
+                  '& .MuiListItemIcon-root': {
+                    color: 'white',
+                  },
+                },
+                '&.Mui-disabled': {
+                  opacity: 0.5,
+                  cursor: 'not-allowed',
+                },
+              }}
+            >
+              <ListItemIcon sx={{ color: isActive ? 'white' : 'text.secondary' }}>
+                {isEnabled ? <Icon size={20} /> : <Lock size={20} />}
+              </ListItemIcon>
+              <ListItemText
+                primary={item.name}
+                primaryTypographyProps={{
+                  fontSize: '0.875rem',
+                  fontWeight: isActive ? 600 : 400,
+                  color: isActive ? 'white' : isEnabled ? 'inherit' : 'text.disabled',
+                }}
+              />
+            </ListItemButton>
+          )
+
           return (
             <ListItem key={item.name} disablePadding>
-              <ListItemButton
-                component={Link}
-                to={item.href}
-                selected={isActive}
-                sx={{
-                  '&.Mui-selected': {
-                    backgroundColor: 'primary.main',
-                    color: 'white',
-                    '&:hover': {
-                      backgroundColor: 'primary.dark',
-                    },
-                    '& .MuiListItemIcon-root': {
-                      color: 'white',
-                    },
-                  },
-                }}
-              >
-                <ListItemIcon sx={{ color: isActive ? 'white' : 'text.secondary' }}>
-                  <Icon size={20} />
-                </ListItemIcon>
-                <ListItemText
-                  primary={item.name}
-                  primaryTypographyProps={{
-                    fontSize: '0.875rem',
-                    fontWeight: isActive ? 600 : 400,
-                    color: isActive ? 'white' : 'inherit',
-                  }}
-                />
-              </ListItemButton>
+              {!isEnabled && disabledReason ? (
+                <Tooltip title={disabledReason} arrow placement="right">
+                  <Box sx={{ width: '100%' }}>
+                    {listItemButton}
+                  </Box>
+                </Tooltip>
+              ) : (
+                listItemButton
+              )}
             </ListItem>
           )
         })}
