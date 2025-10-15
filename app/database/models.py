@@ -48,7 +48,7 @@ class Repository(Base):
 
 class SSHKey(Base):
     __tablename__ = "ssh_keys"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
     description = Column(Text, nullable=True)
@@ -56,9 +56,11 @@ class SSHKey(Base):
     private_key = Column(Text)  # Encrypted
     key_type = Column(String, default="rsa")  # rsa, ed25519, ecdsa
     is_active = Column(Boolean, default=True)
+    is_system_key = Column(Boolean, default=False, index=True)  # Identifies the system SSH key
+    fingerprint = Column(String, nullable=True)  # SSH key fingerprint
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relationships
     repositories = relationship("Repository", back_populates="ssh_key")
     connections = relationship("SSHConnection", back_populates="ssh_key", cascade="all, delete-orphan")

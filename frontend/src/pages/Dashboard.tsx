@@ -93,160 +93,152 @@ export default function Dashboard() {
       </Box>
 
       {/* Status Cards */}
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} sx={{ mb: 4 }} flexWrap="wrap">
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 3, mb: 4 }}>
         {/* Borgmatic Status Card */}
-        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', lg: '1 1 calc(25% - 12px)' }, minWidth: 240 }}>
-          <Card>
-            <CardContent>
-              <Stack spacing={2}>
-                <Stack direction="row" spacing={2} alignItems="center">
-                  <Box
-                    sx={{
-                      backgroundColor: 'primary.light',
-                      borderRadius: 2,
-                      p: 1.5,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Activity size={28} color="primary" />
-                  </Box>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="body2" color="text.secondary" noWrap>
-                      Borgmatic Status
-                    </Typography>
-                    <Typography variant="h6" fontWeight={600} sx={{ mt: 0.5 }}>
-                      Running
-                    </Typography>
-                  </Box>
-                </Stack>
-                <Chip
-                  label="Active"
-                  size="small"
-                  color="success"
-                  icon={<CheckCircle size={14} />}
-                  sx={{ height: 24, width: 'fit-content' }}
-                />
+        <Card>
+          <CardContent>
+            <Stack spacing={2}>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Box
+                  sx={{
+                    backgroundColor: 'primary.light',
+                    borderRadius: 2,
+                    p: 1.5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Activity size={28} color="primary" />
+                </Box>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" color="text.secondary" noWrap>
+                    Borgmatic Status
+                  </Typography>
+                  <Typography variant="h6" fontWeight={600} sx={{ mt: 0.5 }}>
+                    Running
+                  </Typography>
+                </Box>
               </Stack>
-            </CardContent>
-          </Card>
-        </Box>
+              <Chip
+                label="Active"
+                size="small"
+                color="success"
+                icon={<CheckCircle size={14} />}
+                sx={{ height: 24, width: 'fit-content' }}
+              />
+            </Stack>
+          </CardContent>
+        </Card>
 
         {/* CPU Usage Card */}
         {metrics && (
-          <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', lg: '1 1 calc(25% - 12px)' }, minWidth: 240 }}>
-            <Card>
-              <CardContent>
-                <Stack direction="row" spacing={2} alignItems="center">
-                  <Box
-                    sx={{
-                      backgroundColor: 'info.light',
-                      borderRadius: 2,
-                      p: 1.5,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Cpu size={28} color="#0288d1" />
-                  </Box>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="body2" color="text.secondary" noWrap>
-                      CPU Usage
-                    </Typography>
-                    <Typography variant="h6" fontWeight={600} sx={{ mt: 0.5 }}>
-                      {metrics.cpu_usage.toFixed(1)}%
-                    </Typography>
-                    <LinearProgress
-                      variant="determinate"
-                      value={Math.min(metrics.cpu_usage, 100)}
-                      sx={{ mt: 1, height: 6, borderRadius: 1 }}
-                      color={metrics.cpu_usage > 80 ? 'error' : metrics.cpu_usage > 60 ? 'warning' : 'info'}
-                    />
-                  </Box>
-                </Stack>
-              </CardContent>
-            </Card>
-          </Box>
+          <Card>
+            <CardContent>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Box
+                  sx={{
+                    backgroundColor: 'info.light',
+                    borderRadius: 2,
+                    p: 1.5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Cpu size={28} color="#0288d1" />
+                </Box>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" color="text.secondary" noWrap>
+                    CPU Usage
+                  </Typography>
+                  <Typography variant="h6" fontWeight={600} sx={{ mt: 0.5 }}>
+                    {metrics.cpu_usage.toFixed(1)}%
+                  </Typography>
+                  <LinearProgress
+                    variant="determinate"
+                    value={Math.min(metrics.cpu_usage, 100)}
+                    sx={{ mt: 1, height: 6, borderRadius: 1 }}
+                    color={metrics.cpu_usage > 80 ? 'error' : metrics.cpu_usage > 60 ? 'warning' : 'info'}
+                  />
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
         )}
 
         {/* Memory Card */}
         {metrics && (
-          <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', lg: '1 1 calc(25% - 12px)' }, minWidth: 240 }}>
-            <Card>
-              <CardContent>
-                <Stack direction="row" spacing={2} alignItems="center">
-                  <Box
-                    sx={{
-                      backgroundColor: 'success.light',
-                      borderRadius: 2,
-                      p: 1.5,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <MemoryStick size={28} color="#2e7d32" />
-                  </Box>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="body2" color="text.secondary" noWrap>
-                      Memory
-                    </Typography>
-                    <Typography variant="h6" fontWeight={600} sx={{ mt: 0.5, fontSize: '1rem' }}>
-                      {formatBytes(metrics.memory_total - metrics.memory_available)} GB / {formatBytes(metrics.memory_total)} GB
-                    </Typography>
-                    <LinearProgress
-                      variant="determinate"
-                      value={Math.min(metrics.memory_usage, 100)}
-                      sx={{ mt: 1, height: 6, borderRadius: 1 }}
-                      color={metrics.memory_usage > 80 ? 'error' : metrics.memory_usage > 60 ? 'warning' : 'success'}
-                    />
-                  </Box>
-                </Stack>
-              </CardContent>
-            </Card>
-          </Box>
+          <Card>
+            <CardContent>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Box
+                  sx={{
+                    backgroundColor: 'success.light',
+                    borderRadius: 2,
+                    p: 1.5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <MemoryStick size={28} color="#2e7d32" />
+                </Box>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" color="text.secondary" noWrap>
+                    Memory
+                  </Typography>
+                  <Typography variant="h6" fontWeight={600} sx={{ mt: 0.5, fontSize: '1rem' }}>
+                    {formatBytes(metrics.memory_total - metrics.memory_available)} GB / {formatBytes(metrics.memory_total)} GB
+                  </Typography>
+                  <LinearProgress
+                    variant="determinate"
+                    value={Math.min(metrics.memory_usage, 100)}
+                    sx={{ mt: 1, height: 6, borderRadius: 1 }}
+                    color={metrics.memory_usage > 80 ? 'error' : metrics.memory_usage > 60 ? 'warning' : 'success'}
+                  />
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
         )}
 
         {/* Disk Space Card */}
         {metrics && (
-          <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', lg: '1 1 calc(25% - 12px)' }, minWidth: 240 }}>
-            <Card>
-              <CardContent>
-                <Stack direction="row" spacing={2} alignItems="center">
-                  <Box
-                    sx={{
-                      backgroundColor: 'warning.light',
-                      borderRadius: 2,
-                      p: 1.5,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <HardDrive size={28} color="#ed6c02" />
-                  </Box>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="body2" color="text.secondary" noWrap>
-                      Disk Space
-                    </Typography>
-                    <Typography variant="h6" fontWeight={600} sx={{ mt: 0.5, fontSize: '1rem' }}>
-                      {formatBytes(metrics.disk_total - metrics.disk_free)} GB / {formatBytes(metrics.disk_total)} GB
-                    </Typography>
-                    <LinearProgress
-                      variant="determinate"
-                      value={Math.min(metrics.disk_usage, 100)}
-                      sx={{ mt: 1, height: 6, borderRadius: 1 }}
-                      color={metrics.disk_usage > 80 ? 'error' : metrics.disk_usage > 60 ? 'warning' : 'warning'}
-                    />
-                  </Box>
-                </Stack>
-              </CardContent>
-            </Card>
-          </Box>
+          <Card>
+            <CardContent>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Box
+                  sx={{
+                    backgroundColor: 'warning.light',
+                    borderRadius: 2,
+                    p: 1.5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <HardDrive size={28} color="#ed6c02" />
+                </Box>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" color="text.secondary" noWrap>
+                    Disk Space
+                  </Typography>
+                  <Typography variant="h6" fontWeight={600} sx={{ mt: 0.5, fontSize: '1rem' }}>
+                    {formatBytes(metrics.disk_total - metrics.disk_free)} GB / {formatBytes(metrics.disk_total)} GB
+                  </Typography>
+                  <LinearProgress
+                    variant="determinate"
+                    value={Math.min(metrics.disk_usage, 100)}
+                    sx={{ mt: 1, height: 6, borderRadius: 1 }}
+                    color={metrics.disk_usage > 80 ? 'error' : metrics.disk_usage > 60 ? 'warning' : 'warning'}
+                  />
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
         )}
-      </Stack>
+      </Box>
 
       {/* Recent Backup Jobs */}
       {status?.data?.recent_jobs && status.data.recent_jobs.length > 0 && (
