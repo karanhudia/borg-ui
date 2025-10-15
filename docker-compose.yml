@@ -33,6 +33,13 @@ services:
       - /etc/cron.d:/etc/cron.d:ro
       - /etc/localtime:/etc/localtime:ro
 
+      # Optional: Mount remote storage for local-style repository access
+      # Uncomment and configure based on your setup:
+      # For NFS-mounted Raspberry Pi storage:
+      # - /mnt/raspberry-pi:/mnt/remote:rw
+      # For direct host directory access:
+      # - ${REMOTE_STORAGE_PATH:-/path/to/storage}:/mnt/remote:rw
+
     environment:
       # Optional overrides (all have smart defaults)
       - ENVIRONMENT=${ENVIRONMENT:-production}
