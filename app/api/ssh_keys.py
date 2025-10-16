@@ -273,6 +273,23 @@ async def generate_ssh_key(
 
         logger.info("System SSH key generated", name=ssh_key.name, key_type=key_data.key_type, fingerprint=fingerprint, user=current_user.username)
 
+        # Deploy SSH key immediately to filesystem
+        try:
+            deploy_result = subprocess.run(
+                ["python3", "/app/app/scripts/deploy_ssh_key.py"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if deploy_result.returncode == 0:
+                logger.info("System SSH key deployed to filesystem", stdout=deploy_result.stdout)
+            else:
+                logger.warning("SSH key deployment had warnings",
+                             stderr=deploy_result.stderr,
+                             stdout=deploy_result.stdout)
+        except Exception as e:
+            logger.warning("Failed to deploy SSH key to filesystem", error=str(e))
+
         return {
             "success": True,
             "message": "System SSH key generated successfully",
