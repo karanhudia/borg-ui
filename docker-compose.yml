@@ -19,10 +19,9 @@ services:
         - APP_VERSION=${APP_VERSION:-local-dev}
     container_name: borg-web-ui
     restart: unless-stopped
-    network_mode: host
 
-    # ports not needed with host networking
-    # - "${PORT:-8081}:8081"
+    ports:
+      - "${PORT:-8081}:8081"
 
     volumes:
       # Single data volume for all persistent data
@@ -56,14 +55,13 @@ services:
       retries: 3
       start_period: 40s
 
-    # networks not needed with host networking
-    # networks:
-    #   - borg_network
+    networks:
+      - borg_network
 
-# networks:
-#   borg_network:
-#     name: borg_network
-#     driver: bridge
+networks:
+  borg_network:
+    name: borg_network
+    driver: bridge
 
 # Single volume for all persistent data
 volumes:
