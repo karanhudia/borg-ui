@@ -95,6 +95,36 @@ const Backup: React.FC = () => {
     enabled: !!selectedRepoData?.id,
   })
 
+  // Get repository info for size statistics
+  const { data: repoInfoData } = useQuery({
+    queryKey: ['repository-info', selectedRepoData?.id],
+    queryFn: () => repositoriesAPI.getRepositoryInfo(selectedRepoData.id),
+    enabled: !!selectedRepoData?.id,
+  })
+
+  // Calculate live statistics from fetched data
+  const liveStats = useMemo(() => {
+    const archives = archivesData?.data?.archives || []
+    const repoInfo = repoInfoData?.data?.info || {}
+
+    // Get last backup time from most recent archive
+    const lastBackup = archives.length > 0 ? archives[0].start : null
+
+    // Get archive count
+    const archiveCount = archives.length
+
+    // Get total size from repository cache stats (deduplicated size)
+    const cacheStats = repoInfo.cache?.stats
+    const totalSize = cacheStats?.unique_size ? formatBytes(cacheStats.unique_size) : null
+
+    return {
+      lastBackup,
+      archiveCount,
+      totalSize,
+      lastArchive: archives.length > 0 ? archives[0] : null
+    }
+  }, [archivesData, repoInfoData])
+
   // Start backup mutation
   const startBackupMutation = useMutation({
     mutationFn: (repository: string) => backupAPI.startBackup(repository),
@@ -175,6 +205,15 @@ const Backup: React.FC = () => {
   const formatFileSize = (size?: string) => {
     if (!size) return 'Unknown'
     return size
+  }
+
+  // Format bytes to human readable
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 B'
+    const k = 1024
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
   }
 
   // Format timestamp
@@ -397,7 +436,7 @@ const Backup: React.FC = () => {
                           Last Backup
                         </TableCell>
                         <TableCell sx={{ border: 'none', py: 0.5 }}>
-                          {selectedRepoData.last_backup ? formatTimestamp(selectedRepoData.last_backup) : 'Never'}
+                          {liveStats.lastBackup ? formatTimestamp(liveStats.lastBackup) : 'Never'}
                         </TableCell>
                       </TableRow>
                       <TableRow>
@@ -405,7 +444,7 @@ const Backup: React.FC = () => {
                           Total Archive Count
                         </TableCell>
                         <TableCell sx={{ border: 'none', py: 0.5 }}>
-                          {selectedRepoData.archive_count || 0} archives
+                          {liveStats.archiveCount} {liveStats.archiveCount === 1 ? 'archive' : 'archives'}
                         </TableCell>
                       </TableRow>
                       <TableRow>
@@ -413,17 +452,17 @@ const Backup: React.FC = () => {
                           Total Repository Size
                         </TableCell>
                         <TableCell sx={{ border: 'none', py: 0.5 }}>
-                          {selectedRepoData.total_size || 'Unknown'}
+                          {liveStats.totalSize || 'Unknown'}
                         </TableCell>
                       </TableRow>
-                      {archivesData?.data?.archives && archivesData.data.archives.length > 0 && (
+                      {liveStats.lastArchive && (
                         <>
                           <TableRow>
                             <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}>
                               Last Archive
                             </TableCell>
                             <TableCell sx={{ border: 'none', py: 0.5 }}>
-                              {archivesData.data.archives[0].name}
+                              {liveStats.lastArchive.name}
                             </TableCell>
                           </TableRow>
                           <TableRow>
@@ -431,7 +470,7 @@ const Backup: React.FC = () => {
                               Last Archive Created
                             </TableCell>
                             <TableCell sx={{ border: 'none', py: 0.5 }}>
-                              {formatTimestamp(archivesData.data.archives[0].start)}
+                              {formatTimestamp(liveStats.lastArchive.start)}
                             </TableCell>
                           </TableRow>
                         </>
