@@ -8,15 +8,17 @@ import stat
 import sqlite3
 import base64
 import sys
+import pwd
+import grp
 from pathlib import Path
 from cryptography.fernet import Fernet
 
 
 def deploy_ssh_keys():
-    """Deploy SSH keys from database to /root/.ssh/"""
+    """Deploy SSH keys from database to /home/borg/.ssh/"""
     try:
-        # Create .ssh directory
-        ssh_dir = Path("/root/.ssh")
+        # Create .ssh directory for borg user
+        ssh_dir = Path("/home/borg/.ssh")
         ssh_dir.mkdir(parents=True, exist_ok=True)
         ssh_dir.chmod(0o700)
 
@@ -53,6 +55,16 @@ def deploy_ssh_keys():
         pub_key_file = ssh_dir / f"id_{key_type}.pub"
         pub_key_file.write_text(public_key)
         pub_key_file.chmod(0o644)
+
+        # Change ownership to borg user
+        try:
+            borg_uid = pwd.getpwnam('borg').pw_uid
+            borg_gid = grp.getgrnam('borg').gr_gid
+            os.chown(ssh_dir, borg_uid, borg_gid)
+            os.chown(key_file, borg_uid, borg_gid)
+            os.chown(pub_key_file, borg_uid, borg_gid)
+        except KeyError:
+            print("⚠️  Warning: borg user not found, skipping ownership change")
 
         print(f"✓ SSH keys deployed to {ssh_dir}")
         print(f"  - Private key: {key_file}")
