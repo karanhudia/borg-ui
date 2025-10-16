@@ -158,6 +158,17 @@ async def create_repository(
                        borg_path=remote_check.get("borg_path"))
 
             # Build SSH repository path
+            # If path already starts with ssh://, extract just the remote path
+            if repo_path.startswith("ssh://"):
+                # Parse the SSH URL to extract the path component
+                import re
+                match = re.match(r"ssh://[^/]+(/.*)", repo_path)
+                if match:
+                    repo_path = match.group(1)
+                else:
+                    # Fallback: strip ssh:// and extract path after host
+                    repo_path = repo_path.split("/", 3)[-1] if "/" in repo_path else repo_path
+
             repo_path = f"ssh://{repo_data.username}@{repo_data.host}:{repo_data.port}/{repo_path.lstrip('/')}"
         else:
             raise HTTPException(status_code=400, detail="Invalid repository type. Must be 'local', 'ssh', or 'sftp'")
