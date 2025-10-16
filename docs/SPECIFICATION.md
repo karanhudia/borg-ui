@@ -1,4 +1,4 @@
-# Borgmatic Web UI - Technical Specification
+# Borg Web UI - Technical Specification
 
 ## 1. Executive Summary
 
@@ -599,9 +599,9 @@ CMD ["gunicorn", "app.main:app", "--bind", "0.0.0.0:8000", "--workers", "2", "--
 version: '3.8'
 
 services:
-  borgmatic-ui:
+  borg-ui:
     build: .
-    container_name: borgmatic-web-ui
+    container_name: borg-web-ui
     ports:
       - "8080:8000"
     volumes:
@@ -610,7 +610,7 @@ services:
       - ./logs:/app/logs
       - /etc/cron.d:/etc/cron.d:ro
     environment:
-      - BORGMATIC_CONFIG_PATH=/app/config
+      - BORG_CONFIG_PATH=/app/config
       - BORGMATIC_BACKUP_PATH=/backups
       - LOG_LEVEL=INFO
       - SECRET_KEY=${SECRET_KEY}
@@ -646,7 +646,7 @@ volumes:
 # .env file
 SECRET_KEY=your-secret-key-here
 DB_PASSWORD=your-db-password
-BORGMATIC_CONFIG_PATH=/app/config
+BORG_CONFIG_PATH=/app/config
 BORGMATIC_BACKUP_PATH=/backups
 LOG_LEVEL=INFO
 ALLOWED_HOSTS=localhost,127.0.0.1
@@ -742,7 +742,7 @@ structlog.configure(
 ```python
 async def backup_configuration():
     """Backup current configuration"""
-    config_path = os.getenv("BORGMATIC_CONFIG_PATH")
+    config_path = os.getenv("BORG_CONFIG_PATH")
     backup_dir = "/app/backups/config"
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -822,7 +822,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import QueuePool
 
 engine = create_engine(
-    "sqlite:///borgmatic.db",
+    "sqlite:///borg.db",
     poolclass=QueuePool,
     pool_size=10,
     max_overflow=20,

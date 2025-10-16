@@ -1,10 +1,10 @@
-# Borgmatic Web UI
+# Borg Web UI
 
-[![Docker Hub](https://img.shields.io/docker/pulls/ainullcode/borgmatic-ui)](https://hub.docker.com/r/ainullcode/borgmatic-ui)
+[![Docker Hub](https://img.shields.io/docker/pulls/ainullcode/borg-ui)](https://hub.docker.com/r/ainullcode/borg-ui)
 [![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
 [![GitHub Actions](https://github.com/karanhudia/borg-ui/workflows/Build%20and%20Publish%20Docker%20Images/badge.svg)](https://github.com/karanhudia/borg-ui/actions)
 
-A modern, user-friendly web interface for [Borgmatic](https://torsion.org/borgmatic/) backup management. **Zero-configuration deployment** - just run `docker compose up` and you're done!
+A modern, user-friendly web interface for [Borg Backup](https://borgbackup.readthedocs.io/) management. **Zero-configuration deployment** - just run `docker compose up` and you're done!
 
 **Official Repository**: https://github.com/karanhudia/borg-ui
 
@@ -64,8 +64,8 @@ version: '3.8'
 
 services:
   app:
-    image: ainullcode/borgmatic-ui:latest
-    container_name: borgmatic-web-ui
+    image: ainullcode/borg-ui:latest
+    container_name: borg-web-ui
     restart: unless-stopped
     ports:
       - "8081:8081"
@@ -104,16 +104,16 @@ Portainer is the easiest way to deploy with a visual interface.
 #### Step 1: Add Stack in Portainer
 
 1. Go to **Stacks** > **Add Stack**
-2. Name your stack: `borgmatic-ui`
+2. Name your stack: `borg-ui`
 3. Paste the following:
 
 ```yaml
 version: '3.8'
 
 services:
-  borgmatic-ui:
-    image: ainullcode/borgmatic-ui:latest
-    container_name: borgmatic-web-ui
+  borg-ui:
+    image: ainullcode/borg-ui:latest
+    container_name: borg-web-ui
     restart: unless-stopped
 
     ports:
@@ -156,19 +156,19 @@ docker volume create borg_data
 
 ```bash
 docker run -d \
-  --name borgmatic-web-ui \
+  --name borg-web-ui \
   --restart unless-stopped \
   -p 8081:8081 \
   -v borg_data:/data \
   -v /:/local:rw \
-  ainullcode/borgmatic-ui:latest
+  ainullcode/borg-ui:latest
 ```
 
 #### Step 3: Verify Container is Running
 
 ```bash
-docker ps | grep borgmatic-web-ui
-docker logs borgmatic-web-ui
+docker ps | grep borg-web-ui
+docker logs borg-web-ui
 ```
 
 #### Step 4: Access Application
@@ -184,7 +184,7 @@ For infrastructure-as-code deployments.
 #### Step 1: Create Project Directory
 
 ```bash
-mkdir borgmatic-ui && cd borgmatic-ui
+mkdir borg-ui && cd borg-ui
 ```
 
 #### Step 2: Create `docker-compose.yml`
@@ -194,8 +194,8 @@ version: '3.8'
 
 services:
   app:
-    image: ainullcode/borgmatic-ui:latest
-    container_name: borgmatic-web-ui
+    image: ainullcode/borg-ui:latest
+    container_name: borg-web-ui
     restart: unless-stopped
 
     ports:
@@ -244,9 +244,8 @@ The following are **automatically configured** on first run:
 | Setting | Auto-Configuration |
 |---------|-------------------|
 | **SECRET_KEY** | Randomly generated (32 bytes), persisted to `/data/.secret_key` |
-| **DATABASE_URL** | Auto-derived as `sqlite:///data/borgmatic.db` |
-| **BORGMATIC_CONFIG_PATH** | Auto-derived as `/data/config/borgmatic.yaml` |
-| **LOG_FILE** | Auto-derived as `/data/logs/borgmatic-ui.log` |
+| **DATABASE_URL** | Auto-derived as `sqlite:///data/borg.db` |
+| **LOG_FILE** | Auto-derived as `/data/logs/borg-ui.log` |
 | **SSH_KEYS_DIR** | Auto-derived as `/data/ssh_keys` |
 
 ### Optional Environment Variables
@@ -269,7 +268,7 @@ environment:
 
 ### Backup Repository Configuration
 
-**Important**: You configure backup repositories in the borgmatic config file through the web UI, not via Docker volumes!
+**Important**: You configure backup repositories directly through the web UI, not via Docker volumes!
 
 Repositories can be:
 - **Local paths**: `/mnt/backup`, `/external-drive/backups`
@@ -353,7 +352,7 @@ Repositories created at `/local/backups/repo-name` will actually be stored on yo
 Only one volume is needed:
 
 **`borg_data`** - Contains:
-- SQLite database (`borgmatic.db`)
+- SQLite database (`borg.db`)
 - Auto-generated SECRET_KEY (`.secret_key`)
 - SSH keys
 - Configuration files
@@ -384,7 +383,7 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: /mnt/storage/borgmatic-data
+      device: /mnt/storage/borg-data
 ```
 
 ---
@@ -428,7 +427,7 @@ Once running, access interactive API documentation:
 
 Check logs:
 ```bash
-docker logs borgmatic-web-ui
+docker logs borg-web-ui
 ```
 
 ### Port Already in Use
@@ -441,11 +440,11 @@ environment:
 
 ### Data Lost After Container Removal
 
-Ensure you're using a Docker volume (not bind mount). The database must be at `/data/borgmatic.db` inside the volume.
+Ensure you're using a Docker volume (not bind mount). The database must be at `/data/borg.db` inside the volume.
 
 ### Permission Issues
 
-The container runs as user `borgmatic` with **configurable UID/GID** (default: 1001:1001).
+The container runs as user `borg` with **configurable UID/GID** (default: 1001:1001).
 
 #### Quick Fix: Match your host user (LinuxServer.io style)
 
@@ -477,7 +476,7 @@ PGID=1000
 docker run -d \
   -e PUID=1000 \
   -e PGID=1000 \
-  ainullcode/borgmatic-ui:latest
+  ainullcode/borg-ui:latest
 ```
 
 3. Restart container:
@@ -506,8 +505,8 @@ If you need to back up files owned by multiple users or root:
 
 To rotate the SECRET_KEY:
 ```bash
-docker exec borgmatic-web-ui rm /data/.secret_key
-docker restart borgmatic-web-ui
+docker exec borg-web-ui rm /data/.secret_key
+docker restart borg-web-ui
 ```
 
 A new SECRET_KEY will be generated automatically. Note: This will invalidate all existing user sessions.
@@ -578,7 +577,7 @@ npm test
 ### Project Structure
 
 ```
-borgmatic-ui/
+borg-ui/
 ├── app/                    # Backend (FastAPI)
 │   ├── api/               # API endpoints
 │   ├── database/          # Database models
@@ -636,16 +635,15 @@ See the [LICENSE](LICENSE) file for complete terms.
 ### Resources
 
 - **Official Repository**: https://github.com/karanhudia/borg-ui
-- **Docker Hub**: https://hub.docker.com/r/ainullcode/borgmatic-ui
-- **Borgmatic Docs**: https://torsion.org/borgmatic/
-- **Borg Backup**: https://borgbackup.readthedocs.io/
+- **Docker Hub**: https://hub.docker.com/r/ainullcode/borg-ui
+- **Borg Backup Docs**: https://borgbackup.readthedocs.io/
 
 ---
 
 ## Acknowledgments
 
 Built with:
-- [Borgmatic](https://torsion.org/borgmatic/) - Backup automation
+- [Borg Backup](https://borgbackup.readthedocs.io/) - Deduplication backup program
 - [FastAPI](https://fastapi.tiangolo.com/) - Backend framework
 - [React](https://react.dev/) - Frontend framework
 - [Material-UI](https://mui.com/) - UI components

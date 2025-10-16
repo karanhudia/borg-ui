@@ -1,6 +1,6 @@
-# Contributing to Borgmatic UI
+# Contributing to Borg UI
 
-Thank you for your interest in contributing to Borgmatic UI!
+Thank you for your interest in contributing to Borg UI!
 
 ## Important: No Forking Policy
 
@@ -168,7 +168,7 @@ Contributors will be:
 
 ## Thank You!
 
-Your contributions help make Borgmatic UI better for everyone! 🎉
+Your contributions help make Borg UI better for everyone! 🎉
 
 ---
 

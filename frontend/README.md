@@ -1,6 +1,6 @@
-# Borgmatic Web UI - Frontend
+# Borg Web UI - Frontend
 
-React frontend for the Borgmatic Web UI application.
+React frontend for the Borg Web UI application.
 
 ## Development
 

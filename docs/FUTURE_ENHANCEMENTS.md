@@ -2,7 +2,7 @@
 
 ## 📋 **Overview**
 
-This document outlines the optional enhancements that could be added to the Borgmatic Web UI in future versions. These features represent the remaining 2% of functionality and are **not required** for production use.
+This document outlines the optional enhancements that could be added to the Borg Web UI in future versions. These features represent the remaining 2% of functionality and are **not required** for production use.
 
 The current implementation is **98% complete** and **production-ready**. These enhancements are purely optional and can be added based on user demand and development resources.
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Borgmatic UI uses **SQLite** as its database. The database file is stored **outside the container** on your host machine, ensuring data persists across container rebuilds, updates, and restarts.
+Borg UI uses **SQLite** as its database. The database file is stored **outside the container** on your host machine, ensuring data persists across container rebuilds, updates, and restarts.
 
 ---
 
@@ -12,12 +12,12 @@ Borgmatic UI uses **SQLite** as its database. The database file is stored **outs
 
 **Inside Container:**
 ```
-/app/data/borgmatic.db
+/app/data/borg.db
 ```
 
 **On Host Machine:**
 ```
-./data/borgmatic.db
+./data/borg.db
 ```
 
 ### Docker Volume Mount
@@ -45,13 +45,13 @@ This means:
 In `.env` or `docker-compose.yml`:
 
 ```bash
-DATABASE_URL=sqlite:////app/data/borgmatic.db
+DATABASE_URL=sqlite:////app/data/borg.db
 ```
 
 **Note the 4 slashes:** `sqlite:////`
 - `sqlite://` = SQLite protocol
 - `//` = Absolute path follows
-- `/app/data/borgmatic.db` = Full path in container
+- `/app/data/borg.db` = Full path in container
 
 ---
 
@@ -61,10 +61,10 @@ DATABASE_URL=sqlite:////app/data/borgmatic.db
 
 ```bash
 # On your host machine
-ls -lh ./data/borgmatic.db
+ls -lh ./data/borg.db
 
 # Should show something like:
-# -rw-r--r--  1 user  staff   256K Jan 14 10:30 ./data/borgmatic.db
+# -rw-r--r--  1 user  staff   256K Jan 14 10:30 ./data/borg.db
 ```
 
 ### Test 2: Create Test Data
@@ -79,7 +79,7 @@ docker-compose up -d
 docker-compose down
 
 # 4. Check database file still exists
-ls -lh ./data/borgmatic.db
+ls -lh ./data/borg.db
 
 # 5. Restart the container
 docker-compose up -d
@@ -111,7 +111,7 @@ docker-compose up -d
 docker-compose down
 
 # Copy the database file
-cp ./data/borgmatic.db ./data/borgmatic-backup-$(date +%Y%m%d).db
+cp ./data/borg.db ./data/borgmatic-backup-$(date +%Y%m%d).db
 
 # Or create a compressed backup
 tar -czf borgmatic-backup-$(date +%Y%m%d).tar.gz ./data/
@@ -131,7 +131,7 @@ mkdir -p "$BACKUP_DIR"
 
 # Create backup with timestamp
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-cp ./data/borgmatic.db "$BACKUP_DIR/borgmatic-$TIMESTAMP.db"
+cp ./data/borg.db "$BACKUP_DIR/borgmatic-$TIMESTAMP.db"
 
 # Keep only last 7 days of backups
 find "$BACKUP_DIR" -name "borgmatic-*.db" -mtime +7 -delete
@@ -166,7 +166,7 @@ crontab -e
 docker-compose down
 
 # 2. Replace the database file
-cp ./data/borgmatic-backup-20250114.db ./data/borgmatic.db
+cp ./data/borgmatic-backup-20250114.db ./data/borg.db
 
 # 3. Restart
 docker-compose up -d
@@ -176,7 +176,7 @@ docker-compose up -d
 
 ```bash
 # 1. Copy database from old server
-scp user@old-server:/path/to/borg-ui/data/borgmatic.db ./data/
+scp user@old-server:/path/to/borg-ui/data/borg.db ./data/
 
 # 2. Start the application
 docker-compose up -d
@@ -231,7 +231,7 @@ If you get permission denied errors:
 sudo chown -R $USER:$USER ./data/
 
 # Fix permissions
-chmod 644 ./data/borgmatic.db
+chmod 644 ./data/borg.db
 chmod 755 ./data/
 ```
 
@@ -244,13 +244,13 @@ If database becomes corrupted:
 docker-compose down
 
 # 2. Check integrity
-sqlite3 ./data/borgmatic.db "PRAGMA integrity_check;"
+sqlite3 ./data/borg.db "PRAGMA integrity_check;"
 
 # If corrupted, restore from backup
-cp ./data/borgmatic-backup-YYYYMMDD.db ./data/borgmatic.db
+cp ./data/borgmatic-backup-YYYYMMDD.db ./data/borg.db
 
 # Or start fresh (⚠️ loses all data!)
-rm ./data/borgmatic.db
+rm ./data/borg.db
 
 # 3. Restart
 docker-compose up -d
@@ -328,10 +328,10 @@ docker-compose up -d
 
 ```bash
 # On host
-du -h ./data/borgmatic.db
+du -h ./data/borg.db
 
 # Or inside container
-docker exec borgmatic-web-ui du -h /app/data/borgmatic.db
+docker exec borg-web-ui du -h /app/data/borg.db
 ```
 
 ### Vacuum Database (Optimize)
@@ -343,7 +343,7 @@ SQLite can accumulate free space. Vacuum to reclaim it:
 docker-compose down
 
 # Vacuum the database
-sqlite3 ./data/borgmatic.db "VACUUM;"
+sqlite3 ./data/borg.db "VACUUM;"
 
 # Restart
 docker-compose up -d
@@ -362,7 +362,7 @@ docker-compose up -d
 
 ## Summary
 
-✅ **Database persists automatically** - stored in `./data/borgmatic.db`
+✅ **Database persists automatically** - stored in `./data/borg.db`
 ✅ **Survives container rebuilds** - volume mounted to host
 ✅ **Easy to backup** - just copy one file
 ✅ **Simple to migrate** - transfer data directory

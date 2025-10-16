@@ -19,7 +19,7 @@ This document breaks down the implementation of the new system design into manag
 - [x] Ensure only one config can be default at a time
 - [x] Add config validation check endpoint
 - [x] Return validation status in config response
-- [x] **BONUS**: Add borgmatic CLI config generator endpoint
+- [x] **BONUS**: Add borg CLI config generator endpoint
 
 **Frontend Changes**:
 - [x] Add configuration selector dropdown at top of Config page
@@ -28,14 +28,14 @@ This document breaks down the implementation of the new system design into manag
 - [x] Add visual indicator when no default is selected
 - [x] Update state management to track default config
 - [x] Create context for configuration state (AppContext)
-- [x] **BONUS**: Replace templates with borgmatic CLI generator
+- [x] **BONUS**: Replace templates with borg CLI generator
 
 **Acceptance Criteria**:
 - ✅ User can create multiple configurations
 - ✅ Only one configuration can be marked as default
 - ✅ Default configuration is persisted across sessions
 - ✅ Clear visual indication of which config is default
-- ✅ Configurations always up-to-date via borgmatic CLI
+- ✅ Configurations always up-to-date via borg CLI
 
 ---
 
@@ -316,7 +316,7 @@ Settings: true (always)
 - `frontend/src/pages/Config.tsx`
 
 **Implementation**:
-- [ ] Run `borgmatic config validate` on save
+- [ ] Run `borg config validate` on save
 - [ ] Show validation results clearly
 - [ ] List source directories from config
 - [ ] Show which repository is configured
@@ -473,7 +473,7 @@ graph TD
 6. Next: Begin Phase 2 with Task 2.1 (Tab Order Reorganization) or other enhancements
 
 **Phase 1 Completions** (All Done!):
-- ✅ Task 1.1: Multi-configuration management with borgmatic CLI generator
+- ✅ Task 1.1: Multi-configuration management with borg CLI generator
 - ✅ Task 1.2: Tab enablement system with AppContext and route guards
 - ✅ Task 1.3: Single-key SSH system with deploy and test functionality
 - ✅ Task 1.4: Auto-key assignment (merged with Task 1.3)

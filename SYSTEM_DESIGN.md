@@ -1,7 +1,7 @@
-# Borgmatic UI - System Design
+# Borg UI - System Design
 
 ## Overview
-Borgmatic UI is a web-based interface for managing Borg backup operations. The design follows a guided workflow that helps users understand and complete each step of the backup process.
+Borg UI is a web-based interface for managing Borg backup operations. The design follows a guided workflow that helps users understand and complete each step of the backup process.
 
 ## Core Design Principles
 
@@ -157,7 +157,7 @@ Validations:
 Command: borgmatic --verbosity 1 --files
 
 Backend Process:
-1. Execute borgmatic command
+1. Execute borg command
 2. Stream output to log file
 3. Frontend polls log file every 2-3 seconds
 4. Display logs in real-time in UI
@@ -237,7 +237,7 @@ borg --version
 borgmatic --version
 
 # Validate configuration
-borgmatic config validate
+borg config validate
 
 # Edit configuration
 nano /etc/borgmatic/config.yaml
