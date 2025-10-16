@@ -25,6 +25,7 @@ class Repository(Base):
     encryption = Column(String, default="repokey")
     compression = Column(String, default="lz4")
     passphrase = Column(String, nullable=True)  # Borg repository passphrase (for encrypted repos)
+    source_directories = Column(Text, nullable=True)  # JSON array of directories to backup
     is_active = Column(Boolean, default=True)
     last_backup = Column(DateTime, nullable=True)
     total_size = Column(String, nullable=True)

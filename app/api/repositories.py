@@ -6,6 +6,7 @@ import structlog
 import os
 import subprocess
 import asyncio
+import json
 
 from app.database.database import get_db
 from app.database.models import User, Repository
@@ -28,6 +29,7 @@ class RepositoryCreate(BaseModel):
     encryption: str = "repokey"  # repokey, keyfile, none
     compression: str = "lz4"  # lz4, zstd, zlib, none
     passphrase: Optional[str] = None
+    source_directories: Optional[List[str]] = None  # List of directories to backup
     repository_type: str = "local"  # local, ssh, sftp
     host: Optional[str] = None  # For SSH repositories
     port: Optional[int] = 22  # SSH port
@@ -38,6 +40,7 @@ class RepositoryUpdate(BaseModel):
     name: Optional[str] = None
     path: Optional[str] = None
     compression: Optional[str] = None
+    source_directories: Optional[List[str]] = None
     is_active: Optional[bool] = None
 
 class RepositoryInfo(BaseModel):
@@ -46,6 +49,7 @@ class RepositoryInfo(BaseModel):
     path: str
     encryption: str
     compression: str
+    source_directories: Optional[List[str]]
     last_backup: Optional[str]
     total_size: Optional[str]
     archive_count: int
@@ -70,6 +74,7 @@ async def get_repositories(
                     "path": repo.path,
                     "encryption": repo.encryption,
                     "compression": repo.compression,
+                    "source_directories": json.loads(repo.source_directories) if repo.source_directories else [],
                     "last_backup": repo.last_backup.isoformat() if repo.last_backup else None,
                     "total_size": repo.total_size,
                     "archive_count": repo.archive_count,
@@ -241,6 +246,11 @@ async def create_repository(
         if not init_result["success"]:
             raise HTTPException(status_code=500, detail=f"Failed to initialize repository: {init_result['error']}")
         
+        # Serialize source directories as JSON
+        source_directories_json = None
+        if repo_data.source_directories:
+            source_directories_json = json.dumps(repo_data.source_directories)
+
         # Create repository record
         repository = Repository(
             name=repo_data.name,
@@ -248,6 +258,7 @@ async def create_repository(
             encryption=repo_data.encryption,
             compression=repo_data.compression,
             passphrase=repo_data.passphrase,  # Store passphrase for backups
+            source_directories=source_directories_json,
             is_active=True,
             repository_type=repo_data.repository_type,
             host=repo_data.host,
@@ -357,7 +368,10 @@ async def update_repository(
         
         if repo_data.compression is not None:
             repository.compression = repo_data.compression
-        
+
+        if repo_data.source_directories is not None:
+            repository.source_directories = json.dumps(repo_data.source_directories)
+
         if repo_data.is_active is not None:
             repository.is_active = repo_data.is_active
         
