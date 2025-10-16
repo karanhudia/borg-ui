@@ -19,6 +19,76 @@ class BackupService:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.running_processes = {}  # Track running backup processes by job_id
 
+    async def _update_repository_stats(self, db: Session, repository_path: str, env: dict):
+        """Update repository statistics after a successful backup"""
+        try:
+            repo_record = db.query(Repository).filter(Repository.path == repository_path).first()
+            if not repo_record:
+                logger.warning("Repository record not found for stats update", repository=repository_path)
+                return
+
+            # Get archive count using borg list --json
+            list_cmd = ["borg", "list", "--json", repository_path]
+            list_process = await asyncio.create_subprocess_exec(
+                *list_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env
+            )
+            list_stdout, list_stderr = await asyncio.wait_for(list_process.communicate(), timeout=30)
+
+            if list_process.returncode == 0:
+                try:
+                    archives_data = json.loads(list_stdout.decode())
+                    archive_count = len(archives_data.get("archives", []))
+                    repo_record.archive_count = archive_count
+                    logger.info("Updated archive count", repository=repository_path, count=archive_count)
+                except json.JSONDecodeError as e:
+                    logger.warning("Failed to parse borg list output", error=str(e))
+
+            # Get repository info using borg info --json
+            info_cmd = ["borg", "info", "--json", repository_path]
+            info_process = await asyncio.create_subprocess_exec(
+                *info_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env
+            )
+            info_stdout, info_stderr = await asyncio.wait_for(info_process.communicate(), timeout=30)
+
+            if info_process.returncode == 0:
+                try:
+                    info_data = json.loads(info_stdout.decode())
+                    cache_stats = info_data.get("cache", {}).get("stats", {})
+
+                    # Get total repository size (unique_size is deduplicated size)
+                    unique_size = cache_stats.get("unique_size", 0)
+                    if unique_size > 0:
+                        # Format size to human readable
+                        repo_record.total_size = self._format_bytes(unique_size)
+                        logger.info("Updated repository size", repository=repository_path, size=repo_record.total_size)
+                except json.JSONDecodeError as e:
+                    logger.warning("Failed to parse borg info output", error=str(e))
+
+            # Update last_backup timestamp
+            repo_record.last_backup = datetime.utcnow()
+
+            db.commit()
+            logger.info("Repository statistics updated", repository=repository_path)
+
+        except asyncio.TimeoutError:
+            logger.warning("Timeout while updating repository stats", repository=repository_path)
+        except Exception as e:
+            logger.error("Failed to update repository stats", repository=repository_path, error=str(e))
+
+    def _format_bytes(self, bytes_value: int) -> str:
+        """Format bytes to human readable string"""
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if bytes_value < 1024.0:
+                return f"{bytes_value:.2f} {unit}"
+            bytes_value /= 1024.0
+        return f"{bytes_value:.2f} PB"
+
     async def execute_backup(self, job_id: int, repository: str, config_file: str, db: Session = None):
         """Execute backup using borg directly for better control"""
 
@@ -178,12 +248,16 @@ class BackupService:
                 elif process.returncode == 0:
                     job.status = "completed"
                     job.progress = 100
+                    # Update repository statistics after successful backup
+                    await self._update_repository_stats(db, repository, env)
                 elif 100 <= process.returncode <= 127:
                     # Warning (modern exit code system)
                     job.status = "completed"
                     job.progress = 100
                     job.error_message = f"Backup completed with warning (exit code {process.returncode})"
                     logger.warning("Backup completed with warning", job_id=job_id, exit_code=process.returncode)
+                    # Update repository statistics even with warnings
+                    await self._update_repository_stats(db, repository, env)
                 else:
                     job.status = "failed"
                     job.error_message = f"Backup failed with exit code {process.returncode}"
