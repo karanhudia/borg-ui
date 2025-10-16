@@ -57,7 +57,7 @@ interface SystemSettings {
   webhook_url: string
   auto_cleanup: boolean
   cleanup_retention_days: number
-  borgmatic_version: string
+  borg_version: string
   app_version: string
 }
 
@@ -442,8 +442,8 @@ const Settings: React.FC = () => {
                             <Shield size={20} />
                           </ListItemIcon>
                           <ListItemText
-                            primary="Borgmatic Version"
-                            secondary={systemForm.borgmatic_version}
+                            primary="Borg Version"
+                            secondary={systemForm.borg_version}
                             primaryTypographyProps={{ variant: 'body2' }}
                             secondaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
                           />

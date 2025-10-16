@@ -1,6 +1,6 @@
 # Copyright Notice
 
-## Borgmatic Web UI
+## Borg Web UI
 
 **Copyright (c) 2025 Karan Hudia (ainullcode)**
 All Rights Reserved.
@@ -14,7 +14,7 @@ This Software is licensed under a proprietary license. See the [LICENSE](../LICE
 ## Docker Images
 
 Pre-built Docker images are available at:
-- Docker Hub: `ainullcode/borgmatic-ui`
+- Docker Hub: `ainullcode/borg-ui`
 - Supported architectures: amd64, arm64, armv7
 
 ## Usage Rights
@@ -38,7 +38,7 @@ For licensing inquiries or permissions:
 
 ## Trademark
 
-"Borgmatic UI" and associated logos are trademarks of Karan Hudia.
+"Borg UI" and associated logos are trademarks of Karan Hudia.
 
 ---
 

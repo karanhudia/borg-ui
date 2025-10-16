@@ -25,9 +25,6 @@ class Settings(BaseSettings):
     # Database settings - auto-derived from data_dir
     database_url: str = ""  # Will be auto-derived from data_dir
 
-    # Backup settings - auto-derived from data_dir
-    borgmatic_backup_path: str = ""  # Deprecated - not needed anymore
-
     # SSH keys directory - auto-derived from data_dir
     ssh_keys_dir: str = ""  # Will be auto-derived from data_dir
 

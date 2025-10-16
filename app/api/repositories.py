@@ -114,8 +114,8 @@ async def create_repository(
         if repo_data.repository_type == "local":
             # For local repositories, ensure path is absolute
             if not os.path.isabs(repo_path):
-                # If relative path, make it relative to backup path
-                repo_path = os.path.join(settings.borgmatic_backup_path, repo_path)
+                # If relative path, make it relative to data directory
+                repo_path = os.path.join(settings.data_dir, repo_path)
 
             # Validate that the path is a valid absolute path
             repo_path = os.path.abspath(repo_path)
@@ -129,7 +129,7 @@ async def create_repository(
                 raise HTTPException(status_code=400, detail="SSH key is required for SSH repositories")
 
             # Check if borg is installed on remote machine
-            logger.info("Checking if borg/borgmatic is installed on remote machine",
+            logger.info("Checking if borg is installed on remote machine",
                        host=repo_data.host,
                        username=repo_data.username)
 
@@ -155,7 +155,6 @@ async def create_repository(
             logger.info("Remote borg check passed",
                        host=repo_data.host,
                        has_borg=remote_check.get("has_borg"),
-                       has_borgmatic=remote_check.get("has_borgmatic"),
                        borg_path=remote_check.get("borg_path"))
 
             # Build SSH repository path
@@ -519,7 +518,7 @@ async def get_repository_statistics(
         raise HTTPException(status_code=500, detail=f"Failed to get repository statistics: {str(e)}")
 
 async def check_remote_borg_installation(host: str, username: str, port: int, ssh_key_id: int) -> Dict[str, Any]:
-    """Check if borg/borgmatic is installed on remote machine"""
+    """Check if borg is installed on remote machine"""
     temp_key_file = None
     try:
         logger.info("Checking remote borg installation", host=host, username=username, port=port)
@@ -537,8 +536,7 @@ async def check_remote_borg_installation(host: str, username: str, port: int, ss
             return {
                 "success": False,
                 "error": "SSH key not found",
-                "has_borg": False,
-                "has_borgmatic": False
+                "has_borg": False
             }
 
         # Decrypt private key
@@ -575,35 +573,14 @@ async def check_remote_borg_installation(host: str, username: str, port: int, ss
         borg_stdout, borg_stderr = await asyncio.wait_for(borg_process.communicate(), timeout=15)
         has_borg = borg_process.returncode == 0
 
-        # Check for borgmatic
-        borgmatic_cmd = [
-            "ssh", "-i", temp_key_file,
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "ConnectTimeout=10",
-            "-p", str(port),
-            f"{username}@{host}",
-            "which borgmatic"
-        ]
-
-        borgmatic_process = await asyncio.create_subprocess_exec(
-            *borgmatic_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        borgmatic_stdout, borgmatic_stderr = await asyncio.wait_for(borgmatic_process.communicate(), timeout=15)
-        has_borgmatic = borgmatic_process.returncode == 0
-
         logger.info("Remote borg check completed",
                    host=host,
-                   has_borg=has_borg,
-                   has_borgmatic=has_borgmatic)
+                   has_borg=has_borg)
 
         return {
             "success": True,
             "has_borg": has_borg,
-            "has_borgmatic": has_borgmatic,
-            "borg_path": borg_stdout.decode().strip() if has_borg else None,
-            "borgmatic_path": borgmatic_stdout.decode().strip() if has_borgmatic else None
+            "borg_path": borg_stdout.decode().strip() if has_borg else None
         }
 
     except asyncio.TimeoutError:
@@ -611,16 +588,14 @@ async def check_remote_borg_installation(host: str, username: str, port: int, ss
         return {
             "success": False,
             "error": "Connection timeout while checking remote borg installation",
-            "has_borg": False,
-            "has_borgmatic": False
+            "has_borg": False
         }
     except Exception as e:
         logger.error("Failed to check remote borg installation", host=host, error=str(e))
         return {
             "success": False,
             "error": str(e),
-            "has_borg": False,
-            "has_borgmatic": False
+            "has_borg": False
         }
     finally:
         if temp_key_file and os.path.exists(temp_key_file):

@@ -79,7 +79,7 @@ async def get_system_settings(
                 "webhook_url": settings.webhook_url,
                 "auto_cleanup": settings.auto_cleanup,
                 "cleanup_retention_days": settings.cleanup_retention_days,
-                "borgmatic_version": borg.get_version(),
+                "borg_version": borg.get_version(),
                 "app_version": "1.0.0"
             }
         }

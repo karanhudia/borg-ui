@@ -53,7 +53,6 @@ const navigationWithKeys = [
 interface SystemInfo {
   app_version: string
   borg_version: string | null
-  borgmatic_version: string | null
 }
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -192,11 +191,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {systemInfo.borg_version && (
               <Typography variant="caption" display="block" color="text.secondary" sx={{ lineHeight: 1.5 }}>
                 {systemInfo.borg_version}
-              </Typography>
-            )}
-            {systemInfo.borgmatic_version && (
-              <Typography variant="caption" display="block" color="text.secondary" sx={{ lineHeight: 1.5 }}>
-                {systemInfo.borgmatic_version}
               </Typography>
             )}
           </Box>

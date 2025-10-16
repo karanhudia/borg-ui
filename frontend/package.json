@@ -1,7 +1,7 @@
 {
   "name": "borg-web-ui-frontend",
   "version": "1.0.0",
-  "description": "React frontend for Borgmatic Web UI",
+  "description": "React frontend for Borg Web UI",
   "private": true,
   "dependencies": {
     "@emotion/react": "^11.14.0",

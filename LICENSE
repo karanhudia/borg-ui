@@ -34,7 +34,7 @@ TERMS AND CONDITIONS
       proprietary license
 
 4. DOCKER IMAGES
-   Pre-built Docker images (ainullcode/borgmatic-ui) are provided for convenience:
+   Pre-built Docker images (ainullcode/borg-ui) are provided for convenience:
 
    a) You may pull and use these images according to section 1
    b) You may NOT extract, decompile, or reverse-engineer the images

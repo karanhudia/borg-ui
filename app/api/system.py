@@ -16,7 +16,6 @@ class SystemInfo(BaseModel):
     """System information model"""
     app_version: str
     borg_version: Optional[str]
-    borgmatic_version: Optional[str]
 
 
 def get_command_version(command: str) -> Optional[str]:
@@ -48,13 +47,9 @@ async def get_system_info():
         # Get Borg version
         borg_version = get_command_version("borg")
 
-        # Get Borgmatic version
-        borgmatic_version = get_command_version("borgmatic")
-
         return SystemInfo(
             app_version=app_version,
-            borg_version=borg_version,
-            borgmatic_version=borgmatic_version
+            borg_version=borg_version
         )
     except Exception as e:
         logger.error("Failed to get system info", error=str(e))

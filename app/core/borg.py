@@ -322,8 +322,7 @@ class BorgInterface:
             return {
                 "success": True,
                 "borg_version": borg_version,
-                "borgmatic_version": borg_version,  # Keep for compatibility
-                "backup_path": settings.borgmatic_backup_path,
+                "data_dir": settings.data_dir,
                 "help_available": help_result["success"]
             }
 
