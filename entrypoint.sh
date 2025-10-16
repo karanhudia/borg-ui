@@ -35,6 +35,10 @@ else
     echo "[$(date)] UID/GID already correct, skipping update"
 fi
 
+# Deploy SSH keys from database to filesystem
+echo "[$(date)] Deploying SSH keys..."
+python3 /app/app/scripts/deploy_ssh_key.py || echo "[$(date)] Warning: SSH key deployment failed"
+
 # Switch to borg user and start the application
 echo "[$(date)] Starting Borg Web UI as user borg (${PUID}:${PGID})..."
 cd /app
