@@ -57,13 +57,7 @@ RUN apt-get update && apt-get install -y \
     # Cleanup
     && rm -rf /var/lib/apt/lists/*
 
-# Install borgmatic and additional Python packages
-RUN pip3 install --no-cache-dir \
-    borgmatic \
-    borgmatic[mysql] \
-    borgmatic[postgresql] \
-    borgmatic[remote] \
-    borgmatic[ssh]
+# No additional Python packages needed - borg is already installed
 
 # Install additional useful tools
 RUN apt-get update && apt-get install -y \
@@ -98,49 +92,45 @@ RUN mkdir -p \
     /data/logs \
     /data/config \
     /backups \
-    /var/log/borgmatic \
-    /etc/borgmatic
+    /var/log/borg \
+    /etc/borg
 
 # Create non-root user with default UID/GID 1001:1001
 # Runtime UID/GID can be changed via PUID/PGID environment variables
-RUN groupadd -g 1001 borgmatic && \
-    useradd -m -u 1001 -g 1001 -s /bin/bash borgmatic && \
+RUN groupadd -g 1001 borg && \
+    useradd -m -u 1001 -g 1001 -s /bin/bash borg && \
     # Add user to necessary groups
-    usermod -a -G sudo borgmatic && \
-    # Set up sudo access for borgmatic user (needed for cron jobs and borg operations)
-    echo "borgmatic ALL=(ALL) NOPASSWD: /usr/bin/borg, /usr/bin/borgmatic, /usr/bin/crontab" >> /etc/sudoers
+    usermod -a -G sudo borg && \
+    # Set up sudo access for borg user (needed for cron jobs and borg operations)
+    echo "borg ALL=(ALL) NOPASSWD: /usr/bin/borg, /usr/bin/crontab" >> /etc/sudoers
 
 # Set proper ownership and permissions
-RUN chown -R borgmatic:borgmatic /app /data /backups /var/log/borgmatic /etc/borgmatic && \
+RUN chown -R borg:borg /app /data /backups /var/log/borg /etc/borg && \
     chmod -R 755 /app && \
     chmod -R 755 /data && \
     chmod -R 755 /backups && \
-    chmod -R 755 /var/log/borgmatic && \
-    chmod -R 755 /etc/borgmatic
+    chmod -R 755 /var/log/borg && \
+    chmod -R 755 /etc/borg
 
-# Create SSH directory for borgmatic user
-RUN mkdir -p /home/borgmatic/.ssh && \
-    chown -R borgmatic:borgmatic /home/borgmatic/.ssh && \
-    chmod 700 /home/borgmatic/.ssh
-
-# Create borgmatic configuration template (optional - can be mounted via volume)
-# COPY config/borgmatic.yaml.template /etc/borgmatic/config.yaml.template
+# Create SSH directory for borg user
+RUN mkdir -p /home/borg/.ssh && \
+    chown -R borg:borg /home/borg/.ssh && \
+    chmod 700 /home/borg/.ssh
 
 # Set up cron directory
 RUN mkdir -p /etc/cron.d && \
-    chown -R borgmatic:borgmatic /etc/cron.d
+    chown -R borg:borg /etc/cron.d
 
 # Copy entrypoint script
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Stay as root - entrypoint will handle UID/GID changes and switch to borgmatic user
+# Stay as root - entrypoint will handle UID/GID changes and switch to borg user
 
 # Set environment variables
 ENV PYTHONPATH=/app
 ENV DATA_DIR=/data
-ENV DATABASE_URL=sqlite:////data/borgmatic.db
-ENV BORGMATIC_CONFIG_PATH=/data/config/borgmatic.yaml
+ENV DATABASE_URL=sqlite:////data/borg.db
 ENV BORGMATIC_BACKUP_PATH=/backups
 ENV ENABLE_CRON_BACKUPS=false
 ENV PORT=8081

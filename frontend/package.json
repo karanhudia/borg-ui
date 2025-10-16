@@ -1,5 +1,5 @@
 {
-  "name": "borgmatic-web-ui-frontend",
+  "name": "borg-web-ui-frontend",
   "version": "1.0.0",
   "description": "React frontend for Borgmatic Web UI",
   "private": true,

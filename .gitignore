@@ -19,7 +19,7 @@ venv.bak/
 *.db
 *.sqlite
 *.sqlite3
-borgmatic.db
+borg.db
 
 # Logs
 logs/
@@ -27,7 +27,7 @@ logs/
 access.log
 error.log
 app.log
-borgmatic.log
+borg-ui.log
 
 # Environment files (NEVER commit these!)
 .env
