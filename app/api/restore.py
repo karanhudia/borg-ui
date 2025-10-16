@@ -5,7 +5,7 @@ from typing import List
 
 from app.database.models import User
 from app.core.security import get_current_user
-from app.core.borgmatic import borgmatic
+from app.core.borg import borg
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -24,7 +24,7 @@ async def preview_restore(
 ):
     """Preview a restore operation"""
     try:
-        result = await borgmatic.extract_archive(
+        result = await borg.extract_archive(
             restore_request.repository,
             restore_request.archive,
             restore_request.paths,
@@ -46,7 +46,7 @@ async def start_restore(
 ):
     """Start a restore operation"""
     try:
-        result = await borgmatic.extract_archive(
+        result = await borg.extract_archive(
             restore_request.repository,
             restore_request.archive,
             restore_request.paths,

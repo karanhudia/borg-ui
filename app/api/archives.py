@@ -7,7 +7,7 @@ from typing import List, Dict, Any
 from app.database.database import get_db
 from app.database.models import User
 from app.core.security import get_current_user
-from app.core.borgmatic import borgmatic
+from app.core.borg import borg
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -19,7 +19,7 @@ async def list_archives(
 ):
     """List archives in a repository"""
     try:
-        result = await borgmatic.list_archives(repository)
+        result = await borg.list_archives(repository)
         if not result["success"]:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -42,7 +42,7 @@ async def get_archive_info(
 ):
     """Get information about a specific archive"""
     try:
-        result = await borgmatic.info_archive(repository, archive_id)
+        result = await borg.info_archive(repository, archive_id)
         if not result["success"]:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -66,7 +66,7 @@ async def get_archive_contents(
 ):
     """Get contents of an archive"""
     try:
-        result = await borgmatic.list_archive_contents(repository, archive_id, path)
+        result = await borg.list_archive_contents(repository, archive_id, path)
         if not result["success"]:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -89,7 +89,7 @@ async def delete_archive(
 ):
     """Delete an archive"""
     try:
-        result = await borgmatic.delete_archive(repository, archive_id)
+        result = await borg.delete_archive(repository, archive_id)
         if not result["success"]:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

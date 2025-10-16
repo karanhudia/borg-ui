@@ -11,14 +11,14 @@ import json
 from app.database.database import get_db
 from app.database.models import User, Repository
 from app.core.security import get_current_user
-from app.core.borgmatic import BorgmaticInterface
+from app.core.borg import BorgInterface
 from app.config import settings
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["repositories"])
 
-# Initialize Borgmatic interface
-borgmatic = BorgmaticInterface()
+# Initialize Borg interface
+borg = BorgInterface()
 
 # Pydantic models
 from pydantic import BaseModel
@@ -35,13 +35,14 @@ class RepositoryCreate(BaseModel):
     port: Optional[int] = 22  # SSH port
     username: Optional[str] = None  # SSH username
     ssh_key_id: Optional[int] = None  # Associated SSH key ID
+    remote_path: Optional[str] = None  # Path to borg on remote server (e.g., /usr/local/bin/borg)
 
 class RepositoryUpdate(BaseModel):
     name: Optional[str] = None
     path: Optional[str] = None
     compression: Optional[str] = None
     source_directories: Optional[List[str]] = None
-    is_active: Optional[bool] = None
+    remote_path: Optional[str] = None
 
 class RepositoryInfo(BaseModel):
     id: int
@@ -78,7 +79,6 @@ async def get_repositories(
                     "last_backup": repo.last_backup.isoformat() if repo.last_backup else None,
                     "total_size": repo.total_size,
                     "archive_count": repo.archive_count,
-                    "is_active": repo.is_active,
                     "created_at": repo.created_at.isoformat(),
                     "updated_at": repo.updated_at.isoformat() if repo.updated_at else None
                 }
@@ -259,12 +259,12 @@ async def create_repository(
             compression=repo_data.compression,
             passphrase=repo_data.passphrase,  # Store passphrase for backups
             source_directories=source_directories_json,
-            is_active=True,
             repository_type=repo_data.repository_type,
             host=repo_data.host,
             port=repo_data.port,
             username=repo_data.username,
-            ssh_key_id=repo_data.ssh_key_id
+            ssh_key_id=repo_data.ssh_key_id,
+            remote_path=repo_data.remote_path
         )
         
         db.add(repository)
@@ -281,8 +281,7 @@ async def create_repository(
                 "name": repository.name,
                 "path": repository.path,
                 "encryption": repository.encryption,
-                "compression": repository.compression,
-                "is_active": repository.is_active
+                "compression": repository.compression
             }
         }
     except HTTPException:
@@ -317,7 +316,6 @@ async def get_repository(
                 "last_backup": repository.last_backup.isoformat() if repository.last_backup else None,
                 "total_size": repository.total_size,
                 "archive_count": repository.archive_count,
-                "is_active": repository.is_active,
                 "created_at": repository.created_at.isoformat(),
                 "updated_at": repository.updated_at.isoformat() if repository.updated_at else None,
                 "stats": stats
@@ -372,9 +370,9 @@ async def update_repository(
         if repo_data.source_directories is not None:
             repository.source_directories = json.dumps(repo_data.source_directories)
 
-        if repo_data.is_active is not None:
-            repository.is_active = repo_data.is_active
-        
+        if repo_data.remote_path is not None:
+            repository.remote_path = repo_data.remote_path
+
         repository.updated_at = datetime.utcnow()
         db.commit()
         
@@ -406,7 +404,7 @@ async def delete_repository(
             raise HTTPException(status_code=404, detail="Repository not found")
         
         # Check if repository has archives
-        archives_result = await borgmatic.list_archives(repository.path)
+        archives_result = await borg.list_archives(repository.path, remote_path=repository.remote_path)
         if archives_result["success"]:
             try:
                 archives_data = archives_result["stdout"]
@@ -447,7 +445,7 @@ async def check_repository(
             raise HTTPException(status_code=404, detail="Repository not found")
         
         # Run repository check
-        check_result = await borgmatic.check_repository(repository.path)
+        check_result = await borg.check_repository(repository.path, remote_path=repository.remote_path)
         
         return {
             "success": True,
@@ -475,7 +473,7 @@ async def compact_repository(
             raise HTTPException(status_code=404, detail="Repository not found")
         
         # Run repository compaction
-        compact_result = await borgmatic.compact_repository(repository.path)
+        compact_result = await borg.compact_repository(repository.path, remote_path=repository.remote_path)
         
         return {
             "success": True,
@@ -776,7 +774,13 @@ async def list_repository_archives(
             raise HTTPException(status_code=404, detail="Repository not found")
 
         # Build borg list command
-        cmd = ["borg", "list", "--json", repository.path]
+        cmd = ["borg", "list"]
+
+        # Add remote-path if specified
+        if repository.remote_path:
+            cmd.extend(["--remote-path", repository.remote_path])
+
+        cmd.extend(["--json", repository.path])
 
         # Set up environment
         env = os.environ.copy()
@@ -835,7 +839,13 @@ async def get_repository_info(
             raise HTTPException(status_code=404, detail="Repository not found")
 
         # Build borg info command
-        cmd = ["borg", "info", "--json", repository.path]
+        cmd = ["borg", "info"]
+
+        # Add remote-path if specified
+        if repository.remote_path:
+            cmd.extend(["--remote-path", repository.remote_path])
+
+        cmd.extend(["--json", repository.path])
 
         # Set up environment
         env = os.environ.copy()
@@ -900,7 +910,13 @@ async def get_archive_info(
 
         # Build borg info command with repo::archive format
         archive_path = f"{repository.path}::{archive_name}"
-        cmd = ["borg", "info", "--json", archive_path]
+        cmd = ["borg", "info"]
+
+        # Add remote-path if specified
+        if repository.remote_path:
+            cmd.extend(["--remote-path", repository.remote_path])
+
+        cmd.extend(["--json", archive_path])
 
         # Set up environment
         env = os.environ.copy()
@@ -959,7 +975,7 @@ async def get_repository_stats(path: str) -> Dict[str, Any]:
     """Get repository statistics"""
     try:
         # Get repository info
-        info_result = await borgmatic._execute_command(["borg", "info", path])
+        info_result = await borg._execute_command(["borg", "info", path])
 
         if not info_result["success"]:
             return {
@@ -979,7 +995,7 @@ async def get_repository_stats(path: str) -> Dict[str, Any]:
         }
 
         # Try to get archive count
-        archives_result = await borgmatic.list_archives(path)
+        archives_result = await borg.list_archives(path)
         if archives_result["success"]:
             try:
                 archives_data = archives_result["stdout"]

@@ -26,7 +26,6 @@ class Repository(Base):
     compression = Column(String, default="lz4")
     passphrase = Column(String, nullable=True)  # Borg repository passphrase (for encrypted repos)
     source_directories = Column(Text, nullable=True)  # JSON array of directories to backup
-    is_active = Column(Boolean, default=True)
     last_backup = Column(DateTime, nullable=True)
     total_size = Column(String, nullable=True)
     archive_count = Column(Integer, default=0)
@@ -39,6 +38,7 @@ class Repository(Base):
     port = Column(Integer, default=22)  # SSH port
     username = Column(String, nullable=True)  # SSH username
     ssh_key_id = Column(Integer, ForeignKey("ssh_keys.id"), nullable=True)  # Associated SSH key
+    remote_path = Column(String, nullable=True)  # Path to borg binary on remote server (e.g., /usr/local/bin/borg)
 
     # New fields for authentication status
     auth_status = Column(String, default="unknown")  # connected, failed, testing, unknown

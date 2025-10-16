@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     """Application settings"""
 
     # Application settings
-    app_name: str = "Borgmatic Web UI"
+    app_name: str = "Borg Web UI"
     app_version: str = "1.0.0"
     debug: bool = False
     environment: str = "development"
@@ -25,8 +25,7 @@ class Settings(BaseSettings):
     # Database settings - auto-derived from data_dir
     database_url: str = ""  # Will be auto-derived from data_dir
 
-    # Borgmatic settings - auto-derived from data_dir
-    borgmatic_config_path: str = ""  # Will be auto-derived from data_dir
+    # Backup settings - auto-derived from data_dir
     borgmatic_backup_path: str = ""  # Deprecated - not needed anymore
 
     # SSH keys directory - auto-derived from data_dir
@@ -94,23 +93,16 @@ env_database_url = os.getenv("DATABASE_URL")
 if env_database_url:
     settings.database_url = env_database_url
 else:
-    # Auto-derive: sqlite:////data/borgmatic.db
-    settings.database_url = f"sqlite:///{settings.data_dir}/borgmatic.db"
+    # Auto-derive: sqlite:////data/borg.db
+    settings.database_url = f"sqlite:///{settings.data_dir}/borg.db"
 
-# 2. Borgmatic config path - always derived from data_dir
-env_borgmatic_config = os.getenv("BORGMATIC_CONFIG_PATH")
-if env_borgmatic_config:
-    settings.borgmatic_config_path = env_borgmatic_config
-else:
-    settings.borgmatic_config_path = f"{settings.data_dir}/config/borgmatic.yaml"
-
-# 3. SSH keys directory - always derived from data_dir
+# 2. SSH keys directory - always derived from data_dir
 settings.ssh_keys_dir = f"{settings.data_dir}/ssh_keys"
 
-# 4. Log file - always derived from data_dir
-settings.log_file = f"{settings.data_dir}/logs/borgmatic-ui.log"
+# 3. Log file - always derived from data_dir
+settings.log_file = f"{settings.data_dir}/logs/borg-ui.log"
 
-# 5. SECRET_KEY - auto-generate on first run if not provided
+# 4. SECRET_KEY - auto-generate on first run if not provided
 secret_key_file = Path(settings.data_dir) / ".secret_key"
 env_secret_key = os.getenv("SECRET_KEY")
 
