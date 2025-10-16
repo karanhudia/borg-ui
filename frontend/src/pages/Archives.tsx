@@ -18,8 +18,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Breadcrumbs,
-  Link,
   Stack,
   IconButton,
   Alert,
@@ -27,14 +25,13 @@ import {
 import {
   Search,
   Folder,
-  File,
   HardDrive,
   Calendar,
   Trash2,
-  ChevronRight,
   RefreshCw,
   AlertCircle,
   FolderOpen,
+  Info,
 } from 'lucide-react'
 import { archivesAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
@@ -53,20 +50,10 @@ interface Archive {
   time: string
 }
 
-interface ArchiveFile {
-  name: string
-  type: 'file' | 'directory'
-  size?: string
-  path: string
-  children?: ArchiveFile[]
-}
-
 const Archives: React.FC = () => {
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(null)
   const [selectedRepository, setSelectedRepository] = useState<Repository | null>(null)
-  const [selectedArchive, setSelectedArchive] = useState<string>('')
   const [searchQuery, setSearchQuery] = useState('')
-  const [currentPath, setCurrentPath] = useState<string>('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
   const queryClient = useQueryClient()
 
@@ -83,28 +70,21 @@ const Archives: React.FC = () => {
     enabled: !!selectedRepositoryId
   })
 
-  // Get archive details (TODO: implement with borg info command)
-  const { data: archiveDetails, isLoading: loadingDetails } = useQuery({
-    queryKey: ['archive-details', selectedRepository?.path, selectedArchive],
-    queryFn: () => archivesAPI.getArchiveInfo(selectedRepository!.path, selectedArchive),
-    enabled: false // Disabled until we implement proper borg-based endpoints
+  // Get repository info using borg info command
+  const { data: repositoryInfo, isLoading: loadingRepositoryInfo } = useQuery({
+    queryKey: ['repository-info', selectedRepositoryId],
+    queryFn: () => repositoriesAPI.getRepositoryInfo(selectedRepositoryId!),
+    enabled: !!selectedRepositoryId
   })
 
-  // Get archive contents (TODO: implement with borg list command)
-  const { data: archiveContents, isLoading: loadingContents } = useQuery({
-    queryKey: ['archive-contents', selectedRepository?.path, selectedArchive, currentPath],
-    queryFn: () => archivesAPI.listContents(selectedRepository!.path, selectedArchive, currentPath),
-    enabled: false // Disabled until we implement proper borg-based endpoints
-  })
-
-  // Delete archive mutation (keeping old API for now)
+  // Delete archive mutation
   const deleteArchiveMutation = useMutation({
     mutationFn: ({ repository, archive }: { repository: string; archive: string }) =>
       archivesAPI.deleteArchive(repository, archive),
     onSuccess: () => {
       toast.success('Archive deleted successfully!')
       queryClient.invalidateQueries({ queryKey: ['repository-archives', selectedRepositoryId] })
-      setSelectedArchive('')
+      queryClient.invalidateQueries({ queryKey: ['repository-info', selectedRepositoryId] })
     },
     onError: (error: any) => {
       toast.error(`Failed to delete archive: ${error.response?.data?.detail || error.message}`)
@@ -115,33 +95,6 @@ const Archives: React.FC = () => {
   const handleRepositorySelect = (repository: Repository) => {
     setSelectedRepositoryId(repository.id)
     setSelectedRepository(repository)
-    setSelectedArchive('')
-    setCurrentPath('')
-  }
-
-  // Handle archive selection
-  const handleArchiveSelect = (archive: string) => {
-    setSelectedArchive(archive)
-    setCurrentPath('')
-  }
-
-  // Handle file/folder click
-  const handleItemClick = (item: ArchiveFile) => {
-    if (item.type === 'directory') {
-      const newPath = currentPath ? `${currentPath}/${item.name}` : item.name
-      setCurrentPath(newPath)
-    }
-  }
-
-  // Handle navigation breadcrumb
-  const handleBreadcrumbClick = (index: number) => {
-    if (index === 0) {
-      setCurrentPath('')
-    } else {
-      const pathParts = currentPath.split('/')
-      const newPath = pathParts.slice(0, index).join('/')
-      setCurrentPath(newPath)
-    }
   }
 
   // Handle archive deletion
@@ -159,22 +112,27 @@ const Archives: React.FC = () => {
     archive.start.includes(searchQuery)
   ) || []
 
-  // Format file size
-  const formatFileSize = (size?: string) => {
-    if (!size) return 'Unknown'
-    return size
-  }
-
   // Format timestamp
   const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleString()
   }
 
-  // Get breadcrumb parts
-  const breadcrumbParts = currentPath ? ['root', ...currentPath.split('/')] : ['root']
+  // Format bytes to human readable
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 B'
+    const k = 1024
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`
+  }
 
   // Get repositories from API response
   const repositories = repositoriesData?.data?.repositories || []
+
+  // Get repository info data
+  const repoInfo = repositoryInfo?.data?.info?.repository
+  const cacheInfo = repositoryInfo?.data?.info?.cache
+  const encryptionInfo = repositoryInfo?.data?.info?.encryption
 
   return (
     <Box>
@@ -191,7 +149,10 @@ const Archives: React.FC = () => {
         <Button
           variant="outlined"
           startIcon={<RefreshCw size={18} />}
-          onClick={() => queryClient.invalidateQueries({ queryKey: ['repository-archives', selectedRepositoryId] })}
+          onClick={() => {
+            queryClient.invalidateQueries({ queryKey: ['repository-archives', selectedRepositoryId] })
+            queryClient.invalidateQueries({ queryKey: ['repository-info', selectedRepositoryId] })
+          }}
         >
           Refresh
         </Button>
@@ -306,16 +267,9 @@ const Archives: React.FC = () => {
                       key={archive.id}
                       variant="outlined"
                       sx={{
-                        cursor: 'pointer',
-                        border: selectedArchive === archive.archive ? 2 : 1,
-                        borderColor: selectedArchive === archive.archive ? 'primary.main' : 'divider',
-                        backgroundColor: selectedArchive === archive.archive ? 'primary.lighter' : 'background.paper',
-                        '&:hover': {
-                          borderColor: 'primary.main',
-                          backgroundColor: 'action.hover',
-                        },
+                        border: 1,
+                        borderColor: 'divider',
                       }}
-                      onClick={() => handleArchiveSelect(archive.archive)}
                     >
                       <CardContent>
                         <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -357,160 +311,149 @@ const Archives: React.FC = () => {
         </Box>
       </Stack>
 
-      {/* Archive Details and File Browser */}
-      {selectedArchive && (
-        <Stack direction={{ xs: 'column', lg: 'row' }} spacing={3} sx={{ mt: 3 }}>
-          {/* Archive Details */}
-          <Box sx={{ flex: 1 }}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" fontWeight={600} gutterBottom>
-                  Archive Details
+      {/* Repository Information */}
+      {selectedRepository && (
+        <Box sx={{ mt: 3 }}>
+          <Card>
+            <CardContent>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 3 }}>
+                <Info size={20} />
+                <Typography variant="h6" fontWeight={600}>
+                  Repository Information
                 </Typography>
-                {loadingDetails ? (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
-                    <CircularProgress size={48} />
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                      Loading details...
-                    </Typography>
-                  </Box>
-                ) : archiveDetails?.data ? (
-                  <Stack direction="row" flexWrap="wrap" spacing={2} sx={{ mt: 2 }}>
-                    <Box sx={{ flex: '1 1 45%', minWidth: 150 }}>
-                      <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                        Name
-                      </Typography>
-                      <Typography variant="body2">{archiveDetails.data.name}</Typography>
-                    </Box>
-                    <Box sx={{ flex: '1 1 45%', minWidth: 150 }}>
-                      <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                        Created
-                      </Typography>
-                      <Typography variant="body2">{formatTimestamp(archiveDetails.data.timestamp)}</Typography>
-                    </Box>
-                    <Box sx={{ flex: '1 1 45%', minWidth: 150 }}>
-                      <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                        Size
-                      </Typography>
-                      <Typography variant="body2">{formatFileSize(archiveDetails.data.size)}</Typography>
-                    </Box>
-                    <Box sx={{ flex: '1 1 45%', minWidth: 150 }}>
-                      <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                        Compressed
-                      </Typography>
-                      <Typography variant="body2">{formatFileSize(archiveDetails.data.compressed_size)}</Typography>
-                    </Box>
-                    <Box sx={{ flex: '1 1 45%', minWidth: 150 }}>
-                      <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                        Deduplicated
-                      </Typography>
-                      <Typography variant="body2">{formatFileSize(archiveDetails.data.deduplicated_size)}</Typography>
-                    </Box>
-                    <Box sx={{ flex: '1 1 45%', minWidth: 150 }}>
-                      <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                        Files
-                      </Typography>
-                      <Typography variant="body2">{archiveDetails.data.file_count?.toLocaleString() || 'Unknown'}</Typography>
-                    </Box>
-                  </Stack>
-                ) : (
-                  <Box sx={{ textAlign: 'center', py: 8 }}>
-                    <AlertCircle size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
-                    <Typography variant="body1" color="text.secondary">
-                      No details available
-                    </Typography>
-                  </Box>
-                )}
-              </CardContent>
-            </Card>
-          </Box>
+              </Stack>
 
-          {/* File Browser */}
-          <Box sx={{ flex: 1 }}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" fontWeight={600} gutterBottom>
-                  File Browser
-                </Typography>
-
-                {/* Breadcrumb */}
-                <Breadcrumbs
-                  separator={<ChevronRight size={16} />}
-                  sx={{ my: 2, fontSize: '0.875rem' }}
-                >
-                  {breadcrumbParts.map((part, index) => (
-                    <Link
-                      key={index}
-                      component="button"
-                      variant="body2"
-                      onClick={() => handleBreadcrumbClick(index)}
-                      sx={{
-                        textDecoration: 'none',
-                        color: index === breadcrumbParts.length - 1 ? 'text.primary' : 'text.secondary',
-                        fontWeight: index === breadcrumbParts.length - 1 ? 600 : 400,
-                        '&:hover': {
-                          color: 'primary.main',
-                        },
-                      }}
-                    >
-                      {part}
-                    </Link>
-                  ))}
-                </Breadcrumbs>
-
-                {loadingContents ? (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
-                    <CircularProgress size={48} />
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                      Loading contents...
+              {loadingRepositoryInfo ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
+                  <CircularProgress size={48} />
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                    Loading repository info...
+                  </Typography>
+                </Box>
+              ) : repoInfo ? (
+                <Stack spacing={3}>
+                  {/* Repository Details */}
+                  <Box>
+                    <Typography variant="subtitle2" fontWeight={600} color="text.secondary" sx={{ mb: 2 }}>
+                      REPOSITORY DETAILS
                     </Typography>
+                    <Stack direction="row" flexWrap="wrap" spacing={3}>
+                      <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
+                        <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                          ID
+                        </Typography>
+                        <Typography variant="body2" sx={{ mt: 0.5, fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                          {repoInfo.id || 'N/A'}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
+                        <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                          Location
+                        </Typography>
+                        <Typography variant="body2" sx={{ mt: 0.5 }}>
+                          {repoInfo.location || selectedRepository.path}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
+                        <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                          Last Modified
+                        </Typography>
+                        <Typography variant="body2" sx={{ mt: 0.5 }}>
+                          {repoInfo.last_modified ? formatTimestamp(repoInfo.last_modified) : 'N/A'}
+                        </Typography>
+                      </Box>
+                    </Stack>
                   </Box>
-                ) : archiveContents?.data?.length === 0 ? (
-                  <Box sx={{ textAlign: 'center', py: 8 }}>
-                    <Folder size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
-                    <Typography variant="body1" color="text.secondary">
-                      This directory is empty
-                    </Typography>
-                  </Box>
-                ) : (
-                  <List>
-                    {archiveContents?.data?.map((item: ArchiveFile, index: number) => (
-                      <ListItem
-                        key={index}
-                        disablePadding
-                        secondaryAction={
-                          item.size && (
-                            <Typography variant="caption" color="text.secondary">
-                              {formatFileSize(item.size)}
-                            </Typography>
-                          )
-                        }
-                      >
-                        <ListItemButton
-                          onClick={() => handleItemClick(item)}
-                          disabled={item.type !== 'directory'}
-                          sx={{ borderRadius: 1 }}
-                        >
-                          <ListItemIcon>
-                            {item.type === 'directory' ? (
-                              <Folder size={20} color="#1976d2" />
-                            ) : (
-                              <File size={20} color="rgba(0,0,0,0.5)" />
-                            )}
-                          </ListItemIcon>
-                          <ListItemText
-                            primary={item.name}
-                            primaryTypographyProps={{ fontSize: '0.875rem' }}
-                          />
-                        </ListItemButton>
-                      </ListItem>
-                    ))}
-                  </List>
-                )}
-              </CardContent>
-            </Card>
-          </Box>
-        </Stack>
+
+                  {/* Storage Statistics */}
+                  {cacheInfo && cacheInfo.stats && (
+                    <Box>
+                      <Typography variant="subtitle2" fontWeight={600} color="text.secondary" sx={{ mb: 2 }}>
+                        STORAGE STATISTICS
+                      </Typography>
+                      <Stack direction="row" flexWrap="wrap" spacing={3}>
+                        <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
+                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                            Total Size
+                          </Typography>
+                          <Typography variant="body2" sx={{ mt: 0.5 }}>
+                            {formatBytes(cacheInfo.stats.total_size || 0)}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
+                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                            Total Chunks
+                          </Typography>
+                          <Typography variant="body2" sx={{ mt: 0.5 }}>
+                            {(cacheInfo.stats.total_chunks || 0).toLocaleString()}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
+                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                            Unique Chunks
+                          </Typography>
+                          <Typography variant="body2" sx={{ mt: 0.5 }}>
+                            {(cacheInfo.stats.total_unique_chunks || 0).toLocaleString()}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
+                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                            Total Compressed Size
+                          </Typography>
+                          <Typography variant="body2" sx={{ mt: 0.5 }}>
+                            {formatBytes(cacheInfo.stats.total_csize || 0)}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
+                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                            Unique Compressed Size
+                          </Typography>
+                          <Typography variant="body2" sx={{ mt: 0.5 }}>
+                            {formatBytes(cacheInfo.stats.unique_csize || 0)}
+                          </Typography>
+                        </Box>
+                      </Stack>
+                    </Box>
+                  )}
+
+                  {/* Encryption Details */}
+                  {encryptionInfo && (
+                    <Box>
+                      <Typography variant="subtitle2" fontWeight={600} color="text.secondary" sx={{ mb: 2 }}>
+                        ENCRYPTION
+                      </Typography>
+                      <Stack direction="row" flexWrap="wrap" spacing={3}>
+                        <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
+                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                            Mode
+                          </Typography>
+                          <Typography variant="body2" sx={{ mt: 0.5 }}>
+                            {encryptionInfo.mode || 'N/A'}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
+                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                            Key ID
+                          </Typography>
+                          <Typography variant="body2" sx={{ mt: 0.5, fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                            {encryptionInfo.keyid || 'N/A'}
+                          </Typography>
+                        </Box>
+                      </Stack>
+                    </Box>
+                  )}
+                </Stack>
+              ) : (
+                <Box sx={{ textAlign: 'center', py: 8 }}>
+                  <AlertCircle size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
+                  <Typography variant="body1" color="text.secondary">
+                    No repository information available
+                  </Typography>
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+        </Box>
       )}
 
       {/* Delete Confirmation Dialog */}
