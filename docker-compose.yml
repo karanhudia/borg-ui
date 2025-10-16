@@ -9,8 +9,6 @@
 # Users configure backup repositories in borgmatic config (local or SSH)
 # No need for borg_backups volume - repositories can be anywhere!
 
-version: '3.8'
-
 services:
   app:
     build:
@@ -19,7 +17,7 @@ services:
       target: production
       args:
         - APP_VERSION=${APP_VERSION:-local-dev}
-    container_name: borgmatic-web-ui
+    container_name: borg-web-ui
     restart: unless-stopped
 
     ports:
