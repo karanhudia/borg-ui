@@ -524,9 +524,9 @@ export default function Repositories() {
                       </Typography>
                     </Box>
 
-                    <Stack direction="row" spacing={2}>
+                    <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-start' }}>
                       <Box sx={{ flex: 1 }}>
-                        <Typography variant="caption" color="text.secondary" display="block">
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
                           Archives
                         </Typography>
                         <Typography variant="body2" fontWeight={500}>
@@ -537,13 +537,11 @@ export default function Repositories() {
                         <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
                           Status
                         </Typography>
-                        <Box>
-                          <Chip
-                            label={repository.is_active ? 'Active' : 'Inactive'}
-                            size="small"
-                            color={repository.is_active ? 'success' : 'default'}
-                          />
-                        </Box>
+                        <Chip
+                          label={repository.is_active ? 'Active' : 'Inactive'}
+                          size="small"
+                          color={repository.is_active ? 'success' : 'default'}
+                        />
                       </Box>
                     </Stack>
 
