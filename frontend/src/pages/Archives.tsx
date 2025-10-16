@@ -83,18 +83,18 @@ const Archives: React.FC = () => {
     enabled: !!selectedRepositoryId
   })
 
-  // Get archive details (keeping old API for now)
+  // Get archive details (TODO: implement with borg info command)
   const { data: archiveDetails, isLoading: loadingDetails } = useQuery({
     queryKey: ['archive-details', selectedRepository?.path, selectedArchive],
     queryFn: () => archivesAPI.getArchiveInfo(selectedRepository!.path, selectedArchive),
-    enabled: !!selectedRepository && !!selectedArchive
+    enabled: false // Disabled until we implement proper borg-based endpoints
   })
 
-  // Get archive contents (keeping old API for now)
+  // Get archive contents (TODO: implement with borg list command)
   const { data: archiveContents, isLoading: loadingContents } = useQuery({
     queryKey: ['archive-contents', selectedRepository?.path, selectedArchive, currentPath],
     queryFn: () => archivesAPI.listContents(selectedRepository!.path, selectedArchive, currentPath),
-    enabled: !!selectedRepository && !!selectedArchive
+    enabled: false // Disabled until we implement proper borg-based endpoints
   })
 
   // Delete archive mutation (keeping old API for now)
