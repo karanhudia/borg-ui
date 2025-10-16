@@ -21,6 +21,11 @@ import {
   Stack,
   IconButton,
   Alert,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableRow,
 } from '@mui/material'
 import {
   Search,
@@ -354,32 +359,20 @@ const Archives: React.FC = () => {
                     <Typography variant="subtitle2" fontWeight={600} color="text.secondary" sx={{ mb: 2 }}>
                       REPOSITORY DETAILS
                     </Typography>
-                    <Stack spacing={2}>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          ID
-                        </Typography>
-                        <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5, fontFamily: 'monospace', fontSize: '0.875rem' }}>
-                          {repoInfo.id || 'N/A'}
-                        </Typography>
-                      </Box>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          Location
-                        </Typography>
-                        <Typography variant="body2" sx={{ mt: 0.5 }}>
-                          {repoInfo.location || selectedRepository.path}
-                        </Typography>
-                      </Box>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          Last Modified
-                        </Typography>
-                        <Typography variant="body2" sx={{ mt: 0.5 }}>
-                          {repoInfo.last_modified ? formatTimestamp(repoInfo.last_modified) : 'N/A'}
-                        </Typography>
-                      </Box>
-                    </Stack>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableBody>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 500, color: 'text.secondary', width: '30%' }}>Location</TableCell>
+                            <TableCell>{repoInfo.location || selectedRepository.path}</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Last Modified</TableCell>
+                            <TableCell>{repoInfo.last_modified ? formatTimestamp(repoInfo.last_modified) : 'N/A'}</TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
                   </Box>
 
                   {/* Storage Statistics */}
@@ -388,50 +381,36 @@ const Archives: React.FC = () => {
                       <Typography variant="subtitle2" fontWeight={600} color="text.secondary" sx={{ mb: 2 }}>
                         STORAGE STATISTICS
                       </Typography>
-                      <Stack spacing={2}>
-                        <Box>
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            Unique Size (Deduplicated)
-                          </Typography>
-                          <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5 }}>
-                            {formatBytes(cacheInfo.stats.unique_size || 0)}
-                          </Typography>
-                        </Box>
-                        <Box>
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            Compressed Size
-                          </Typography>
-                          <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5 }}>
-                            {formatBytes(cacheInfo.stats.unique_csize || 0)}
-                          </Typography>
-                        </Box>
-                        <Box>
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            Total Chunks
-                          </Typography>
-                          <Typography variant="body2" sx={{ mt: 0.5 }}>
-                            {(cacheInfo.stats.total_chunks || 0).toLocaleString()}
-                          </Typography>
-                        </Box>
-                        <Box>
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            Unique Chunks
-                          </Typography>
-                          <Typography variant="body2" sx={{ mt: 0.5 }}>
-                            {(cacheInfo.stats.total_unique_chunks || 0).toLocaleString()}
-                          </Typography>
-                        </Box>
-                        <Box>
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            Compression Ratio
-                          </Typography>
-                          <Typography variant="body2" sx={{ mt: 0.5 }}>
-                            {cacheInfo.stats.unique_size && cacheInfo.stats.unique_csize
-                              ? `${((1 - cacheInfo.stats.unique_csize / cacheInfo.stats.unique_size) * 100).toFixed(1)}%`
-                              : 'N/A'}
-                          </Typography>
-                        </Box>
-                      </Stack>
+                      <TableContainer>
+                        <Table size="small">
+                          <TableBody>
+                            <TableRow>
+                              <TableCell sx={{ fontWeight: 500, color: 'text.secondary', width: '30%' }}>Unique Size (Deduplicated)</TableCell>
+                              <TableCell>{formatBytes(cacheInfo.stats.unique_size || 0)}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Compressed Size</TableCell>
+                              <TableCell>{formatBytes(cacheInfo.stats.unique_csize || 0)}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Total Chunks</TableCell>
+                              <TableCell>{(cacheInfo.stats.total_chunks || 0).toLocaleString()}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Unique Chunks</TableCell>
+                              <TableCell>{(cacheInfo.stats.total_unique_chunks || 0).toLocaleString()}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Compression Ratio</TableCell>
+                              <TableCell>
+                                {cacheInfo.stats.unique_size && cacheInfo.stats.unique_csize
+                                  ? `${((1 - cacheInfo.stats.unique_csize / cacheInfo.stats.unique_size) * 100).toFixed(1)}%`
+                                  : 'N/A'}
+                              </TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
                     </Box>
                   )}
 
@@ -441,24 +420,16 @@ const Archives: React.FC = () => {
                       <Typography variant="subtitle2" fontWeight={600} color="text.secondary" sx={{ mb: 2 }}>
                         ENCRYPTION
                       </Typography>
-                      <Stack spacing={2}>
-                        <Box>
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            Mode
-                          </Typography>
-                          <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5 }}>
-                            {encryptionInfo.mode || 'N/A'}
-                          </Typography>
-                        </Box>
-                        <Box>
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            Key ID
-                          </Typography>
-                          <Typography variant="body2" sx={{ mt: 0.5, fontFamily: 'monospace', fontSize: '0.875rem' }}>
-                            {encryptionInfo.keyid || 'N/A'}
-                          </Typography>
-                        </Box>
-                      </Stack>
+                      <TableContainer>
+                        <Table size="small">
+                          <TableBody>
+                            <TableRow>
+                              <TableCell sx={{ fontWeight: 500, color: 'text.secondary', width: '30%' }}>Mode</TableCell>
+                              <TableCell>{encryptionInfo.mode || 'N/A'}</TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
                     </Box>
                   )}
                 </Stack>
@@ -501,42 +472,32 @@ const Archives: React.FC = () => {
                     <Typography variant="subtitle2" fontWeight={600} color="text.secondary" sx={{ mb: 2 }}>
                       ARCHIVE DETAILS
                     </Typography>
-                    <Stack spacing={2}>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          Name
-                        </Typography>
-                        <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5 }}>
-                          {archiveInfo.data.archive.name || selectedArchive.name}
-                        </Typography>
-                      </Box>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          Created
-                        </Typography>
-                        <Typography variant="body2" sx={{ mt: 0.5 }}>
-                          {archiveInfo.data.archive.start ? formatTimestamp(archiveInfo.data.archive.start) : selectedArchive.start}
-                        </Typography>
-                      </Box>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          Duration
-                        </Typography>
-                        <Typography variant="body2" sx={{ mt: 0.5 }}>
-                          {archiveInfo.data.archive.duration || selectedArchive.time}
-                        </Typography>
-                      </Box>
-                      {archiveInfo.data.archive.command_line && (
-                        <Box>
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            Command Line
-                          </Typography>
-                          <Typography variant="body2" sx={{ mt: 0.5, fontFamily: 'monospace', fontSize: '0.875rem', wordBreak: 'break-all', bgcolor: 'grey.50', p: 1.5, borderRadius: 1 }}>
-                            {archiveInfo.data.archive.command_line.join(' ')}
-                          </Typography>
-                        </Box>
-                      )}
-                    </Stack>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableBody>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 500, color: 'text.secondary', width: '30%' }}>Name</TableCell>
+                            <TableCell>{archiveInfo.data.archive.name || selectedArchive.name}</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Created</TableCell>
+                            <TableCell>{archiveInfo.data.archive.start ? formatTimestamp(archiveInfo.data.archive.start) : selectedArchive.start}</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Duration</TableCell>
+                            <TableCell>{archiveInfo.data.archive.duration || selectedArchive.time}</TableCell>
+                          </TableRow>
+                          {archiveInfo.data.archive.command_line && (
+                            <TableRow>
+                              <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Command Line</TableCell>
+                              <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.875rem', wordBreak: 'break-all' }}>
+                                {archiveInfo.data.archive.command_line.join(' ')}
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
                   </Box>
 
                   {/* Archive Statistics */}
@@ -545,50 +506,36 @@ const Archives: React.FC = () => {
                       <Typography variant="subtitle2" fontWeight={600} color="text.secondary" sx={{ mb: 2 }}>
                         ARCHIVE STATISTICS
                       </Typography>
-                      <Stack spacing={2}>
-                        <Box>
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            Original Size
-                          </Typography>
-                          <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5 }}>
-                            {formatBytes(archiveInfo.data.archive.stats.original_size || 0)}
-                          </Typography>
-                        </Box>
-                        <Box>
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            Compressed Size
-                          </Typography>
-                          <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5 }}>
-                            {formatBytes(archiveInfo.data.archive.stats.compressed_size || 0)}
-                          </Typography>
-                        </Box>
-                        <Box>
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            Deduplicated Size
-                          </Typography>
-                          <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5 }}>
-                            {formatBytes(archiveInfo.data.archive.stats.deduplicated_size || 0)}
-                          </Typography>
-                        </Box>
-                        <Box>
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            Total Files
-                          </Typography>
-                          <Typography variant="body2" sx={{ mt: 0.5 }}>
-                            {(archiveInfo.data.archive.stats.nfiles || 0).toLocaleString()}
-                          </Typography>
-                        </Box>
-                        <Box>
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            Compression Ratio
-                          </Typography>
-                          <Typography variant="body2" sx={{ mt: 0.5 }}>
-                            {archiveInfo.data.archive.stats.original_size && archiveInfo.data.archive.stats.compressed_size
-                              ? `${((1 - archiveInfo.data.archive.stats.compressed_size / archiveInfo.data.archive.stats.original_size) * 100).toFixed(1)}%`
-                              : 'N/A'}
-                          </Typography>
-                        </Box>
-                      </Stack>
+                      <TableContainer>
+                        <Table size="small">
+                          <TableBody>
+                            <TableRow>
+                              <TableCell sx={{ fontWeight: 500, color: 'text.secondary', width: '30%' }}>Original Size</TableCell>
+                              <TableCell>{formatBytes(archiveInfo.data.archive.stats.original_size || 0)}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Compressed Size</TableCell>
+                              <TableCell>{formatBytes(archiveInfo.data.archive.stats.compressed_size || 0)}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Deduplicated Size</TableCell>
+                              <TableCell>{formatBytes(archiveInfo.data.archive.stats.deduplicated_size || 0)}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Total Files</TableCell>
+                              <TableCell>{(archiveInfo.data.archive.stats.nfiles || 0).toLocaleString()}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Compression Ratio</TableCell>
+                              <TableCell>
+                                {archiveInfo.data.archive.stats.original_size && archiveInfo.data.archive.stats.compressed_size
+                                  ? `${((1 - archiveInfo.data.archive.stats.compressed_size / archiveInfo.data.archive.stats.original_size) * 100).toFixed(1)}%`
+                                  : 'N/A'}
+                              </TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
                     </Box>
                   )}
                 </Stack>

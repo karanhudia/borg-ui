@@ -154,7 +154,7 @@ Validations:
 
 **Backup Execution**:
 ```
-Command: borgmatic --verbosity 1 --files
+Command: borg create --verbose --list
 
 Backend Process:
 1. Execute borg command
@@ -234,13 +234,12 @@ Settings: Always enabled
 ```bash
 # Check versions
 borg --version
-borgmatic --version
 
-# Validate configuration
-borg config validate
+# Validate repository
+borg check /path/to/repo
 
-# Edit configuration
-nano /etc/borgmatic/config.yaml
+# View repository info
+borg info /path/to/repo
 
 # Create SSH key (one-time)
 sudo ssh-keygen -t ed25519 -C "root@odroidm1"
@@ -255,13 +254,13 @@ borg init -e repokey /srv/borg_backup
 borg init --encryption=repokey ssh://karanhudia@192.168.1.250/mnt/mydisk/data/immich-backup
 
 # Run backup with verbose logging
-borgmatic --verbosity 1 --files
+borg create --verbose --list /path/to/repo::archive-name /path/to/source
 ```
 
 ## Error Handling Philosophy
 
 **DO**:
-- Show exact error messages from borgmatic/borg
+- Show exact error messages from borg
 - Display full command output
 - Log all operations
 
@@ -328,7 +327,7 @@ borgmatic --verbosity 1 --files
    - List backup history
 
 6. **Log Streaming**:
-   - Append borgmatic output to log file
+   - Append borg output to log file
    - Provide endpoint to fetch new log entries
    - Frontend polls every 2-3 seconds
 
