@@ -32,15 +32,15 @@ class EventManager:
         async with self._lock:
             queue = asyncio.Queue()
             self.connections[user_id] = queue
-            logger.info("Added SSE connection", user_id=user_id, total_connections=len(self.connections))
+            logger.debug("Added SSE connection", user_id=user_id, total_connections=len(self.connections))
             return queue
-    
+
     async def remove_connection(self, user_id: str):
         """Remove a connection for a user"""
         async with self._lock:
             if user_id in self.connections:
                 del self.connections[user_id]
-                logger.info("Removed SSE connection", user_id=user_id, total_connections=len(self.connections))
+                logger.debug("Removed SSE connection", user_id=user_id, total_connections=len(self.connections))
     
     async def broadcast_event(self, event_type: str, data: Dict[str, Any], user_id: str = None):
         """Broadcast an event to all connections or a specific user"""

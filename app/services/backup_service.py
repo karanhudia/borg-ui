@@ -17,6 +17,7 @@ class BackupService:
     def __init__(self):
         self.log_dir = Path("/data/logs")
         self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.running_processes = {}  # Track running backup processes by job_id
 
     async def execute_backup(self, job_id: int, repository: str, config_file: str, db: Session = None):
         """Execute backup using borg directly for better control"""
@@ -109,21 +110,47 @@ class BackupService:
                     env=env
                 )
 
+                # Track this process so it can be cancelled
+                self.running_processes[job_id] = process
+
                 # Stream output line by line
-                async for line in process.stdout:
-                    line_str = line.decode('utf-8', errors='replace')
-                    timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-                    log_line = f"[{timestamp}] {line_str}"
-                    f.write(log_line)
-                    f.flush()  # Force write to disk immediately
+                try:
+                    async for line in process.stdout:
+                        # Check if job was cancelled
+                        db.refresh(job)
+                        if job.status == "cancelled":
+                            logger.info("Backup job cancelled, terminating process", job_id=job_id)
+                            process.terminate()
+                            try:
+                                await asyncio.wait_for(process.wait(), timeout=5.0)
+                            except asyncio.TimeoutError:
+                                logger.warning("Process didn't terminate, killing it", job_id=job_id)
+                                process.kill()
+                                await process.wait()
+                            break
 
-                # Wait for process to complete
-                await process.wait()
+                        line_str = line.decode('utf-8', errors='replace')
+                        timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+                        log_line = f"[{timestamp}] {line_str}"
+                        f.write(log_line)
+                        f.flush()  # Force write to disk immediately
+                except asyncio.CancelledError:
+                    logger.info("Backup task cancelled", job_id=job_id)
+                    process.terminate()
+                    await process.wait()
+                    raise
 
-                # Update job status using modern exit codes
+                # Wait for process to complete if not already terminated
+                if process.returncode is None:
+                    await process.wait()
+
+                # Update job status using modern exit codes (if not already cancelled)
                 # 0 = success, 1 = warning (legacy), 2 = error (legacy)
                 # Modern: 0 = success, 3-99 = errors, 100-127 = warnings
-                if process.returncode == 0:
+                if job.status == "cancelled":
+                    logger.info("Backup job was cancelled", job_id=job_id)
+                    job.completed_at = datetime.utcnow()
+                elif process.returncode == 0:
                     job.status = "completed"
                     job.progress = 100
                 elif 100 <= process.returncode <= 127:
@@ -136,7 +163,8 @@ class BackupService:
                     job.status = "failed"
                     job.error_message = f"Backup failed with exit code {process.returncode}"
 
-                job.completed_at = datetime.utcnow()
+                if job.completed_at is None:
+                    job.completed_at = datetime.utcnow()
 
                 # Read full logs and store in database
                 with open(log_file, 'r') as log_read:
@@ -152,6 +180,11 @@ class BackupService:
             job.completed_at = datetime.utcnow()
             db.commit()
         finally:
+            # Remove from running processes
+            if job_id in self.running_processes:
+                del self.running_processes[job_id]
+                logger.debug("Removed backup process from tracking", job_id=job_id)
+
             # Close the database session
             db.close()
 
