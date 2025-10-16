@@ -290,25 +290,6 @@ async def create_repository(
         db.commit()
         db.refresh(repository)
 
-        # Deploy SSH keys if this is an SSH repository
-        if repo_data.repository_type in ["ssh", "sftp"]:
-            logger.info("Deploying SSH keys for remote repository", repo_id=repository.id)
-            try:
-                deploy_result = subprocess.run(
-                    ["python3", "/app/app/scripts/deploy_ssh_key.py"],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-                if deploy_result.returncode == 0:
-                    logger.info("SSH keys deployed successfully", stdout=deploy_result.stdout)
-                else:
-                    logger.warning("SSH key deployment had warnings",
-                                 stderr=deploy_result.stderr,
-                                 stdout=deploy_result.stdout)
-            except Exception as e:
-                logger.warning("Failed to deploy SSH keys, may need container restart", error=str(e))
-
         # Determine response message
         already_existed = init_result.get("already_existed", False)
         if already_existed:
