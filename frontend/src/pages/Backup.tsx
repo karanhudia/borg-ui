@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import {
   Box,
@@ -25,6 +25,8 @@ import {
   DialogContent,
   DialogActions,
   Paper,
+  Alert,
+  Divider,
 } from '@mui/material'
 import {
   Play,
@@ -35,6 +37,10 @@ import {
   RefreshCw,
   FileText,
   HardDrive,
+  Folder,
+  Database,
+  Archive,
+  Info,
 } from 'lucide-react'
 import { backupAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
@@ -74,6 +80,19 @@ const Backup: React.FC = () => {
   const { data: repositoriesData, isLoading: loadingRepositories } = useQuery({
     queryKey: ['repositories'],
     queryFn: repositoriesAPI.getRepositories,
+  })
+
+  // Get selected repository details
+  const selectedRepoData = useMemo(() => {
+    if (!selectedRepository || !repositoriesData?.data?.repositories) return null
+    return repositoriesData.data.repositories.find((repo: any) => repo.path === selectedRepository)
+  }, [selectedRepository, repositoriesData])
+
+  // Get archives for selected repository
+  const { data: archivesData } = useQuery({
+    queryKey: ['repository-archives', selectedRepoData?.id],
+    queryFn: () => repositoriesAPI.listRepositoryArchives(selectedRepoData.id),
+    enabled: !!selectedRepoData?.id,
   })
 
   // Start backup mutation
@@ -156,6 +175,13 @@ const Backup: React.FC = () => {
   const formatFileSize = (size?: string) => {
     if (!size) return 'Unknown'
     return size
+  }
+
+  // Format timestamp
+  const formatTimestamp = (timestamp: string) => {
+    if (!timestamp) return 'Never'
+    const date = new Date(timestamp)
+    return date.toLocaleString()
   }
 
   // Format time range (start and end only, no calculation)
@@ -261,6 +287,163 @@ const Backup: React.FC = () => {
           </Stack>
         </CardContent>
       </Card>
+
+      {/* Backup Context Card */}
+      {selectedRepoData && (
+        <Card sx={{ mb: 3, bgcolor: 'rgba(25, 118, 210, 0.04)' }}>
+          <CardContent>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+              <Info size={20} color="#1976d2" />
+              <Typography variant="h6" fontWeight={600}>
+                Backup Overview
+              </Typography>
+            </Stack>
+
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Here's what will be backed up and the current backup status
+            </Typography>
+
+            <Stack spacing={3}>
+              {/* Source Directories */}
+              <Box>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+                  <Folder size={18} color="rgba(0,0,0,0.6)" />
+                  <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
+                    Source Directories
+                  </Typography>
+                </Stack>
+                {selectedRepoData.source_directories && selectedRepoData.source_directories.length > 0 ? (
+                  <Stack spacing={1} sx={{ pl: 3.5 }}>
+                    {selectedRepoData.source_directories.map((dir: string, index: number) => (
+                      <Chip
+                        key={index}
+                        label={dir}
+                        size="small"
+                        icon={<Folder size={14} />}
+                        sx={{ justifyContent: 'flex-start', maxWidth: 'fit-content' }}
+                      />
+                    ))}
+                  </Stack>
+                ) : (
+                  <Alert severity="warning" sx={{ ml: 3.5 }}>
+                    No source directories configured for this repository
+                  </Alert>
+                )}
+              </Box>
+
+              <Divider />
+
+              {/* Repository Info */}
+              <Box>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+                  <Database size={18} color="rgba(0,0,0,0.6)" />
+                  <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
+                    Backup Destination
+                  </Typography>
+                </Stack>
+                <TableContainer sx={{ pl: 3.5 }}>
+                  <Table size="small">
+                    <TableBody>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 500, color: 'text.secondary', width: '30%', border: 'none', py: 0.5 }}>
+                          Repository Name
+                        </TableCell>
+                        <TableCell sx={{ border: 'none', py: 0.5 }}>{selectedRepoData.name}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}>
+                          Path
+                        </TableCell>
+                        <TableCell sx={{ border: 'none', py: 0.5, fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                          {selectedRepoData.path}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}>
+                          Encryption
+                        </TableCell>
+                        <TableCell sx={{ border: 'none', py: 0.5 }}>
+                          {selectedRepoData.encryption || 'Unknown'}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}>
+                          Compression
+                        </TableCell>
+                        <TableCell sx={{ border: 'none', py: 0.5 }}>
+                          {selectedRepoData.compression || 'lz4'}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+
+              <Divider />
+
+              {/* Backup Statistics */}
+              <Box>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+                  <Archive size={18} color="rgba(0,0,0,0.6)" />
+                  <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
+                    Backup Statistics
+                  </Typography>
+                </Stack>
+                <TableContainer sx={{ pl: 3.5 }}>
+                  <Table size="small">
+                    <TableBody>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 500, color: 'text.secondary', width: '30%', border: 'none', py: 0.5 }}>
+                          Last Backup
+                        </TableCell>
+                        <TableCell sx={{ border: 'none', py: 0.5 }}>
+                          {selectedRepoData.last_backup ? formatTimestamp(selectedRepoData.last_backup) : 'Never'}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}>
+                          Total Archive Count
+                        </TableCell>
+                        <TableCell sx={{ border: 'none', py: 0.5 }}>
+                          {selectedRepoData.archive_count || 0} archives
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}>
+                          Total Repository Size
+                        </TableCell>
+                        <TableCell sx={{ border: 'none', py: 0.5 }}>
+                          {selectedRepoData.total_size || 'Unknown'}
+                        </TableCell>
+                      </TableRow>
+                      {archivesData?.data?.archives && archivesData.data.archives.length > 0 && (
+                        <>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}>
+                              Last Archive
+                            </TableCell>
+                            <TableCell sx={{ border: 'none', py: 0.5 }}>
+                              {archivesData.data.archives[0].name}
+                            </TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}>
+                              Last Archive Created
+                            </TableCell>
+                            <TableCell sx={{ border: 'none', py: 0.5 }}>
+                              {formatTimestamp(archivesData.data.archives[0].start)}
+                            </TableCell>
+                          </TableRow>
+                        </>
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Running Jobs */}
       {runningJobs.length > 0 && (
