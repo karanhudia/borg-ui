@@ -48,6 +48,7 @@ interface Repository {
   path: string
   encryption: string
   compression: string
+  source_directories: string[]
   last_backup: string | null
   total_size: string | null
   archive_count: number
@@ -184,6 +185,7 @@ export default function Repositories() {
     encryption: 'repokey',
     compression: 'lz4',
     passphrase: '',
+    source_directories: [] as string[],
     repository_type: 'local',
     host: '',
     port: 22,
@@ -192,12 +194,17 @@ export default function Repositories() {
     connection_id: null as number | null,
   })
 
+  const [newSourceDir, setNewSourceDir] = useState('')
+
   const [editForm, setEditForm] = useState({
     name: '',
     path: '',
     compression: 'lz4',
+    source_directories: [] as string[],
     is_active: true,
   })
+
+  const [editNewSourceDir, setEditNewSourceDir] = useState('')
 
   // Event handlers
   const handleCreateRepository = (e: React.FormEvent) => {
@@ -252,6 +259,7 @@ export default function Repositories() {
       encryption: 'repokey',
       compression: 'lz4',
       passphrase: '',
+      source_directories: [],
       repository_type: 'local',
       host: '',
       port: 22,
@@ -259,6 +267,7 @@ export default function Repositories() {
       ssh_key_id: null,
       connection_id: null,
     })
+    setNewSourceDir('')
   }
 
   const openEditModal = (repository: Repository) => {
@@ -267,8 +276,10 @@ export default function Repositories() {
       name: repository.name,
       path: repository.path,
       compression: repository.compression,
+      source_directories: repository.source_directories || [],
       is_active: repository.is_active,
     })
+    setEditNewSourceDir('')
   }
 
   // Parse source directories from configuration (simple regex-based extraction)
@@ -754,6 +765,76 @@ export default function Repositories() {
                   fullWidth
                 />
               )}
+
+              {/* Source Directories */}
+              <Box>
+                <Typography variant="subtitle2" gutterBottom>
+                  Source Directories (Optional)
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+                  Specify which directories to backup to this repository
+                </Typography>
+
+                {createForm.source_directories.length > 0 && (
+                  <Stack spacing={0.5} sx={{ mb: 1.5 }}>
+                    {createForm.source_directories.map((dir, index) => (
+                      <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', flex: 1 }}>
+                          {dir}
+                        </Typography>
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setCreateForm({
+                              ...createForm,
+                              source_directories: createForm.source_directories.filter((_, i) => i !== index)
+                            })
+                          }}
+                        >
+                          <Delete fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    ))}
+                  </Stack>
+                )}
+
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <TextField
+                    value={newSourceDir}
+                    onChange={(e) => setNewSourceDir(e.target.value)}
+                    placeholder="/home/user/documents"
+                    size="small"
+                    fullWidth
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        if (newSourceDir.trim()) {
+                          setCreateForm({
+                            ...createForm,
+                            source_directories: [...createForm.source_directories, newSourceDir.trim()]
+                          })
+                          setNewSourceDir('')
+                        }
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => {
+                      if (newSourceDir.trim()) {
+                        setCreateForm({
+                          ...createForm,
+                          source_directories: [...createForm.source_directories, newSourceDir.trim()]
+                        })
+                        setNewSourceDir('')
+                      }
+                    }}
+                  >
+                    Add
+                  </Button>
+                </Box>
+              </Box>
             </Box>
           </DialogContent>
           <DialogActions>
@@ -800,6 +881,76 @@ export default function Repositories() {
                   <MenuItem value="none">None</MenuItem>
                 </Select>
               </FormControl>
+
+              {/* Source Directories */}
+              <Box>
+                <Typography variant="subtitle2" gutterBottom>
+                  Source Directories (Optional)
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+                  Specify which directories to backup to this repository
+                </Typography>
+
+                {editForm.source_directories.length > 0 && (
+                  <Stack spacing={0.5} sx={{ mb: 1.5 }}>
+                    {editForm.source_directories.map((dir, index) => (
+                      <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', flex: 1 }}>
+                          {dir}
+                        </Typography>
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setEditForm({
+                              ...editForm,
+                              source_directories: editForm.source_directories.filter((_, i) => i !== index)
+                            })
+                          }}
+                        >
+                          <Delete fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    ))}
+                  </Stack>
+                )}
+
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <TextField
+                    value={editNewSourceDir}
+                    onChange={(e) => setEditNewSourceDir(e.target.value)}
+                    placeholder="/home/user/documents"
+                    size="small"
+                    fullWidth
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        if (editNewSourceDir.trim()) {
+                          setEditForm({
+                            ...editForm,
+                            source_directories: [...editForm.source_directories, editNewSourceDir.trim()]
+                          })
+                          setEditNewSourceDir('')
+                        }
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => {
+                      if (editNewSourceDir.trim()) {
+                        setEditForm({
+                          ...editForm,
+                          source_directories: [...editForm.source_directories, editNewSourceDir.trim()]
+                        })
+                        setEditNewSourceDir('')
+                      }
+                    }}
+                  >
+                    Add
+                  </Button>
+                </Box>
+              </Box>
 
               <FormControlLabel
                 control={

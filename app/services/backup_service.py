@@ -1,5 +1,6 @@
 import asyncio
 import os
+import json
 from datetime import datetime
 from pathlib import Path
 import structlog
@@ -38,18 +39,8 @@ class BackupService:
             db.commit()
 
             # Build borg create command directly
-            # Format: borg create --progress --stats --list REPOSITORY::ARCHIVE PATH
+            # Format: borg create --progress --stats --list REPOSITORY::ARCHIVE PATH [PATH ...]
             archive_name = f"manual-backup-{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')}"
-
-            cmd = [
-                "borg", "create",
-                "--progress",
-                "--stats",
-                "--list",
-                "--compression", "lz4",
-                f"{repository}::{archive_name}",
-                "/data"  # Default backup path - could be made configurable
-            ]
 
             # Set environment variables for borg
             env = os.environ.copy()
@@ -58,16 +49,47 @@ class BackupService:
             env['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes'
             env['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes'
 
-            # Look up repository record to get passphrase
+            # Look up repository record to get passphrase and source directories
+            source_paths = ["/data"]  # Default backup path
             try:
                 repo_record = db.query(Repository).filter(Repository.path == repository).first()
-                if repo_record and repo_record.passphrase:
-                    env['BORG_PASSPHRASE'] = repo_record.passphrase
-                    logger.info("Using passphrase from repository record", repository=repository)
+                if repo_record:
+                    # Set passphrase if available
+                    if repo_record.passphrase:
+                        env['BORG_PASSPHRASE'] = repo_record.passphrase
+                        logger.info("Using passphrase from repository record", repository=repository)
+
+                    # Parse source directories from JSON if available
+                    if repo_record.source_directories:
+                        try:
+                            source_dirs = json.loads(repo_record.source_directories)
+                            if source_dirs and isinstance(source_dirs, list) and len(source_dirs) > 0:
+                                source_paths = source_dirs
+                                logger.info("Using source directories from repository",
+                                          repository=repository,
+                                          source_directories=source_paths)
+                            else:
+                                logger.info("No source directories configured, using default /data",
+                                          repository=repository)
+                        except json.JSONDecodeError as e:
+                            logger.warning("Could not parse source_directories JSON, using default /data",
+                                         repository=repository, error=str(e))
                 else:
-                    logger.warning("No passphrase found for repository", repository=repository)
+                    logger.warning("Repository record not found, using defaults", repository=repository)
             except Exception as e:
-                logger.warning("Could not look up repository passphrase", error=str(e))
+                logger.warning("Could not look up repository record", error=str(e))
+
+            # Build command with source directories
+            cmd = [
+                "borg", "create",
+                "--progress",
+                "--stats",
+                "--list",
+                "--compression", "lz4",
+                f"{repository}::{archive_name}",
+            ]
+            # Add all source paths to the command
+            cmd.extend(source_paths)
 
             logger.info("Starting borg backup", job_id=job_id, repository=repository, archive=archive_name, command=" ".join(cmd))
 
