@@ -653,6 +653,8 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
         if passphrase:
             env["BORG_PASSPHRASE"] = passphrase
             logger.info("Passphrase added to environment")
+        # Allow non-interactive access to unencrypted repositories
+        env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
 
         # Handle SSH key for remote repositories
         if ssh_key_id and path.startswith("ssh://"):
@@ -790,6 +792,8 @@ async def list_repository_archives(
         env = os.environ.copy()
         if repository.passphrase:
             env["BORG_PASSPHRASE"] = repository.passphrase
+        # Allow non-interactive access to unencrypted repositories
+        env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
 
         # Execute command
         process = await asyncio.create_subprocess_exec(
@@ -855,6 +859,8 @@ async def get_repository_info(
         env = os.environ.copy()
         if repository.passphrase:
             env["BORG_PASSPHRASE"] = repository.passphrase
+        # Allow non-interactive access to unencrypted repositories
+        env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
 
         # Execute command
         process = await asyncio.create_subprocess_exec(
@@ -926,6 +932,8 @@ async def get_archive_info(
         env = os.environ.copy()
         if repository.passphrase:
             env["BORG_PASSPHRASE"] = repository.passphrase
+        # Allow non-interactive access to unencrypted repositories
+        env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
 
         # Execute command
         process = await asyncio.create_subprocess_exec(
