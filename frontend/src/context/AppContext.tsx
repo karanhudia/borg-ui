@@ -129,8 +129,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         repositories: true,
         backups: true,
         archives: true,
-        restore: true,
-        schedule: true,
+        restore: false, // Under development
+        schedule: false, // Under development
         settings: true,
       }
     }
@@ -143,14 +143,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       repositories: appState.hasSSHKey,
       backups: appState.hasSSHKey && appState.hasRepositories,
       archives: appState.hasSSHKey && appState.hasRepositories,
-      restore: appState.hasSSHKey && appState.hasArchives,
-      schedule: appState.hasSSHKey && appState.hasRepositories,
+      restore: false, // Under development
+      schedule: false, // Under development
       settings: true,
     }
   }, [appState.hasSSHKey, appState.hasRepositories, appState.hasArchives, fetchedSSH, fetchedRepos, authLoading, isAuthenticated])
 
   // Get reason why a tab is disabled
   const getTabDisabledReason = useCallback((tab: keyof TabEnablement): string | null => {
+    // Check for features under development first
+    if (tab === 'restore') {
+      return 'Under Development - Coming Soon'
+    }
+    if (tab === 'schedule') {
+      return 'Under Development - Coming Soon'
+    }
+
     if (tabEnablement[tab]) {
       return null
     }
@@ -161,20 +169,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return 'Please generate or upload an SSH key first'
       case 'backups':
       case 'archives':
-      case 'schedule':
         if (!appState.hasSSHKey) {
           return 'Please generate or upload an SSH key first'
         }
         if (!appState.hasRepositories) {
           return 'Please create a repository first'
-        }
-        return null
-      case 'restore':
-        if (!appState.hasSSHKey) {
-          return 'Please generate or upload an SSH key first'
-        }
-        if (!appState.hasArchives) {
-          return 'Please create a backup first to have archives available'
         }
         return null
       default:
