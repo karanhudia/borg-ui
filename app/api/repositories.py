@@ -237,15 +237,15 @@ async def create_repository(
         
         # Initialize Borg repository
         init_result = await initialize_borg_repository(
-            repo_path, 
-            repo_data.encryption, 
+            repo_path,
+            repo_data.encryption,
             repo_data.passphrase,
             repo_data.ssh_key_id if repo_data.repository_type in ["ssh", "sftp"] else None
         )
-        
+
         if not init_result["success"]:
             raise HTTPException(status_code=500, detail=f"Failed to initialize repository: {init_result['error']}")
-        
+
         # Serialize source directories as JSON
         source_directories_json = None
         if repo_data.source_directories:
@@ -266,16 +266,24 @@ async def create_repository(
             ssh_key_id=repo_data.ssh_key_id,
             remote_path=repo_data.remote_path
         )
-        
+
         db.add(repository)
         db.commit()
         db.refresh(repository)
-        
-        logger.info("Repository created", name=repo_data.name, path=repo_path, user=current_user.username)
-        
+
+        # Determine response message
+        already_existed = init_result.get("already_existed", False)
+        if already_existed:
+            message = "Repository already exists at this location and has been added to the UI"
+            logger.info("Existing repository added", name=repo_data.name, path=repo_path, user=current_user.username)
+        else:
+            message = "Repository created successfully"
+            logger.info("Repository created", name=repo_data.name, path=repo_path, user=current_user.username)
+
         return {
             "success": True,
-            "message": "Repository created successfully",
+            "message": message,
+            "already_existed": already_existed,
             "repository": {
                 "id": repository.id,
                 "name": repository.name,
@@ -730,9 +738,19 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
             logger.info("Repository initialized successfully", path=path)
             return {
                 "success": True,
-                "message": "Repository initialized successfully"
+                "message": "Repository initialized successfully",
+                "already_existed": False
             }
         else:
+            # Check if repository already exists (borg returns exit code 2)
+            if process.returncode == 2 and "repository already exists" in stderr_str.lower():
+                logger.info("Repository already exists at path, treating as success", path=path)
+                return {
+                    "success": True,
+                    "message": "Repository already exists at this location",
+                    "already_existed": True
+                }
+
             logger.error("Repository initialization failed",
                         returncode=process.returncode,
                         stderr=stderr_str,

@@ -120,8 +120,17 @@ export default function Repositories() {
   // Mutations
   const createRepositoryMutation = useMutation({
     mutationFn: repositoriesAPI.createRepository,
-    onSuccess: () => {
-      toast.success('Repository created successfully')
+    onSuccess: (response: any) => {
+      // Check if repository already existed
+      const alreadyExisted = response?.data?.already_existed || false
+      const message = response?.data?.message || 'Repository created successfully'
+
+      if (alreadyExisted) {
+        toast.success(message, { duration: 5000 })
+      } else {
+        toast.success(message)
+      }
+
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
       // Invalidate AppContext query to update tab enablement immediately
       queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
