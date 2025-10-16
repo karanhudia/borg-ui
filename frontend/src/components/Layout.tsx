@@ -108,11 +108,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <Box>
         <Toolbar>
           <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 600 }}>
-            Borgmatic UI
+            Borg UI
           </Typography>
         </Toolbar>
         <Divider />
-        <List>
+        <List sx={{ pt: 0 }}>
           {navigationWithKeys.map((item) => {
             const isActive = location.pathname === item.href
             const isEnabled = tabEnablement[item.key]

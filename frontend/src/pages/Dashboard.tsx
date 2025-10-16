@@ -94,7 +94,7 @@ export default function Dashboard() {
 
       {/* Status Cards */}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 3, mb: 4, '& > *': { mb: { xs: 2, sm: 0 } } }}>
-        {/* Borgmatic Status Card */}
+        {/* Borg Status Card */}
         <Card>
           <CardContent>
             <Stack spacing={2}>
@@ -109,11 +109,11 @@ export default function Dashboard() {
                     justifyContent: 'center',
                   }}
                 >
-                  <Activity size={28} color="primary" />
+                  <Activity size={28} color="#1976d2" />
                 </Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography variant="body2" color="text.secondary" noWrap>
-                    Borgmatic Status
+                    Borg Status
                   </Typography>
                   <Typography variant="h6" fontWeight={600} sx={{ mt: 0.5 }}>
                     Running
