@@ -37,6 +37,7 @@ import {
   Warning,
   Computer,
   Wifi,
+  Info,
 } from '@mui/icons-material'
 import { repositoriesAPI, sshKeysAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
@@ -80,6 +81,7 @@ export default function Repositories() {
   const appState = useAppState()
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingRepository, setEditingRepository] = useState<Repository | null>(null)
+  const [viewingInfoRepository, setViewingInfoRepository] = useState<Repository | null>(null)
 
   // Queries
   const { data: repositoriesData, isLoading } = useQuery({
@@ -95,6 +97,13 @@ export default function Repositories() {
   const { data: connectionsData } = useQuery({
     queryKey: ['ssh-connections'],
     queryFn: sshKeysAPI.getSSHConnections,
+  })
+
+  // Get repository info using borg info command
+  const { data: repositoryInfo, isLoading: loadingInfo } = useQuery({
+    queryKey: ['repository-info', viewingInfoRepository?.id],
+    queryFn: () => repositoriesAPI.getRepositoryInfo(viewingInfoRepository!.id),
+    enabled: !!viewingInfoRepository,
   })
 
   // Get default configuration to show source directories
@@ -564,6 +573,13 @@ export default function Repositories() {
                         <Box sx={{ display: 'flex', gap: 1 }}>
                           <Button
                             size="small"
+                            startIcon={<Info />}
+                            onClick={() => setViewingInfoRepository(repository)}
+                          >
+                            Info
+                          </Button>
+                          <Button
+                            size="small"
                             startIcon={<CheckCircleIcon />}
                             onClick={() => handleCheckRepository(repository)}
                             disabled={checkRepositoryMutation.isLoading}
@@ -970,6 +986,127 @@ export default function Repositories() {
             </Button>
           </DialogActions>
         </form>
+      </Dialog>
+
+      {/* Repository Info Dialog */}
+      <Dialog
+        open={!!viewingInfoRepository}
+        onClose={() => setViewingInfoRepository(null)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          Repository Information: {viewingInfoRepository?.name}
+        </DialogTitle>
+        <DialogContent>
+          {loadingInfo ? (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Typography variant="body2" color="text.secondary">
+                Loading repository info...
+              </Typography>
+            </Box>
+          ) : repositoryInfo?.data ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+              <Alert severity="info">
+                This information comes from <code>borg info --json</code>
+              </Alert>
+
+              {/* Repository Info */}
+              {repositoryInfo.data.repository && (
+                <Box>
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Storage /> Repository
+                  </Typography>
+                  <Box sx={{
+                    bgcolor: 'grey.50',
+                    p: 2,
+                    borderRadius: 1,
+                    fontFamily: 'monospace',
+                    fontSize: '0.875rem'
+                  }}>
+                    {Object.entries(repositoryInfo.data.repository).map(([key, value]) => (
+                      <Box key={key} sx={{ mb: 0.5 }}>
+                        <strong>{key}:</strong> {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+
+              {/* Cache Info */}
+              {repositoryInfo.data.cache && (
+                <Box>
+                  <Typography variant="h6" gutterBottom>
+                    Cache
+                  </Typography>
+                  <Box sx={{
+                    bgcolor: 'grey.50',
+                    p: 2,
+                    borderRadius: 1,
+                    fontFamily: 'monospace',
+                    fontSize: '0.875rem'
+                  }}>
+                    {Object.entries(repositoryInfo.data.cache).map(([key, value]) => (
+                      <Box key={key} sx={{ mb: 0.5 }}>
+                        <strong>{key}:</strong> {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+
+              {/* Encryption Info */}
+              {repositoryInfo.data.encryption && (
+                <Box>
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Shield /> Encryption
+                  </Typography>
+                  <Box sx={{
+                    bgcolor: 'grey.50',
+                    p: 2,
+                    borderRadius: 1,
+                    fontFamily: 'monospace',
+                    fontSize: '0.875rem'
+                  }}>
+                    {Object.entries(repositoryInfo.data.encryption).map(([key, value]) => (
+                      <Box key={key} sx={{ mb: 0.5 }}>
+                        <strong>{key}:</strong> {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+
+              {/* Raw JSON (collapsible) */}
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                  Raw JSON Output
+                </Typography>
+                <Box sx={{
+                  bgcolor: 'grey.900',
+                  color: 'grey.100',
+                  p: 2,
+                  borderRadius: 1,
+                  fontFamily: 'monospace',
+                  fontSize: '0.75rem',
+                  maxHeight: 300,
+                  overflow: 'auto'
+                }}>
+                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+                    {JSON.stringify(repositoryInfo.data, null, 2)}
+                  </pre>
+                </Box>
+              </Box>
+            </Box>
+          ) : (
+            <Alert severity="error">
+              Failed to load repository information. Make sure the repository is accessible and properly initialized.
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setViewingInfoRepository(null)}>Close</Button>
+        </DialogActions>
       </Dialog>
     </Box>
   )
