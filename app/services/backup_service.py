@@ -45,6 +45,11 @@ class BackupService:
             # Set environment variables for borg
             env = os.environ.copy()
 
+            # Use modern exit codes for better error handling
+            # 0 = success, 1 = warning, 2+ = error
+            # Modern: 0 = success, 1-99 reserved, 3-99 = errors, 100-127 = warnings
+            env['BORG_EXIT_CODES'] = 'modern'
+
             # Skip interactive prompts (auto-accept for unencrypted repos, etc.)
             env['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes'
             env['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes'
@@ -85,6 +90,8 @@ class BackupService:
                 "--progress",
                 "--stats",
                 "--list",
+                "--show-rc",  # Show return code for better debugging
+                "--log-json",  # Structured JSON logging
                 "--compression", "lz4",
                 f"{repository}::{archive_name}",
             ]
@@ -113,10 +120,18 @@ class BackupService:
                 # Wait for process to complete
                 await process.wait()
 
-                # Update job status
+                # Update job status using modern exit codes
+                # 0 = success, 1 = warning (legacy), 2 = error (legacy)
+                # Modern: 0 = success, 3-99 = errors, 100-127 = warnings
                 if process.returncode == 0:
                     job.status = "completed"
                     job.progress = 100
+                elif 100 <= process.returncode <= 127:
+                    # Warning (modern exit code system)
+                    job.status = "completed"
+                    job.progress = 100
+                    job.error_message = f"Backup completed with warning (exit code {process.returncode})"
+                    logger.warning("Backup completed with warning", job_id=job_id, exit_code=process.returncode)
                 else:
                     job.status = "failed"
                     job.error_message = f"Backup failed with exit code {process.returncode}"
