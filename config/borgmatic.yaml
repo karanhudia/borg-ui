@@ -1,8 +1,0 @@
-repositories:
-  - path: /path/to/repository
-
-storage:
-  compression: lz4
-
-retention:
-  keep_daily: 7

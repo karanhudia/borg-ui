@@ -11,39 +11,39 @@ from app.config import settings
 logger = structlog.get_logger()
 
 class BorgmaticInterface:
-    """Interface for interacting with Borgmatic CLI"""
+    """Interface for interacting with Borg CLI"""
 
     _validated = False  # Class variable to track if validation has run
 
-    def __init__(self, config_path: str = None):
-        self.config_path = config_path or settings.borgmatic_config_path
-        self.borgmatic_cmd = "borgmatic"
+    def __init__(self):
+        self.borg_cmd = "borg"
         if not BorgmaticInterface._validated:
-            self._validate_borgmatic_installation()
+            self._validate_borg_installation()
             BorgmaticInterface._validated = True
-    
-    def _validate_borgmatic_installation(self):
-        """Validate that borgmatic is installed and accessible"""
+
+    def _validate_borg_installation(self):
+        """Validate that borg is installed and accessible"""
         try:
-            result = subprocess.run([self.borgmatic_cmd, "--version"], 
+            result = subprocess.run([self.borg_cmd, "--version"],
                                   capture_output=True, text=True, timeout=10)
             if result.returncode == 0:
-                logger.info("Borgmatic found", version=result.stdout.strip())
+                logger.info("Borg found", version=result.stdout.strip())
             else:
-                raise RuntimeError(f"Borgmatic command failed with return code {result.returncode}")
+                raise RuntimeError(f"Borg command failed with return code {result.returncode}")
         except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-            logger.error("Borgmatic not available", error=str(e))
-            raise RuntimeError(f"Borgmatic not available: {str(e)}")
+            logger.error("Borg not available", error=str(e))
+            raise RuntimeError(f"Borg not available: {str(e)}")
     
-    async def _execute_command(self, cmd: List[str], timeout: int = 3600) -> Dict:
+    async def _execute_command(self, cmd: List[str], timeout: int = 3600, cwd: str = None) -> Dict:
         """Execute a command with real-time output capture"""
-        logger.info("Executing command", command=" ".join(cmd))
-        
+        logger.info("Executing command", command=" ".join(cmd), cwd=cwd)
+
         try:
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
+                cwd=cwd
             )
             
             stdout, stderr = await asyncio.wait_for(
@@ -85,78 +85,96 @@ class BorgmaticInterface:
                 "success": False
             }
     
-    async def run_backup(self, repository: str = None, config_file: str = None) -> Dict:
-        """Execute backup operation"""
-        cmd = [self.borgmatic_cmd, "create"]
-        
-        if repository:
-            cmd.extend(["--repository", repository])
-        
-        if config_file:
-            cmd.extend(["--config", config_file])
-        elif self.config_path:
-            cmd.extend(["--config", self.config_path])
-        
+    async def run_backup(self, repository: str, source_paths: List[str],
+                        compression: str = "lz4", archive_name: str = None) -> Dict:
+        """Execute backup operation with direct parameters"""
+        if not repository:
+            return {"success": False, "error": "Repository is required", "stdout": "", "stderr": ""}
+
+        if not source_paths:
+            return {"success": False, "error": "Source paths are required", "stdout": "", "stderr": ""}
+
+        # Build borg create command
+        cmd = [self.borg_cmd, "create"]
+
+        # Add compression
+        cmd.extend(["--compression", compression])
+
+        # Add common options
+        cmd.extend(["--stats", "--json"])
+
+        # Repository::archive format
+        if not archive_name:
+            archive_name = "{hostname}-{now}"
+        cmd.append(f"{repository}::{archive_name}")
+
+        # Add source paths
+        cmd.extend(source_paths)
+
         return await self._execute_command(cmd, timeout=settings.backup_timeout)
     
     async def list_archives(self, repository: str) -> Dict:
         """List archives in repository"""
-        cmd = [self.borgmatic_cmd, "list", "--repository", repository, "--json"]
+        cmd = [self.borg_cmd, "list", repository, "--json"]
         return await self._execute_command(cmd)
     
     async def info_archive(self, repository: str, archive: str) -> Dict:
         """Get information about a specific archive"""
-        cmd = [self.borgmatic_cmd, "info", "--repository", repository, "--archive", archive, "--json"]
+        cmd = [self.borg_cmd, "info", f"{repository}::{archive}", "--json"]
         return await self._execute_command(cmd)
     
     async def list_archive_contents(self, repository: str, archive: str, path: str = "") -> Dict:
         """List contents of an archive"""
-        cmd = [self.borgmatic_cmd, "list", "--repository", repository, "--archive", archive, "--json"]
+        cmd = [self.borg_cmd, "list", f"{repository}::{archive}", "--json-lines"]
         if path:
-            cmd.extend(["--path", path])
+            cmd.append(path)
         return await self._execute_command(cmd)
     
-    async def extract_archive(self, repository: str, archive: str, paths: List[str], 
+    async def extract_archive(self, repository: str, archive: str, paths: List[str],
                             destination: str, dry_run: bool = False) -> Dict:
         """Extract files from an archive"""
-        cmd = [self.borgmatic_cmd, "extract"]
-        
+        cmd = [self.borg_cmd, "extract"]
+
         if dry_run:
             cmd.append("--dry-run")
-        
-        cmd.extend(["--repository", repository, "--archive", archive, "--destination", destination])
-        
-        for path in paths:
-            cmd.extend(["--path", path])
-        
-        return await self._execute_command(cmd, timeout=settings.backup_timeout)
+
+        cmd.append(f"{repository}::{archive}")
+
+        # Add paths to extract
+        if paths:
+            cmd.extend(paths)
+
+        # Borg extract always extracts to current directory
+        # Use cwd parameter to change to destination directory
+        return await self._execute_command(cmd, timeout=settings.backup_timeout, cwd=destination)
     
     async def delete_archive(self, repository: str, archive: str) -> Dict:
         """Delete an archive"""
-        cmd = [self.borgmatic_cmd, "delete", "--repository", repository, "--archive", archive]
+        cmd = [self.borg_cmd, "delete", f"{repository}::{archive}"]
         return await self._execute_command(cmd)
     
-    async def prune_archives(self, repository: str, keep_daily: int = 7, keep_weekly: int = 4, 
+    async def prune_archives(self, repository: str, keep_daily: int = 7, keep_weekly: int = 4,
                            keep_monthly: int = 6, keep_yearly: int = 1) -> Dict:
         """Prune old archives"""
         cmd = [
-            self.borgmatic_cmd, "prune",
-            "--repository", repository,
+            self.borg_cmd, "prune",
+            repository,
             "--keep-daily", str(keep_daily),
             "--keep-weekly", str(keep_weekly),
             "--keep-monthly", str(keep_monthly),
-            "--keep-yearly", str(keep_yearly)
+            "--keep-yearly", str(keep_yearly),
+            "--stats"
         ]
         return await self._execute_command(cmd)
     
     async def check_repository(self, repository: str) -> Dict:
         """Check repository integrity"""
-        cmd = [self.borgmatic_cmd, "check", "--repository", repository]
+        cmd = [self.borg_cmd, "check", repository]
         return await self._execute_command(cmd)
     
     async def compact_repository(self, repository: str) -> Dict:
         """Compact repository to save space"""
-        cmd = [self.borgmatic_cmd, "compact", "--repository", repository]
+        cmd = [self.borg_cmd, "compact", repository]
         return await self._execute_command(cmd)
     
     async def get_config_info(self, config_file: str = None) -> Dict:
@@ -187,98 +205,81 @@ class BorgmaticInterface:
             }
     
     async def validate_config(self, config_content: str) -> Dict:
-        """Validate configuration content using borgmatic config validate"""
+        """Validate configuration content using YAML parsing"""
         try:
-            # Create a temporary config file for validation
-            import tempfile
-            import os
-            
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as temp_file:
-                temp_file.write(config_content)
-                temp_file_path = temp_file.name
-            
-            try:
-                # Use borgmatic config validate command
-                cmd = [self.borgmatic_cmd, "config", "validate", "--config", temp_file_path]
-                result = await self._execute_command(cmd, timeout=30)
-                
-                # Parse output for warnings and errors
-                stdout = result["stdout"].strip()
-                stderr = result["stderr"].strip()
-                
-                warnings = []
-                errors = []
-                
-                # Process stderr for errors and warnings
-                if stderr:
-                    lines = stderr.split('\n')
-                    for line in lines:
-                        line = line.strip()
-                        if line:
-                            # Remove temporary file path prefix
-                            if temp_file_path in line:
-                                line = line.replace(temp_file_path, "config.yaml")
-                            
-                            # Skip the success message
-                            if "All configuration files are valid" in line:
-                                continue
-                                
-                            # Check for warnings vs errors
-                            if any(keyword in line.lower() for keyword in ["deprecated", "warning", "will be removed"]):
-                                warnings.append(line)
-                            elif line != "summary:" and line:  # Skip the "summary:" line as it's just a header
-                                errors.append(line)
-                
-                # Process stdout for any additional messages
-                if stdout:
-                    lines = stdout.split('\n')
-                    for line in lines:
-                        line = line.strip()
-                        if line and "All configuration files are valid" not in line:
-                            # Remove temporary file path prefix
-                            if temp_file_path in line:
-                                line = line.replace(temp_file_path, "config.yaml")
-                            
-                            if any(keyword in line.lower() for keyword in ["deprecated", "warning", "will be removed"]):
-                                warnings.append(line)
-                            elif line != "summary:" and line:  # Skip the "summary:" line as it's just a header
-                                errors.append(line)
-                
-                # Determine if validation was successful
-                # borgmatic config validate returns 0 on success, non-zero on failure
-                is_valid = result["success"]
-                
-                if is_valid:
-                    return {
-                        "success": True, 
-                        "config": yaml.safe_load(config_content),
-                        "warnings": warnings,
-                        "errors": errors
-                    }
-                else:
-                    # If no specific errors were found, use the stderr as error message
-                    if not errors and stderr:
-                        errors.append(stderr.strip())
-                    elif not errors:
-                        errors.append("Configuration validation failed")
-                    
-                    return {
-                        "success": False, 
-                        "error": "; ".join(errors),
-                        "warnings": warnings,
-                        "errors": errors
-                    }
-                    
-            finally:
-                # Clean up temporary file
-                try:
-                    os.unlink(temp_file_path)
-                except:
-                    pass
-                    
+            # Parse YAML to validate syntax
+            config = yaml.safe_load(config_content)
+
+            # Validate required fields
+            warnings = []
+            errors = []
+
+            # Check for required sections
+            if not config:
+                errors.append("Configuration is empty")
+                return {"success": False, "error": "Configuration is empty", "errors": errors, "warnings": warnings}
+
+            # Validate repositories
+            if "repositories" not in config:
+                errors.append("Missing required field: repositories")
+            elif not isinstance(config["repositories"], list) or len(config["repositories"]) == 0:
+                errors.append("repositories must be a non-empty list")
+            else:
+                # Validate each repository
+                for i, repo in enumerate(config["repositories"]):
+                    if isinstance(repo, dict):
+                        if "path" not in repo:
+                            errors.append(f"Repository {i}: missing 'path' field")
+                    elif not isinstance(repo, str):
+                        errors.append(f"Repository {i}: must be a string path or object with 'path' field")
+
+            # Validate source_directories (optional but recommended)
+            if "source_directories" in config:
+                if not isinstance(config["source_directories"], list):
+                    errors.append("source_directories must be a list")
+                elif len(config["source_directories"]) == 0:
+                    warnings.append("source_directories is empty - no files will be backed up")
+
+            # Validate retention settings (optional)
+            if "retention" in config:
+                retention = config["retention"]
+                valid_retention_keys = ["keep_daily", "keep_weekly", "keep_monthly", "keep_yearly", "keep_within"]
+                for key in retention:
+                    if key not in valid_retention_keys:
+                        warnings.append(f"Unknown retention key: {key}")
+
+            # Validate storage settings (optional)
+            if "storage" in config:
+                storage = config["storage"]
+                if "compression" in storage:
+                    valid_compressions = ["none", "lz4", "zstd", "zlib", "lzma", "auto"]
+                    compression = storage["compression"]
+                    # Handle compression with level (e.g., "zstd,10")
+                    base_compression = compression.split(",")[0] if isinstance(compression, str) else compression
+                    if base_compression not in valid_compressions:
+                        warnings.append(f"Unknown compression method: {compression}")
+
+            if errors:
+                return {
+                    "success": False,
+                    "error": "; ".join(errors),
+                    "errors": errors,
+                    "warnings": warnings
+                }
+
+            return {
+                "success": True,
+                "config": config,
+                "warnings": warnings,
+                "errors": errors
+            }
+
+        except yaml.YAMLError as e:
+            logger.error("Failed to parse YAML config", error=str(e))
+            return {"success": False, "error": f"Invalid YAML syntax: {str(e)}", "errors": [str(e)], "warnings": []}
         except Exception as e:
             logger.error("Failed to validate config", error=str(e))
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": str(e), "errors": [str(e)], "warnings": []}
     
     async def get_repository_info(self, repository_path: str) -> Dict:
         """Get detailed information about a specific repository"""
@@ -413,35 +414,36 @@ class BorgmaticInterface:
             return {"success": False, "error": str(e)}
     
     def get_version(self) -> str:
-        """Get Borgmatic version"""
+        """Get Borg version"""
         try:
-            result = subprocess.run([self.borgmatic_cmd, "--version"], capture_output=True, text=True, timeout=10)
+            result = subprocess.run([self.borg_cmd, "--version"], capture_output=True, text=True, timeout=10)
             if result.returncode == 0:
                 return result.stdout.strip()
             else:
                 return "Unknown"
         except Exception as e:
-            logger.error("Failed to get borgmatic version", error=str(e))
+            logger.error("Failed to get borg version", error=str(e))
             return "Unknown"
 
     async def get_system_info(self) -> Dict:
         """Get system information"""
         try:
-            # Get borgmatic version
-            version_result = await self._execute_command([self.borgmatic_cmd, "--version"])
-            borgmatic_version = version_result["stdout"].strip() if version_result["success"] else "Unknown"
-            
+            # Get borg version
+            version_result = await self._execute_command([self.borg_cmd, "--version"])
+            borg_version = version_result["stdout"].strip() if version_result["success"] else "Unknown"
+
             # Get available commands
-            help_result = await self._execute_command([self.borgmatic_cmd, "--help"])
-            
+            help_result = await self._execute_command([self.borg_cmd, "--help"])
+
             return {
                 "success": True,
-                "borgmatic_version": borgmatic_version,
+                "borg_version": borg_version,
+                "borgmatic_version": borg_version,  # Keep for compatibility
                 "config_path": self.config_path,
                 "backup_path": settings.borgmatic_backup_path,
                 "help_available": help_result["success"]
             }
-            
+
         except Exception as e:
             logger.error("Failed to get system info", error=str(e))
             return {"success": False, "error": str(e)}

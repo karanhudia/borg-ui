@@ -159,8 +159,12 @@ const Backup: React.FC = () => {
   }
 
   // Format duration
-  const formatDuration = (startTime: string, endTime?: string) => {
+  const formatDuration = (startTime: string, endTime?: string, status?: string) => {
     const start = new Date(startTime)
+    // For non-running jobs without completed_at, don't increment timer
+    if (!endTime && status && status !== 'running') {
+      return 'N/A'
+    }
     const end = endTime ? new Date(endTime) : new Date()
     const diff = Math.floor((end.getTime() - start.getTime()) / 1000)
 
@@ -312,7 +316,7 @@ const Backup: React.FC = () => {
                         Progress: {job.progress || 0}%
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        {formatDuration(job.started_at)}
+                        {formatDuration(job.started_at, job.completed_at, job.status)}
                       </Typography>
                     </Stack>
                     <LinearProgress
@@ -417,7 +421,7 @@ const Backup: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">
-                          {formatDuration(job.started_at, job.completed_at)}
+                          {formatDuration(job.started_at, job.completed_at, job.status)}
                         </Typography>
                       </TableCell>
                       <TableCell>

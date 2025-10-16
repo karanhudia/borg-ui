@@ -537,11 +537,13 @@ export default function Repositories() {
                         <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
                           Status
                         </Typography>
-                        <Chip
-                          label={repository.is_active ? 'Active' : 'Inactive'}
-                          size="small"
-                          color={repository.is_active ? 'success' : 'default'}
-                        />
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center' }}>
+                          <Chip
+                            label={repository.is_active ? 'Active' : 'Inactive'}
+                            size="small"
+                            color={repository.is_active ? 'success' : 'default'}
+                          />
+                        </Box>
                       </Box>
                     </Stack>
 
