@@ -102,6 +102,15 @@ const Backup: React.FC = () => {
     enabled: !!selectedRepoData?.id,
   })
 
+  // Format bytes to human readable (defined before liveStats to avoid initialization error)
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 B'
+    const k = 1024
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
+  }
+
   // Calculate live statistics from fetched data
   const liveStats = useMemo(() => {
     const archives = archivesData?.data?.archives || []
@@ -205,15 +214,6 @@ const Backup: React.FC = () => {
   const formatFileSize = (size?: string) => {
     if (!size) return 'Unknown'
     return size
-  }
-
-  // Format bytes to human readable
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 B'
-    const k = 1024
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
   }
 
   // Format timestamp
