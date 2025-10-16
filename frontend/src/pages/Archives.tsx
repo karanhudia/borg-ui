@@ -78,6 +78,13 @@ const Archives: React.FC = () => {
     enabled: !!selectedRepositoryId
   })
 
+  // Get archive-specific info using borg info repo::archive
+  const { data: archiveInfo, isLoading: loadingArchiveInfo } = useQuery({
+    queryKey: ['archive-info', selectedRepositoryId, selectedArchive?.name],
+    queryFn: () => repositoriesAPI.getArchiveInfo(selectedRepositoryId!, selectedArchive!.name),
+    enabled: !!selectedRepositoryId && !!selectedArchive
+  })
+
   // Delete archive mutation
   const deleteArchiveMutation = useMutation({
     mutationFn: ({ repository, archive }: { repository: string; archive: string }) =>
@@ -460,6 +467,136 @@ const Archives: React.FC = () => {
                   <AlertCircle size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
                   <Typography variant="body1" color="text.secondary">
                     No repository information available
+                  </Typography>
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+        </Box>
+      )}
+
+      {/* Archive Information */}
+      {selectedArchive && (
+        <Box sx={{ mt: 3 }}>
+          <Card>
+            <CardContent>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 3 }}>
+                <FolderOpen size={20} />
+                <Typography variant="h6" fontWeight={600}>
+                  Archive Information
+                </Typography>
+              </Stack>
+
+              {loadingArchiveInfo ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
+                  <CircularProgress size={48} />
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                    Loading archive info...
+                  </Typography>
+                </Box>
+              ) : archiveInfo?.data?.archive ? (
+                <Stack spacing={3}>
+                  {/* Archive Details */}
+                  <Box>
+                    <Typography variant="subtitle2" fontWeight={600} color="text.secondary" sx={{ mb: 2 }}>
+                      ARCHIVE DETAILS
+                    </Typography>
+                    <Stack direction="row" flexWrap="wrap" spacing={3}>
+                      <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
+                        <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                          Name
+                        </Typography>
+                        <Typography variant="body2" sx={{ mt: 0.5 }}>
+                          {archiveInfo.data.archive.name || selectedArchive.name}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
+                        <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                          Created
+                        </Typography>
+                        <Typography variant="body2" sx={{ mt: 0.5 }}>
+                          {archiveInfo.data.archive.start ? formatTimestamp(archiveInfo.data.archive.start) : selectedArchive.start}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
+                        <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                          Duration
+                        </Typography>
+                        <Typography variant="body2" sx={{ mt: 0.5 }}>
+                          {archiveInfo.data.archive.duration || selectedArchive.time}
+                        </Typography>
+                      </Box>
+                      {archiveInfo.data.archive.command_line && (
+                        <Box sx={{ flex: '1 1 100%', minWidth: 200 }}>
+                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                            Command Line
+                          </Typography>
+                          <Typography variant="body2" sx={{ mt: 0.5, fontFamily: 'monospace', fontSize: '0.75rem', wordBreak: 'break-all' }}>
+                            {archiveInfo.data.archive.command_line.join(' ')}
+                          </Typography>
+                        </Box>
+                      )}
+                    </Stack>
+                  </Box>
+
+                  {/* Archive Statistics */}
+                  {archiveInfo.data.archive.stats && (
+                    <Box>
+                      <Typography variant="subtitle2" fontWeight={600} color="text.secondary" sx={{ mb: 2 }}>
+                        ARCHIVE STATISTICS
+                      </Typography>
+                      <Stack direction="row" flexWrap="wrap" spacing={3}>
+                        <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
+                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                            Original Size
+                          </Typography>
+                          <Typography variant="body2" sx={{ mt: 0.5, fontWeight: 500 }}>
+                            {formatBytes(archiveInfo.data.archive.stats.original_size || 0)}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
+                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                            Compressed Size
+                          </Typography>
+                          <Typography variant="body2" sx={{ mt: 0.5, fontWeight: 500 }}>
+                            {formatBytes(archiveInfo.data.archive.stats.compressed_size || 0)}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
+                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                            Deduplicated Size
+                          </Typography>
+                          <Typography variant="body2" sx={{ mt: 0.5, fontWeight: 500 }}>
+                            {formatBytes(archiveInfo.data.archive.stats.deduplicated_size || 0)}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
+                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                            Total Files
+                          </Typography>
+                          <Typography variant="body2" sx={{ mt: 0.5 }}>
+                            {(archiveInfo.data.archive.stats.nfiles || 0).toLocaleString()}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
+                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                            Compression Ratio
+                          </Typography>
+                          <Typography variant="body2" sx={{ mt: 0.5 }}>
+                            {archiveInfo.data.archive.stats.original_size && archiveInfo.data.archive.stats.compressed_size
+                              ? `${((1 - archiveInfo.data.archive.stats.compressed_size / archiveInfo.data.archive.stats.original_size) * 100).toFixed(1)}%`
+                              : 'N/A'}
+                          </Typography>
+                        </Box>
+                      </Stack>
+                    </Box>
+                  )}
+                </Stack>
+              ) : (
+                <Box sx={{ textAlign: 'center', py: 8 }}>
+                  <AlertCircle size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
+                  <Typography variant="body1" color="text.secondary">
+                    No archive information available
                   </Typography>
                 </Box>
               )}

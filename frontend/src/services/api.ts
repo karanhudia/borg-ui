@@ -180,6 +180,8 @@ export const repositoriesAPI = {
   getRepositoryStats: (id: number) => api.get(`/repositories/${id}/stats`),
   listRepositoryArchives: (id: number) => api.get(`/repositories/${id}/archives`),
   getRepositoryInfo: (id: number) => api.get(`/repositories/${id}/info`),
+  getArchiveInfo: (repoId: number, archiveName: string) =>
+    api.get(`/repositories/${repoId}/archives/${archiveName}/info`),
 }
 
 // SSH Keys API
