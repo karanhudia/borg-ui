@@ -8,14 +8,14 @@ from app.database.database import get_db, engine
 from app.database.models import User, SSHKey, SSHConnection, Repository, BackupJob
 from app.core.security import get_current_user, get_password_hash, verify_password
 from sqlalchemy import text
-from app.core.borgmatic import BorgmaticInterface
+from app.core.borg import BorgInterface
 from app.config import settings as app_settings
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["settings"])
 
-# Initialize Borgmatic interface
-borgmatic = BorgmaticInterface()
+# Initialize Borg interface
+borg = BorgInterface()
 
 # Pydantic models for request/response
 from pydantic import BaseModel
@@ -79,7 +79,7 @@ async def get_system_settings(
                 "webhook_url": settings.webhook_url,
                 "auto_cleanup": settings.auto_cleanup,
                 "cleanup_retention_days": settings.cleanup_retention_days,
-                "borgmatic_version": borgmatic.get_version(),
+                "borgmatic_version": borg.get_version(),
                 "app_version": "1.0.0"
             }
         }

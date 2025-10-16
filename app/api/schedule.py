@@ -11,14 +11,14 @@ import asyncio
 from app.database.database import get_db
 from app.database.models import User
 from app.core.security import get_current_user
-from app.core.borgmatic import BorgmaticInterface
+from app.core.borg import BorgInterface
 from app.config import settings
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["schedule"])
 
-# Initialize Borgmatic interface
-borgmatic = BorgmaticInterface()
+# Initialize Borg interface
+borg = BorgInterface()
 
 # Pydantic models
 from pydantic import BaseModel
@@ -426,7 +426,7 @@ async def run_scheduled_job_now(
             raise HTTPException(status_code=404, detail="Scheduled job not found")
         
         # Execute backup
-        result = await borgmatic.run_backup(
+        result = await borg.run_backup(
             repository=job.repository,
             config_file=job.config_file
         )
@@ -500,7 +500,7 @@ async def check_scheduled_jobs():
                     logger.info("Running scheduled job", job_id=job.id, name=job.name)
                     
                     # Execute backup
-                    result = await borgmatic.run_backup(
+                    result = await borg.run_backup(
                         repository=job.repository,
                         config_file=job.config_file
                     )

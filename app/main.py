@@ -6,7 +6,7 @@ import structlog
 import os
 from dotenv import load_dotenv
 
-from app.api import auth, dashboard, config, backup, archives, restore, schedule, settings as settings_api, events, repositories, ssh_keys, system
+from app.api import auth, dashboard, backup, archives, restore, schedule, settings as settings_api, events, repositories, ssh_keys, system
 from app.database.database import engine
 from app.database.models import Base
 from app.core.security import create_first_user
@@ -47,8 +47,8 @@ Base.metadata.create_all(bind=engine)
 
 # Create FastAPI app
 app = FastAPI(
-    title="Borgmatic Web UI",
-    description="A lightweight web interface for Borgmatic backup management",
+    title="Borg Web UI",
+    description="A lightweight web interface for Borg backup management",
     version="1.0.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc"
@@ -71,7 +71,6 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # Include API routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
-app.include_router(config.router, prefix="/api/config", tags=["Configuration"])
 app.include_router(backup.router, prefix="/api/backup", tags=["Backup"])
 app.include_router(archives.router, prefix="/api/archives", tags=["Archives"])
 app.include_router(restore.router, prefix="/api/restore", tags=["Restore"])
@@ -85,17 +84,17 @@ app.include_router(system.router, prefix="/api/system", tags=["System"])
 @app.on_event("startup")
 async def startup_event():
     """Initialize application on startup"""
-    logger.info("Starting Borgmatic Web UI")
-    
+    logger.info("Starting Borg Web UI")
+
     # Create first user if no users exist
     await create_first_user()
-    
-    logger.info("Borgmatic Web UI started successfully")
+
+    logger.info("Borg Web UI started successfully")
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on application shutdown"""
-    logger.info("Shutting down Borgmatic Web UI")
+    logger.info("Shutting down Borg Web UI")
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -104,7 +103,7 @@ async def root():
         with open("app/static/index.html", "r") as f:
             return HTMLResponse(content=f.read())
     except FileNotFoundError:
-        return HTMLResponse(content="<h1>Borgmatic Web UI</h1><p>Frontend not built yet. Please run the build process.</p>")
+        return HTMLResponse(content="<h1>Borg Web UI</h1><p>Frontend not built yet. Please run the build process.</p>")
 
 @app.get("/{full_path:path}", response_class=HTMLResponse)
 async def catch_all(full_path: str):
@@ -112,23 +111,23 @@ async def catch_all(full_path: str):
     # Don't interfere with API routes
     if full_path.startswith("api/"):
         raise HTTPException(status_code=404, detail="Not Found")
-    
+
     # Don't interfere with static assets
     if full_path.startswith("assets/") or full_path.startswith("static/"):
         raise HTTPException(status_code=404, detail="Not Found")
-    
+
     # Serve index.html for all other routes (frontend routes)
     try:
         with open("app/static/index.html", "r") as f:
             return HTMLResponse(content=f.read())
     except FileNotFoundError:
-        return HTMLResponse(content="<h1>Borgmatic Web UI</h1><p>Frontend not built yet. Please run the build process.</p>")
+        return HTMLResponse(content="<h1>Borg Web UI</h1><p>Frontend not built yet. Please run the build process.</p>")
 
 @app.get("/api")
 async def api_info():
     """API information endpoint"""
     return {
-        "name": "Borgmatic Web UI API",
+        "name": "Borg Web UI API",
         "version": "1.0.0",
         "docs": "/api/docs",
         "status": "running"

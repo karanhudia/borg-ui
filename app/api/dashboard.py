@@ -10,7 +10,7 @@ from typing import List, Dict, Any
 from app.database.database import get_db
 from app.database.models import User, BackupJob
 from app.core.security import get_current_user
-from app.core.borgmatic import borgmatic
+from app.core.borg import borg
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -102,7 +102,7 @@ def get_system_metrics() -> SystemMetrics:
 async def get_backup_status() -> List[BackupStatus]:
     """Get backup status for all repositories"""
     try:
-        repo_status = await borgmatic.get_repository_status()
+        repo_status = await borg.get_repository_status()
         if not repo_status["success"]:
             logger.warning("Failed to get repository status", error=repo_status.get("error"))
             return []
@@ -283,7 +283,7 @@ async def get_dashboard_health(current_user: User = Depends(get_current_user)):
         
         # Check borgmatic availability
         try:
-            system_info = await borgmatic.get_system_info()
+            system_info = await borg.get_system_info()
             checks["borgmatic"] = {
                 "status": "healthy" if system_info["success"] else "error",
                 "version": system_info.get("borgmatic_version", "Unknown"),
@@ -297,7 +297,7 @@ async def get_dashboard_health(current_user: User = Depends(get_current_user)):
         
         # Check backup repositories
         try:
-            repo_status = await borgmatic.get_repository_status()
+            repo_status = await borg.get_repository_status()
             if repo_status["success"]:
                 healthy_repos = sum(1 for repo in repo_status["repositories"] if repo["status"] == "healthy")
                 total_repos = len(repo_status["repositories"])

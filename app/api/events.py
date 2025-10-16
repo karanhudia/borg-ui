@@ -9,13 +9,13 @@ from sqlalchemy.orm import Session
 from app.core.security import get_current_user
 from app.database.models import User
 from app.database.database import get_db
-from app.core.borgmatic import BorgmaticInterface
+from app.core.borg import BorgInterface
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["events"])
 
-# Initialize Borgmatic interface
-borgmatic = BorgmaticInterface()
+# Initialize Borg interface
+borg = BorgInterface()
 
 # Store active connections for broadcasting
 active_connections: Dict[str, asyncio.Queue] = {}
@@ -250,7 +250,7 @@ async def periodic_system_status():
     while True:
         try:
             # Get system information
-            system_info = await borgmatic.get_system_info()
+            system_info = await borg.get_system_info()
             
             if system_info["success"]:
                 await event_manager.broadcast_event(
