@@ -98,7 +98,7 @@ export default function Dashboard() {
         <Card>
           <CardContent>
             <Stack spacing={2}>
-              <Stack direction="row" spacing={2} alignItems="center">
+              <Stack direction="row" spacing={2} alignItems="flex-start">
                 <Box
                   sx={{
                     backgroundColor: 'primary.light',
@@ -107,6 +107,7 @@ export default function Dashboard() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    alignSelf: 'center',
                   }}
                 >
                   <Activity size={28} color="#1976d2" />
@@ -135,7 +136,7 @@ export default function Dashboard() {
         {metrics && (
           <Card>
             <CardContent>
-              <Stack direction="row" spacing={2} alignItems="center">
+              <Stack direction="row" spacing={2} alignItems="flex-start">
                 <Box
                   sx={{
                     backgroundColor: 'info.light',
@@ -144,6 +145,7 @@ export default function Dashboard() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    alignSelf: 'center',
                   }}
                 >
                   <Cpu size={28} color="#0288d1" />
@@ -171,7 +173,7 @@ export default function Dashboard() {
         {metrics && (
           <Card>
             <CardContent>
-              <Stack direction="row" spacing={2} alignItems="center">
+              <Stack direction="row" spacing={2} alignItems="flex-start">
                 <Box
                   sx={{
                     backgroundColor: 'success.light',
@@ -180,6 +182,7 @@ export default function Dashboard() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    alignSelf: 'center',
                   }}
                 >
                   <MemoryStick size={28} color="#2e7d32" />
@@ -207,7 +210,7 @@ export default function Dashboard() {
         {metrics && (
           <Card>
             <CardContent>
-              <Stack direction="row" spacing={2} alignItems="center">
+              <Stack direction="row" spacing={2} alignItems="flex-start">
                 <Box
                   sx={{
                     backgroundColor: 'warning.light',
@@ -216,6 +219,7 @@ export default function Dashboard() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    alignSelf: 'center',
                   }}
                 >
                   <HardDrive size={28} color="#ed6c02" />
@@ -270,6 +274,7 @@ export default function Dashboard() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        alignSelf: 'center',
                       }}
                     >
                       <Clock size={20} />

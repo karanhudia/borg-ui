@@ -208,7 +208,7 @@ const Archives: React.FC = () => {
                           },
                         }}
                       >
-                        <ListItemIcon>
+                        <ListItemIcon sx={{ minWidth: 40, alignSelf: 'center' }}>
                           <HardDrive size={20} />
                         </ListItemIcon>
                         <ListItemText
@@ -296,7 +296,9 @@ const Archives: React.FC = () => {
                       <CardContent>
                         <Stack direction="row" justifyContent="space-between" alignItems="center">
                           <Stack direction="row" spacing={2} alignItems="center" sx={{ flex: 1 }}>
-                            <FolderOpen size={24} color="#1976d2" />
+                            <Box sx={{ display: 'flex', alignItems: 'center', alignSelf: 'flex-start', mt: 0.5 }}>
+                              <FolderOpen size={24} color="#1976d2" />
+                            </Box>
                             <Box>
                               <Typography variant="body1" fontWeight={500}>
                                 {archive.name}
