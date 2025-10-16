@@ -1,7 +1,7 @@
 {
 	"info": {
-		"name": "Borgmatic UI API - Complete",
-		"description": "Comprehensive API collection for Borgmatic UI\n\nFeatures:\n- Authentication & User Management\n- Dashboard & Metrics\n- Backup Operations\n- Repository Management (Local & SSH)\n- SSH Key Management\n- Archive Management\n- Real-time Updates (SSE)\n- Configuration Management\n\nNote: Logs and Health endpoints have been removed - logs are printed to console",
+		"name": "Borg UI API - Complete",
+		"description": "Comprehensive API collection for Borg UI\n\nFeatures:\n- Authentication & User Management\n- Dashboard & Metrics\n- Backup Operations\n- Repository Management (Local & SSH)\n- SSH Key Management\n- Archive Management\n- Real-time Updates (SSE)\n- Configuration Management\n\nNote: Logs and Health endpoints have been removed - logs are printed to console",
 		"version": "2.2.0",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},

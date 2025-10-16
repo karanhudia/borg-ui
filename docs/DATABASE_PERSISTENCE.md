@@ -111,10 +111,10 @@ docker-compose up -d
 docker-compose down
 
 # Copy the database file
-cp ./data/borg.db ./data/borgmatic-backup-$(date +%Y%m%d).db
+cp ./data/borg.db ./data/borg-backup-$(date +%Y%m%d).db
 
 # Or create a compressed backup
-tar -czf borgmatic-backup-$(date +%Y%m%d).tar.gz ./data/
+tar -czf borg-backup-$(date +%Y%m%d).tar.gz ./data/
 
 # Restart
 docker-compose up -d
@@ -131,12 +131,12 @@ mkdir -p "$BACKUP_DIR"
 
 # Create backup with timestamp
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-cp ./data/borg.db "$BACKUP_DIR/borgmatic-$TIMESTAMP.db"
+cp ./data/borg.db "$BACKUP_DIR/borg-$TIMESTAMP.db"
 
 # Keep only last 7 days of backups
-find "$BACKUP_DIR" -name "borgmatic-*.db" -mtime +7 -delete
+find "$BACKUP_DIR" -name "borg-*.db" -mtime +7 -delete
 
-echo "✅ Database backed up to: $BACKUP_DIR/borgmatic-$TIMESTAMP.db"
+echo "✅ Database backed up to: $BACKUP_DIR/borg-$TIMESTAMP.db"
 ```
 
 Run it:
@@ -166,7 +166,7 @@ crontab -e
 docker-compose down
 
 # 2. Replace the database file
-cp ./data/borgmatic-backup-20250114.db ./data/borg.db
+cp ./data/borg-backup-20250114.db ./data/borg.db
 
 # 3. Restart
 docker-compose up -d
@@ -216,7 +216,7 @@ docker-compose ps
 docker-compose down
 
 # Check for lingering processes
-ps aux | grep borgmatic
+ps aux | grep borg
 
 # Restart
 docker-compose up -d
@@ -247,7 +247,7 @@ docker-compose down
 sqlite3 ./data/borg.db "PRAGMA integrity_check;"
 
 # If corrupted, restore from backup
-cp ./data/borgmatic-backup-YYYYMMDD.db ./data/borg.db
+cp ./data/borg-backup-YYYYMMDD.db ./data/borg.db
 
 # Or start fresh (⚠️ loses all data!)
 rm ./data/borg.db
@@ -269,14 +269,14 @@ On old machine:
 docker-compose down
 
 # 2. Create archive
-tar -czf borgmatic-data-export.tar.gz \
+tar -czf borg-data-export.tar.gz \
   ./data/ \
   ./config/ \
   ./backups/ \
   .env
 
 # 3. Transfer to new machine
-scp borgmatic-data-export.tar.gz user@new-machine:/path/to/destination/
+scp borg-data-export.tar.gz user@new-machine:/path/to/destination/
 ```
 
 ### Import Data
@@ -289,7 +289,7 @@ git clone https://github.com/karanhudia/borg-ui.git
 cd borg-ui
 
 # 2. Extract backup
-tar -xzf /path/to/borgmatic-data-export.tar.gz
+tar -xzf /path/to/borg-data-export.tar.gz
 
 # 3. Start the application
 docker-compose up -d
