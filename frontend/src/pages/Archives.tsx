@@ -53,6 +53,7 @@ interface Archive {
 const Archives: React.FC = () => {
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(null)
   const [selectedRepository, setSelectedRepository] = useState<Repository | null>(null)
+  const [selectedArchive, setSelectedArchive] = useState<Archive | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
   const queryClient = useQueryClient()
@@ -268,8 +269,17 @@ const Archives: React.FC = () => {
                       variant="outlined"
                       sx={{
                         border: 1,
-                        borderColor: 'divider',
+                        borderColor: selectedArchive?.id === archive.id ? 'primary.main' : 'divider',
+                        borderWidth: selectedArchive?.id === archive.id ? 2 : 1,
+                        backgroundColor: selectedArchive?.id === archive.id ? 'primary.lighter' : 'transparent',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        '&:hover': {
+                          borderColor: 'primary.main',
+                          backgroundColor: 'primary.lighter',
+                        },
                       }}
+                      onClick={() => setSelectedArchive(archive)}
                     >
                       <CardContent>
                         <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -374,10 +384,18 @@ const Archives: React.FC = () => {
                       <Stack direction="row" flexWrap="wrap" spacing={3}>
                         <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
                           <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                            Total Size
+                            Unique Size (Deduplicated)
                           </Typography>
-                          <Typography variant="body2" sx={{ mt: 0.5 }}>
-                            {formatBytes(cacheInfo.stats.total_size || 0)}
+                          <Typography variant="body2" sx={{ mt: 0.5, fontWeight: 500 }}>
+                            {formatBytes(cacheInfo.stats.unique_size || 0)}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
+                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                            Compressed Size
+                          </Typography>
+                          <Typography variant="body2" sx={{ mt: 0.5, fontWeight: 500 }}>
+                            {formatBytes(cacheInfo.stats.unique_csize || 0)}
                           </Typography>
                         </Box>
                         <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
@@ -398,18 +416,12 @@ const Archives: React.FC = () => {
                         </Box>
                         <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
                           <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                            Total Compressed Size
+                            Compression Ratio
                           </Typography>
                           <Typography variant="body2" sx={{ mt: 0.5 }}>
-                            {formatBytes(cacheInfo.stats.total_csize || 0)}
-                          </Typography>
-                        </Box>
-                        <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
-                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                            Unique Compressed Size
-                          </Typography>
-                          <Typography variant="body2" sx={{ mt: 0.5 }}>
-                            {formatBytes(cacheInfo.stats.unique_csize || 0)}
+                            {cacheInfo.stats.unique_size && cacheInfo.stats.unique_csize
+                              ? `${((1 - cacheInfo.stats.unique_csize / cacheInfo.stats.unique_size) * 100).toFixed(1)}%`
+                              : 'N/A'}
                           </Typography>
                         </Box>
                       </Stack>
