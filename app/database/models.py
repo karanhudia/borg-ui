@@ -26,6 +26,7 @@ class Repository(Base):
     compression = Column(String, default="lz4")
     passphrase = Column(String, nullable=True)  # Borg repository passphrase (for encrypted repos)
     source_directories = Column(Text, nullable=True)  # JSON array of directories to backup
+    exclude_patterns = Column(Text, nullable=True)  # JSON array of exclude patterns (e.g., ["*.log", "*.tmp"])
     last_backup = Column(DateTime, nullable=True)
     total_size = Column(String, nullable=True)
     archive_count = Column(Integer, default=0)

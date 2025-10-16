@@ -30,6 +30,7 @@ class RepositoryCreate(BaseModel):
     compression: str = "lz4"  # lz4, zstd, zlib, none
     passphrase: Optional[str] = None
     source_directories: Optional[List[str]] = None  # List of directories to backup
+    exclude_patterns: Optional[List[str]] = None  # List of exclude patterns (e.g., ["*.log", "*.tmp"])
     repository_type: str = "local"  # local, ssh, sftp
     host: Optional[str] = None  # For SSH repositories
     port: Optional[int] = 22  # SSH port
@@ -42,6 +43,7 @@ class RepositoryUpdate(BaseModel):
     path: Optional[str] = None
     compression: Optional[str] = None
     source_directories: Optional[List[str]] = None
+    exclude_patterns: Optional[List[str]] = None
     remote_path: Optional[str] = None
 
 class RepositoryInfo(BaseModel):
@@ -76,6 +78,7 @@ async def get_repositories(
                     "encryption": repo.encryption,
                     "compression": repo.compression,
                     "source_directories": json.loads(repo.source_directories) if repo.source_directories else [],
+                    "exclude_patterns": json.loads(repo.exclude_patterns) if repo.exclude_patterns else [],
                     "last_backup": repo.last_backup.isoformat() if repo.last_backup else None,
                     "total_size": repo.total_size,
                     "archive_count": repo.archive_count,
@@ -261,6 +264,11 @@ async def create_repository(
         if repo_data.source_directories:
             source_directories_json = json.dumps(repo_data.source_directories)
 
+        # Serialize exclude patterns as JSON
+        exclude_patterns_json = None
+        if repo_data.exclude_patterns:
+            exclude_patterns_json = json.dumps(repo_data.exclude_patterns)
+
         # Create repository record
         repository = Repository(
             name=repo_data.name,
@@ -269,6 +277,7 @@ async def create_repository(
             compression=repo_data.compression,
             passphrase=repo_data.passphrase,  # Store passphrase for backups
             source_directories=source_directories_json,
+            exclude_patterns=exclude_patterns_json,
             repository_type=repo_data.repository_type,
             host=repo_data.host,
             port=repo_data.port,
@@ -387,6 +396,9 @@ async def update_repository(
 
         if repo_data.source_directories is not None:
             repository.source_directories = json.dumps(repo_data.source_directories)
+
+        if repo_data.exclude_patterns is not None:
+            repository.exclude_patterns = json.dumps(repo_data.exclude_patterns)
 
         if repo_data.remote_path is not None:
             repository.remote_path = repo_data.remote_path

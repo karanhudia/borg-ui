@@ -233,7 +233,15 @@ const Backup: React.FC = () => {
       ? selectedRepoData.source_directories.join(' ')
       : '/data'
 
-    return `borg create --progress --stats --compression ${compression} ${selectedRepoData.path}::${archiveName} ${sourceDirs}`
+    // Build exclude patterns
+    let excludeArgs = ''
+    if (selectedRepoData.exclude_patterns && selectedRepoData.exclude_patterns.length > 0) {
+      excludeArgs = selectedRepoData.exclude_patterns
+        .map((pattern: string) => `--exclude '${pattern}'`)
+        .join(' ') + ' '
+    }
+
+    return `borg create --progress --stats --compression ${compression} ${excludeArgs}${selectedRepoData.path}::${archiveName} ${sourceDirs}`
   }
 
   // Format time range (start and end only, no calculation)
@@ -402,6 +410,32 @@ const Backup: React.FC = () => {
                   </Alert>
                 )}
               </Box>
+
+              {/* Exclude Patterns */}
+              {selectedRepoData.exclude_patterns && selectedRepoData.exclude_patterns.length > 0 && (
+                <>
+                  <Divider />
+                  <Box>
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+                      <AlertCircle size={18} color="rgba(0,0,0,0.6)" />
+                      <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
+                        Exclude Patterns
+                      </Typography>
+                    </Stack>
+                    <Stack spacing={1} sx={{ pl: 3.5 }}>
+                      {selectedRepoData.exclude_patterns.map((pattern: string, index: number) => (
+                        <Chip
+                          key={index}
+                          label={pattern}
+                          size="small"
+                          color="warning"
+                          sx={{ justifyContent: 'flex-start', maxWidth: 'fit-content' }}
+                        />
+                      ))}
+                    </Stack>
+                  </Box>
+                </>
+              )}
 
               <Divider />
 

@@ -47,6 +47,7 @@ interface Repository {
   encryption: string
   compression: string
   source_directories: string[]
+  exclude_patterns: string[]
   last_backup: string | null
   total_size: string | null
   archive_count: number
@@ -200,6 +201,7 @@ export default function Repositories() {
     compression: 'lz4',
     passphrase: '',
     source_directories: [] as string[],
+    exclude_patterns: [] as string[],
     repository_type: 'local',
     host: '',
     port: 22,
@@ -210,16 +212,19 @@ export default function Repositories() {
   })
 
   const [newSourceDir, setNewSourceDir] = useState('')
+  const [newExcludePattern, setNewExcludePattern] = useState('')
 
   const [editForm, setEditForm] = useState({
     name: '',
     path: '',
     compression: 'lz4',
     source_directories: [] as string[],
+    exclude_patterns: [] as string[],
     remote_path: '',
   })
 
   const [editNewSourceDir, setEditNewSourceDir] = useState('')
+  const [editNewExcludePattern, setEditNewExcludePattern] = useState('')
 
   // Event handlers
   const handleCreateRepository = (e: React.FormEvent) => {
@@ -275,6 +280,7 @@ export default function Repositories() {
       compression: 'lz4',
       passphrase: '',
       source_directories: [],
+      exclude_patterns: [],
       repository_type: 'local',
       host: '',
       port: 22,
@@ -284,6 +290,7 @@ export default function Repositories() {
       remote_path: '',
     })
     setNewSourceDir('')
+    setNewExcludePattern('')
   }
 
   const openEditModal = (repository: Repository) => {
@@ -293,9 +300,11 @@ export default function Repositories() {
       path: repository.path,
       compression: repository.compression,
       source_directories: repository.source_directories || [],
+      exclude_patterns: repository.exclude_patterns || [],
       remote_path: (repository as any).remote_path || '',
     })
     setEditNewSourceDir('')
+    setEditNewExcludePattern('')
   }
 
   // Parse source directories from configuration (simple regex-based extraction)
@@ -886,6 +895,76 @@ export default function Repositories() {
                   </Button>
                 </Box>
               </Box>
+
+              {/* Exclude Patterns */}
+              <Box>
+                <Typography variant="subtitle2" gutterBottom>
+                  Exclude Patterns (Optional)
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+                  Specify patterns to exclude from backup (e.g., *.log, *.tmp, __pycache__, node_modules)
+                </Typography>
+
+                {createForm.exclude_patterns.length > 0 && (
+                  <Stack spacing={0.5} sx={{ mb: 1.5 }}>
+                    {createForm.exclude_patterns.map((pattern, index) => (
+                      <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', flex: 1 }}>
+                          {pattern}
+                        </Typography>
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setCreateForm({
+                              ...createForm,
+                              exclude_patterns: createForm.exclude_patterns.filter((_, i) => i !== index)
+                            })
+                          }}
+                        >
+                          <Delete fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    ))}
+                  </Stack>
+                )}
+
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <TextField
+                    value={newExcludePattern}
+                    onChange={(e) => setNewExcludePattern(e.target.value)}
+                    placeholder="*.log"
+                    size="small"
+                    fullWidth
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        if (newExcludePattern.trim()) {
+                          setCreateForm({
+                            ...createForm,
+                            exclude_patterns: [...createForm.exclude_patterns, newExcludePattern.trim()]
+                          })
+                          setNewExcludePattern('')
+                        }
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => {
+                      if (newExcludePattern.trim()) {
+                        setCreateForm({
+                          ...createForm,
+                          exclude_patterns: [...createForm.exclude_patterns, newExcludePattern.trim()]
+                        })
+                        setNewExcludePattern('')
+                      }
+                    }}
+                  >
+                    Add
+                  </Button>
+                </Box>
+              </Box>
             </Box>
           </DialogContent>
           <DialogActions>
@@ -1004,6 +1083,76 @@ export default function Repositories() {
                           source_directories: [...editForm.source_directories, editNewSourceDir.trim()]
                         })
                         setEditNewSourceDir('')
+                      }
+                    }}
+                  >
+                    Add
+                  </Button>
+                </Box>
+              </Box>
+
+              {/* Exclude Patterns */}
+              <Box>
+                <Typography variant="subtitle2" gutterBottom>
+                  Exclude Patterns (Optional)
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+                  Specify patterns to exclude from backup (e.g., *.log, *.tmp, __pycache__, node_modules)
+                </Typography>
+
+                {editForm.exclude_patterns.length > 0 && (
+                  <Stack spacing={0.5} sx={{ mb: 1.5 }}>
+                    {editForm.exclude_patterns.map((pattern, index) => (
+                      <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', flex: 1 }}>
+                          {pattern}
+                        </Typography>
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setEditForm({
+                              ...editForm,
+                              exclude_patterns: editForm.exclude_patterns.filter((_, i) => i !== index)
+                            })
+                          }}
+                        >
+                          <Delete fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    ))}
+                  </Stack>
+                )}
+
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <TextField
+                    value={editNewExcludePattern}
+                    onChange={(e) => setEditNewExcludePattern(e.target.value)}
+                    placeholder="*.log"
+                    size="small"
+                    fullWidth
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        if (editNewExcludePattern.trim()) {
+                          setEditForm({
+                            ...editForm,
+                            exclude_patterns: [...editForm.exclude_patterns, editNewExcludePattern.trim()]
+                          })
+                          setEditNewExcludePattern('')
+                        }
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => {
+                      if (editNewExcludePattern.trim()) {
+                        setEditForm({
+                          ...editForm,
+                          exclude_patterns: [...editForm.exclude_patterns, editNewExcludePattern.trim()]
+                        })
+                        setEditNewExcludePattern('')
                       }
                     }}
                   >

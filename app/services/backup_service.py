@@ -125,8 +125,9 @@ class BackupService:
             env['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes'
             env['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes'
 
-            # Look up repository record to get passphrase and source directories
+            # Look up repository record to get passphrase, source directories, and exclude patterns
             source_paths = ["/data"]  # Default backup path
+            exclude_patterns = []  # Default no exclusions
             try:
                 repo_record = db.query(Repository).filter(Repository.path == repository).first()
                 if repo_record:
@@ -150,12 +151,25 @@ class BackupService:
                         except json.JSONDecodeError as e:
                             logger.warning("Could not parse source_directories JSON, using default /data",
                                          repository=repository, error=str(e))
+
+                    # Parse exclude patterns from JSON if available
+                    if repo_record.exclude_patterns:
+                        try:
+                            patterns = json.loads(repo_record.exclude_patterns)
+                            if patterns and isinstance(patterns, list) and len(patterns) > 0:
+                                exclude_patterns = patterns
+                                logger.info("Using exclude patterns from repository",
+                                          repository=repository,
+                                          exclude_patterns=exclude_patterns)
+                        except json.JSONDecodeError as e:
+                            logger.warning("Could not parse exclude_patterns JSON",
+                                         repository=repository, error=str(e))
                 else:
                     logger.warning("Repository record not found, using defaults", repository=repository)
             except Exception as e:
                 logger.warning("Could not look up repository record", error=str(e))
 
-            # Build command with source directories
+            # Build command with source directories and exclude patterns
             cmd = [
                 "borg", "create",
                 "--progress",
@@ -164,8 +178,15 @@ class BackupService:
                 "--show-rc",  # Show return code for better debugging
                 "--log-json",  # Structured JSON logging
                 "--compression", "lz4",
-                f"{repository}::{archive_name}",
             ]
+
+            # Add exclude patterns
+            for pattern in exclude_patterns:
+                cmd.extend(["--exclude", pattern])
+
+            # Add repository::archive
+            cmd.append(f"{repository}::{archive_name}")
+
             # Add all source paths to the command
             cmd.extend(source_paths)
 
