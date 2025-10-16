@@ -223,6 +223,19 @@ const Backup: React.FC = () => {
     return date.toLocaleString()
   }
 
+  // Generate borg create command preview
+  const getBorgBackupCommand = () => {
+    if (!selectedRepoData) return 'Select a repository to see the command'
+
+    const archiveName = `{hostname}-{now}`
+    const compression = selectedRepoData.compression || 'lz4'
+    const sourceDirs = selectedRepoData.source_directories && selectedRepoData.source_directories.length > 0
+      ? selectedRepoData.source_directories.join(' ')
+      : '/data'
+
+    return `borg create --progress --stats --compression ${compression} ${selectedRepoData.path}::${archiveName} ${sourceDirs}`
+  }
+
   // Format time range (start and end only, no calculation)
   const formatTimeRange = (startTime: string, endTime?: string, status?: string) => {
     const start = new Date(startTime).toLocaleTimeString()
@@ -341,6 +354,26 @@ const Backup: React.FC = () => {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               Here's what will be backed up and the current backup status
             </Typography>
+
+            {/* Command Preview */}
+            <Alert severity="info" sx={{ mb: 3 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Command Preview
+              </Typography>
+              <Box sx={{
+                bgcolor: 'grey.900',
+                color: 'grey.100',
+                p: 1.5,
+                borderRadius: 1,
+                fontFamily: 'monospace',
+                fontSize: '0.875rem',
+                overflow: 'auto',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-all'
+              }}>
+                {getBorgBackupCommand()}
+              </Box>
+            </Alert>
 
             <Stack spacing={3}>
               {/* Source Directories */}
