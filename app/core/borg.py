@@ -10,16 +10,16 @@ from app.config import settings
 
 logger = structlog.get_logger()
 
-class BorgmaticInterface:
+class BorgInterface:
     """Interface for interacting with Borg CLI"""
 
     _validated = False  # Class variable to track if validation has run
 
     def __init__(self):
         self.borg_cmd = "borg"
-        if not BorgmaticInterface._validated:
+        if not BorgInterface._validated:
             self._validate_borg_installation()
-            BorgmaticInterface._validated = True
+            BorgInterface._validated = True
 
     def _validate_borg_installation(self):
         """Validate that borg is installed and accessible"""
@@ -86,7 +86,7 @@ class BorgmaticInterface:
             }
     
     async def run_backup(self, repository: str, source_paths: List[str],
-                        compression: str = "lz4", archive_name: str = None) -> Dict:
+                        compression: str = "lz4", archive_name: str = None, remote_path: str = None) -> Dict:
         """Execute backup operation with direct parameters"""
         if not repository:
             return {"success": False, "error": "Repository is required", "stdout": "", "stderr": ""}
@@ -96,6 +96,10 @@ class BorgmaticInterface:
 
         # Build borg create command
         cmd = [self.borg_cmd, "create"]
+
+        # Add remote-path if specified (for remote repositories)
+        if remote_path:
+            cmd.extend(["--remote-path", remote_path])
 
         # Add compression
         cmd.extend(["--compression", compression])
@@ -113,27 +117,39 @@ class BorgmaticInterface:
 
         return await self._execute_command(cmd, timeout=settings.backup_timeout)
     
-    async def list_archives(self, repository: str) -> Dict:
+    async def list_archives(self, repository: str, remote_path: str = None) -> Dict:
         """List archives in repository"""
-        cmd = [self.borg_cmd, "list", repository, "--json"]
+        cmd = [self.borg_cmd, "list"]
+        if remote_path:
+            cmd.extend(["--remote-path", remote_path])
+        cmd.extend([repository, "--json"])
         return await self._execute_command(cmd)
-    
-    async def info_archive(self, repository: str, archive: str) -> Dict:
+
+    async def info_archive(self, repository: str, archive: str, remote_path: str = None) -> Dict:
         """Get information about a specific archive"""
-        cmd = [self.borg_cmd, "info", f"{repository}::{archive}", "--json"]
+        cmd = [self.borg_cmd, "info"]
+        if remote_path:
+            cmd.extend(["--remote-path", remote_path])
+        cmd.extend([f"{repository}::{archive}", "--json"])
         return await self._execute_command(cmd)
-    
-    async def list_archive_contents(self, repository: str, archive: str, path: str = "") -> Dict:
+
+    async def list_archive_contents(self, repository: str, archive: str, path: str = "", remote_path: str = None) -> Dict:
         """List contents of an archive"""
-        cmd = [self.borg_cmd, "list", f"{repository}::{archive}", "--json-lines"]
+        cmd = [self.borg_cmd, "list"]
+        if remote_path:
+            cmd.extend(["--remote-path", remote_path])
+        cmd.extend([f"{repository}::{archive}", "--json-lines"])
         if path:
             cmd.append(path)
         return await self._execute_command(cmd)
-    
+
     async def extract_archive(self, repository: str, archive: str, paths: List[str],
-                            destination: str, dry_run: bool = False) -> Dict:
+                            destination: str, dry_run: bool = False, remote_path: str = None) -> Dict:
         """Extract files from an archive"""
         cmd = [self.borg_cmd, "extract"]
+
+        if remote_path:
+            cmd.extend(["--remote-path", remote_path])
 
         if dry_run:
             cmd.append("--dry-run")
@@ -147,145 +163,56 @@ class BorgmaticInterface:
         # Borg extract always extracts to current directory
         # Use cwd parameter to change to destination directory
         return await self._execute_command(cmd, timeout=settings.backup_timeout, cwd=destination)
-    
-    async def delete_archive(self, repository: str, archive: str) -> Dict:
+
+    async def delete_archive(self, repository: str, archive: str, remote_path: str = None) -> Dict:
         """Delete an archive"""
-        cmd = [self.borg_cmd, "delete", f"{repository}::{archive}"]
+        cmd = [self.borg_cmd, "delete"]
+        if remote_path:
+            cmd.extend(["--remote-path", remote_path])
+        cmd.append(f"{repository}::{archive}")
         return await self._execute_command(cmd)
-    
+
     async def prune_archives(self, repository: str, keep_daily: int = 7, keep_weekly: int = 4,
-                           keep_monthly: int = 6, keep_yearly: int = 1) -> Dict:
+                           keep_monthly: int = 6, keep_yearly: int = 1, remote_path: str = None) -> Dict:
         """Prune old archives"""
-        cmd = [
-            self.borg_cmd, "prune",
+        cmd = [self.borg_cmd, "prune"]
+        if remote_path:
+            cmd.extend(["--remote-path", remote_path])
+        cmd.extend([
             repository,
             "--keep-daily", str(keep_daily),
             "--keep-weekly", str(keep_weekly),
             "--keep-monthly", str(keep_monthly),
             "--keep-yearly", str(keep_yearly),
             "--stats"
-        ]
+        ])
         return await self._execute_command(cmd)
-    
-    async def check_repository(self, repository: str) -> Dict:
+
+    async def check_repository(self, repository: str, remote_path: str = None) -> Dict:
         """Check repository integrity"""
-        cmd = [self.borg_cmd, "check", repository]
+        cmd = [self.borg_cmd, "check"]
+        if remote_path:
+            cmd.extend(["--remote-path", remote_path])
+        cmd.append(repository)
         return await self._execute_command(cmd)
-    
-    async def compact_repository(self, repository: str) -> Dict:
+
+    async def compact_repository(self, repository: str, remote_path: str = None) -> Dict:
         """Compact repository to save space"""
-        cmd = [self.borg_cmd, "compact", repository]
+        cmd = [self.borg_cmd, "compact"]
+        if remote_path:
+            cmd.extend(["--remote-path", remote_path])
+        cmd.append(repository)
         return await self._execute_command(cmd)
     
-    async def get_config_info(self, config_file: str = None) -> Dict:
-        """Get configuration information"""
-        config_path = config_file or self.config_path
-        if not config_path or not os.path.exists(config_path):
-            return {
-                "success": False,
-                "error": "Configuration file not found",
-                "config_path": config_path
-            }
-        
-        try:
-            with open(config_path, 'r') as f:
-                config_content = yaml.safe_load(f)
-            
-            return {
-                "success": True,
-                "config": config_content,
-                "config_path": config_path
-            }
-        except Exception as e:
-            logger.error("Failed to read config file", config_path=config_path, error=str(e))
-            return {
-                "success": False,
-                "error": str(e),
-                "config_path": config_path
-            }
     
-    async def validate_config(self, config_content: str) -> Dict:
-        """Validate configuration content using YAML parsing"""
-        try:
-            # Parse YAML to validate syntax
-            config = yaml.safe_load(config_content)
-
-            # Validate required fields
-            warnings = []
-            errors = []
-
-            # Check for required sections
-            if not config:
-                errors.append("Configuration is empty")
-                return {"success": False, "error": "Configuration is empty", "errors": errors, "warnings": warnings}
-
-            # Validate repositories
-            if "repositories" not in config:
-                errors.append("Missing required field: repositories")
-            elif not isinstance(config["repositories"], list) or len(config["repositories"]) == 0:
-                errors.append("repositories must be a non-empty list")
-            else:
-                # Validate each repository
-                for i, repo in enumerate(config["repositories"]):
-                    if isinstance(repo, dict):
-                        if "path" not in repo:
-                            errors.append(f"Repository {i}: missing 'path' field")
-                    elif not isinstance(repo, str):
-                        errors.append(f"Repository {i}: must be a string path or object with 'path' field")
-
-            # Validate source_directories (optional but recommended)
-            if "source_directories" in config:
-                if not isinstance(config["source_directories"], list):
-                    errors.append("source_directories must be a list")
-                elif len(config["source_directories"]) == 0:
-                    warnings.append("source_directories is empty - no files will be backed up")
-
-            # Validate retention settings (optional)
-            if "retention" in config:
-                retention = config["retention"]
-                valid_retention_keys = ["keep_daily", "keep_weekly", "keep_monthly", "keep_yearly", "keep_within"]
-                for key in retention:
-                    if key not in valid_retention_keys:
-                        warnings.append(f"Unknown retention key: {key}")
-
-            # Validate storage settings (optional)
-            if "storage" in config:
-                storage = config["storage"]
-                if "compression" in storage:
-                    valid_compressions = ["none", "lz4", "zstd", "zlib", "lzma", "auto"]
-                    compression = storage["compression"]
-                    # Handle compression with level (e.g., "zstd,10")
-                    base_compression = compression.split(",")[0] if isinstance(compression, str) else compression
-                    if base_compression not in valid_compressions:
-                        warnings.append(f"Unknown compression method: {compression}")
-
-            if errors:
-                return {
-                    "success": False,
-                    "error": "; ".join(errors),
-                    "errors": errors,
-                    "warnings": warnings
-                }
-
-            return {
-                "success": True,
-                "config": config,
-                "warnings": warnings,
-                "errors": errors
-            }
-
-        except yaml.YAMLError as e:
-            logger.error("Failed to parse YAML config", error=str(e))
-            return {"success": False, "error": f"Invalid YAML syntax: {str(e)}", "errors": [str(e)], "warnings": []}
-        except Exception as e:
-            logger.error("Failed to validate config", error=str(e))
-            return {"success": False, "error": str(e), "errors": [str(e)], "warnings": []}
-    
-    async def get_repository_info(self, repository_path: str) -> Dict:
+    async def get_repository_info(self, repository_path: str, remote_path: str = None) -> Dict:
         """Get detailed information about a specific repository"""
         try:
             # Get repository info using borg info
-            cmd = ["borg", "info", repository_path, "--json"]
+            cmd = ["borg", "info"]
+            if remote_path:
+                cmd.extend(["--remote-path", remote_path])
+            cmd.extend([repository_path, "--json"])
             result = await self._execute_command(cmd, timeout=60)
             
             if not result["success"]:
@@ -369,49 +296,6 @@ class BorgmaticInterface:
                 "disk_usage": 0
             }
 
-    async def get_repository_status(self) -> Dict:
-        """Get status of all repositories"""
-        try:
-            config_info = await self.get_config_info()
-            if not config_info["success"]:
-                return config_info
-            
-            repositories = config_info["config"].get("repositories", [])
-            status_list = []
-            
-            for repo in repositories:
-                repo_status = {
-                    "name": repo.get("name", "Unknown"),
-                    "path": repo.get("path", ""),
-                    "encryption": repo.get("encryption", "unknown"),
-                    "last_backup": None,
-                    "archive_count": 0,
-                    "total_size": "0",
-                    "status": "unknown"
-                }
-                
-                # Try to get archive info
-                try:
-                    archives_result = await self.list_archives(repo["path"])
-                    if archives_result["success"]:
-                        archives_data = json.loads(archives_result["stdout"])
-                        repo_status["archive_count"] = len(archives_data.get("archives", []))
-                        if archives_data.get("archives"):
-                            latest_archive = archives_data["archives"][-1]
-                            repo_status["last_backup"] = latest_archive.get("time")
-                            repo_status["total_size"] = latest_archive.get("size", "0")
-                            repo_status["status"] = "healthy"
-                except Exception as e:
-                    logger.warning("Failed to get repository status", repository=repo["path"], error=str(e))
-                    repo_status["status"] = "error"
-                
-                status_list.append(repo_status)
-            
-            return {"success": True, "repositories": status_list}
-            
-        except Exception as e:
-            logger.error("Failed to get repository status", error=str(e))
-            return {"success": False, "error": str(e)}
     
     def get_version(self) -> str:
         """Get Borg version"""
@@ -439,7 +323,6 @@ class BorgmaticInterface:
                 "success": True,
                 "borg_version": borg_version,
                 "borgmatic_version": borg_version,  # Keep for compatibility
-                "config_path": self.config_path,
                 "backup_path": settings.borgmatic_backup_path,
                 "help_available": help_result["success"]
             }
@@ -449,4 +332,4 @@ class BorgmaticInterface:
             return {"success": False, "error": str(e)}
 
 # Global instance
-borgmatic = BorgmaticInterface() 
+borg = BorgInterface() 
