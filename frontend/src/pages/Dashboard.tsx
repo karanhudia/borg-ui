@@ -311,7 +311,7 @@ export default function Dashboard() {
       {/* Empty State for Recent Jobs */}
       {status?.data?.recent_jobs && status.data.recent_jobs.length === 0 && (
         <Card>
-          <CardContent sx={{ textAlign: 'center', py: 6 }}>
+          <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 6 }}>
             <Clock size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
             <Typography variant="h6" gutterBottom>
               No Recent Backup Jobs

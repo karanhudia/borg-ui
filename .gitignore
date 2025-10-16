@@ -3,6 +3,10 @@
 /frontend/build
 /frontend/dist
 
+# Built static files (generated during Docker build)
+/app/static/*
+!/app/static/.gitkeep
+
 # Backend
 __pycache__/
 *.py[cod]

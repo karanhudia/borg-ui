@@ -253,7 +253,7 @@ const Archives: React.FC = () => {
               </Stack>
 
               {!selectedRepository ? (
-                <Box sx={{ textAlign: 'center', py: 8 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
                   <HardDrive size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
                   <Typography variant="body1" color="text.secondary">
                     Select a repository to view archives
@@ -267,7 +267,7 @@ const Archives: React.FC = () => {
                   </Typography>
                 </Box>
               ) : filteredArchives.length === 0 ? (
-                <Box sx={{ textAlign: 'center', py: 8 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
                   <Folder size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
                   <Typography variant="body1" color="text.secondary">
                     {searchQuery ? 'No archives found matching your search' : 'No archives found in this repository'}
