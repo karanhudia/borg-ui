@@ -281,16 +281,16 @@ async def get_dashboard_health(current_user: User = Depends(get_current_user)):
                 "error": str(e)
             }
         
-        # Check borgmatic availability
+        # Check borg availability
         try:
             system_info = await borg.get_system_info()
-            checks["borgmatic"] = {
+            checks["borg"] = {
                 "status": "healthy" if system_info["success"] else "error",
                 "version": system_info.get("borgmatic_version", "Unknown"),
                 "config_path": system_info.get("config_path", "Unknown")
             }
         except Exception as e:
-            checks["borgmatic"] = {
+            checks["borg"] = {
                 "status": "error",
                 "error": str(e)
             }

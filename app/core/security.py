@@ -126,7 +126,7 @@ async def create_first_user():
             admin_user = User(
                 username="admin",
                 password_hash=hashed_password,
-                email="admin@borgmatic.local",
+                email="admin@borg.local",
                 is_active=True,
                 is_admin=True
             )
