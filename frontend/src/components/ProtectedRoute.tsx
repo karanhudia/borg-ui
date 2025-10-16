@@ -1,6 +1,6 @@
-import { ReactElement, useEffect } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
-import { useTabEnablement } from '../context/AppContext'
+import { ReactElement, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useTabEnablement, useAppState } from '../context/AppContext'
 import { toast } from 'react-hot-toast'
 
 interface ProtectedRouteProps {
@@ -10,23 +10,31 @@ interface ProtectedRouteProps {
 
 export default function ProtectedRoute({ children, requiredTab }: ProtectedRouteProps) {
   const { tabEnablement, getTabDisabledReason } = useTabEnablement()
+  const appState = useAppState()
   const navigate = useNavigate()
-  const location = useLocation()
   const isEnabled = tabEnablement[requiredTab]
+  const hasShownToast = useRef(false)
 
   useEffect(() => {
-    if (!isEnabled) {
+    // Only check after initial loading is complete
+    if (!appState.isLoading && !isEnabled && !hasShownToast.current) {
       const reason = getTabDisabledReason(requiredTab)
 
-      // Show toast notification
+      // Show toast notification only once
       toast.error(reason || 'This feature is currently unavailable', {
         duration: 4000,
       })
+      hasShownToast.current = true
 
       // Redirect to dashboard
       navigate('/dashboard', { replace: true })
     }
-  }, [isEnabled, requiredTab, navigate, location.pathname])
+
+    // Reset the flag if the tab becomes enabled
+    if (isEnabled) {
+      hasShownToast.current = false
+    }
+  }, [isEnabled, requiredTab, navigate, appState.isLoading, getTabDisabledReason])
 
   // If tab is disabled, return null while redirect happens
   if (!isEnabled) {

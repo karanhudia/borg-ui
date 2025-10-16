@@ -774,6 +774,21 @@ const SSHKeys: React.FC = () => {
             <div className="mt-3">
               <h3 className="text-lg font-medium text-gray-900 mb-4">Deploy SSH Key: {selectedKey.name}</h3>
               <form onSubmit={handleDeploySSHKey} className="space-y-4">
+                {/* Command Preview */}
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                  <p className="text-xs font-semibold text-blue-900 mb-2">Command Preview</p>
+                  <div className="bg-gray-900 text-gray-100 p-2 rounded font-mono text-xs overflow-auto">
+                    {deployForm.host && deployForm.username && deployForm.port ? (
+                      `ssh-copy-id -i ~/.ssh/${selectedKey.name}.pub ${deployForm.username}@${deployForm.host} -p ${deployForm.port}`
+                    ) : (
+                      'ssh-copy-id -i ~/.ssh/key.pub username@host -p 22'
+                    )}
+                  </div>
+                  <p className="text-xs text-blue-700 mt-2">
+                    This will add the public key to the remote server's authorized_keys file
+                  </p>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Host</label>
                   <input

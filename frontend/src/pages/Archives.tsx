@@ -354,25 +354,25 @@ const Archives: React.FC = () => {
                     <Typography variant="subtitle2" fontWeight={600} color="text.secondary" sx={{ mb: 2 }}>
                       REPOSITORY DETAILS
                     </Typography>
-                    <Stack direction="row" flexWrap="wrap" spacing={3}>
-                      <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
-                        <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                    <Stack spacing={2}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block">
                           ID
                         </Typography>
-                        <Typography variant="body2" sx={{ mt: 0.5, fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                        <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5, fontFamily: 'monospace', fontSize: '0.875rem' }}>
                           {repoInfo.id || 'N/A'}
                         </Typography>
                       </Box>
-                      <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
-                        <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block">
                           Location
                         </Typography>
                         <Typography variant="body2" sx={{ mt: 0.5 }}>
                           {repoInfo.location || selectedRepository.path}
                         </Typography>
                       </Box>
-                      <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
-                        <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block">
                           Last Modified
                         </Typography>
                         <Typography variant="body2" sx={{ mt: 0.5 }}>
@@ -388,41 +388,41 @@ const Archives: React.FC = () => {
                       <Typography variant="subtitle2" fontWeight={600} color="text.secondary" sx={{ mb: 2 }}>
                         STORAGE STATISTICS
                       </Typography>
-                      <Stack direction="row" flexWrap="wrap" spacing={3}>
-                        <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
-                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                      <Stack spacing={2}>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">
                             Unique Size (Deduplicated)
                           </Typography>
-                          <Typography variant="body2" sx={{ mt: 0.5, fontWeight: 500 }}>
+                          <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5 }}>
                             {formatBytes(cacheInfo.stats.unique_size || 0)}
                           </Typography>
                         </Box>
-                        <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
-                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">
                             Compressed Size
                           </Typography>
-                          <Typography variant="body2" sx={{ mt: 0.5, fontWeight: 500 }}>
+                          <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5 }}>
                             {formatBytes(cacheInfo.stats.unique_csize || 0)}
                           </Typography>
                         </Box>
-                        <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
-                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">
                             Total Chunks
                           </Typography>
                           <Typography variant="body2" sx={{ mt: 0.5 }}>
                             {(cacheInfo.stats.total_chunks || 0).toLocaleString()}
                           </Typography>
                         </Box>
-                        <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
-                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">
                             Unique Chunks
                           </Typography>
                           <Typography variant="body2" sx={{ mt: 0.5 }}>
                             {(cacheInfo.stats.total_unique_chunks || 0).toLocaleString()}
                           </Typography>
                         </Box>
-                        <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
-                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">
                             Compression Ratio
                           </Typography>
                           <Typography variant="body2" sx={{ mt: 0.5 }}>
@@ -441,20 +441,20 @@ const Archives: React.FC = () => {
                       <Typography variant="subtitle2" fontWeight={600} color="text.secondary" sx={{ mb: 2 }}>
                         ENCRYPTION
                       </Typography>
-                      <Stack direction="row" flexWrap="wrap" spacing={3}>
-                        <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
-                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                      <Stack spacing={2}>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">
                             Mode
                           </Typography>
-                          <Typography variant="body2" sx={{ mt: 0.5 }}>
+                          <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5 }}>
                             {encryptionInfo.mode || 'N/A'}
                           </Typography>
                         </Box>
-                        <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
-                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">
                             Key ID
                           </Typography>
-                          <Typography variant="body2" sx={{ mt: 0.5, fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                          <Typography variant="body2" sx={{ mt: 0.5, fontFamily: 'monospace', fontSize: '0.875rem' }}>
                             {encryptionInfo.keyid || 'N/A'}
                           </Typography>
                         </Box>
@@ -501,25 +501,25 @@ const Archives: React.FC = () => {
                     <Typography variant="subtitle2" fontWeight={600} color="text.secondary" sx={{ mb: 2 }}>
                       ARCHIVE DETAILS
                     </Typography>
-                    <Stack direction="row" flexWrap="wrap" spacing={3}>
-                      <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
-                        <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                    <Stack spacing={2}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block">
                           Name
                         </Typography>
-                        <Typography variant="body2" sx={{ mt: 0.5 }}>
+                        <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5 }}>
                           {archiveInfo.data.archive.name || selectedArchive.name}
                         </Typography>
                       </Box>
-                      <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
-                        <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block">
                           Created
                         </Typography>
                         <Typography variant="body2" sx={{ mt: 0.5 }}>
                           {archiveInfo.data.archive.start ? formatTimestamp(archiveInfo.data.archive.start) : selectedArchive.start}
                         </Typography>
                       </Box>
-                      <Box sx={{ flex: '1 1 45%', minWidth: 200 }}>
-                        <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block">
                           Duration
                         </Typography>
                         <Typography variant="body2" sx={{ mt: 0.5 }}>
@@ -527,11 +527,11 @@ const Archives: React.FC = () => {
                         </Typography>
                       </Box>
                       {archiveInfo.data.archive.command_line && (
-                        <Box sx={{ flex: '1 1 100%', minWidth: 200 }}>
-                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">
                             Command Line
                           </Typography>
-                          <Typography variant="body2" sx={{ mt: 0.5, fontFamily: 'monospace', fontSize: '0.75rem', wordBreak: 'break-all' }}>
+                          <Typography variant="body2" sx={{ mt: 0.5, fontFamily: 'monospace', fontSize: '0.875rem', wordBreak: 'break-all', bgcolor: 'grey.50', p: 1.5, borderRadius: 1 }}>
                             {archiveInfo.data.archive.command_line.join(' ')}
                           </Typography>
                         </Box>
@@ -545,41 +545,41 @@ const Archives: React.FC = () => {
                       <Typography variant="subtitle2" fontWeight={600} color="text.secondary" sx={{ mb: 2 }}>
                         ARCHIVE STATISTICS
                       </Typography>
-                      <Stack direction="row" flexWrap="wrap" spacing={3}>
-                        <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
-                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                      <Stack spacing={2}>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">
                             Original Size
                           </Typography>
-                          <Typography variant="body2" sx={{ mt: 0.5, fontWeight: 500 }}>
+                          <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5 }}>
                             {formatBytes(archiveInfo.data.archive.stats.original_size || 0)}
                           </Typography>
                         </Box>
-                        <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
-                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">
                             Compressed Size
                           </Typography>
-                          <Typography variant="body2" sx={{ mt: 0.5, fontWeight: 500 }}>
+                          <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5 }}>
                             {formatBytes(archiveInfo.data.archive.stats.compressed_size || 0)}
                           </Typography>
                         </Box>
-                        <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
-                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">
                             Deduplicated Size
                           </Typography>
-                          <Typography variant="body2" sx={{ mt: 0.5, fontWeight: 500 }}>
+                          <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5 }}>
                             {formatBytes(archiveInfo.data.archive.stats.deduplicated_size || 0)}
                           </Typography>
                         </Box>
-                        <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
-                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">
                             Total Files
                           </Typography>
                           <Typography variant="body2" sx={{ mt: 0.5 }}>
                             {(archiveInfo.data.archive.stats.nfiles || 0).toLocaleString()}
                           </Typography>
                         </Box>
-                        <Box sx={{ flex: '1 1 30%', minWidth: 150 }}>
-                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">
                             Compression Ratio
                           </Typography>
                           <Typography variant="body2" sx={{ mt: 0.5 }}>

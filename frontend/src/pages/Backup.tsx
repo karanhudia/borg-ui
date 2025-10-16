@@ -158,27 +158,20 @@ const Backup: React.FC = () => {
     return size
   }
 
-  // Format duration
-  const formatDuration = (startTime: string, endTime?: string, status?: string) => {
-    const start = new Date(startTime)
-    // For non-running jobs without completed_at, don't increment timer
-    if (!endTime && status && status !== 'running') {
-      return 'N/A'
-    }
-    const end = endTime ? new Date(endTime) : new Date()
-    const diff = Math.floor((end.getTime() - start.getTime()) / 1000)
+  // Format time range (start and end only, no calculation)
+  const formatTimeRange = (startTime: string, endTime?: string, status?: string) => {
+    const start = new Date(startTime).toLocaleTimeString()
 
-    const hours = Math.floor(diff / 3600)
-    const minutes = Math.floor((diff % 3600) / 60)
-    const seconds = diff % 60
-
-    if (hours > 0) {
-      return `${hours}h ${minutes}m ${seconds}s`
-    } else if (minutes > 0) {
-      return `${minutes}m ${seconds}s`
-    } else {
-      return `${seconds}s`
+    if (status === 'running') {
+      return `Started: ${start}`
     }
+
+    if (!endTime) {
+      return `Started: ${start}`
+    }
+
+    const end = new Date(endTime).toLocaleTimeString()
+    return `${start} - ${end}`
   }
 
   const runningJobs = backupStatus?.data?.jobs?.filter((job: BackupJob) => job.status === 'running') || []
@@ -316,7 +309,7 @@ const Backup: React.FC = () => {
                         Progress: {job.progress || 0}%
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        {formatDuration(job.started_at, job.completed_at, job.status)}
+                        {formatTimeRange(job.started_at, job.completed_at, job.status)}
                       </Typography>
                     </Stack>
                     <LinearProgress
@@ -421,7 +414,7 @@ const Backup: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">
-                          {formatDuration(job.started_at, job.completed_at, job.status)}
+                          {formatTimeRange(job.started_at, job.completed_at, job.status)}
                         </Typography>
                       </TableCell>
                       <TableCell>
