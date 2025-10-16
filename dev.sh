@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Development helper script for Borgmatic Web UI
+# Development helper script for Borg Web UI
 # Usage: ./dev.sh [command]
 
 set -e
@@ -72,7 +72,7 @@ cmd_logs() {
 
 cmd_shell() {
     print_info "Opening shell in container..."
-    docker-compose exec borgmatic-ui bash
+    docker-compose exec borg-ui bash
 }
 
 cmd_test() {
@@ -134,7 +134,7 @@ cmd_backend() {
 
 cmd_db() {
     print_info "Opening database shell..."
-    docker-compose exec borgmatic-ui bash -c "cd /app/data && sqlite3 borgmatic.db"
+    docker-compose exec borg-ui bash -c "cd /app/data && sqlite3 borg.db"
 }
 
 cmd_init() {
@@ -177,7 +177,7 @@ cmd_init() {
 
 cmd_help() {
     cat << EOF
-Borgmatic Web UI - Development Helper Script
+Borg Web UI - Development Helper Script
 
 Usage: ./dev.sh [command]
 

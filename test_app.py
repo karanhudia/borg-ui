@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Comprehensive test suite for Borgmatic Web UI
+Comprehensive test suite for Borg Web UI
 Tests all core functionality including API endpoints, authentication, routing, and application health.
 """
 
@@ -10,7 +10,7 @@ import time
 import sys
 from typing import Dict, Any, Optional
 
-class BorgmaticWebUITester:
+class BorgWebUITester:
     def __init__(self, base_url: str = "http://localhost:7879"):
         self.base_url = base_url
         self.session = requests.Session()
@@ -402,7 +402,7 @@ source_directories:
     
     def run_all_tests(self) -> Dict[str, Any]:
         """Run all tests and return results"""
-        print("🚀 Starting Borgmatic Web UI Test Suite")
+        print("🚀 Starting Borg Web UI Test Suite")
         print("=" * 50)
         
         # Run tests in order
@@ -460,15 +460,15 @@ source_directories:
 def main():
     """Main function to run the test suite"""
     import argparse
-    
-    parser = argparse.ArgumentParser(description="Test Borgmatic Web UI")
-    parser.add_argument("--url", default="http://localhost:7879", 
+
+    parser = argparse.ArgumentParser(description="Test Borg Web UI")
+    parser.add_argument("--url", default="http://localhost:7879",
                        help="Base URL of the application (default: http://localhost:7879)")
     parser.add_argument("--output", help="Output results to JSON file")
-    
+
     args = parser.parse_args()
-    
-    tester = BorgmaticWebUITester(args.url)
+
+    tester = BorgWebUITester(args.url)
     results = tester.run_all_tests()
     
     if args.output:

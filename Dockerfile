@@ -131,7 +131,7 @@ RUN chmod +x /entrypoint.sh
 ENV PYTHONPATH=/app
 ENV DATA_DIR=/data
 ENV DATABASE_URL=sqlite:////data/borg.db
-ENV BORGMATIC_BACKUP_PATH=/backups
+ENV BORG_BACKUP_PATH=/backups
 ENV ENABLE_CRON_BACKUPS=false
 ENV PORT=8081
 

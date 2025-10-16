@@ -3,10 +3,10 @@
 # Auto-configured settings:
 # - SECRET_KEY: Auto-generated on first run and persisted
 # - DATABASE_URL: Auto-derived from data_dir (/data)
-# - BORGMATIC_CONFIG_PATH: Auto-derived from data_dir
+# - BORG_CONFIG_PATH: Auto-derived from data_dir
 # - LOG_LEVEL: Defaults to INFO
 #
-# Users configure backup repositories in borgmatic config (local or SSH)
+# Users configure backup repositories in borg config (local or SSH)
 # No need for borg_backups volume - repositories can be anywhere!
 
 services:

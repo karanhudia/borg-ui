@@ -611,7 +611,7 @@ services:
       - /etc/cron.d:/etc/cron.d:ro
     environment:
       - BORG_CONFIG_PATH=/app/config
-      - BORGMATIC_BACKUP_PATH=/backups
+      - BORG_BACKUP_PATH=/backups
       - LOG_LEVEL=INFO
       - SECRET_KEY=${SECRET_KEY}
     restart: unless-stopped
@@ -647,7 +647,7 @@ volumes:
 SECRET_KEY=your-secret-key-here
 DB_PASSWORD=your-db-password
 BORG_CONFIG_PATH=/app/config
-BORGMATIC_BACKUP_PATH=/backups
+BORG_BACKUP_PATH=/backups
 LOG_LEVEL=INFO
 ALLOWED_HOSTS=localhost,127.0.0.1
 CORS_ORIGINS=http://localhost:3000,http://localhost:8080

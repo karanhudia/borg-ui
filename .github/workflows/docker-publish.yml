@@ -13,7 +13,7 @@ on:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/borgmatic-ui
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/borg-ui
 
 jobs:
   build-and-push:
@@ -94,4 +94,4 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: ${{ env.IMAGE_NAME }}
           readme-filepath: ./README.md
-          short-description: "Web UI for Borgmatic - Backup management made easy"
+          short-description: "Web UI for Borg Backup - Backup management made easy"

@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Borgmatic Web UI Test Runner
+# Borg Web UI Test Runner
 # This script runs the comprehensive test suite for the application
 
 set -e  # Exit on any error
 
-echo "🧪 Borgmatic Web UI Test Runner"
+echo "🧪 Borg Web UI Test Runner"
 echo "================================"
 
 # Check if Python 3 is available
