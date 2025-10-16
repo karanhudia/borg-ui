@@ -36,18 +36,21 @@ import {
   AlertCircle,
   FolderOpen,
 } from 'lucide-react'
-import { archivesAPI } from '../services/api'
+import { archivesAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
+
+interface Repository {
+  id: number
+  name: string
+  path: string
+}
 
 interface Archive {
   id: string
+  archive: string
   name: string
-  timestamp: string
-  size: string
-  compressed_size: string
-  deduplicated_size: string
-  file_count: number
-  repository: string
+  start: string
+  time: string
 }
 
 interface ArchiveFile {
@@ -59,41 +62,48 @@ interface ArchiveFile {
 }
 
 const Archives: React.FC = () => {
-  const [selectedRepository, setSelectedRepository] = useState<string>('')
+  const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(null)
+  const [selectedRepository, setSelectedRepository] = useState<Repository | null>(null)
   const [selectedArchive, setSelectedArchive] = useState<string>('')
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPath, setCurrentPath] = useState<string>('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
   const queryClient = useQueryClient()
 
-  // Get archives for selected repository
+  // Get repositories list
+  const { data: repositoriesData, isLoading: loadingRepositories } = useQuery({
+    queryKey: ['repositories'],
+    queryFn: repositoriesAPI.getRepositories,
+  })
+
+  // Get archives for selected repository using new borg list endpoint
   const { data: archives, isLoading: loadingArchives } = useQuery({
-    queryKey: ['archives', selectedRepository],
-    queryFn: () => archivesAPI.listArchives(selectedRepository),
-    enabled: !!selectedRepository
+    queryKey: ['repository-archives', selectedRepositoryId],
+    queryFn: () => repositoriesAPI.listRepositoryArchives(selectedRepositoryId!),
+    enabled: !!selectedRepositoryId
   })
 
-  // Get archive details
+  // Get archive details (keeping old API for now)
   const { data: archiveDetails, isLoading: loadingDetails } = useQuery({
-    queryKey: ['archive-details', selectedRepository, selectedArchive],
-    queryFn: () => archivesAPI.getArchiveInfo(selectedRepository, selectedArchive),
+    queryKey: ['archive-details', selectedRepository?.path, selectedArchive],
+    queryFn: () => archivesAPI.getArchiveInfo(selectedRepository!.path, selectedArchive),
     enabled: !!selectedRepository && !!selectedArchive
   })
 
-  // Get archive contents
+  // Get archive contents (keeping old API for now)
   const { data: archiveContents, isLoading: loadingContents } = useQuery({
-    queryKey: ['archive-contents', selectedRepository, selectedArchive, currentPath],
-    queryFn: () => archivesAPI.listContents(selectedRepository, selectedArchive, currentPath),
+    queryKey: ['archive-contents', selectedRepository?.path, selectedArchive, currentPath],
+    queryFn: () => archivesAPI.listContents(selectedRepository!.path, selectedArchive, currentPath),
     enabled: !!selectedRepository && !!selectedArchive
   })
 
-  // Delete archive mutation
+  // Delete archive mutation (keeping old API for now)
   const deleteArchiveMutation = useMutation({
     mutationFn: ({ repository, archive }: { repository: string; archive: string }) =>
       archivesAPI.deleteArchive(repository, archive),
     onSuccess: () => {
       toast.success('Archive deleted successfully!')
-      queryClient.invalidateQueries({ queryKey: ['archives', selectedRepository] })
+      queryClient.invalidateQueries({ queryKey: ['repository-archives', selectedRepositoryId] })
       setSelectedArchive('')
     },
     onError: (error: any) => {
@@ -102,7 +112,8 @@ const Archives: React.FC = () => {
   })
 
   // Handle repository selection
-  const handleRepositorySelect = (repository: string) => {
+  const handleRepositorySelect = (repository: Repository) => {
+    setSelectedRepositoryId(repository.id)
     setSelectedRepository(repository)
     setSelectedArchive('')
     setCurrentPath('')
@@ -135,14 +146,17 @@ const Archives: React.FC = () => {
 
   // Handle archive deletion
   const handleDeleteArchive = (archive: string) => {
-    deleteArchiveMutation.mutate({ repository: selectedRepository, archive })
-    setShowDeleteConfirm(null)
+    if (selectedRepository) {
+      deleteArchiveMutation.mutate({ repository: selectedRepository.path, archive })
+      setShowDeleteConfirm(null)
+    }
   }
 
   // Filter archives based on search
-  const filteredArchives = archives?.data?.filter((archive: Archive) =>
+  const filteredArchives = archives?.data?.archives?.filter((archive: Archive) =>
     archive.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    archive.timestamp.includes(searchQuery)
+    archive.archive.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    archive.start.includes(searchQuery)
   ) || []
 
   // Format file size
@@ -159,12 +173,8 @@ const Archives: React.FC = () => {
   // Get breadcrumb parts
   const breadcrumbParts = currentPath ? ['root', ...currentPath.split('/')] : ['root']
 
-  // Mock repositories for now (will be replaced with actual API call)
-  const mockRepositories = [
-    { id: 'repo1', name: 'Default Repository', path: '/backups/default' },
-    { id: 'repo2', name: 'Documents Backup', path: '/backups/documents' },
-    { id: 'repo3', name: 'System Backup', path: '/backups/system' }
-  ]
+  // Get repositories from API response
+  const repositories = repositoriesData?.data?.repositories || []
 
   return (
     <Box>
@@ -181,7 +191,7 @@ const Archives: React.FC = () => {
         <Button
           variant="outlined"
           startIcon={<RefreshCw size={18} />}
-          onClick={() => queryClient.invalidateQueries({ queryKey: ['archives', selectedRepository] })}
+          onClick={() => queryClient.invalidateQueries({ queryKey: ['repository-archives', selectedRepositoryId] })}
         >
           Refresh
         </Button>
@@ -195,37 +205,49 @@ const Archives: React.FC = () => {
               <Typography variant="h6" fontWeight={600} gutterBottom>
                 Repositories
               </Typography>
-              <List sx={{ pt: 2 }}>
-                {mockRepositories.map((repo) => (
-                  <ListItem key={repo.id} disablePadding sx={{ mb: 1 }}>
-                    <ListItemButton
-                      selected={selectedRepository === repo.id}
-                      onClick={() => handleRepositorySelect(repo.id)}
-                      sx={{
-                        borderRadius: 1,
-                        '&.Mui-selected': {
-                          backgroundColor: 'primary.lighter',
-                          borderLeft: 3,
-                          borderColor: 'primary.main',
-                          '&:hover': {
+              {loadingRepositories ? (
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                  <CircularProgress size={32} />
+                </Box>
+              ) : repositories.length === 0 ? (
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    No repositories found
+                  </Typography>
+                </Box>
+              ) : (
+                <List sx={{ pt: 2 }}>
+                  {repositories.map((repo: Repository) => (
+                    <ListItem key={repo.id} disablePadding sx={{ mb: 1 }}>
+                      <ListItemButton
+                        selected={selectedRepositoryId === repo.id}
+                        onClick={() => handleRepositorySelect(repo)}
+                        sx={{
+                          borderRadius: 1,
+                          '&.Mui-selected': {
                             backgroundColor: 'primary.lighter',
+                            borderLeft: 3,
+                            borderColor: 'primary.main',
+                            '&:hover': {
+                              backgroundColor: 'primary.lighter',
+                            },
                           },
-                        },
-                      }}
-                    >
-                      <ListItemIcon>
-                        <HardDrive size={20} />
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={repo.name}
-                        secondary={repo.path}
-                        primaryTypographyProps={{ fontWeight: 500, fontSize: '0.875rem' }}
-                        secondaryTypographyProps={{ fontSize: '0.75rem' }}
-                      />
-                    </ListItemButton>
-                  </ListItem>
-                ))}
-              </List>
+                        }}
+                      >
+                        <ListItemIcon>
+                          <HardDrive size={20} />
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={repo.name}
+                          secondary={repo.path}
+                          primaryTypographyProps={{ fontWeight: 500, fontSize: '0.875rem' }}
+                          secondaryTypographyProps={{ fontSize: '0.75rem' }}
+                        />
+                      </ListItemButton>
+                    </ListItem>
+                  ))}
+                </List>
+              )}
             </CardContent>
           </Card>
         </Box>
@@ -285,15 +307,15 @@ const Archives: React.FC = () => {
                       variant="outlined"
                       sx={{
                         cursor: 'pointer',
-                        border: selectedArchive === archive.name ? 2 : 1,
-                        borderColor: selectedArchive === archive.name ? 'primary.main' : 'divider',
-                        backgroundColor: selectedArchive === archive.name ? 'primary.lighter' : 'background.paper',
+                        border: selectedArchive === archive.archive ? 2 : 1,
+                        borderColor: selectedArchive === archive.archive ? 'primary.main' : 'divider',
+                        backgroundColor: selectedArchive === archive.archive ? 'primary.lighter' : 'background.paper',
                         '&:hover': {
                           borderColor: 'primary.main',
                           backgroundColor: 'action.hover',
                         },
                       }}
-                      onClick={() => handleArchiveSelect(archive.name)}
+                      onClick={() => handleArchiveSelect(archive.archive)}
                     >
                       <CardContent>
                         <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -306,13 +328,10 @@ const Archives: React.FC = () => {
                               <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
                                 <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                   <Calendar size={14} />
-                                  {formatTimestamp(archive.timestamp)}
+                                  {formatTimestamp(archive.start)}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary">
-                                  {formatFileSize(archive.size)}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  {archive.file_count.toLocaleString()} files
+                                  {archive.time}
                                 </Typography>
                               </Stack>
                             </Box>
@@ -322,7 +341,7 @@ const Archives: React.FC = () => {
                             size="small"
                             onClick={(e) => {
                               e.stopPropagation()
-                              setShowDeleteConfirm(archive.name)
+                              setShowDeleteConfirm(archive.archive)
                             }}
                           >
                             <Trash2 size={18} />
