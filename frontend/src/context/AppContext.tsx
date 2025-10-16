@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react'
 import { useQuery } from 'react-query'
-import { repositoriesAPI, sshKeysAPI, archivesAPI } from '../services/api'
+import { repositoriesAPI, sshKeysAPI } from '../services/api'
+import { useAuth } from '../hooks/useAuth'
 
 interface AppState {
   hasSSHKey: boolean
@@ -31,6 +32,8 @@ interface AppContextValue {
 const AppContext = createContext<AppContextValue | undefined>(undefined)
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { isAuthenticated, isLoading: authLoading } = useAuth()
+
   const [appState, setAppState] = useState<AppState>({
     hasSSHKey: false,
     hasRepositories: false,
@@ -39,8 +42,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     refetch: () => {},
   })
 
-  // Check for SSH keys
-  const { data: sshKeys, isLoading: loadingSSH, refetch: refetchSSH } = useQuery({
+  // Check for SSH keys - only run when authenticated
+  const { data: sshKeys, isLoading: loadingSSH, isFetched: fetchedSSH, refetch: refetchSSH } = useQuery({
     queryKey: ['app-ssh-keys'],
     queryFn: async () => {
       try {
@@ -51,13 +54,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return []
       }
     },
+    enabled: !authLoading && isAuthenticated, // Only run when authenticated
     retry: false,
     refetchInterval: 30000,
     // Use global defaults for staleTime/cacheTime (SWR strategy)
   })
 
-  // Check for repositories
-  const { data: repositories, isLoading: loadingRepos, refetch: refetchRepos } = useQuery({
+  // Check for repositories - only run when authenticated
+  const { data: repositories, isLoading: loadingRepos, isFetched: fetchedRepos, refetch: refetchRepos } = useQuery({
     queryKey: ['app-repositories'],
     queryFn: async () => {
       try {
@@ -68,6 +72,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return []
       }
     },
+    enabled: !authLoading && isAuthenticated, // Only run when authenticated
     retry: false,
     refetchInterval: 30000,
     // Use global defaults for staleTime/cacheTime (SWR strategy)
@@ -81,14 +86,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return { hasArchives: false }
       }
       try {
-        // Check first repository for archives
-        const response = await archivesAPI.listArchives(repositories[0].path)
-        return { hasArchives: response.data && response.data.length > 0 }
+        // Check first repository for archives using the new endpoint
+        const response = await repositoriesAPI.listRepositoryArchives(repositories[0].id)
+        return { hasArchives: response.data?.archives && response.data.archives.length > 0 }
       } catch (error) {
         return { hasArchives: false }
       }
     },
-    enabled: !!repositories && repositories.length > 0,
+    enabled: !authLoading && isAuthenticated && !!repositories && repositories.length > 0,
     retry: false,
     refetchInterval: 60000, // Check less frequently
   })
@@ -112,20 +117,40 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Calculate tab enablement based on app state
   // Simplified: Only need SSH key + repositories for all features
-  const tabEnablement: TabEnablement = {
-    dashboard: true,
-    sshKeys: true, // Always accessible
-    connections: appState.hasSSHKey,
-    repositories: appState.hasSSHKey,
-    backups: appState.hasSSHKey && appState.hasRepositories,
-    archives: appState.hasSSHKey && appState.hasRepositories,
-    restore: appState.hasSSHKey && appState.hasArchives,
-    schedule: appState.hasSSHKey && appState.hasRepositories,
-    settings: true,
-  }
+  // While loading, optimistically enable all tabs to avoid flashing disabled state
+  const tabEnablement: TabEnablement = useMemo(() => {
+    // If auth is still loading or initial data hasn't been fetched yet,
+    // enable all tabs to prevent flash of disabled state
+    if (authLoading || !isAuthenticated || !fetchedSSH || !fetchedRepos) {
+      return {
+        dashboard: true,
+        sshKeys: true,
+        connections: true,
+        repositories: true,
+        backups: true,
+        archives: true,
+        restore: true,
+        schedule: true,
+        settings: true,
+      }
+    }
+
+    // Once loaded, apply actual enablement logic
+    return {
+      dashboard: true,
+      sshKeys: true, // Always accessible
+      connections: true, // Always accessible - needed to generate SSH keys
+      repositories: appState.hasSSHKey,
+      backups: appState.hasSSHKey && appState.hasRepositories,
+      archives: appState.hasSSHKey && appState.hasRepositories,
+      restore: appState.hasSSHKey && appState.hasArchives,
+      schedule: appState.hasSSHKey && appState.hasRepositories,
+      settings: true,
+    }
+  }, [appState.hasSSHKey, appState.hasRepositories, appState.hasArchives, fetchedSSH, fetchedRepos, authLoading, isAuthenticated])
 
   // Get reason why a tab is disabled
-  const getTabDisabledReason = (tab: keyof TabEnablement): string | null => {
+  const getTabDisabledReason = useCallback((tab: keyof TabEnablement): string | null => {
     if (tabEnablement[tab]) {
       return null
     }
@@ -155,7 +180,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       default:
         return null
     }
-  }
+  }, [tabEnablement, appState.hasSSHKey, appState.hasRepositories, appState.hasArchives])
 
   const value: AppContextValue = {
     appState,
