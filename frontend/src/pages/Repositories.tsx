@@ -524,7 +524,7 @@ export default function Repositories() {
                       </Typography>
                     </Box>
 
-                    <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-start' }}>
+                    <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
                       <Box sx={{ flex: 1 }}>
                         <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
                           Archives
