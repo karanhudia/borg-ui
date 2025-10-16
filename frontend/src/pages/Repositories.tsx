@@ -8,7 +8,6 @@ import {
   Typography,
   Button,
   IconButton,
-  Chip,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -21,8 +20,6 @@ import {
   Alert,
   Divider,
   Stack,
-  Checkbox,
-  FormControlLabel,
   Autocomplete,
 } from '@mui/material'
 import {
@@ -53,7 +50,6 @@ interface Repository {
   last_backup: string | null
   total_size: string | null
   archive_count: number
-  is_active: boolean
   created_at: string
   updated_at: string | null
 }
@@ -201,6 +197,7 @@ export default function Repositories() {
     username: '',
     ssh_key_id: null as number | null,
     connection_id: null as number | null,
+    remote_path: '',
   })
 
   const [newSourceDir, setNewSourceDir] = useState('')
@@ -210,7 +207,7 @@ export default function Repositories() {
     path: '',
     compression: 'lz4',
     source_directories: [] as string[],
-    is_active: true,
+    remote_path: '',
   })
 
   const [editNewSourceDir, setEditNewSourceDir] = useState('')
@@ -275,6 +272,7 @@ export default function Repositories() {
       username: '',
       ssh_key_id: null,
       connection_id: null,
+      remote_path: '',
     })
     setNewSourceDir('')
   }
@@ -286,7 +284,7 @@ export default function Repositories() {
       path: repository.path,
       compression: repository.compression,
       source_directories: repository.source_directories || [],
-      is_active: repository.is_active,
+      remote_path: (repository as any).remote_path || '',
     })
     setEditNewSourceDir('')
   }
@@ -524,28 +522,14 @@ export default function Repositories() {
                       </Typography>
                     </Box>
 
-                    <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                          Archives
-                        </Typography>
-                        <Typography variant="body2" fontWeight={500}>
-                          {repository.archive_count}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                          Status
-                        </Typography>
-                        <Box sx={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center' }}>
-                          <Chip
-                            label={repository.is_active ? 'Active' : 'Inactive'}
-                            size="small"
-                            color={repository.is_active ? 'success' : 'default'}
-                          />
-                        </Box>
-                      </Box>
-                    </Stack>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                        Archives
+                      </Typography>
+                      <Typography variant="body2" fontWeight={500}>
+                        {repository.archive_count}
+                      </Typography>
+                    </Box>
 
                     {repository.last_backup && (
                       <Box>
@@ -564,6 +548,37 @@ export default function Repositories() {
                           Total Size
                         </Typography>
                         <Typography variant="body2">{repository.total_size}</Typography>
+                      </Box>
+                    )}
+
+                    {repository.source_directories && repository.source_directories.length > 0 && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                          Source Paths ({repository.source_directories.length})
+                        </Typography>
+                        <Stack spacing={0.5}>
+                          {repository.source_directories.slice(0, 3).map((dir: string, index: number) => (
+                            <Typography
+                              key={index}
+                              variant="body2"
+                              sx={{
+                                fontFamily: 'monospace',
+                                fontSize: '0.75rem',
+                                color: 'text.secondary',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              {dir}
+                            </Typography>
+                          ))}
+                          {repository.source_directories.length > 3 && (
+                            <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                              +{repository.source_directories.length - 3} more
+                            </Typography>
+                          )}
+                        </Stack>
                       </Box>
                     )}
                   </Stack>
@@ -733,6 +748,15 @@ export default function Repositories() {
                         ))}
                     </Select>
                   </FormControl>
+
+                  <TextField
+                    label="Remote Borg Path (Optional)"
+                    value={createForm.remote_path}
+                    onChange={(e) => setCreateForm({ ...createForm, remote_path: e.target.value })}
+                    placeholder="/usr/local/bin/borg"
+                    fullWidth
+                    helperText="Path to borg executable on remote server. Leave empty if borg is in PATH."
+                  />
                 </>
               )}
 
@@ -900,6 +924,15 @@ export default function Repositories() {
                 </Select>
               </FormControl>
 
+              <TextField
+                label="Remote Borg Path (Optional)"
+                value={editForm.remote_path}
+                onChange={(e) => setEditForm({ ...editForm, remote_path: e.target.value })}
+                placeholder="/usr/local/bin/borg"
+                fullWidth
+                helperText="Path to borg executable on remote server. Leave empty if borg is in PATH."
+              />
+
               {/* Source Directories */}
               <Box>
                 <Typography variant="subtitle2" gutterBottom>
@@ -970,15 +1003,6 @@ export default function Repositories() {
                 </Box>
               </Box>
 
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={editForm.is_active}
-                    onChange={(e) => setEditForm({ ...editForm, is_active: e.target.checked })}
-                  />
-                }
-                label="Active"
-              />
             </Box>
           </DialogContent>
           <DialogActions>
@@ -1019,19 +1043,18 @@ export default function Repositories() {
                   <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Storage /> Repository
                   </Typography>
-                  <Box sx={{
-                    bgcolor: 'grey.50',
-                    p: 2,
-                    borderRadius: 1,
-                    fontFamily: 'monospace',
-                    fontSize: '0.875rem'
-                  }}>
+                  <Stack spacing={1.5} sx={{ bgcolor: 'grey.50', p: 2, borderRadius: 1 }}>
                     {Object.entries(repositoryInfo.data.repository).map(([key, value]) => (
-                      <Box key={key} sx={{ mb: 0.5 }}>
-                        <strong>{key}:</strong> {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                      <Box key={key} sx={{ display: 'flex', flexDirection: 'column' }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
+                          {key.replace(/_/g, ' ')}
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                          {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                        </Typography>
                       </Box>
                     ))}
-                  </Box>
+                  </Stack>
                 </Box>
               )}
 
@@ -1041,19 +1064,18 @@ export default function Repositories() {
                   <Typography variant="h6" gutterBottom>
                     Cache
                   </Typography>
-                  <Box sx={{
-                    bgcolor: 'grey.50',
-                    p: 2,
-                    borderRadius: 1,
-                    fontFamily: 'monospace',
-                    fontSize: '0.875rem'
-                  }}>
+                  <Stack spacing={1.5} sx={{ bgcolor: 'grey.50', p: 2, borderRadius: 1 }}>
                     {Object.entries(repositoryInfo.data.cache).map(([key, value]) => (
-                      <Box key={key} sx={{ mb: 0.5 }}>
-                        <strong>{key}:</strong> {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                      <Box key={key} sx={{ display: 'flex', flexDirection: 'column' }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
+                          {key.replace(/_/g, ' ')}
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                          {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                        </Typography>
                       </Box>
                     ))}
-                  </Box>
+                  </Stack>
                 </Box>
               )}
 
@@ -1063,19 +1085,18 @@ export default function Repositories() {
                   <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Shield /> Encryption
                   </Typography>
-                  <Box sx={{
-                    bgcolor: 'grey.50',
-                    p: 2,
-                    borderRadius: 1,
-                    fontFamily: 'monospace',
-                    fontSize: '0.875rem'
-                  }}>
+                  <Stack spacing={1.5} sx={{ bgcolor: 'grey.50', p: 2, borderRadius: 1 }}>
                     {Object.entries(repositoryInfo.data.encryption).map(([key, value]) => (
-                      <Box key={key} sx={{ mb: 0.5 }}>
-                        <strong>{key}:</strong> {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                      <Box key={key} sx={{ display: 'flex', flexDirection: 'column' }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
+                          {key.replace(/_/g, ' ')}
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                          {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                        </Typography>
                       </Box>
                     ))}
-                  </Box>
+                  </Stack>
                 </Box>
               )}
 
