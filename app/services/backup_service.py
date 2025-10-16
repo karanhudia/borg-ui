@@ -113,13 +113,18 @@ class BackupService:
                 # Track this process so it can be cancelled
                 self.running_processes[job_id] = process
 
-                # Stream output line by line
-                try:
-                    async for line in process.stdout:
-                        # Check if job was cancelled
+                # Flag to track cancellation
+                cancelled = False
+
+                async def check_cancellation():
+                    """Periodic heartbeat to check for cancellation independent of log output"""
+                    nonlocal cancelled
+                    while not cancelled and process.returncode is None:
+                        await asyncio.sleep(1)  # Check every second
                         db.refresh(job)
                         if job.status == "cancelled":
-                            logger.info("Backup job cancelled, terminating process", job_id=job_id)
+                            logger.info("Backup job cancelled (heartbeat), terminating process", job_id=job_id)
+                            cancelled = True
                             process.terminate()
                             try:
                                 await asyncio.wait_for(process.wait(), timeout=5.0)
@@ -129,13 +134,33 @@ class BackupService:
                                 await process.wait()
                             break
 
-                        line_str = line.decode('utf-8', errors='replace')
-                        timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-                        log_line = f"[{timestamp}] {line_str}"
-                        f.write(log_line)
-                        f.flush()  # Force write to disk immediately
+                async def stream_logs():
+                    """Stream log output from process"""
+                    nonlocal cancelled
+                    try:
+                        async for line in process.stdout:
+                            if cancelled:
+                                break
+
+                            line_str = line.decode('utf-8', errors='replace')
+                            timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+                            log_line = f"[{timestamp}] {line_str}"
+                            f.write(log_line)
+                            f.flush()  # Force write to disk immediately
+                    except asyncio.CancelledError:
+                        logger.info("Log streaming cancelled", job_id=job_id)
+                        raise
+
+                # Run both tasks concurrently
+                try:
+                    await asyncio.gather(
+                        check_cancellation(),
+                        stream_logs(),
+                        return_exceptions=True
+                    )
                 except asyncio.CancelledError:
                     logger.info("Backup task cancelled", job_id=job_id)
+                    cancelled = True
                     process.terminate()
                     await process.wait()
                     raise
