@@ -763,18 +763,140 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
                              path=temp_key_file,
                              error=str(e))
 
+@router.get("/{repo_id}/archives")
+async def list_repository_archives(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """List all archives in a repository using borg list"""
+    try:
+        repository = db.query(Repository).filter(Repository.id == repo_id).first()
+        if not repository:
+            raise HTTPException(status_code=404, detail="Repository not found")
+
+        # Build borg list command
+        cmd = ["borg", "list", "--json", repository.path]
+
+        # Set up environment
+        env = os.environ.copy()
+        if repository.passphrase:
+            env["BORG_PASSPHRASE"] = repository.passphrase
+
+        # Execute command
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env
+        )
+
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+
+        if process.returncode != 0:
+            error_msg = stderr.decode() if stderr else "Unknown error"
+            logger.error("Failed to list archives", error=error_msg)
+            raise HTTPException(status_code=500, detail=f"Failed to list archives: {error_msg}")
+
+        # Parse JSON output
+        archives_data = json.loads(stdout.decode())
+        archives = archives_data.get("archives", [])
+
+        logger.info("Archives listed successfully", repo_id=repo_id, count=len(archives))
+
+        return {
+            "success": True,
+            "archives": archives,
+            "repository": {
+                "id": repository.id,
+                "name": repository.name,
+                "path": repository.path
+            }
+        }
+    except HTTPException:
+        raise
+    except json.JSONDecodeError as e:
+        logger.error("Failed to parse borg list output", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to parse archive list")
+    except Exception as e:
+        logger.error("Failed to list archives", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to list archives: {str(e)}")
+
+@router.get("/{repo_id}/info")
+async def get_repository_info(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get detailed repository information using borg info"""
+    try:
+        repository = db.query(Repository).filter(Repository.id == repo_id).first()
+        if not repository:
+            raise HTTPException(status_code=404, detail="Repository not found")
+
+        # Build borg info command
+        cmd = ["borg", "info", "--json", repository.path]
+
+        # Set up environment
+        env = os.environ.copy()
+        if repository.passphrase:
+            env["BORG_PASSPHRASE"] = repository.passphrase
+
+        # Execute command
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env
+        )
+
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+
+        if process.returncode != 0:
+            error_msg = stderr.decode() if stderr else "Unknown error"
+            logger.error("Failed to get repository info", error=error_msg)
+            raise HTTPException(status_code=500, detail=f"Failed to get repository info: {error_msg}")
+
+        # Parse JSON output
+        info_data = json.loads(stdout.decode())
+
+        # Extract relevant information
+        repository_info = info_data.get("repository", {})
+        cache_info = info_data.get("cache", {})
+        encryption_info = info_data.get("encryption", {})
+
+        logger.info("Repository info retrieved successfully", repo_id=repo_id)
+
+        return {
+            "success": True,
+            "info": {
+                "repository": repository_info,
+                "cache": cache_info,
+                "encryption": encryption_info
+            },
+            "raw_output": info_data
+        }
+    except HTTPException:
+        raise
+    except json.JSONDecodeError as e:
+        logger.error("Failed to parse borg info output", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to parse repository info")
+    except Exception as e:
+        logger.error("Failed to get repository info", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to get repository info: {str(e)}")
+
 async def get_repository_stats(path: str) -> Dict[str, Any]:
     """Get repository statistics"""
     try:
         # Get repository info
         info_result = await borgmatic._execute_command(["borg", "info", path])
-        
+
         if not info_result["success"]:
             return {
                 "error": "Failed to get repository info",
                 "details": info_result["stderr"]
             }
-        
+
         # Parse repository info (basic implementation)
         # In a real implementation, you would parse the borg info output
         stats = {
@@ -785,7 +907,7 @@ async def get_repository_stats(path: str) -> Dict[str, Any]:
             "last_modified": None,
             "encryption": "Unknown"
         }
-        
+
         # Try to get archive count
         archives_result = await borgmatic.list_archives(path)
         if archives_result["success"]:
@@ -795,7 +917,7 @@ async def get_repository_stats(path: str) -> Dict[str, Any]:
                     stats["archive_count"] = len(archives_data)
             except:
                 pass
-        
+
         return stats
     except Exception as e:
         logger.error("Failed to get repository stats", error=str(e))
