@@ -217,7 +217,7 @@ Settings: true (always)
 
 **Backend Changes**:
 - [x] Create backup execution service (BackupService)
-- [x] Execute `borgmatic create --verbosity 1 --files`
+- [x] Execute `borg create --verbose --list`
 - [x] Stream output to log file (`/data/logs/backup_{job_id}.log`)
 - [x] Create endpoint: `POST /api/backup/start`
 - [x] Create endpoint: `GET /api/backup/logs/{job_id}/stream` (returns new log entries with offset)
@@ -239,7 +239,7 @@ Settings: true (always)
 **Log Display Example**:
 ```
 [2025-01-15 10:30:00] Starting backup...
-[2025-01-15 10:30:01] borgmatic --verbosity 1 --files
+[2025-01-15 10:30:01] borg create --verbose --list
 [2025-01-15 10:30:02] Creating archive...
 [2025-01-15 10:30:05] A /home/user/documents/file1.txt
 [2025-01-15 10:30:05] A /home/user/documents/file2.txt

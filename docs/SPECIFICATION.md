@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-This document outlines the technical specification for a lightweight web-based user interface for Borgmatic, designed to run efficiently on resource-constrained devices like Raspberry Pi or Odroid. The solution provides comprehensive visualization and control over backup operations without requiring command-line interaction.
+This document outlines the technical specification for a lightweight web-based user interface for Borg, designed to run efficiently on resource-constrained devices like Raspberry Pi or Odroid. The solution provides comprehensive visualization and control over backup operations without requiring command-line interaction.
 
 ### 1.1 Key Objectives
 - **Resource Efficiency**: Minimal memory and CPU footprint suitable for ARM-based devices
@@ -17,14 +17,14 @@ This document outlines the technical specification for a lightweight web-based u
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Web Browser  │    │   Borgmatic     │    │   System        │
+│   Web Browser  │    │   Borg     │    │   System        │
 │   (Frontend)   │◄──►│   Web UI        │◄──►│   (Backend)     │
 │                │    │   (Backend)      │    │                 │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                               │
                               ▼
                        ┌─────────────────┐
-                       │   Borgmatic     │
+                       │   Borg     │
                        │   CLI Interface │
                        └─────────────────┘
 ```
@@ -33,7 +33,7 @@ This document outlines the technical specification for a lightweight web-based u
 
 #### Backend
 - **Framework**: FastAPI (Python 3.9+)
-- **Process Management**: Subprocess for Borgmatic CLI interaction
+- **Process Management**: Subprocess for Borg CLI interaction
 - **Authentication**: JWT-based with bcrypt password hashing
 - **Database**: SQLite for lightweight storage
 - **Logging**: Structured logging with rotation
@@ -63,7 +63,7 @@ This document outlines the technical specification for a lightweight web-based u
 
 #### 3.1.2 Data Flow
 ```
-Dashboard → API → Borgmatic CLI → System → Real-time Updates
+Dashboard → API → Borg CLI → System → Real-time Updates
 ```
 
 #### 3.1.3 API Endpoints
@@ -79,7 +79,7 @@ GET /api/dashboard/health
 #### 3.2.1 Configuration Viewer
 - **YAML Editor**: Syntax-highlighted editor with validation
 - **Configuration Templates**: Pre-built templates for common scenarios
-- **Validation**: Real-time YAML syntax and Borgmatic configuration validation
+- **Validation**: Real-time YAML syntax and Borg configuration validation
 - **Backup/Restore**: Configuration backup and restore capabilities
 
 #### 3.2.2 API Endpoints
@@ -322,7 +322,7 @@ app/
 │   ├── settings.py        # Settings endpoints
 │   └── health.py          # Health endpoints
 ├── core/
-│   ├── borgmatic.py       # Borgmatic CLI interface
+│   ├── borg.py       # Borg CLI interface
 │   ├── scheduler.py        # Cron job management
 │   ├── notifications.py    # Notification system
 │   └── security.py        # Security utilities
@@ -337,18 +337,18 @@ app/
     └── helpers.py         # Helper functions
 ```
 
-### 5.2 Borgmatic Integration
+### 5.2 Borg Integration
 
 #### 5.2.1 CLI Interface
 ```python
-class BorgmaticInterface:
+class BorgInterface:
     def __init__(self, config_path: str):
         self.config_path = config_path
-        self.borgmatic_cmd = "borgmatic"
+        self.borg_cmd = "borg"
     
     async def run_backup(self, repository: str = None) -> dict:
         """Execute backup operation"""
-        cmd = [self.borgmatic_cmd, "create"]
+        cmd = [self.borg_cmd, "create"]
         if repository:
             cmd.extend(["--repository", repository])
         
@@ -356,7 +356,7 @@ class BorgmaticInterface:
     
     async def list_archives(self, repository: str) -> dict:
         """List archives in repository"""
-        cmd = [self.borgmatic_cmd, "list", "--repository", repository]
+        cmd = [self.borg_cmd, "list", "--repository", repository]
         return await self._execute_command(cmd)
     
     async def _execute_command(self, cmd: List[str]) -> dict:
@@ -489,7 +489,7 @@ async def get_dashboard_status(current_user: str = Depends(get_current_user)):
     """Get comprehensive dashboard status"""
     try:
         # Get backup status
-        backup_status = await borgmatic.get_backup_status()
+        backup_status = await borg.get_backup_status()
         
         # Get system metrics
         system_metrics = await get_system_metrics()
@@ -576,11 +576,11 @@ COPY app/ ./app/
 COPY --from=frontend-builder /app/frontend/build ./app/static
 
 # Create non-root user
-RUN useradd -m -u 1000 borgmatic && \
-    chown -R borgmatic:borgmatic /app
+RUN useradd -m -u 1000 borg && \
+    chown -R borg:borg /app
 
 # Switch to non-root user
-USER borgmatic
+USER borg
 
 # Expose port
 EXPOSE 8000
@@ -616,24 +616,24 @@ services:
       - SECRET_KEY=${SECRET_KEY}
     restart: unless-stopped
     networks:
-      - borgmatic-network
+      - borg-network
 
   # Optional: PostgreSQL for production
   postgres:
     image: postgres:13-alpine
-    container_name: borgmatic-db
+    container_name: borg-db
     environment:
-      - POSTGRES_DB=borgmatic
-      - POSTGRES_USER=borgmatic
+      - POSTGRES_DB=borg
+      - POSTGRES_USER=borg
       - POSTGRES_PASSWORD=${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
     networks:
-      - borgmatic-network
+      - borg-network
 
 networks:
-  borgmatic-network:
+  borg-network:
     driver: bridge
 
 volumes:
@@ -812,7 +812,7 @@ async def get_dashboard_metrics():
 @cache(expire=60)  # Cache for 1 minute
 async def get_repository_status():
     """Get cached repository status"""
-    return await borgmatic.get_repository_status()
+    return await borg.get_repository_status()
 ```
 
 #### 9.2.2 Database Optimization
@@ -836,17 +836,17 @@ engine = create_engine(
 
 #### 10.1.1 Backend Tests
 ```python
-# tests/test_borgmatic.py
+# tests/test_borg.py
 import pytest
-from app.core.borgmatic import BorgmaticInterface
+from app.core.borg import BorgInterface
 
 @pytest.fixture
-def borgmatic_interface():
-    return BorgmaticInterface("/tmp/test_config")
+def borg_interface():
+    return BorgInterface("/tmp/test_config")
 
 @pytest.mark.asyncio
-async def test_run_backup(borgmatic_interface):
-    result = await borgmatic_interface.run_backup("test_repo")
+async def test_run_backup(borg_interface):
+    result = await borg_interface.run_backup("test_repo")
     assert result["return_code"] == 0
     assert "backup" in result["stdout"].lower()
 ```
@@ -931,7 +931,7 @@ services:
 
 ## 12. Conclusion
 
-This technical specification provides a comprehensive framework for developing a lightweight, feature-rich web UI for Borgmatic. The solution addresses all core requirements while maintaining focus on resource efficiency and ease of deployment.
+This technical specification provides a comprehensive framework for developing a lightweight, feature-rich web UI for Borg. The solution addresses all core requirements while maintaining focus on resource efficiency and ease of deployment.
 
 ### 12.1 Key Success Factors
 
@@ -951,4 +951,4 @@ This technical specification provides a comprehensive framework for developing a
 4. **Deployment**: Create deployment packages and installation scripts
 5. **Community**: Open source release and community engagement
 
-This specification provides a solid foundation for building a production-ready Borgmatic web UI that meets all requirements while maintaining the lightweight, efficient design necessary for resource-constrained devices. 
+This specification provides a solid foundation for building a production-ready Borg web UI that meets all requirements while maintaining the lightweight, efficient design necessary for resource-constrained devices. 

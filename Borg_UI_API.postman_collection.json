@@ -637,7 +637,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "config", "current"]
 						},
-						"description": "Get current Borgmatic configuration"
+						"description": "Get current Borg configuration"
 					}
 				},
 				{
@@ -654,7 +654,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "config", "update"]
 						},
-						"description": "Update Borgmatic configuration"
+						"description": "Update Borg configuration"
 					}
 				},
 				{
