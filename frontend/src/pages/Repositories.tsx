@@ -1215,7 +1215,23 @@ export default function Repositories() {
                     <Typography variant="body2" color="text.secondary">Last Modified</Typography>
                     <Typography variant="body2">
                       {repositoryInfo.data.info?.repository?.last_modified
-                        ? new Date(repositoryInfo.data.info.repository.last_modified).toLocaleString()
+                        ? (() => {
+                            const date = new Date(repositoryInfo.data.info.repository.last_modified + (repositoryInfo.data.info.repository.last_modified.endsWith('Z') ? '' : 'Z'))
+                            const day = date.getDate()
+                            const getOrdinalSuffix = (d: number) => {
+                              if (d > 3 && d < 21) return 'th'
+                              switch (d % 10) {
+                                case 1: return 'st'
+                                case 2: return 'nd'
+                                case 3: return 'rd'
+                                default: return 'th'
+                              }
+                            }
+                            const month = date.toLocaleString('en-US', { month: 'long' })
+                            const year = date.getFullYear()
+                            const time = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })
+                            return `${day}${getOrdinalSuffix(day)} ${month} ${year}, ${time}`
+                          })()
                         : 'N/A'}
                     </Typography>
                   </Box>

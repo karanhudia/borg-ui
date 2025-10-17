@@ -792,7 +792,9 @@ const Backup: React.FC = () => {
             </Box>
           ) : recentJobs.length === 0 ? (
             <Box sx={{ textAlign: 'center', py: 8 }}>
-              <FileText size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
+              <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+                <FileText size={48} color="rgba(0,0,0,0.3)" />
+              </Box>
               <Typography variant="body1" color="text.secondary">
                 No backup jobs found
               </Typography>
