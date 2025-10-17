@@ -807,6 +807,14 @@ async def list_repository_archives(
         # Allow non-interactive access to unencrypted repositories
         env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
 
+        # Add SSH options to disable host key checking for remote repos
+        ssh_opts = [
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "UserKnownHostsFile=/dev/null",
+            "-o", "LogLevel=ERROR"
+        ]
+        env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+
         # Execute command
         process = await asyncio.create_subprocess_exec(
             *cmd,
@@ -874,6 +882,14 @@ async def get_repository_info(
         # Allow non-interactive access to unencrypted repositories
         env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
 
+        # Add SSH options to disable host key checking for remote repos
+        ssh_opts = [
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "UserKnownHostsFile=/dev/null",
+            "-o", "LogLevel=ERROR"
+        ]
+        env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+
         # Execute command
         process = await asyncio.create_subprocess_exec(
             *cmd,
@@ -921,10 +937,12 @@ async def get_repository_info(
 async def get_archive_info(
     repo_id: int,
     archive_name: str,
+    include_files: bool = Query(default=True, description="Include file listing in response"),
+    file_limit: int = Query(default=1000, description="Maximum number of files to return"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get detailed archive information using borg info repo::archive"""
+    """Get detailed archive information using borg info repo::archive with optional file listing"""
     try:
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
@@ -946,6 +964,14 @@ async def get_archive_info(
             env["BORG_PASSPHRASE"] = repository.passphrase
         # Allow non-interactive access to unencrypted repositories
         env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+
+        # Add SSH options to disable host key checking for remote repos
+        ssh_opts = [
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "UserKnownHostsFile=/dev/null",
+            "-o", "LogLevel=ERROR"
+        ]
+        env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
 
         # Execute command
         process = await asyncio.create_subprocess_exec(
@@ -974,9 +1000,77 @@ async def get_archive_info(
         cache_info = info_data.get("cache", {})
         encryption_info = info_data.get("encryption", {})
 
+        # Optionally fetch file listing using borg list
+        if include_files:
+            list_cmd = ["borg", "list"]
+            if repository.remote_path:
+                list_cmd.extend(["--remote-path", repository.remote_path])
+            list_cmd.extend(["--json-lines", archive_path])
+
+            # Use same environment setup
+            list_env = os.environ.copy()
+            if repository.passphrase:
+                list_env["BORG_PASSPHRASE"] = repository.passphrase
+            list_env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+
+            # Add SSH options
+            ssh_opts = [
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "UserKnownHostsFile=/dev/null",
+                "-o", "LogLevel=ERROR"
+            ]
+            list_env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+
+            try:
+                list_process = await asyncio.create_subprocess_exec(
+                    *list_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=list_env
+                )
+                list_stdout, list_stderr = await asyncio.wait_for(list_process.communicate(), timeout=60)
+
+                if list_process.returncode == 0:
+                    # Parse JSON-lines output
+                    files = []
+                    for line in list_stdout.decode().strip().split('\n'):
+                        if line and len(files) < file_limit:
+                            try:
+                                file_obj = json.loads(line)
+                                files.append({
+                                    "path": file_obj.get("path"),
+                                    "type": file_obj.get("type"),
+                                    "mode": file_obj.get("mode"),
+                                    "user": file_obj.get("user"),
+                                    "group": file_obj.get("group"),
+                                    "size": file_obj.get("size"),
+                                    "mtime": file_obj.get("mtime"),
+                                    "healthy": file_obj.get("healthy", True)
+                                })
+                            except json.JSONDecodeError:
+                                continue
+                    archive_info["files"] = files
+                    archive_info["file_count"] = len(files)
+                    logger.info("Fetched file listing for archive",
+                               archive_name=archive_name,
+                               file_count=len(files))
+                else:
+                    logger.warning("Failed to fetch file listing",
+                                 archive_name=archive_name,
+                                 error=list_stderr.decode())
+                    archive_info["files"] = []
+                    archive_info["file_count"] = 0
+            except Exception as e:
+                logger.warning("Error fetching file listing",
+                             archive_name=archive_name,
+                             error=str(e))
+                archive_info["files"] = []
+                archive_info["file_count"] = 0
+
         logger.info("Archive info retrieved successfully",
                    repo_id=repo_id,
-                   archive_name=archive_name)
+                   archive_name=archive_name,
+                   include_files=include_files)
 
         return {
             "success": True,
@@ -1026,6 +1120,14 @@ async def list_archive_files(
             env["BORG_PASSPHRASE"] = repository.passphrase
         # Allow non-interactive access to unencrypted repositories
         env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+
+        # Add SSH options to disable host key checking for remote repos
+        ssh_opts = [
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "UserKnownHostsFile=/dev/null",
+            "-o", "LogLevel=ERROR"
+        ]
+        env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
 
         # Execute command
         process = await asyncio.create_subprocess_exec(

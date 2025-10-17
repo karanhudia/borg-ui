@@ -1200,22 +1200,22 @@ export default function Repositories() {
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Typography variant="body2" color="text.secondary">Location</Typography>
                     <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all', maxWidth: '60%', textAlign: 'right' }}>
-                      {repositoryInfo.data.repository?.location || 'N/A'}
+                      {repositoryInfo.data.info?.repository?.location || 'N/A'}
                     </Typography>
                   </Box>
                   <Divider />
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Typography variant="body2" color="text.secondary">Repository ID</Typography>
                     <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
-                      {repositoryInfo.data.repository?.id?.substring(0, 16) || 'N/A'}...
+                      {repositoryInfo.data.info?.repository?.id?.substring(0, 16) || 'N/A'}...
                     </Typography>
                   </Box>
                   <Divider />
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Typography variant="body2" color="text.secondary">Last Modified</Typography>
                     <Typography variant="body2">
-                      {repositoryInfo.data.repository?.last_modified
-                        ? new Date(repositoryInfo.data.repository.last_modified).toLocaleString()
+                      {repositoryInfo.data.info?.repository?.last_modified
+                        ? new Date(repositoryInfo.data.info.repository.last_modified).toLocaleString()
                         : 'N/A'}
                     </Typography>
                   </Box>
@@ -1223,7 +1223,7 @@ export default function Repositories() {
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Typography variant="body2" color="text.secondary">Encryption Mode</Typography>
                     <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {repositoryInfo.data.encryption?.mode || 'N/A'}
+                      {repositoryInfo.data.info?.encryption?.mode || 'N/A'}
                     </Typography>
                   </Box>
                 </Stack>
@@ -1234,40 +1234,40 @@ export default function Repositories() {
                 <Typography variant="h6" gutterBottom>
                   Storage Statistics
                 </Typography>
-                {repositoryInfo.data.cache?.stats && repositoryInfo.data.cache.stats.unique_size > 0 ? (
+                {repositoryInfo.data.info?.cache?.stats && repositoryInfo.data.info.cache.stats.unique_size > 0 ? (
                   <Stack spacing={1.5} sx={{ bgcolor: 'grey.50', p: 2, borderRadius: 1 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">Unique Data (Deduplicated)</Typography>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {(repositoryInfo.data.cache.stats.unique_size / (1024 * 1024)).toFixed(2)} MB
+                        {(repositoryInfo.data.info.cache.stats.unique_size / (1024 * 1024)).toFixed(2)} MB
                       </Typography>
                     </Box>
                     <Divider />
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">Unique Compressed Size</Typography>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {(repositoryInfo.data.cache.stats.unique_csize / (1024 * 1024)).toFixed(2)} MB
+                        {(repositoryInfo.data.info.cache.stats.unique_csize / (1024 * 1024)).toFixed(2)} MB
                       </Typography>
                     </Box>
                     <Divider />
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">Total Data Size</Typography>
                       <Typography variant="body2">
-                        {(repositoryInfo.data.cache.stats.total_size / (1024 * 1024)).toFixed(2)} MB
+                        {(repositoryInfo.data.info.cache.stats.total_size / (1024 * 1024)).toFixed(2)} MB
                       </Typography>
                     </Box>
                     <Divider />
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">Total Chunks</Typography>
                       <Typography variant="body2">
-                        {repositoryInfo.data.cache.stats.total_chunks?.toLocaleString()}
+                        {repositoryInfo.data.info.cache.stats.total_chunks?.toLocaleString()}
                       </Typography>
                     </Box>
                     <Divider />
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">Unique Chunks</Typography>
                       <Typography variant="body2">
-                        {repositoryInfo.data.cache.stats.total_unique_chunks?.toLocaleString()}
+                        {repositoryInfo.data.info.cache.stats.total_unique_chunks?.toLocaleString()}
                       </Typography>
                     </Box>
                   </Stack>
