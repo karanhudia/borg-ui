@@ -226,18 +226,81 @@ class BackupService:
                             break
 
                 async def stream_logs():
-                    """Stream log output from process"""
+                    """Stream log output from process and parse JSON progress"""
                     nonlocal cancelled
                     try:
                         async for line in process.stdout:
                             if cancelled:
                                 break
 
-                            line_str = line.decode('utf-8', errors='replace')
+                            line_str = line.decode('utf-8', errors='replace').strip()
                             timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-                            log_line = f"[{timestamp}] {line_str}"
+                            log_line = f"[{timestamp}] {line_str}\n"
                             f.write(log_line)
                             f.flush()  # Force write to disk immediately
+
+                            # Try to parse JSON progress messages
+                            try:
+                                if line_str.startswith('{') and line_str.endswith('}'):
+                                    json_msg = json.loads(line_str)
+                                    msg_type = json_msg.get('type')
+
+                                    # Parse archive_progress messages for real-time stats
+                                    if msg_type == 'archive_progress':
+                                        job.original_size = json_msg.get('original_size', 0)
+                                        job.compressed_size = json_msg.get('compressed_size', 0)
+                                        job.deduplicated_size = json_msg.get('deduplicated_size', 0)
+                                        job.nfiles = json_msg.get('nfiles', 0)
+                                        job.current_file = json_msg.get('path', '')
+                                        db.commit()
+                                        logger.debug("Updated progress from archive_progress",
+                                                   job_id=job_id,
+                                                   nfiles=job.nfiles,
+                                                   current_file=job.current_file)
+
+                                    # Parse progress_percent messages for percentage
+                                    elif msg_type == 'progress_percent':
+                                        finished = json_msg.get('finished', False)
+                                        if finished:
+                                            job.progress_percent = 100
+                                        else:
+                                            current = json_msg.get('current', 0)
+                                            total = json_msg.get('total', 1)
+                                            if total > 0:
+                                                job.progress_percent = int((current / total) * 100)
+                                        db.commit()
+                                        logger.debug("Updated progress percent",
+                                                   job_id=job_id,
+                                                   percent=job.progress_percent)
+
+                                    # Parse file_status messages for current file
+                                    elif msg_type == 'file_status':
+                                        status = json_msg.get('status', '')
+                                        path = json_msg.get('path', '')
+                                        if path:
+                                            job.current_file = f"[{status}] {path}"
+                                            db.commit()
+
+                                    # Parse log_message for errors with msgid
+                                    elif msg_type == 'log_message':
+                                        levelname = json_msg.get('levelname', '')
+                                        message = json_msg.get('message', '')
+                                        msgid = json_msg.get('msgid', '')
+                                        if levelname in ['ERROR', 'CRITICAL'] and msgid:
+                                            logger.error("Borg error detected",
+                                                       job_id=job_id,
+                                                       msgid=msgid,
+                                                       message=message)
+
+                            except json.JSONDecodeError:
+                                # Not a JSON line, just regular log output
+                                pass
+                            except Exception as e:
+                                logger.warning("Failed to parse JSON progress",
+                                             job_id=job_id,
+                                             error=str(e),
+                                             line=line_str[:100])
+
                     except asyncio.CancelledError:
                         logger.info("Log streaming cancelled", job_id=job_id)
                         raise

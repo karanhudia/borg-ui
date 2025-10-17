@@ -59,6 +59,14 @@ interface BackupJob {
   total_size?: string
   processed_size?: string
   error_message?: string
+  progress_details?: {
+    original_size: number
+    compressed_size: number
+    deduplicated_size: number
+    nfiles: number
+    current_file: string
+    progress_percent: number
+  }
 }
 
 const Backup: React.FC = () => {
@@ -595,37 +603,64 @@ const Backup: React.FC = () => {
                   <Box sx={{ mb: 2 }}>
                     <Stack direction="row" justifyContent="space-between" sx={{ mb: 1 }}>
                       <Typography variant="body2" color="text.secondary">
-                        Progress: {job.progress || 0}%
+                        Progress: {job.progress_details?.progress_percent || job.progress || 0}%
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
                         {formatTimeRange(job.started_at, job.completed_at, job.status)}
                       </Typography>
                     </Stack>
                     <LinearProgress
-                      variant="determinate"
-                      value={job.progress || 0}
+                      variant={job.progress_details?.progress_percent ? "determinate" : "indeterminate"}
+                      value={job.progress_details?.progress_percent || job.progress || 0}
                       sx={{ height: 8, borderRadius: 1 }}
                     />
                   </Box>
 
-                  {/* Job Details */}
-                  <Stack direction="row" spacing={2}>
-                    <Box sx={{ flex: 1 }}>
+                  {/* Current File Being Processed */}
+                  {job.progress_details?.current_file && (
+                    <Alert severity="info" sx={{ mb: 2, py: 0.5 }}>
+                      <Typography variant="caption" fontWeight={500}>
+                        Current File:
+                      </Typography>
+                      <Typography variant="caption" sx={{ fontFamily: 'monospace', display: 'block', mt: 0.5, wordBreak: 'break-all' }}>
+                        {job.progress_details.current_file}
+                      </Typography>
+                    </Alert>
+                  )}
+
+                  {/* Job Details with Detailed Stats */}
+                  <Stack direction="row" spacing={2} flexWrap="wrap">
+                    <Box sx={{ flex: 1, minWidth: 150 }}>
                       <Typography variant="body2" color="text.secondary">
-                        Files:
+                        Files Processed:
                       </Typography>
                       <Typography variant="body2" fontWeight={500}>
-                        {job.processed_files?.toLocaleString() || 'N/A'}
+                        {job.progress_details?.nfiles?.toLocaleString() || job.processed_files?.toLocaleString() || '0'}
                         {job.total_files && ` / ${job.total_files.toLocaleString()}`}
                       </Typography>
                     </Box>
-                    <Box sx={{ flex: 1 }}>
+                    <Box sx={{ flex: 1, minWidth: 150 }}>
                       <Typography variant="body2" color="text.secondary">
-                        Size:
+                        Original Size:
                       </Typography>
                       <Typography variant="body2" fontWeight={500}>
-                        {formatFileSize(job.processed_size)}
-                        {job.total_size && ` / ${formatFileSize(job.total_size)}`}
+                        {job.progress_details?.original_size ? formatBytes(job.progress_details.original_size) : formatFileSize(job.processed_size)}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ flex: 1, minWidth: 150 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        Compressed:
+                      </Typography>
+                      <Typography variant="body2" fontWeight={500}>
+                        {job.progress_details?.compressed_size ? formatBytes(job.progress_details.compressed_size) : 'N/A'}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ flex: 1, minWidth: 150 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        Deduplicated:
+                      </Typography>
+                      <Typography variant="body2" fontWeight={500} color="success.main">
+                        {job.progress_details?.deduplicated_size ? formatBytes(job.progress_details.deduplicated_size) : 'N/A'}
                       </Typography>
                     </Box>
                   </Stack>

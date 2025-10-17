@@ -112,4 +112,13 @@ class BackupJob(Base):
     error_message = Column(Text, nullable=True)
     logs = Column(Text, nullable=True)  # Full logs (stored after completion)
     log_file_path = Column(String, nullable=True)  # Path to streaming log file
+
+    # Detailed progress fields from Borg JSON output
+    original_size = Column(Integer, default=0)  # Original uncompressed size in bytes
+    compressed_size = Column(Integer, default=0)  # Compressed size in bytes
+    deduplicated_size = Column(Integer, default=0)  # Deduplicated size in bytes
+    nfiles = Column(Integer, default=0)  # Number of files processed
+    current_file = Column(Text, nullable=True)  # Current file being processed
+    progress_percent = Column(Integer, default=0)  # Progress percentage
+
     created_at = Column(DateTime, default=datetime.utcnow) 

@@ -71,7 +71,7 @@ async def get_all_backup_jobs(
     db: Session = Depends(get_db),
     limit: int = 50
 ):
-    """Get all backup jobs (most recent first)"""
+    """Get all backup jobs (most recent first) with progress details"""
     try:
         jobs = db.query(BackupJob).order_by(BackupJob.id.desc()).limit(limit).all()
 
@@ -84,7 +84,15 @@ async def get_all_backup_jobs(
                     "started_at": job.started_at.isoformat() if job.started_at else None,
                     "completed_at": job.completed_at.isoformat() if job.completed_at else None,
                     "progress": job.progress,
-                    "error_message": job.error_message
+                    "error_message": job.error_message,
+                    "progress_details": {
+                        "original_size": job.original_size or 0,
+                        "compressed_size": job.compressed_size or 0,
+                        "deduplicated_size": job.deduplicated_size or 0,
+                        "nfiles": job.nfiles or 0,
+                        "current_file": job.current_file or "",
+                        "progress_percent": job.progress_percent or 0
+                    }
                 }
                 for job in jobs
             ]
@@ -102,7 +110,7 @@ async def get_backup_status(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get backup job status"""
+    """Get backup job status with detailed progress information"""
     try:
         job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
         if not job:
@@ -119,7 +127,16 @@ async def get_backup_status(
             "completed_at": job.completed_at.isoformat() if job.completed_at else None,
             "progress": job.progress,
             "error_message": job.error_message,
-            "logs": job.logs
+            "logs": job.logs,
+            # Detailed progress from JSON parsing
+            "progress_details": {
+                "original_size": job.original_size or 0,
+                "compressed_size": job.compressed_size or 0,
+                "deduplicated_size": job.deduplicated_size or 0,
+                "nfiles": job.nfiles or 0,
+                "current_file": job.current_file or "",
+                "progress_percent": job.progress_percent or 0
+            }
         }
     except Exception as e:
         logger.error("Failed to get backup status", error=str(e))
