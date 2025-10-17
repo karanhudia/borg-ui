@@ -1230,55 +1230,58 @@ export default function Repositories() {
               </Box>
 
               {/* Storage Statistics */}
-              {repositoryInfo.data.cache?.stats && (
-                <Box>
-                  <Typography variant="h6" gutterBottom>
-                    Storage Statistics
-                  </Typography>
+              <Box>
+                <Typography variant="h6" gutterBottom>
+                  Storage Statistics
+                </Typography>
+                {repositoryInfo.data.cache?.stats && repositoryInfo.data.cache.stats.unique_size > 0 ? (
                   <Stack spacing={1.5} sx={{ bgcolor: 'grey.50', p: 2, borderRadius: 1 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">Unique Data (Deduplicated)</Typography>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {repositoryInfo.data.cache.stats.unique_size
-                          ? `${(repositoryInfo.data.cache.stats.unique_size / (1024 * 1024)).toFixed(2)} MB`
-                          : '0 MB'}
+                        {(repositoryInfo.data.cache.stats.unique_size / (1024 * 1024)).toFixed(2)} MB
                       </Typography>
                     </Box>
                     <Divider />
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">Unique Compressed Size</Typography>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {repositoryInfo.data.cache.stats.unique_csize
-                          ? `${(repositoryInfo.data.cache.stats.unique_csize / (1024 * 1024)).toFixed(2)} MB`
-                          : '0 MB'}
+                        {(repositoryInfo.data.cache.stats.unique_csize / (1024 * 1024)).toFixed(2)} MB
                       </Typography>
                     </Box>
                     <Divider />
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">Total Data Size</Typography>
                       <Typography variant="body2">
-                        {repositoryInfo.data.cache.stats.total_size
-                          ? `${(repositoryInfo.data.cache.stats.total_size / (1024 * 1024)).toFixed(2)} MB`
-                          : '0 MB'}
+                        {(repositoryInfo.data.cache.stats.total_size / (1024 * 1024)).toFixed(2)} MB
                       </Typography>
                     </Box>
                     <Divider />
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">Total Chunks</Typography>
                       <Typography variant="body2">
-                        {repositoryInfo.data.cache.stats.total_chunks?.toLocaleString() || '0'}
+                        {repositoryInfo.data.cache.stats.total_chunks?.toLocaleString()}
                       </Typography>
                     </Box>
                     <Divider />
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">Unique Chunks</Typography>
                       <Typography variant="body2">
-                        {repositoryInfo.data.cache.stats.total_unique_chunks?.toLocaleString() || '0'}
+                        {repositoryInfo.data.cache.stats.total_unique_chunks?.toLocaleString()}
                       </Typography>
                     </Box>
                   </Stack>
-                </Box>
-              )}
+                ) : (
+                  <Alert severity="info" sx={{ bgcolor: 'grey.50' }}>
+                    <Typography variant="body2" gutterBottom>
+                      <strong>No backups yet</strong>
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      This repository has been initialized but contains no archives. Storage statistics will appear here after you create your first backup.
+                    </Typography>
+                  </Alert>
+                )}
+              </Box>
 
               <Alert severity="info" sx={{ mt: 1 }}>
                 This information is retrieved from <code>borg info --json</code> command
