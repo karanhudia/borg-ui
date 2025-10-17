@@ -315,28 +315,41 @@ const Backup: React.FC = () => {
       {/* Manual Backup Control */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Typography variant="h6" fontWeight={600} gutterBottom>
-            Manual Backup
-          </Typography>
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+            <Play size={20} color="#2e7d32" />
+            <Typography variant="h6" fontWeight={600}>
+              Manual Backup
+            </Typography>
+          </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Start a new backup job
+            Select a repository and start a backup job
           </Typography>
 
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'flex-end' }}>
-            <FormControl fullWidth>
-              <InputLabel>Repository</InputLabel>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="stretch">
+            <FormControl fullWidth sx={{ minWidth: { xs: '100%', sm: 300 } }}>
+              <InputLabel id="repository-select-label">Repository</InputLabel>
               <Select
+                labelId="repository-select-label"
+                id="repository-select"
                 value={selectedRepository}
                 onChange={(e) => setSelectedRepository(e.target.value)}
                 label="Repository"
                 disabled={loadingRepositories}
               >
-                <MenuItem value="">
+                <MenuItem value="" disabled>
                   {loadingRepositories ? 'Loading repositories...' : 'Select a repository...'}
                 </MenuItem>
                 {repositoriesData?.data?.repositories?.map((repo: any) => (
                   <MenuItem key={repo.id} value={repo.path}>
-                    {repo.name} ({repo.path})
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Database size={16} />
+                      <Box>
+                        <Typography variant="body2" fontWeight={500}>{repo.name}</Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                          {repo.path}
+                        </Typography>
+                      </Box>
+                    </Stack>
                   </MenuItem>
                 ))}
               </Select>
@@ -345,14 +358,38 @@ const Backup: React.FC = () => {
             <Button
               variant="contained"
               color="success"
+              size="large"
               startIcon={startBackupMutation.isLoading ? <CircularProgress size={16} color="inherit" /> : <Play size={18} />}
               onClick={handleStartBackup}
               disabled={startBackupMutation.isLoading || !selectedRepository}
-              sx={{ minWidth: 180 }}
+              sx={{
+                minWidth: { xs: '100%', sm: 180 },
+                height: { xs: 48, sm: 56 },
+                fontWeight: 600
+              }}
             >
               {startBackupMutation.isLoading ? 'Starting...' : 'Start Backup'}
             </Button>
           </Stack>
+
+          {!selectedRepository && !loadingRepositories && repositoriesData?.data?.repositories?.length > 0 && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              <Typography variant="body2">
+                Choose a repository above to view backup details and start a backup operation
+              </Typography>
+            </Alert>
+          )}
+
+          {repositoriesData?.data?.repositories?.length === 0 && !loadingRepositories && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              <Typography variant="body2" fontWeight={500} gutterBottom>
+                No Repositories Found
+              </Typography>
+              <Typography variant="body2">
+                Create a repository in the Repositories page before starting a backup
+              </Typography>
+            </Alert>
+          )}
         </CardContent>
       </Card>
 
@@ -674,9 +711,12 @@ const Backup: React.FC = () => {
       {/* Recent Jobs */}
       <Card>
         <CardContent>
-          <Typography variant="h6" fontWeight={600} gutterBottom>
-            Recent Jobs
-          </Typography>
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
+            <Clock size={20} color="rgba(0,0,0,0.6)" />
+            <Typography variant="h6" fontWeight={600}>
+              Recent Jobs
+            </Typography>
+          </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
             History of backup operations
           </Typography>
@@ -696,75 +736,108 @@ const Backup: React.FC = () => {
               </Typography>
             </Box>
           ) : (
-            <TableContainer>
+            <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
               <Table>
                 <TableHead>
-                  <TableRow>
-                    <TableCell>Job ID</TableCell>
-                    <TableCell>Repository</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Started</TableCell>
-                    <TableCell>Duration</TableCell>
-                    <TableCell>Progress</TableCell>
-                    <TableCell>Actions</TableCell>
+                  <TableRow sx={{ bgcolor: 'grey.50' }}>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Job ID</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Repository</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Status</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Started</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Duration</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Progress</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {recentJobs.map((job: BackupJob) => (
-                    <TableRow key={job.id} hover>
+                    <TableRow
+                      key={job.id}
+                      hover
+                      sx={{
+                        '&:last-child td': { borderBottom: 0 },
+                        cursor: 'pointer',
+                        transition: 'background-color 0.2s'
+                      }}
+                    >
                       <TableCell>
-                        <Typography variant="body2" fontWeight={500}>
-                          {job.id}
+                        <Typography variant="body2" fontWeight={600} color="primary">
+                          #{job.id}
                         </Typography>
                       </TableCell>
                       <TableCell>
                         <Stack direction="row" spacing={1} alignItems="center">
                           <HardDrive size={16} color="rgba(0,0,0,0.4)" />
-                          <Typography variant="body2">{job.repository}</Typography>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              maxWidth: 300,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            {job.repository}
+                          </Typography>
                         </Stack>
                       </TableCell>
                       <TableCell>
                         <Chip
                           icon={getStatusIcon(job.status)}
-                          label={job.status}
+                          label={job.status.charAt(0).toUpperCase() + job.status.slice(1)}
                           color={getStatusColor(job.status)}
                           size="small"
+                          sx={{ fontWeight: 500 }}
                         />
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2">
-                          {new Date(job.started_at).toLocaleString()}
+                        <Typography variant="body2" color="text.secondary">
+                          {new Date(job.started_at).toLocaleDateString()}<br />
+                          <Typography component="span" variant="caption" color="text.secondary">
+                            {new Date(job.started_at).toLocaleTimeString()}
+                          </Typography>
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2">
+                        <Typography variant="body2" color="text.secondary">
                           {formatTimeRange(job.started_at, job.completed_at, job.status)}
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Stack direction="row" spacing={1} alignItems="center">
-                          <Box sx={{ width: 60 }}>
+                        <Stack direction="row" spacing={1.5} alignItems="center">
+                          <Box sx={{ width: 80 }}>
                             <LinearProgress
                               variant="determinate"
                               value={job.progress}
-                              sx={{ height: 6, borderRadius: 1 }}
+                              sx={{
+                                height: 8,
+                                borderRadius: 1,
+                                bgcolor: 'grey.200'
+                              }}
+                              color={job.status === 'completed' ? 'success' : job.status === 'failed' ? 'error' : 'primary'}
                             />
                           </Box>
-                          <Typography variant="body2">{job.progress}%</Typography>
+                          <Typography variant="body2" fontWeight={500} sx={{ minWidth: 40 }}>
+                            {job.progress}%
+                          </Typography>
                         </Stack>
                       </TableCell>
                       <TableCell>
                         <Stack direction="row" spacing={1}>
                           <Button
                             size="small"
+                            variant="outlined"
+                            startIcon={<FileText size={14} />}
                             onClick={() => setShowJobDetails(showJobDetails === job.id ? null : job.id)}
                           >
-                            {showJobDetails === job.id ? 'Hide' : 'Details'}
+                            {showJobDetails === job.id ? 'Hide' : 'Logs'}
                           </Button>
                           {job.status === 'running' && (
                             <Button
                               size="small"
+                              variant="outlined"
                               color="error"
+                              startIcon={<Square size={14} />}
                               onClick={() => handleCancelBackup(job.id)}
                             >
                               Cancel
