@@ -1190,94 +1190,99 @@ export default function Repositories() {
               </Typography>
             </Box>
           ) : repositoryInfo?.data ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-              <Alert severity="info">
-                This information comes from <code>borg info --json</code>
-              </Alert>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 1 }}>
+              {/* Repository Details */}
+              <Box>
+                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Storage /> Repository Details
+                </Typography>
+                <Stack spacing={1.5} sx={{ bgcolor: 'grey.50', p: 2, borderRadius: 1 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">Location</Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all', maxWidth: '60%', textAlign: 'right' }}>
+                      {repositoryInfo.data.repository?.location || 'N/A'}
+                    </Typography>
+                  </Box>
+                  <Divider />
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">Repository ID</Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                      {repositoryInfo.data.repository?.id?.substring(0, 16) || 'N/A'}...
+                    </Typography>
+                  </Box>
+                  <Divider />
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">Last Modified</Typography>
+                    <Typography variant="body2">
+                      {repositoryInfo.data.repository?.last_modified
+                        ? new Date(repositoryInfo.data.repository.last_modified).toLocaleString()
+                        : 'N/A'}
+                    </Typography>
+                  </Box>
+                  <Divider />
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">Encryption Mode</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      {repositoryInfo.data.encryption?.mode || 'N/A'}
+                    </Typography>
+                  </Box>
+                </Stack>
+              </Box>
 
-              {/* Repository Info */}
-              {repositoryInfo.data.repository && (
-                <Box>
-                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Storage /> Repository
-                  </Typography>
-                  <Stack spacing={1.5} sx={{ bgcolor: 'grey.50', p: 2, borderRadius: 1 }}>
-                    {Object.entries(repositoryInfo.data.repository).map(([key, value]) => (
-                      <Box key={key} sx={{ display: 'flex', flexDirection: 'column' }}>
-                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
-                          {key.replace(/_/g, ' ')}
-                        </Typography>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
-                          {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
-                        </Typography>
-                      </Box>
-                    ))}
-                  </Stack>
-                </Box>
-              )}
-
-              {/* Cache Info */}
-              {repositoryInfo.data.cache && (
+              {/* Storage Statistics */}
+              {repositoryInfo.data.cache?.stats && (
                 <Box>
                   <Typography variant="h6" gutterBottom>
-                    Cache
+                    Storage Statistics
                   </Typography>
                   <Stack spacing={1.5} sx={{ bgcolor: 'grey.50', p: 2, borderRadius: 1 }}>
-                    {Object.entries(repositoryInfo.data.cache).map(([key, value]) => (
-                      <Box key={key} sx={{ display: 'flex', flexDirection: 'column' }}>
-                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
-                          {key.replace(/_/g, ' ')}
-                        </Typography>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
-                          {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
-                        </Typography>
-                      </Box>
-                    ))}
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2" color="text.secondary">Unique Data (Deduplicated)</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {repositoryInfo.data.cache.stats.unique_size
+                          ? `${(repositoryInfo.data.cache.stats.unique_size / (1024 * 1024)).toFixed(2)} MB`
+                          : '0 MB'}
+                      </Typography>
+                    </Box>
+                    <Divider />
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2" color="text.secondary">Unique Compressed Size</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {repositoryInfo.data.cache.stats.unique_csize
+                          ? `${(repositoryInfo.data.cache.stats.unique_csize / (1024 * 1024)).toFixed(2)} MB`
+                          : '0 MB'}
+                      </Typography>
+                    </Box>
+                    <Divider />
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2" color="text.secondary">Total Data Size</Typography>
+                      <Typography variant="body2">
+                        {repositoryInfo.data.cache.stats.total_size
+                          ? `${(repositoryInfo.data.cache.stats.total_size / (1024 * 1024)).toFixed(2)} MB`
+                          : '0 MB'}
+                      </Typography>
+                    </Box>
+                    <Divider />
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2" color="text.secondary">Total Chunks</Typography>
+                      <Typography variant="body2">
+                        {repositoryInfo.data.cache.stats.total_chunks?.toLocaleString() || '0'}
+                      </Typography>
+                    </Box>
+                    <Divider />
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2" color="text.secondary">Unique Chunks</Typography>
+                      <Typography variant="body2">
+                        {repositoryInfo.data.cache.stats.total_unique_chunks?.toLocaleString() || '0'}
+                      </Typography>
+                    </Box>
                   </Stack>
                 </Box>
               )}
 
-              {/* Encryption Info */}
-              {repositoryInfo.data.encryption && (
-                <Box>
-                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Shield /> Encryption
-                  </Typography>
-                  <Stack spacing={1.5} sx={{ bgcolor: 'grey.50', p: 2, borderRadius: 1 }}>
-                    {Object.entries(repositoryInfo.data.encryption).map(([key, value]) => (
-                      <Box key={key} sx={{ display: 'flex', flexDirection: 'column' }}>
-                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
-                          {key.replace(/_/g, ' ')}
-                        </Typography>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
-                          {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
-                        </Typography>
-                      </Box>
-                    ))}
-                  </Stack>
-                </Box>
-              )}
-
-              {/* Raw JSON (collapsible) */}
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                  Raw JSON Output
-                </Typography>
-                <Box sx={{
-                  bgcolor: 'grey.900',
-                  color: 'grey.100',
-                  p: 2,
-                  borderRadius: 1,
-                  fontFamily: 'monospace',
-                  fontSize: '0.75rem',
-                  maxHeight: 300,
-                  overflow: 'auto'
-                }}>
-                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
-                    {JSON.stringify(repositoryInfo.data, null, 2)}
-                  </pre>
-                </Box>
-              </Box>
+              <Alert severity="info" sx={{ mt: 1 }}>
+                This information is retrieved from <code>borg info --json</code> command
+              </Alert>
             </Box>
           ) : (
             <Alert severity="error">
