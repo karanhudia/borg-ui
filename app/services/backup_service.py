@@ -127,6 +127,15 @@ class BackupService:
             env['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes'
             env['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes'
 
+            # Add SSH options to disable host key checking for remote repos
+            # This allows automatic connection to new hosts without manual intervention
+            ssh_opts = [
+                "-o", "StrictHostKeyChecking=no",  # Don't check host keys
+                "-o", "UserKnownHostsFile=/dev/null",  # Don't save host keys
+                "-o", "LogLevel=ERROR"  # Reduce SSH verbosity
+            ]
+            env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+
             # Look up repository record to get passphrase, source directories, and exclude patterns
             source_paths = ["/data"]  # Default backup path
             exclude_patterns = []  # Default no exclusions

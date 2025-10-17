@@ -34,16 +34,33 @@ class BorgInterface:
             logger.error("Borg not available", error=str(e))
             raise RuntimeError(f"Borg not available: {str(e)}")
     
-    async def _execute_command(self, cmd: List[str], timeout: int = 3600, cwd: str = None) -> Dict:
+    async def _execute_command(self, cmd: List[str], timeout: int = 3600, cwd: str = None, env: dict = None) -> Dict:
         """Execute a command with real-time output capture"""
         logger.info("Executing command", command=" ".join(cmd), cwd=cwd)
+
+        # Set up environment with SSH options for remote repositories
+        exec_env = os.environ.copy()
+
+        # Add SSH options to disable host key checking for remote repos
+        # This allows automatic connection to new hosts without manual intervention
+        ssh_opts = [
+            "-o", "StrictHostKeyChecking=no",  # Don't check host keys
+            "-o", "UserKnownHostsFile=/dev/null",  # Don't save host keys
+            "-o", "LogLevel=ERROR"  # Reduce SSH verbosity
+        ]
+        exec_env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+
+        # Merge any additional environment variables
+        if env:
+            exec_env.update(env)
 
         try:
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=cwd
+                cwd=cwd,
+                env=exec_env
             )
             
             stdout, stderr = await asyncio.wait_for(
