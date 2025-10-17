@@ -995,6 +995,93 @@ async def get_archive_info(
         logger.error("Failed to get archive info", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to get archive info: {str(e)}")
 
+@router.get("/{repo_id}/archives/{archive_name}/files")
+async def list_archive_files(
+    repo_id: int,
+    archive_name: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    limit: Optional[int] = Query(None, description="Limit number of files returned")
+):
+    """List files in an archive using borg list repo::archive"""
+    try:
+        repository = db.query(Repository).filter(Repository.id == repo_id).first()
+        if not repository:
+            raise HTTPException(status_code=404, detail="Repository not found")
+
+        # Build borg list command with repo::archive format
+        archive_path = f"{repository.path}::{archive_name}"
+        cmd = ["borg", "list"]
+
+        # Add remote-path if specified
+        if repository.remote_path:
+            cmd.extend(["--remote-path", repository.remote_path])
+
+        # Use --json-lines for file listing
+        cmd.extend(["--json-lines", archive_path])
+
+        # Set up environment
+        env = os.environ.copy()
+        if repository.passphrase:
+            env["BORG_PASSPHRASE"] = repository.passphrase
+        # Allow non-interactive access to unencrypted repositories
+        env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+
+        # Execute command
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env
+        )
+
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
+
+        if process.returncode != 0:
+            error_msg = stderr.decode() if stderr else "Unknown error"
+            logger.error("Failed to list archive files", archive_name=archive_name, error=error_msg)
+            raise HTTPException(status_code=500, detail=f"Failed to list archive files: {error_msg}")
+
+        # Parse JSON-lines output (one JSON object per line)
+        files = []
+        for line in stdout.decode().strip().split('\n'):
+            if line:
+                try:
+                    file_obj = json.loads(line)
+                    files.append({
+                        "path": file_obj.get("path"),
+                        "type": file_obj.get("type"),  # 'd' for directory, '-' for file
+                        "mode": file_obj.get("mode"),
+                        "user": file_obj.get("user"),
+                        "group": file_obj.get("group"),
+                        "size": file_obj.get("size"),
+                        "mtime": file_obj.get("mtime"),
+                        "healthy": file_obj.get("healthy", True)
+                    })
+                except json.JSONDecodeError:
+                    continue
+
+        # Apply limit if specified
+        if limit and limit > 0:
+            files = files[:limit]
+
+        logger.info("Archive files listed successfully",
+                   repo_id=repo_id,
+                   archive_name=archive_name,
+                   file_count=len(files))
+
+        return {
+            "success": True,
+            "files": files,
+            "total_count": len(files),
+            "archive_name": archive_name
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to list archive files", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to list archive files: {str(e)}")
+
 async def get_repository_stats(path: str) -> Dict[str, Any]:
     """Get repository statistics"""
     try:

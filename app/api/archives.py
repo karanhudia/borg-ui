@@ -39,9 +39,11 @@ async def list_archives(
 async def get_archive_info(
     repository: str,
     archive_id: str,
+    include_files: bool = False,
+    file_limit: int = 1000,
     current_user: User = Depends(get_current_user)
 ):
-    """Get detailed information about a specific archive including command line and metadata"""
+    """Get detailed information about a specific archive including command line, metadata, and optionally file listing"""
     try:
         result = await borg.info_archive(repository, archive_id)
         if not result["success"]:
@@ -84,6 +86,39 @@ async def get_archive_info(
                 "encryption": archive_data.get("encryption", {}),
                 "cache": archive_data.get("cache", {}),
             }
+
+            # Optionally fetch file listing
+            if include_files:
+                list_result = await borg.list_archive_contents(repository, archive_id)
+                if list_result["success"]:
+                    try:
+                        # Parse JSON-lines output
+                        files = []
+                        for line in list_result["stdout"].strip().split('\n'):
+                            if line and len(files) < file_limit:
+                                try:
+                                    file_obj = json.loads(line)
+                                    files.append({
+                                        "path": file_obj.get("path"),
+                                        "type": file_obj.get("type"),
+                                        "mode": file_obj.get("mode"),
+                                        "user": file_obj.get("user"),
+                                        "group": file_obj.get("group"),
+                                        "size": file_obj.get("size"),
+                                        "mtime": file_obj.get("mtime"),
+                                        "healthy": file_obj.get("healthy", True)
+                                    })
+                                except json.JSONDecodeError:
+                                    continue
+                        enhanced_info["files"] = files
+                        enhanced_info["file_count"] = len(files)
+                    except Exception as e:
+                        logger.warning("Failed to parse file listing", error=str(e))
+                        enhanced_info["files"] = []
+                        enhanced_info["file_count"] = 0
+                else:
+                    enhanced_info["files"] = []
+                    enhanced_info["file_count"] = 0
 
             return {"info": enhanced_info}
 

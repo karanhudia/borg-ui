@@ -540,6 +540,40 @@ const Archives: React.FC = () => {
                       </TableContainer>
                     </Box>
                   )}
+
+                  {/* File Listing */}
+                  {archiveInfo?.data?.archive?.files && archiveInfo.data.archive.files.length > 0 && (
+                    <Box>
+                      <Typography variant="subtitle2" fontWeight={600} color="text.secondary" sx={{ mb: 2 }}>
+                        FILE LISTING ({archiveInfo.data.archive.file_count || archiveInfo.data.archive.files.length} files)
+                      </Typography>
+                      <Alert severity="info" sx={{ mb: 2 }}>
+                        Showing first {archiveInfo.data.archive.files.length} files from this archive
+                      </Alert>
+                      <TableContainer sx={{ maxHeight: 400 }}>
+                        <Table size="small" stickyHeader>
+                          <TableBody>
+                            {archiveInfo.data.archive.files.map((file: any, index: number) => (
+                              <TableRow key={index}>
+                                <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem', py: 0.5 }}>
+                                  {file.type === 'd' ? '📁' : '📄'}
+                                </TableCell>
+                                <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem', wordBreak: 'break-all', py: 0.5 }}>
+                                  {file.path}
+                                </TableCell>
+                                <TableCell sx={{ fontSize: '0.75rem', py: 0.5, whiteSpace: 'nowrap' }}>
+                                  {file.type === '-' ? formatBytes(file.size || 0) : '-'}
+                                </TableCell>
+                                <TableCell sx={{ fontSize: '0.75rem', py: 0.5, color: 'text.secondary', whiteSpace: 'nowrap' }}>
+                                  {file.mtime ? new Date(file.mtime).toLocaleDateString() : ''}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </Box>
+                  )}
                 </Stack>
               ) : (
                 <Box sx={{ textAlign: 'center', py: 8 }}>

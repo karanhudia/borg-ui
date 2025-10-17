@@ -180,8 +180,14 @@ export const repositoriesAPI = {
   getRepositoryStats: (id: number) => api.get(`/repositories/${id}/stats`),
   listRepositoryArchives: (id: number) => api.get(`/repositories/${id}/archives`),
   getRepositoryInfo: (id: number) => api.get(`/repositories/${id}/info`),
-  getArchiveInfo: (repoId: number, archiveName: string) =>
-    api.get(`/repositories/${repoId}/archives/${archiveName}/info`),
+  getArchiveInfo: (repoId: number, archiveName: string, includeFiles: boolean = true, fileLimit: number = 1000) =>
+    api.get(`/repositories/${repoId}/archives/${archiveName}/info`, {
+      params: { include_files: includeFiles, file_limit: fileLimit }
+    }),
+  getArchiveFiles: (repoId: number, archiveName: string, limit?: number) =>
+    api.get(`/repositories/${repoId}/archives/${archiveName}/files`, {
+      params: limit ? { limit } : undefined
+    }),
 }
 
 // SSH Keys API
