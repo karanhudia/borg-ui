@@ -225,11 +225,54 @@ const Backup: React.FC = () => {
     return size
   }
 
-  // Format timestamp
+  // Format timestamp to human-readable relative time
   const formatTimestamp = (timestamp: string) => {
     if (!timestamp) return 'Never'
-    const date = new Date(timestamp)
-    return date.toLocaleString()
+    // Assume backend returns UTC, convert to local
+    const date = new Date(timestamp + 'Z') // Add 'Z' to indicate UTC if not present
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffSecs = Math.floor(diffMs / 1000)
+    const diffMins = Math.floor(diffSecs / 60)
+    const diffHours = Math.floor(diffMins / 60)
+    const diffDays = Math.floor(diffHours / 24)
+
+    if (diffSecs < 60) return 'Just now'
+    if (diffMins < 60) return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`
+    if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`
+    if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`
+
+    // For older dates, show actual date
+    return date.toLocaleDateString() + ' at ' + date.toLocaleTimeString()
+  }
+
+  // Get ordinal suffix for day (1st, 2nd, 3rd, etc.)
+  const getOrdinalSuffix = (day: number) => {
+    if (day > 3 && day < 21) return 'th'
+    switch (day % 10) {
+      case 1: return 'st'
+      case 2: return 'nd'
+      case 3: return 'rd'
+      default: return 'th'
+    }
+  }
+
+  // Format date for table display (e.g., "16th October 2025, 2:40:55 PM")
+  const formatDateForTable = (timestamp: string) => {
+    if (!timestamp) return 'Never'
+    const date = new Date(timestamp + (timestamp.endsWith('Z') ? '' : 'Z'))
+
+    const day = date.getDate()
+    const month = date.toLocaleString('en-US', { month: 'long' })
+    const year = date.getFullYear()
+    const time = date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    })
+
+    return `${day}${getOrdinalSuffix(day)} ${month} ${year}, ${time}`
   }
 
   // Generate borg create command preview
@@ -253,20 +296,31 @@ const Backup: React.FC = () => {
     return `borg create --progress --stats --compression ${compression} ${excludeArgs}${selectedRepoData.path}::${archiveName} ${sourceDirs}`
   }
 
-  // Format time range (start and end only, no calculation)
+  // Format duration in human-readable form (e.g., "5 min 2 sec")
   const formatTimeRange = (startTime: string, endTime?: string, status?: string) => {
-    const start = new Date(startTime).toLocaleTimeString()
-
     if (status === 'running') {
-      return `Started: ${start}`
+      // Calculate duration from start to now
+      const start = new Date(startTime + (startTime.endsWith('Z') ? '' : 'Z'))
+      const now = new Date()
+      const diffSecs = Math.floor((now.getTime() - start.getTime()) / 1000)
+
+      if (diffSecs < 60) return `${diffSecs} sec`
+      const mins = Math.floor(diffSecs / 60)
+      const secs = diffSecs % 60
+      return `${mins} min ${secs} sec`
     }
 
-    if (!endTime) {
-      return `Started: ${start}`
-    }
+    if (!endTime) return 'N/A'
 
-    const end = new Date(endTime).toLocaleTimeString()
-    return `${start} - ${end}`
+    // Calculate duration from start to end
+    const start = new Date(startTime + (startTime.endsWith('Z') ? '' : 'Z'))
+    const end = new Date(endTime + (endTime.endsWith('Z') ? '' : 'Z'))
+    const diffSecs = Math.floor((end.getTime() - start.getTime()) / 1000)
+
+    if (diffSecs < 60) return `${diffSecs} sec`
+    const mins = Math.floor(diffSecs / 60)
+    const secs = diffSecs % 60
+    return `${mins} min ${secs} sec`
   }
 
   // Get repository name from path
@@ -811,10 +865,7 @@ const Backup: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2" color="text.secondary">
-                          {new Date(job.started_at).toLocaleDateString()}<br />
-                          <Typography component="span" variant="caption" color="text.secondary">
-                            {new Date(job.started_at).toLocaleTimeString()}
-                          </Typography>
+                          {formatDateForTable(job.started_at)}
                         </Typography>
                       </TableCell>
                       <TableCell>
