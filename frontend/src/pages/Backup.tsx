@@ -27,6 +27,7 @@ import {
   Paper,
   Alert,
   Divider,
+  Tooltip,
 } from '@mui/material'
 import {
   Play,
@@ -268,6 +269,12 @@ const Backup: React.FC = () => {
     return `${start} - ${end}`
   }
 
+  // Get repository name from path
+  const getRepositoryName = (path: string) => {
+    const repo = repositoriesData?.data?.repositories?.find((r: any) => r.path === path)
+    return repo?.name || path
+  }
+
   const runningJobs = backupStatus?.data?.jobs?.filter((job: BackupJob) => job.status === 'running') || []
   const recentJobs = backupStatus?.data?.jobs?.slice(0, 10) || []
   const selectedJob = recentJobs.find((j: BackupJob) => j.id === showJobDetails)
@@ -335,6 +342,7 @@ const Backup: React.FC = () => {
                 onChange={(e) => setSelectedRepository(e.target.value)}
                 label="Repository"
                 disabled={loadingRepositories}
+                sx={{ height: { xs: 48, sm: 56 } }}
               >
                 <MenuItem value="" disabled>
                   {loadingRepositories ? 'Loading repositories...' : 'Select a repository...'}
@@ -766,20 +774,31 @@ const Backup: React.FC = () => {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Stack direction="row" spacing={1} alignItems="center">
-                          <HardDrive size={16} color="rgba(0,0,0,0.4)" />
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              maxWidth: 300,
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap'
-                            }}
-                          >
-                            {job.repository}
-                          </Typography>
-                        </Stack>
+                        <Tooltip title={job.repository} placement="top" arrow>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <HardDrive size={16} color="rgba(0,0,0,0.4)" />
+                            <Box>
+                              <Typography variant="body2" fontWeight={500}>
+                                {getRepositoryName(job.repository)}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{
+                                  fontFamily: 'monospace',
+                                  fontSize: '0.7rem',
+                                  maxWidth: 250,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  display: 'block'
+                                }}
+                              >
+                                {job.repository}
+                              </Typography>
+                            </Box>
+                          </Stack>
+                        </Tooltip>
                       </TableCell>
                       <TableCell>
                         <Chip
