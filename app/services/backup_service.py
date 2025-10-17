@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.database.models import BackupJob, Repository
 from app.database.database import SessionLocal
 from app.config import settings
+from app.core.borg_errors import format_error_message, get_error_details
 
 logger = structlog.get_logger()
 
@@ -18,6 +19,7 @@ class BackupService:
         self.log_dir = Path("/data/logs")
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.running_processes = {}  # Track running backup processes by job_id
+        self.error_msgids = {}  # Track error message IDs by job_id
 
     async def _update_repository_stats(self, db: Session, repository_path: str, env: dict):
         """Update repository statistics after a successful backup"""
@@ -287,6 +289,14 @@ class BackupService:
                                         message = json_msg.get('message', '')
                                         msgid = json_msg.get('msgid', '')
                                         if levelname in ['ERROR', 'CRITICAL'] and msgid:
+                                            # Store error msgid for later use
+                                            if job_id not in self.error_msgids:
+                                                self.error_msgids[job_id] = []
+                                            self.error_msgids[job_id].append({
+                                                'msgid': msgid,
+                                                'message': message,
+                                                'levelname': levelname
+                                            })
                                             logger.error("Borg error detected",
                                                        job_id=job_id,
                                                        msgid=msgid,
@@ -344,7 +354,33 @@ class BackupService:
                     await self._update_repository_stats(db, repository, env)
                 else:
                     job.status = "failed"
-                    job.error_message = f"Backup failed with exit code {process.returncode}"
+                    # Build comprehensive error message with msgid details
+                    error_parts = []
+
+                    # Check if we have captured error msgids
+                    if job_id in self.error_msgids and self.error_msgids[job_id]:
+                        # Use the first critical error or the first error
+                        errors = self.error_msgids[job_id]
+                        primary_error = next((e for e in errors if e['levelname'] == 'CRITICAL'), errors[0])
+
+                        # Format error with details and suggestions
+                        formatted_error = format_error_message(
+                            msgid=primary_error['msgid'],
+                            original_message=primary_error['message'],
+                            exit_code=process.returncode
+                        )
+                        error_parts.append(formatted_error)
+
+                        # Add additional errors if present
+                        if len(errors) > 1:
+                            error_parts.append(f"\n\nAdditional errors encountered: {len(errors) - 1}")
+                    else:
+                        # Fallback to simple exit code message
+                        error_parts.append(format_error_message(
+                            exit_code=process.returncode
+                        ))
+
+                    job.error_message = "\n".join(error_parts)
 
                 if job.completed_at is None:
                     job.completed_at = datetime.utcnow()
@@ -367,6 +403,10 @@ class BackupService:
             if job_id in self.running_processes:
                 del self.running_processes[job_id]
                 logger.debug("Removed backup process from tracking", job_id=job_id)
+
+            # Clean up error msgids
+            if job_id in self.error_msgids:
+                del self.error_msgids[job_id]
 
             # Close the database session
             db.close()

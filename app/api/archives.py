@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import structlog
+import json
 from typing import List, Dict, Any
 
 from app.database.database import get_db
@@ -40,7 +41,7 @@ async def get_archive_info(
     archive_id: str,
     current_user: User = Depends(get_current_user)
 ):
-    """Get information about a specific archive"""
+    """Get detailed information about a specific archive including command line and metadata"""
     try:
         result = await borg.info_archive(repository, archive_id)
         if not result["success"]:
@@ -48,8 +49,49 @@ async def get_archive_info(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to get archive info: {result['stderr']}"
             )
-        
-        return {"info": result["stdout"]}
+
+        # Parse JSON output from Borg
+        try:
+            archive_data = json.loads(result["stdout"])
+
+            # Extract archive information
+            if "archives" in archive_data and len(archive_data["archives"]) > 0:
+                archive_info = archive_data["archives"][0]
+            else:
+                archive_info = {}
+
+            # Build enhanced response with all metadata
+            enhanced_info = {
+                "name": archive_info.get("name"),
+                "id": archive_info.get("id"),
+                "start": archive_info.get("start"),
+                "end": archive_info.get("end"),
+                "duration": archive_info.get("duration"),
+                "stats": archive_info.get("stats", {}),
+
+                # Creation metadata
+                "command_line": archive_info.get("command_line", []),
+                "hostname": archive_info.get("hostname"),
+                "username": archive_info.get("username"),
+
+                # Technical details
+                "chunker_params": archive_info.get("chunker_params"),
+                "limits": archive_info.get("limits", {}),
+                "comment": archive_info.get("comment", ""),
+
+                # Repository info
+                "repository": archive_data.get("repository", {}),
+                "encryption": archive_data.get("encryption", {}),
+                "cache": archive_data.get("cache", {}),
+            }
+
+            return {"info": enhanced_info}
+
+        except json.JSONDecodeError:
+            # Fallback to raw output if not JSON
+            logger.warning("Archive info is not JSON, returning raw output")
+            return {"info": result["stdout"]}
+
     except Exception as e:
         logger.error("Failed to get archive info", error=str(e))
         raise HTTPException(
