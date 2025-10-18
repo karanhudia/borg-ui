@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { sshKeysAPI } from '../services/api'
-import { formatDate as formatDateUtil, formatRelativeTime } from '../utils/dateUtils'
+import { formatDate as formatDateUtil } from '../utils/dateUtils'
 
 interface SSHConnection {
   id: number
