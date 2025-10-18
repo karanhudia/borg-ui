@@ -40,6 +40,7 @@ import {
 } from 'lucide-react'
 import { archivesAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
+import { formatDate, formatDurationString, formatBytes as formatBytesUtil } from '../utils/dateUtils'
 
 interface Repository {
   id: number
@@ -125,19 +126,6 @@ const Archives: React.FC = () => {
     archive.start.includes(searchQuery)
   ) || []
 
-  // Format timestamp
-  const formatTimestamp = (timestamp: string) => {
-    return new Date(timestamp).toLocaleString()
-  }
-
-  // Format bytes to human readable
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 B'
-    const k = 1024
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`
-  }
 
   // Get repositories from API response
   const repositories = repositoriesData?.data?.repositories || []
@@ -306,10 +294,10 @@ const Archives: React.FC = () => {
                               <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
                                 <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                   <Calendar size={14} />
-                                  {formatTimestamp(archive.start)}
+                                  {formatDate(archive.start)}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary">
-                                  {archive.time}
+                                  {formatDurationString(archive.time)}
                                 </Typography>
                               </Stack>
                             </Box>
@@ -370,7 +358,7 @@ const Archives: React.FC = () => {
                           </TableRow>
                           <TableRow>
                             <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Last Modified</TableCell>
-                            <TableCell>{repoInfo.last_modified ? formatTimestamp(repoInfo.last_modified) : 'N/A'}</TableCell>
+                            <TableCell>{repoInfo.last_modified ? formatDate(repoInfo.last_modified) : 'N/A'}</TableCell>
                           </TableRow>
                         </TableBody>
                       </Table>
@@ -388,11 +376,11 @@ const Archives: React.FC = () => {
                           <TableBody>
                             <TableRow>
                               <TableCell sx={{ fontWeight: 500, color: 'text.secondary', width: '30%' }}>Unique Size (Deduplicated)</TableCell>
-                              <TableCell>{formatBytes(cacheInfo.stats.unique_size || 0)}</TableCell>
+                              <TableCell>{formatBytesUtil(cacheInfo.stats.unique_size || 0)}</TableCell>
                             </TableRow>
                             <TableRow>
                               <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Compressed Size</TableCell>
-                              <TableCell>{formatBytes(cacheInfo.stats.unique_csize || 0)}</TableCell>
+                              <TableCell>{formatBytesUtil(cacheInfo.stats.unique_csize || 0)}</TableCell>
                             </TableRow>
                             <TableRow>
                               <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Total Chunks</TableCell>
@@ -483,11 +471,11 @@ const Archives: React.FC = () => {
                           </TableRow>
                           <TableRow>
                             <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Created</TableCell>
-                            <TableCell>{archiveInfo.data.archive.start ? formatTimestamp(archiveInfo.data.archive.start) : selectedArchive.start}</TableCell>
+                            <TableCell>{archiveInfo.data.archive.start ? formatDate(archiveInfo.data.archive.start) : formatDate(selectedArchive.start)}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Duration</TableCell>
-                            <TableCell>{archiveInfo.data.archive.duration || selectedArchive.time}</TableCell>
+                            <TableCell>{formatDurationString(archiveInfo.data.archive.duration || selectedArchive.time)}</TableCell>
                           </TableRow>
                           {archiveInfo.data.archive.command_line && (
                             <TableRow>
@@ -513,15 +501,15 @@ const Archives: React.FC = () => {
                           <TableBody>
                             <TableRow>
                               <TableCell sx={{ fontWeight: 500, color: 'text.secondary', width: '30%' }}>Original Size</TableCell>
-                              <TableCell>{formatBytes(archiveInfo.data.archive.stats.original_size || 0)}</TableCell>
+                              <TableCell>{formatBytesUtil(archiveInfo.data.archive.stats.original_size || 0)}</TableCell>
                             </TableRow>
                             <TableRow>
                               <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Compressed Size</TableCell>
-                              <TableCell>{formatBytes(archiveInfo.data.archive.stats.compressed_size || 0)}</TableCell>
+                              <TableCell>{formatBytesUtil(archiveInfo.data.archive.stats.compressed_size || 0)}</TableCell>
                             </TableRow>
                             <TableRow>
                               <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Deduplicated Size</TableCell>
-                              <TableCell>{formatBytes(archiveInfo.data.archive.stats.deduplicated_size || 0)}</TableCell>
+                              <TableCell>{formatBytesUtil(archiveInfo.data.archive.stats.deduplicated_size || 0)}</TableCell>
                             </TableRow>
                             <TableRow>
                               <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Total Files</TableCell>
@@ -562,7 +550,7 @@ const Archives: React.FC = () => {
                                   {file.path}
                                 </TableCell>
                                 <TableCell sx={{ fontSize: '0.75rem', py: 0.5, whiteSpace: 'nowrap' }}>
-                                  {file.type === '-' ? formatBytes(file.size || 0) : '-'}
+                                  {file.type === '-' ? formatBytesUtil(file.size || 0) : '-'}
                                 </TableCell>
                                 <TableCell sx={{ fontSize: '0.75rem', py: 0.5, color: 'text.secondary', whiteSpace: 'nowrap' }}>
                                   {file.mtime ? new Date(file.mtime).toLocaleDateString() : ''}

@@ -40,6 +40,7 @@ import {
 } from 'lucide-react'
 import { restoreAPI, archivesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
+import { formatDate } from '../utils/dateUtils'
 
 interface Archive {
   id: string
@@ -193,11 +194,6 @@ const Restore: React.FC = () => {
     return size
   }
 
-  // Format timestamp
-  const formatTimestamp = (timestamp: string) => {
-    return new Date(timestamp).toLocaleString()
-  }
-
   // Get breadcrumb parts
   const breadcrumbParts = currentPath ? ['root', ...currentPath.split('/')] : ['root']
 
@@ -329,7 +325,7 @@ const Restore: React.FC = () => {
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                   <Calendar size={12} />
-                                  {formatTimestamp(archive.timestamp)}
+                                  {formatDate(archive.timestamp)}
                                 </Typography>
                               </Box>
                             </Stack>

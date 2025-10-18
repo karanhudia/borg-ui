@@ -18,6 +18,7 @@ import {
   Clock,
   CheckCircle,
 } from 'lucide-react'
+import { formatDate } from '../utils/dateUtils'
 
 interface SystemMetrics {
   cpu_usage: number
@@ -299,7 +300,7 @@ export default function Dashboard() {
                     </Box>
                   </Stack>
                   <Typography variant="caption" color="text.secondary" sx={{ ml: 2, whiteSpace: 'nowrap' }}>
-                    {job.started_at ? new Date(job.started_at).toLocaleString() : 'N/A'}
+                    {job.started_at ? formatDate(job.started_at) : 'N/A'}
                   </Typography>
                 </Box>
               ))}

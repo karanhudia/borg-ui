@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { sshKeysAPI } from '../services/api'
+import { formatDate } from '../utils/dateUtils'
 
 interface SSHKey {
   id: number
@@ -373,10 +374,7 @@ const SSHKeys: React.FC = () => {
 //         return 'text-gray-600 bg-gray-100'
 //     }
 //   }
-// 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString()
-  }
+//
 
   const sshKeys = sshKeysData?.data?.ssh_keys || []
 

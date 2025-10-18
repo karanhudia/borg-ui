@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { sshKeysAPI } from '../services/api'
+import { formatDate as formatDateUtil, formatRelativeTime } from '../utils/dateUtils'
 
 interface SSHConnection {
   id: number
@@ -172,11 +173,6 @@ const Connections: React.FC = () => {
     }
   }
 
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return 'Never'
-    return new Date(dateString).toLocaleString()
-  }
-
   const getTimeSince = (dateString: string | null) => {
     if (!dateString) return 'Never'
     const date = new Date(dateString)
@@ -326,12 +322,12 @@ const Connections: React.FC = () => {
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
                         <label className="text-gray-500 block">Last Test</label>
-                        <p className="font-medium text-gray-900">{formatDate(connection.last_test)}</p>
+                        <p className="font-medium text-gray-900">{formatDateUtil(connection.last_test)}</p>
                         <p className="text-xs text-gray-500">{getTimeSince(connection.last_test)}</p>
                       </div>
                       <div>
                         <label className="text-gray-500 block">Last Success</label>
-                        <p className="font-medium text-gray-900">{formatDate(connection.last_success)}</p>
+                        <p className="font-medium text-gray-900">{formatDateUtil(connection.last_success)}</p>
                         <p className="text-xs text-gray-500">{getTimeSince(connection.last_success)}</p>
                       </div>
                     </div>

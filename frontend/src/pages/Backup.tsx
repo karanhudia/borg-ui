@@ -47,6 +47,7 @@ import { backupAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useBackupProgress } from '../hooks/useSSE'
 import TerminalLogViewer from '../components/TerminalLogViewer'
+import { formatDate, formatRelativeTime, formatTimeRange, formatBytes as formatBytesUtil } from '../utils/dateUtils'
 
 interface BackupJob {
   id: string
@@ -111,15 +112,6 @@ const Backup: React.FC = () => {
     enabled: !!selectedRepoData?.id,
   })
 
-  // Format bytes to human readable (defined before liveStats to avoid initialization error)
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 B'
-    const k = 1024
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
-  }
-
   // Calculate live statistics from fetched data
   const liveStats = useMemo(() => {
     const archives = archivesData?.data?.archives || []
@@ -133,7 +125,7 @@ const Backup: React.FC = () => {
 
     // Get total size from repository cache stats (deduplicated size)
     const cacheStats = repoInfo.cache?.stats
-    const totalSize = cacheStats?.unique_size ? formatBytes(cacheStats.unique_size) : null
+    const totalSize = cacheStats?.unique_size ? formatBytesUtil(cacheStats.unique_size) : null
 
     return {
       lastBackup,
@@ -225,55 +217,6 @@ const Backup: React.FC = () => {
     return size
   }
 
-  // Format timestamp to human-readable relative time
-  const formatTimestamp = (timestamp: string) => {
-    if (!timestamp) return 'Never'
-    // Assume backend returns UTC, convert to local
-    const date = new Date(timestamp + 'Z') // Add 'Z' to indicate UTC if not present
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffSecs = Math.floor(diffMs / 1000)
-    const diffMins = Math.floor(diffSecs / 60)
-    const diffHours = Math.floor(diffMins / 60)
-    const diffDays = Math.floor(diffHours / 24)
-
-    if (diffSecs < 60) return 'Just now'
-    if (diffMins < 60) return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`
-    if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`
-    if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`
-
-    // For older dates, show actual date
-    return date.toLocaleDateString() + ' at ' + date.toLocaleTimeString()
-  }
-
-  // Get ordinal suffix for day (1st, 2nd, 3rd, etc.)
-  const getOrdinalSuffix = (day: number) => {
-    if (day > 3 && day < 21) return 'th'
-    switch (day % 10) {
-      case 1: return 'st'
-      case 2: return 'nd'
-      case 3: return 'rd'
-      default: return 'th'
-    }
-  }
-
-  // Format date for table display (e.g., "16th October 2025, 2:40:55 PM")
-  const formatDateForTable = (timestamp: string) => {
-    if (!timestamp) return 'Never'
-    const date = new Date(timestamp + (timestamp.endsWith('Z') ? '' : 'Z'))
-
-    const day = date.getDate()
-    const month = date.toLocaleString('en-US', { month: 'long' })
-    const year = date.getFullYear()
-    const time = date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    })
-
-    return `${day}${getOrdinalSuffix(day)} ${month} ${year}, ${time}`
-  }
 
   // Generate borg create command preview
   const getBorgBackupCommand = () => {
@@ -294,33 +237,6 @@ const Backup: React.FC = () => {
     }
 
     return `borg create --progress --stats --compression ${compression} ${excludeArgs}${selectedRepoData.path}::${archiveName} ${sourceDirs}`
-  }
-
-  // Format duration in human-readable form (e.g., "5 min 2 sec")
-  const formatTimeRange = (startTime: string, endTime?: string, status?: string) => {
-    if (status === 'running') {
-      // Calculate duration from start to now
-      const start = new Date(startTime + (startTime.endsWith('Z') ? '' : 'Z'))
-      const now = new Date()
-      const diffSecs = Math.floor((now.getTime() - start.getTime()) / 1000)
-
-      if (diffSecs < 60) return `${diffSecs} sec`
-      const mins = Math.floor(diffSecs / 60)
-      const secs = diffSecs % 60
-      return `${mins} min ${secs} sec`
-    }
-
-    if (!endTime) return 'N/A'
-
-    // Calculate duration from start to end
-    const start = new Date(startTime + (startTime.endsWith('Z') ? '' : 'Z'))
-    const end = new Date(endTime + (endTime.endsWith('Z') ? '' : 'Z'))
-    const diffSecs = Math.floor((end.getTime() - start.getTime()) / 1000)
-
-    if (diffSecs < 60) return `${diffSecs} sec`
-    const mins = Math.floor(diffSecs / 60)
-    const secs = diffSecs % 60
-    return `${mins} min ${secs} sec`
   }
 
   // Get repository name from path
@@ -610,7 +526,7 @@ const Backup: React.FC = () => {
                           Last Backup
                         </TableCell>
                         <TableCell sx={{ border: 'none', py: 0.5 }}>
-                          {liveStats.lastBackup ? formatTimestamp(liveStats.lastBackup) : 'Never'}
+                          {liveStats.lastBackup ? formatRelativeTime(liveStats.lastBackup) : 'Never'}
                         </TableCell>
                       </TableRow>
                       <TableRow>
@@ -644,7 +560,7 @@ const Backup: React.FC = () => {
                               Last Archive Created
                             </TableCell>
                             <TableCell sx={{ border: 'none', py: 0.5 }}>
-                              {formatTimestamp(liveStats.lastArchive.start)}
+                              {formatRelativeTime(liveStats.lastArchive.start)}
                             </TableCell>
                           </TableRow>
                         </>
@@ -743,7 +659,7 @@ const Backup: React.FC = () => {
                         Original Size:
                       </Typography>
                       <Typography variant="body2" fontWeight={500}>
-                        {job.progress_details?.original_size ? formatBytes(job.progress_details.original_size) : formatFileSize(job.processed_size)}
+                        {job.progress_details?.original_size ? formatBytesUtil(job.progress_details.original_size) : formatFileSize(job.processed_size)}
                       </Typography>
                     </Box>
                     <Box sx={{ flex: 1, minWidth: 150 }}>
@@ -751,7 +667,7 @@ const Backup: React.FC = () => {
                         Compressed:
                       </Typography>
                       <Typography variant="body2" fontWeight={500}>
-                        {job.progress_details?.compressed_size ? formatBytes(job.progress_details.compressed_size) : 'N/A'}
+                        {job.progress_details?.compressed_size ? formatBytesUtil(job.progress_details.compressed_size) : 'N/A'}
                       </Typography>
                     </Box>
                     <Box sx={{ flex: 1, minWidth: 150 }}>
@@ -759,7 +675,7 @@ const Backup: React.FC = () => {
                         Deduplicated:
                       </Typography>
                       <Typography variant="body2" fontWeight={500} color="success.main">
-                        {job.progress_details?.deduplicated_size ? formatBytes(job.progress_details.deduplicated_size) : 'N/A'}
+                        {job.progress_details?.deduplicated_size ? formatBytesUtil(job.progress_details.deduplicated_size) : 'N/A'}
                       </Typography>
                     </Box>
                   </Stack>
@@ -867,7 +783,7 @@ const Backup: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2" color="text.secondary">
-                          {formatDateForTable(job.started_at)}
+                          {formatDate(job.started_at)}
                         </Typography>
                       </TableCell>
                       <TableCell>
