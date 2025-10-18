@@ -258,15 +258,32 @@ class BackupService:
 
                                     # Parse archive_progress messages for real-time stats
                                     if msg_type == 'archive_progress':
+                                        # Always update size/file stats
                                         job.original_size = json_msg.get('original_size', 0)
                                         job.compressed_size = json_msg.get('compressed_size', 0)
                                         job.deduplicated_size = json_msg.get('deduplicated_size', 0)
                                         job.nfiles = json_msg.get('nfiles', 0)
                                         job.current_file = json_msg.get('path', '')
+
+                                        # Check if finished
+                                        finished = json_msg.get('finished', False)
+                                        if finished:
+                                            # Archive is complete
+                                            job.progress = 100
+                                            job.progress_percent = 100.0
+                                            logger.info("Archive creation finished", job_id=job_id)
+                                        else:
+                                            # Show indeterminate progress (1%) while backup is running
+                                            # We can't calculate accurate percentage without knowing total size
+                                            if job.progress == 0 and job.original_size > 0:
+                                                job.progress = 1
+                                                job.progress_percent = 1.0
+
                                         db.commit()
                                         logger.debug("Updated progress from archive_progress",
                                                    job_id=job_id,
                                                    nfiles=job.nfiles,
+                                                   progress=job.progress,
                                                    current_file=job.current_file)
 
                                     # Parse progress_percent messages for percentage
