@@ -9,6 +9,14 @@ import {
   Stack,
   LinearProgress,
   Chip,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Tooltip,
 } from '@mui/material'
 import {
   Activity,
@@ -17,8 +25,11 @@ import {
   Cpu,
   Clock,
   CheckCircle,
+  RefreshCw,
+  AlertCircle,
+  XCircle,
 } from 'lucide-react'
-import { formatDate } from '../utils/dateUtils'
+import { formatDate, formatTimeRange } from '../utils/dateUtils'
 
 interface SystemMetrics {
   cpu_usage: number
@@ -36,6 +47,7 @@ interface BackupJob {
   status: string
   progress?: number
   started_at?: string
+  completed_at?: string
 }
 
 interface DashboardStatus {
@@ -65,7 +77,7 @@ export default function Dashboard() {
     return (bytes / 1024 / 1024 / 1024).toFixed(1)
   }
 
-  const getStatusColor = (status: string): 'success' | 'error' | 'warning' | 'info' => {
+  const getStatusColor = (status: string): 'success' | 'error' | 'warning' | 'info' | 'default' => {
     switch (status.toLowerCase()) {
       case 'completed':
       case 'success':
@@ -76,9 +88,35 @@ export default function Dashboard() {
       case 'running':
       case 'in_progress':
         return 'info'
+      case 'cancelled':
+        return 'default'
       default:
         return 'warning'
     }
+  }
+
+  const getStatusIcon = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'running':
+      case 'in_progress':
+        return <RefreshCw size={18} className="animate-spin" />
+      case 'completed':
+      case 'success':
+        return <CheckCircle size={18} />
+      case 'failed':
+      case 'error':
+        return <AlertCircle size={18} />
+      case 'cancelled':
+        return <XCircle size={18} />
+      default:
+        return <Clock size={18} />
+    }
+  }
+
+  const getRepositoryName = (path: string): string => {
+    if (!path) return 'Unknown'
+    const parts = path.split('/')
+    return parts[parts.length - 1] || parts[parts.length - 2] || path
   }
 
   return (
@@ -249,62 +287,113 @@ export default function Dashboard() {
       {status?.data?.recent_jobs && status.data.recent_jobs.length > 0 && (
         <Card>
           <CardContent>
-            <Typography variant="h6" fontWeight={600} gutterBottom>
-              Recent Backup Jobs
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
+              <Clock size={20} color="rgba(0,0,0,0.6)" />
+              <Typography variant="h6" fontWeight={600}>
+                Recent Backup Jobs
+              </Typography>
+            </Stack>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Latest backup operations across all repositories
             </Typography>
-            <Stack spacing={2} sx={{ mt: 3 }}>
-              {status.data.recent_jobs.map((job: BackupJob) => (
-                <Box
-                  key={job.id}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    py: 2,
-                    borderBottom: 1,
-                    borderColor: 'divider',
-                    '&:last-child': { borderBottom: 0 },
-                  }}
-                >
-                  <Stack direction="row" spacing={2} alignItems="center" sx={{ flex: 1 }}>
-                    <Box
+
+            <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+              <Table>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: 'grey.50' }}>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Job ID</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Repository</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Status</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Started</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Duration</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Progress</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {status.data.recent_jobs.map((job: BackupJob) => (
+                    <TableRow
+                      key={job.id}
+                      hover
                       sx={{
-                        backgroundColor: 'grey.100',
-                        borderRadius: 1.5,
-                        p: 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        alignSelf: 'center',
+                        '&:last-child td': { borderBottom: 0 },
+                        transition: 'background-color 0.2s'
                       }}
                     >
-                      <Clock size={20} />
-                    </Box>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography variant="body1" fontWeight={500} noWrap>
-                        {job.repository}
-                      </Typography>
-                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={600} color="primary">
+                          #{job.id}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Tooltip title={job.repository} placement="top" arrow>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <HardDrive size={16} color="rgba(0,0,0,0.4)" />
+                            <Box>
+                              <Typography variant="body2" fontWeight={500}>
+                                {getRepositoryName(job.repository)}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{
+                                  fontFamily: 'monospace',
+                                  fontSize: '0.7rem',
+                                  maxWidth: 250,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  display: 'block'
+                                }}
+                              >
+                                {job.repository}
+                              </Typography>
+                            </Box>
+                          </Stack>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell>
                         <Chip
-                          label={job.status}
-                          size="small"
+                          icon={getStatusIcon(job.status)}
+                          label={job.status.charAt(0).toUpperCase() + job.status.slice(1)}
                           color={getStatusColor(job.status)}
-                          sx={{ height: 20, fontSize: '0.75rem' }}
+                          size="small"
+                          sx={{ fontWeight: 500 }}
                         />
-                        {job.progress !== undefined && (
-                          <Typography variant="caption" color="text.secondary">
-                            {job.progress}%
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          {job.started_at ? formatDate(job.started_at) : 'N/A'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          {formatTimeRange(job.started_at, job.completed_at, job.status)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Stack direction="row" spacing={1.5} alignItems="center">
+                          <Box sx={{ width: 80 }}>
+                            <LinearProgress
+                              variant="determinate"
+                              value={job.progress || 0}
+                              sx={{
+                                height: 8,
+                                borderRadius: 1,
+                                bgcolor: 'grey.200'
+                              }}
+                              color={job.status === 'completed' ? 'success' : job.status === 'failed' ? 'error' : 'primary'}
+                            />
+                          </Box>
+                          <Typography variant="body2" fontWeight={500} sx={{ minWidth: 40 }}>
+                            {job.progress || 0}%
                           </Typography>
-                        )}
-                      </Stack>
-                    </Box>
-                  </Stack>
-                  <Typography variant="caption" color="text.secondary" sx={{ ml: 2, whiteSpace: 'nowrap' }}>
-                    {job.started_at ? formatDate(job.started_at) : 'N/A'}
-                  </Typography>
-                </Box>
-              ))}
-            </Stack>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           </CardContent>
         </Card>
       )}
@@ -312,14 +401,28 @@ export default function Dashboard() {
       {/* Empty State for Recent Jobs */}
       {status?.data?.recent_jobs && status.data.recent_jobs.length === 0 && (
         <Card>
-          <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 6 }}>
-            <Clock size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
-            <Typography variant="h6" gutterBottom>
-              No Recent Backup Jobs
+          <CardContent>
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
+              <Clock size={20} color="rgba(0,0,0,0.6)" />
+              <Typography variant="h6" fontWeight={600}>
+                Recent Backup Jobs
+              </Typography>
+            </Stack>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Latest backup operations across all repositories
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Your recent backup jobs will appear here once you start running backups
-            </Typography>
+
+            <Box sx={{ textAlign: 'center', py: 6 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+                <Clock size={48} color="rgba(0,0,0,0.3)" />
+              </Box>
+              <Typography variant="body1" fontWeight={500} gutterBottom>
+                No Backup Jobs Yet
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Your recent backup jobs will appear here once you start running backups
+              </Typography>
+            </Box>
           </CardContent>
         </Card>
       )}
