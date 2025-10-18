@@ -136,37 +136,43 @@ export default function Dashboard() {
         {/* Borg Status Card */}
         <Card>
           <CardContent>
-            <Stack spacing={2}>
-              <Stack direction="row" spacing={2} alignItems="flex-start">
+            <Stack direction="row" spacing={2} alignItems="flex-start">
+              <Box
+                sx={{
+                  backgroundColor: 'primary.light',
+                  borderRadius: 2,
+                  p: 1.5,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  alignSelf: 'center',
+                }}
+              >
+                <Activity size={28} color="#1976d2" />
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography variant="body2" color="text.secondary" noWrap>
+                  Borg Status
+                </Typography>
                 <Box
                   sx={{
-                    backgroundColor: 'primary.light',
-                    borderRadius: 2,
-                    p: 1.5,
-                    display: 'flex',
+                    mt: 0.5,
+                    display: 'inline-flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    alignSelf: 'center',
+                    gap: 0.75,
+                    backgroundColor: 'success.main',
+                    color: 'white',
+                    px: 1.5,
+                    py: 0.5,
+                    borderRadius: 1,
                   }}
                 >
-                  <Activity size={28} color="#1976d2" />
-                </Box>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body2" color="text.secondary" noWrap>
-                    Borg Status
-                  </Typography>
-                  <Typography variant="h6" fontWeight={600} sx={{ mt: 0.5 }}>
+                  <CheckCircle size={16} />
+                  <Typography variant="h6" fontWeight={600} component="span">
                     Running
                   </Typography>
                 </Box>
-              </Stack>
-              <Chip
-                label="Active"
-                size="small"
-                color="success"
-                icon={<CheckCircle size={14} />}
-                sx={{ height: 24, width: 'fit-content' }}
-              />
+              </Box>
             </Stack>
           </CardContent>
         </Card>
