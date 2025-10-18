@@ -274,11 +274,14 @@ class BackupService:
                                         finished = json_msg.get('finished', False)
                                         if finished:
                                             job.progress_percent = 100
+                                            job.progress = 100
                                         else:
                                             current = json_msg.get('current', 0)
                                             total = json_msg.get('total', 1)
                                             if total > 0:
-                                                job.progress_percent = int((current / total) * 100)
+                                                progress_value = int((current / total) * 100)
+                                                job.progress_percent = progress_value
+                                                job.progress = progress_value
                                         db.commit()
                                         logger.debug("Updated progress percent",
                                                    job_id=job_id,
