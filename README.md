@@ -7,6 +7,35 @@
 A modern, user-friendly web interface for [Borg Backup](https://borgbackup.readthedocs.io/) management. **Zero-configuration deployment** - just run `docker compose up` and you're done!
 
 **Official Repository**: https://github.com/karanhudia/borg-ui
+**Documentation**: https://karanhudia.github.io/borg-ui
+
+---
+
+## Why This Exists
+
+I love [Borg Backup](https://borgbackup.readthedocs.io/) - it's powerful, efficient, and reliable. But let's be honest: **the terminal interface is complicated**.
+
+Every time I wanted to:
+- Create a backup → Remember the exact `borg create` syntax with all the flags
+- Browse archives → Parse verbose terminal output to find what I need
+- Restore files → Navigate complex paths and remember extraction commands
+- Schedule backups → Write and debug cron jobs manually
+- Manage SSH keys → Deal with permissions and deployment across servers
+
+**It was exhausting.** I found myself constantly referring to documentation, copy-pasting commands from notes, and making mistakes that could have been avoided with a simple UI.
+
+So I built Borg Web UI - not to replace Borg's power, but to make it **accessible**. A web interface that handles the complexity while you focus on what matters: keeping your data safe.
+
+### Project Goals
+
+🎯 **Simplicity First** - If you can click it, you shouldn't have to type it
+🚀 **Zero Configuration** - No manual setup, no environment files to edit, just `docker compose up`
+🔒 **Secure by Default** - Auto-generated secrets, JWT authentication, permission controls
+📱 **Works Everywhere** - Desktop, tablet, mobile, Raspberry Pi, NAS, cloud servers
+🌐 **Real-time Feedback** - Live backup progress, instant logs, responsive dashboards
+💾 **Data Safety** - Never lose your backups or configuration, everything persists
+
+This project solves my personal backup management headaches, and I hope it solves yours too.
 
 ---
 

@@ -1,0 +1,44 @@
+title: Borg Web UI
+description: A modern, user-friendly web interface for Borg Backup management
+theme: jekyll-theme-cayman
+baseurl: /borg-ui
+url: https://karanhudia.github.io
+
+# GitHub metadata
+repository: karanhudia/borg-ui
+
+# Build settings
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+
+# Plugins
+plugins:
+  - jekyll-relative-links
+  - jekyll-optional-front-matter
+  - jekyll-readme-index
+  - jekyll-titles-from-headings
+
+# Plugin settings
+relative_links:
+  enabled: true
+  collections: false
+
+optional_front_matter:
+  remove_originals: false
+
+titles_from_headings:
+  enabled: true
+  strip_title: true
+  collections: false
+
+# Navigation
+show_downloads: true
+
+# Exclude from processing
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor
