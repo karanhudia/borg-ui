@@ -614,21 +614,35 @@ const Backup: React.FC = () => {
                     </Button>
                   </Stack>
 
-                  {/* Progress Bar */}
+                  {/* Backup Stage Indicator */}
                   <Box sx={{ mb: 2 }}>
-                    <Stack direction="row" justifyContent="space-between" sx={{ mb: 1 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Progress: {job.progress_details?.progress_percent || job.progress || 0}%
-                      </Typography>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Box
+                          sx={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            bgcolor: 'info.main',
+                            animation: 'pulse 2s ease-in-out infinite',
+                            '@keyframes pulse': {
+                              '0%, 100%': { opacity: 1 },
+                              '50%': { opacity: 0.5 },
+                            },
+                          }}
+                        />
+                        <Typography variant="body2" fontWeight={500} color="info.main">
+                          {(job.progress || 0) === 0
+                            ? 'Initializing backup...'
+                            : (job.progress || 0) >= 100
+                            ? 'Finalizing...'
+                            : 'Processing files...'}
+                        </Typography>
+                      </Stack>
                       <Typography variant="body2" color="text.secondary">
                         {formatTimeRange(job.started_at, job.completed_at, job.status)}
                       </Typography>
                     </Stack>
-                    <LinearProgress
-                      variant={job.progress_details?.progress_percent ? "determinate" : "indeterminate"}
-                      value={job.progress_details?.progress_percent || job.progress || 0}
-                      sx={{ height: 8, borderRadius: 1 }}
-                    />
                   </Box>
 
                   {/* Current File Being Processed */}
@@ -667,7 +681,9 @@ const Backup: React.FC = () => {
                         Compressed:
                       </Typography>
                       <Typography variant="body2" fontWeight={500}>
-                        {job.progress_details?.compressed_size ? formatBytesUtil(job.progress_details.compressed_size) : 'N/A'}
+                        {job.progress_details?.compressed_size !== undefined && job.progress_details?.compressed_size !== null
+                          ? formatBytesUtil(job.progress_details.compressed_size)
+                          : 'N/A'}
                       </Typography>
                     </Box>
                     <Box sx={{ flex: 1, minWidth: 150 }}>
@@ -675,7 +691,9 @@ const Backup: React.FC = () => {
                         Deduplicated:
                       </Typography>
                       <Typography variant="body2" fontWeight={500} color="success.main">
-                        {job.progress_details?.deduplicated_size ? formatBytesUtil(job.progress_details.deduplicated_size) : 'N/A'}
+                        {job.progress_details?.deduplicated_size !== undefined && job.progress_details?.deduplicated_size !== null
+                          ? formatBytesUtil(job.progress_details.deduplicated_size)
+                          : 'N/A'}
                       </Typography>
                     </Box>
                   </Stack>

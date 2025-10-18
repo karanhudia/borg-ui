@@ -377,23 +377,34 @@ export default function Dashboard() {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Stack direction="row" spacing={1.5} alignItems="center">
-                          <Box sx={{ width: 80 }}>
-                            <LinearProgress
-                              variant="determinate"
-                              value={job.progress || 0}
+                        {job.status === 'running' ? (
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <Box
                               sx={{
-                                height: 8,
-                                borderRadius: 1,
-                                bgcolor: 'grey.200'
+                                width: 6,
+                                height: 6,
+                                borderRadius: '50%',
+                                bgcolor: 'info.main',
+                                animation: 'pulse 2s ease-in-out infinite',
+                                '@keyframes pulse': {
+                                  '0%, 100%': { opacity: 1 },
+                                  '50%': { opacity: 0.5 },
+                                },
                               }}
-                              color={job.status === 'completed' ? 'success' : job.status === 'failed' ? 'error' : 'primary'}
                             />
-                          </Box>
-                          <Typography variant="body2" fontWeight={500} sx={{ minWidth: 40 }}>
-                            {job.progress || 0}%
+                            <Typography variant="body2" color="info.main">
+                              {(job.progress || 0) === 0
+                                ? 'Initializing...'
+                                : (job.progress || 0) >= 100
+                                ? 'Finalizing...'
+                                : 'Processing...'}
+                            </Typography>
+                          </Stack>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            {job.status === 'completed' ? 'Completed' : job.status === 'failed' ? 'Failed' : 'Cancelled'}
                           </Typography>
-                        </Stack>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
