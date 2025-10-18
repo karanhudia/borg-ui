@@ -57,18 +57,16 @@ const RealTimeStatus: React.FC = () => {
                 {backupProgress.status}
               </span>
             </div>
-            {backupProgress.progress !== undefined && (
-              <div className="space-y-1">
-                <div className="flex justify-between text-sm">
-                  <span className="text-green-800">Progress</span>
-                  <span className="font-medium">{backupProgress.progress}%</span>
-                </div>
-                <div className="w-full bg-green-200 rounded-full h-2">
-                  <div 
-                    className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${backupProgress.progress}%` }}
-                  ></div>
-                </div>
+            {backupProgress.status === 'running' && backupProgress.progress !== undefined && (
+              <div className="flex items-center space-x-2">
+                <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
+                <span className="text-sm font-medium text-blue-800">
+                  {backupProgress.progress === 0
+                    ? 'Initializing backup...'
+                    : backupProgress.progress >= 100
+                    ? 'Finalizing...'
+                    : 'Processing files...'}
+                </span>
               </div>
             )}
             {backupProgress.message && (
