@@ -21,6 +21,60 @@ class BackupService:
         self.running_processes = {}  # Track running backup processes by job_id
         self.error_msgids = {}  # Track error message IDs by job_id
 
+    async def _update_archive_stats(self, db: Session, job_id: int, repository_path: str, archive_name: str, env: dict):
+        """Update backup job with final archive statistics"""
+        try:
+            job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
+            if not job:
+                logger.warning("Job not found for stats update", job_id=job_id)
+                return
+
+            # Get specific archive info using borg info --json
+            archive_path = f"{repository_path}::{archive_name}"
+            info_cmd = ["borg", "info", "--json", archive_path]
+            info_process = await asyncio.create_subprocess_exec(
+                *info_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env
+            )
+            info_stdout, info_stderr = await asyncio.wait_for(info_process.communicate(), timeout=30)
+
+            if info_process.returncode == 0:
+                try:
+                    info_data = json.loads(info_stdout.decode())
+                    archives = info_data.get("archives", [])
+                    if archives:
+                        archive_info = archives[0]
+                        stats = archive_info.get("stats", {})
+
+                        # Update job with final statistics
+                        job.original_size = stats.get("original_size", job.original_size or 0)
+                        job.compressed_size = stats.get("compressed_size", job.compressed_size or 0)
+                        job.deduplicated_size = stats.get("deduplicated_size", job.deduplicated_size or 0)
+                        job.nfiles = stats.get("nfiles", job.nfiles or 0)
+
+                        db.commit()
+                        logger.info("Updated archive statistics",
+                                  job_id=job_id,
+                                  archive=archive_name,
+                                  original_size=job.original_size,
+                                  compressed_size=job.compressed_size,
+                                  deduplicated_size=job.deduplicated_size,
+                                  nfiles=job.nfiles)
+                except json.JSONDecodeError as e:
+                    logger.warning("Failed to parse borg info output for archive", job_id=job_id, error=str(e))
+            else:
+                logger.warning("Failed to get archive info",
+                             job_id=job_id,
+                             archive=archive_name,
+                             returncode=info_process.returncode)
+
+        except asyncio.TimeoutError:
+            logger.warning("Timeout while updating archive stats", job_id=job_id)
+        except Exception as e:
+            logger.error("Failed to update archive stats", job_id=job_id, error=str(e))
+
     async def _update_repository_stats(self, db: Session, repository_path: str, env: dict):
         """Update repository statistics after a successful backup"""
         try:
@@ -371,6 +425,8 @@ class BackupService:
                 elif process.returncode == 0:
                     job.status = "completed"
                     job.progress = 100
+                    # Update archive statistics with final deduplicated size
+                    await self._update_archive_stats(db, job_id, repository, archive_name, env)
                     # Update repository statistics after successful backup
                     await self._update_repository_stats(db, repository, env)
                 elif 100 <= process.returncode <= 127:
@@ -379,6 +435,8 @@ class BackupService:
                     job.progress = 100
                     job.error_message = f"Backup completed with warning (exit code {process.returncode})"
                     logger.warning("Backup completed with warning", job_id=job_id, exit_code=process.returncode)
+                    # Update archive statistics with final deduplicated size
+                    await self._update_archive_stats(db, job_id, repository, archive_name, env)
                     # Update repository statistics even with warnings
                     await self._update_repository_stats(db, repository, env)
                 else:
