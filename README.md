@@ -419,6 +419,10 @@ volumes:
 
 ## Documentation
 
+📚 **[Full Documentation Site](https://karanhudia.github.io/borg-ui)** - Complete guides, tutorials, and references
+
+### Additional Resources
+
 - **[System Design](SYSTEM_DESIGN.md)** - Architecture and workflow design
 - **[Implementation Tasks](IMPLEMENTATION_TASKS.md)** - Development progress
 - **[Security Guide](SECURITY.md)** - Security best practices
@@ -656,7 +660,7 @@ See the [LICENSE](LICENSE) file for complete terms.
 
 ### Getting Help
 
-- 📖 **Documentation**: Check the [docs](docs/) directory
+- 📖 **Documentation**: [Full Documentation Site](https://karanhudia.github.io/borg-ui)
 - 🐛 **Bug Reports**: [GitHub Issues](https://github.com/karanhudia/borg-ui/issues)
 - 💬 **Discussions**: [GitHub Discussions](https://github.com/karanhudia/borg-ui/discussions)
 - 📧 **Contact**: Open an issue for support
@@ -664,6 +668,7 @@ See the [LICENSE](LICENSE) file for complete terms.
 ### Resources
 
 - **Official Repository**: https://github.com/karanhudia/borg-ui
+- **Documentation Site**: https://karanhudia.github.io/borg-ui
 - **Docker Hub**: https://hub.docker.com/r/ainullcode/borg-ui
 - **Borg Backup Docs**: https://borgbackup.readthedocs.io/
 
