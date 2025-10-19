@@ -158,9 +158,7 @@ class BackupService:
                 logger.error("Job not found", job_id=job_id)
                 return
 
-            # Create log file
-            log_file = self.log_dir / f"backup_{job_id}.log"
-            job.log_file_path = str(log_file)
+            # No log files - maximum performance
             job.status = "running"
             job.started_at = datetime.utcnow()
             db.commit()
@@ -257,227 +255,222 @@ class BackupService:
 
             logger.info("Starting borg backup", job_id=job_id, repository=repository, archive=archive_name, command=" ".join(cmd))
 
-            # Execute command and stream to log file
-            with open(log_file, 'w') as f:
-                process = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.STDOUT,  # Merge stderr into stdout
-                    env=env
-                )
+            # Execute command - NO LOG FILE FOR MAXIMUM PERFORMANCE
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,  # Merge stderr into stdout
+                env=env
+            )
 
-                # Track this process so it can be cancelled
-                self.running_processes[job_id] = process
+            # Track this process so it can be cancelled
+            self.running_processes[job_id] = process
 
-                # Flag to track cancellation
-                cancelled = False
+            # Flag to track cancellation
+            cancelled = False
 
-                async def check_cancellation():
-                    """Periodic heartbeat to check for cancellation independent of log output"""
-                    nonlocal cancelled
-                    while not cancelled and process.returncode is None:
-                        await asyncio.sleep(1)  # Check every second
-                        db.refresh(job)
-                        if job.status == "cancelled":
-                            logger.info("Backup job cancelled (heartbeat), terminating process", job_id=job_id)
-                            cancelled = True
-                            process.terminate()
-                            try:
-                                await asyncio.wait_for(process.wait(), timeout=5.0)
-                            except asyncio.TimeoutError:
-                                logger.warning("Process didn't terminate, killing it", job_id=job_id)
-                                process.kill()
-                                await process.wait()
+            async def check_cancellation():
+                """Periodic heartbeat to check for cancellation independent of log output"""
+                nonlocal cancelled
+                while not cancelled and process.returncode is None:
+                    await asyncio.sleep(1)  # Check every second
+                    db.refresh(job)
+                    if job.status == "cancelled":
+                        logger.info("Backup job cancelled (heartbeat), terminating process", job_id=job_id)
+                        cancelled = True
+                        process.terminate()
+                        try:
+                            await asyncio.wait_for(process.wait(), timeout=5.0)
+                        except asyncio.TimeoutError:
+                            logger.warning("Process didn't terminate, killing it", job_id=job_id)
+                            process.kill()
+                            await process.wait()
+                        break
+
+            async def stream_logs():
+                """Stream log output from process and parse JSON progress"""
+                nonlocal cancelled
+                try:
+                    async for line in process.stdout:
+                        if cancelled:
                             break
 
-                async def stream_logs():
-                    """Stream log output from process and parse JSON progress"""
-                    nonlocal cancelled
-                    try:
-                        async for line in process.stdout:
-                            if cancelled:
-                                break
+                        line_str = line.decode('utf-8', errors='replace').strip()
+                        
+                        # NO LOG FILE OPERATIONS - MAXIMUM PERFORMANCE
 
-                            line_str = line.decode('utf-8', errors='replace').strip()
-                            timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-                            log_line = f"[{timestamp}] {line_str}\n"
-                            f.write(log_line)
-                            f.flush()  # Force write to disk immediately
+                        # Try to parse JSON progress messages
+                        try:
+                            if line_str.startswith('{') and line_str.endswith('}'):
+                                json_msg = json.loads(line_str)
+                                msg_type = json_msg.get('type')
 
-                            # Try to parse JSON progress messages
-                            try:
-                                if line_str.startswith('{') and line_str.endswith('}'):
-                                    json_msg = json.loads(line_str)
-                                    msg_type = json_msg.get('type')
+                                # Parse archive_progress messages for real-time stats
+                                if msg_type == 'archive_progress':
+                                    # Always update size/file stats
+                                    job.original_size = json_msg.get('original_size', 0)
+                                    job.compressed_size = json_msg.get('compressed_size', 0)
+                                    job.deduplicated_size = json_msg.get('deduplicated_size', 0)
+                                    job.nfiles = json_msg.get('nfiles', 0)
+                                    job.current_file = json_msg.get('path', '')
 
-                                    # Parse archive_progress messages for real-time stats
-                                    if msg_type == 'archive_progress':
-                                        # Always update size/file stats
-                                        job.original_size = json_msg.get('original_size', 0)
-                                        job.compressed_size = json_msg.get('compressed_size', 0)
-                                        job.deduplicated_size = json_msg.get('deduplicated_size', 0)
-                                        job.nfiles = json_msg.get('nfiles', 0)
-                                        job.current_file = json_msg.get('path', '')
+                                    # Check if finished
+                                    finished = json_msg.get('finished', False)
+                                    if finished:
+                                        # Archive is complete
+                                        job.progress = 100
+                                        job.progress_percent = 100.0
+                                        logger.info("Archive creation finished", job_id=job_id)
+                                    else:
+                                        # Show indeterminate progress (1%) while backup is running
+                                        # We can't calculate accurate percentage without knowing total size
+                                        if job.progress == 0 and job.original_size > 0:
+                                            job.progress = 1
+                                            job.progress_percent = 1.0
 
-                                        # Check if finished
-                                        finished = json_msg.get('finished', False)
-                                        if finished:
-                                            # Archive is complete
-                                            job.progress = 100
-                                            job.progress_percent = 100.0
-                                            logger.info("Archive creation finished", job_id=job_id)
-                                        else:
-                                            # Show indeterminate progress (1%) while backup is running
-                                            # We can't calculate accurate percentage without knowing total size
-                                            if job.progress == 0 and job.original_size > 0:
-                                                job.progress = 1
-                                                job.progress_percent = 1.0
+                                    db.commit()
+                                    logger.debug("Updated progress from archive_progress",
+                                               job_id=job_id,
+                                               nfiles=job.nfiles,
+                                               progress=job.progress,
+                                               current_file=job.current_file)
 
+                                # Parse progress_percent messages for percentage
+                                elif msg_type == 'progress_percent':
+                                    finished = json_msg.get('finished', False)
+                                    if finished:
+                                        job.progress_percent = 100
+                                        job.progress = 100
+                                    else:
+                                        current = json_msg.get('current', 0)
+                                        total = json_msg.get('total', 1)
+                                        if total > 0:
+                                            progress_value = int((current / total) * 100)
+                                            job.progress_percent = progress_value
+                                            job.progress = progress_value
+                                    db.commit()
+                                    logger.debug("Updated progress percent",
+                                               job_id=job_id,
+                                               percent=job.progress_percent)
+
+                                # Parse file_status messages for current file
+                                elif msg_type == 'file_status':
+                                    status = json_msg.get('status', '')
+                                    path = json_msg.get('path', '')
+                                    if path:
+                                        job.current_file = f"[{status}] {path}"
                                         db.commit()
-                                        logger.debug("Updated progress from archive_progress",
+
+                                # Parse log_message for errors with msgid
+                                elif msg_type == 'log_message':
+                                    levelname = json_msg.get('levelname', '')
+                                    message = json_msg.get('message', '')
+                                    msgid = json_msg.get('msgid', '')
+                                    if levelname in ['ERROR', 'CRITICAL'] and msgid:
+                                        # Store error msgid for later use
+                                        if job_id not in self.error_msgids:
+                                            self.error_msgids[job_id] = []
+                                        self.error_msgids[job_id].append({
+                                            'msgid': msgid,
+                                            'message': message,
+                                            'levelname': levelname
+                                        })
+                                        logger.error("Borg error detected",
                                                    job_id=job_id,
-                                                   nfiles=job.nfiles,
-                                                   progress=job.progress,
-                                                   current_file=job.current_file)
+                                                   msgid=msgid,
+                                                   message=message)
 
-                                    # Parse progress_percent messages for percentage
-                                    elif msg_type == 'progress_percent':
-                                        finished = json_msg.get('finished', False)
-                                        if finished:
-                                            job.progress_percent = 100
-                                            job.progress = 100
-                                        else:
-                                            current = json_msg.get('current', 0)
-                                            total = json_msg.get('total', 1)
-                                            if total > 0:
-                                                progress_value = int((current / total) * 100)
-                                                job.progress_percent = progress_value
-                                                job.progress = progress_value
-                                        db.commit()
-                                        logger.debug("Updated progress percent",
-                                                   job_id=job_id,
-                                                   percent=job.progress_percent)
+                        except json.JSONDecodeError:
+                            # Not a JSON line, just regular log output
+                            pass
+                        except Exception as e:
+                            logger.warning("Failed to parse JSON progress",
+                                         job_id=job_id,
+                                         error=str(e),
+                                         line=line_str[:100])
 
-                                    # Parse file_status messages for current file
-                                    elif msg_type == 'file_status':
-                                        status = json_msg.get('status', '')
-                                        path = json_msg.get('path', '')
-                                        if path:
-                                            job.current_file = f"[{status}] {path}"
-                                            db.commit()
-
-                                    # Parse log_message for errors with msgid
-                                    elif msg_type == 'log_message':
-                                        levelname = json_msg.get('levelname', '')
-                                        message = json_msg.get('message', '')
-                                        msgid = json_msg.get('msgid', '')
-                                        if levelname in ['ERROR', 'CRITICAL'] and msgid:
-                                            # Store error msgid for later use
-                                            if job_id not in self.error_msgids:
-                                                self.error_msgids[job_id] = []
-                                            self.error_msgids[job_id].append({
-                                                'msgid': msgid,
-                                                'message': message,
-                                                'levelname': levelname
-                                            })
-                                            logger.error("Borg error detected",
-                                                       job_id=job_id,
-                                                       msgid=msgid,
-                                                       message=message)
-
-                            except json.JSONDecodeError:
-                                # Not a JSON line, just regular log output
-                                pass
-                            except Exception as e:
-                                logger.warning("Failed to parse JSON progress",
-                                             job_id=job_id,
-                                             error=str(e),
-                                             line=line_str[:100])
-
-                    except asyncio.CancelledError:
-                        logger.info("Log streaming cancelled", job_id=job_id)
-                        raise
-
-                # Run both tasks concurrently
-                try:
-                    await asyncio.gather(
-                        check_cancellation(),
-                        stream_logs(),
-                        return_exceptions=True
-                    )
                 except asyncio.CancelledError:
-                    logger.info("Backup task cancelled", job_id=job_id)
-                    cancelled = True
-                    process.terminate()
-                    await process.wait()
+                    logger.info("Log streaming cancelled", job_id=job_id)
                     raise
 
-                # Wait for process to complete if not already terminated
-                if process.returncode is None:
-                    await process.wait()
+            # Run both tasks concurrently
+            try:
+                await asyncio.gather(
+                    check_cancellation(),
+                    stream_logs(),
+                    return_exceptions=True
+                )
+            except asyncio.CancelledError:
+                logger.info("Backup task cancelled", job_id=job_id)
+                cancelled = True
+                process.terminate()
+                await process.wait()
+                raise
 
-                # Update job status using modern exit codes (if not already cancelled)
-                # 0 = success, 1 = warning (legacy), 2 = error (legacy)
-                # Modern: 0 = success, 3-99 = errors, 100-127 = warnings
-                if job.status == "cancelled":
-                    logger.info("Backup job was cancelled", job_id=job_id)
-                    job.completed_at = datetime.utcnow()
-                elif process.returncode == 0:
-                    job.status = "completed"
-                    job.progress = 100
-                    # Update archive statistics with final deduplicated size
-                    await self._update_archive_stats(db, job_id, repository, archive_name, env)
-                    # Update repository statistics after successful backup
-                    await self._update_repository_stats(db, repository, env)
-                elif 100 <= process.returncode <= 127:
-                    # Warning (modern exit code system)
-                    job.status = "completed"
-                    job.progress = 100
-                    job.error_message = f"Backup completed with warning (exit code {process.returncode})"
-                    logger.warning("Backup completed with warning", job_id=job_id, exit_code=process.returncode)
-                    # Update archive statistics with final deduplicated size
-                    await self._update_archive_stats(db, job_id, repository, archive_name, env)
-                    # Update repository statistics even with warnings
-                    await self._update_repository_stats(db, repository, env)
+            # Wait for process to complete if not already terminated
+            if process.returncode is None:
+                await process.wait()
+
+            # Update job status using modern exit codes (if not already cancelled)
+            # 0 = success, 1 = warning (legacy), 2 = error (legacy)
+            # Modern: 0 = success, 3-99 = errors, 100-127 = warnings
+            if job.status == "cancelled":
+                logger.info("Backup job was cancelled", job_id=job_id)
+                job.completed_at = datetime.utcnow()
+            elif process.returncode == 0:
+                job.status = "completed"
+                job.progress = 100
+                # Update archive statistics with final deduplicated size
+                await self._update_archive_stats(db, job_id, repository, archive_name, env)
+                # Update repository statistics after successful backup
+                await self._update_repository_stats(db, repository, env)
+            elif 100 <= process.returncode <= 127:
+                # Warning (modern exit code system)
+                job.status = "completed"
+                job.progress = 100
+                job.error_message = f"Backup completed with warning (exit code {process.returncode})"
+                logger.warning("Backup completed with warning", job_id=job_id, exit_code=process.returncode)
+                # Update archive statistics with final deduplicated size
+                await self._update_archive_stats(db, job_id, repository, archive_name, env)
+                # Update repository statistics even with warnings
+                await self._update_repository_stats(db, repository, env)
+            else:
+                job.status = "failed"
+                # Build comprehensive error message with msgid details
+                error_parts = []
+
+                # Check if we have captured error msgids
+                if job_id in self.error_msgids and self.error_msgids[job_id]:
+                    # Use the first critical error or the first error
+                    errors = self.error_msgids[job_id]
+                    primary_error = next((e for e in errors if e['levelname'] == 'CRITICAL'), errors[0])
+
+                    # Format error with details and suggestions
+                    formatted_error = format_error_message(
+                        msgid=primary_error['msgid'],
+                        original_message=primary_error['message'],
+                        exit_code=process.returncode
+                    )
+                    error_parts.append(formatted_error)
+
+                    # Add additional errors if present
+                    if len(errors) > 1:
+                        error_parts.append(f"\n\nAdditional errors encountered: {len(errors) - 1}")
                 else:
-                    job.status = "failed"
-                    # Build comprehensive error message with msgid details
-                    error_parts = []
+                    # Fallback to simple exit code message
+                    error_parts.append(format_error_message(
+                        exit_code=process.returncode
+                    ))
 
-                    # Check if we have captured error msgids
-                    if job_id in self.error_msgids and self.error_msgids[job_id]:
-                        # Use the first critical error or the first error
-                        errors = self.error_msgids[job_id]
-                        primary_error = next((e for e in errors if e['levelname'] == 'CRITICAL'), errors[0])
+                job.error_message = "\n".join(error_parts)
 
-                        # Format error with details and suggestions
-                        formatted_error = format_error_message(
-                            msgid=primary_error['msgid'],
-                            original_message=primary_error['message'],
-                            exit_code=process.returncode
-                        )
-                        error_parts.append(formatted_error)
+            if job.completed_at is None:
+                job.completed_at = datetime.utcnow()
 
-                        # Add additional errors if present
-                        if len(errors) > 1:
-                            error_parts.append(f"\n\nAdditional errors encountered: {len(errors) - 1}")
-                    else:
-                        # Fallback to simple exit code message
-                        error_parts.append(format_error_message(
-                            exit_code=process.returncode
-                        ))
-
-                    job.error_message = "\n".join(error_parts)
-
-                if job.completed_at is None:
-                    job.completed_at = datetime.utcnow()
-
-                # Read full logs and store in database
-                with open(log_file, 'r') as log_read:
-                    job.logs = log_read.read()
-
-                db.commit()
-                logger.info("Backup completed", job_id=job_id, status=job.status)
+            # No log storage - maximum performance
+            job.logs = "Logging disabled for maximum performance"
+            db.commit()
+            logger.info("Backup completed", job_id=job_id, status=job.status)
 
         except Exception as e:
             logger.error("Backup execution failed", job_id=job_id, error=str(e))

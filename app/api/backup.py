@@ -221,33 +221,13 @@ async def stream_backup_logs(
                 detail="Backup job not found"
             )
 
-        # If no log file yet, return empty
-        if not job.log_file_path or not os.path.exists(job.log_file_path):
-            return {
-                "job_id": job.id,
-                "status": job.status,
-                "lines": [],
-                "total_lines": 0,
-                "has_more": job.status == "running"
-            }
-
-        # Read log file from offset
-        lines = []
-        with open(job.log_file_path, 'r') as f:
-            all_lines = f.readlines()
-            total_lines = len(all_lines)
-
-            # Get lines from offset onwards
-            if offset < total_lines:
-                lines = [{"line_number": offset + i + 1, "content": line.rstrip('\n')}
-                         for i, line in enumerate(all_lines[offset:])]
-
+        # NO LOGGING - MAXIMUM PERFORMANCE
         return {
             "job_id": job.id,
             "status": job.status,
-            "lines": lines,
-            "total_lines": total_lines,
-            "has_more": job.status == "running"
+            "lines": [{"line_number": 1, "content": "Logging disabled for maximum performance. Use SSE for real-time progress updates."}],
+            "total_lines": 1,
+            "has_more": False
         }
 
     except Exception as e:
