@@ -69,6 +69,7 @@ This project solves my personal backup management headaches, and I hope it solve
   - [Method 1: Portainer](#method-1-portainer-recommended)
   - [Method 2: Docker Run](#method-2-docker-run)
   - [Method 3: Docker Compose](#method-3-docker-compose)
+- [📖 **[Usage Guide](https://karanhudia.github.io/borg-ui/usage-guide)** - How to create local and SSH backups](#usage-guide)
 - [Configuration](#configuration)
 - [Troubleshooting](#troubleshooting)
 - [Documentation](#documentation)
@@ -143,6 +144,40 @@ Access the web interface at `http://localhost:8081`
 - **Password**: `admin123`
 
 ⚠️ **Change the default password immediately after first login!**
+
+---
+
+## Usage Guide
+
+📖 **[Complete Step-by-Step Usage Guide](https://karanhudia.github.io/borg-ui/usage-guide)**
+
+### Two Ways to Create Backups
+
+Borg Web UI supports two backup methods with the same simple workflow:
+
+#### 1. Local Backups (Recommended for Beginners)
+✅ **No SSH setup required** - Perfect for USB drives, NAS mounts, or local storage
+✅ **Faster** - No network overhead
+✅ **Simple** - Just use `/local/` prefix for paths
+
+**Example:** Backup to USB drive at `/mnt/usb-drive`
+- Create repository: `/local/mnt/usb-drive/borg-backups/myrepo`
+- That's it! Start backing up.
+
+#### 2. SSH/Remote Backups
+✅ **Off-site protection** - Survive local disasters
+✅ **Secure** - Industry-standard SSH protocol
+✅ **Flexible** - Backup to any remote server
+
+**Example:** Backup to remote server at `192.168.1.100`
+1. Generate SSH key in UI (one click)
+2. Deploy key to remote server (automatic)
+3. Create repository: `user@192.168.1.100:backups/myrepo`
+4. Start backing up!
+
+**The Difference?** Just the SSH key setup. Everything else is identical!
+
+**👉 [Read the full step-by-step guide](https://karanhudia.github.io/borg-ui/usage-guide)** with examples, screenshots, and troubleshooting.
 
 ---
 

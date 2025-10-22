@@ -61,10 +61,23 @@ Access at `http://localhost:8081` (default credentials: `admin` / `admin123`)
 
 ---
 
+## 📖 New to Borg Web UI?
+
+**[→ Start Here: Complete Usage Guide](usage-guide.md)**
+
+Learn how to create your first backup in minutes:
+- **Local Backups** (USB drives, NAS, etc.) - No SSH needed!
+- **SSH/Remote Backups** (Off-site protection) - With easy SSH key setup
+
+Both methods use the same simple workflow. The guide covers everything step-by-step.
+
+---
+
 ## Documentation
 
 ### Core Guides
 
+- **[📖 Usage Guide](usage-guide.md)** - **Step-by-step guides for creating local and SSH backups**
 - **[Installation Guide](https://github.com/karanhudia/borg-ui#installation-methods)** - Multiple deployment methods (Portainer, Docker Run, Docker Compose)
 - **[Configuration Guide](https://github.com/karanhudia/borg-ui#configuration)** - Environment variables and settings
 - **[Troubleshooting](https://github.com/karanhudia/borg-ui#troubleshooting)** - Common issues and solutions

@@ -64,6 +64,7 @@ open http://localhost:4000/borg-ui
 docs/
 ├── _config.yml              # Jekyll configuration
 ├── index.md                 # Main documentation page
+├── usage-guide.md           # Step-by-step guide for local and SSH backups
 ├── SPECIFICATION.md         # System architecture
 ├── DATABASE_PERSISTENCE.md  # Database guide
 ├── FUTURE_ENHANCEMENTS.md   # Roadmap
