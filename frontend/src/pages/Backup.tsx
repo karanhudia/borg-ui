@@ -824,38 +824,42 @@ const Backup: React.FC = () => {
                             const repoPath = job.error_message.match(/LOCK_ERROR::(.+)/)?.[1].split('\n')[0]
                             const repo = repositoriesData?.data?.repositories?.find((r: any) => r.path === repoPath)
                             return repo ? (
-                              <Button
-                                size="small"
-                                variant="contained"
-                                color="warning"
-                                startIcon={<Unlock size={14} />}
-                                onClick={async () => {
-                                  if (window.confirm('Are you CERTAIN no backup is currently running on this repository? Breaking the lock while a backup is running can corrupt your repository!')) {
-                                    try {
-                                      await repositoriesAPI.breakLock(repo.id)
-                                      enqueueSnackbar('Lock removed successfully! You can now start a new backup.', { variant: 'success' })
-                                      refetch()
-                                    } catch (error: any) {
-                                      enqueueSnackbar(error.response?.data?.detail || 'Failed to break lock', { variant: 'error' })
+                              <Tooltip title="Break stale repository lock" arrow>
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  color="warning"
+                                  onClick={async () => {
+                                    if (window.confirm('Are you CERTAIN no backup is currently running on this repository? Breaking the lock while a backup is running can corrupt your repository!')) {
+                                      try {
+                                        await repositoriesAPI.breakLock(repo.id)
+                                        enqueueSnackbar('Lock removed successfully! You can now start a new backup.', { variant: 'success' })
+                                        refetch()
+                                      } catch (error: any) {
+                                        enqueueSnackbar(error.response?.data?.detail || 'Failed to break lock', { variant: 'error' })
+                                      }
                                     }
-                                  }
-                                }}
-                              >
-                                Break Lock
-                              </Button>
+                                  }}
+                                  sx={{ minWidth: 'auto', px: 1 }}
+                                >
+                                  <Unlock size={16} />
+                                </Button>
+                              </Tooltip>
                             ) : null
                           })()}
                           {/* Download Logs button - only for completed failed/cancelled backups with logs */}
                           {job.has_logs && job.status !== 'running' && (
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              color="info"
-                              startIcon={<Download size={14} />}
-                              onClick={() => handleDownloadLogs(job.id)}
-                            >
-                              Download Logs
-                            </Button>
+                            <Tooltip title="Download logs" arrow>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color="info"
+                                onClick={() => handleDownloadLogs(job.id)}
+                                sx={{ minWidth: 'auto', px: 1 }}
+                              >
+                                <Download size={16} />
+                              </Button>
+                            </Tooltip>
                           )}
                           {job.status === 'running' && (
                             <Button

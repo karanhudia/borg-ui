@@ -122,4 +122,19 @@ class BackupJob(Base):
     progress_percent = Column(Float, default=0.0)  # Progress percentage
     backup_speed = Column(Float, default=0.0)  # Current backup speed in MB/s
 
-    created_at = Column(DateTime, default=datetime.utcnow) 
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class ScheduledJob(Base):
+    __tablename__ = "scheduled_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False, index=True)
+    cron_expression = Column(String, nullable=False)  # e.g., "0 2 * * *" for daily at 2 AM
+    repository = Column(String, nullable=True)  # Repository path/ID to backup
+    config_file = Column(String, nullable=True)  # Optional config file path
+    enabled = Column(Boolean, default=True)  # Whether the job is active
+    last_run = Column(DateTime, nullable=True)  # Last execution time
+    next_run = Column(DateTime, nullable=True)  # Next scheduled execution time
+    description = Column(Text, nullable=True)  # User description of the job
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=True) 

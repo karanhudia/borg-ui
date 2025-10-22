@@ -9,7 +9,7 @@ import os
 import asyncio
 
 from app.database.database import get_db
-from app.database.models import User
+from app.database.models import User, ScheduledJob
 from app.core.security import get_current_user
 from app.core.borg import BorgInterface
 from app.config import settings
