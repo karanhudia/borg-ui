@@ -19,13 +19,15 @@ if settings.database_url.startswith("sqlite:///"):
         print(f"Created database directory: {db_dir}")
 
 # Create database engine with connection pooling
+# Note: echo=False disables SQL query logging for performance
+# Use LOG_LEVEL=DEBUG environment variable if you need to debug SQL queries
 engine = create_engine(
     settings.database_url,
     poolclass=QueuePool,
     pool_size=10,
     max_overflow=20,
     pool_pre_ping=True,
-    echo=settings.debug
+    echo=False  # Always disable SQL logging for performance (creates massive log spam)
 )
 
 # Create session factory

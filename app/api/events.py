@@ -117,15 +117,14 @@ async def event_generator(user_id: str) -> AsyncGenerator[str, None]:
 @router.get("/stream")
 async def stream_events(
     request: Request,
-    token: str = None,
-    db: Session = Depends(get_db)
+    token: str = None
 ):
     """Stream real-time events via Server-Sent Events"""
     try:
         # Try to get user from token query parameter (for EventSource)
         # or from Authorization header
         from app.core.security import verify_token
-        from app.database.database import get_db as get_db_dep
+        from app.database.database import SessionLocal
 
         token_str = None
         if token:
@@ -145,13 +144,19 @@ async def stream_events(
         if not username:
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
-        # Get user from database
-        user = db.query(User).filter(User.username == username).first()
-        if not user or not user.is_active:
-            raise HTTPException(status_code=401, detail="User not found or inactive")
+        # Create a scoped database session just for authentication
+        # Close it immediately to avoid holding connections during SSE streaming
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter(User.username == username).first()
+            if not user or not user.is_active:
+                raise HTTPException(status_code=401, detail="User not found or inactive")
+            user_id = str(user.id)
+        finally:
+            db.close()  # IMPORTANT: Close DB connection before starting SSE stream
 
         return StreamingResponse(
-            event_generator(str(user.id)),
+            event_generator(user_id),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",

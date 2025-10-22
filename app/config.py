@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     app_name: str = "Borg Web UI"
     app_version: str = "1.0.0"
     debug: bool = False
-    environment: str = "development"
+    environment: str = "production"  # Default to production for safety
 
     # Data directory (for all persistent data) - this is the ONLY path users need to configure
     data_dir: str = "/data"
