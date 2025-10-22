@@ -63,6 +63,7 @@ interface BackupJob {
     nfiles: number
     current_file: string
     progress_percent: number
+    backup_speed: number
   }
 }
 
@@ -690,6 +691,16 @@ const Backup: React.FC = () => {
                       <Typography variant="body2" fontWeight={500} color="success.main">
                         {job.progress_details?.deduplicated_size !== undefined && job.progress_details?.deduplicated_size !== null
                           ? formatBytesUtil(job.progress_details.deduplicated_size)
+                          : 'N/A'}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ flex: 1, minWidth: 150 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        Speed:
+                      </Typography>
+                      <Typography variant="body2" fontWeight={500} color="primary.main">
+                        {job.status === 'running' && job.progress_details?.backup_speed
+                          ? `${job.progress_details.backup_speed.toFixed(2)} MB/s`
                           : 'N/A'}
                       </Typography>
                     </Box>

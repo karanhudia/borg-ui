@@ -329,6 +329,13 @@ class BackupService:
                                     job.deduplicated_size = json_msg.get('deduplicated_size', 0)
                                     job.nfiles = json_msg.get('nfiles', 0)
 
+                                    # Calculate backup speed (MB/s)
+                                    if job.started_at and job.original_size > 0:
+                                        elapsed_seconds = (datetime.utcnow() - job.started_at).total_seconds()
+                                        if elapsed_seconds > 0:
+                                            # Speed in MB/s
+                                            job.backup_speed = (job.original_size / (1024 * 1024)) / elapsed_seconds
+
                                     # SMART CURRENT_FILE TRACKING: Only show files taking >3 seconds
                                     current_path = json_msg.get('path', '')
                                     if current_path:

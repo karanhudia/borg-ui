@@ -120,5 +120,6 @@ class BackupJob(Base):
     nfiles = Column(Integer, default=0)  # Number of files processed
     current_file = Column(Text, nullable=True)  # Current file being processed
     progress_percent = Column(Float, default=0.0)  # Progress percentage
+    backup_speed = Column(Float, default=0.0)  # Current backup speed in MB/s
 
     created_at = Column(DateTime, default=datetime.utcnow) 

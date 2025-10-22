@@ -92,7 +92,8 @@ async def get_all_backup_jobs(
                         "deduplicated_size": job.deduplicated_size or 0,
                         "nfiles": job.nfiles or 0,
                         "current_file": job.current_file or "",
-                        "progress_percent": job.progress_percent or 0
+                        "progress_percent": job.progress_percent or 0,
+                        "backup_speed": job.backup_speed or 0.0
                     }
                 }
                 for job in jobs
@@ -136,7 +137,8 @@ async def get_backup_status(
                 "deduplicated_size": job.deduplicated_size or 0,
                 "nfiles": job.nfiles or 0,
                 "current_file": job.current_file or "",
-                "progress_percent": job.progress_percent or 0
+                "progress_percent": job.progress_percent or 0,
+                "backup_speed": job.backup_speed or 0.0
             }
         }
     except Exception as e:
