@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import {
   Box,
@@ -41,7 +41,6 @@ import {
 } from 'lucide-react'
 import { backupAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
-import { useBackupProgress } from '../hooks/useSSE'
 import { formatDate, formatRelativeTime, formatTimeRange, formatBytes as formatBytesUtil, formatDurationSeconds } from '../utils/dateUtils'
 
 interface BackupJob {
@@ -74,24 +73,12 @@ const Backup: React.FC = () => {
   const [selectedRepository, setSelectedRepository] = useState<string>('')
   const queryClient = useQueryClient()
 
-  // Real-time backup progress with query invalidation
-  const { progress, isConnected } = useBackupProgress()
-
   // Get backup status and history (manual backups only)
-  // Use longer polling when SSE is connected, shorter when disconnected (fallback)
   const { data: backupStatus, isLoading: loadingStatus } = useQuery({
     queryKey: ['backup-status-manual'],
     queryFn: backupAPI.getManualJobs,
-    refetchInterval: isConnected ? 30000 : 3000, // 30s with SSE, 3s without (fallback)
+    refetchInterval: 1000, // Poll every 1 second for real-time updates
   })
-
-  // Invalidate queries when SSE events are received
-  useEffect(() => {
-    if (progress) {
-      // Invalidate backup status query when progress events arrive
-      queryClient.invalidateQueries({ queryKey: ['backup-status-manual'] })
-    }
-  }, [progress, queryClient])
 
   // Get repositories
   const { data: repositoriesData, isLoading: loadingRepositories } = useQuery({
@@ -272,15 +259,6 @@ const Backup: React.FC = () => {
           </Typography>
         </Box>
         <Stack direction="row" spacing={2} alignItems="center">
-          {/* Real-time connection status */}
-          {isConnected && (
-            <Chip
-              icon={<RefreshCw size={14} className="animate-spin" />}
-              label="Live Updates"
-              color="success"
-              size="small"
-            />
-          )}
         </Stack>
       </Box>
 
