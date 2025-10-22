@@ -39,6 +39,28 @@ This project solves my personal backup management headaches, and I hope it solve
 
 ---
 
+## Screenshots
+
+### Dashboard
+![Dashboard](screenshots/dashboard.png)
+*Real-time system monitoring with Borg status, CPU, memory, and disk usage metrics, plus recent backup job history*
+
+### Backup Operations
+![Backup Operations - Live Progress](screenshots/backup-live-progress.png)
+*Live backup progress tracking showing current file being processed, files count, original size, compressed size, and deduplicated data*
+
+![Backup Operations - Job History](screenshots/backup-job-history.png)
+*Complete backup job history with status, duration, progress tracking, and quick access to logs*
+
+### Repository Management
+![Repository Details](screenshots/repository-details.png)
+*Repository overview showing SSH connection details, compression settings, archive count, and configured source paths*
+
+![Create Repository](screenshots/create-repository.png)
+*Intuitive repository creation with command preview, encryption options, compression settings, and source directory configuration*
+
+---
+
 ## Table of Contents
 
 - [Features](#features)

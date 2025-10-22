@@ -85,6 +85,7 @@ async def get_all_backup_jobs(
                     "completed_at": job.completed_at.isoformat() if job.completed_at else None,
                     "progress": job.progress,
                     "error_message": job.error_message,
+                    "has_logs": bool(job.logs),  # Indicate if logs are available
                     "progress_details": {
                         "original_size": job.original_size or 0,
                         "compressed_size": job.compressed_size or 0,
@@ -178,14 +179,50 @@ async def cancel_backup(
             detail="Failed to cancel backup"
         )
 
-@router.get("/logs/{job_id}")
-async def get_backup_logs(
+@router.get("/logs/{job_id}/download")
+async def download_backup_logs(
     job_id: int,
-    current_user: User = Depends(get_current_user),
+    token: str = None,
     db: Session = Depends(get_db)
 ):
-    """Get backup job logs"""
+    """Download backup job logs as a file (only for failed/cancelled backups)"""
+    # Handle authentication from query parameter (for download links)
+    from app.core.security import verify_token
+    from app.database.models import User as UserModel
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication token required"
+        )
+
     try:
+        username = verify_token(token)
+        if not username:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token"
+            )
+
+        # Get user from database
+        current_user = db.query(UserModel).filter(UserModel.username == username).first()
+        if not current_user or not current_user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found or inactive"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Token verification failed", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication"
+        )
+    try:
+        from fastapi.responses import FileResponse
+        from pathlib import Path
+
         job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
         if not job:
             raise HTTPException(
@@ -193,16 +230,57 @@ async def get_backup_logs(
                 detail="Backup job not found"
             )
 
-        return {
-            "job_id": job.id,
-            "logs": job.logs or "",
-            "error_message": job.error_message or ""
-        }
+        # Only allow download for completed failed/cancelled backups
+        if job.status == "running":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot download logs for running backup"
+            )
+
+        # Check if logs are available
+        if not job.logs:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No logs available for this backup (successful backups don't save logs)"
+            )
+
+        # Handle file-based logs
+        if job.logs.startswith("Logs saved to:"):
+            log_filename = job.logs.replace("Logs saved to: ", "").strip()
+            log_file = Path("/data/logs") / log_filename
+
+            if not log_file.exists():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Log file not found: {log_filename}"
+                )
+
+            # Return file as download
+            return FileResponse(
+                path=str(log_file),
+                filename=f"backup_job_{job_id}_logs.txt",
+                media_type="text/plain"
+            )
+        else:
+            # Legacy: logs stored in database - create temp file
+            import tempfile
+            temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt')
+            temp_file.write(job.logs or "")
+            temp_file.close()
+
+            return FileResponse(
+                path=temp_file.name,
+                filename=f"backup_job_{job_id}_logs.txt",
+                media_type="text/plain"
+            )
+
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error("Failed to get backup logs", error=str(e))
+        logger.error("Failed to download backup logs", error=str(e), job_id=job_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get backup logs"
+            detail=f"Failed to download logs: {str(e)}"
         )
 
 @router.get("/logs/{job_id}/stream")
@@ -221,14 +299,77 @@ async def stream_backup_logs(
                 detail="Backup job not found"
             )
 
-        # NO LOGGING - MAXIMUM PERFORMANCE
-        return {
-            "job_id": job.id,
-            "status": job.status,
-            "lines": [{"line_number": 1, "content": "Logging disabled for maximum performance. Use SSE for real-time progress updates."}],
-            "total_lines": 1,
-            "has_more": False
-        }
+        # Check if logs are available
+        if not job.logs:
+            # No logs (successful backup with performance optimization)
+            return {
+                "job_id": job.id,
+                "status": job.status,
+                "lines": [],
+                "total_lines": 0,
+                "has_more": False
+            }
+
+        # Check if logs point to a file
+        if job.logs.startswith("Logs saved to:"):
+            # Parse file path from logs field
+            from pathlib import Path
+            log_filename = job.logs.replace("Logs saved to: ", "").strip()
+            log_file = Path("/data/logs") / log_filename
+
+            if log_file.exists():
+                # Read log file and return lines
+                try:
+                    log_content = log_file.read_text()
+                    log_lines = log_content.split('\n')
+
+                    # Apply offset for streaming
+                    lines_to_return = log_lines[offset:]
+                    formatted_lines = [
+                        {"line_number": offset + i + 1, "content": line}
+                        for i, line in enumerate(lines_to_return)
+                    ]
+
+                    return {
+                        "job_id": job.id,
+                        "status": job.status,
+                        "lines": formatted_lines,
+                        "total_lines": len(log_lines),
+                        "has_more": False
+                    }
+                except Exception as e:
+                    logger.error("Failed to read log file", log_file=str(log_file), error=str(e))
+                    return {
+                        "job_id": job.id,
+                        "status": job.status,
+                        "lines": [{"line_number": 1, "content": f"Error reading log file: {str(e)}"}],
+                        "total_lines": 1,
+                        "has_more": False
+                    }
+            else:
+                return {
+                    "job_id": job.id,
+                    "status": job.status,
+                    "lines": [{"line_number": 1, "content": f"Log file not found: {log_filename}"}],
+                    "total_lines": 1,
+                    "has_more": False
+                }
+        else:
+            # Legacy: logs stored in database (shouldn't happen with new code)
+            log_lines = job.logs.split('\n') if job.logs else []
+            lines_to_return = log_lines[offset:]
+            formatted_lines = [
+                {"line_number": offset + i + 1, "content": line}
+                for i, line in enumerate(lines_to_return)
+            ]
+
+            return {
+                "job_id": job.id,
+                "status": job.status,
+                "lines": formatted_lines,
+                "total_lines": len(log_lines),
+                "has_more": False
+            }
 
     except Exception as e:
         logger.error("Failed to stream backup logs", error=str(e), job_id=job_id)

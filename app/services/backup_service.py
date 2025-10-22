@@ -237,7 +237,7 @@ class BackupService:
                 "borg", "create",
                 "--progress",
                 "--stats",
-                "--list",
+                # "--list",  # REMOVED: Generates massive output, not needed for progress tracking
                 "--show-rc",  # Show return code for better debugging
                 "--log-json",  # Structured JSON logging
                 "--compression", "lz4",
@@ -269,11 +269,23 @@ class BackupService:
             # Flag to track cancellation
             cancelled = False
 
+            # Performance optimization: Batch database commits
+            last_commit_time = asyncio.get_event_loop().time()
+            COMMIT_INTERVAL = 3.0  # Commit every 3 seconds for performance
+
+            # In-memory circular log buffer (only saved on failure)
+            log_buffer = []
+            MAX_BUFFER_SIZE = 1000  # Keep last 1000 lines (~100KB RAM)
+
+            # Smart current_file tracking: Only show files taking >3 seconds
+            file_start_times = {}  # Track when each file started processing
+            last_shown_file = None
+
             async def check_cancellation():
                 """Periodic heartbeat to check for cancellation independent of log output"""
                 nonlocal cancelled
                 while not cancelled and process.returncode is None:
-                    await asyncio.sleep(1)  # Check every second
+                    await asyncio.sleep(3)  # Check every 3 seconds (reduced from 1s for performance)
                     db.refresh(job)
                     if job.status == "cancelled":
                         logger.info("Backup job cancelled (heartbeat), terminating process", job_id=job_id)
@@ -289,30 +301,64 @@ class BackupService:
 
             async def stream_logs():
                 """Stream log output from process and parse JSON progress"""
-                nonlocal cancelled
+                nonlocal cancelled, last_commit_time, last_shown_file
                 try:
                     async for line in process.stdout:
                         if cancelled:
                             break
 
                         line_str = line.decode('utf-8', errors='replace').strip()
-                        
-                        # NO LOG FILE OPERATIONS - MAXIMUM PERFORMANCE
 
-                        # Try to parse JSON progress messages
+                        # Add to in-memory circular log buffer (for failure debugging)
+                        log_buffer.append(line_str)
+                        if len(log_buffer) > MAX_BUFFER_SIZE:
+                            log_buffer.pop(0)  # Remove oldest line
+
+                        # PERFORMANCE OPTIMIZATION: Fast JSON detection (check first char only)
+                        # Parse JSON progress messages only
                         try:
-                            if line_str.startswith('{') and line_str.endswith('}'):
+                            if line_str and line_str[0] == '{':
                                 json_msg = json.loads(line_str)
                                 msg_type = json_msg.get('type')
 
                                 # Parse archive_progress messages for real-time stats
                                 if msg_type == 'archive_progress':
-                                    # Always update size/file stats
+                                    # Update size/file stats (in memory, no DB write yet)
                                     job.original_size = json_msg.get('original_size', 0)
                                     job.compressed_size = json_msg.get('compressed_size', 0)
                                     job.deduplicated_size = json_msg.get('deduplicated_size', 0)
                                     job.nfiles = json_msg.get('nfiles', 0)
-                                    job.current_file = json_msg.get('path', '')
+
+                                    # SMART CURRENT_FILE TRACKING: Only show files taking >3 seconds
+                                    current_path = json_msg.get('path', '')
+                                    if current_path:
+                                        current_time = asyncio.get_event_loop().time()
+
+                                        # Track when this file started
+                                        if current_path not in file_start_times:
+                                            file_start_times[current_path] = current_time
+
+                                        # Check how long this file has been processing
+                                        file_duration = current_time - file_start_times[current_path]
+
+                                        if file_duration > 3.0:
+                                            # Large/slow file - worth showing to user
+                                            job.current_file = current_path
+                                            last_shown_file = current_path
+                                        elif current_path != last_shown_file:
+                                            # Fast file - don't show it, keep showing last large file or clear it
+                                            if last_shown_file and last_shown_file not in file_start_times:
+                                                # Last shown file is done, clear the display
+                                                job.current_file = None
+                                                last_shown_file = None
+
+                                        # Clean up old file tracking (keep memory usage low)
+                                        if len(file_start_times) > 100:
+                                            # Remove files we finished more than 10 seconds ago
+                                            old_files = [f for f, t in file_start_times.items()
+                                                       if current_time - t > 10.0 and f != current_path]
+                                            for old_file in old_files:
+                                                del file_start_times[old_file]
 
                                     # Check if finished
                                     finished = json_msg.get('finished', False)
@@ -323,17 +369,19 @@ class BackupService:
                                         logger.info("Archive creation finished", job_id=job_id)
                                     else:
                                         # Show indeterminate progress (1%) while backup is running
-                                        # We can't calculate accurate percentage without knowing total size
                                         if job.progress == 0 and job.original_size > 0:
                                             job.progress = 1
                                             job.progress_percent = 1.0
 
-                                    db.commit()
-                                    logger.debug("Updated progress from archive_progress",
-                                               job_id=job_id,
-                                               nfiles=job.nfiles,
-                                               progress=job.progress,
-                                               current_file=job.current_file)
+                                    # PERFORMANCE OPTIMIZATION: Batched commits (every 3 seconds)
+                                    current_time = asyncio.get_event_loop().time()
+                                    if current_time - last_commit_time >= COMMIT_INTERVAL:
+                                        db.commit()
+                                        last_commit_time = current_time
+                                        logger.debug("Batched commit: progress update",
+                                                   job_id=job_id,
+                                                   nfiles=job.nfiles,
+                                                   original_size=job.original_size)
 
                                 # Parse progress_percent messages for percentage
                                 elif msg_type == 'progress_percent':
@@ -348,18 +396,23 @@ class BackupService:
                                             progress_value = int((current / total) * 100)
                                             job.progress_percent = progress_value
                                             job.progress = progress_value
-                                    db.commit()
-                                    logger.debug("Updated progress percent",
-                                               job_id=job_id,
-                                               percent=job.progress_percent)
+
+                                    # Batched commit (no immediate commit)
+                                    current_time = asyncio.get_event_loop().time()
+                                    if current_time - last_commit_time >= COMMIT_INTERVAL:
+                                        db.commit()
+                                        last_commit_time = current_time
 
                                 # Parse file_status messages for current file
                                 elif msg_type == 'file_status':
                                     status = json_msg.get('status', '')
                                     path = json_msg.get('path', '')
                                     if path:
-                                        job.current_file = f"[{status}] {path}"
-                                        db.commit()
+                                        # Apply same smart filtering
+                                        file_duration = asyncio.get_event_loop().time() - file_start_times.get(path, asyncio.get_event_loop().time())
+                                        if file_duration > 3.0:
+                                            job.current_file = f"[{status}] {path}"
+                                            last_shown_file = path
 
                                 # Parse log_message for errors with msgid
                                 elif msg_type == 'log_message':
@@ -380,8 +433,8 @@ class BackupService:
                                                    msgid=msgid,
                                                    message=message)
 
-                        except json.JSONDecodeError:
-                            # Not a JSON line, just regular log output
+                        except (json.JSONDecodeError, ValueError):
+                            # Not a JSON line, just regular log output - ignore
                             pass
                         except Exception as e:
                             logger.warning("Failed to parse JSON progress",
@@ -392,6 +445,10 @@ class BackupService:
                 except asyncio.CancelledError:
                     logger.info("Log streaming cancelled", job_id=job_id)
                     raise
+                finally:
+                    # Final commit to save last state
+                    db.commit()
+                    logger.debug("Final commit after stream_logs completed", job_id=job_id)
 
             # Run both tasks concurrently
             try:
@@ -467,8 +524,26 @@ class BackupService:
             if job.completed_at is None:
                 job.completed_at = datetime.utcnow()
 
-            # No log storage - maximum performance
-            job.logs = "Logging disabled for maximum performance"
+            # CONDITIONAL LOG SAVING: Only save logs on failure/cancellation for debugging
+            if job.status in ['failed', 'cancelled'] or process.returncode not in [0, None]:
+                # Save log buffer to file for debugging
+                log_file = self.log_dir / f"backup_job_{job_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.log"
+                try:
+                    log_file.write_text('\n'.join(log_buffer))
+                    job.logs = f"Logs saved to: {log_file.name}"
+                    logger.warning("Backup failed/cancelled, logs saved for debugging",
+                                 job_id=job_id,
+                                 status=job.status,
+                                 log_file=str(log_file),
+                                 log_lines=len(log_buffer))
+                except Exception as e:
+                    job.logs = f"Failed to save logs: {str(e)}"
+                    logger.error("Failed to save log buffer to file", job_id=job_id, error=str(e))
+            else:
+                # Success - no logs needed, maximum performance
+                job.logs = None
+                logger.info("Backup completed successfully, no logs saved", job_id=job_id)
+
             db.commit()
             logger.info("Backup completed", job_id=job_id, status=job.status)
 

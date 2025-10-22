@@ -89,10 +89,11 @@ export const backupAPI = {
   getStatus: (jobId: string) => api.get(`/backup/status/${jobId}`),
   getAllJobs: () => api.get('/backup/jobs'),
   cancelJob: (jobId: string) => api.post(`/backup/cancel/${jobId}`),
-  getLogs: (jobId: string) => api.get(`/backup/logs/${jobId}`),
-  // NEW: Stream logs incrementally
-  streamLogs: (jobId: string, offset: number) =>
-    api.get(`/backup/logs/${jobId}/stream`, { params: { offset } }),
+  // Download logs as file (only for failed/cancelled backups)
+  downloadLogs: (jobId: string) => {
+    const token = localStorage.getItem('access_token')
+    window.open(`${API_BASE_URL}/backup/logs/${jobId}/download?token=${token}`, '_blank')
+  },
 }
 
 export const archivesAPI = {

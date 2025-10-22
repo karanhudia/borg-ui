@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     # Security settings - auto-generated if not provided
     secret_key: str = ""  # Will be auto-generated on first run
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
+    access_token_expire_minutes: int = 1440  # 24 hours
 
     # Database settings - auto-derived from data_dir
     database_url: str = ""  # Will be auto-derived from data_dir

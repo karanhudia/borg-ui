@@ -20,10 +20,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Paper,
   Alert,
   Divider,
@@ -36,7 +32,7 @@ import {
   CheckCircle,
   AlertCircle,
   RefreshCw,
-  FileText,
+  Download,
   HardDrive,
   Folder,
   Database,
@@ -46,7 +42,6 @@ import {
 import { backupAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useBackupProgress } from '../hooks/useSSE'
-import TerminalLogViewer from '../components/TerminalLogViewer'
 import { formatDate, formatRelativeTime, formatTimeRange, formatBytes as formatBytesUtil } from '../utils/dateUtils'
 
 interface BackupJob {
@@ -61,6 +56,7 @@ interface BackupJob {
   total_size?: string
   processed_size?: string
   error_message?: string
+  has_logs?: boolean  // Indicates if logs are available for this job
   progress_details?: {
     original_size: number
     compressed_size: number
@@ -73,7 +69,6 @@ interface BackupJob {
 
 const Backup: React.FC = () => {
   const [selectedRepository, setSelectedRepository] = useState<string>('')
-  const [showJobDetails, setShowJobDetails] = useState<string | null>(null)
   const queryClient = useQueryClient()
 
   // Real-time backup progress
@@ -173,10 +168,14 @@ const Backup: React.FC = () => {
     cancelBackupMutation.mutate(jobId)
   }
 
-  // Fetch logs for TerminalLogViewer
-  const fetchJobLogs = async (jobId: string, offset: number) => {
-    const response = await backupAPI.streamLogs(jobId, offset)
-    return response.data
+  // Handle download logs
+  const handleDownloadLogs = (jobId: string) => {
+    try {
+      backupAPI.downloadLogs(jobId)
+      toast.success('Downloading logs...')
+    } catch (error) {
+      toast.error('Failed to download logs')
+    }
   }
 
   // Get status color for Chip
@@ -247,7 +246,6 @@ const Backup: React.FC = () => {
 
   const runningJobs = backupStatus?.data?.jobs?.filter((job: BackupJob) => job.status === 'running') || []
   const recentJobs = backupStatus?.data?.jobs?.slice(0, 10) || []
-  const selectedJob = recentJobs.find((j: BackupJob) => j.id === showJobDetails)
 
   return (
     <Box>
@@ -727,7 +725,7 @@ const Backup: React.FC = () => {
           ) : recentJobs.length === 0 ? (
             <Box sx={{ textAlign: 'center', py: 8 }}>
               <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-                <FileText size={48} color="rgba(0,0,0,0.3)" />
+                <Clock size={48} color="rgba(0,0,0,0.3)" />
               </Box>
               <Typography variant="body1" color="text.secondary">
                 No backup jobs found
@@ -810,34 +808,33 @@ const Backup: React.FC = () => {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Stack direction="row" spacing={1.5} alignItems="center">
-                          <Box sx={{ width: 80 }}>
-                            <LinearProgress
-                              variant="determinate"
-                              value={job.progress}
-                              sx={{
-                                height: 8,
-                                borderRadius: 1,
-                                bgcolor: 'grey.200'
-                              }}
-                              color={job.status === 'completed' ? 'success' : job.status === 'failed' ? 'error' : 'primary'}
-                            />
-                          </Box>
-                          <Typography variant="body2" fontWeight={500} sx={{ minWidth: 40 }}>
-                            {job.progress}%
-                          </Typography>
-                        </Stack>
+                        <Box sx={{ width: 100 }}>
+                          <LinearProgress
+                            variant="determinate"
+                            value={job.progress}
+                            sx={{
+                              height: 8,
+                              borderRadius: 1,
+                              bgcolor: 'grey.200'
+                            }}
+                            color={job.status === 'completed' ? 'success' : job.status === 'failed' ? 'error' : 'primary'}
+                          />
+                        </Box>
                       </TableCell>
                       <TableCell>
                         <Stack direction="row" spacing={1}>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            startIcon={<FileText size={14} />}
-                            onClick={() => setShowJobDetails(showJobDetails === job.id ? null : job.id)}
-                          >
-                            {showJobDetails === job.id ? 'Hide' : 'Logs'}
-                          </Button>
+                          {/* Download Logs button - only for completed failed/cancelled backups with logs */}
+                          {job.has_logs && job.status !== 'running' && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="info"
+                              startIcon={<Download size={14} />}
+                              onClick={() => handleDownloadLogs(job.id)}
+                            >
+                              Download Logs
+                            </Button>
+                          )}
                           {job.status === 'running' && (
                             <Button
                               size="small"
@@ -859,30 +856,6 @@ const Backup: React.FC = () => {
           )}
         </CardContent>
       </Card>
-
-      {/* Log Viewer Dialog */}
-      {showJobDetails && selectedJob && (
-        <Dialog
-          open={!!showJobDetails}
-          onClose={() => setShowJobDetails(null)}
-          maxWidth="lg"
-          fullWidth
-        >
-          <DialogTitle>
-            Backup Job {selectedJob.id} Logs
-          </DialogTitle>
-          <DialogContent>
-            <TerminalLogViewer
-              jobId={selectedJob.id}
-              status={selectedJob.status}
-              onFetchLogs={(offset) => fetchJobLogs(selectedJob.id, offset)}
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setShowJobDetails(null)}>Close</Button>
-          </DialogActions>
-        </Dialog>
-      )}
     </Box>
   )
 }
