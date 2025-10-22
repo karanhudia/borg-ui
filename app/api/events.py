@@ -22,14 +22,21 @@ active_connections: Dict[str, asyncio.Queue] = {}
 
 class EventManager:
     """Manages real-time events and broadcasting"""
-    
+
     def __init__(self):
         self.connections: Dict[str, asyncio.Queue] = {}
-        self._lock = asyncio.Lock()
-    
+        self._lock = None
+
+    @property
+    def lock(self):
+        """Lazy-load the asyncio lock when event loop is available"""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
+
     async def add_connection(self, user_id: str) -> asyncio.Queue:
         """Add a new connection for a user"""
-        async with self._lock:
+        async with self.lock:
             queue = asyncio.Queue()
             self.connections[user_id] = queue
             logger.debug("Added SSE connection", user_id=user_id, total_connections=len(self.connections))
@@ -37,7 +44,7 @@ class EventManager:
 
     async def remove_connection(self, user_id: str):
         """Remove a connection for a user"""
-        async with self._lock:
+        async with self.lock:
             if user_id in self.connections:
                 del self.connections[user_id]
                 logger.debug("Removed SSE connection", user_id=user_id, total_connections=len(self.connections))
@@ -49,8 +56,8 @@ class EventManager:
             "data": data,
             "timestamp": datetime.utcnow().isoformat()
         }
-        
-        async with self._lock:
+
+        async with self.lock:
             if user_id:
                 # Send to specific user
                 if user_id in self.connections:
@@ -68,7 +75,7 @@ class EventManager:
     
     async def get_connection_count(self) -> int:
         """Get the number of active connections"""
-        async with self._lock:
+        async with self.lock:
             return len(self.connections)
 
 # Global event manager instance
