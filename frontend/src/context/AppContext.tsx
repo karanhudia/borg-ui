@@ -130,7 +130,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         backups: true,
         archives: true,
         restore: false, // Under development
-        schedule: false, // Under development
+        schedule: true,
         settings: true,
       }
     }
@@ -144,7 +144,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       backups: appState.hasSSHKey && appState.hasRepositories,
       archives: appState.hasSSHKey && appState.hasRepositories,
       restore: false, // Under development
-      schedule: false, // Under development
+      schedule: appState.hasSSHKey && appState.hasRepositories, // Requires SSH key and repositories
       settings: true,
     }
   }, [appState.hasSSHKey, appState.hasRepositories, appState.hasArchives, fetchedSSH, fetchedRepos, authLoading, isAuthenticated])
@@ -153,9 +153,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const getTabDisabledReason = useCallback((tab: keyof TabEnablement): string | null => {
     // Check for features under development first
     if (tab === 'restore') {
-      return 'Under Development - Coming Soon'
-    }
-    if (tab === 'schedule') {
       return 'Under Development - Coming Soon'
     }
 
@@ -169,6 +166,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return 'Please generate or upload an SSH key first'
       case 'backups':
       case 'archives':
+      case 'schedule':
         if (!appState.hasSSHKey) {
           return 'Please generate or upload an SSH key first'
         }

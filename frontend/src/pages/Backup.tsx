@@ -833,10 +833,10 @@ const Backup: React.FC = () => {
                                     if (window.confirm('Are you CERTAIN no backup is currently running on this repository? Breaking the lock while a backup is running can corrupt your repository!')) {
                                       try {
                                         await repositoriesAPI.breakLock(repo.id)
-                                        enqueueSnackbar('Lock removed successfully! You can now start a new backup.', { variant: 'success' })
-                                        refetch()
+                                        toast.success('Lock removed successfully! You can now start a new backup.')
+                                        queryClient.invalidateQueries({ queryKey: ['backup-status'] })
                                       } catch (error: any) {
-                                        enqueueSnackbar(error.response?.data?.detail || 'Failed to break lock', { variant: 'error' })
+                                        toast.error(error.response?.data?.detail || 'Failed to break lock')
                                       }
                                     }
                                   }}
