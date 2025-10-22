@@ -42,21 +42,23 @@ This project solves my personal backup management headaches, and I hope it solve
 ## Screenshots
 
 ### Dashboard
-![Dashboard](screenshots/dashboard.png)
+<img width="1512" height="822" alt="dashboard" src="https://github.com/user-attachments/assets/998e9216-ed2d-494b-8cb1-6a1b2a330df9" />
+
 *Real-time system monitoring with Borg status, CPU, memory, and disk usage metrics, plus recent backup job history*
 
 ### Backup Operations
-![Backup Operations - Live Progress](screenshots/backup-live-progress.png)
+<img width="1512" height="822" alt="backup-live-progress" src="https://github.com/user-attachments/assets/6a6099f2-de79-4bf1-9b26-32cab6a52173" />
+
 *Live backup progress tracking showing current file being processed, files count, original size, compressed size, and deduplicated data*
 
-![Backup Operations - Job History](screenshots/backup-job-history.png)
+<img width="1512" height="822" alt="backup-job-history" src="https://github.com/user-attachments/assets/a4272a93-4f56-4640-ab57-6ed6164b415f" />
 *Complete backup job history with status, duration, progress tracking, and quick access to logs*
 
 ### Repository Management
-![Repository Details](screenshots/repository-details.png)
+<img width="1512" height="822" alt="repository-details" src="https://github.com/user-attachments/assets/8aa0dffc-c45d-4336-bb81-3e6918f49591" />
 *Repository overview showing SSH connection details, compression settings, archive count, and configured source paths*
 
-![Create Repository](screenshots/create-repository.png)
+<img width="1512" height="822" alt="create-repository" src="https://github.com/user-attachments/assets/d7bba4d2-0fec-4257-8aa2-f72ccfeeb30a" />
 *Intuitive repository creation with command preview, encryption options, compression settings, and source directory configuration*
 
 ---
@@ -69,7 +71,6 @@ This project solves my personal backup management headaches, and I hope it solve
   - [Method 1: Portainer](#method-1-portainer-recommended)
   - [Method 2: Docker Run](#method-2-docker-run)
   - [Method 3: Docker Compose](#method-3-docker-compose)
-- [📖 **[Usage Guide](https://karanhudia.github.io/borg-ui/usage-guide)** - How to create local and SSH backups](#usage-guide)
 - [Configuration](#configuration)
 - [Troubleshooting](#troubleshooting)
 - [Documentation](#documentation)
@@ -144,40 +145,6 @@ Access the web interface at `http://localhost:8081`
 - **Password**: `admin123`
 
 ⚠️ **Change the default password immediately after first login!**
-
----
-
-## Usage Guide
-
-📖 **[Complete Step-by-Step Usage Guide](https://karanhudia.github.io/borg-ui/usage-guide)**
-
-### Two Ways to Create Backups
-
-Borg Web UI supports two backup methods with the same simple workflow:
-
-#### 1. Local Backups (Recommended for Beginners)
-✅ **No SSH setup required** - Perfect for USB drives, NAS mounts, or local storage
-✅ **Faster** - No network overhead
-✅ **Simple** - Just use `/local/` prefix for paths
-
-**Example:** Backup to USB drive at `/mnt/usb-drive`
-- Create repository: `/local/mnt/usb-drive/borg-backups/myrepo`
-- That's it! Start backing up.
-
-#### 2. SSH/Remote Backups
-✅ **Off-site protection** - Survive local disasters
-✅ **Secure** - Industry-standard SSH protocol
-✅ **Flexible** - Backup to any remote server
-
-**Example:** Backup to remote server at `192.168.1.100`
-1. Generate SSH key in UI (one click)
-2. Deploy key to remote server (automatic)
-3. Create repository: `user@192.168.1.100:backups/myrepo`
-4. Start backing up!
-
-**The Difference?** Just the SSH key setup. Everything else is identical!
-
-**👉 [Read the full step-by-step guide](https://karanhudia.github.io/borg-ui/usage-guide)** with examples, screenshots, and troubleshooting.
 
 ---
 
