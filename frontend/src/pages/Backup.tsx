@@ -10,7 +10,6 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  LinearProgress,
   CircularProgress,
   Stack,
   Chip,
@@ -741,7 +740,6 @@ const Backup: React.FC = () => {
                     <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Status</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Started</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Duration</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Progress</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Actions</TableCell>
                   </TableRow>
                 </TableHead>
@@ -806,20 +804,6 @@ const Backup: React.FC = () => {
                         <Typography variant="body2" color="text.secondary">
                           {formatTimeRange(job.started_at, job.completed_at, job.status)}
                         </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ width: 100 }}>
-                          <LinearProgress
-                            variant="determinate"
-                            value={job.progress}
-                            sx={{
-                              height: 8,
-                              borderRadius: 1,
-                              bgcolor: 'grey.200'
-                            }}
-                            color={job.status === 'completed' ? 'success' : job.status === 'failed' ? 'error' : 'primary'}
-                          />
-                        </Box>
                       </TableCell>
                       <TableCell>
                         <Stack direction="row" spacing={1}>
