@@ -1223,3 +1223,100 @@ async def get_repository_stats(path: str) -> Dict[str, Any]:
         return {
             "error": str(e)
         }
+
+@router.post("/{repository_id}/break-lock")
+async def break_repository_lock(
+    repository_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Break a stale lock on a repository
+
+    Use this when a backup has crashed or been killed, leaving behind a lock file
+    that prevents new backups from starting.
+
+    WARNING: Only use this if you're CERTAIN no backup is currently running!
+    """
+    try:
+        # Get repository from database
+        repository = db.query(Repository).filter(Repository.id == repository_id).first()
+        if not repository:
+            raise HTTPException(status_code=404, detail="Repository not found")
+
+        logger.info("Breaking repository lock",
+                   repository=repository.path,
+                   user=current_user.username,
+                   repository_id=repository_id)
+
+        # Set up environment with SSH options and passphrase
+        env = os.environ.copy()
+
+        # Add SSH options
+        ssh_opts = [
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "UserKnownHostsFile=/dev/null",
+            "-o", "LogLevel=ERROR"
+        ]
+        env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+
+        # Add passphrase if available
+        if repository.passphrase:
+            env['BORG_PASSPHRASE'] = repository.passphrase
+
+        # Skip prompts
+        env['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes'
+        env['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes'
+
+        # Build borg break-lock command
+        cmd = ["borg", "break-lock", repository.path]
+
+        # Execute command
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env
+        )
+
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+
+        stdout_str = stdout.decode('utf-8', errors='replace') if stdout else ""
+        stderr_str = stderr.decode('utf-8', errors='replace') if stderr else ""
+
+        if process.returncode == 0:
+            logger.info("Successfully broke repository lock",
+                       repository=repository.path,
+                       user=current_user.username)
+            return {
+                "success": True,
+                "message": "Lock successfully removed. You can now start a new backup.",
+                "repository": repository.path,
+                "output": stdout_str
+            }
+        else:
+            logger.error("Failed to break repository lock",
+                        repository=repository.path,
+                        returncode=process.returncode,
+                        stderr=stderr_str)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to break lock: {stderr_str}"
+            )
+
+    except asyncio.TimeoutError:
+        logger.error("Timeout breaking repository lock", repository_id=repository_id)
+        raise HTTPException(
+            status_code=500,
+            detail="Timeout while trying to break lock"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error breaking repository lock",
+                    repository_id=repository_id,
+                    error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to break lock: {str(e)}"
+        )

@@ -54,14 +54,16 @@ BORG_MESSAGE_IDS = {
 
     # Lock errors
     "LockTimeout": {
-        "message": "Could not acquire repository lock",
-        "suggestion": "Another backup process may be running. Wait for it to complete or break the lock with 'borg break-lock'",
-        "severity": "error"
+        "message": "Could not acquire repository lock - the repository is locked by another process or has a stale lock",
+        "suggestion": "If no backup is currently running, this is likely a stale lock from a crashed backup. Use the 'Break Lock' button to remove it safely.",
+        "severity": "error",
+        "is_lock_error": True
     },
     "LockError": {
         "message": "Repository locking error",
-        "suggestion": "Check if another process is using the repository",
-        "severity": "error"
+        "suggestion": "Check if another process is using the repository. If not, use the 'Break Lock' button to remove the stale lock.",
+        "severity": "error",
+        "is_lock_error": True
     },
 
     # Authentication/Passphrase errors

@@ -562,12 +562,19 @@ class BackupService:
                 job.status = "failed"
                 # Build comprehensive error message with msgid details
                 error_parts = []
+                is_lock_error = False
 
                 # Check if we have captured error msgids
                 if job_id in self.error_msgids and self.error_msgids[job_id]:
                     # Use the first critical error or the first error
                     errors = self.error_msgids[job_id]
                     primary_error = next((e for e in errors if e['levelname'] == 'CRITICAL'), errors[0])
+
+                    # Check if this is a lock error
+                    if primary_error['msgid'] in ['LockTimeout', 'LockError']:
+                        is_lock_error = True
+                        # Store repository path in error message for easy access
+                        error_parts.append(f"LOCK_ERROR::{repository}")
 
                     # Format error with details and suggestions
                     formatted_error = format_error_message(
@@ -587,6 +594,13 @@ class BackupService:
                     ))
 
                 job.error_message = "\n".join(error_parts)
+
+                # Log lock error for visibility
+                if is_lock_error:
+                    logger.warning("Backup failed due to lock timeout",
+                                 job_id=job_id,
+                                 repository=repository,
+                                 msgid=primary_error['msgid'])
 
             if job.completed_at is None:
                 job.completed_at = datetime.utcnow()
