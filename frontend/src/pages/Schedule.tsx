@@ -13,31 +13,40 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
   IconButton,
   Chip,
-  Divider,
-  Checkbox,
   FormControlLabel,
+  Switch,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Tooltip,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
   InputAdornment,
+  Alert,
 } from '@mui/material'
 import {
   Plus,
   Edit,
   Trash2,
   Play,
-  Pause,
   Clock,
   Settings,
   CheckCircle,
+  XCircle,
   AlertCircle,
+  Calendar,
 } from 'lucide-react'
-import { scheduleAPI } from '../services/api'
+import { scheduleAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
-import { useAuth } from '../hooks/useAuth'
+import { formatDate, formatRelativeTime } from '../utils/dateUtils'
 
 interface ScheduledJob {
   id: number
@@ -53,7 +62,6 @@ interface ScheduledJob {
 }
 
 const Schedule: React.FC = () => {
-  const { user } = useAuth()
   const queryClient = useQueryClient()
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingJob, setEditingJob] = useState<ScheduledJob | null>(null)
@@ -64,6 +72,13 @@ const Schedule: React.FC = () => {
   const { data: jobsData, isLoading } = useQuery({
     queryKey: ['scheduled-jobs'],
     queryFn: scheduleAPI.getScheduledJobs,
+    refetchInterval: 30000, // Refresh every 30 seconds
+  })
+
+  // Get repositories
+  const { data: repositoriesData } = useQuery({
+    queryKey: ['repositories'],
+    queryFn: repositoriesAPI.getRepositories,
   })
 
   // Get cron presets
@@ -76,6 +91,7 @@ const Schedule: React.FC = () => {
   const { data: upcomingData } = useQuery({
     queryKey: ['upcoming-jobs'],
     queryFn: () => scheduleAPI.getUpcomingJobs(24),
+    refetchInterval: 60000, // Refresh every minute
   })
 
   // Create job mutation
@@ -86,6 +102,7 @@ const Schedule: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
       setShowCreateModal(false)
+      resetCreateForm()
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to create scheduled job')
@@ -125,12 +142,12 @@ const Schedule: React.FC = () => {
   const toggleJobMutation = useMutation({
     mutationFn: scheduleAPI.toggleScheduledJob,
     onSuccess: () => {
-      toast.success('Scheduled job toggled successfully')
+      toast.success('Job status updated')
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to toggle scheduled job')
+      toast.error(error.response?.data?.detail || 'Failed to toggle job')
     },
   })
 
@@ -138,20 +155,20 @@ const Schedule: React.FC = () => {
   const runJobNowMutation = useMutation({
     mutationFn: scheduleAPI.runScheduledJobNow,
     onSuccess: () => {
-      toast.success('Scheduled job executed successfully')
+      toast.success('Job started successfully')
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
+      queryClient.invalidateQueries({ queryKey: ['backup-status'] })
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to run scheduled job')
+      toast.error(error.response?.data?.detail || 'Failed to run job')
     },
   })
 
   // Form states
   const [createForm, setCreateForm] = useState({
     name: '',
-    cron_expression: '0 0 * * *',
+    cron_expression: '0 2 * * *',
     repository: '',
-    config_file: '',
     enabled: true,
     description: '',
   })
@@ -160,18 +177,35 @@ const Schedule: React.FC = () => {
     name: '',
     cron_expression: '',
     repository: '',
-    config_file: '',
     enabled: true,
     description: '',
   })
 
+  const resetCreateForm = () => {
+    setCreateForm({
+      name: '',
+      cron_expression: '0 2 * * *',
+      repository: '',
+      enabled: true,
+      description: '',
+    })
+  }
+
   const handleCreateJob = (e: React.FormEvent) => {
     e.preventDefault()
+    if (!createForm.repository) {
+      toast.error('Please select a repository')
+      return
+    }
     createJobMutation.mutate(createForm)
   }
 
   const handleUpdateJob = (e: React.FormEvent) => {
     e.preventDefault()
+    if (!editForm.repository) {
+      toast.error('Please select a repository')
+      return
+    }
     if (editingJob) {
       updateJobMutation.mutate({
         id: editingJob.id,
@@ -191,19 +225,14 @@ const Schedule: React.FC = () => {
   }
 
   const handleRunJobNow = (job: ScheduledJob) => {
-    runJobNowMutation.mutate(job.id)
+    if (window.confirm(`Run "${job.name}" now?`)) {
+      runJobNowMutation.mutate(job.id)
+    }
   }
 
   const openCreateModal = () => {
+    resetCreateForm()
     setShowCreateModal(true)
-    setCreateForm({
-      name: '',
-      cron_expression: '0 0 * * *',
-      repository: '',
-      config_file: '',
-      enabled: true,
-      description: '',
-    })
   }
 
   const openEditModal = (job: ScheduledJob) => {
@@ -212,7 +241,6 @@ const Schedule: React.FC = () => {
       name: job.name,
       cron_expression: job.cron_expression,
       repository: job.repository || '',
-      config_file: '',
       enabled: job.enabled,
       description: job.description || '',
     })
@@ -232,25 +260,31 @@ const Schedule: React.FC = () => {
   }
 
   const formatCronExpression = (expression: string) => {
-    try {
-      const descriptions: { [key: string]: string } = {
-        '0 0 * * *': 'Daily at midnight',
-        '0 2 * * *': 'Daily at 2 AM',
-        '0 */6 * * *': 'Every 6 hours',
-        '0 * * * *': 'Every hour',
-        '*/15 * * * *': 'Every 15 minutes',
-        '*/5 * * * *': 'Every 5 minutes',
-        '* * * * *': 'Every minute',
-        '0 0 * * 0': 'Weekly on Sunday',
-        '0 0 1 * *': 'Monthly on 1st',
-        '0 9 * * 1-5': 'Weekdays at 9 AM',
-        '0 6 * * 0,6': 'Weekends at 6 AM',
-      }
-      return descriptions[expression] || expression
-    } catch {
-      return expression
+    const descriptions: { [key: string]: string } = {
+      '0 0 * * *': 'Daily at midnight',
+      '0 2 * * *': 'Daily at 2 AM',
+      '0 */6 * * *': 'Every 6 hours',
+      '0 * * * *': 'Every hour',
+      '*/15 * * * *': 'Every 15 minutes',
+      '*/5 * * * *': 'Every 5 minutes',
+      '* * * * *': 'Every minute',
+      '0 0 * * 0': 'Weekly on Sunday',
+      '0 0 1 * *': 'Monthly on 1st',
+      '0 9 * * 1-5': 'Weekdays at 9 AM',
+      '0 6 * * 0,6': 'Weekends at 6 AM',
     }
+    return descriptions[expression] || expression
   }
+
+  const getRepositoryName = (path: string) => {
+    const repos = repositoriesData?.data?.repositories || []
+    const repo = repos.find((r: any) => r.path === path)
+    return repo?.name || path
+  }
+
+  const jobs = jobsData?.data?.jobs || []
+  const repositories = repositoriesData?.data?.repositories || []
+  const upcomingJobs = upcomingData?.data?.upcoming_jobs || []
 
   return (
     <Box>
@@ -258,71 +292,80 @@ const Schedule: React.FC = () => {
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <Box>
           <Typography variant="h4" fontWeight={600} gutterBottom>
-            Schedule Management
+            Scheduled Backups
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Manage scheduled backup jobs and cron expressions
+            Automate your backups with cron-based scheduling
           </Typography>
         </Box>
-        {user?.is_admin && (
-          <Button
-            variant="contained"
-            startIcon={<Plus size={18} />}
-            onClick={openCreateModal}
-          >
-            Create Job
-          </Button>
-        )}
+        <Button
+          variant="contained"
+          startIcon={<Plus size={18} />}
+          onClick={openCreateModal}
+          disabled={repositories.length === 0}
+        >
+          Create Schedule
+        </Button>
       </Box>
 
-      {/* Upcoming Jobs */}
-      {upcomingData && upcomingData.data?.upcoming_jobs?.length > 0 && (
+      {/* No repositories warning */}
+      {repositories.length === 0 && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          You need to create at least one repository before scheduling backups.
+        </Alert>
+      )}
+
+      {/* Upcoming Jobs Summary */}
+      {upcomingJobs.length > 0 && (
         <Card sx={{ mb: 3 }}>
           <CardContent>
-            <Typography variant="h6" fontWeight={600} gutterBottom>
-              Upcoming Jobs (Next 24 Hours)
-            </Typography>
-            <List>
-              {upcomingData.data.upcoming_jobs.map((job: any, index: number) => (
-                <React.Fragment key={job.id}>
-                  {index > 0 && <Divider />}
-                  <ListItem
-                    sx={{
-                      py: 2,
-                      backgroundColor: 'grey.50',
-                      borderRadius: 1,
-                      my: 0.5,
-                    }}
-                  >
-                    <ListItemIcon>
-                      <Clock size={20} color="#1976d2" />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={job.name}
-                      secondary={job.repository}
-                      primaryTypographyProps={{ fontWeight: 500 }}
-                    />
-                    <Box sx={{ textAlign: 'right' }}>
-                      <Typography variant="body2" fontWeight={500}>
-                        {new Date(job.next_run).toLocaleString()}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {formatCronExpression(job.cron_expression)}
-                      </Typography>
-                    </Box>
-                  </ListItem>
-                </React.Fragment>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+              <Calendar size={20} color="#1976d2" />
+              <Typography variant="h6" fontWeight={600}>
+                Upcoming Jobs (Next 24 Hours)
+              </Typography>
+            </Stack>
+            <Stack spacing={1.5}>
+              {upcomingJobs.slice(0, 5).map((job: any) => (
+                <Box
+                  key={job.id}
+                  sx={{
+                    p: 2,
+                    backgroundColor: 'grey.50',
+                    borderRadius: 1,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Box>
+                    <Typography variant="body2" fontWeight={500}>
+                      {job.name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {getRepositoryName(job.repository)}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ textAlign: 'right' }}>
+                    <Typography variant="body2" fontWeight={500}>
+                      {formatDate(job.next_run)}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {formatRelativeTime(job.next_run)}
+                    </Typography>
+                  </Box>
+                </Box>
               ))}
-            </List>
+            </Stack>
           </CardContent>
         </Card>
       )}
 
-      {/* Scheduled Jobs List */}
+      {/* Scheduled Jobs Table */}
       <Card>
         <CardContent>
           <Typography variant="h6" fontWeight={600} gutterBottom>
-            Scheduled Jobs
+            All Scheduled Jobs
           </Typography>
 
           {isLoading ? (
@@ -332,7 +375,7 @@ const Schedule: React.FC = () => {
                 Loading scheduled jobs...
               </Typography>
             </Box>
-          ) : jobsData?.data?.jobs?.length === 0 ? (
+          ) : jobs.length === 0 ? (
             <Box sx={{ textAlign: 'center', py: 8 }}>
               <Clock size={48} color="rgba(0,0,0,0.3)" style={{ margin: '0 auto' }} />
               <Typography variant="body1" color="text.secondary" sx={{ mt: 2 }}>
@@ -343,95 +386,146 @@ const Schedule: React.FC = () => {
               </Typography>
             </Box>
           ) : (
-            <List>
-              {jobsData?.data?.jobs?.map((job: ScheduledJob, index: number) => (
-                <React.Fragment key={job.id}>
-                  {index > 0 && <Divider />}
-                  <ListItem
-                    sx={{
-                      py: 2,
-                      flexDirection: { xs: 'column', md: 'row' },
-                      alignItems: { xs: 'flex-start', md: 'center' },
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, mb: { xs: 2, md: 0 } }}>
-                      <ListItemIcon sx={{ minWidth: 40 }}>
-                        {job.enabled ? (
-                          <CheckCircle size={20} color="#2e7d32" />
-                        ) : (
-                          <Pause size={20} color="rgba(0,0,0,0.5)" />
-                        )}
-                      </ListItemIcon>
-                      <Box>
-                        <Typography variant="body1" fontWeight={500}>
+            <TableContainer component={Paper} variant="outlined" sx={{ mt: 2 }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell width="5%">Status</TableCell>
+                    <TableCell width="20%">Job Name</TableCell>
+                    <TableCell width="20%">Repository</TableCell>
+                    <TableCell width="15%">Schedule</TableCell>
+                    <TableCell width="15%">Last Run</TableCell>
+                    <TableCell width="15%">Next Run</TableCell>
+                    <TableCell width="10%" align="right">Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {jobs.map((job: ScheduledJob) => (
+                    <TableRow key={job.id} hover>
+                      <TableCell>
+                        <Tooltip title={job.enabled ? 'Enabled' : 'Disabled'} arrow>
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            {job.enabled ? (
+                              <CheckCircle size={18} color="#2e7d32" />
+                            ) : (
+                              <XCircle size={18} color="rgba(0,0,0,0.3)" />
+                            )}
+                          </Box>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={500}>
                           {job.name}
                         </Typography>
-                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
-                          <Chip
-                            label={formatCronExpression(job.cron_expression)}
-                            size="small"
-                            variant="outlined"
-                          />
-                          {job.repository && (
-                            <Typography variant="caption" color="text.secondary">
-                              {job.repository}
-                            </Typography>
-                          )}
-                        </Stack>
-                      </Box>
-                    </Box>
-
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Box sx={{ textAlign: 'right', mr: 2 }}>
-                        <Typography variant="body2" fontWeight={500}>
-                          Next: {job.next_run ? new Date(job.next_run).toLocaleString() : 'Never'}
-                        </Typography>
-                        {job.last_run && (
+                        {job.description && (
                           <Typography variant="caption" color="text.secondary">
-                            Last: {new Date(job.last_run).toLocaleString()}
+                            {job.description}
                           </Typography>
                         )}
-                      </Box>
-
-                      {user?.is_admin && (
-                        <Stack direction="row" spacing={0.5}>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleRunJobNow(job)}
-                            disabled={runJobNowMutation.isLoading}
-                            sx={{ color: 'primary.main' }}
-                          >
-                            <Play size={16} />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleToggleJob(job)}
-                            disabled={toggleJobMutation.isLoading}
-                            sx={{ color: 'text.secondary' }}
-                          >
-                            {job.enabled ? <Pause size={16} /> : <Play size={16} />}
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            onClick={() => openEditModal(job)}
-                            sx={{ color: 'text.secondary' }}
-                          >
-                            <Edit size={16} />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            onClick={() => setDeleteConfirmJob(job)}
-                            sx={{ color: 'error.main' }}
-                          >
-                            <Trash2 size={16} />
-                          </IconButton>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {getRepositoryName(job.repository || '')}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                          {job.repository}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={formatCronExpression(job.cron_expression)}
+                          size="small"
+                          variant="outlined"
+                          color="primary"
+                        />
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                          {job.cron_expression}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        {job.last_run ? (
+                          <>
+                            <Typography variant="body2">
+                              {formatDate(job.last_run)}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {formatRelativeTime(job.last_run)}
+                            </Typography>
+                          </>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            Never
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {job.next_run ? (
+                          <>
+                            <Typography variant="body2" fontWeight={500}>
+                              {formatDate(job.next_run)}
+                            </Typography>
+                            <Typography variant="caption" color="primary.main">
+                              {formatRelativeTime(job.next_run)}
+                            </Typography>
+                          </>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            Never
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                          <Tooltip title={job.enabled ? 'Disable' : 'Enable'} arrow>
+                            <FormControlLabel
+                              control={
+                                <Switch
+                                  checked={job.enabled}
+                                  onChange={() => handleToggleJob(job)}
+                                  size="small"
+                                />
+                              }
+                              label=""
+                              sx={{ m: 0 }}
+                            />
+                          </Tooltip>
+                          <Tooltip title="Run Now" arrow>
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleRunJobNow(job)}
+                                disabled={!job.enabled || runJobNowMutation.isLoading}
+                                color="primary"
+                              >
+                                <Play size={16} />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title="Edit" arrow>
+                            <IconButton
+                              size="small"
+                              onClick={() => openEditModal(job)}
+                              color="default"
+                            >
+                              <Edit size={16} />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Delete" arrow>
+                            <IconButton
+                              size="small"
+                              onClick={() => setDeleteConfirmJob(job)}
+                              color="error"
+                            >
+                              <Trash2 size={16} />
+                            </IconButton>
+                          </Tooltip>
                         </Stack>
-                      )}
-                    </Box>
-                  </ListItem>
-                </React.Fragment>
-              ))}
-            </List>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           )}
         </CardContent>
       </Card>
@@ -448,64 +542,76 @@ const Schedule: React.FC = () => {
           <DialogContent>
             <Stack spacing={3}>
               <TextField
-                label="Name"
+                label="Job Name"
                 value={createForm.name}
                 onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
                 required
                 fullWidth
+                placeholder="Daily backup"
+                helperText="A descriptive name for this scheduled job"
               />
 
+              <FormControl fullWidth required>
+                <InputLabel>Repository</InputLabel>
+                <Select
+                  value={createForm.repository}
+                  onChange={(e) => setCreateForm({ ...createForm, repository: e.target.value })}
+                  label="Repository"
+                >
+                  {repositories.map((repo: any) => (
+                    <MenuItem key={repo.id} value={repo.path}>
+                      <Box>
+                        <Typography variant="body2">{repo.name}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {repo.path}
+                        </Typography>
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
               <Box>
-                <Stack direction="row" spacing={2}>
-                  <TextField
-                    label="Cron Expression"
-                    value={createForm.cron_expression}
-                    onChange={(e) => setCreateForm({ ...createForm, cron_expression: e.target.value })}
-                    required
-                    fullWidth
-                    placeholder="0 0 * * *"
-                    InputProps={{
-                      endAdornment: (
-                        <InputAdornment position="end">
+                <TextField
+                  label="Cron Expression"
+                  value={createForm.cron_expression}
+                  onChange={(e) => setCreateForm({ ...createForm, cron_expression: e.target.value })}
+                  required
+                  fullWidth
+                  placeholder="0 2 * * *"
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <Tooltip title="Choose preset" arrow>
                           <IconButton onClick={openCronBuilder} edge="end">
                             <Settings size={18} />
                           </IconButton>
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                </Stack>
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                  {formatCronExpression(createForm.cron_expression)}
-                </Typography>
+                        </Tooltip>
+                      </InputAdornment>
+                    ),
+                  }}
+                  helperText={formatCronExpression(createForm.cron_expression)}
+                />
               </Box>
-
-              <TextField
-                label="Repository"
-                value={createForm.repository}
-                onChange={(e) => setCreateForm({ ...createForm, repository: e.target.value })}
-                placeholder="Optional"
-                fullWidth
-              />
 
               <TextField
                 label="Description"
                 value={createForm.description}
                 onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
                 multiline
-                rows={3}
+                rows={2}
                 placeholder="Optional description"
                 fullWidth
               />
 
               <FormControlLabel
                 control={
-                  <Checkbox
+                  <Switch
                     checked={createForm.enabled}
                     onChange={(e) => setCreateForm({ ...createForm, enabled: e.target.checked })}
                   />
                 }
-                label="Enabled"
+                label="Enable immediately"
               />
             </Stack>
           </DialogContent>
@@ -515,9 +621,9 @@ const Schedule: React.FC = () => {
               type="submit"
               variant="contained"
               disabled={createJobMutation.isLoading}
-              startIcon={createJobMutation.isLoading ? <CircularProgress size={16} /> : null}
+              startIcon={createJobMutation.isLoading ? <CircularProgress size={16} /> : <Plus size={16} />}
             >
-              {createJobMutation.isLoading ? 'Creating...' : 'Create'}
+              {createJobMutation.isLoading ? 'Creating...' : 'Create Job'}
             </Button>
           </DialogActions>
         </form>
@@ -535,12 +641,32 @@ const Schedule: React.FC = () => {
           <DialogContent>
             <Stack spacing={3}>
               <TextField
-                label="Name"
+                label="Job Name"
                 value={editForm.name}
                 onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                 required
                 fullWidth
               />
+
+              <FormControl fullWidth required>
+                <InputLabel>Repository</InputLabel>
+                <Select
+                  value={editForm.repository}
+                  onChange={(e) => setEditForm({ ...editForm, repository: e.target.value })}
+                  label="Repository"
+                >
+                  {repositories.map((repo: any) => (
+                    <MenuItem key={repo.id} value={repo.path}>
+                      <Box>
+                        <Typography variant="body2">{repo.name}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {repo.path}
+                        </Typography>
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
 
               <Box>
                 <TextField
@@ -552,37 +678,30 @@ const Schedule: React.FC = () => {
                   InputProps={{
                     endAdornment: (
                       <InputAdornment position="end">
-                        <IconButton onClick={openCronBuilder} edge="end">
-                          <Settings size={18} />
-                        </IconButton>
+                        <Tooltip title="Choose preset" arrow>
+                          <IconButton onClick={openCronBuilder} edge="end">
+                            <Settings size={18} />
+                          </IconButton>
+                        </Tooltip>
                       </InputAdornment>
                     ),
                   }}
+                  helperText={formatCronExpression(editForm.cron_expression)}
                 />
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                  {formatCronExpression(editForm.cron_expression)}
-                </Typography>
               </Box>
-
-              <TextField
-                label="Repository"
-                value={editForm.repository}
-                onChange={(e) => setEditForm({ ...editForm, repository: e.target.value })}
-                fullWidth
-              />
 
               <TextField
                 label="Description"
                 value={editForm.description}
                 onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                 multiline
-                rows={3}
+                rows={2}
                 fullWidth
               />
 
               <FormControlLabel
                 control={
-                  <Checkbox
+                  <Switch
                     checked={editForm.enabled}
                     onChange={(e) => setEditForm({ ...editForm, enabled: e.target.checked })}
                   />
@@ -599,7 +718,7 @@ const Schedule: React.FC = () => {
               disabled={updateJobMutation.isLoading}
               startIcon={updateJobMutation.isLoading ? <CircularProgress size={16} /> : null}
             >
-              {updateJobMutation.isLoading ? 'Updating...' : 'Update'}
+              {updateJobMutation.isLoading ? 'Updating...' : 'Update Job'}
             </Button>
           </DialogActions>
         </form>
@@ -612,34 +731,46 @@ const Schedule: React.FC = () => {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Cron Expression Builder</DialogTitle>
+        <DialogTitle>Cron Expression Presets</DialogTitle>
         <DialogContent>
-          <Typography variant="body2" fontWeight={500} gutterBottom sx={{ mt: 1 }}>
-            Quick Presets
+          <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mt: 1 }}>
+            Select a preset schedule for your backup job
           </Typography>
-          <List>
+          <Stack spacing={1} sx={{ mt: 2 }}>
             {presetsData?.data?.presets?.map((preset: any) => (
-              <ListItem
+              <Paper
                 key={preset.expression}
                 sx={{
+                  p: 2,
                   cursor: 'pointer',
                   border: 1,
                   borderColor: 'divider',
-                  borderRadius: 1,
-                  mb: 1,
-                  '&:hover': { backgroundColor: 'action.hover' },
+                  '&:hover': {
+                    backgroundColor: 'action.hover',
+                    borderColor: 'primary.main',
+                  },
                 }}
                 onClick={() => applyCronPreset(preset)}
               >
-                <ListItemText
-                  primary={preset.name}
-                  secondary={preset.description}
-                  primaryTypographyProps={{ fontWeight: 500 }}
-                  secondaryTypographyProps={{ variant: 'caption' }}
-                />
-              </ListItem>
+                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                  <Box>
+                    <Typography variant="body2" fontWeight={500}>
+                      {preset.name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {preset.description}
+                    </Typography>
+                  </Box>
+                  <Chip
+                    label={preset.expression}
+                    size="small"
+                    variant="outlined"
+                    sx={{ fontFamily: 'monospace' }}
+                  />
+                </Stack>
+              </Paper>
             ))}
-          </List>
+          </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setShowCronBuilder(false)}>Close</Button>
@@ -679,7 +810,7 @@ const Schedule: React.FC = () => {
             <strong>"{deleteConfirmJob?.name}"</strong>?
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            This action cannot be undone.
+            This action cannot be undone. The job will no longer run automatically.
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -689,9 +820,9 @@ const Schedule: React.FC = () => {
             variant="contained"
             color="error"
             disabled={deleteJobMutation.isLoading}
-            startIcon={deleteJobMutation.isLoading ? <CircularProgress size={16} /> : null}
+            startIcon={deleteJobMutation.isLoading ? <CircularProgress size={16} /> : <Trash2 size={16} />}
           >
-            {deleteJobMutation.isLoading ? 'Deleting...' : 'Delete'}
+            {deleteJobMutation.isLoading ? 'Deleting...' : 'Delete Job'}
           </Button>
         </DialogActions>
       </Dialog>
