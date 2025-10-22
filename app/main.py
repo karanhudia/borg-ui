@@ -6,7 +6,7 @@ import structlog
 import os
 from dotenv import load_dotenv
 
-from app.api import auth, dashboard, backup, archives, restore, schedule, settings as settings_api, events, repositories, ssh_keys
+from app.api import auth, dashboard, backup, archives, restore, schedule, settings as settings_api, events, repositories, ssh_keys, system
 from app.database.database import engine
 from app.database.models import Base
 from app.core.security import create_first_user
@@ -79,6 +79,7 @@ app.include_router(settings_api.router, prefix="/api/settings", tags=["Settings"
 app.include_router(events.router, prefix="/api/events", tags=["Events"])
 app.include_router(repositories.router, prefix="/api/repositories", tags=["Repositories"])
 app.include_router(ssh_keys.router, prefix="/api/ssh-keys", tags=["SSH Keys"])
+app.include_router(system.router, prefix="/api/system", tags=["System"])
 
 @app.on_event("startup")
 async def startup_event():
@@ -143,6 +144,15 @@ async def catch_all(full_path: str):
 
     # Don't interfere with static assets
     if full_path.startswith("assets/") or full_path.startswith("static/"):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    # Serve static files from root (logo.png, favicon files, etc.)
+    if full_path in ["logo.png", "logo.svg", "favicon.svg", "favicon.ico", "favicon-16x16.png", "favicon-32x32.png"]:
+        from fastapi.responses import FileResponse
+        import os
+        file_path = f"app/static/{full_path}"
+        if os.path.exists(file_path):
+            return FileResponse(file_path)
         raise HTTPException(status_code=404, detail="Not Found")
 
     # Serve index.html for all other routes (frontend routes)

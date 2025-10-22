@@ -188,8 +188,8 @@ export const sshKeysAPI = {
 
 // Schedule API
 export const scheduleAPI = {
-  getScheduledJobs: () => api.get('/schedule'),
-  createScheduledJob: (data: any) => api.post('/schedule', data),
+  getScheduledJobs: () => api.get('/schedule/'),
+  createScheduledJob: (data: any) => api.post('/schedule/', data),
   getScheduledJob: (id: number) => api.get(`/schedule/${id}`),
   updateScheduledJob: (id: number, data: any) => api.put(`/schedule/${id}`, data),
   deleteScheduledJob: (id: number) => api.delete(`/schedule/${id}`),

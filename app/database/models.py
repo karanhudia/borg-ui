@@ -1,7 +1,11 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Float, BigInteger
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from app.database.database import Base
+
+# Helper function for timezone-aware UTC timestamps
+def utc_now():
+    return datetime.now(timezone.utc)
 
 class User(Base):
     __tablename__ = "users"
@@ -13,8 +17,8 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
     last_login = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
 class Repository(Base):
     __tablename__ = "repositories"
@@ -30,8 +34,8 @@ class Repository(Base):
     last_backup = Column(DateTime, nullable=True)
     total_size = Column(String, nullable=True)
     archive_count = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # New fields for remote repositories
     repository_type = Column(String, default="local")  # local, ssh, sftp
@@ -61,8 +65,8 @@ class SSHKey(Base):
     is_active = Column(Boolean, default=True)
     is_system_key = Column(Boolean, default=False, index=True)  # Identifies the system SSH key
     fingerprint = Column(String, nullable=True)  # SSH key fingerprint
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Relationships
     repositories = relationship("Repository", back_populates="ssh_key")
@@ -80,8 +84,8 @@ class SSHConnection(Base):
     last_test = Column(DateTime, nullable=True)
     last_success = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     
     # Relationships
     ssh_key = relationship("SSHKey", back_populates="connections")
@@ -97,8 +101,8 @@ class Configuration(Base):
     is_valid = Column(Boolean, default=False)  # Validation status
     validation_errors = Column(Text, nullable=True)  # JSON string of errors
     validation_warnings = Column(Text, nullable=True)  # JSON string of warnings
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
 class BackupJob(Base):
     __tablename__ = "backup_jobs"
@@ -121,8 +125,10 @@ class BackupJob(Base):
     current_file = Column(Text, nullable=True)  # Current file being processed
     progress_percent = Column(Float, default=0.0)  # Progress percentage
     backup_speed = Column(Float, default=0.0)  # Current backup speed in MB/s
+    total_expected_size = Column(BigInteger, default=0)  # Total size of source directories (calculated before backup)
+    estimated_time_remaining = Column(Integer, default=0)  # Estimated seconds remaining
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 class ScheduledJob(Base):
     __tablename__ = "scheduled_jobs"
@@ -136,5 +142,5 @@ class ScheduledJob(Base):
     last_run = Column(DateTime, nullable=True)  # Last execution time
     next_run = Column(DateTime, nullable=True)  # Next scheduled execution time
     description = Column(Text, nullable=True)  # User description of the job
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, nullable=True) 

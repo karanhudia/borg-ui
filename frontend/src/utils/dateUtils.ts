@@ -8,7 +8,7 @@ export const formatDate = (dateString: string | null | undefined): string => {
   if (!dateString) return 'Never'
 
   try {
-    const date = new Date(dateString + (dateString.endsWith('Z') ? '' : 'Z'))
+    const date = new Date(dateString)
     const day = date.getDate()
 
     const getOrdinalSuffix = (d: number) => {
@@ -45,7 +45,7 @@ export const formatDateShort = (dateString: string | null | undefined): string =
   if (!dateString) return 'Never'
 
   try {
-    const date = new Date(dateString + (dateString.endsWith('Z') ? '' : 'Z'))
+    const date = new Date(dateString)
     return format(date, 'MMM d, yyyy')
   } catch (error) {
     console.error('Error formatting date:', error)
@@ -61,7 +61,7 @@ export const formatRelativeTime = (dateString: string | null | undefined): strin
   if (!dateString) return 'Never'
 
   try {
-    const date = new Date(dateString + (dateString.endsWith('Z') ? '' : 'Z'))
+    const date = new Date(dateString)
     return formatDistance(date, new Date(), { addSuffix: true })
   } catch (error) {
     console.error('Error formatting relative time:', error)
@@ -147,7 +147,7 @@ export const formatTimeRange = (
   if (!startTime) return 'N/A'
 
   try {
-    const start = new Date(startTime + (startTime.endsWith('Z') ? '' : 'Z'))
+    const start = new Date(startTime)
 
     if (status === 'running') {
       // Calculate duration from start to now
@@ -158,7 +158,7 @@ export const formatTimeRange = (
 
     if (!endTime) return 'N/A'
 
-    const end = new Date(endTime + (endTime.endsWith('Z') ? '' : 'Z'))
+    const end = new Date(endTime)
     const durationMs = end.getTime() - start.getTime()
     const durationSec = Math.floor(durationMs / 1000)
 
@@ -176,7 +176,7 @@ export const formatTimestamp = (timestamp: string | null | undefined): string =>
   if (!timestamp) return 'Never'
 
   try {
-    const date = new Date(timestamp + (timestamp.endsWith('Z') ? '' : 'Z'))
+    const date = new Date(timestamp)
     return date.toLocaleString()
   } catch (error) {
     console.error('Error formatting timestamp:', error)

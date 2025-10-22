@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import structlog
 import croniter
 import json
@@ -89,7 +89,7 @@ async def create_scheduled_job(
     try:
         # Validate cron expression
         try:
-            cron = croniter.croniter(job_data.cron_expression, datetime.now())
+            cron = croniter.croniter(job_data.cron_expression, datetime.now(timezone.utc))
             next_run = cron.get_next(datetime)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid cron expression: {str(e)}")
@@ -210,12 +210,12 @@ async def get_upcoming_jobs(
     try:
         jobs = db.query(ScheduledJob).filter(ScheduledJob.enabled == True).all()
         upcoming_jobs = []
-        
-        end_time = datetime.now() + timedelta(hours=hours)
-        
+
+        end_time = datetime.now(timezone.utc) + timedelta(hours=hours)
+
         for job in jobs:
             try:
-                cron = croniter.croniter(job.cron_expression, datetime.now())
+                cron = croniter.croniter(job.cron_expression, datetime.now(timezone.utc))
                 next_run = cron.get_next(datetime)
                 
                 if next_run <= end_time:
@@ -255,7 +255,7 @@ async def get_scheduled_job(
         
         # Calculate next run times
         try:
-            cron = croniter.croniter(job.cron_expression, datetime.now())
+            cron = croniter.croniter(job.cron_expression, datetime.now(timezone.utc))
             next_runs = []
             for i in range(5):  # Get next 5 run times
                 next_runs.append(cron.get_next(datetime).isoformat())
@@ -315,7 +315,7 @@ async def update_scheduled_job(
         if job_data.cron_expression is not None:
             # Validate cron expression
             try:
-                cron = croniter.croniter(job_data.cron_expression, datetime.now())
+                cron = croniter.croniter(job_data.cron_expression, datetime.now(timezone.utc))
                 job.cron_expression = job_data.cron_expression
                 job.next_run = cron.get_next(datetime)
             except Exception as e:
@@ -332,8 +332,8 @@ async def update_scheduled_job(
         
         if job_data.description is not None:
             job.description = job_data.description
-        
-        job.updated_at = datetime.utcnow()
+
+        job.updated_at = datetime.now(timezone.utc)
         db.commit()
         
         logger.info("Scheduled job updated", job_id=job_id, user=current_user.username)
@@ -394,7 +394,7 @@ async def toggle_scheduled_job(
             raise HTTPException(status_code=404, detail="Scheduled job not found")
         
         job.enabled = not job.enabled
-        job.updated_at = datetime.utcnow()
+        job.updated_at = datetime.now(timezone.utc)
         db.commit()
         
         logger.info("Scheduled job toggled", job_id=job_id, enabled=job.enabled, user=current_user.username)
@@ -432,8 +432,8 @@ async def run_scheduled_job_now(
         )
         
         # Update last run time
-        job.last_run = datetime.utcnow()
-        job.updated_at = datetime.utcnow()
+        job.last_run = datetime.now(timezone.utc)
+        job.updated_at = datetime.now(timezone.utc)
         db.commit()
         
         logger.info("Scheduled job run manually", job_id=job_id, user=current_user.username)
@@ -461,7 +461,7 @@ async def validate_cron_expression(
         
         # Validate cron expression
         try:
-            cron = croniter.croniter(cron_expr, datetime.now())
+            cron = croniter.croniter(cron_expr, datetime.now(timezone.utc))
         except Exception as e:
             return {
                 "success": False,
@@ -492,34 +492,51 @@ async def check_scheduled_jobs():
             db = next(get_db())
             jobs = db.query(ScheduledJob).filter(
                 ScheduledJob.enabled == True,
-                ScheduledJob.next_run <= datetime.now()
+                ScheduledJob.next_run <= datetime.now(timezone.utc)
             ).all()
             
             for job in jobs:
                 try:
                     logger.info("Running scheduled job", job_id=job.id, name=job.name)
-                    
+
+                    # Get repository info
+                    from app.database.models import Repository
+                    repo = db.query(Repository).filter(Repository.path == job.repository).first()
+                    if not repo:
+                        logger.error("Repository not found for scheduled job", job_id=job.id, repository=job.repository)
+                        continue
+
+                    # Parse source directories
+                    import json
+                    source_dirs = json.loads(repo.source_directories) if repo.source_directories else []
+                    if not source_dirs:
+                        logger.error("No source directories configured for repository", job_id=job.id, repository=job.repository)
+                        continue
+
                     # Execute backup
                     result = await borg.run_backup(
                         repository=job.repository,
-                        config_file=job.config_file
+                        source_paths=source_dirs,
+                        compression=repo.compression,
+                        remote_path=repo.remote_path,
+                        passphrase=repo.passphrase
                     )
-                    
+
                     # Update job status
-                    job.last_run = datetime.now()
-                    
+                    job.last_run = datetime.now(timezone.utc)
+
                     # Calculate next run time
-                    cron = croniter.croniter(job.cron_expression, datetime.now())
+                    cron = croniter.croniter(job.cron_expression, datetime.now(timezone.utc))
                     job.next_run = cron.get_next(datetime)
-                    
+
                     db.commit()
-                    
+
                     logger.info("Scheduled job completed", job_id=job.id, name=job.name, success=result["success"])
-                    
+
                 except Exception as e:
                     logger.error("Failed to run scheduled job", job_id=job.id, error=str(e))
                     # Update last run time even if failed
-                    job.last_run = datetime.now()
+                    job.last_run = datetime.now(timezone.utc)
                     db.commit()
             
             db.close()

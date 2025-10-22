@@ -43,9 +43,9 @@ import {
   AlertCircle,
   Calendar,
 } from 'lucide-react'
-import { scheduleAPI, repositoriesAPI } from '../services/api'
+import { scheduleAPI, repositoriesAPI, backupAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
-import { formatDate, formatRelativeTime } from '../utils/dateUtils'
+import { formatDate, formatRelativeTime, formatTimeRange } from '../utils/dateUtils'
 
 interface ScheduledJob {
   id: number
@@ -58,6 +58,15 @@ interface ScheduledJob {
   created_at: string
   updated_at: string | null
   description: string | null
+}
+
+interface BackupJob {
+  id: string
+  repository: string
+  status: 'running' | 'completed' | 'failed' | 'cancelled'
+  started_at: string
+  completed_at?: string
+  error_message?: string
 }
 
 const Schedule: React.FC = () => {
@@ -78,6 +87,13 @@ const Schedule: React.FC = () => {
   const { data: repositoriesData } = useQuery({
     queryKey: ['repositories'],
     queryFn: repositoriesAPI.getRepositories,
+  })
+
+  // Get backup jobs history
+  const { data: backupJobsData, isLoading: loadingBackupJobs } = useQuery({
+    queryKey: ['backup-jobs'],
+    queryFn: backupAPI.getAllJobs,
+    refetchInterval: 10000, // Refresh every 10 seconds
   })
 
   // Get cron presets
@@ -281,8 +297,39 @@ const Schedule: React.FC = () => {
     return repo?.name || path
   }
 
+  const getBackupStatusIcon = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle size={18} />
+      case 'running':
+        return <Clock size={18} />
+      case 'failed':
+        return <XCircle size={18} />
+      case 'cancelled':
+        return <AlertCircle size={18} />
+      default:
+        return <Clock size={18} />
+    }
+  }
+
+  const getBackupStatusColor = (status: string): 'success' | 'info' | 'error' | 'warning' | 'default' => {
+    switch (status) {
+      case 'completed':
+        return 'success'
+      case 'running':
+        return 'info'
+      case 'failed':
+        return 'error'
+      case 'cancelled':
+        return 'warning'
+      default:
+        return 'default'
+    }
+  }
+
   const jobs = jobsData?.data?.jobs || []
   const repositories = repositoriesData?.data?.repositories || []
+  const recentBackupJobs = backupJobsData?.data?.jobs?.slice(0, 10) || []
   const upcomingJobs = upcomingData?.data?.upcoming_jobs || []
 
   return (
@@ -390,12 +437,12 @@ const Schedule: React.FC = () => {
                 <TableHead>
                   <TableRow>
                     <TableCell width="5%">Status</TableCell>
-                    <TableCell width="20%">Job Name</TableCell>
-                    <TableCell width="20%">Repository</TableCell>
-                    <TableCell width="15%">Schedule</TableCell>
-                    <TableCell width="15%">Last Run</TableCell>
-                    <TableCell width="15%">Next Run</TableCell>
-                    <TableCell width="10%" align="right">Actions</TableCell>
+                    <TableCell width="15%">Job Name</TableCell>
+                    <TableCell width="30%">Repository</TableCell>
+                    <TableCell width="12%">Schedule</TableCell>
+                    <TableCell width="13%">Last Run</TableCell>
+                    <TableCell width="13%">Next Run</TableCell>
+                    <TableCell width="12%" align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -529,6 +576,103 @@ const Schedule: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* Backup History */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h6" fontWeight={600} gutterBottom>
+            Backup History
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Recent backup jobs from scheduled tasks
+          </Typography>
+
+          {loadingBackupJobs ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
+              <CircularProgress size={48} />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                Loading backup history...
+              </Typography>
+            </Box>
+          ) : recentBackupJobs.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 8 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+                <Clock size={48} color="rgba(0,0,0,0.3)" />
+              </Box>
+              <Typography variant="body1" color="text.secondary">
+                No backup jobs found
+              </Typography>
+            </Box>
+          ) : (
+            <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+              <Table>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: 'grey.50' }}>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Job ID</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Repository</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Status</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Started</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Duration</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {recentBackupJobs.map((job: BackupJob) => (
+                    <TableRow
+                      key={job.id}
+                      hover
+                      sx={{
+                        '&:hover': {
+                          backgroundColor: 'action.hover',
+                          cursor: 'pointer'
+                        }
+                      }}
+                    >
+                      <TableCell>
+                        <Chip
+                          label={`#${job.id}`}
+                          size="small"
+                          variant="outlined"
+                          sx={{ fontFamily: 'monospace' }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {getRepositoryName(job.repository)}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {job.repository}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          icon={getBackupStatusIcon(job.status)}
+                          label={job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+                          size="small"
+                          color={getBackupStatusColor(job.status)}
+                          sx={{ minWidth: 100 }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {formatDate(job.started_at)}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {formatRelativeTime(job.started_at)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {job.completed_at ? formatTimeRange(job.started_at, job.completed_at) : 'Running...'}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Create Job Modal */}
       <Dialog
         open={showCreateModal}
@@ -548,20 +692,35 @@ const Schedule: React.FC = () => {
                 fullWidth
                 placeholder="Daily backup"
                 helperText="A descriptive name for this scheduled job"
+                size="medium"
+                InputProps={{
+                  sx: { fontSize: '1.1rem' }
+                }}
+                InputLabelProps={{
+                  sx: { fontSize: '1.1rem' }
+                }}
               />
 
-              <FormControl fullWidth required>
-                <InputLabel>Repository</InputLabel>
+              <FormControl fullWidth required size="medium">
+                <InputLabel sx={{ fontSize: '1.1rem' }}>Repository</InputLabel>
                 <Select
                   value={createForm.repository}
                   onChange={(e) => setCreateForm({ ...createForm, repository: e.target.value })}
                   label="Repository"
+                  sx={{ fontSize: '1.1rem', height: { xs: 48, sm: 56 } }}
+                  MenuProps={{
+                    PaperProps: {
+                      style: {
+                        maxHeight: 400,
+                      },
+                    },
+                  }}
                 >
                   {repositories.map((repo: any) => (
-                    <MenuItem key={repo.id} value={repo.path}>
+                    <MenuItem key={repo.id} value={repo.path} sx={{ fontSize: '1rem' }}>
                       <Box>
-                        <Typography variant="body2">{repo.name}</Typography>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="body2" sx={{ fontSize: '1rem' }}>{repo.name}</Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.85rem' }}>
                           {repo.path}
                         </Typography>
                       </Box>
@@ -577,22 +736,26 @@ const Schedule: React.FC = () => {
                   onChange={(e) => setCreateForm({ ...createForm, cron_expression: e.target.value })}
                   required
                   fullWidth
+                  size="medium"
                   placeholder="0 2 * * *"
                   InputProps={{
                     sx: {
                       fontFamily: 'monospace',
-                      fontSize: '1rem',
+                      fontSize: '1.1rem',
                       letterSpacing: '0.1em',
                     },
                     endAdornment: (
                       <InputAdornment position="end">
                         <Tooltip title="Choose preset schedule" arrow>
                           <IconButton onClick={openCronBuilder} edge="end">
-                            <Clock size={18} />
+                            <Clock size={20} />
                           </IconButton>
                         </Tooltip>
                       </InputAdornment>
                     ),
+                  }}
+                  InputLabelProps={{
+                    sx: { fontSize: '1.1rem' }
                   }}
                   helperText={
                     <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -611,6 +774,13 @@ const Schedule: React.FC = () => {
                 rows={2}
                 placeholder="Optional description"
                 fullWidth
+                size="medium"
+                InputProps={{
+                  sx: { fontSize: '1.1rem' }
+                }}
+                InputLabelProps={{
+                  sx: { fontSize: '1.1rem' }
+                }}
               />
 
               <FormControlLabel
@@ -655,20 +825,35 @@ const Schedule: React.FC = () => {
                 onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                 required
                 fullWidth
+                size="medium"
+                InputProps={{
+                  sx: { fontSize: '1.1rem' }
+                }}
+                InputLabelProps={{
+                  sx: { fontSize: '1.1rem' }
+                }}
               />
 
-              <FormControl fullWidth required>
-                <InputLabel>Repository</InputLabel>
+              <FormControl fullWidth required size="medium">
+                <InputLabel sx={{ fontSize: '1.1rem' }}>Repository</InputLabel>
                 <Select
                   value={editForm.repository}
                   onChange={(e) => setEditForm({ ...editForm, repository: e.target.value })}
                   label="Repository"
+                  sx={{ fontSize: '1.1rem', height: { xs: 48, sm: 56 } }}
+                  MenuProps={{
+                    PaperProps: {
+                      style: {
+                        maxHeight: 400,
+                      },
+                    },
+                  }}
                 >
                   {repositories.map((repo: any) => (
-                    <MenuItem key={repo.id} value={repo.path}>
+                    <MenuItem key={repo.id} value={repo.path} sx={{ fontSize: '1rem' }}>
                       <Box>
-                        <Typography variant="body2">{repo.name}</Typography>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="body2" sx={{ fontSize: '1rem' }}>{repo.name}</Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.85rem' }}>
                           {repo.path}
                         </Typography>
                       </Box>
@@ -684,21 +869,25 @@ const Schedule: React.FC = () => {
                   onChange={(e) => setEditForm({ ...editForm, cron_expression: e.target.value })}
                   required
                   fullWidth
+                  size="medium"
                   InputProps={{
                     sx: {
                       fontFamily: 'monospace',
-                      fontSize: '1rem',
+                      fontSize: '1.1rem',
                       letterSpacing: '0.1em',
                     },
                     endAdornment: (
                       <InputAdornment position="end">
                         <Tooltip title="Choose preset schedule" arrow>
                           <IconButton onClick={openCronBuilder} edge="end">
-                            <Clock size={18} />
+                            <Clock size={20} />
                           </IconButton>
                         </Tooltip>
                       </InputAdornment>
                     ),
+                  }}
+                  InputLabelProps={{
+                    sx: { fontSize: '1.1rem' }
                   }}
                   helperText={
                     <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -716,6 +905,13 @@ const Schedule: React.FC = () => {
                 multiline
                 rows={2}
                 fullWidth
+                size="medium"
+                InputProps={{
+                  sx: { fontSize: '1.1rem' }
+                }}
+                InputLabelProps={{
+                  sx: { fontSize: '1.1rem' }
+                }}
               />
 
               <FormControlLabel

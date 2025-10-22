@@ -105,7 +105,7 @@ class BorgInterface:
             }
     
     async def run_backup(self, repository: str, source_paths: List[str],
-                        compression: str = "lz4", archive_name: str = None, remote_path: str = None) -> Dict:
+                        compression: str = "lz4", archive_name: str = None, remote_path: str = None, passphrase: str = None) -> Dict:
         """Execute backup operation with direct parameters"""
         if not repository:
             return {"success": False, "error": "Repository is required", "stdout": "", "stderr": ""}
@@ -134,25 +134,40 @@ class BorgInterface:
         # Add source paths
         cmd.extend(source_paths)
 
-        return await self._execute_command(cmd, timeout=settings.backup_timeout)
+        # Set passphrase environment variable if provided
+        env = {}
+        if passphrase:
+            env["BORG_PASSPHRASE"] = passphrase
+
+        return await self._execute_command(cmd, timeout=settings.backup_timeout, env=env if env else None)
     
-    async def list_archives(self, repository: str, remote_path: str = None) -> Dict:
+    async def list_archives(self, repository: str, remote_path: str = None, passphrase: str = None) -> Dict:
         """List archives in repository"""
         cmd = [self.borg_cmd, "list"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
         cmd.extend([repository, "--json"])
-        return await self._execute_command(cmd)
 
-    async def info_archive(self, repository: str, archive: str, remote_path: str = None) -> Dict:
+        env = {}
+        if passphrase:
+            env["BORG_PASSPHRASE"] = passphrase
+
+        return await self._execute_command(cmd, env=env if env else None)
+
+    async def info_archive(self, repository: str, archive: str, remote_path: str = None, passphrase: str = None) -> Dict:
         """Get information about a specific archive"""
         cmd = [self.borg_cmd, "info"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
         cmd.extend([f"{repository}::{archive}", "--json"])
-        return await self._execute_command(cmd)
 
-    async def list_archive_contents(self, repository: str, archive: str, path: str = "", remote_path: str = None) -> Dict:
+        env = {}
+        if passphrase:
+            env["BORG_PASSPHRASE"] = passphrase
+
+        return await self._execute_command(cmd, env=env if env else None)
+
+    async def list_archive_contents(self, repository: str, archive: str, path: str = "", remote_path: str = None, passphrase: str = None) -> Dict:
         """List contents of an archive"""
         cmd = [self.borg_cmd, "list"]
         if remote_path:
@@ -160,10 +175,15 @@ class BorgInterface:
         cmd.extend([f"{repository}::{archive}", "--json-lines"])
         if path:
             cmd.append(path)
-        return await self._execute_command(cmd)
+
+        env = {}
+        if passphrase:
+            env["BORG_PASSPHRASE"] = passphrase
+
+        return await self._execute_command(cmd, env=env if env else None)
 
     async def extract_archive(self, repository: str, archive: str, paths: List[str],
-                            destination: str, dry_run: bool = False, remote_path: str = None) -> Dict:
+                            destination: str, dry_run: bool = False, remote_path: str = None, passphrase: str = None) -> Dict:
         """Extract files from an archive"""
         cmd = [self.borg_cmd, "extract"]
 
@@ -179,9 +199,13 @@ class BorgInterface:
         if paths:
             cmd.extend(paths)
 
+        env = {}
+        if passphrase:
+            env["BORG_PASSPHRASE"] = passphrase
+
         # Borg extract always extracts to current directory
         # Use cwd parameter to change to destination directory
-        return await self._execute_command(cmd, timeout=settings.backup_timeout, cwd=destination)
+        return await self._execute_command(cmd, timeout=settings.backup_timeout, cwd=destination, env=env if env else None)
 
     async def delete_archive(self, repository: str, archive: str, remote_path: str = None) -> Dict:
         """Delete an archive"""
