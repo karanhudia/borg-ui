@@ -81,7 +81,7 @@ const Backup: React.FC = () => {
   const { data: backupStatus, isLoading: loadingStatus } = useQuery({
     queryKey: ['backup-status-manual'],
     queryFn: backupAPI.getManualJobs,
-    refetchInterval: 10000, // Poll every 10 seconds as fallback
+    refetchInterval: 3000, // Poll every 3 seconds as fallback
   })
 
   // Invalidate queries when SSE events are received

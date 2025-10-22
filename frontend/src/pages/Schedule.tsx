@@ -107,7 +107,7 @@ const Schedule: React.FC = () => {
   const { data: backupJobsData, isLoading: loadingBackupJobs } = useQuery({
     queryKey: ['backup-jobs-scheduled'],
     queryFn: backupAPI.getScheduledJobs,
-    refetchInterval: 10000, // Refresh every 10 seconds
+    refetchInterval: 3000, // Refresh every 3 seconds
   })
 
   // Get cron presets
