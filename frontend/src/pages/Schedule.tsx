@@ -38,7 +38,6 @@ import {
   Trash2,
   Play,
   Clock,
-  Settings,
   CheckCircle,
   XCircle,
   AlertCircle,
@@ -573,24 +572,34 @@ const Schedule: React.FC = () => {
 
               <Box>
                 <TextField
-                  label="Cron Expression"
+                  label="Schedule"
                   value={createForm.cron_expression}
                   onChange={(e) => setCreateForm({ ...createForm, cron_expression: e.target.value })}
                   required
                   fullWidth
                   placeholder="0 2 * * *"
                   InputProps={{
+                    sx: {
+                      fontFamily: 'monospace',
+                      fontSize: '1rem',
+                      letterSpacing: '0.1em',
+                    },
                     endAdornment: (
                       <InputAdornment position="end">
-                        <Tooltip title="Choose preset" arrow>
+                        <Tooltip title="Choose preset schedule" arrow>
                           <IconButton onClick={openCronBuilder} edge="end">
-                            <Settings size={18} />
+                            <Clock size={18} />
                           </IconButton>
                         </Tooltip>
                       </InputAdornment>
                     ),
                   }}
-                  helperText={formatCronExpression(createForm.cron_expression)}
+                  helperText={
+                    <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <CheckCircle size={14} style={{ color: '#2e7d32' }} />
+                      <span>{formatCronExpression(createForm.cron_expression)}</span>
+                    </Box>
+                  }
                 />
               </Box>
 
@@ -670,23 +679,33 @@ const Schedule: React.FC = () => {
 
               <Box>
                 <TextField
-                  label="Cron Expression"
+                  label="Schedule"
                   value={editForm.cron_expression}
                   onChange={(e) => setEditForm({ ...editForm, cron_expression: e.target.value })}
                   required
                   fullWidth
                   InputProps={{
+                    sx: {
+                      fontFamily: 'monospace',
+                      fontSize: '1rem',
+                      letterSpacing: '0.1em',
+                    },
                     endAdornment: (
                       <InputAdornment position="end">
-                        <Tooltip title="Choose preset" arrow>
+                        <Tooltip title="Choose preset schedule" arrow>
                           <IconButton onClick={openCronBuilder} edge="end">
-                            <Settings size={18} />
+                            <Clock size={18} />
                           </IconButton>
                         </Tooltip>
                       </InputAdornment>
                     ),
                   }}
-                  helperText={formatCronExpression(editForm.cron_expression)}
+                  helperText={
+                    <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <CheckCircle size={14} style={{ color: '#2e7d32' }} />
+                      <span>{formatCronExpression(editForm.cron_expression)}</span>
+                    </Box>
+                  }
                 />
               </Box>
 
