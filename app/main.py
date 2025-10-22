@@ -85,6 +85,14 @@ async def startup_event():
     """Initialize application on startup"""
     logger.info("Starting Borg Web UI")
 
+    # Run database migrations
+    from app.database.migrations import run_migrations
+    try:
+        run_migrations()
+    except Exception as e:
+        logger.error("Failed to run migrations", error=str(e))
+        # Don't fail startup, just log the error
+
     # Create first user if no users exist
     await create_first_user()
 
