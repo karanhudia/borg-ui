@@ -503,13 +503,13 @@ const Schedule: React.FC = () => {
                           : 'N/A'}
                       </Typography>
                     </Box>
-                    {job.progress_details?.estimated_time_remaining && job.progress_details.estimated_time_remaining > 0 && (
+                    {((job.progress_details?.estimated_time_remaining ?? 0) > 0) && (
                       <Box>
                         <Typography variant="body2" color="text.secondary">
                           ETA:
                         </Typography>
                         <Typography variant="body2" fontWeight={500} color="success.main">
-                          {formatDurationSeconds(job.progress_details.estimated_time_remaining)}
+                          {formatDurationSeconds(job.progress_details?.estimated_time_remaining ?? 0)}
                         </Typography>
                       </Box>
                     )}
