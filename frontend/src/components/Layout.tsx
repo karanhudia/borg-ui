@@ -105,7 +105,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const drawer = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Box>
-        <Toolbar>
+        <Toolbar sx={{ gap: 1.5 }}>
+          <Box
+            component="img"
+            src="/logo.svg"
+            alt="Borg UI Logo"
+            sx={{
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+            }}
+          />
           <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 600 }}>
             Borg UI
           </Typography>

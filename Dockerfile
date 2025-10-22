@@ -35,6 +35,17 @@ FROM python:3.9-slim AS production
 ARG APP_VERSION=dev
 ENV APP_VERSION=${APP_VERSION}
 
+# Docker image metadata
+LABEL org.opencontainers.image.title="Borg Web UI"
+LABEL org.opencontainers.image.description="A lightweight web interface for Borg backup management"
+LABEL org.opencontainers.image.version="${APP_VERSION}"
+LABEL org.opencontainers.image.vendor="Borg Web UI"
+LABEL org.opencontainers.image.url="https://github.com/karanhudia/borg-ui"
+LABEL org.opencontainers.image.documentation="https://github.com/karanhudia/borg-ui/blob/main/README.md"
+LABEL org.opencontainers.image.source="https://github.com/karanhudia/borg-ui"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL com.borg-ui.icon.color="#00dd00"
+
 WORKDIR /app
 
 # Install system dependencies including borg and related packages
