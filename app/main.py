@@ -112,6 +112,12 @@ async def startup_event():
     except Exception as e:
         logger.warning("Failed to rotate logs", error=str(e))
 
+    # Start scheduled backup checker (background task)
+    from app.api.schedule import check_scheduled_jobs
+    import asyncio
+    asyncio.create_task(check_scheduled_jobs())
+    logger.info("Scheduled backup checker started")
+
     logger.info("Borg Web UI started successfully")
 
 @app.on_event("shutdown")
