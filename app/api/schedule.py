@@ -63,10 +63,10 @@ async def get_scheduled_jobs(
                     "cron_expression": job.cron_expression,
                     "repository": job.repository,
                     "enabled": job.enabled,
-                    "last_run": job.last_run.isoformat() if job.last_run else None,
-                    "next_run": job.next_run.isoformat() if job.next_run else None,
-                    "created_at": job.created_at.isoformat(),
-                    "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+                    "last_run": job.last_run.replace(tzinfo=timezone.utc).isoformat() if job.last_run else None,
+                    "next_run": job.next_run.replace(tzinfo=timezone.utc).isoformat() if job.next_run else None,
+                    "created_at": job.created_at.replace(tzinfo=timezone.utc).isoformat() if job.created_at else None,
+                    "updated_at": job.updated_at.replace(tzinfo=timezone.utc).isoformat() if job.updated_at else None,
                     "description": job.description
                 }
                 for job in jobs
@@ -125,7 +125,7 @@ async def create_scheduled_job(
                 "cron_expression": scheduled_job.cron_expression,
                 "repository": scheduled_job.repository,
                 "enabled": scheduled_job.enabled,
-                "next_run": scheduled_job.next_run.isoformat() if scheduled_job.next_run else None
+                "next_run": scheduled_job.next_run.replace(tzinfo=timezone.utc).isoformat() if scheduled_job.next_run else None
             }
         }
     except HTTPException:
@@ -223,7 +223,7 @@ async def get_upcoming_jobs(
                         "id": job.id,
                         "name": job.name,
                         "repository": job.repository,
-                        "next_run": next_run.isoformat(),
+                        "next_run": next_run.replace(tzinfo=timezone.utc).isoformat() if next_run.tzinfo is None else next_run.isoformat(),
                         "cron_expression": job.cron_expression
                     })
             except:
@@ -258,10 +258,11 @@ async def get_scheduled_job(
             cron = croniter.croniter(job.cron_expression, datetime.now(timezone.utc))
             next_runs = []
             for i in range(5):  # Get next 5 run times
-                next_runs.append(cron.get_next(datetime).isoformat())
+                next_dt = cron.get_next(datetime)
+                next_runs.append(next_dt.replace(tzinfo=timezone.utc).isoformat() if next_dt.tzinfo is None else next_dt.isoformat())
         except:
             next_runs = []
-        
+
         return {
             "success": True,
             "job": {
@@ -271,11 +272,11 @@ async def get_scheduled_job(
                 "repository": job.repository,
                 "config_file": job.config_file,
                 "enabled": job.enabled,
-                "last_run": job.last_run.isoformat() if job.last_run else None,
-                "next_run": job.next_run.isoformat() if job.next_run else None,
+                "last_run": job.last_run.replace(tzinfo=timezone.utc).isoformat() if job.last_run else None,
+                "next_run": job.next_run.replace(tzinfo=timezone.utc).isoformat() if job.next_run else None,
                 "next_runs": next_runs,
-                "created_at": job.created_at.isoformat(),
-                "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+                "created_at": job.created_at.replace(tzinfo=timezone.utc).isoformat() if job.created_at else None,
+                "updated_at": job.updated_at.replace(tzinfo=timezone.utc).isoformat() if job.updated_at else None,
                 "description": job.description
             }
         }
@@ -472,8 +473,9 @@ async def validate_cron_expression(
         # Get next 10 run times
         next_runs = []
         for i in range(10):
-            next_runs.append(cron.get_next(datetime).isoformat())
-        
+            next_dt = cron.get_next(datetime)
+            next_runs.append(next_dt.replace(tzinfo=timezone.utc).isoformat() if next_dt.tzinfo is None else next_dt.isoformat())
+
         return {
             "success": True,
             "cron_expression": cron_expr,
@@ -500,26 +502,32 @@ async def check_scheduled_jobs():
                     logger.info("Running scheduled job", job_id=job.id, name=job.name)
 
                     # Get repository info
-                    from app.database.models import Repository
+                    from app.database.models import Repository, BackupJob
+                    from app.services.backup_service import backup_service
+
                     repo = db.query(Repository).filter(Repository.path == job.repository).first()
                     if not repo:
                         logger.error("Repository not found for scheduled job", job_id=job.id, repository=job.repository)
                         continue
 
-                    # Parse source directories
-                    import json
-                    source_dirs = json.loads(repo.source_directories) if repo.source_directories else []
-                    if not source_dirs:
-                        logger.error("No source directories configured for repository", job_id=job.id, repository=job.repository)
-                        continue
+                    # Create backup job record with scheduled_job_id
+                    backup_job = BackupJob(
+                        repository=job.repository or "default",
+                        status="pending",
+                        scheduled_job_id=job.id  # Link to scheduled job
+                    )
+                    db.add(backup_job)
+                    db.commit()
+                    db.refresh(backup_job)
 
-                    # Execute backup
-                    result = await borg.run_backup(
-                        repository=job.repository,
-                        source_paths=source_dirs,
-                        compression=repo.compression,
-                        remote_path=repo.remote_path,
-                        passphrase=repo.passphrase
+                    # Execute backup asynchronously (non-blocking)
+                    asyncio.create_task(
+                        backup_service.execute_backup(
+                            backup_job.id,
+                            job.repository,
+                            job.config_file,
+                            db
+                        )
                     )
 
                     # Update job status
@@ -531,7 +539,7 @@ async def check_scheduled_jobs():
 
                     db.commit()
 
-                    logger.info("Scheduled job completed", job_id=job.id, name=job.name, success=result["success"])
+                    logger.info("Scheduled job started", job_id=job.id, name=job.name, backup_job_id=backup_job.id)
 
                 except Exception as e:
                     logger.error("Failed to run scheduled job", job_id=job.id, error=str(e))

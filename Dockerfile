@@ -94,6 +94,9 @@ COPY --from=backend-builder /usr/local/bin /usr/local/bin
 COPY app/ ./app/
 COPY --from=frontend-builder /app/frontend/build ./app/static
 
+# Copy VERSION file
+COPY VERSION ./VERSION
+
 # Create necessary directories with proper permissions
 # /data - main data directory for all persistent data (database, ssh keys, logs, configs)
 # /backups - for actual backup storage

@@ -5,6 +5,7 @@ import structlog
 import asyncio
 import os
 from typing import List, Dict, Any
+from datetime import timezone
 
 from app.database.database import get_db
 from app.database.models import User, BackupJob
@@ -69,11 +70,27 @@ async def start_backup(
 async def get_all_backup_jobs(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-    limit: int = 50
+    limit: int = 50,
+    scheduled_only: bool = False,
+    manual_only: bool = False
 ):
-    """Get all backup jobs (most recent first) with progress details"""
+    """Get all backup jobs (most recent first) with progress details
+
+    Args:
+        scheduled_only: If True, only return jobs triggered by scheduled tasks
+        manual_only: If True, only return manual backup jobs (not scheduled)
+    """
     try:
-        jobs = db.query(BackupJob).order_by(BackupJob.id.desc()).limit(limit).all()
+        query = db.query(BackupJob)
+
+        if scheduled_only:
+            # Filter to only jobs with scheduled_job_id set
+            query = query.filter(BackupJob.scheduled_job_id.isnot(None))
+        elif manual_only:
+            # Filter to only jobs without scheduled_job_id (manual backups)
+            query = query.filter(BackupJob.scheduled_job_id.is_(None))
+
+        jobs = query.order_by(BackupJob.id.desc()).limit(limit).all()
 
         return {
             "jobs": [
@@ -81,8 +98,8 @@ async def get_all_backup_jobs(
                     "id": job.id,
                     "repository": job.repository,
                     "status": job.status,
-                    "started_at": job.started_at.isoformat() if job.started_at else None,
-                    "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                    "started_at": job.started_at.replace(tzinfo=timezone.utc).isoformat() if job.started_at else None,
+                    "completed_at": job.completed_at.replace(tzinfo=timezone.utc).isoformat() if job.completed_at else None,
                     "progress": job.progress,
                     "error_message": job.error_message,
                     "has_logs": bool(job.logs),  # Indicate if logs are available
@@ -127,8 +144,8 @@ async def get_backup_status(
             "id": job.id,
             "repository": job.repository,
             "status": job.status,
-            "started_at": job.started_at.isoformat() if job.started_at else None,
-            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+            "started_at": job.started_at.replace(tzinfo=timezone.utc).isoformat() if job.started_at else None,
+            "completed_at": job.completed_at.replace(tzinfo=timezone.utc).isoformat() if job.completed_at else None,
             "progress": job.progress,
             "error_message": job.error_message,
             "logs": job.logs,

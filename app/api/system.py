@@ -14,8 +14,18 @@ borg = BorgInterface()
 async def get_system_info():
     """Get system information including app and borg versions"""
     try:
-        # Get app version from environment variable
-        app_version = os.getenv('APP_VERSION', 'dev')
+        # Get app version from VERSION file (primary) or environment variable (fallback)
+        app_version = "dev"
+        try:
+            with open('/app/VERSION', 'r') as f:
+                app_version = f.read().strip()
+                if not app_version:
+                    app_version = os.getenv('APP_VERSION', 'dev')
+        except FileNotFoundError:
+            app_version = os.getenv('APP_VERSION', 'dev')
+        except Exception as e:
+            logger.warning("Failed to read VERSION file", error=str(e))
+            app_version = os.getenv('APP_VERSION', 'dev')
 
         # Get borg version
         borg_version = None

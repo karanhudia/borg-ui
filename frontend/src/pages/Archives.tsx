@@ -40,7 +40,7 @@ import {
 } from 'lucide-react'
 import { archivesAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
-import { formatDate, formatDurationString, formatBytes as formatBytesUtil } from '../utils/dateUtils'
+import { formatDate, formatRelativeTime, formatDurationString, formatBytes as formatBytesUtil } from '../utils/dateUtils'
 
 interface Repository {
   id: number
@@ -294,10 +294,10 @@ const Archives: React.FC = () => {
                               <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
                                 <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                   <Calendar size={14} />
-                                  {formatDate(archive.start)}
+                                  {formatRelativeTime(archive.start)}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary">
-                                  {formatDurationString(archive.time)}
+                                  Duration: {formatDurationString(archive.time)}
                                 </Typography>
                               </Stack>
                             </Box>

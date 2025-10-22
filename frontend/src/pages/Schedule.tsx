@@ -89,10 +89,10 @@ const Schedule: React.FC = () => {
     queryFn: repositoriesAPI.getRepositories,
   })
 
-  // Get backup jobs history
+  // Get backup jobs history (scheduled only)
   const { data: backupJobsData, isLoading: loadingBackupJobs } = useQuery({
-    queryKey: ['backup-jobs'],
-    queryFn: backupAPI.getAllJobs,
+    queryKey: ['backup-jobs-scheduled'],
+    queryFn: backupAPI.getScheduledJobs,
     refetchInterval: 10000, // Refresh every 10 seconds
   })
 
@@ -422,7 +422,7 @@ const Schedule: React.FC = () => {
               </Typography>
             </Box>
           ) : jobs.length === 0 ? (
-            <Box sx={{ textAlign: 'center', py: 10, px: 4 }}>
+            <Box sx={{ textAlign: 'center', py: 6, px: 4 }}>
               <Clock size={48} color="rgba(0,0,0,0.3)" style={{ margin: '0 auto' }} />
               <Typography variant="body1" color="text.secondary" sx={{ mt: 2 }}>
                 No scheduled jobs found
@@ -577,12 +577,12 @@ const Schedule: React.FC = () => {
       </Card>
 
       {/* Backup History */}
-      <Card sx={{ mb: 3 }}>
+      <Card sx={{ mt: 3 }}>
         <CardContent>
           <Typography variant="h6" fontWeight={600} gutterBottom>
             Backup History
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Recent backup jobs from scheduled tasks
           </Typography>
 
@@ -594,7 +594,7 @@ const Schedule: React.FC = () => {
               </Typography>
             </Box>
           ) : recentBackupJobs.length === 0 ? (
-            <Box sx={{ textAlign: 'center', py: 10, px: 4 }}>
+            <Box sx={{ textAlign: 'center', py: 6, px: 4 }}>
               <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
                 <Clock size={48} color="rgba(0,0,0,0.3)" />
               </Box>

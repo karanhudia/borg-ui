@@ -116,6 +116,7 @@ class BackupJob(Base):
     error_message = Column(Text, nullable=True)
     logs = Column(Text, nullable=True)  # Full logs (stored after completion)
     log_file_path = Column(String, nullable=True)  # Path to streaming log file
+    scheduled_job_id = Column(Integer, ForeignKey("scheduled_jobs.id"), nullable=True)  # NULL for manual backups
 
     # Detailed progress fields from Borg JSON output
     original_size = Column(BigInteger, default=0)  # Original uncompressed size in bytes

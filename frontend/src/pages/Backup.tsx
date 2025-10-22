@@ -75,13 +75,13 @@ const Backup: React.FC = () => {
   const queryClient = useQueryClient()
 
   // Real-time backup progress
-  const { progress: realtimeProgress, isConnected } = useBackupProgress()
+  const { isConnected } = useBackupProgress()
 
-  // Get backup status and history
+  // Get backup status and history (manual backups only)
   const { data: backupStatus, isLoading: loadingStatus } = useQuery({
-    queryKey: ['backup-status'],
-    queryFn: backupAPI.getAllJobs,
-    refetchInterval: realtimeProgress ? 0 : 5000 // Use real-time updates if available, otherwise poll
+    queryKey: ['backup-status-manual'],
+    queryFn: backupAPI.getManualJobs,
+    // No polling - user can manually trigger backups and see real-time updates via SSE
   })
 
   // Get repositories
@@ -138,7 +138,7 @@ const Backup: React.FC = () => {
     mutationFn: (repository: string) => backupAPI.startBackup(repository),
     onSuccess: () => {
       toast.success('Backup started successfully!')
-      queryClient.invalidateQueries({ queryKey: ['backup-status'] })
+      queryClient.invalidateQueries({ queryKey: ['backup-status-manual'] })
     },
     onError: (error: any) => {
       toast.error(`Failed to start backup: ${error.response?.data?.detail || error.message}`)
@@ -150,7 +150,7 @@ const Backup: React.FC = () => {
     mutationFn: (jobId: string) => backupAPI.cancelJob(jobId),
     onSuccess: () => {
       toast.success('Backup cancelled successfully!')
-      queryClient.invalidateQueries({ queryKey: ['backup-status'] })
+      queryClient.invalidateQueries({ queryKey: ['backup-status-manual'] })
     },
     onError: (error: any) => {
       toast.error(`Failed to cancel backup: ${error.response?.data?.detail || error.message}`)
@@ -264,29 +264,14 @@ const Backup: React.FC = () => {
         </Box>
         <Stack direction="row" spacing={2} alignItems="center">
           {/* Real-time connection status */}
-          {isConnected ? (
+          {isConnected && (
             <Chip
               icon={<RefreshCw size={14} className="animate-spin" />}
               label="Live Updates"
               color="success"
               size="small"
             />
-          ) : (
-            <Chip
-              icon={<Clock size={14} />}
-              label="Polling"
-              color="default"
-              size="small"
-            />
           )}
-
-          <Button
-            variant="outlined"
-            startIcon={<RefreshCw size={18} />}
-            onClick={() => queryClient.invalidateQueries({ queryKey: ['backup-status'] })}
-          >
-            Refresh
-          </Button>
         </Stack>
       </Box>
 
@@ -697,6 +682,16 @@ const Backup: React.FC = () => {
                           : 'N/A'}
                       </Typography>
                     </Box>
+                    {job.progress_details?.total_expected_size && job.progress_details.total_expected_size > 0 && (
+                      <Box sx={{ flex: 1, minWidth: 150 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          Total Source Size:
+                        </Typography>
+                        <Typography variant="body2" fontWeight={500} color="info.main">
+                          {formatBytesUtil(job.progress_details.total_expected_size)}
+                        </Typography>
+                      </Box>
+                    )}
                     <Box sx={{ flex: 1, minWidth: 150 }}>
                       <Typography variant="body2" color="text.secondary">
                         Speed:

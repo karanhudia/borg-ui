@@ -42,11 +42,27 @@ jobs:
       - name: Generate version number
         id: version
         run: |
-          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
-            # Auto-generate alpha version: 0.1.0-alpha.YYYYMMDD.HHMMSS
-            VERSION="0.1.0-alpha.$(date -u +%Y%m%d.%H%M%S)"
+          # Check if this is a tag push (manual version bump)
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"  # Remove 'v' prefix
             echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "Generated version: $VERSION"
+            echo "Manual version from tag: $VERSION"
+          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            # Auto-bump patch version on main branch
+            BASE_VERSION=$(cat VERSION)
+            # Split version into parts
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
+            # Increment patch version
+            PATCH=$((PATCH + 1))
+            VERSION="${MAJOR}.${MINOR}.${PATCH}"
+            # Add commit SHA for uniqueness
+            SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+            VERSION="${VERSION}+${SHORT_SHA}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "Auto-bumped version: $VERSION"
+            echo "Base version in VERSION file: $BASE_VERSION"
+            echo "Next release will be: ${MAJOR}.${MINOR}.${PATCH}"
           fi
 
       - name: Extract metadata (tags, labels)
@@ -55,20 +71,16 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            # Tag with 'latest' on main branch
-            type=raw,value=latest,enable={{is_default_branch}}
-            # Auto-generated alpha version on main branch
+            # Tag with 'latest' on main branch or version tags
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
+            # Auto-generated version on main branch
             type=raw,value=${{ steps.version.outputs.version }},enable={{is_default_branch}}
             # Tag with version on git tags (v1.0.0 -> 1.0.0)
             type=semver,pattern={{version}}
             # Tag with major.minor (v1.2.3 -> 1.2)
             type=semver,pattern={{major}}.{{minor}}
             # Tag with major version (v1.2.3 -> 1)
-            type=semver,pattern={{major}}
-            # Tag with short SHA for branch commits only
-            type=sha,prefix=sha-,enable={{is_default_branch}}
-            # Tag with branch name
-            type=ref,event=branch
+            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
