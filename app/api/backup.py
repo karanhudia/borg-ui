@@ -93,7 +93,9 @@ async def get_all_backup_jobs(
                         "nfiles": job.nfiles or 0,
                         "current_file": job.current_file or "",
                         "progress_percent": job.progress_percent or 0,
-                        "backup_speed": job.backup_speed or 0.0
+                        "backup_speed": job.backup_speed or 0.0,
+                        "total_expected_size": job.total_expected_size or 0,
+                        "estimated_time_remaining": job.estimated_time_remaining or 0
                     }
                 }
                 for job in jobs

@@ -422,7 +422,7 @@ const Schedule: React.FC = () => {
               </Typography>
             </Box>
           ) : jobs.length === 0 ? (
-            <Box sx={{ textAlign: 'center', py: 8 }}>
+            <Box sx={{ textAlign: 'center', py: 10, px: 4 }}>
               <Clock size={48} color="rgba(0,0,0,0.3)" style={{ margin: '0 auto' }} />
               <Typography variant="body1" color="text.secondary" sx={{ mt: 2 }}>
                 No scheduled jobs found
@@ -594,7 +594,7 @@ const Schedule: React.FC = () => {
               </Typography>
             </Box>
           ) : recentBackupJobs.length === 0 ? (
-            <Box sx={{ textAlign: 'center', py: 8 }}>
+            <Box sx={{ textAlign: 'center', py: 10, px: 4 }}>
               <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
                 <Clock size={48} color="rgba(0,0,0,0.3)" />
               </Box>

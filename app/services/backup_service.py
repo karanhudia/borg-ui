@@ -205,6 +205,52 @@ class BackupService:
             bytes_value /= 1024.0
         return f"{bytes_value:.2f} PB"
 
+    async def _calculate_source_size(self, source_paths: list[str]) -> int:
+        """
+        Calculate total size of source directories in bytes using du
+        Returns total size in bytes, or 0 if calculation fails
+        """
+        try:
+            total_size = 0
+
+            for path in source_paths:
+                try:
+                    # Use du to get directory size in bytes
+                    # -s: summarize (total for directory)
+                    # -B1: block size of 1 byte (for precise byte count)
+                    cmd = ["du", "-s", "-B1", path]
+
+                    process = await asyncio.create_subprocess_exec(
+                        *cmd,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE
+                    )
+
+                    stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+
+                    if process.returncode == 0:
+                        # Parse output: "1234567\t/path/to/dir"
+                        output = stdout.decode().strip()
+                        if output:
+                            size_str = output.split('\t')[0]
+                            path_size = int(size_str)
+                            total_size += path_size
+                            logger.info("Calculated directory size", path=path, size=path_size, size_formatted=self._format_bytes(path_size))
+                    else:
+                        logger.warning("Failed to calculate directory size", path=path, stderr=stderr.decode())
+
+                except asyncio.TimeoutError:
+                    logger.warning("Timeout while calculating directory size", path=path)
+                except Exception as e:
+                    logger.warning("Error calculating directory size", path=path, error=str(e))
+
+            logger.info("Total source size calculated", total_size=total_size, total_formatted=self._format_bytes(total_size))
+            return total_size
+
+        except Exception as e:
+            logger.error("Failed to calculate total source size", error=str(e))
+            return 0
+
     async def execute_backup(self, job_id: int, repository: str, config_file: str, db: Session = None):
         """Execute backup using borg directly for better control"""
 
@@ -291,6 +337,17 @@ class BackupService:
                     logger.warning("Repository record not found, using defaults", repository=repository)
             except Exception as e:
                 logger.warning("Could not look up repository record", error=str(e))
+
+            # Calculate total expected size of source directories
+            logger.info("Calculating total size of source directories", source_paths=source_paths)
+            total_expected_size = await self._calculate_source_size(source_paths)
+            if total_expected_size > 0:
+                job.total_expected_size = total_expected_size
+                db.commit()
+                logger.info("Stored expected size", job_id=job_id, total_expected_size=total_expected_size,
+                          size_formatted=self._format_bytes(total_expected_size))
+            else:
+                logger.warning("Could not calculate expected size, progress percentage will not be accurate")
 
             # Build command with source directories and exclude patterns
             cmd = [
@@ -395,6 +452,19 @@ class BackupService:
                                         if elapsed_seconds > 0:
                                             # Speed in MB/s
                                             job.backup_speed = (job.original_size / (1024 * 1024)) / elapsed_seconds
+
+                                            # Calculate progress percentage if we have expected size
+                                            if job.total_expected_size and job.total_expected_size > 0:
+                                                job.progress_percent = min(100.0, (job.original_size / job.total_expected_size) * 100.0)
+
+                                                # Calculate estimated time remaining (in seconds)
+                                                remaining_bytes = job.total_expected_size - job.original_size
+                                                if remaining_bytes > 0 and job.backup_speed > 0:
+                                                    # Speed is in MB/s, convert remaining bytes to MB
+                                                    remaining_mb = remaining_bytes / (1024 * 1024)
+                                                    job.estimated_time_remaining = int(remaining_mb / job.backup_speed)
+                                                else:
+                                                    job.estimated_time_remaining = 0
 
                                     # SMART CURRENT_FILE TRACKING: Only show files taking >3 seconds
                                     current_path = json_msg.get('path', '')

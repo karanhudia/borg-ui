@@ -42,7 +42,7 @@ import {
 import { backupAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useBackupProgress } from '../hooks/useSSE'
-import { formatDate, formatRelativeTime, formatTimeRange, formatBytes as formatBytesUtil } from '../utils/dateUtils'
+import { formatDate, formatRelativeTime, formatTimeRange, formatBytes as formatBytesUtil, formatDurationSeconds } from '../utils/dateUtils'
 
 interface BackupJob {
   id: string
@@ -65,6 +65,8 @@ interface BackupJob {
     current_file: string
     progress_percent: number
     backup_speed: number
+    total_expected_size: number
+    estimated_time_remaining: number
   }
 }
 
@@ -705,6 +707,16 @@ const Backup: React.FC = () => {
                           : 'N/A'}
                       </Typography>
                     </Box>
+                    {job.progress_details?.estimated_time_remaining && job.progress_details.estimated_time_remaining > 0 && (
+                      <Box sx={{ flex: 1, minWidth: 150 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          ETA:
+                        </Typography>
+                        <Typography variant="body2" fontWeight={500} color="success.main">
+                          {formatDurationSeconds(job.progress_details?.estimated_time_remaining || 0)}
+                        </Typography>
+                      </Box>
+                    )}
                   </Stack>
                 </Paper>
               ))}
