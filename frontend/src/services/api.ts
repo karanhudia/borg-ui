@@ -112,23 +112,6 @@ export const restoreAPI = {
   startRestore: (repository: string, archive: string, paths: string[], destination: string) =>
     api.post('/restore/start', { repository, archive, paths, destination }),
 }
-
-
-
-export const logsAPI = {
-  getLogs: (params: {
-    log_type?: string;
-    lines?: number;
-    search?: string;
-    level?: string;
-    start_time?: string;
-    end_time?: string;
-  }) => api.get('/logs', { params }),
-  getLogTypes: () => api.get('/logs/types'),
-  getLogStats: (params: { log_type?: string; hours?: number }) => api.get('/logs/stats', { params }),
-  clearLogs: (params: { log_type: string }) => api.delete('/logs/clear', { params }),
-}
-
 export const settingsAPI = {
   // System settings
   getSystemSettings: () => api.get('/settings/system'),
@@ -151,11 +134,6 @@ export const settingsAPI = {
   cleanupSystem: () => api.post('/settings/system/cleanup'),
 }
 
-export const healthAPI = {
-  getSystemHealth: () => api.get('/health/system'),
-  getRepositoryHealth: () => api.get('/health/repositories'),
-}
-
 // Events API (Server-Sent Events)
 export const eventsAPI = {
   streamEvents: () => {
@@ -163,10 +141,6 @@ export const eventsAPI = {
     const url = `/api/events/stream${token ? `?token=${token}` : ''}`
     return new EventSource(url)
   },
-  getConnectionCount: () => api.get('/events/connections'),
-  sendBackupProgress: (data: any) => api.post('/events/backup-progress', data),
-  sendSystemStatus: (data: any) => api.post('/events/system-status', data),
-  sendLogUpdate: (data: any) => api.post('/events/log-update', data),
 }
 
 // Repositories API
