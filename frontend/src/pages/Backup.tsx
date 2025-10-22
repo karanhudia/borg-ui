@@ -78,10 +78,11 @@ const Backup: React.FC = () => {
   const { progress, isConnected } = useBackupProgress()
 
   // Get backup status and history (manual backups only)
+  // Use longer polling when SSE is connected, shorter when disconnected (fallback)
   const { data: backupStatus, isLoading: loadingStatus } = useQuery({
     queryKey: ['backup-status-manual'],
     queryFn: backupAPI.getManualJobs,
-    refetchInterval: 3000, // Poll every 3 seconds as fallback
+    refetchInterval: isConnected ? 30000 : 3000, // 30s with SSE, 3s without (fallback)
   })
 
   // Invalidate queries when SSE events are received

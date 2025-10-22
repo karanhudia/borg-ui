@@ -33,39 +33,34 @@ export const useSSE = (): UseSSEReturn => {
 
       eventSource.onopen = () => {
         setIsConnected(true);
-        console.log('SSE connection established');
+        // Only log once on initial connection, not on every reconnect
+        console.log('[SSE] Connected');
       };
 
       eventSource.onmessage = (event) => {
         try {
           const sseEvent: SSEEvent = JSON.parse(event.data);
           setLastEvent(sseEvent);
-          setEvents(prev => [...prev, sseEvent]);
-          
-          // Keep only last 100 events to prevent memory issues
-          if (events.length > 100) {
-            setEvents(prev => prev.slice(-100));
-          }
+          setEvents(prev => {
+            const newEvents = [...prev, sseEvent];
+            // Keep only last 100 events to prevent memory issues
+            return newEvents.length > 100 ? newEvents.slice(-100) : newEvents;
+          });
         } catch (error) {
-          console.error('Failed to parse SSE event:', error);
+          console.error('[SSE] Failed to parse event:', error);
         }
       };
 
-      eventSource.onerror = (error) => {
-        console.error('SSE connection error:', error);
+      eventSource.onerror = () => {
+        console.warn('[SSE] Connection lost, will retry...');
         setIsConnected(false);
       };
 
-      eventSource.addEventListener('error', (event) => {
-        console.error('SSE error event:', event);
-        setIsConnected(false);
-      });
-
     } catch (error) {
-      console.error('Failed to create SSE connection:', error);
+      console.error('[SSE] Failed to create connection:', error);
       setIsConnected(false);
     }
-  }, [events.length]);
+  }, []); // Remove events.length dependency - this was causing reconnects!
 
   const disconnect = useCallback(() => {
     if (eventSourceRef.current) {
