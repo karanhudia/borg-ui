@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import {
   Box,
@@ -74,15 +74,23 @@ const Backup: React.FC = () => {
   const [selectedRepository, setSelectedRepository] = useState<string>('')
   const queryClient = useQueryClient()
 
-  // Real-time backup progress
-  const { isConnected } = useBackupProgress()
+  // Real-time backup progress with query invalidation
+  const { progress, isConnected } = useBackupProgress()
 
   // Get backup status and history (manual backups only)
   const { data: backupStatus, isLoading: loadingStatus } = useQuery({
     queryKey: ['backup-status-manual'],
     queryFn: backupAPI.getManualJobs,
-    // No polling - user can manually trigger backups and see real-time updates via SSE
+    refetchInterval: 10000, // Poll every 10 seconds as fallback
   })
+
+  // Invalidate queries when SSE events are received
+  useEffect(() => {
+    if (progress) {
+      // Invalidate backup status query when progress events arrive
+      queryClient.invalidateQueries({ queryKey: ['backup-status-manual'] })
+    }
+  }, [progress, queryClient])
 
   // Get repositories
   const { data: repositoriesData, isLoading: loadingRepositories } = useQuery({
