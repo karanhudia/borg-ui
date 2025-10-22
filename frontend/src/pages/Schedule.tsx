@@ -47,7 +47,7 @@ import {
 } from 'lucide-react'
 import { scheduleAPI, repositoriesAPI, backupAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
-import { formatDate, formatRelativeTime, formatTimeRange, formatBytes as formatBytesUtil, formatDurationSeconds } from '../utils/dateUtils'
+import { formatDate, formatRelativeTime, formatTimeRange, formatBytes as formatBytesUtil, formatDurationSeconds, convertCronToUTC, convertCronToLocal } from '../utils/dateUtils'
 
 interface ScheduledJob {
   id: number
@@ -226,7 +226,12 @@ const Schedule: React.FC = () => {
       toast.error('Please select a repository')
       return
     }
-    createJobMutation.mutate(createForm)
+    // Convert cron expression from local time to UTC before sending to server
+    const utcCron = convertCronToUTC(createForm.cron_expression)
+    createJobMutation.mutate({
+      ...createForm,
+      cron_expression: utcCron
+    })
   }
 
   const handleUpdateJob = (e: React.FormEvent) => {
@@ -236,9 +241,14 @@ const Schedule: React.FC = () => {
       return
     }
     if (editingJob) {
+      // Convert cron expression from local time to UTC before sending to server
+      const utcCron = convertCronToUTC(editForm.cron_expression)
       updateJobMutation.mutate({
         id: editingJob.id,
-        data: editForm,
+        data: {
+          ...editForm,
+          cron_expression: utcCron
+        },
       })
     }
   }
@@ -266,9 +276,11 @@ const Schedule: React.FC = () => {
 
   const openEditModal = (job: ScheduledJob) => {
     setEditingJob(job)
+    // Convert UTC cron expression from server to local time for editing
+    const localCron = convertCronToLocal(job.cron_expression)
     setEditForm({
       name: job.name,
-      cron_expression: job.cron_expression,
+      cron_expression: localCron,
       repository: job.repository || '',
       enabled: job.enabled,
       description: job.description || '',
@@ -639,13 +651,13 @@ const Schedule: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={formatCronExpression(job.cron_expression)}
+                          label={formatCronExpression(convertCronToLocal(job.cron_expression))}
                           size="small"
                           variant="outlined"
                           color="primary"
                         />
                         <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                          {job.cron_expression}
+                          {convertCronToLocal(job.cron_expression)}
                         </Typography>
                       </TableCell>
                       <TableCell>

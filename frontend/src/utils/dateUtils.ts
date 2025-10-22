@@ -197,3 +197,134 @@ export const formatBytes = (bytes: number | null | undefined): string => {
 
   return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`
 }
+
+/**
+ * Convert a cron expression from local time to UTC
+ * Example: "0 2 * * *" (2 AM IST) -> "30 20 * * *" (8:30 PM UTC previous day)
+ */
+export const convertCronToUTC = (cronExpression: string): string => {
+  try {
+    // Parse cron expression (minute hour day month dayOfWeek)
+    const parts = cronExpression.trim().split(/\s+/)
+    if (parts.length !== 5) {
+      // Not a standard 5-part cron, return as-is
+      return cronExpression
+    }
+
+    const [minute, hour, day, month, dayOfWeek] = parts
+
+    // Only convert if hour and minute are specific numbers (not */ranges)
+    if (!/^\d+$/.test(hour) || !/^\d+$/.test(minute)) {
+      // Can't convert expressions like "*/6" or ranges
+      return cronExpression
+    }
+
+    // Get timezone offset in minutes
+    const now = new Date()
+    const offsetMinutes = now.getTimezoneOffset() // Negative for timezones ahead of UTC
+
+    // Convert local time to UTC
+    const localMinutes = parseInt(minute)
+    const localHours = parseInt(hour)
+    const totalLocalMinutes = localHours * 60 + localMinutes
+
+    // Subtract offset (because getTimezoneOffset returns UTC - local)
+    const totalUTCMinutes = totalLocalMinutes + offsetMinutes
+
+    // Handle day wrapping
+    let utcMinutes = totalUTCMinutes % 60
+    let utcHours = Math.floor(totalUTCMinutes / 60)
+    let dayAdjustment = 0
+
+    if (utcMinutes < 0) {
+      utcMinutes += 60
+      utcHours -= 1
+    }
+
+    if (utcHours < 0) {
+      utcHours += 24
+      dayAdjustment = -1
+    } else if (utcHours >= 24) {
+      utcHours -= 24
+      dayAdjustment = 1
+    }
+
+    // If day adjustment is needed and day/dayOfWeek are specific, adjust them
+    let newDay = day
+    let newDayOfWeek = dayOfWeek
+
+    if (dayAdjustment !== 0) {
+      // If day is specific number, adjust it
+      if (/^\d+$/.test(day)) {
+        let dayNum = parseInt(day) + dayAdjustment
+        if (dayNum < 1) dayNum = 1
+        if (dayNum > 31) dayNum = 31
+        newDay = dayNum.toString()
+      }
+
+      // If dayOfWeek is specific, adjust it
+      if (/^\d+$/.test(dayOfWeek)) {
+        let dowNum = (parseInt(dayOfWeek) + dayAdjustment + 7) % 7
+        newDayOfWeek = dowNum.toString()
+      }
+    }
+
+    return `${utcMinutes} ${utcHours} ${newDay} ${month} ${newDayOfWeek}`
+  } catch (error) {
+    console.error('Error converting cron to UTC:', error)
+    return cronExpression
+  }
+}
+
+/**
+ * Convert a cron expression from UTC to local time (for display)
+ * Example: "30 20 * * *" (8:30 PM UTC) -> "0 2 * * *" (2 AM IST next day)
+ */
+export const convertCronToLocal = (cronExpression: string): string => {
+  try {
+    // Parse cron expression
+    const parts = cronExpression.trim().split(/\s+/)
+    if (parts.length !== 5) {
+      return cronExpression
+    }
+
+    const [minute, hour, day, month, dayOfWeek] = parts
+
+    // Only convert if hour and minute are specific numbers
+    if (!/^\d+$/.test(hour) || !/^\d+$/.test(minute)) {
+      return cronExpression
+    }
+
+    // Get timezone offset in minutes
+    const now = new Date()
+    const offsetMinutes = now.getTimezoneOffset()
+
+    // Convert UTC time to local
+    const utcMinutes = parseInt(minute)
+    const utcHours = parseInt(hour)
+    const totalUTCMinutes = utcHours * 60 + utcMinutes
+
+    // Add offset (to convert from UTC to local)
+    const totalLocalMinutes = totalUTCMinutes - offsetMinutes
+
+    // Handle day wrapping
+    let localMinutes = totalLocalMinutes % 60
+    let localHours = Math.floor(totalLocalMinutes / 60)
+
+    if (localMinutes < 0) {
+      localMinutes += 60
+      localHours -= 1
+    }
+
+    if (localHours < 0) {
+      localHours += 24
+    } else if (localHours >= 24) {
+      localHours -= 24
+    }
+
+    return `${localMinutes} ${localHours} ${day} ${month} ${dayOfWeek}`
+  } catch (error) {
+    console.error('Error converting cron to local:', error)
+    return cronExpression
+  }
+}
