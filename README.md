@@ -599,8 +599,8 @@ A new SECRET_KEY will be generated automatically. Note: This will invalidate all
    ```
 
 4. **Access the application:**
-   - Frontend: `http://localhost:8081`
-   - API Docs: `http://localhost:8081/api/docs`
+    - Frontend: `http://localhost:8081`
+    - API Docs: `http://localhost:8081/api/docs`
 
 ### Development Workflow
 

@@ -108,36 +108,32 @@ You can customize this via the `LOCAL_STORAGE_PATH` environment variable (see [C
 
 ---
 
-### Step 1: Prepare Your Storage Location (On Host)
+### Step 1: Ensure Storage is Accessible
 
-First, create a directory on your host machine where backups will be stored.
+**Good news:** You don't need to create directories manually! Borg automatically creates the repository directory when you initialize it.
 
-**For Linux/Raspberry Pi:**
+**What you DO need:**
+- Storage attached to your Docker host (USB drive, NAS mount, etc.)
+- Your Docker user has write permissions to the **parent directory**
 
-```bash
-# Option A: USB external drive (assuming mounted at /mnt/usb-drive)
-sudo mkdir -p /mnt/usb-drive/borg-backups
-sudo chown $(id -u):$(id -g) /mnt/usb-drive/borg-backups
+**Examples of parent directories:**
+- `/mnt/usb-drive/` - For external drives (Linux/Pi)
+- `/mnt/nas/` - For NAS mounts
+- `/home/user/backups/` - For home directory (Linux)
+- `~/backups/` - For home directory (shorthand)
+- `/Volumes/MyExternalDrive/` - For external drives (macOS)
 
-# Option B: NAS mount (assuming mounted at /mnt/nas)
-sudo mkdir -p /mnt/nas/borg-backups
-sudo chown $(id -u):$(id -g) /mnt/nas/borg-backups
-
-# Option C: Home directory
-mkdir -p ~/backups/borg-repos
-```
-
-**For macOS:**
+**Setting permissions (if needed):**
 
 ```bash
-# Option A: External drive
-mkdir -p /Volumes/MyExternalDrive/borg-backups
+# Linux/Raspberry Pi - Make sure you own the parent directory
+sudo chown -R $(id -u):$(id -g) /mnt/usb-drive
 
-# Option B: Home directory
-mkdir -p ~/backups/borg-repos
+# Check permissions
+ls -la /mnt/usb-drive
 ```
 
-**Important:** Ensure your Docker user (set via `PUID`/`PGID`) has write permissions to this directory!
+**Tip:** Ensure `PUID`/`PGID` in docker-compose matches your user ID. See [Troubleshooting > Permission Issues](https://github.com/karanhudia/borg-ui#permission-issues).
 
 ---
 
@@ -357,24 +353,37 @@ Before creating a repository, verify the SSH connection works:
 
 ---
 
-### Step 4: Prepare Remote Storage Directory
+### Step 4: Ensure Remote Server is Ready
 
-On the **remote server**, create a directory for Borg repositories:
+**Good news:** You don't need to create directories manually! Borg automatically creates the repository directory when you initialize it.
+
+**What you DO need on the remote server:**
+
+1. **Borg installed**
+2. **Write permissions** to the parent directory
+
+**Check and prepare the remote server:**
 
 ```bash
 # SSH into remote server
 ssh backupuser@192.168.1.100
 
-# Create backup directory
-mkdir -p ~/borg-backups
-
-# Ensure Borg is installed
+# 1. Ensure Borg is installed
 borg --version
 # If not installed: sudo apt install borgbackup
+
+# 2. (Optional) Create a parent directory if you want to organize repos
+#    Borg will create the actual repo directory automatically
+mkdir -p ~/borg-backups  # Optional: just for organization
+
+# 3. Verify you have write permissions
+touch ~/borg-backups/test && rm ~/borg-backups/test && echo "Permissions OK"
 
 # Exit
 exit
 ```
+
+**Note:** You can skip creating directories - just ensure Borg is installed and you have write access to your home directory or wherever you plan to store repos.
 
 ---
 
@@ -693,20 +702,22 @@ Restart container: `docker compose down && docker compose up -d`
 
 ## Summary
 
-### Local Backups in 3 Steps:
-1. **Create storage directory** on host
-2. **Create repository** using `/local/path/to/repo`
+### Local Backups in 3 Easy Steps:
+1. **Ensure storage is accessible** (USB drive, NAS mount, etc.) with write permissions
+2. **Create repository** in UI using `/local/path/to/repo` - Borg auto-creates the directory!
 3. **Run backup** - no SSH key needed!
 
-### SSH Backups in 6 Steps:
-1. **Generate SSH key** in UI
-2. **Deploy public key** to remote server
-3. **Test connection**
-4. **Prepare remote directory**
-5. **Create repository** using `user@host:path`
+### SSH Backups in 6 Easy Steps:
+1. **Generate SSH key** in UI (one click)
+2. **Deploy public key** to remote server (automatic or manual)
+3. **Test connection** (verify it works)
+4. **Ensure Borg is installed** on remote server
+5. **Create repository** in UI using `user@host:path` - Borg auto-creates the directory!
 6. **Run backup**
 
 **The difference?** Just the SSH key setup. Everything else is identical!
+
+**Pro tip:** Borg automatically creates repository directories when you initialize them - no manual `mkdir` needed!
 
 ---
 
