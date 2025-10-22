@@ -643,9 +643,14 @@ const Backup: React.FC = () => {
                     </Alert>
                   )}
 
-                  {/* Job Details with Detailed Stats */}
-                  <Stack direction="row" spacing={2} flexWrap="wrap">
-                    <Box sx={{ flex: 1, minWidth: 150 }}>
+                  {/* Job Details with Detailed Stats - Grid Layout to prevent overflow */}
+                  <Box sx={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                    gap: 2,
+                    width: '100%'
+                  }}>
+                    <Box>
                       <Typography variant="body2" color="text.secondary">
                         Files Processed:
                       </Typography>
@@ -654,7 +659,7 @@ const Backup: React.FC = () => {
                         {job.total_files && ` / ${job.total_files.toLocaleString()}`}
                       </Typography>
                     </Box>
-                    <Box sx={{ flex: 1, minWidth: 150 }}>
+                    <Box>
                       <Typography variant="body2" color="text.secondary">
                         Original Size:
                       </Typography>
@@ -662,7 +667,7 @@ const Backup: React.FC = () => {
                         {job.progress_details?.original_size ? formatBytesUtil(job.progress_details.original_size) : formatFileSize(job.processed_size)}
                       </Typography>
                     </Box>
-                    <Box sx={{ flex: 1, minWidth: 150 }}>
+                    <Box>
                       <Typography variant="body2" color="text.secondary">
                         Compressed:
                       </Typography>
@@ -672,7 +677,7 @@ const Backup: React.FC = () => {
                           : 'N/A'}
                       </Typography>
                     </Box>
-                    <Box sx={{ flex: 1, minWidth: 150 }}>
+                    <Box>
                       <Typography variant="body2" color="text.secondary">
                         Deduplicated:
                       </Typography>
@@ -683,7 +688,7 @@ const Backup: React.FC = () => {
                       </Typography>
                     </Box>
                     {job.progress_details?.total_expected_size && job.progress_details.total_expected_size > 0 && (
-                      <Box sx={{ flex: 1, minWidth: 150 }}>
+                      <Box>
                         <Typography variant="body2" color="text.secondary">
                           Total Source Size:
                         </Typography>
@@ -692,7 +697,7 @@ const Backup: React.FC = () => {
                         </Typography>
                       </Box>
                     )}
-                    <Box sx={{ flex: 1, minWidth: 150 }}>
+                    <Box>
                       <Typography variant="body2" color="text.secondary">
                         Speed:
                       </Typography>
@@ -703,7 +708,7 @@ const Backup: React.FC = () => {
                       </Typography>
                     </Box>
                     {job.progress_details?.estimated_time_remaining && job.progress_details.estimated_time_remaining > 0 && (
-                      <Box sx={{ flex: 1, minWidth: 150 }}>
+                      <Box>
                         <Typography variant="body2" color="text.secondary">
                           ETA:
                         </Typography>
@@ -712,7 +717,7 @@ const Backup: React.FC = () => {
                         </Typography>
                       </Box>
                     )}
-                  </Stack>
+                  </Box>
                 </Paper>
               ))}
             </Stack>

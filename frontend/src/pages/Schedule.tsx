@@ -42,10 +42,12 @@ import {
   XCircle,
   AlertCircle,
   Calendar,
+  RefreshCw,
+  Download,
 } from 'lucide-react'
 import { scheduleAPI, repositoriesAPI, backupAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
-import { formatDate, formatRelativeTime, formatTimeRange } from '../utils/dateUtils'
+import { formatDate, formatRelativeTime, formatTimeRange, formatBytes as formatBytesUtil, formatDurationSeconds } from '../utils/dateUtils'
 
 interface ScheduledJob {
   id: number
@@ -67,6 +69,18 @@ interface BackupJob {
   started_at: string
   completed_at?: string
   error_message?: string
+  has_logs?: boolean
+  progress_details?: {
+    original_size: number
+    compressed_size: number
+    deduplicated_size: number
+    nfiles: number
+    current_file: string
+    progress_percent: number
+    backup_speed: number
+    total_expected_size: number
+    estimated_time_remaining: number
+  }
 }
 
 const Schedule: React.FC = () => {
@@ -329,7 +343,9 @@ const Schedule: React.FC = () => {
 
   const jobs = jobsData?.data?.jobs || []
   const repositories = repositoriesData?.data?.repositories || []
-  const recentBackupJobs = backupJobsData?.data?.jobs?.slice(0, 10) || []
+  const allBackupJobs = backupJobsData?.data?.jobs || []
+  const runningBackupJobs = allBackupJobs.filter((job: BackupJob) => job.status === 'running')
+  const recentBackupJobs = allBackupJobs.slice(0, 10)
   const upcomingJobs = upcomingData?.data?.upcoming_jobs || []
 
   return (
@@ -359,6 +375,150 @@ const Schedule: React.FC = () => {
         <Alert severity="info" sx={{ mb: 3 }}>
           You need to create at least one repository before scheduling backups.
         </Alert>
+      )}
+
+      {/* Running Scheduled Jobs */}
+      {runningBackupJobs.length > 0 && (
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+              <RefreshCw size={20} color="#1976d2" className="animate-spin" />
+              <Typography variant="h6" fontWeight={600}>
+                Running Scheduled Backups
+              </Typography>
+              <Chip
+                label={`${runningBackupJobs.length} active`}
+                size="small"
+                color="primary"
+                sx={{ ml: 1 }}
+              />
+            </Stack>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Real-time progress for scheduled backup jobs
+            </Typography>
+
+            <Stack spacing={2}>
+              {runningBackupJobs.map((job: BackupJob) => (
+                <Paper
+                  key={job.id}
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    border: 1,
+                    borderColor: 'primary.main',
+                    borderRadius: 2,
+                    backgroundColor: 'primary.lighter',
+                  }}
+                >
+                  {/* Job Header */}
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                    <Stack direction="row" spacing={2} alignItems="center">
+                      <Chip
+                        icon={<RefreshCw size={14} className="animate-spin" />}
+                        label="Running"
+                        color="primary"
+                        size="small"
+                      />
+                      <Typography variant="body2" fontWeight={600}>
+                        Job #{job.id} - {getRepositoryName(job.repository)}
+                      </Typography>
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary">
+                      Started: {formatRelativeTime(job.started_at)}
+                    </Typography>
+                  </Stack>
+
+                  {/* Current File Being Processed */}
+                  {job.progress_details?.current_file && (
+                    <Alert severity="info" sx={{ mb: 2, py: 0.5 }}>
+                      <Typography variant="caption" fontWeight={500}>
+                        Current File:
+                      </Typography>
+                      <Typography variant="caption" sx={{ fontFamily: 'monospace', display: 'block', mt: 0.5, wordBreak: 'break-all' }}>
+                        {job.progress_details.current_file}
+                      </Typography>
+                    </Alert>
+                  )}
+
+                  {/* Job Details Grid */}
+                  <Box sx={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                    gap: 2,
+                    width: '100%'
+                  }}>
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Files Processed:
+                      </Typography>
+                      <Typography variant="body2" fontWeight={500}>
+                        {job.progress_details?.nfiles?.toLocaleString() || '0'}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Original Size:
+                      </Typography>
+                      <Typography variant="body2" fontWeight={500}>
+                        {job.progress_details?.original_size ? formatBytesUtil(job.progress_details.original_size) : 'N/A'}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Compressed:
+                      </Typography>
+                      <Typography variant="body2" fontWeight={500}>
+                        {job.progress_details?.compressed_size !== undefined && job.progress_details?.compressed_size !== null
+                          ? formatBytesUtil(job.progress_details.compressed_size)
+                          : 'N/A'}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Deduplicated:
+                      </Typography>
+                      <Typography variant="body2" fontWeight={500} color="success.main">
+                        {job.progress_details?.deduplicated_size !== undefined && job.progress_details?.deduplicated_size !== null
+                          ? formatBytesUtil(job.progress_details.deduplicated_size)
+                          : 'N/A'}
+                      </Typography>
+                    </Box>
+                    {job.progress_details?.total_expected_size && job.progress_details.total_expected_size > 0 && (
+                      <Box>
+                        <Typography variant="body2" color="text.secondary">
+                          Total Source Size:
+                        </Typography>
+                        <Typography variant="body2" fontWeight={500} color="info.main">
+                          {formatBytesUtil(job.progress_details.total_expected_size)}
+                        </Typography>
+                      </Box>
+                    )}
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Speed:
+                      </Typography>
+                      <Typography variant="body2" fontWeight={500} color="primary.main">
+                        {job.progress_details?.backup_speed
+                          ? `${job.progress_details.backup_speed.toFixed(2)} MB/s`
+                          : 'N/A'}
+                      </Typography>
+                    </Box>
+                    {job.progress_details?.estimated_time_remaining && job.progress_details.estimated_time_remaining > 0 && (
+                      <Box>
+                        <Typography variant="body2" color="text.secondary">
+                          ETA:
+                        </Typography>
+                        <Typography variant="body2" fontWeight={500} color="success.main">
+                          {formatDurationSeconds(job.progress_details.estimated_time_remaining)}
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+                </Paper>
+              ))}
+            </Stack>
+          </CardContent>
+        </Card>
       )}
 
       {/* Upcoming Jobs Summary */}
@@ -612,6 +772,7 @@ const Schedule: React.FC = () => {
                     <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Status</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Started</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Duration</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }} align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -663,6 +824,29 @@ const Schedule: React.FC = () => {
                         <Typography variant="body2">
                           {job.completed_at ? formatTimeRange(job.started_at, job.completed_at) : 'Running...'}
                         </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        {job.has_logs && (job.status === 'failed' || job.status === 'cancelled') && (
+                          <Tooltip title="Download Logs" arrow>
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() => backupAPI.downloadLogs(job.id)}
+                            >
+                              <Download size={16} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {job.error_message && (
+                          <Tooltip title={job.error_message} arrow>
+                            <IconButton
+                              size="small"
+                              color="error"
+                            >
+                              <AlertCircle size={16} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
