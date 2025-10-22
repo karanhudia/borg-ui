@@ -229,23 +229,27 @@ export const convertCronToUTC = (cronExpression: string): string => {
     const totalLocalMinutes = localHours * 60 + localMinutes
 
     // Subtract offset (because getTimezoneOffset returns UTC - local)
-    const totalUTCMinutes = totalLocalMinutes + offsetMinutes
+    let totalUTCMinutes = totalLocalMinutes + offsetMinutes
 
-    // Handle day wrapping
-    let utcMinutes = totalUTCMinutes % 60
-    let utcHours = Math.floor(totalUTCMinutes / 60)
-    let dayAdjustment = 0
-
-    if (utcMinutes < 0) {
-      utcMinutes += 60
-      utcHours -= 1
+    // Handle negative time (previous day)
+    while (totalUTCMinutes < 0) {
+      totalUTCMinutes += 24 * 60
     }
 
-    if (utcHours < 0) {
-      utcHours += 24
+    // Handle overflow (next day)
+    while (totalUTCMinutes >= 24 * 60) {
+      totalUTCMinutes -= 24 * 60
+    }
+
+    // Extract hours and minutes
+    const utcMinutes = totalUTCMinutes % 60
+    const utcHours = Math.floor(totalUTCMinutes / 60)
+    let dayAdjustment = 0
+
+    // Determine if we crossed day boundary
+    if (totalLocalMinutes + offsetMinutes < 0) {
       dayAdjustment = -1
-    } else if (utcHours >= 24) {
-      utcHours -= 24
+    } else if (totalLocalMinutes + offsetMinutes >= 24 * 60) {
       dayAdjustment = 1
     }
 
@@ -302,25 +306,24 @@ export const convertCronToLocal = (cronExpression: string): string => {
     // Convert UTC time to local
     const utcMinutes = parseInt(minute)
     const utcHours = parseInt(hour)
-    const totalUTCMinutes = utcHours * 60 + utcMinutes
+    let totalUTCMinutes = utcHours * 60 + utcMinutes
 
     // Add offset (to convert from UTC to local)
-    const totalLocalMinutes = totalUTCMinutes - offsetMinutes
+    let totalLocalMinutes = totalUTCMinutes - offsetMinutes
 
-    // Handle day wrapping
-    let localMinutes = totalLocalMinutes % 60
-    let localHours = Math.floor(totalLocalMinutes / 60)
-
-    if (localMinutes < 0) {
-      localMinutes += 60
-      localHours -= 1
+    // Handle negative time (previous day)
+    while (totalLocalMinutes < 0) {
+      totalLocalMinutes += 24 * 60
     }
 
-    if (localHours < 0) {
-      localHours += 24
-    } else if (localHours >= 24) {
-      localHours -= 24
+    // Handle overflow (next day)
+    while (totalLocalMinutes >= 24 * 60) {
+      totalLocalMinutes -= 24 * 60
     }
+
+    // Extract hours and minutes
+    const localMinutes = totalLocalMinutes % 60
+    const localHours = Math.floor(totalLocalMinutes / 60)
 
     return `${localMinutes} ${localHours} ${day} ${month} ${dayOfWeek}`
   } catch (error) {
