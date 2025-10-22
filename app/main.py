@@ -96,6 +96,22 @@ async def startup_event():
     # Create first user if no users exist
     await create_first_user()
 
+    # Cache borg system info on startup (prevents repeated borg --version calls)
+    from app.core.borg import borg
+    try:
+        await borg.get_system_info()
+        logger.info("Borg system info cached")
+    except Exception as e:
+        logger.warning("Failed to cache borg system info", error=str(e))
+
+    # Rotate old backup logs on startup
+    from app.services.backup_service import backup_service
+    try:
+        backup_service.rotate_logs(max_age_days=30, max_files=100)
+        logger.info("Log rotation completed")
+    except Exception as e:
+        logger.warning("Failed to rotate logs", error=str(e))
+
     logger.info("Borg Web UI started successfully")
 
 @app.on_event("shutdown")

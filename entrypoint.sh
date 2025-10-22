@@ -44,11 +44,13 @@ echo "[$(date)] Starting Borg Web UI as user borg (${PUID}:${PGID})..."
 cd /app
 PORT=${PORT:-8081}
 
+# Note: Access logs disabled (/dev/null) because FastAPI middleware already logs all requests
+# with structured logging. This prevents duplicate log entries.
 exec gosu borg gunicorn app.main:app \
     --bind 0.0.0.0:${PORT} \
     --workers 1 \
     --worker-class uvicorn.workers.UvicornWorker \
     --timeout 0 \
     --graceful-timeout 30 \
-    --access-logfile - \
+    --access-logfile /dev/null \
     --error-logfile -

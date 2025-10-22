@@ -14,6 +14,8 @@ class BorgInterface:
     """Interface for interacting with Borg CLI"""
 
     _validated = False  # Class variable to track if validation has run
+    _cached_version = None  # Class variable to cache borg version
+    _cached_system_info = None  # Class variable to cache system info
 
     def __init__(self):
         self.borg_cmd = "borg"
@@ -327,21 +329,29 @@ class BorgInterface:
             return "Unknown"
 
     async def get_system_info(self) -> Dict:
-        """Get system information"""
+        """Get system information (cached after first call)"""
         try:
-            # Get borg version
+            # Return cached info if available
+            if BorgInterface._cached_system_info is not None:
+                return BorgInterface._cached_system_info
+
+            # Get borg version (only once)
             version_result = await self._execute_command([self.borg_cmd, "--version"])
             borg_version = version_result["stdout"].strip() if version_result["success"] else "Unknown"
 
-            # Get available commands
+            # Get available commands (only once)
             help_result = await self._execute_command([self.borg_cmd, "--help"])
 
-            return {
+            # Cache the result
+            BorgInterface._cached_system_info = {
                 "success": True,
                 "borg_version": borg_version,
                 "data_dir": settings.data_dir,
                 "help_available": help_result["success"]
             }
+
+            logger.info("Cached borg system info", version=borg_version)
+            return BorgInterface._cached_system_info
 
         except Exception as e:
             logger.error("Failed to get system info", error=str(e))

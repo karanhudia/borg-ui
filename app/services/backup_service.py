@@ -21,6 +21,66 @@ class BackupService:
         self.running_processes = {}  # Track running backup processes by job_id
         self.error_msgids = {}  # Track error message IDs by job_id
 
+    def rotate_logs(self, max_age_days: int = 30, max_files: int = 100):
+        """
+        Rotate backup log files to prevent disk space issues
+        - Deletes logs older than max_age_days
+        - Keeps only max_files most recent log files
+        """
+        try:
+            import time
+
+            if not self.log_dir.exists():
+                return
+
+            # Get all log files
+            log_files = list(self.log_dir.glob("backup_*.log"))
+
+            if not log_files:
+                return
+
+            current_time = time.time()
+            max_age_seconds = max_age_days * 24 * 60 * 60
+            deleted_count = 0
+
+            # Delete files older than max_age_days
+            for log_file in log_files:
+                try:
+                    file_age = current_time - log_file.stat().st_mtime
+                    if file_age > max_age_seconds:
+                        log_file.unlink()
+                        deleted_count += 1
+                        logger.debug("Deleted old log file", file=log_file.name, age_days=int(file_age / 86400))
+                except Exception as e:
+                    logger.warning("Failed to delete log file", file=log_file.name, error=str(e))
+
+            # Get remaining files and sort by modification time (newest first)
+            log_files = sorted(
+                [f for f in self.log_dir.glob("backup_*.log")],
+                key=lambda f: f.stat().st_mtime,
+                reverse=True
+            )
+
+            # Keep only max_files most recent
+            if len(log_files) > max_files:
+                for log_file in log_files[max_files:]:
+                    try:
+                        log_file.unlink()
+                        deleted_count += 1
+                        logger.debug("Deleted excess log file", file=log_file.name)
+                    except Exception as e:
+                        logger.warning("Failed to delete log file", file=log_file.name, error=str(e))
+
+            if deleted_count > 0:
+                logger.info("Log rotation completed",
+                          deleted=deleted_count,
+                          remaining=len(log_files) - deleted_count,
+                          max_age_days=max_age_days,
+                          max_files=max_files)
+
+        except Exception as e:
+            logger.error("Log rotation failed", error=str(e))
+
     async def _update_archive_stats(self, db: Session, job_id: int, repository_path: str, archive_name: str, env: dict):
         """Update backup job with final archive statistics"""
         try:

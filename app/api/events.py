@@ -167,27 +167,29 @@ async def stream_events(
         raise HTTPException(status_code=500, detail="Failed to start event stream")
 
 # Background task for periodic system status updates
-async def periodic_system_status():
-    """Send periodic system status updates"""
-    while True:
-        try:
-            # Get system information
-            system_info = await borg.get_system_info()
-            
-            if system_info["success"]:
-                await event_manager.broadcast_event(
-                    "system_status",
-                    {
-                        "type": "periodic_update",
-                        "data": system_info
-                    }
-                )
-            
-            # Wait for 30 seconds before next update
-            await asyncio.sleep(30)
-        except Exception as e:
-            logger.error("Error in periodic system status", error=str(e))
-            await asyncio.sleep(30)
+# DISABLED: This was causing excessive borg --version/--help calls every 30 seconds
+# Borg version is now cached on startup and doesn't change during runtime
+# async def periodic_system_status():
+#     """Send periodic system status updates"""
+#     while True:
+#         try:
+#             # Get system information
+#             system_info = await borg.get_system_info()
+#
+#             if system_info["success"]:
+#                 await event_manager.broadcast_event(
+#                     "system_status",
+#                     {
+#                         "type": "periodic_update",
+#                         "data": system_info
+#                     }
+#                 )
+#
+#             # Wait for 30 seconds before next update
+#             await asyncio.sleep(30)
+#         except Exception as e:
+#             logger.error("Error in periodic system status", error=str(e))
+#             await asyncio.sleep(30)
 
 # Background task for monitoring backup jobs
 async def monitor_backup_jobs():
@@ -207,6 +209,6 @@ async def monitor_backup_jobs():
 @router.on_event("startup")
 async def startup_event():
     """Start background tasks on startup"""
-    asyncio.create_task(periodic_system_status())
+    # asyncio.create_task(periodic_system_status())  # DISABLED: Causes excessive borg command spam
     asyncio.create_task(monitor_backup_jobs())
     logger.info("Started SSE background tasks")
