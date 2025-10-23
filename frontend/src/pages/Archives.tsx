@@ -39,7 +39,7 @@ import {
 } from 'lucide-react'
 import { archivesAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
-import { formatDate, formatRelativeTime, formatSmartDuration, formatBytes as formatBytesUtil } from '../utils/dateUtils'
+import { formatDate, formatRelativeTime, formatBytes as formatBytesUtil } from '../utils/dateUtils'
 
 interface Repository {
   id: number
@@ -284,7 +284,7 @@ const Archives: React.FC = () => {
                                   {formatRelativeTime(archive.start)}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary">
-                                  Duration: {formatSmartDuration(archive.time, archive.start)}
+                                  {formatDate(archive.start)}
                                 </Typography>
                               </Stack>
                             </Box>
@@ -459,10 +459,6 @@ const Archives: React.FC = () => {
                           <TableRow>
                             <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Created</TableCell>
                             <TableCell>{archiveInfo.data.archive.start ? formatDate(archiveInfo.data.archive.start) : formatDate(selectedArchive.start)}</TableCell>
-                          </TableRow>
-                          <TableRow>
-                            <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Duration</TableCell>
-                            <TableCell>{formatSmartDuration(archiveInfo.data.archive.duration || selectedArchive.time, archiveInfo.data.archive.start || selectedArchive.start)}</TableCell>
                           </TableRow>
                           {archiveInfo.data.archive.command_line && (
                             <TableRow>
