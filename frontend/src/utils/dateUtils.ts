@@ -97,80 +97,6 @@ export const formatDurationSeconds = (seconds: number | null | undefined): strin
 }
 
 /**
- * Format duration string from backend (e.g., "840 minutes" -> "14 hours")
- */
-export const formatDurationString = (durationString: string | null | undefined): string => {
-  if (!durationString) return '0 sec'
-
-  try {
-    // Parse backend duration strings like "840 minutes" or "5.5 seconds"
-    const match = durationString.match(/^([\d.]+)\s+(second|minute|hour|day)s?$/)
-    if (match) {
-      const value = parseFloat(match[1])
-      const unit = match[2]
-
-      let seconds = 0
-      switch (unit) {
-        case 'second':
-          seconds = value
-          break
-        case 'minute':
-          seconds = value * 60
-          break
-        case 'hour':
-          seconds = value * 3600
-          break
-        case 'day':
-          seconds = value * 86400
-          break
-      }
-
-      return formatDurationSeconds(seconds)
-    }
-
-    return durationString
-  } catch (error) {
-    console.error('Error formatting duration string:', error)
-    return durationString
-  }
-}
-
-/**
- * Smart duration formatter that handles both duration strings and timestamps
- * If given a timestamp and start time, calculates the duration
- * If given a duration string, formats it nicely
- */
-export const formatSmartDuration = (
-  durationOrEndTime: string | null | undefined,
-  startTime?: string | null | undefined
-): string => {
-  if (!durationOrEndTime) return '0 sec'
-
-  try {
-    // Check if it looks like a timestamp (contains date format like YYYY-MM-DD or ISO format)
-    const isTimestamp = /\d{4}-\d{2}-\d{2}/.test(durationOrEndTime)
-
-    if (isTimestamp && startTime) {
-      // Calculate duration between start and end times
-      const start = new Date(startTime)
-      const end = new Date(durationOrEndTime)
-      const durationMs = end.getTime() - start.getTime()
-      const durationSec = Math.floor(durationMs / 1000)
-      return formatDurationSeconds(durationSec)
-    } else if (isTimestamp) {
-      // It's a timestamp but we don't have start time, just show it as a date
-      return formatDate(durationOrEndTime)
-    } else {
-      // It's a duration string, format it
-      return formatDurationString(durationOrEndTime)
-    }
-  } catch (error) {
-    console.error('Error formatting smart duration:', error)
-    return durationOrEndTime
-  }
-}
-
-/**
  * Format time range between two dates
  * Example: "5 min 2 sec" or "Running for 2 hours"
  */
@@ -201,21 +127,6 @@ export const formatTimeRange = (
   } catch (error) {
     console.error('Error formatting time range:', error)
     return 'N/A'
-  }
-}
-
-/**
- * Format timestamp to locale string (for backward compatibility)
- */
-export const formatTimestamp = (timestamp: string | null | undefined): string => {
-  if (!timestamp) return 'Never'
-
-  try {
-    const date = new Date(timestamp)
-    return date.toLocaleString()
-  } catch (error) {
-    console.error('Error formatting timestamp:', error)
-    return timestamp
   }
 }
 
