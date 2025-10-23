@@ -3,12 +3,21 @@ import { format, formatDistance, intervalToDuration } from 'date-fns'
 /**
  * Format a date string to a human-readable format
  * Example: "16th October 2025, 2:40:55 PM"
+ * Handles UTC timestamps by appending 'Z' if no timezone is specified
  */
 export const formatDate = (dateString: string | null | undefined): string => {
   if (!dateString) return 'Never'
 
   try {
-    const date = new Date(dateString)
+    // Ensure UTC timestamps are properly interpreted
+    // If the timestamp doesn't end with 'Z' or have timezone offset (+/-), assume it's UTC
+    let normalizedDateString = dateString
+    if (!/[Zz]$/.test(dateString) && !/[+-]\d{2}:\d{2}$/.test(dateString)) {
+      // No timezone indicator, treat as UTC by appending 'Z'
+      normalizedDateString = dateString.replace(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}).*/, '$1Z')
+    }
+
+    const date = new Date(normalizedDateString)
     const day = date.getDate()
 
     const getOrdinalSuffix = (d: number) => {
@@ -40,12 +49,19 @@ export const formatDate = (dateString: string | null | undefined): string => {
 /**
  * Format a date string to a shorter format
  * Example: "Oct 16, 2025"
+ * Handles UTC timestamps by appending 'Z' if no timezone is specified
  */
 export const formatDateShort = (dateString: string | null | undefined): string => {
   if (!dateString) return 'Never'
 
   try {
-    const date = new Date(dateString)
+    // Ensure UTC timestamps are properly interpreted
+    let normalizedDateString = dateString
+    if (!/[Zz]$/.test(dateString) && !/[+-]\d{2}:\d{2}$/.test(dateString)) {
+      normalizedDateString = dateString.replace(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}).*/, '$1Z')
+    }
+
+    const date = new Date(normalizedDateString)
     return format(date, 'MMM d, yyyy')
   } catch (error) {
     console.error('Error formatting date:', error)
@@ -56,12 +72,19 @@ export const formatDateShort = (dateString: string | null | undefined): string =
 /**
  * Format a date string to relative time
  * Example: "2 hours ago", "in 3 days"
+ * Handles UTC timestamps by appending 'Z' if no timezone is specified
  */
 export const formatRelativeTime = (dateString: string | null | undefined): string => {
   if (!dateString) return 'Never'
 
   try {
-    const date = new Date(dateString)
+    // Ensure UTC timestamps are properly interpreted
+    let normalizedDateString = dateString
+    if (!/[Zz]$/.test(dateString) && !/[+-]\d{2}:\d{2}$/.test(dateString)) {
+      normalizedDateString = dateString.replace(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}).*/, '$1Z')
+    }
+
+    const date = new Date(normalizedDateString)
     return formatDistance(date, new Date(), { addSuffix: true })
   } catch (error) {
     console.error('Error formatting relative time:', error)
@@ -136,8 +159,56 @@ export const formatDurationString = (durationString: string | null | undefined):
 }
 
 /**
+ * Smart duration formatter that handles both duration strings and timestamps
+ * If given a timestamp and start time, calculates the duration
+ * If given a duration string, formats it nicely
+ * Handles UTC timestamps by appending 'Z' if no timezone is specified
+ */
+export const formatSmartDuration = (
+  durationOrEndTime: string | null | undefined,
+  startTime?: string | null | undefined
+): string => {
+  if (!durationOrEndTime) return '0 sec'
+
+  try {
+    // Check if it looks like a timestamp (contains date format like YYYY-MM-DD or ISO format)
+    const isTimestamp = /\d{4}-\d{2}-\d{2}/.test(durationOrEndTime)
+
+    if (isTimestamp && startTime) {
+      // Calculate duration between start and end times
+      // Normalize timestamps to UTC if no timezone specified
+      let normalizedStartTime = startTime
+      if (!/[Zz]$/.test(startTime) && !/[+-]\d{2}:\d{2}$/.test(startTime)) {
+        normalizedStartTime = startTime.replace(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}).*/, '$1Z')
+      }
+
+      let normalizedEndTime = durationOrEndTime
+      if (!/[Zz]$/.test(durationOrEndTime) && !/[+-]\d{2}:\d{2}$/.test(durationOrEndTime)) {
+        normalizedEndTime = durationOrEndTime.replace(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}).*/, '$1Z')
+      }
+
+      const start = new Date(normalizedStartTime)
+      const end = new Date(normalizedEndTime)
+      const durationMs = end.getTime() - start.getTime()
+      const durationSec = Math.floor(durationMs / 1000)
+      return formatDurationSeconds(durationSec)
+    } else if (isTimestamp) {
+      // It's a timestamp but we don't have start time, just show it as a date
+      return formatDate(durationOrEndTime)
+    } else {
+      // It's a duration string, format it
+      return formatDurationString(durationOrEndTime)
+    }
+  } catch (error) {
+    console.error('Error formatting smart duration:', error)
+    return durationOrEndTime
+  }
+}
+
+/**
  * Format time range between two dates
  * Example: "5 min 2 sec" or "Running for 2 hours"
+ * Handles UTC timestamps by appending 'Z' if no timezone is specified
  */
 export const formatTimeRange = (
   startTime: string | null | undefined,
@@ -147,7 +218,13 @@ export const formatTimeRange = (
   if (!startTime) return 'N/A'
 
   try {
-    const start = new Date(startTime)
+    // Ensure UTC timestamps are properly interpreted
+    let normalizedStartTime = startTime
+    if (!/[Zz]$/.test(startTime) && !/[+-]\d{2}:\d{2}$/.test(startTime)) {
+      normalizedStartTime = startTime.replace(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}).*/, '$1Z')
+    }
+
+    const start = new Date(normalizedStartTime)
 
     if (status === 'running') {
       // Calculate duration from start to now
@@ -158,7 +235,12 @@ export const formatTimeRange = (
 
     if (!endTime) return 'N/A'
 
-    const end = new Date(endTime)
+    let normalizedEndTime = endTime
+    if (!/[Zz]$/.test(endTime) && !/[+-]\d{2}:\d{2}$/.test(endTime)) {
+      normalizedEndTime = endTime.replace(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}).*/, '$1Z')
+    }
+
+    const end = new Date(normalizedEndTime)
     const durationMs = end.getTime() - start.getTime()
     const durationSec = Math.floor(durationMs / 1000)
 

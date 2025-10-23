@@ -838,7 +838,7 @@ const Schedule: React.FC = () => {
                         </Typography>
                       </TableCell>
                       <TableCell align="right">
-                        {job.has_logs && (job.status === 'failed' || job.status === 'cancelled') && (
+                        {job.has_logs && (
                           <Tooltip title="Download Logs" arrow>
                             <IconButton
                               size="small"

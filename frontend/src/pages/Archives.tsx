@@ -33,14 +33,13 @@ import {
   HardDrive,
   Calendar,
   Trash2,
-  RefreshCw,
   AlertCircle,
   FolderOpen,
   Info,
 } from 'lucide-react'
 import { archivesAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
-import { formatDate, formatRelativeTime, formatDurationString, formatBytes as formatBytesUtil } from '../utils/dateUtils'
+import { formatDate, formatRelativeTime, formatSmartDuration, formatBytes as formatBytesUtil } from '../utils/dateUtils'
 
 interface Repository {
   id: number
@@ -138,25 +137,13 @@ const Archives: React.FC = () => {
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <Box>
-          <Typography variant="h4" fontWeight={600} gutterBottom>
-            Archive Management
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Browse and manage your backup archives
-          </Typography>
-        </Box>
-        <Button
-          variant="outlined"
-          startIcon={<RefreshCw size={18} />}
-          onClick={() => {
-            queryClient.invalidateQueries({ queryKey: ['repository-archives', selectedRepositoryId] })
-            queryClient.invalidateQueries({ queryKey: ['repository-info', selectedRepositoryId] })
-          }}
-        >
-          Refresh
-        </Button>
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" fontWeight={600} gutterBottom>
+          Archive Management
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Browse and manage your backup archives
+        </Typography>
       </Box>
 
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={3}>
@@ -297,7 +284,7 @@ const Archives: React.FC = () => {
                                   {formatRelativeTime(archive.start)}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary">
-                                  Duration: {formatDurationString(archive.time)}
+                                  Duration: {formatSmartDuration(archive.time, archive.start)}
                                 </Typography>
                               </Stack>
                             </Box>
@@ -475,7 +462,7 @@ const Archives: React.FC = () => {
                           </TableRow>
                           <TableRow>
                             <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Duration</TableCell>
-                            <TableCell>{formatDurationString(archiveInfo.data.archive.duration || selectedArchive.time)}</TableCell>
+                            <TableCell>{formatSmartDuration(archiveInfo.data.archive.duration || selectedArchive.time, archiveInfo.data.archive.start || selectedArchive.start)}</TableCell>
                           </TableRow>
                           {archiveInfo.data.archive.command_line && (
                             <TableRow>
