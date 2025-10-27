@@ -55,6 +55,7 @@ const Archives: React.FC = () => {
   const [selectedRepository, setSelectedRepository] = useState<Repository | null>(null)
   const [viewArchive, setViewArchive] = useState<Archive | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
+  const [currentPath, setCurrentPath] = useState<string>('/')
   const queryClient = useQueryClient()
 
   // Get repositories list
@@ -108,6 +109,84 @@ const Archives: React.FC = () => {
   // Get repositories from API response
   const repositories = repositoriesData?.data?.repositories || []
   const archivesList = archives?.data?.archives || []
+
+  // File browser helper functions
+  const getFilesInCurrentPath = () => {
+    if (!archiveInfo?.data?.archive?.files) return { folders: [], files: [] }
+
+    const allFiles = archiveInfo.data.archive.files
+    const folders: any[] = []
+    const files: any[] = []
+    const seenFolders = new Set<string>()
+
+    // Normalize current path
+    const normalizedPath = currentPath === '/' ? '' : currentPath.replace(/\/$/, '')
+
+    allFiles.forEach((file: any) => {
+      let filePath = file.path.startsWith('/') ? file.path.substring(1) : file.path
+
+      // Check if file is in current directory
+      if (normalizedPath) {
+        if (!filePath.startsWith(normalizedPath + '/')) return
+        filePath = filePath.substring(normalizedPath.length + 1)
+      }
+
+      // Skip if empty after normalization
+      if (!filePath) return
+
+      const parts = filePath.split('/')
+
+      if (parts.length === 1) {
+        // Direct child - either file or folder
+        if (file.type === 'd') {
+          if (!seenFolders.has(parts[0])) {
+            folders.push({ ...file, name: parts[0], path: file.path })
+            seenFolders.add(parts[0])
+          }
+        } else {
+          files.push({ ...file, name: parts[0] })
+        }
+      } else if (parts.length > 1) {
+        // Nested item - show as folder
+        const folderName = parts[0]
+        if (!seenFolders.has(folderName)) {
+          folders.push({
+            type: 'd',
+            name: folderName,
+            path: normalizedPath ? `${normalizedPath}/${folderName}` : folderName
+          })
+          seenFolders.add(folderName)
+        }
+      }
+    })
+
+    return { folders, files }
+  }
+
+  const navigateToPath = (path: string) => {
+    setCurrentPath(path)
+  }
+
+  const getBreadcrumbs = () => {
+    if (currentPath === '/') return [{ label: 'Root', path: '/' }]
+
+    const parts = currentPath.split('/').filter(Boolean)
+    const breadcrumbs = [{ label: 'Root', path: '/' }]
+
+    let accumulatedPath = ''
+    parts.forEach(part => {
+      accumulatedPath += `/${part}`
+      breadcrumbs.push({ label: part, path: accumulatedPath })
+    })
+
+    return breadcrumbs
+  }
+
+  // Reset path when opening a new archive
+  const handleViewArchive = (archive: Archive) => {
+    setViewArchive(archive)
+    setCurrentPath('/')
+  }
 
   return (
     <Box>
@@ -247,7 +326,7 @@ const Archives: React.FC = () => {
                           variant="outlined"
                           size="small"
                           startIcon={<Eye size={16} />}
-                          onClick={() => setViewArchive(archive)}
+                          onClick={() => handleViewArchive(archive)}
                         >
                           View Contents
                         </Button>
@@ -371,37 +450,128 @@ const Archives: React.FC = () => {
                 </Box>
               )}
 
-              {/* File Listing */}
+              {/* Interactive File Browser */}
               {archiveInfo?.data?.archive?.files && archiveInfo.data.archive.files.length > 0 && (
                 <Box>
-                  <Typography variant="subtitle2" fontWeight={600} color="text.secondary" sx={{ mb: 2 }}>
-                    FILE LISTING ({archiveInfo.data.archive.file_count || archiveInfo.data.archive.files.length} files)
-                  </Typography>
-                  <Alert severity="info" sx={{ mb: 2 }}>
-                    Showing first {archiveInfo.data.archive.files.length} files from this archive
-                  </Alert>
-                  <TableContainer sx={{ maxHeight: 400 }}>
-                    <Table size="small" stickyHeader>
-                      <TableBody>
-                        {archiveInfo.data.archive.files.map((file: any, index: number) => (
-                          <TableRow key={index}>
-                            <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem', py: 0.5 }}>
-                              {file.type === 'd' ? '📁' : '📄'}
-                            </TableCell>
-                            <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem', wordBreak: 'break-all', py: 0.5 }}>
-                              {file.path}
-                            </TableCell>
-                            <TableCell sx={{ fontSize: '0.75rem', py: 0.5, whiteSpace: 'nowrap' }}>
-                              {file.type === '-' ? formatBytesUtil(file.size || 0) : '-'}
-                            </TableCell>
-                            <TableCell sx={{ fontSize: '0.75rem', py: 0.5, color: 'text.secondary', whiteSpace: 'nowrap' }}>
-                              {file.mtime ? new Date(file.mtime).toLocaleDateString() : ''}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                  {/* Breadcrumb Navigation */}
+                  <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
+                    {getBreadcrumbs().map((crumb, index) => (
+                      <React.Fragment key={crumb.path}>
+                        {index > 0 && (
+                          <Typography variant="body2" color="text.secondary">/</Typography>
+                        )}
+                        <Typography
+                          variant="body2"
+                          onClick={() => navigateToPath(crumb.path)}
+                          sx={{
+                            cursor: 'pointer',
+                            color: 'primary.main',
+                            textDecoration: 'underline',
+                            '&:hover': {
+                              color: 'primary.dark',
+                            },
+                          }}
+                        >
+                          {crumb.label}
+                        </Typography>
+                      </React.Fragment>
+                    ))}
+                  </Box>
+
+                  {/* Files and Folders List */}
+                  <Box sx={{ maxHeight: 400, overflowY: 'auto' }}>
+                    {(() => {
+                      const { folders, files } = getFilesInCurrentPath()
+
+                      if (folders.length === 0 && files.length === 0) {
+                        return (
+                          <Box sx={{ textAlign: 'center', py: 4 }}>
+                            <Typography variant="body2" color="text.secondary">
+                              This directory is empty
+                            </Typography>
+                          </Box>
+                        )
+                      }
+
+                      return (
+                        <Stack spacing={0.5}>
+                          {/* Folders */}
+                          {folders.map((folder, index) => (
+                            <Box
+                              key={`folder-${index}`}
+                              onClick={() => {
+                                const newPath = currentPath === '/' ? `/${folder.name}` : `${currentPath}/${folder.name}`
+                                navigateToPath(newPath)
+                              }}
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                p: 1.5,
+                                borderRadius: 1,
+                                cursor: 'pointer',
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                '&:hover': {
+                                  backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                                },
+                              }}
+                            >
+                              <Stack direction="row" spacing={1.5} alignItems="center">
+                                <Folder size={20} color="#3b82f6" />
+                                <Typography variant="body2" fontWeight={500}>
+                                  {folder.name}
+                                </Typography>
+                              </Stack>
+                            </Box>
+                          ))}
+
+                          {/* Files */}
+                          {files.map((file, index) => (
+                            <Box
+                              key={`file-${index}`}
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                p: 1.5,
+                                borderRadius: 1,
+                                backgroundColor: 'rgba(0, 0, 0, 0.02)',
+                                '&:hover': {
+                                  backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                                },
+                              }}
+                            >
+                              <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flex: 1, minWidth: 0 }}>
+                                <FolderOpen size={20} color="rgba(0,0,0,0.4)" />
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {file.name}
+                                </Typography>
+                              </Stack>
+                              <Stack direction="row" spacing={2} alignItems="center">
+                                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 60, textAlign: 'right' }}>
+                                  {file.size ? formatBytesUtil(file.size) : '0 B'}
+                                </Typography>
+                                <IconButton size="small" sx={{ color: 'text.secondary' }}>
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="7 10 12 15 17 10" />
+                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                  </svg>
+                                </IconButton>
+                              </Stack>
+                            </Box>
+                          ))}
+                        </Stack>
+                      )
+                    })()}
+                  </Box>
                 </Box>
               )}
             </Stack>
