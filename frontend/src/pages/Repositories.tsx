@@ -93,6 +93,7 @@ export default function Repositories() {
     keep_monthly: 6,
     keep_yearly: 1,
   })
+  const [pruneResults, setPruneResults] = useState<any>(null)
 
   // Queries
   const { data: repositoriesData, isLoading } = useQuery({
@@ -213,17 +214,18 @@ export default function Repositories() {
   const pruneRepositoryMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) => repositoriesAPI.pruneRepository(id, data),
     onSuccess: (response: any) => {
+      setPruneResults(response.data)
       if (response.data.dry_run) {
-        toast.success('Dry run completed - see results in dialog')
+        toast.success('Dry run completed - review results below')
       } else {
         toast.success('Repository pruned successfully!')
-        setPruningRepository(null)
         queryClient.invalidateQueries({ queryKey: ['repositories'] })
         queryClient.invalidateQueries({ queryKey: ['repository-archives', pruningRepository?.id] })
       }
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to prune repository')
+      setPruneResults(null)
     },
   })
 
@@ -304,6 +306,12 @@ export default function Repositories() {
       keep_monthly: 6,
       keep_yearly: 1,
     })
+    setPruneResults(null)
+  }
+
+  const handleClosePruneDialog = () => {
+    setPruningRepository(null)
+    setPruneResults(null)
   }
 
   const handlePruneDryRun = () => {
@@ -1471,7 +1479,7 @@ export default function Repositories() {
       {/* Prune Repository Dialog */}
       <Dialog
         open={!!pruningRepository}
-        onClose={() => setPruningRepository(null)}
+        onClose={handleClosePruneDialog}
         maxWidth="md"
         fullWidth
       >
@@ -1548,6 +1556,101 @@ export default function Repositories() {
             </Typography>
           </Box>
 
+          {/* Prune Results Display */}
+          {pruneResults && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                {pruneResults.dry_run ? 'Dry Run Results (Preview)' : 'Prune Results'}
+              </Typography>
+
+              {pruneResults.prune_result?.success === false ? (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  <Typography variant="body2" fontWeight={600} gutterBottom>
+                    Operation Failed
+                  </Typography>
+                  {pruneResults.prune_result?.stderr && (
+                    <Box
+                      component="pre"
+                      sx={{
+                        mt: 1,
+                        p: 1.5,
+                        bgcolor: 'rgba(0,0,0,0.05)',
+                        borderRadius: 1,
+                        fontSize: '0.75rem',
+                        overflow: 'auto',
+                        maxHeight: 200,
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word'
+                      }}
+                    >
+                      {pruneResults.prune_result.stderr}
+                    </Box>
+                  )}
+                </Alert>
+              ) : (
+                <Card variant="outlined" sx={{ mb: 2 }}>
+                  <CardContent>
+                    {pruneResults.prune_result?.stdout && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                          Output:
+                        </Typography>
+                        <Box
+                          component="pre"
+                          sx={{
+                            p: 1.5,
+                            bgcolor: 'grey.50',
+                            borderRadius: 1,
+                            fontSize: '0.75rem',
+                            overflow: 'auto',
+                            maxHeight: 300,
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                            fontFamily: 'monospace'
+                          }}
+                        >
+                          {pruneResults.prune_result.stdout || 'No output'}
+                        </Box>
+                      </Box>
+                    )}
+                    {pruneResults.prune_result?.stderr && (
+                      <Box sx={{ mt: 2 }}>
+                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                          Messages:
+                        </Typography>
+                        <Box
+                          component="pre"
+                          sx={{
+                            p: 1.5,
+                            bgcolor: 'warning.lighter',
+                            borderRadius: 1,
+                            fontSize: '0.75rem',
+                            overflow: 'auto',
+                            maxHeight: 200,
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                            fontFamily: 'monospace'
+                          }}
+                        >
+                          {pruneResults.prune_result.stderr}
+                        </Box>
+                      </Box>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {pruneResults.dry_run && pruneResults.prune_result?.success !== false && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    ✓ Dry run completed successfully. Review the output above to see which archives would be deleted.
+                    If everything looks correct, click "Prune Archives" to execute.
+                  </Typography>
+                </Alert>
+              )}
+            </Box>
+          )}
+
           <Alert severity="warning">
             <Typography variant="body2" fontWeight={600} gutterBottom>
               ⚠️ Warning: Deleted archives cannot be recovered!
@@ -1558,7 +1661,7 @@ export default function Repositories() {
           </Alert>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setPruningRepository(null)}>
+          <Button onClick={handleClosePruneDialog}>
             Cancel
           </Button>
           <Button
