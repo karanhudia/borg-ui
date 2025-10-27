@@ -502,157 +502,146 @@ export default function Repositories() {
           </CardContent>
         </Card>
       ) : (
-        <Stack direction={{ xs: 'column', md: 'row' }} flexWrap="wrap" spacing={3}>
+        <Stack spacing={2}>
           {repositories.map((repository: Repository) => (
-            <Box key={repository.id} sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(33.333% - 16px)' }, minWidth: 300 }}>
-              <Card>
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 2 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <Storage color="primary" />
-                      <Typography variant="h6" fontWeight={600}>
+            <Card
+              key={repository.id}
+              variant="outlined"
+              sx={{
+                border: 1,
+                borderColor: 'divider',
+                transition: 'all 0.2s',
+                '&:hover': {
+                  borderColor: 'primary.main',
+                  boxShadow: 1,
+                },
+              }}
+            >
+              <CardContent sx={{ py: 2.5 }}>
+                {/* Repository Header */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 2 }}>
+                  <Box sx={{ flex: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                      <Storage sx={{ fontSize: 28, color: 'primary.main' }} />
+                      <Typography variant="h5" fontWeight={600}>
                         {repository.name}
                       </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 1 }}>
+                        {getEncryptionIcon(repository.encryption)}
+                        <Typography variant="caption" color="text.secondary">
+                          {repository.encryption}
+                        </Typography>
+                      </Box>
                     </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      {getEncryptionIcon(repository.encryption)}
-                      <Typography variant="caption" color="text.secondary">
-                        {repository.encryption}
-                      </Typography>
-                    </Box>
-                  </Box>
-
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="caption" color="text.secondary" display="block">
-                      Path
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ fontFamily: 'monospace', fontSize: '0.85rem', ml: 4.5 }}
+                    >
                       {repository.path}
                     </Typography>
                   </Box>
+                </Box>
 
-                  <Stack spacing={1.5}>
+                {/* Repository Stats - Horizontal Layout */}
+                <Box sx={{ display: 'flex', gap: 4, mb: 2, ml: 4.5, flexWrap: 'wrap' }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      Archives
+                    </Typography>
+                    <Typography variant="h6" fontWeight={600}>
+                      {repository.archive_count}
+                    </Typography>
+                  </Box>
+
+                  {repository.last_backup && (
                     <Box>
                       <Typography variant="caption" color="text.secondary" display="block">
-                        Compression
-                      </Typography>
-                      <Typography variant="body2">
-                        {getCompressionLabel(repository.compression)}
-                      </Typography>
-                    </Box>
-
-                    <Box>
-                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                        Archives
+                        Last Backup
                       </Typography>
                       <Typography variant="body2" fontWeight={500}>
-                        {repository.archive_count}
+                        {formatDateShort(repository.last_backup)}
                       </Typography>
                     </Box>
-
-                    {repository.last_backup && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          Last Backup
-                        </Typography>
-                        <Typography variant="body2">
-                          {formatDateShort(repository.last_backup)}
-                        </Typography>
-                      </Box>
-                    )}
-
-                    {repository.total_size && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          Total Size
-                        </Typography>
-                        <Typography variant="body2">{repository.total_size}</Typography>
-                      </Box>
-                    )}
-
-                    {repository.source_directories && repository.source_directories.length > 0 && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                          Source Paths ({repository.source_directories.length})
-                        </Typography>
-                        <Stack spacing={0.5}>
-                          {repository.source_directories.slice(0, 3).map((dir: string, index: number) => (
-                            <Typography
-                              key={index}
-                              variant="body2"
-                              sx={{
-                                fontFamily: 'monospace',
-                                fontSize: '0.75rem',
-                                color: 'text.secondary',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap'
-                              }}
-                            >
-                              {dir}
-                            </Typography>
-                          ))}
-                          {repository.source_directories.length > 3 && (
-                            <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                              +{repository.source_directories.length - 3} more
-                            </Typography>
-                          )}
-                        </Stack>
-                      </Box>
-                    )}
-                  </Stack>
-
-                  {user?.is_admin && (
-                    <>
-                      <Divider sx={{ my: 2 }} />
-                      <Stack direction="row" spacing={1} justifyContent="space-between">
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          <Button
-                            size="small"
-                            startIcon={<Info />}
-                            onClick={() => setViewingInfoRepository(repository)}
-                          >
-                            Info
-                          </Button>
-                          <Button
-                            size="small"
-                            startIcon={<CheckCircleIcon />}
-                            onClick={() => handleCheckRepository(repository)}
-                            disabled={checkRepositoryMutation.isLoading}
-                          >
-                            Check
-                          </Button>
-                          <Button
-                            size="small"
-                            startIcon={<Refresh />}
-                            onClick={() => handleCompactRepository(repository)}
-                            disabled={compactRepositoryMutation.isLoading}
-                            color="warning"
-                          >
-                            Compact
-                          </Button>
-                        </Box>
-                        <Box sx={{ display: 'flex', gap: 0.5 }}>
-                          <IconButton
-                            size="small"
-                            onClick={() => openEditModal(repository)}
-                          >
-                            <Edit fontSize="small" />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            color="error"
-                            onClick={() => handleDeleteRepository(repository)}
-                          >
-                            <Delete fontSize="small" />
-                          </IconButton>
-                        </Box>
-                      </Stack>
-                    </>
                   )}
-                </CardContent>
-              </Card>
-            </Box>
+
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      Compression
+                    </Typography>
+                    <Typography variant="body2" fontWeight={500}>
+                      {getCompressionLabel(repository.compression)}
+                    </Typography>
+                  </Box>
+
+                  {repository.source_directories && repository.source_directories.length > 0 && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Source Paths
+                      </Typography>
+                      <Typography variant="body2" fontWeight={500}>
+                        {repository.source_directories.length} {repository.source_directories.length === 1 ? 'path' : 'paths'}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+
+                {/* Action Buttons */}
+                {user?.is_admin && (
+                  <Box sx={{ display: 'flex', gap: 1, ml: 4.5, flexWrap: 'wrap' }}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<Info />}
+                      onClick={() => setViewingInfoRepository(repository)}
+                      sx={{ textTransform: 'none' }}
+                    >
+                      Info
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<CheckCircleIcon />}
+                      onClick={() => handleCheckRepository(repository)}
+                      disabled={checkRepositoryMutation.isLoading}
+                      sx={{ textTransform: 'none' }}
+                    >
+                      Check
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<Refresh />}
+                      onClick={() => handleCompactRepository(repository)}
+                      disabled={compactRepositoryMutation.isLoading}
+                      color="warning"
+                      sx={{ textTransform: 'none' }}
+                    >
+                      Compact
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<Edit />}
+                      onClick={() => openEditModal(repository)}
+                      sx={{ textTransform: 'none' }}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<Delete />}
+                      onClick={() => handleDeleteRepository(repository)}
+                      color="error"
+                      sx={{ textTransform: 'none' }}
+                    >
+                      Delete
+                    </Button>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
           ))}
         </Stack>
       )}
