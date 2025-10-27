@@ -475,7 +475,11 @@ async def check_repository(
             raise HTTPException(status_code=404, detail="Repository not found")
         
         # Run repository check
-        check_result = await borg.check_repository(repository.path, remote_path=repository.remote_path)
+        check_result = await borg.check_repository(
+            repository.path,
+            remote_path=repository.remote_path,
+            passphrase=repository.passphrase
+        )
         
         return {
             "success": True,
@@ -503,7 +507,11 @@ async def compact_repository(
             raise HTTPException(status_code=404, detail="Repository not found")
 
         # Run repository compaction
-        compact_result = await borg.compact_repository(repository.path, remote_path=repository.remote_path)
+        compact_result = await borg.compact_repository(
+            repository.path,
+            remote_path=repository.remote_path,
+            passphrase=repository.passphrase
+        )
 
         return {
             "success": True,
@@ -546,7 +554,8 @@ async def prune_repository(
             keep_monthly=keep_monthly,
             keep_yearly=keep_yearly,
             dry_run=dry_run,
-            remote_path=repository.remote_path
+            remote_path=repository.remote_path,
+            passphrase=repository.passphrase
         )
 
         return {
