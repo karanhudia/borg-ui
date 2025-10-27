@@ -217,7 +217,7 @@ class BorgInterface:
 
     async def prune_archives(self, repository: str, keep_daily: int = 7, keep_weekly: int = 4,
                            keep_monthly: int = 6, keep_yearly: int = 1, dry_run: bool = False,
-                           remote_path: str = None) -> Dict:
+                           remote_path: str = None, passphrase: str = None) -> Dict:
         """Prune old archives"""
         cmd = [self.borg_cmd, "prune"]
         if remote_path:
@@ -228,28 +228,45 @@ class BorgInterface:
             "--keep-weekly", str(keep_weekly),
             "--keep-monthly", str(keep_monthly),
             "--keep-yearly", str(keep_yearly),
-            "--list",
-            "--stats"
+            "--list"
         ])
+        # Don't add --stats when doing dry run (not supported)
+        if not dry_run:
+            cmd.append("--stats")
         if dry_run:
             cmd.append("--dry-run")
-        return await self._execute_command(cmd)
 
-    async def check_repository(self, repository: str, remote_path: str = None) -> Dict:
+        env = {}
+        if passphrase:
+            env["BORG_PASSPHRASE"] = passphrase
+
+        return await self._execute_command(cmd, env=env if env else None)
+
+    async def check_repository(self, repository: str, remote_path: str = None, passphrase: str = None) -> Dict:
         """Check repository integrity"""
         cmd = [self.borg_cmd, "check"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
         cmd.append(repository)
-        return await self._execute_command(cmd)
 
-    async def compact_repository(self, repository: str, remote_path: str = None) -> Dict:
+        env = {}
+        if passphrase:
+            env["BORG_PASSPHRASE"] = passphrase
+
+        return await self._execute_command(cmd, env=env if env else None)
+
+    async def compact_repository(self, repository: str, remote_path: str = None, passphrase: str = None) -> Dict:
         """Compact repository to save space"""
         cmd = [self.borg_cmd, "compact"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
         cmd.append(repository)
-        return await self._execute_command(cmd)
+
+        env = {}
+        if passphrase:
+            env["BORG_PASSPHRASE"] = passphrase
+
+        return await self._execute_command(cmd, env=env if env else None)
     
     
     async def get_repository_info(self, repository_path: str, remote_path: str = None) -> Dict:
