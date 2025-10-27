@@ -35,11 +35,16 @@ import {
   Computer,
   Wifi,
   Info,
+  Lock,
+  CalendarMonth,
+  DataUsage,
+  Compress,
+  Inventory,
 } from '@mui/icons-material'
 import { repositoriesAPI, sshKeysAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { useAppState } from '../context/AppContext'
-import { formatDate, formatDateShort, formatBytes } from '../utils/dateUtils'
+import { formatDateShort, formatBytes } from '../utils/dateUtils'
 
 interface Repository {
   id: number
@@ -1170,112 +1175,157 @@ export default function Repositories() {
         fullWidth
       >
         <DialogTitle>
-          Repository Information: {viewingInfoRepository?.name}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Storage color="primary" />
+            <Typography variant="h5" fontWeight={600}>
+              {viewingInfoRepository?.name}
+            </Typography>
+          </Box>
         </DialogTitle>
         <DialogContent>
           {loadingInfo ? (
-            <Box sx={{ textAlign: 'center', py: 4 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
               <Typography variant="body2" color="text.secondary">
                 Loading repository info...
               </Typography>
             </Box>
           ) : repositoryInfo?.data ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 1 }}>
-              {/* Repository Details */}
-              <Box>
-                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Storage /> Repository Details
-                </Typography>
-                <Stack spacing={1.5} sx={{ bgcolor: 'grey.50', p: 2, borderRadius: 1 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2" color="text.secondary">Location</Typography>
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all', maxWidth: '60%', textAlign: 'right' }}>
-                      {repositoryInfo.data.info?.repository?.location || 'N/A'}
-                    </Typography>
-                  </Box>
-                  <Divider />
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2" color="text.secondary">Repository ID</Typography>
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
-                      {repositoryInfo.data.info?.repository?.id?.substring(0, 16) || 'N/A'}...
-                    </Typography>
-                  </Box>
-                  <Divider />
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2" color="text.secondary">Last Modified</Typography>
-                    <Typography variant="body2">
-                      {repositoryInfo.data.info?.repository?.last_modified
-                        ? formatDate(repositoryInfo.data.info.repository.last_modified)
-                        : 'N/A'}
-                    </Typography>
-                  </Box>
-                  <Divider />
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2" color="text.secondary">Encryption Mode</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              {/* Repository Details Cards */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+                {/* Encryption */}
+                <Card sx={{ backgroundColor: '#f3e5f5' }}>
+                  <CardContent sx={{ py: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+                      <Lock sx={{ color: '#7b1fa2', fontSize: 28 }} />
+                      <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                        Encryption
+                      </Typography>
+                    </Box>
+                    <Typography variant="h6" fontWeight={700} sx={{ color: '#7b1fa2', ml: 5 }}>
                       {repositoryInfo.data.info?.encryption?.mode || 'N/A'}
                     </Typography>
-                  </Box>
-                </Stack>
+                  </CardContent>
+                </Card>
+
+                {/* Last Modified */}
+                <Card sx={{ backgroundColor: '#e1f5fe' }}>
+                  <CardContent sx={{ py: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+                      <CalendarMonth sx={{ color: '#0277bd', fontSize: 28 }} />
+                      <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                        Last Modified
+                      </Typography>
+                    </Box>
+                    <Typography variant="body2" fontWeight={600} sx={{ color: '#0277bd', ml: 5 }}>
+                      {repositoryInfo.data.info?.repository?.last_modified
+                        ? formatDateShort(repositoryInfo.data.info.repository.last_modified)
+                        : 'N/A'}
+                    </Typography>
+                  </CardContent>
+                </Card>
               </Box>
+
+              {/* Location */}
+              <Card variant="outlined">
+                <CardContent sx={{ py: 2 }}>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                    Repository Location
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                    {repositoryInfo.data.info?.repository?.location || 'N/A'}
+                  </Typography>
+                </CardContent>
+              </Card>
 
               {/* Storage Statistics */}
-              <Box>
-                <Typography variant="h6" gutterBottom>
-                  Storage Statistics
-                </Typography>
-                {repositoryInfo.data.info?.cache?.stats && repositoryInfo.data.info.cache.stats.unique_size > 0 ? (
-                  <Stack spacing={1.5} sx={{ bgcolor: 'grey.50', p: 2, borderRadius: 1 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="body2" color="text.secondary">Unique Data (Deduplicated)</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {formatBytes(repositoryInfo.data.info.cache.stats.unique_size)}
-                      </Typography>
-                    </Box>
-                    <Divider />
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="body2" color="text.secondary">Unique Compressed Size</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {formatBytes(repositoryInfo.data.info.cache.stats.unique_csize)}
-                      </Typography>
-                    </Box>
-                    <Divider />
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="body2" color="text.secondary">Total Data Size</Typography>
-                      <Typography variant="body2">
-                        {formatBytes(repositoryInfo.data.info.cache.stats.total_size)}
-                      </Typography>
-                    </Box>
-                    <Divider />
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="body2" color="text.secondary">Total Chunks</Typography>
-                      <Typography variant="body2">
-                        {repositoryInfo.data.info.cache.stats.total_chunks?.toLocaleString()}
-                      </Typography>
-                    </Box>
-                    <Divider />
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="body2" color="text.secondary">Unique Chunks</Typography>
-                      <Typography variant="body2">
-                        {repositoryInfo.data.info.cache.stats.total_unique_chunks?.toLocaleString()}
-                      </Typography>
-                    </Box>
-                  </Stack>
-                ) : (
-                  <Alert severity="info" sx={{ bgcolor: 'grey.50' }}>
-                    <Typography variant="body2" gutterBottom>
-                      <strong>No backups yet</strong>
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      This repository has been initialized but contains no archives. Storage statistics will appear here after you create your first backup.
-                    </Typography>
-                  </Alert>
-                )}
-              </Box>
+              {repositoryInfo.data.info?.cache?.stats && repositoryInfo.data.info.cache.stats.unique_size > 0 ? (
+                <>
+                  <Typography variant="h6" fontWeight={600} sx={{ mt: 1 }}>
+                    Storage Statistics
+                  </Typography>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
+                    {/* Total Data Size */}
+                    <Card sx={{ backgroundColor: '#e8f5e9' }}>
+                      <CardContent sx={{ py: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                          <DataUsage sx={{ color: '#2e7d32', fontSize: 24 }} />
+                          <Typography variant="caption" color="text.secondary" fontWeight={500}>
+                            Total Size
+                          </Typography>
+                        </Box>
+                        <Typography variant="h6" fontWeight={700} sx={{ color: '#2e7d32' }}>
+                          {formatBytes(repositoryInfo.data.info.cache.stats.total_size)}
+                        </Typography>
+                      </CardContent>
+                    </Card>
 
-              <Alert severity="info" sx={{ mt: 1 }}>
-                This information is retrieved from <code>borg info --json</code> command
-              </Alert>
+                    {/* Unique Compressed */}
+                    <Card sx={{ backgroundColor: '#e3f2fd' }}>
+                      <CardContent sx={{ py: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                          <Compress sx={{ color: '#1565c0', fontSize: 24 }} />
+                          <Typography variant="caption" color="text.secondary" fontWeight={500}>
+                            Used on Disk
+                          </Typography>
+                        </Box>
+                        <Typography variant="h6" fontWeight={700} sx={{ color: '#1565c0' }}>
+                          {formatBytes(repositoryInfo.data.info.cache.stats.unique_csize)}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+
+                    {/* Deduplicated Size */}
+                    <Card sx={{ backgroundColor: '#fff3e0' }}>
+                      <CardContent sx={{ py: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                          <Inventory sx={{ color: '#e65100', fontSize: 24 }} />
+                          <Typography variant="caption" color="text.secondary" fontWeight={500}>
+                            Unique Data
+                          </Typography>
+                        </Box>
+                        <Typography variant="h6" fontWeight={700} sx={{ color: '#e65100' }}>
+                          {formatBytes(repositoryInfo.data.info.cache.stats.unique_size)}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Box>
+
+                  {/* Chunk Statistics */}
+                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+                    <Card variant="outlined">
+                      <CardContent sx={{ py: 1.5 }}>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Total Chunks
+                        </Typography>
+                        <Typography variant="h6" fontWeight={600}>
+                          {repositoryInfo.data.info.cache.stats.total_chunks?.toLocaleString()}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+
+                    <Card variant="outlined">
+                      <CardContent sx={{ py: 1.5 }}>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Unique Chunks
+                        </Typography>
+                        <Typography variant="h6" fontWeight={600}>
+                          {repositoryInfo.data.info.cache.stats.total_unique_chunks?.toLocaleString()}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Box>
+                </>
+              ) : (
+                <Alert severity="info" icon={<Info />}>
+                  <Typography variant="body2" fontWeight={600} gutterBottom>
+                    No backups yet
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    This repository has been initialized but contains no archives. Storage statistics will appear here after you create your first backup.
+                  </Typography>
+                </Alert>
+              )}
             </Box>
           ) : (
             <Alert severity="error">
@@ -1284,7 +1334,9 @@ export default function Repositories() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setViewingInfoRepository(null)}>Close</Button>
+          <Button onClick={() => setViewingInfoRepository(null)} variant="contained">
+            Close
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>
