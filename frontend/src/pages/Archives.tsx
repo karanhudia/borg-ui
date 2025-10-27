@@ -238,8 +238,8 @@ const Archives: React.FC = () => {
       </Box>
 
       {/* Repository Statistics */}
-      {selectedRepositoryId && repoInfo?.data && (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2, mb: 4 }}>
+      {selectedRepositoryId && repoInfo?.data?.info?.cache?.stats && (
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(5, 1fr)' }, gap: 2, mb: 4 }}>
           {/* Total Archives */}
           <Card sx={{ backgroundColor: '#e3f2fd' }}>
             <CardContent>
@@ -257,17 +257,34 @@ const Archives: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Space Saved */}
+          {/* Space Used on Disk */}
           <Card sx={{ backgroundColor: '#e8f5e9' }}>
             <CardContent>
               <Stack direction="row" spacing={2} alignItems="center">
                 <Database size={32} color="#2e7d32" />
                 <Box>
                   <Typography variant="body2" color="success.dark" fontWeight={500}>
+                    Space Used
+                  </Typography>
+                  <Typography variant="h4" fontWeight={700} color="success.dark" sx={{ fontSize: '1.5rem' }}>
+                    {formatBytesUtil(repoInfo.data.info.cache.stats.unique_csize)}
+                  </Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+
+          {/* Space Saved */}
+          <Card sx={{ backgroundColor: '#e1f5fe' }}>
+            <CardContent>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Database size={32} color="#0277bd" />
+                <Box>
+                  <Typography variant="body2" sx={{ color: '#0277bd' }} fontWeight={500}>
                     Space Saved
                   </Typography>
-                  <Typography variant="h4" fontWeight={700} color="success.dark">
-                    {repoInfo.data.stats?.unique_csize ? formatBytesUtil(repoInfo.data.stats.unique_csize) : '0 B'}
+                  <Typography variant="h4" fontWeight={700} sx={{ color: '#0277bd', fontSize: '1.5rem' }}>
+                    {formatBytesUtil(repoInfo.data.info.cache.stats.total_size - repoInfo.data.info.cache.stats.unique_csize)}
                   </Typography>
                 </Box>
               </Stack>
@@ -284,8 +301,8 @@ const Archives: React.FC = () => {
                     Compression
                   </Typography>
                   <Typography variant="h4" fontWeight={700} color="purple">
-                    {repoInfo.data.stats?.unique_csize && repoInfo.data.stats?.total_size
-                      ? `${((1 - repoInfo.data.stats.unique_csize / repoInfo.data.stats.total_size) * 100).toFixed(2)}%`
+                    {repoInfo.data.info.cache.stats.unique_size > 0
+                      ? `${((1 - repoInfo.data.info.cache.stats.unique_csize / repoInfo.data.info.cache.stats.unique_size) * 100).toFixed(1)}%`
                       : '0%'}
                   </Typography>
                 </Box>
@@ -303,9 +320,9 @@ const Archives: React.FC = () => {
                     Deduplication
                   </Typography>
                   <Typography variant="h4" fontWeight={700} sx={{ color: '#e65100' }}>
-                    {repoInfo.data.stats?.unique_csize && repoInfo.data.stats?.total_csize
-                      ? `${((1 - repoInfo.data.stats.unique_csize / repoInfo.data.stats.total_csize) * 100).toFixed(1)}%`
-                      : '100.0%'}
+                    {repoInfo.data.info.cache.stats.total_size > 0
+                      ? `${((1 - repoInfo.data.info.cache.stats.unique_size / repoInfo.data.info.cache.stats.total_size) * 100).toFixed(1)}%`
+                      : '0%'}
                   </Typography>
                 </Box>
               </Stack>
