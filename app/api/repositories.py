@@ -558,6 +558,29 @@ async def prune_repository(
             passphrase=repository.passphrase
         )
 
+        # Update archive count after successful prune (not dry run)
+        if not dry_run and prune_result.get("success"):
+            try:
+                # List archives to get updated count
+                list_result = await borg.list_archives(
+                    repository.path,
+                    remote_path=repository.remote_path,
+                    passphrase=repository.passphrase
+                )
+                if list_result.get("success"):
+                    try:
+                        # Parse JSON stdout
+                        archives_data = json.loads(list_result.get("stdout", "{}"))
+                        if isinstance(archives_data, dict):
+                            archive_count = len(archives_data.get("archives", []))
+                            repository.archive_count = archive_count
+                            db.commit()
+                            logger.info("Updated archive count after prune", repository=repository.name, count=archive_count)
+                    except json.JSONDecodeError:
+                        logger.warning("Failed to parse archive list after prune")
+            except Exception as e:
+                logger.warning("Failed to update archive count after prune", error=str(e))
+
         return {
             "success": True,
             "dry_run": dry_run,

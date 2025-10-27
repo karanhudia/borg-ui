@@ -6,7 +6,7 @@ import json
 from typing import List, Dict, Any
 
 from app.database.database import get_db
-from app.database.models import User
+from app.database.models import User, Repository
 from app.core.security import get_current_user
 from app.core.borg import borg
 
@@ -162,7 +162,8 @@ async def get_archive_contents(
 async def delete_archive(
     repository: str,
     archive_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """Delete an archive"""
     try:
@@ -172,7 +173,33 @@ async def delete_archive(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to delete archive: {result['stderr']}"
             )
-        
+
+        # Update archive count after successful deletion
+        try:
+            # Find repository by path
+            repo = db.query(Repository).filter(Repository.path == repository).first()
+            if repo:
+                # List archives to get updated count
+                list_result = await borg.list_archives(
+                    repo.path,
+                    remote_path=repo.remote_path,
+                    passphrase=repo.passphrase
+                )
+                if list_result.get("success"):
+                    try:
+                        archives_data = json.loads(list_result.get("stdout", "{}"))
+                        if isinstance(archives_data, dict):
+                            archive_count = len(archives_data.get("archives", []))
+                            repo.archive_count = archive_count
+                            db.commit()
+                            logger.info("Updated archive count after deletion",
+                                      repository=repo.name,
+                                      count=archive_count)
+                    except json.JSONDecodeError:
+                        logger.warning("Failed to parse archive list after deletion")
+        except Exception as e:
+            logger.warning("Failed to update archive count after deletion", error=str(e))
+
         return {"message": "Archive deleted successfully"}
     except Exception as e:
         logger.error("Failed to delete archive", error=str(e))
