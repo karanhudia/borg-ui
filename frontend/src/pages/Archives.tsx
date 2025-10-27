@@ -14,11 +14,6 @@ import {
   Stack,
   IconButton,
   Alert,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableRow,
   Select,
   MenuItem,
   FormControl,
@@ -27,9 +22,12 @@ import {
   Trash2,
   AlertCircle,
   FolderOpen,
-  Lock,
   Eye,
   Folder,
+  Archive as ArchiveIcon,
+  Database,
+  Gauge,
+  Layers,
 } from 'lucide-react'
 import { archivesAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
@@ -67,6 +65,13 @@ const Archives: React.FC = () => {
   const { data: archives, isLoading: loadingArchives } = useQuery({
     queryKey: ['repository-archives', selectedRepositoryId],
     queryFn: () => repositoriesAPI.listRepositoryArchives(selectedRepositoryId!),
+    enabled: !!selectedRepositoryId
+  })
+
+  // Get repository info for statistics
+  const { data: repoInfo } = useQuery({
+    queryKey: ['repository-info', selectedRepositoryId],
+    queryFn: () => repositoriesAPI.getRepositoryInfo(selectedRepositoryId!),
     enabled: !!selectedRepositoryId
   })
 
@@ -121,8 +126,8 @@ const Archives: React.FC = () => {
     const files: any[] = []
     const seenFolders = new Set<string>()
 
-    // Normalize current path
-    const normalizedPath = currentPath === '/' ? '' : currentPath.replace(/\/$/, '')
+    // Normalize current path - remove leading and trailing slashes
+    const normalizedPath = currentPath === '/' ? '' : currentPath.replace(/^\/|\/$/g, '')
 
     allFiles.forEach((file: any) => {
       let filePath = file.path.startsWith('/') ? file.path.substring(1) : file.path
@@ -232,6 +237,83 @@ const Archives: React.FC = () => {
         </FormControl>
       </Box>
 
+      {/* Repository Statistics */}
+      {selectedRepositoryId && repoInfo?.data && (
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2, mb: 4 }}>
+          {/* Total Archives */}
+          <Card sx={{ backgroundColor: '#e3f2fd' }}>
+            <CardContent>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <ArchiveIcon size={32} color="#1565c0" />
+                <Box>
+                  <Typography variant="body2" color="primary.dark" fontWeight={500}>
+                    Total Archives
+                  </Typography>
+                  <Typography variant="h4" fontWeight={700} color="primary.dark">
+                    {archivesList.length}
+                  </Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+
+          {/* Space Saved */}
+          <Card sx={{ backgroundColor: '#e8f5e9' }}>
+            <CardContent>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Database size={32} color="#2e7d32" />
+                <Box>
+                  <Typography variant="body2" color="success.dark" fontWeight={500}>
+                    Space Saved
+                  </Typography>
+                  <Typography variant="h4" fontWeight={700} color="success.dark">
+                    {repoInfo.data.stats?.unique_csize ? formatBytesUtil(repoInfo.data.stats.unique_csize) : '0 B'}
+                  </Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+
+          {/* Compression */}
+          <Card sx={{ backgroundColor: '#f3e5f5' }}>
+            <CardContent>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Gauge size={32} color="#7b1fa2" />
+                <Box>
+                  <Typography variant="body2" color="purple" fontWeight={500}>
+                    Compression
+                  </Typography>
+                  <Typography variant="h4" fontWeight={700} color="purple">
+                    {repoInfo.data.stats?.unique_csize && repoInfo.data.stats?.total_size
+                      ? `${((1 - repoInfo.data.stats.unique_csize / repoInfo.data.stats.total_size) * 100).toFixed(2)}%`
+                      : '0%'}
+                  </Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+
+          {/* Deduplication */}
+          <Card sx={{ backgroundColor: '#fff3e0' }}>
+            <CardContent>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Layers size={32} color="#e65100" />
+                <Box>
+                  <Typography variant="body2" sx={{ color: '#e65100' }} fontWeight={500}>
+                    Deduplication
+                  </Typography>
+                  <Typography variant="h4" fontWeight={700} sx={{ color: '#e65100' }}>
+                    {repoInfo.data.stats?.unique_csize && repoInfo.data.stats?.total_csize
+                      ? `${((1 - repoInfo.data.stats.unique_csize / repoInfo.data.stats.total_csize) * 100).toFixed(1)}%`
+                      : '100.0%'}
+                  </Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Box>
+      )}
+
       {/* No Repository Selected State */}
       {!selectedRepositoryId && !loadingRepositories && (
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
@@ -291,34 +373,34 @@ const Archives: React.FC = () => {
                     transition: 'all 0.2s',
                     '&:hover': {
                       borderColor: 'primary.main',
-                      backgroundColor: 'action.hover',
+                      boxShadow: 1,
                     },
                   }}
                 >
-                  <CardContent>
+                  <CardContent sx={{ py: 2 }}>
                     <Stack direction="row" alignItems="center" justifyContent="space-between">
-                      {/* Archive Icon and Info */}
-                      <Stack direction="row" spacing={2} alignItems="center" sx={{ flex: 1 }}>
-                        <Lock size={24} color="rgba(0,0,0,0.4)" />
-                        <Box>
-                          <Typography variant="body1" fontWeight={500}>
-                            {archive.name}
-                          </Typography>
+                      {/* Archive Info */}
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="h6" fontWeight={600} sx={{ mb: 0.5 }}>
+                          {archive.name}
+                        </Typography>
+                        <Stack direction="row" spacing={2} alignItems="center">
                           <Typography variant="body2" color="text.secondary">
-                            Created: {formatDate(archive.start)}
+                            {formatDate(archive.start)}
                           </Typography>
-                        </Box>
-                      </Stack>
+                        </Stack>
+                      </Box>
 
                       {/* Actions */}
                       <Stack direction="row" spacing={1}>
                         <Button
-                          variant="outlined"
+                          variant="contained"
                           size="small"
                           startIcon={<Eye size={16} />}
                           onClick={() => handleViewArchive(archive)}
+                          sx={{ textTransform: 'none' }}
                         >
-                          View Contents
+                          View
                         </Button>
                         <IconButton
                           color="error"
@@ -372,74 +454,6 @@ const Archives: React.FC = () => {
             </Box>
           ) : archiveInfo?.data?.archive ? (
             <Stack spacing={3}>
-              {/* Archive Details */}
-              <Box>
-                <Typography variant="subtitle2" fontWeight={600} color="text.secondary" sx={{ mb: 2 }}>
-                  ARCHIVE DETAILS
-                </Typography>
-                <TableContainer>
-                  <Table size="small">
-                    <TableBody>
-                      <TableRow>
-                        <TableCell sx={{ fontWeight: 500, color: 'text.secondary', width: '30%' }}>Name</TableCell>
-                        <TableCell>{archiveInfo.data.archive.name || viewArchive?.name}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Created</TableCell>
-                        <TableCell>{archiveInfo.data.archive.start ? formatDate(archiveInfo.data.archive.start) : (viewArchive?.start ? formatDate(viewArchive.start) : 'N/A')}</TableCell>
-                      </TableRow>
-                      {archiveInfo.data.archive.command_line && (
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Command Line</TableCell>
-                          <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.875rem', wordBreak: 'break-all' }}>
-                            {archiveInfo.data.archive.command_line.join(' ')}
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Box>
-
-              {/* Archive Statistics */}
-              {archiveInfo.data.archive.stats && (
-                <Box>
-                  <Typography variant="subtitle2" fontWeight={600} color="text.secondary" sx={{ mb: 2 }}>
-                    ARCHIVE STATISTICS
-                  </Typography>
-                  <TableContainer>
-                    <Table size="small">
-                      <TableBody>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 500, color: 'text.secondary', width: '30%' }}>Original Size</TableCell>
-                          <TableCell>{formatBytesUtil(archiveInfo.data.archive.stats.original_size || 0)}</TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Compressed Size</TableCell>
-                          <TableCell>{formatBytesUtil(archiveInfo.data.archive.stats.compressed_size || 0)}</TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Deduplicated Size</TableCell>
-                          <TableCell>{formatBytesUtil(archiveInfo.data.archive.stats.deduplicated_size || 0)}</TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Total Files</TableCell>
-                          <TableCell>{(archiveInfo.data.archive.stats.nfiles || 0).toLocaleString()}</TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 500, color: 'text.secondary' }}>Compression Ratio</TableCell>
-                          <TableCell>
-                            {archiveInfo.data.archive.stats.original_size && archiveInfo.data.archive.stats.compressed_size
-                              ? `${((1 - archiveInfo.data.archive.stats.compressed_size / archiveInfo.data.archive.stats.original_size) * 100).toFixed(1)}%`
-                              : 'N/A'}
-                          </TableCell>
-                        </TableRow>
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Box>
-              )}
-
               {/* Interactive File Browser */}
               {archiveInfo?.data?.archive?.files && archiveInfo.data.archive.files.length > 0 && (
                 <Box>
