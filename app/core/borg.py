@@ -216,7 +216,8 @@ class BorgInterface:
         return await self._execute_command(cmd)
 
     async def prune_archives(self, repository: str, keep_daily: int = 7, keep_weekly: int = 4,
-                           keep_monthly: int = 6, keep_yearly: int = 1, remote_path: str = None) -> Dict:
+                           keep_monthly: int = 6, keep_yearly: int = 1, dry_run: bool = False,
+                           remote_path: str = None) -> Dict:
         """Prune old archives"""
         cmd = [self.borg_cmd, "prune"]
         if remote_path:
@@ -227,8 +228,11 @@ class BorgInterface:
             "--keep-weekly", str(keep_weekly),
             "--keep-monthly", str(keep_monthly),
             "--keep-yearly", str(keep_yearly),
+            "--list",
             "--stats"
         ])
+        if dry_run:
+            cmd.append("--dry-run")
         return await self._execute_command(cmd)
 
     async def check_repository(self, repository: str, remote_path: str = None) -> Dict:

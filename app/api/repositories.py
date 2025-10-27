@@ -496,15 +496,15 @@ async def compact_repository(
     """Compact repository to free space"""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     try:
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
             raise HTTPException(status_code=404, detail="Repository not found")
-        
+
         # Run repository compaction
         compact_result = await borg.compact_repository(repository.path, remote_path=repository.remote_path)
-        
+
         return {
             "success": True,
             "compact_result": compact_result
@@ -514,6 +514,51 @@ async def compact_repository(
     except Exception as e:
         logger.error("Failed to compact repository", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to compact repository: {str(e)}")
+
+@router.post("/{repo_id}/prune")
+async def prune_repository(
+    repo_id: int,
+    request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Prune old archives based on retention policy"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        repository = db.query(Repository).filter(Repository.id == repo_id).first()
+        if not repository:
+            raise HTTPException(status_code=404, detail="Repository not found")
+
+        # Extract retention policy from request
+        keep_daily = request.get("keep_daily", 7)
+        keep_weekly = request.get("keep_weekly", 4)
+        keep_monthly = request.get("keep_monthly", 6)
+        keep_yearly = request.get("keep_yearly", 1)
+        dry_run = request.get("dry_run", False)
+
+        # Run prune
+        prune_result = await borg.prune_archives(
+            repository.path,
+            keep_daily=keep_daily,
+            keep_weekly=keep_weekly,
+            keep_monthly=keep_monthly,
+            keep_yearly=keep_yearly,
+            dry_run=dry_run,
+            remote_path=repository.remote_path
+        )
+
+        return {
+            "success": True,
+            "dry_run": dry_run,
+            "prune_result": prune_result
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to prune repository", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to prune repository: {str(e)}")
 
 @router.get("/{repo_id}/stats")
 async def get_repository_statistics(

@@ -85,6 +85,14 @@ export default function Repositories() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingRepository, setEditingRepository] = useState<Repository | null>(null)
   const [viewingInfoRepository, setViewingInfoRepository] = useState<Repository | null>(null)
+  const [compactingRepository, setCompactingRepository] = useState<Repository | null>(null)
+  const [pruningRepository, setPruningRepository] = useState<Repository | null>(null)
+  const [pruneForm, setPruneForm] = useState({
+    keep_daily: 7,
+    keep_weekly: 4,
+    keep_monthly: 6,
+    keep_yearly: 1,
+  })
 
   // Queries
   const { data: repositoriesData, isLoading } = useQuery({
@@ -192,10 +200,30 @@ export default function Repositories() {
   const compactRepositoryMutation = useMutation({
     mutationFn: repositoriesAPI.compactRepository,
     onSuccess: () => {
-      toast.success('Repository compaction completed')
+      toast.success('Repository compaction completed successfully!')
+      setCompactingRepository(null)
+      queryClient.invalidateQueries({ queryKey: ['repositories'] })
+      queryClient.invalidateQueries({ queryKey: ['repository-info', compactingRepository?.id] })
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to compact repository')
+    },
+  })
+
+  const pruneRepositoryMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => repositoriesAPI.pruneRepository(id, data),
+    onSuccess: (response: any) => {
+      if (response.data.dry_run) {
+        toast.success('Dry run completed - see results in dialog')
+      } else {
+        toast.success('Repository pruned successfully!')
+        setPruningRepository(null)
+        queryClient.invalidateQueries({ queryKey: ['repositories'] })
+        queryClient.invalidateQueries({ queryKey: ['repository-archives', pruningRepository?.id] })
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to prune repository')
     },
   })
 
@@ -259,8 +287,40 @@ export default function Repositories() {
   }
 
   const handleCompactRepository = (repository: Repository) => {
-    if (window.confirm(`Are you sure you want to compact repository "${repository.name}"?`)) {
-      compactRepositoryMutation.mutate(repository.id)
+    setCompactingRepository(repository)
+  }
+
+  const handleConfirmCompact = () => {
+    if (compactingRepository) {
+      compactRepositoryMutation.mutate(compactingRepository.id)
+    }
+  }
+
+  const handlePruneRepository = (repository: Repository) => {
+    setPruningRepository(repository)
+    setPruneForm({
+      keep_daily: 7,
+      keep_weekly: 4,
+      keep_monthly: 6,
+      keep_yearly: 1,
+    })
+  }
+
+  const handlePruneDryRun = () => {
+    if (pruningRepository) {
+      pruneRepositoryMutation.mutate({
+        id: pruningRepository.id,
+        data: { ...pruneForm, dry_run: true }
+      })
+    }
+  }
+
+  const handleConfirmPrune = () => {
+    if (pruningRepository) {
+      pruneRepositoryMutation.mutate({
+        id: pruningRepository.id,
+        data: { ...pruneForm, dry_run: false }
+      })
     }
   }
 
@@ -623,6 +683,17 @@ export default function Repositories() {
                       sx={{ textTransform: 'none' }}
                     >
                       Compact
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<Delete />}
+                      onClick={() => handlePruneRepository(repository)}
+                      disabled={pruneRepositoryMutation.isLoading}
+                      color="secondary"
+                      sx={{ textTransform: 'none' }}
+                    >
+                      Prune
                     </Button>
                     <Button
                       variant="outlined"
@@ -1336,6 +1407,176 @@ export default function Repositories() {
         <DialogActions>
           <Button onClick={() => setViewingInfoRepository(null)} variant="contained">
             Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Compact Repository Dialog */}
+      <Dialog
+        open={!!compactingRepository}
+        onClose={() => setCompactingRepository(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Refresh color="warning" />
+            <Typography variant="h6" fontWeight={600}>
+              Compact Repository
+            </Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+              What does compacting do?
+            </Typography>
+            <Typography variant="body2">
+              Compacting reclaims space from deleted archives. When you delete archives, the space isn't immediately freed.
+              Running compact will reorganize repository segments and free up disk space.
+            </Typography>
+          </Alert>
+
+          <Box sx={{ bgcolor: 'grey.50', p: 2, borderRadius: 1 }}>
+            <Typography variant="body2" gutterBottom>
+              <strong>Repository:</strong> {compactingRepository?.name}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+              {compactingRepository?.path}
+            </Typography>
+          </Box>
+
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            <Typography variant="body2">
+              This operation can take several minutes depending on repository size. The repository will remain accessible during compaction.
+            </Typography>
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCompactingRepository(null)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmCompact}
+            variant="contained"
+            color="warning"
+            disabled={compactRepositoryMutation.isLoading}
+            startIcon={compactRepositoryMutation.isLoading ? <Refresh className="animate-spin" /> : <Refresh />}
+          >
+            {compactRepositoryMutation.isLoading ? 'Compacting...' : 'Start Compacting'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Prune Repository Dialog */}
+      <Dialog
+        open={!!pruningRepository}
+        onClose={() => setPruningRepository(null)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Delete color="secondary" />
+            <Typography variant="h6" fontWeight={600}>
+              Prune Archives
+            </Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+              What does pruning do?
+            </Typography>
+            <Typography variant="body2" gutterBottom>
+              Pruning automatically deletes old archives based on retention rules. This helps manage repository size by keeping
+              only the backups you need.
+            </Typography>
+            <Typography variant="body2" fontWeight={600} color="primary.main">
+              💡 Tip: Always run "Dry Run" first to preview what will be deleted!
+            </Typography>
+          </Alert>
+
+          <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+            Retention Policy
+          </Typography>
+          <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mb: 2 }}>
+            Specify how many backups to keep for each time period
+          </Typography>
+
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2, mb: 3 }}>
+            <TextField
+              label="Keep Daily"
+              type="number"
+              value={pruneForm.keep_daily}
+              onChange={(e) => setPruneForm({ ...pruneForm, keep_daily: parseInt(e.target.value) || 0 })}
+              helperText="Last N daily backups"
+              fullWidth
+            />
+            <TextField
+              label="Keep Weekly"
+              type="number"
+              value={pruneForm.keep_weekly}
+              onChange={(e) => setPruneForm({ ...pruneForm, keep_weekly: parseInt(e.target.value) || 0 })}
+              helperText="Last N weekly backups"
+              fullWidth
+            />
+            <TextField
+              label="Keep Monthly"
+              type="number"
+              value={pruneForm.keep_monthly}
+              onChange={(e) => setPruneForm({ ...pruneForm, keep_monthly: parseInt(e.target.value) || 0 })}
+              helperText="Last N monthly backups"
+              fullWidth
+            />
+            <TextField
+              label="Keep Yearly"
+              type="number"
+              value={pruneForm.keep_yearly}
+              onChange={(e) => setPruneForm({ ...pruneForm, keep_yearly: parseInt(e.target.value) || 0 })}
+              helperText="Last N yearly backups"
+              fullWidth
+            />
+          </Box>
+
+          <Box sx={{ bgcolor: 'grey.50', p: 2, borderRadius: 1, mb: 2 }}>
+            <Typography variant="body2" gutterBottom>
+              <strong>Repository:</strong> {pruningRepository?.name}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block">
+              Example: With these settings, you'll keep the last 7 daily, 4 weekly, 6 monthly, and 1 yearly backup. Older archives will be deleted.
+            </Typography>
+          </Box>
+
+          <Alert severity="warning">
+            <Typography variant="body2" fontWeight={600} gutterBottom>
+              ⚠️ Warning: Deleted archives cannot be recovered!
+            </Typography>
+            <Typography variant="body2">
+              After pruning, run "Compact" to actually free up disk space.
+            </Typography>
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPruningRepository(null)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handlePruneDryRun}
+            variant="outlined"
+            disabled={pruneRepositoryMutation.isLoading}
+            startIcon={<Info />}
+          >
+            Dry Run (Preview)
+          </Button>
+          <Button
+            onClick={handleConfirmPrune}
+            variant="contained"
+            color="error"
+            disabled={pruneRepositoryMutation.isLoading}
+            startIcon={pruneRepositoryMutation.isLoading ? <Delete className="animate-spin" /> : <Delete />}
+          >
+            {pruneRepositoryMutation.isLoading ? 'Pruning...' : 'Prune Archives'}
           </Button>
         </DialogActions>
       </Dialog>
