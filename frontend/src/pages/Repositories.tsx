@@ -39,7 +39,7 @@ import {
 import { repositoriesAPI, sshKeysAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { useAppState } from '../context/AppContext'
-import { formatDate, formatDateShort } from '../utils/dateUtils'
+import { formatDate, formatDateShort, formatBytes } from '../utils/dateUtils'
 
 interface Repository {
   id: number
@@ -1240,21 +1240,21 @@ export default function Repositories() {
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">Unique Data (Deduplicated)</Typography>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {(repositoryInfo.data.info.cache.stats.unique_size / (1024 * 1024)).toFixed(2)} MB
+                        {formatBytes(repositoryInfo.data.info.cache.stats.unique_size)}
                       </Typography>
                     </Box>
                     <Divider />
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">Unique Compressed Size</Typography>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {(repositoryInfo.data.info.cache.stats.unique_csize / (1024 * 1024)).toFixed(2)} MB
+                        {formatBytes(repositoryInfo.data.info.cache.stats.unique_csize)}
                       </Typography>
                     </Box>
                     <Divider />
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography variant="body2" color="text.secondary">Total Data Size</Typography>
                       <Typography variant="body2">
-                        {(repositoryInfo.data.info.cache.stats.total_size / (1024 * 1024)).toFixed(2)} MB
+                        {formatBytes(repositoryInfo.data.info.cache.stats.total_size)}
                       </Typography>
                     </Box>
                     <Divider />
