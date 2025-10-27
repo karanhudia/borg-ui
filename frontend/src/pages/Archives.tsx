@@ -28,7 +28,6 @@ import {
   AlertCircle,
   FolderOpen,
   Lock,
-  RefreshCw,
   Eye,
   Folder,
 } from 'lucide-react'
@@ -65,7 +64,7 @@ const Archives: React.FC = () => {
   })
 
   // Get archives for selected repository
-  const { data: archives, isLoading: loadingArchives, refetch: refetchArchives } = useQuery({
+  const { data: archives, isLoading: loadingArchives } = useQuery({
     queryKey: ['repository-archives', selectedRepositoryId],
     queryFn: () => repositoriesAPI.listRepositoryArchives(selectedRepositoryId!),
     enabled: !!selectedRepositoryId
@@ -108,7 +107,10 @@ const Archives: React.FC = () => {
 
   // Get repositories from API response
   const repositories = repositoriesData?.data?.repositories || []
-  const archivesList = archives?.data?.archives || []
+  const archivesList = (archives?.data?.archives || []).sort((a: Archive, b: Archive) => {
+    // Sort by start date, latest first
+    return new Date(b.start).getTime() - new Date(a.start).getTime()
+  })
 
   // File browser helper functions
   const getFilesInCurrentPath = () => {
@@ -201,50 +203,38 @@ const Archives: React.FC = () => {
       </Box>
 
       {/* Repository Selector */}
-      <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-            Select Repository
-          </Typography>
-          <FormControl fullWidth>
-            <Select
-              value={selectedRepositoryId || ''}
-              onChange={(e) => handleRepositoryChange(e.target.value as number)}
-              displayEmpty
-              disabled={loadingRepositories || repositories.length === 0}
-              sx={{
-                backgroundColor: 'background.paper',
-                '& .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'divider',
-                },
-              }}
-            >
-              <MenuItem value="" disabled>
-                {loadingRepositories ? 'Loading repositories...' : 'Select a repository'}
-              </MenuItem>
-              {repositories.map((repo: Repository) => (
-                <MenuItem key={repo.id} value={repo.id}>
-                  {repo.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Box>
-        {selectedRepositoryId && (
-          <Button
-            variant="contained"
-            startIcon={<RefreshCw size={18} />}
-            onClick={() => refetchArchives()}
-            sx={{ mt: 3.5 }}
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+          Select Repository
+        </Typography>
+        <FormControl fullWidth>
+          <Select
+            value={selectedRepositoryId || ''}
+            onChange={(e) => handleRepositoryChange(e.target.value as number)}
+            displayEmpty
+            disabled={loadingRepositories || repositories.length === 0}
+            sx={{
+              backgroundColor: 'background.paper',
+              '& .MuiOutlinedInput-notchedOutline': {
+                borderColor: 'divider',
+              },
+            }}
           >
-            Refresh
-          </Button>
-        )}
-      </Stack>
+            <MenuItem value="" disabled>
+              {loadingRepositories ? 'Loading repositories...' : 'Select a repository'}
+            </MenuItem>
+            {repositories.map((repo: Repository) => (
+              <MenuItem key={repo.id} value={repo.id}>
+                {repo.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </Box>
 
       {/* No Repository Selected State */}
       {!selectedRepositoryId && !loadingRepositories && (
-        <Box sx={{ textAlign: 'center', py: 8 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
           <Folder size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
           <Typography variant="body1" color="text.secondary">
             {repositories.length === 0
