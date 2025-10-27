@@ -154,6 +154,7 @@ export const repositoriesAPI = {
   deleteRepository: (id: number) => api.delete(`/repositories/${id}`),
   checkRepository: (id: number) => api.post(`/repositories/${id}/check`),
   compactRepository: (id: number) => api.post(`/repositories/${id}/compact`),
+  pruneRepository: (id: number, data: any) => api.post(`/repositories/${id}/prune`, data),
   breakLock: (id: number) => api.post(`/repositories/${id}/break-lock`),
   getRepositoryStats: (id: number) => api.get(`/repositories/${id}/stats`),
   listRepositoryArchives: (id: number) => api.get(`/repositories/${id}/archives`),
