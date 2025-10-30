@@ -6,8 +6,7 @@
 
 A modern, user-friendly web interface for [Borg Backup](https://borgbackup.readthedocs.io/) management. **Zero-configuration deployment** - just run `docker compose up` and you're done!
 
-**Official Repository**: https://github.com/karanhudia/borg-ui
-**Documentation**: https://karanhudia.github.io/borg-ui
+📚 **[Full Documentation](https://karanhudia.github.io/borg-ui)** | 🐳 **[Docker Hub](https://hub.docker.com/r/ainullcode/borg-ui)**
 
 ---
 
@@ -28,12 +27,12 @@ So I built Borg Web UI - not to replace Borg's power, but to make it **accessibl
 
 ### Project Goals
 
-🎯 **Simplicity First** - If you can click it, you shouldn't have to type it
-🚀 **Zero Configuration** - No manual setup, no environment files to edit, just `docker compose up`
-🔒 **Secure by Default** - Auto-generated secrets, JWT authentication, permission controls
-📱 **Works Everywhere** - Desktop, tablet, mobile, Raspberry Pi, NAS, cloud servers
-🌐 **Real-time Feedback** - Live backup progress, instant logs, responsive dashboards
-💾 **Data Safety** - Never lose your backups or configuration, everything persists
+- 🎯 **Simplicity First** - If you can click it, you shouldn't have to type it
+- 🚀 **Zero Configuration** - No manual setup, no environment files to edit, just `docker compose up`
+- 🔒 **Secure by Default** - Auto-generated secrets, JWT authentication, permission controls
+- 📱 **Works Everywhere** - Desktop, tablet, mobile, Raspberry Pi, NAS, cloud servers
+- 🌐 **Real-time Feedback** - Live backup progress, instant logs, responsive dashboards
+- 💾 **Data Safety** - Never lose your backups or configuration, everything persists
 
 This project solves my personal backup management headaches, and I hope it solves yours too.
 
@@ -69,15 +68,15 @@ This project solves my personal backup management headaches, and I hope it solve
 ## Table of Contents
 
 - [Features](#features)
-- [Quick Start](#quick-start)
 - [Installation Methods](#installation-methods)
   - [Method 1: Portainer](#method-1-portainer-recommended)
   - [Method 2: Docker Run](#method-2-docker-run)
   - [Method 3: Docker Compose](#method-3-docker-compose)
+- [Mounting Host Filesystem](#mounting-host-filesystem)
 - [Configuration](#configuration)
+- [Data Persistence](#data-persistence)
 - [Troubleshooting](#troubleshooting)
 - [Documentation](#documentation)
-- [API Reference](#api-reference)
 - [License](#license)
 - [Support](#support)
 
@@ -104,45 +103,15 @@ This project solves my personal backup management headaches, and I hope it solve
 
 ---
 
-## Quick Start
+## Prerequisites
 
-### Prerequisites
 - Docker installed on your system
 - 512MB RAM minimum (1GB recommended)
 - Network access to backup destinations
 
-### 30-Second Deployment
-
-```bash
-# Create docker-compose.yml
-cat > docker-compose.yml << 'EOF'
-version: '3.8'
-
-services:
-  app:
-    image: ainullcode/borg-ui:latest
-    container_name: borg-web-ui
-    restart: unless-stopped
-    ports:
-      - "8081:8081"
-    volumes:
-      - borg_data:/data
-      - ${LOCAL_STORAGE_PATH:-/}:/local:rw  # Access host filesystem
-
-volumes:
-  borg_data:
-EOF
-
-# Start the container
-docker compose up -d
-
-# That's it! Everything else is auto-configured.
-```
-
-**Note:** If you get "Permission denied" errors when creating repositories, see [Troubleshooting > Permission Issues](#permission-issues) to configure user permissions.
-
 ### Default Credentials
-Access the web interface at `http://localhost:8081`
+
+After installation, access the web interface at `http://localhost:8081`
 
 - **Username**: `admin`
 - **Password**: `admin123`
@@ -215,10 +184,14 @@ docker run -d \
   --name borg-web-ui \
   --restart unless-stopped \
   -p 8081:8081 \
+  -e PUID=1000 \
+  -e PGID=1000 \
   -v borg_data:/data \
   -v /:/local:rw \
   ainullcode/borg-ui:latest
 ```
+
+**Note:** Replace `1000` with your user/group ID. Find yours with `id -u && id -g`
 
 #### Step 3: Verify Container is Running
 
@@ -291,6 +264,68 @@ Open `http://localhost:8081` and login.
 
 ---
 
+## Mounting Host Filesystem
+
+### Why Mount Host Filesystem?
+
+The container automatically mounts your host filesystem at `/local` to:
+- Access external drives, NAS mounts, or network storage for repositories
+- Keep repositories outside the container (survive container rebuilds)
+- Better performance for local/LAN storage vs SSH
+- Simpler setup than SSH for local storage
+
+### Default Configuration
+
+By default, the container mounts:
+- **All Systems**: `/` (root filesystem) → `/local` in container
+- **Custom**: Any directory via `LOCAL_STORAGE_PATH` environment variable
+
+### Setup Instructions
+
+**Step 1**: (Optional) Customize the mount path
+
+Create `.env` file or set environment variable:
+
+```bash
+# .env file
+# Default: Mount entire filesystem
+LOCAL_STORAGE_PATH=/
+
+# Custom examples:
+# LOCAL_STORAGE_PATH=/Users        # Only user directories (macOS)
+# LOCAL_STORAGE_PATH=/home          # Only user directories (Linux)
+# LOCAL_STORAGE_PATH=/mnt/nas       # Only NAS mount point
+```
+
+**Step 2**: Create repositories in the UI using `/local/` prefix
+
+Examples (with default `/` mount):
+- **macOS**: `/local/Users/your-username/backups/my-repo`
+- **Linux**: `/local/home/your-username/backups/my-repo`
+- **External Drive**: `/local/mnt/external-drive/backups/important-data`
+- **NAS**: `/local/mnt/nas-mount/borg-backups/project-repo`
+
+### For Remote Storage (Raspberry Pi, NAS)
+
+If your remote storage is already mounted on your host machine via NFS/CIFS/SMB:
+
+```bash
+# Example: Mount Raspberry Pi via NFS (on host machine)
+sudo mount -t nfs 192.168.1.250:/home/pi /mnt/raspberry-pi
+
+# Or mount via SMB/CIFS
+sudo mount -t cifs //192.168.1.250/share /mnt/raspberry-pi -o username=pi
+```
+
+Then set in `.env`:
+```bash
+LOCAL_STORAGE_PATH=/mnt/raspberry-pi
+```
+
+Repositories created at `/local/backups/repo-name` will be stored on your Raspberry Pi!
+
+---
+
 ## Configuration
 
 ### Auto-Configured Settings
@@ -327,77 +362,11 @@ environment:
 **Important**: You configure backup repositories directly through the web UI, not via Docker volumes!
 
 Repositories can be:
-- **Local paths**: `/mnt/backup`, `/external-drive/backups`
+- **Local paths**: `/local/mnt/backup`, `/local/external-drive/backups` (see [Mounting Host Filesystem](#mounting-host-filesystem))
 - **SSH/SFTP**: `user@host:/path/to/repo`
 - **Cloud storage**: S3, Azure, Google Cloud (via rclone)
 
 No need for a separate `borg_backups` volume!
-
-### Accessing Host Filesystem for Repositories
-
-**Built-in Feature**: The container automatically mounts your host filesystem at `/local` for easy repository access.
-
-#### Why Host Filesystem Mount?
-
-- Repositories survive container rebuilds
-- Access external drives, NAS mounts, or network storage
-- Simpler than SSH for local or network-attached storage
-- Better performance for local/LAN storage
-
-#### Default Configuration
-
-By default, the container mounts:
-- **All Systems**: `/` (root filesystem) → `/local` in container
-- **Custom**: Any directory via `LOCAL_STORAGE_PATH` environment variable (e.g., `/Users`, `/home`, `/mnt/nas`)
-
-#### Setup Instructions
-
-**Step 1**: (Optional) Customize the mount path by creating `.env` file:
-
-```bash
-# .env
-# Default: Entire filesystem (/)
-# LOCAL_STORAGE_PATH=/
-
-# Custom examples:
-# LOCAL_STORAGE_PATH=/Users        # Only user directories (macOS)
-# LOCAL_STORAGE_PATH=/home          # Only user directories (Linux)
-# LOCAL_STORAGE_PATH=/mnt/nas       # Only NAS mount point
-```
-
-**Step 2**: Restart the container (only if you changed the mount path):
-
-```bash
-docker compose down
-docker compose up -d
-```
-
-**Step 3**: Create repositories in the UI using `/local/` prefix:
-
-Examples (with default `/` mount):
-- **macOS**: `/local/Users/your-username/backups/my-repo`
-- **Linux**: `/local/home/your-username/backups/my-repo`
-- **External Drive**: `/local/mnt/external-drive/backups/important-data`
-- **NAS**: `/local/mnt/nas-mount/borg-backups/project-repo`
-
-#### For Remote Storage (Raspberry Pi, NAS)
-
-If your Raspberry Pi or NAS is already mounted on your host machine via NFS/CIFS/SMB:
-
-```bash
-# Example: Mount Raspberry Pi via NFS (on host machine)
-sudo mount -t nfs 192.168.1.250:/home/pi /mnt/raspberry-pi
-
-# Or mount via SMB/CIFS
-sudo mount -t cifs //192.168.1.250/share /mnt/raspberry-pi -o username=pi
-```
-
-Then set in `.env`:
-```bash
-LOCAL_STORAGE_PATH=/mnt/raspberry-pi
-```
-
-Repositories created at `/local/backups/repo-name` will actually be stored on your Raspberry Pi!
 
 ---
 
@@ -454,30 +423,6 @@ volumes:
 - **[Implementation Tasks](IMPLEMENTATION_TASKS.md)** - Development progress
 - **[Security Guide](SECURITY.md)** - Security best practices
 - **[API Documentation](http://localhost:8081/api/docs)** - Interactive API docs (after installation)
-
----
-
-## API Reference
-
-### OpenAPI Documentation
-
-Once running, access interactive API documentation:
-
-- **Swagger UI**: `http://localhost:8081/api/docs`
-- **ReDoc**: `http://localhost:8081/api/redoc`
-- **OpenAPI JSON**: `http://localhost:8081/openapi.json`
-
-### Key Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/auth/login` | POST | Authenticate and get JWT token |
-| `/api/backups` | GET, POST | List and create backups |
-| `/api/archives` | GET | Browse backup archives |
-| `/api/repositories` | GET, POST | Manage repositories |
-| `/api/ssh-keys` | GET, POST | Manage SSH keys |
-| `/api/schedules` | GET, POST | Manage backup schedules |
-| `/api/health/system` | GET | System health check |
 
 ---
 
