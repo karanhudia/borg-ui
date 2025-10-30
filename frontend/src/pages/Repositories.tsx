@@ -266,6 +266,8 @@ export default function Repositories() {
 
   const [editNewSourceDir, setEditNewSourceDir] = useState('')
   const [editNewExcludePattern, setEditNewExcludePattern] = useState('')
+  const [showEditSourceDirExplorer, setShowEditSourceDirExplorer] = useState(false)
+  const [showEditExcludeExplorer, setShowEditExcludeExplorer] = useState(false)
 
   // Event handlers
   const handleCreateRepository = (e: React.FormEvent) => {
@@ -872,13 +874,12 @@ export default function Repositories() {
                   onClick={() => setShowPathExplorer(true)}
                   sx={{
                     minWidth: 'auto',
-                    px: 1.5,
-                    py: 1.75,
-                    mt: '2px'
+                    px: 1,
+                    height: '56px',
                   }}
                   title="Browse filesystem"
                 >
-                  <FolderOpen sx={{ fontSize: 20 }} />
+                  <FolderOpen sx={{ fontSize: 18 }} />
                 </Button>
               </Box>
 
@@ -1188,6 +1189,15 @@ export default function Repositories() {
                   <Button
                     variant="outlined"
                     size="small"
+                    onClick={() => setShowEditSourceDirExplorer(true)}
+                    sx={{ minWidth: 'auto', px: 1 }}
+                    title="Browse directories"
+                  >
+                    <FolderOpen fontSize="small" />
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
                     onClick={() => {
                       if (editNewSourceDir.trim()) {
                         setEditForm({
@@ -1239,7 +1249,7 @@ export default function Repositories() {
                   <TextField
                     value={editNewExcludePattern}
                     onChange={(e) => setEditNewExcludePattern(e.target.value)}
-                    placeholder="*.log"
+                    placeholder="*.log or /path/to/exclude"
                     size="small"
                     fullWidth
                     onKeyPress={(e) => {
@@ -1255,6 +1265,15 @@ export default function Repositories() {
                       }
                     }}
                   />
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => setShowEditExcludeExplorer(true)}
+                    sx={{ minWidth: 'auto', px: 1 }}
+                    title="Browse directories to exclude"
+                  >
+                    <FolderOpen fontSize="small" />
+                  </Button>
                   <Button
                     variant="outlined"
                     size="small"
@@ -1797,6 +1816,39 @@ export default function Repositories() {
               }
             : undefined
         }
+        selectMode="both"
+      />
+
+      {/* Edit Dialog File Explorers */}
+      <FileExplorerDialog
+        open={showEditSourceDirExplorer}
+        onClose={() => setShowEditSourceDirExplorer(false)}
+        onSelect={(paths) => {
+          setEditForm({
+            ...editForm,
+            source_directories: [...editForm.source_directories, ...paths],
+          })
+        }}
+        title="Select Source Directories"
+        initialPath="/"
+        multiSelect={true}
+        connectionType="local"
+        selectMode="directories"
+      />
+
+      <FileExplorerDialog
+        open={showEditExcludeExplorer}
+        onClose={() => setShowEditExcludeExplorer(false)}
+        onSelect={(paths) => {
+          setEditForm({
+            ...editForm,
+            exclude_patterns: [...editForm.exclude_patterns, ...paths],
+          })
+        }}
+        title="Select Directories to Exclude"
+        initialPath="/"
+        multiSelect={true}
+        connectionType="local"
         selectMode="both"
       />
     </Box>
