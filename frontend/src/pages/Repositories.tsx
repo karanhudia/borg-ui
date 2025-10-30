@@ -21,6 +21,7 @@ import {
   Divider,
   Stack,
   Autocomplete,
+  InputAdornment,
 } from '@mui/material'
 import {
   Add,
@@ -859,29 +860,29 @@ export default function Repositories() {
                 </>
               )}
 
-              <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-                <TextField
-                  label="Path"
-                  value={createForm.path}
-                  onChange={(e) => setCreateForm({ ...createForm, path: e.target.value })}
-                  placeholder={createForm.repository_type === 'local' ? '/path/to/repository' : '/path/to/repository'}
-                  required
-                  fullWidth
-                  helperText="Any path is allowed. Directory will be created automatically."
-                />
-                <Button
-                  variant="outlined"
-                  onClick={() => setShowPathExplorer(true)}
-                  sx={{
-                    minWidth: 'auto',
-                    px: 1,
-                    height: '56px',
-                  }}
-                  title="Browse filesystem"
-                >
-                  <FolderOpen sx={{ fontSize: 18 }} />
-                </Button>
-              </Box>
+              <TextField
+                label="Path"
+                value={createForm.path}
+                onChange={(e) => setCreateForm({ ...createForm, path: e.target.value })}
+                placeholder={createForm.repository_type === 'local' ? '/path/to/repository' : '/path/to/repository'}
+                required
+                fullWidth
+                helperText="Any path is allowed. Directory will be created automatically."
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        onClick={() => setShowPathExplorer(true)}
+                        edge="end"
+                        size="small"
+                        title="Browse filesystem"
+                      >
+                        <FolderOpen fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
 
               <FormControl fullWidth>
                 <InputLabel>Encryption</InputLabel>
