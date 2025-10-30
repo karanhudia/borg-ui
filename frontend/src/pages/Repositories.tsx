@@ -973,16 +973,21 @@ export default function Repositories() {
                         }
                       }
                     }}
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            onClick={() => setShowSourceDirExplorer(true)}
+                            edge="end"
+                            size="small"
+                            title="Browse directories"
+                          >
+                            <FolderOpen fontSize="small" />
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
                   />
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => setShowSourceDirExplorer(true)}
-                    sx={{ minWidth: 'auto', px: 1 }}
-                    title="Browse directories"
-                  >
-                    <FolderOpen fontSize="small" />
-                  </Button>
                   <Button
                     variant="outlined"
                     size="small"
@@ -1052,16 +1057,21 @@ export default function Repositories() {
                         }
                       }
                     }}
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            onClick={() => setShowExcludeExplorer(true)}
+                            edge="end"
+                            size="small"
+                            title="Browse directories to exclude"
+                          >
+                            <FolderOpen fontSize="small" />
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
                   />
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => setShowExcludeExplorer(true)}
-                    sx={{ minWidth: 'auto', px: 1 }}
-                    title="Browse directories to exclude"
-                  >
-                    <FolderOpen fontSize="small" />
-                  </Button>
                   <Button
                     variant="outlined"
                     size="small"
@@ -1186,16 +1196,21 @@ export default function Repositories() {
                         }
                       }
                     }}
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            onClick={() => setShowEditSourceDirExplorer(true)}
+                            edge="end"
+                            size="small"
+                            title="Browse directories"
+                          >
+                            <FolderOpen fontSize="small" />
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
                   />
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => setShowEditSourceDirExplorer(true)}
-                    sx={{ minWidth: 'auto', px: 1 }}
-                    title="Browse directories"
-                  >
-                    <FolderOpen fontSize="small" />
-                  </Button>
                   <Button
                     variant="outlined"
                     size="small"
@@ -1265,16 +1280,21 @@ export default function Repositories() {
                         }
                       }
                     }}
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            onClick={() => setShowEditExcludeExplorer(true)}
+                            edge="end"
+                            size="small"
+                            title="Browse directories to exclude"
+                          >
+                            <FolderOpen fontSize="small" />
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
                   />
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => setShowEditExcludeExplorer(true)}
-                    sx={{ minWidth: 'auto', px: 1 }}
-                    title="Browse directories to exclude"
-                  >
-                    <FolderOpen fontSize="small" />
-                  </Button>
                   <Button
                     variant="outlined"
                     size="small"
