@@ -870,10 +870,10 @@ export default function Repositories() {
                 <Button
                   variant="outlined"
                   onClick={() => setShowPathExplorer(true)}
-                  sx={{ minWidth: 'auto', px: 2 }}
+                  sx={{ minWidth: 'auto', px: 1.5 }}
                   title="Browse filesystem"
                 >
-                  <FolderOpen />
+                  <FolderOpen fontSize="small" />
                 </Button>
               </Box>
 
@@ -971,10 +971,10 @@ export default function Repositories() {
                     variant="outlined"
                     size="small"
                     onClick={() => setShowSourceDirExplorer(true)}
-                    sx={{ minWidth: 'auto' }}
+                    sx={{ minWidth: 'auto', px: 1 }}
                     title="Browse directories"
                   >
-                    <FolderOpen />
+                    <FolderOpen fontSize="small" />
                   </Button>
                   <Button
                     variant="outlined"
@@ -1050,10 +1050,10 @@ export default function Repositories() {
                     variant="outlined"
                     size="small"
                     onClick={() => setShowExcludeExplorer(true)}
-                    sx={{ minWidth: 'auto' }}
+                    sx={{ minWidth: 'auto', px: 1 }}
                     title="Browse directories to exclude"
                   >
-                    <FolderOpen />
+                    <FolderOpen fontSize="small" />
                   </Button>
                   <Button
                     variant="outlined"

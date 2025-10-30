@@ -100,7 +100,7 @@ export default function FileExplorerDialog({
         params.port = sshConfig.port
       }
 
-      const response = await api.get('/api/filesystem/browse', { params })
+      const response = await api.get('/filesystem/browse', { params })
       setItems(response.data.items || [])
       setCurrentPath(response.data.current_path)
     } catch (err: any) {
