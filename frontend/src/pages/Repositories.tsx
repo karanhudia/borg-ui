@@ -857,7 +857,7 @@ export default function Repositories() {
                 </>
               )}
 
-              <Box sx={{ display: 'flex', gap: 1 }}>
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
                 <TextField
                   label="Path"
                   value={createForm.path}
@@ -870,10 +870,15 @@ export default function Repositories() {
                 <Button
                   variant="outlined"
                   onClick={() => setShowPathExplorer(true)}
-                  sx={{ minWidth: 'auto', px: 1.5 }}
+                  sx={{
+                    minWidth: 'auto',
+                    px: 1.5,
+                    py: 1.75,
+                    mt: '2px'
+                  }}
                   title="Browse filesystem"
                 >
-                  <FolderOpen fontSize="small" />
+                  <FolderOpen sx={{ fontSize: 20 }} />
                 </Button>
               </Box>
 
