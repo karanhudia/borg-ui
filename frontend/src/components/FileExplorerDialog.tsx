@@ -28,6 +28,7 @@ import {
   Home,
   Search,
   Archive,
+  FolderOpen,
 } from 'lucide-react'
 import api from '../services/api'
 
@@ -179,10 +180,10 @@ export default function FileExplorerDialog({
   )
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { height: '80vh' } }}>
+      <DialogTitle sx={{ pb: 2 }}>
         <Box display="flex" alignItems="center" justifyContent="space-between">
-          <Typography variant="h6">{title}</Typography>
+          <Typography variant="h6" fontWeight={600}>{title}</Typography>
           {connectionType === 'ssh' && sshConfig && (
             <Chip
               label={`${sshConfig.username}@${sshConfig.host}`}
@@ -194,10 +195,14 @@ export default function FileExplorerDialog({
         </Box>
       </DialogTitle>
 
-      <DialogContent dividers>
+      <DialogContent sx={{ p: 0 }}>
         {/* Breadcrumb Navigation */}
-        <Box mb={2}>
-          <Breadcrumbs separator={<ChevronRight size={16} />} maxItems={6}>
+        <Box sx={{ px: 3, py: 2, bgcolor: 'grey.50', borderBottom: 1, borderColor: 'divider' }}>
+          <Breadcrumbs
+            separator={<ChevronRight size={14} />}
+            maxItems={6}
+            sx={{ '& .MuiBreadcrumbs-separator': { mx: 0.5 } }}
+          >
             {getBreadcrumbs().map((crumb, index) => (
               <Link
                 key={index}
@@ -209,10 +214,15 @@ export default function FileExplorerDialog({
                   alignItems: 'center',
                   gap: 0.5,
                   textDecoration: 'none',
-                  '&:hover': { textDecoration: 'underline' },
+                  color: 'text.primary',
+                  fontWeight: index === getBreadcrumbs().length - 1 ? 600 : 400,
+                  '&:hover': {
+                    textDecoration: 'underline',
+                    color: 'primary.main'
+                  },
                 }}
               >
-                {index === 0 && <Home size={16} />}
+                {index === 0 && <Home size={14} />}
                 {crumb.label}
               </Link>
             ))}
@@ -220,45 +230,69 @@ export default function FileExplorerDialog({
         </Box>
 
         {/* Search */}
-        <TextField
-          fullWidth
-          size="small"
-          placeholder="Search files and folders..."
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <Search size={18} />
-              </InputAdornment>
-            ),
-          }}
-          sx={{ mb: 2 }}
-        />
+        <Box sx={{ px: 3, pt: 2, pb: 1 }}>
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Search files and folders..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search size={18} />
+                </InputAdornment>
+              ),
+            }}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                bgcolor: 'background.paper',
+              }
+            }}
+          />
+        </Box>
 
         {/* Error Display */}
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
+          <Box sx={{ px: 3, pb: 2 }}>
+            <Alert severity="error" sx={{ borderRadius: 1 }}>
+              {error}
+            </Alert>
+          </Box>
         )}
 
         {/* Loading State */}
         {loading ? (
-          <Box display="flex" justifyContent="center" py={4}>
-            <CircularProgress />
+          <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" py={8}>
+            <CircularProgress size={40} />
+            <Typography variant="body2" color="text.secondary" mt={2}>
+              Loading...
+            </Typography>
           </Box>
         ) : (
           <>
             {/* File List */}
-            <List sx={{ maxHeight: 400, overflow: 'auto' }}>
+            <List
+              sx={{
+                flex: 1,
+                overflow: 'auto',
+                px: 1,
+                '& .MuiListItem-root': {
+                  borderRadius: 1,
+                  mb: 0.5,
+                }
+              }}
+            >
               {filteredItems.length === 0 ? (
-                <ListItem>
-                  <ListItemText
-                    primary="No items found"
-                    secondary={searchTerm ? 'Try a different search term' : 'This directory is empty'}
-                  />
-                </ListItem>
+                <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" py={8}>
+                  <Folder size={48} color="#ccc" />
+                  <Typography variant="body1" color="text.secondary" mt={2}>
+                    No items found
+                  </Typography>
+                  <Typography variant="caption" color="text.disabled">
+                    {searchTerm ? 'Try a different search term' : 'This directory is empty'}
+                  </Typography>
+                </Box>
               ) : (
                 filteredItems.map(item => {
                   const isSelectable =
@@ -278,6 +312,7 @@ export default function FileExplorerDialog({
                             edge="end"
                             checked={isSelected}
                             onChange={() => handleItemSelect(item)}
+                            sx={{ mr: 1 }}
                           />
                         ) : null
                       }
@@ -289,32 +324,46 @@ export default function FileExplorerDialog({
                             : isSelectable && handleItemSelect(item)
                         }
                         selected={isSelected && !multiSelect}
+                        sx={{
+                          py: 1.5,
+                          '&:hover': {
+                            bgcolor: 'action.hover',
+                          },
+                          '&.Mui-selected': {
+                            bgcolor: 'primary.50',
+                            '&:hover': {
+                              bgcolor: 'primary.100',
+                            }
+                          }
+                        }}
                       >
-                        <ListItemIcon>
+                        <ListItemIcon sx={{ minWidth: 40 }}>
                           {item.is_borg_repo ? (
-                            <Archive size={20} color="#ff6b6b" />
+                            <Archive size={22} color="#ff6b6b" />
                           ) : item.is_directory ? (
-                            <Folder size={20} color="#4A90E2" />
+                            <Folder size={22} color="#4A90E2" />
                           ) : (
-                            <File size={20} color="#666" />
+                            <File size={22} color="#999" />
                           )}
                         </ListItemIcon>
                         <ListItemText
                           primary={
                             <Box display="flex" alignItems="center" gap={1}>
-                              <Typography variant="body2">{item.name}</Typography>
+                              <Typography variant="body2" fontWeight={500}>
+                                {item.name}
+                              </Typography>
                               {item.is_borg_repo && (
                                 <Chip
                                   label="Borg Repo"
                                   size="small"
                                   color="warning"
-                                  sx={{ height: 20, fontSize: '0.7rem' }}
+                                  sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600 }}
                                 />
                               )}
                             </Box>
                           }
                           secondary={
-                            <Box display="flex" gap={2} mt={0.5}>
+                            <Box display="flex" gap={2} mt={0.25}>
                               {!item.is_directory && item.size && (
                                 <Typography variant="caption" color="text.secondary">
                                   {formatFileSize(item.size)}
@@ -323,11 +372,6 @@ export default function FileExplorerDialog({
                               {item.modified && (
                                 <Typography variant="caption" color="text.secondary">
                                   {new Date(item.modified).toLocaleDateString()}
-                                </Typography>
-                              )}
-                              {item.permissions && (
-                                <Typography variant="caption" color="text.secondary">
-                                  {item.permissions}
                                 </Typography>
                               )}
                             </Box>
@@ -342,18 +386,23 @@ export default function FileExplorerDialog({
 
             {/* Info Box */}
             {multiSelect && selectedPaths.length > 0 && (
-              <Alert severity="info" sx={{ mt: 2 }}>
-                {selectedPaths.length} item(s) selected
-              </Alert>
+              <Box sx={{ px: 3, py: 2, bgcolor: 'primary.50', borderTop: 1, borderColor: 'divider' }}>
+                <Typography variant="body2" color="primary.main" fontWeight={600}>
+                  {selectedPaths.length} item{selectedPaths.length !== 1 ? 's' : ''} selected
+                </Typography>
+              </Box>
             )}
           </>
         )}
       </DialogContent>
 
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+      <DialogActions sx={{ px: 3, py: 2, borderTop: 1, borderColor: 'divider' }}>
+        <Button onClick={onClose} sx={{ color: 'text.secondary' }}>
+          Cancel
+        </Button>
+        <Box sx={{ flex: 1 }} />
         {selectMode === 'directories' && (
-          <Button onClick={handleSelectCurrent} variant="outlined">
+          <Button onClick={handleSelectCurrent} variant="outlined" sx={{ mr: 1 }}>
             Select Current Directory
           </Button>
         )}
@@ -361,6 +410,7 @@ export default function FileExplorerDialog({
           onClick={handleConfirm}
           variant="contained"
           disabled={selectedPaths.length === 0}
+          sx={{ minWidth: 120 }}
         >
           Select {multiSelect && selectedPaths.length > 0 ? `(${selectedPaths.length})` : ''}
         </Button>
