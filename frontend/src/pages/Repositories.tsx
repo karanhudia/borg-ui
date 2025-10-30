@@ -45,6 +45,8 @@ import { repositoriesAPI, sshKeysAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { useAppState } from '../context/AppContext'
 import { formatDateShort, formatBytes } from '../utils/dateUtils'
+import FileExplorerDialog from '../components/FileExplorerDialog'
+import { FolderOpen } from '@mui/icons-material'
 
 interface Repository {
   id: number
@@ -249,6 +251,9 @@ export default function Repositories() {
 
   const [newSourceDir, setNewSourceDir] = useState('')
   const [newExcludePattern, setNewExcludePattern] = useState('')
+  const [showPathExplorer, setShowPathExplorer] = useState(false)
+  const [showSourceDirExplorer, setShowSourceDirExplorer] = useState(false)
+  const [showExcludeExplorer, setShowExcludeExplorer] = useState(false)
 
   const [editForm, setEditForm] = useState({
     name: '',
@@ -852,15 +857,25 @@ export default function Repositories() {
                 </>
               )}
 
-              <TextField
-                label="Path"
-                value={createForm.path}
-                onChange={(e) => setCreateForm({ ...createForm, path: e.target.value })}
-                placeholder={createForm.repository_type === 'local' ? '/path/to/repository' : '/mnt/backup/repo'}
-                required
-                fullWidth
-                helperText="Any path is allowed. Directory will be created automatically."
-              />
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <TextField
+                  label="Path"
+                  value={createForm.path}
+                  onChange={(e) => setCreateForm({ ...createForm, path: e.target.value })}
+                  placeholder={createForm.repository_type === 'local' ? '/path/to/repository' : '/path/to/repository'}
+                  required
+                  fullWidth
+                  helperText="Any path is allowed. Directory will be created automatically."
+                />
+                <Button
+                  variant="outlined"
+                  onClick={() => setShowPathExplorer(true)}
+                  sx={{ minWidth: 'auto', px: 2 }}
+                  title="Browse filesystem"
+                >
+                  <FolderOpen />
+                </Button>
+              </Box>
 
               <FormControl fullWidth>
                 <InputLabel>Encryption</InputLabel>
@@ -955,6 +970,15 @@ export default function Repositories() {
                   <Button
                     variant="outlined"
                     size="small"
+                    onClick={() => setShowSourceDirExplorer(true)}
+                    sx={{ minWidth: 'auto' }}
+                    title="Browse directories"
+                  >
+                    <FolderOpen />
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
                     onClick={() => {
                       if (newSourceDir.trim()) {
                         setCreateForm({
@@ -1006,7 +1030,7 @@ export default function Repositories() {
                   <TextField
                     value={newExcludePattern}
                     onChange={(e) => setNewExcludePattern(e.target.value)}
-                    placeholder="*.log"
+                    placeholder="*.log or /path/to/exclude"
                     size="small"
                     fullWidth
                     onKeyPress={(e) => {
@@ -1022,6 +1046,15 @@ export default function Repositories() {
                       }
                     }}
                   />
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => setShowExcludeExplorer(true)}
+                    sx={{ minWidth: 'auto' }}
+                    title="Browse directories to exclude"
+                  >
+                    <FolderOpen />
+                  </Button>
                   <Button
                     variant="outlined"
                     size="small"
@@ -1683,6 +1716,84 @@ export default function Repositories() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* File Explorer Dialogs */}
+      <FileExplorerDialog
+        open={showPathExplorer}
+        onClose={() => setShowPathExplorer(false)}
+        onSelect={(paths) => {
+          if (paths.length > 0) {
+            setCreateForm({ ...createForm, path: paths[0] })
+          }
+        }}
+        title="Select Repository Path"
+        initialPath="/"
+        multiSelect={false}
+        connectionType={createForm.repository_type === 'local' ? 'local' : 'ssh'}
+        sshConfig={
+          createForm.repository_type !== 'local' && createForm.ssh_key_id
+            ? {
+                ssh_key_id: createForm.ssh_key_id,
+                host: createForm.host,
+                username: createForm.username,
+                port: createForm.port,
+              }
+            : undefined
+        }
+        selectMode="directories"
+      />
+
+      <FileExplorerDialog
+        open={showSourceDirExplorer}
+        onClose={() => setShowSourceDirExplorer(false)}
+        onSelect={(paths) => {
+          setCreateForm({
+            ...createForm,
+            source_directories: [...createForm.source_directories, ...paths],
+          })
+        }}
+        title="Select Source Directories"
+        initialPath="/"
+        multiSelect={true}
+        connectionType={createForm.repository_type === 'local' ? 'local' : 'ssh'}
+        sshConfig={
+          createForm.repository_type !== 'local' && createForm.ssh_key_id
+            ? {
+                ssh_key_id: createForm.ssh_key_id,
+                host: createForm.host,
+                username: createForm.username,
+                port: createForm.port,
+              }
+            : undefined
+        }
+        selectMode="directories"
+      />
+
+      <FileExplorerDialog
+        open={showExcludeExplorer}
+        onClose={() => setShowExcludeExplorer(false)}
+        onSelect={(paths) => {
+          setCreateForm({
+            ...createForm,
+            exclude_patterns: [...createForm.exclude_patterns, ...paths],
+          })
+        }}
+        title="Select Directories to Exclude"
+        initialPath="/"
+        multiSelect={true}
+        connectionType={createForm.repository_type === 'local' ? 'local' : 'ssh'}
+        sshConfig={
+          createForm.repository_type !== 'local' && createForm.ssh_key_id
+            ? {
+                ssh_key_id: createForm.ssh_key_id,
+                host: createForm.host,
+                username: createForm.username,
+                port: createForm.port,
+              }
+            : undefined
+        }
+        selectMode="both"
+      />
     </Box>
   )
 }
