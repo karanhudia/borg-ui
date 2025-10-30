@@ -28,7 +28,6 @@ import {
   Home,
   Search,
   Archive,
-  FolderOpen,
 } from 'lucide-react'
 import api from '../services/api'
 
