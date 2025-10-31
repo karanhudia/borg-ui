@@ -118,9 +118,10 @@ const Restore: React.FC = () => {
   const restoreMutation = useMutation({
     mutationFn: ({ repository, archive, destination }: { repository: string; archive: string; destination: string }) =>
       restoreAPI.startRestore(repository, archive, [], destination),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success('Restore job started!')
-      queryClient.invalidateQueries({ queryKey: ['restore-jobs'] })
+      // Force immediate refetch instead of just invalidating
+      await queryClient.refetchQueries({ queryKey: ['restore-jobs'] })
       setRestoreArchive(null)
       setDestination('')
     },
