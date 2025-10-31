@@ -129,7 +129,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         repositories: true,
         backups: true,
         archives: true,
-        restore: false, // Under development
+        restore: true,
         schedule: true,
         settings: true,
       }
@@ -143,7 +143,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       repositories: appState.hasSSHKey,
       backups: appState.hasSSHKey && appState.hasRepositories,
       archives: appState.hasSSHKey && appState.hasRepositories,
-      restore: false, // Under development
+      restore: appState.hasSSHKey && appState.hasRepositories && appState.hasArchives, // Requires archives to restore from
       schedule: appState.hasSSHKey && appState.hasRepositories, // Requires SSH key and repositories
       settings: true,
     }
@@ -151,11 +151,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Get reason why a tab is disabled
   const getTabDisabledReason = useCallback((tab: keyof TabEnablement): string | null => {
-    // Check for features under development first
-    if (tab === 'restore') {
-      return 'Under Development - Coming Soon'
-    }
-
     if (tabEnablement[tab]) {
       return null
     }
@@ -172,6 +167,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
         if (!appState.hasRepositories) {
           return 'Please create a repository first'
+        }
+        return null
+      case 'restore':
+        if (!appState.hasSSHKey) {
+          return 'Please generate or upload an SSH key first'
+        }
+        if (!appState.hasRepositories) {
+          return 'Please create a repository first'
+        }
+        if (!appState.hasArchives) {
+          return 'No archives available to restore from'
         }
         return null
       default:
