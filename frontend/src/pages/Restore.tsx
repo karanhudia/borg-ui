@@ -120,14 +120,14 @@ const Restore: React.FC = () => {
   const restoreMutation = useMutation({
     mutationFn: ({ repository, archive, destination }: { repository: string; archive: string; destination: string }) =>
       restoreAPI.startRestore(repository, archive, [], destination),
-    onSuccess: async () => {
+    onSuccess: () => {
       toast.success('Restore job started!')
-
-      // Immediately refetch to show the new job
-      await queryClient.refetchQueries({ queryKey: ['restore-jobs'] })
 
       setRestoreArchive(null)
       setDestination('')
+
+      // Refetch in background (don't await - let polling handle it)
+      queryClient.refetchQueries({ queryKey: ['restore-jobs'] })
     },
     onError: (error: any) => {
       toast.error(`Failed to start restore: ${error.response?.data?.detail || error.message}`)
