@@ -5,6 +5,7 @@ import structlog
 from typing import List, Optional
 import json
 from datetime import timezone
+import asyncio
 
 from app.database.models import User, Repository, RestoreJob
 from app.database.database import get_db
@@ -47,7 +48,6 @@ async def preview_restore(
 @router.post("/start")
 async def start_restore(
     restore_request: RestoreRequest,
-    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -64,14 +64,16 @@ async def start_restore(
         db.commit()
         db.refresh(restore_job)
 
-        # Execute restore in background
-        background_tasks.add_task(
-            restore_service.execute_restore,
-            restore_job.id,
-            restore_request.repository,
-            restore_request.archive,
-            restore_request.destination,
-            restore_request.paths
+        # Execute restore in background using asyncio.create_task
+        # This ensures the task runs independently and doesn't block the response
+        asyncio.create_task(
+            restore_service.execute_restore(
+                restore_job.id,
+                restore_request.repository,
+                restore_request.archive,
+                restore_request.destination,
+                restore_request.paths
+            )
         )
 
         logger.info("Restore job created", job_id=restore_job.id, user=current_user.username)
