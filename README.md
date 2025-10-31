@@ -609,17 +609,7 @@ See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for guidelines.
 
 ## License
 
-This project is licensed under the **GNU General Public License v3.0** - see the [LICENSE](LICENSE) file for details.
-
-**TL;DR**:
-- ✅ You can use, modify, and distribute this software freely
-- ✅ You can use it commercially (hosting, enterprise deployments, etc.)
-- ✅ Any modifications you distribute must also be open source under GPL-3.0
-- ❌ You cannot make a closed-source/proprietary version
-
-This ensures the software stays free and open for everyone. 🎉
-
-Copyright © 2025 Karan Hudia
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
 
 ---
 
