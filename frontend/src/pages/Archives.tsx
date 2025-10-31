@@ -542,6 +542,7 @@ const Archives: React.FC = () => {
                                 p: 1.5,
                                 borderRadius: 1,
                                 cursor: 'pointer',
+                                userSelect: 'none',
                                 backgroundColor: 'rgba(59, 130, 246, 0.1)',
                                 '&:hover': {
                                   backgroundColor: 'rgba(59, 130, 246, 0.2)',
@@ -567,6 +568,7 @@ const Archives: React.FC = () => {
                                 justifyContent: 'space-between',
                                 p: 1.5,
                                 borderRadius: 1,
+                                userSelect: 'none',
                                 backgroundColor: 'rgba(0, 0, 0, 0.02)',
                                 '&:hover': {
                                   backgroundColor: 'rgba(0, 0, 0, 0.05)',

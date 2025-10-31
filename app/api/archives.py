@@ -211,24 +211,33 @@ async def delete_archive(
             detail="Failed to delete archive"
         )
 
-@router.get("/{repository_path}/{archive_id}/download")
+@router.get("/download")
 async def download_file_from_archive(
-    repository_path: str,
-    archive_id: str,
+    repository: str,
+    archive: str,
     file_path: str,
-    token: str = None,
-    current_user: User = Depends(get_current_user),
+    token: str,
     db: Session = Depends(get_db)
 ):
     """Extract and download a specific file from an archive"""
-    try:
-        # Decode the repository path and add leading slash back if needed
-        from urllib.parse import unquote
-        repository = unquote(repository_path)
-        # Ensure repository path starts with / for absolute paths
-        if not repository.startswith('/') and not repository.startswith('ssh://'):
-            repository = '/' + repository
+    # Authenticate using token from query parameter
+    from app.core.security import verify_token
+    username = verify_token(token)
+    if not username:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token"
+        )
 
+    # Get user from database
+    current_user = db.query(User).filter(User.username == username).first()
+    if not current_user or not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or inactive"
+        )
+
+    try:
         # Get repository details for passphrase and remote_path
         repo = db.query(Repository).filter(Repository.path == repository).first()
         if not repo:
@@ -244,7 +253,7 @@ async def download_file_from_archive(
             # Extract the specific file using borg extract
             result = await borg.extract_archive(
                 repository,
-                archive_id,
+                archive,
                 [file_path],
                 temp_dir,
                 dry_run=False,
