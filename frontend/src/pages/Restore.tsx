@@ -120,8 +120,15 @@ const Restore: React.FC = () => {
       restoreAPI.startRestore(repository, archive, [], destination),
     onSuccess: () => {
       toast.success('Restore job started!')
-      // Trigger refetch immediately (don't await to avoid blocking UI)
-      queryClient.refetchQueries({ queryKey: ['restore-jobs'] })
+
+      // Invalidate and immediately refetch
+      queryClient.invalidateQueries({ queryKey: ['restore-jobs'] })
+
+      // Force a refetch after a short delay to ensure the job is visible
+      setTimeout(() => {
+        queryClient.refetchQueries({ queryKey: ['restore-jobs'] })
+      }, 100)
+
       setRestoreArchive(null)
       setDestination('')
     },
