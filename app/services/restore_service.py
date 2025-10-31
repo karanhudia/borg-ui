@@ -98,11 +98,13 @@ class RestoreService:
             stdout_lines = []
             stderr_lines = []
             last_update_time = datetime.now(timezone.utc)
+            seen_files = set()  # Track unique files
+            nfiles = 0
 
             # Read stderr for progress (borg writes progress to stderr)
             # Borg uses \r for progress updates, we need to read raw bytes and split on \r
             async def read_stderr():
-                nonlocal current_file, last_update_time
+                nonlocal current_file, last_update_time, nfiles
                 buffer = b''
 
                 while True:
@@ -153,9 +155,15 @@ class RestoreService:
                                             percent = float(parts[0].strip())
                                             current_file = parts[1].strip()
 
-                                            # Update job with percentage and file
+                                            # Count unique files
+                                            if current_file and current_file not in seen_files:
+                                                seen_files.add(current_file)
+                                                nfiles = len(seen_files)
+
+                                            # Update job with percentage, file, and count
                                             job.progress_percent = percent
                                             job.current_file = current_file
+                                            job.nfiles = nfiles
 
                                             # Commit every 2 seconds to reduce database load
                                             now = datetime.now(timezone.utc)
@@ -163,7 +171,7 @@ class RestoreService:
                                                 try:
                                                     db_session.commit()
                                                     last_update_time = now
-                                                    logger.info("Progress update", job_id=job_id, percent=percent, file=current_file[:50] if current_file else '')
+                                                    logger.info("Progress update", job_id=job_id, percent=percent, nfiles=nfiles, file=current_file[:50] if current_file else '')
                                                 except:
                                                     db_session.rollback()
                                         except ValueError:
