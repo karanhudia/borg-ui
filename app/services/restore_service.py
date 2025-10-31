@@ -100,45 +100,76 @@ class RestoreService:
             last_update_time = datetime.now(timezone.utc)
 
             # Read stderr for progress (borg writes progress to stderr)
+            # Borg uses \r for progress updates, we need to read raw bytes and split on \r
             async def read_stderr():
                 nonlocal current_file, last_update_time
-                async for line in process.stderr:
-                    line_text = line.decode().strip()
-                    stderr_lines.append(line_text)
+                buffer = b''
 
-                    # Debug: Log all stderr lines to see what we're getting
-                    logger.debug("Borg stderr", line=line_text, job_id=job_id)
+                while True:
+                    chunk = await process.stderr.read(8192)  # Read in chunks
+                    if not chunk:
+                        break
 
-                    # Parse progress from stderr
-                    # Format: "XX.X% Extracting: filepath" with progress updates
-                    try:
-                        if "% Extracting:" in line_text:
-                            # Extract percentage and file path
-                            parts = line_text.split("% Extracting:", 1)
-                            if len(parts) == 2:
-                                try:
-                                    percent = float(parts[0].strip())
-                                    current_file = parts[1].strip()
+                    buffer += chunk
 
-                                    # Update job with percentage and file
-                                    job.progress_percent = percent
-                                    job.current_file = current_file
+                    # Split on both \r and \n to handle progress updates
+                    while b'\r' in buffer or b'\n' in buffer:
+                        # Find the next separator
+                        r_pos = buffer.find(b'\r')
+                        n_pos = buffer.find(b'\n')
 
-                                    logger.info("Progress update", job_id=job_id, percent=percent, file=current_file[:50])
+                        # Use whichever comes first
+                        if r_pos == -1:
+                            pos = n_pos
+                            sep_len = 1
+                        elif n_pos == -1:
+                            pos = r_pos
+                            sep_len = 1
+                        else:
+                            pos = min(r_pos, n_pos)
+                            sep_len = 1
 
-                                    # Commit every 2 seconds to reduce database load
-                                    now = datetime.now(timezone.utc)
-                                    if (now - last_update_time).total_seconds() >= 2.0:
+                        if pos == -1:
+                            break
+
+                        line_bytes = buffer[:pos]
+                        buffer = buffer[pos + sep_len:]
+
+                        if not line_bytes:
+                            continue
+
+                        line_text = line_bytes.decode('utf-8', errors='replace').strip()
+                        if line_text:
+                            stderr_lines.append(line_text)
+
+                            # Parse progress from stderr
+                            # Format: "XX.X% Extracting: filepath" with progress updates
+                            try:
+                                if "% Extracting:" in line_text:
+                                    # Extract percentage and file path
+                                    parts = line_text.split("% Extracting:", 1)
+                                    if len(parts) == 2:
                                         try:
-                                            db_session.commit()
-                                            last_update_time = now
-                                            logger.info("Progress committed to database", job_id=job_id, percent=percent)
-                                        except:
-                                            db_session.rollback()
-                                except ValueError as ve:
-                                    logger.warning("Failed to parse percent", line=line_text, error=str(ve))
-                    except Exception as e:
-                        logger.error("Failed to parse progress line", line=line_text, error=str(e))
+                                            percent = float(parts[0].strip())
+                                            current_file = parts[1].strip()
+
+                                            # Update job with percentage and file
+                                            job.progress_percent = percent
+                                            job.current_file = current_file
+
+                                            # Commit every 2 seconds to reduce database load
+                                            now = datetime.now(timezone.utc)
+                                            if (now - last_update_time).total_seconds() >= 2.0:
+                                                try:
+                                                    db_session.commit()
+                                                    last_update_time = now
+                                                    logger.info("Progress update", job_id=job_id, percent=percent, file=current_file[:50] if current_file else '')
+                                                except:
+                                                    db_session.rollback()
+                                        except ValueError:
+                                            pass
+                            except Exception as e:
+                                logger.debug("Failed to parse progress line", line=line_text[:100], error=str(e))
 
             # Read stdout for any output
             async def read_stdout():
