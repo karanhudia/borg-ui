@@ -1,7 +1,7 @@
 # Borg Web UI
 
 [![Docker Hub](https://img.shields.io/docker/pulls/ainullcode/borg-ui)](https://hub.docker.com/r/ainullcode/borg-ui)
-[![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![GitHub Actions](https://github.com/karanhudia/borg-ui/workflows/Build%20and%20Publish%20Docker%20Images/badge.svg)](https://github.com/karanhudia/borg-ui/actions)
 
 A modern, user-friendly web interface for [Borg Backup](https://borgbackup.readthedocs.io/) management. **Zero-configuration deployment** - just run `docker compose up` and you're done!
@@ -609,22 +609,11 @@ See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for guidelines.
 
 ## License
 
-**Proprietary License - Copyright © 2025 Karan Hudia (ainullcode)**
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
-### ✅ You CAN:
-- Use this software for personal or commercial purposes
-- Submit pull requests with improvements
-- Report issues and bugs
-- Pull and use Docker images from Docker Hub
+**TL;DR**: You can freely use, modify, distribute, and even sell this software. Just keep the copyright notice. 🎉
 
-### ❌ You CANNOT:
-- Fork or copy this repository
-- Create derivative works
-- Redistribute the source code
-- Use the code in other projects
-- Remove copyright notices
-
-See the [LICENSE](LICENSE) file for complete terms.
+Copyright © 2025 Karan Hudia
 
 ---
 

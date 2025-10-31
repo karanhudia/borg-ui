@@ -178,22 +178,11 @@ Manage backups for multiple servers from a central web interface:
 
 ## License
 
-**Proprietary License - Copyright © 2025 Karan Hudia (ainullcode)**
+This project is licensed under the **MIT License** - see the [LICENSE](https://github.com/karanhudia/borg-ui/blob/main/LICENSE) file for details.
 
-### ✅ You CAN:
-- Use this software for personal or commercial purposes
-- Submit pull requests with improvements
-- Report issues and bugs
-- Pull and use Docker images from Docker Hub
+**TL;DR**: You can freely use, modify, distribute, and even sell this software. Just keep the copyright notice. 🎉
 
-### ❌ You CANNOT:
-- Fork or copy this repository
-- Create derivative works
-- Redistribute the source code
-- Use the code in other projects
-- Remove copyright notices
-
-See the [LICENSE](https://github.com/karanhudia/borg-ui/blob/main/LICENSE) file for complete terms.
+Copyright © 2025 Karan Hudia
 
 ---
 
