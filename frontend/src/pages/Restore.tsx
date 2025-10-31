@@ -112,6 +112,8 @@ const Restore: React.FC = () => {
     queryKey: ['restore-jobs'],
     queryFn: restoreAPI.getRestoreJobs,
     refetchInterval: 1000, // Poll every 1 second
+    staleTime: 0, // Always consider stale so refetchInterval works
+    cacheTime: 0, // Don't cache to ensure fresh data
   })
 
   // Restore mutation
