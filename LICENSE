@@ -1,72 +1,21 @@
-PROPRIETARY SOFTWARE LICENSE
+MIT License
 
-Copyright (c) 2025 Karan Hudia (ainullcode)
-All Rights Reserved.
+Copyright (c) 2025 Karan Hudia
 
-TERMS AND CONDITIONS
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-1. GRANT OF LICENSE
-   Subject to the terms and conditions of this License, you are granted a limited,
-   non-exclusive, non-transferable, revocable license to:
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-   a) USE the software for personal or commercial purposes
-   b) SUBMIT pull requests with proposed changes to the original repository
-   c) REPORT issues and bugs
-
-2. RESTRICTIONS
-   You are expressly PROHIBITED from:
-
-   a) Copying, forking, or creating derivative works of this software
-   b) Redistributing the software or its source code in any form
-   c) Using the software's code in other projects
-   d) Removing or modifying copyright notices
-   e) Claiming authorship or ownership of the software
-   f) Creating competing products based on this software
-
-3. CONTRIBUTIONS
-   By submitting a pull request to this project:
-
-   a) You grant the copyright holder a perpetual, worldwide, non-exclusive,
-      royalty-free, irrevocable license to use, modify, and distribute your
-      contributions
-   b) You represent that you are legally entitled to grant the above license
-   c) You agree that your contributions become part of the project under this
-      proprietary license
-
-4. DOCKER IMAGES
-   Pre-built Docker images (ainullcode/borg-ui) are provided for convenience:
-
-   a) You may pull and use these images according to section 1
-   b) You may NOT extract, decompile, or reverse-engineer the images
-   c) You may NOT redistribute or host these images elsewhere
-
-5. NO WARRANTY
-   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-   THE SOFTWARE.
-
-6. TERMINATION
-   This license is effective until terminated. Your rights under this license
-   will terminate automatically without notice if you fail to comply with any
-   term of this license.
-
-7. GOVERNING LAW
-   This license shall be governed by and construed in accordance with the laws
-   of the jurisdiction in which the copyright holder resides.
-
-8. CONTACT
-   For licensing inquiries, permissions, or questions:
-   GitHub: https://github.com/karanhudia
-   Docker Hub: https://hub.docker.com/u/ainullcode
-
----
-
-SUMMARY (Not legally binding - see full terms above):
-✅ You CAN: Use the software, submit pull requests, report issues
-❌ You CANNOT: Fork, copy, redistribute, or create derivative works
-
-For commercial licensing or special permissions, contact the author.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
