@@ -109,6 +109,10 @@ export const archivesAPI = {
 }
 
 export const restoreAPI = {
+  getRepositories: () => api.get('/restore/repositories'),
+  getArchives: (repositoryId: number) => api.get(`/restore/archives/${repositoryId}`),
+  getContents: (repositoryId: number, archiveName: string, path: string = '') =>
+    api.get(`/restore/contents/${repositoryId}/${archiveName}`, { params: { path } }),
   previewRestore: (repository: string, archive: string, paths: string[]) =>
     api.post('/restore/preview', { repository, archive, paths }),
   startRestore: (repository: string, archive: string, paths: string[], destination: string) =>

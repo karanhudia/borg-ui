@@ -8,6 +8,7 @@ import {
   Button,
   TextField,
   InputAdornment,
+  IconButton,
   List,
   ListItem,
   ListItemButton,
@@ -28,6 +29,7 @@ import {
 import {
   Search,
   Folder,
+  FolderOpen,
   File,
   HardDrive,
   Calendar,
@@ -38,56 +40,74 @@ import {
   Play,
   MapPin,
 } from 'lucide-react'
-import { restoreAPI, archivesAPI } from '../services/api'
+import { restoreAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { formatDate } from '../utils/dateUtils'
+import FileExplorerDialog from '../components/FileExplorerDialog'
+
+interface Repository {
+  id: number
+  name: string
+  path: string
+  repository_type: string
+}
 
 interface Archive {
   id: string
   name: string
   timestamp: string
-  size: string
-  file_count: number
-  repository: string
 }
 
 interface ArchiveFile {
   name: string
   type: 'file' | 'directory'
-  size?: string
+  size?: number
   path: string
   selected?: boolean
 }
 
 const Restore: React.FC = () => {
-  const [selectedRepository, setSelectedRepository] = useState<string>('')
+  const [selectedRepository, setSelectedRepository] = useState<Repository | null>(null)
   const [selectedArchive, setSelectedArchive] = useState<string>('')
   const [selectedFiles, setSelectedFiles] = useState<string[]>([])
   const [destinationPath, setDestinationPath] = useState<string>('')
   const [currentPath, setCurrentPath] = useState<string>('')
   const [searchQuery, setSearchQuery] = useState('')
   const [showPreview, setShowPreview] = useState(false)
+  const [showDestinationExplorer, setShowDestinationExplorer] = useState(false)
   const [restoreJobId, setRestoreJobId] = useState<string | null>(null)
   const queryClient = useQueryClient()
 
+  // Get repositories
+  const { data: repositoriesData, isLoading: loadingRepositories } = useQuery({
+    queryKey: ['restore-repositories'],
+    queryFn: () => restoreAPI.getRepositories()
+  })
+
+  const repositories = repositoriesData?.data?.repositories || []
+
   // Get archives for selected repository
-  const { data: archives, isLoading: loadingArchives } = useQuery({
-    queryKey: ['restore-archives', selectedRepository],
-    queryFn: () => archivesAPI.listArchives(selectedRepository),
+  const { data: archivesData, isLoading: loadingArchives } = useQuery({
+    queryKey: ['restore-archives', selectedRepository?.id],
+    queryFn: () => restoreAPI.getArchives(selectedRepository!.id),
     enabled: !!selectedRepository
   })
 
+  const archives = archivesData?.data?.archives || []
+
   // Get archive contents
-  const { data: archiveContents, isLoading: loadingContents } = useQuery({
-    queryKey: ['restore-contents', selectedRepository, selectedArchive, currentPath],
-    queryFn: () => archivesAPI.listContents(selectedRepository, selectedArchive, currentPath),
+  const { data: archiveContentsData, isLoading: loadingContents } = useQuery({
+    queryKey: ['restore-contents', selectedRepository?.id, selectedArchive, currentPath],
+    queryFn: () => restoreAPI.getContents(selectedRepository!.id, selectedArchive, currentPath),
     enabled: !!selectedRepository && !!selectedArchive
   })
+
+  const archiveContents = archiveContentsData?.data?.items || []
 
   // Preview restore mutation
   const previewMutation = useMutation({
     mutationFn: (paths: string[]) =>
-      restoreAPI.previewRestore(selectedRepository, selectedArchive, paths),
+      restoreAPI.previewRestore(selectedRepository!.path, selectedArchive, paths),
     onSuccess: () => {
       setShowPreview(true)
       toast.success('Restore preview generated!')
@@ -100,10 +120,10 @@ const Restore: React.FC = () => {
   // Start restore mutation
   const startRestoreMutation = useMutation({
     mutationFn: ({ paths, destination }: { paths: string[]; destination: string }) =>
-      restoreAPI.startRestore(selectedRepository, selectedArchive, paths, destination),
+      restoreAPI.startRestore(selectedRepository!.path, selectedArchive, paths, destination),
     onSuccess: (data: any) => {
       setRestoreJobId(data.data?.job_id)
-      toast.success('Restore job started successfully!')
+      toast.success('Restore completed successfully!')
       queryClient.invalidateQueries({ queryKey: ['restore-status'] })
     },
     onError: (error: any) => {
@@ -112,7 +132,7 @@ const Restore: React.FC = () => {
   })
 
   // Handle repository selection
-  const handleRepositorySelect = (repository: string) => {
+  const handleRepositorySelect = (repository: Repository) => {
     setSelectedRepository(repository)
     setSelectedArchive('')
     setSelectedFiles([])
@@ -183,26 +203,26 @@ const Restore: React.FC = () => {
   }
 
   // Filter archives based on search
-  const filteredArchives = archives?.data?.filter((archive: Archive) =>
+  const filteredArchives = archives.filter((archive: Archive) =>
     archive.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    archive.timestamp.includes(searchQuery)
-  ) || []
+    (archive.timestamp && archive.timestamp.includes(searchQuery))
+  )
 
   // Format file size
-  const formatFileSize = (size?: string) => {
-    if (!size) return 'Unknown'
-    return size
+  const formatFileSize = (size?: number) => {
+    if (!size) return ''
+    const units = ['B', 'KB', 'MB', 'GB', 'TB']
+    let formattedSize = size
+    let unitIndex = 0
+    while (formattedSize >= 1024 && unitIndex < units.length - 1) {
+      formattedSize /= 1024
+      unitIndex++
+    }
+    return `${formattedSize.toFixed(1)} ${units[unitIndex]}`
   }
 
   // Get breadcrumb parts
   const breadcrumbParts = currentPath ? ['root', ...currentPath.split('/')] : ['root']
-
-  // Mock repositories for now
-  const mockRepositories = [
-    { id: 'repo1', name: 'Default Repository', path: '/backups/default' },
-    { id: 'repo2', name: 'Documents Backup', path: '/backups/documents' },
-    { id: 'repo3', name: 'System Backup', path: '/backups/system' }
-  ]
 
   return (
     <Box>
@@ -235,32 +255,48 @@ const Restore: React.FC = () => {
                 <Typography variant="h6" fontWeight={600} gutterBottom>
                   Repository
                 </Typography>
-                <List>
-                  {mockRepositories.map((repo) => (
-                    <ListItem key={repo.id} disablePadding sx={{ mb: 1 }}>
-                      <ListItemButton
-                        selected={selectedRepository === repo.id}
-                        onClick={() => handleRepositorySelect(repo.id)}
-                        sx={{
-                          borderRadius: 1,
-                          '&.Mui-selected': {
-                            backgroundColor: 'primary.lighter',
-                          },
-                        }}
-                      >
-                        <ListItemIcon>
-                          <HardDrive size={20} />
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={repo.name}
-                          secondary={repo.path}
-                          primaryTypographyProps={{ fontWeight: 500, fontSize: '0.875rem' }}
-                          secondaryTypographyProps={{ fontSize: '0.75rem' }}
-                        />
-                      </ListItemButton>
-                    </ListItem>
-                  ))}
-                </List>
+                {loadingRepositories ? (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
+                    <CircularProgress size={32} />
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                      Loading repositories...
+                    </Typography>
+                  </Box>
+                ) : repositories.length === 0 ? (
+                  <Box sx={{ textAlign: 'center', py: 4 }}>
+                    <HardDrive size={32} color="rgba(0,0,0,0.3)" style={{ marginBottom: 8 }} />
+                    <Typography variant="caption" color="text.secondary">
+                      No repositories found
+                    </Typography>
+                  </Box>
+                ) : (
+                  <List>
+                    {repositories.map((repo: Repository) => (
+                      <ListItem key={repo.id} disablePadding sx={{ mb: 1 }}>
+                        <ListItemButton
+                          selected={selectedRepository?.id === repo.id}
+                          onClick={() => handleRepositorySelect(repo)}
+                          sx={{
+                            borderRadius: 1,
+                            '&.Mui-selected': {
+                              backgroundColor: 'primary.lighter',
+                            },
+                          }}
+                        >
+                          <ListItemIcon>
+                            <HardDrive size={20} />
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={repo.name}
+                            secondary={repo.path}
+                            primaryTypographyProps={{ fontWeight: 500, fontSize: '0.875rem' }}
+                            secondaryTypographyProps={{ fontSize: '0.75rem' }}
+                          />
+                        </ListItemButton>
+                      </ListItem>
+                    ))}
+                  </List>
+                )}
               </CardContent>
             </Card>
 
@@ -399,9 +435,8 @@ const Restore: React.FC = () => {
                     </Box>
                   ) : (
                     <List>
-                      {archiveContents?.data?.map((item: ArchiveFile, index: number) => {
-                        const fullPath = currentPath ? `${currentPath}/${item.name}` : item.name
-                        const isSelected = selectedFiles.includes(fullPath)
+                      {archiveContents.map((item: ArchiveFile, index: number) => {
+                        const isSelected = selectedFiles.includes(item.path)
 
                         return (
                           <ListItem
@@ -417,7 +452,7 @@ const Restore: React.FC = () => {
                           >
                             <Checkbox
                               checked={isSelected}
-                              onChange={() => handleFileSelect(fullPath)}
+                              onChange={() => handleFileSelect(item.path)}
                               sx={{ mr: 1 }}
                             />
                             <ListItemButton onClick={() => handleItemClick(item)} disabled={item.type !== 'directory'} sx={{ borderRadius: 1 }}>
@@ -489,6 +524,18 @@ const Restore: React.FC = () => {
                     startAdornment: (
                       <InputAdornment position="start">
                         <MapPin size={18} />
+                      </InputAdornment>
+                    ),
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          onClick={() => setShowDestinationExplorer(true)}
+                          edge="end"
+                          size="small"
+                          title="Browse filesystem"
+                        >
+                          <FolderOpen size={18} />
+                        </IconButton>
                       </InputAdornment>
                     ),
                   }}
@@ -590,6 +637,22 @@ const Restore: React.FC = () => {
           <Typography variant="body2">Check the Backup page to monitor progress</Typography>
         </Alert>
       )}
+
+      {/* File Explorer Dialog */}
+      <FileExplorerDialog
+        open={showDestinationExplorer}
+        onClose={() => setShowDestinationExplorer(false)}
+        onSelect={(paths) => {
+          if (paths.length > 0) {
+            setDestinationPath(paths[0])
+          }
+        }}
+        title="Select Destination Directory"
+        initialPath="/"
+        multiSelect={false}
+        connectionType="local"
+        selectMode="directories"
+      />
     </Box>
   )
 }
