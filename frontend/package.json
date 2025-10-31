@@ -2,7 +2,7 @@
   "name": "borg-web-ui-frontend",
   "version": "1.0.0",
   "description": "React frontend for Borg Web UI",
-  "license": "MIT",
+  "license": "GPL-3.0",
   "private": true,
   "dependencies": {
     "@emotion/react": "^11.14.0",
