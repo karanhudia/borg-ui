@@ -221,7 +221,7 @@ const Restore: React.FC = () => {
     }
   }
 
-  const runningJobs = restoreJobsData?.data?.jobs?.filter((job: RestoreJob) => job.status === 'running') || []
+  const runningJobs = restoreJobsData?.data?.jobs?.filter((job: RestoreJob) => job.status === 'running' || job.status === 'pending') || []
   const recentJobs = restoreJobsData?.data?.jobs?.slice(0, 10) || []
 
   return (
@@ -362,10 +362,10 @@ const Restore: React.FC = () => {
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography variant="h6" fontWeight={600} gutterBottom>
-              Running Restores
+              Active Restores
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Currently active restore operations
+              Pending and running restore operations
             </Typography>
 
             <Stack spacing={3}>
