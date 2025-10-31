@@ -211,9 +211,9 @@ async def delete_archive(
             detail="Failed to delete archive"
         )
 
-@router.get("/{archive_id}/download")
+@router.get("/{repository_path}/{archive_id}/download")
 async def download_file_from_archive(
-    repository: str,
+    repository_path: str,
     archive_id: str,
     file_path: str,
     token: str = None,
@@ -222,6 +222,10 @@ async def download_file_from_archive(
 ):
     """Extract and download a specific file from an archive"""
     try:
+        # Decode the repository path
+        from urllib.parse import unquote
+        repository = unquote(repository_path)
+
         # Get repository details for passphrase and remote_path
         repo = db.query(Repository).filter(Repository.path == repository).first()
         if not repo:
