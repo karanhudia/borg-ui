@@ -25,7 +25,7 @@ import {
   Home,
   FileText,
   Archive,
-  RotateCcw,
+  Download,
   Clock,
   Menu,
   Database,
@@ -46,7 +46,7 @@ const navigationWithKeys = [
   { name: 'Repositories', href: '/repositories', icon: Database, key: 'repositories' as const },
   { name: 'Backup', href: '/backup', icon: FileText, key: 'backups' as const },
   { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },
-  { name: 'Restore', href: '/restore', icon: RotateCcw, key: 'restore' as const },
+  { name: 'Restore', href: '/restore', icon: Download, key: 'restore' as const },
   { name: 'Schedule', href: '/schedule', icon: Clock, key: 'schedule' as const },
 ]
 

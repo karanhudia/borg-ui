@@ -222,9 +222,12 @@ async def download_file_from_archive(
 ):
     """Extract and download a specific file from an archive"""
     try:
-        # Decode the repository path
+        # Decode the repository path and add leading slash back if needed
         from urllib.parse import unquote
         repository = unquote(repository_path)
+        # Ensure repository path starts with / for absolute paths
+        if not repository.startswith('/') and not repository.startswith('ssh://'):
+            repository = '/' + repository
 
         # Get repository details for passphrase and remote_path
         repo = db.query(Repository).filter(Repository.path == repository).first()
