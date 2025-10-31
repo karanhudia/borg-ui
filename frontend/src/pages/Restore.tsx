@@ -120,36 +120,11 @@ const Restore: React.FC = () => {
   const restoreMutation = useMutation({
     mutationFn: ({ repository, archive, destination }: { repository: string; archive: string; destination: string }) =>
       restoreAPI.startRestore(repository, archive, [], destination),
-    onSuccess: (response) => {
+    onSuccess: async () => {
       toast.success('Restore job started!')
 
-      // Optimistically add the new job to the cache
-      const newJob: RestoreJob = {
-        id: response.data.job_id,
-        repository: selectedRepository,
-        archive: restoreArchive?.name || '',
-        destination: destination,
-        status: 'pending',
-        started_at: new Date().toISOString(),
-        progress: 0,
-        progress_details: {
-          nfiles: 0,
-          current_file: '',
-          progress_percent: 0,
-        }
-      }
-
-      // Update the cache optimistically
-      queryClient.setQueryData(['restore-jobs'], (old: any) => {
-        if (!old?.data?.jobs) return old
-        return {
-          ...old,
-          data: {
-            ...old.data,
-            jobs: [newJob, ...old.data.jobs]
-          }
-        }
-      })
+      // Immediately refetch to show the new job
+      await queryClient.refetchQueries({ queryKey: ['restore-jobs'] })
 
       setRestoreArchive(null)
       setDestination('')
