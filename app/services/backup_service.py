@@ -294,9 +294,10 @@ class BackupService:
             ]
             env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
 
-            # Look up repository record to get passphrase, source directories, and exclude patterns
+            # Look up repository record to get passphrase, source directories, exclude patterns, and compression
             source_paths = ["/data"]  # Default backup path
             exclude_patterns = []  # Default no exclusions
+            compression = "lz4"  # Default compression
             try:
                 repo_record = db.query(Repository).filter(Repository.path == repository).first()
                 if repo_record:
@@ -304,6 +305,11 @@ class BackupService:
                     if repo_record.passphrase:
                         env['BORG_PASSPHRASE'] = repo_record.passphrase
                         logger.info("Using passphrase from repository record", repository=repository)
+
+                    # Get compression setting from repository
+                    if repo_record.compression:
+                        compression = repo_record.compression
+                        logger.info("Using compression from repository", repository=repository, compression=compression)
 
                     # Parse source directories from JSON if available
                     if repo_record.source_directories:
@@ -357,7 +363,7 @@ class BackupService:
                 # "--list",  # REMOVED: Generates massive output, not needed for progress tracking
                 "--show-rc",  # Show return code for better debugging
                 "--log-json",  # Structured JSON logging
-                "--compression", "lz4",
+                "--compression", compression,
             ]
 
             # Add exclude patterns

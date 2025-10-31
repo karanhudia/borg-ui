@@ -117,6 +117,8 @@ export const restoreAPI = {
     api.post('/restore/preview', { repository, archive, paths }),
   startRestore: (repository: string, archive: string, paths: string[], destination: string) =>
     api.post('/restore/start', { repository, archive, paths, destination }),
+  getRestoreJobs: () => api.get('/restore/jobs'),
+  getRestoreStatus: (jobId: number) => api.get(`/restore/status/${jobId}`),
 }
 export const settingsAPI = {
   // System settings
