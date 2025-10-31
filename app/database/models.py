@@ -131,6 +131,27 @@ class BackupJob(Base):
 
     created_at = Column(DateTime, default=utc_now)
 
+class RestoreJob(Base):
+    __tablename__ = "restore_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    repository = Column(String)  # Repository path
+    archive = Column(String)  # Archive name
+    destination = Column(String)  # Restore destination path
+    status = Column(String, default="pending")  # pending, running, completed, failed, cancelled
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    progress = Column(Integer, default=0)
+    error_message = Column(Text, nullable=True)
+    logs = Column(Text, nullable=True)  # Full logs (stored after completion)
+
+    # Progress tracking fields
+    nfiles = Column(Integer, default=0)  # Number of files restored
+    current_file = Column(Text, nullable=True)  # Current file being restored
+    progress_percent = Column(Float, default=0.0)  # Progress percentage
+
+    created_at = Column(DateTime, default=utc_now)
+
 class ScheduledJob(Base):
     __tablename__ = "scheduled_jobs"
 

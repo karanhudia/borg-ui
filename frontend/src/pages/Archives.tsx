@@ -17,6 +17,7 @@ import {
   Select,
   MenuItem,
   FormControl,
+  InputLabel,
 } from '@mui/material'
 import {
   Trash2,
@@ -208,34 +209,44 @@ const Archives: React.FC = () => {
       </Box>
 
       {/* Repository Selector */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-          Select Repository
-        </Typography>
-        <FormControl fullWidth>
-          <Select
-            value={selectedRepositoryId || ''}
-            onChange={(e) => handleRepositoryChange(e.target.value as number)}
-            displayEmpty
-            disabled={loadingRepositories || repositories.length === 0}
-            sx={{
-              backgroundColor: 'background.paper',
-              '& .MuiOutlinedInput-notchedOutline': {
-                borderColor: 'divider',
-              },
-            }}
-          >
-            <MenuItem value="" disabled>
-              {loadingRepositories ? 'Loading repositories...' : 'Select a repository'}
-            </MenuItem>
-            {repositories.map((repo: Repository) => (
-              <MenuItem key={repo.id} value={repo.id}>
-                {repo.name}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+            <Database size={20} color="#2e7d32" />
+            <Typography variant="h6" fontWeight={600}>
+              Select Repository
+            </Typography>
+          </Stack>
+          <FormControl fullWidth sx={{ minWidth: { xs: '100%', sm: 300 } }}>
+            <InputLabel id="repository-select-label">Repository</InputLabel>
+            <Select
+              labelId="repository-select-label"
+              value={selectedRepositoryId || ''}
+              onChange={(e) => handleRepositoryChange(e.target.value as number)}
+              label="Repository"
+              disabled={loadingRepositories}
+              sx={{ height: { xs: 48, sm: 56 } }}
+            >
+              <MenuItem value="" disabled>
+                {loadingRepositories ? 'Loading repositories...' : 'Select a repository...'}
               </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      </Box>
+              {repositories.map((repo: Repository) => (
+                <MenuItem key={repo.id} value={repo.id}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Database size={16} />
+                    <Box>
+                      <Typography variant="body2" fontWeight={500}>{repo.name}</Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                        {repo.path}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </CardContent>
+      </Card>
 
       {/* Repository Statistics */}
       {selectedRepositoryId && repoInfo?.data?.info?.cache?.stats && (

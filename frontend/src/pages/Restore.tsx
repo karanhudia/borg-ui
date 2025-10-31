@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import {
   Box,
@@ -6,125 +6,123 @@ import {
   CardContent,
   Typography,
   Button,
-  TextField,
-  InputAdornment,
-  IconButton,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Checkbox,
   CircularProgress,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Breadcrumbs,
-  Link,
   Stack,
   Alert,
-  AlertTitle,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Chip,
 } from '@mui/material'
 import {
-  Search,
-  Folder,
-  FolderOpen,
-  File,
-  HardDrive,
-  Calendar,
-  Eye,
-  ChevronRight,
+  Download,
+  Database,
+  Archive as ArchiveIcon,
   RefreshCw,
   CheckCircle,
-  Play,
-  MapPin,
+  AlertCircle,
+  Clock,
 } from 'lucide-react'
-import { restoreAPI } from '../services/api'
+import { restoreAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
-import { formatDate } from '../utils/dateUtils'
-import FileExplorerDialog from '../components/FileExplorerDialog'
+import { formatDate, formatBytes as formatBytesUtil, formatTimeRange } from '../utils/dateUtils'
+import RepositoryInfo from '../components/RepositoryInfo'
+import PathSelectorField from '../components/PathSelectorField'
 
 interface Repository {
   id: number
   name: string
   path: string
-  repository_type: string
+  repository_type: 'local' | 'ssh'
 }
 
 interface Archive {
   id: string
+  archive: string
   name: string
-  timestamp: string
+  start: string
+  time: string
 }
 
-interface ArchiveFile {
-  name: string
-  type: 'file' | 'directory'
-  size?: number
-  path: string
-  selected?: boolean
+interface RestoreJob {
+  id: number
+  repository: string
+  archive: string
+  destination: string
+  status: string
+  started_at?: string
+  completed_at?: string
+  progress: number
+  error_message?: string
+  progress_details?: {
+    nfiles: number
+    current_file: string
+    progress_percent: number
+  }
 }
 
 const Restore: React.FC = () => {
-  const [selectedRepository, setSelectedRepository] = useState<Repository | null>(null)
-  const [selectedArchive, setSelectedArchive] = useState<string>('')
-  const [selectedFiles, setSelectedFiles] = useState<string[]>([])
-  const [destinationPath, setDestinationPath] = useState<string>('')
-  const [currentPath, setCurrentPath] = useState<string>('')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [showPreview, setShowPreview] = useState(false)
-  const [showDestinationExplorer, setShowDestinationExplorer] = useState(false)
-  const [restoreJobId, setRestoreJobId] = useState<string | null>(null)
+  const [selectedRepository, setSelectedRepository] = useState<string>('')
+  const [selectedRepoData, setSelectedRepoData] = useState<Repository | null>(null)
+  const [restoreArchive, setRestoreArchive] = useState<Archive | null>(null)
+  const [destination, setDestination] = useState<string>('')
   const queryClient = useQueryClient()
 
-  // Get repositories
+  // Get repositories list
   const { data: repositoriesData, isLoading: loadingRepositories } = useQuery({
-    queryKey: ['restore-repositories'],
-    queryFn: () => restoreAPI.getRepositories()
+    queryKey: ['repositories'],
+    queryFn: repositoriesAPI.getRepositories,
   })
-
-  const repositories = repositoriesData?.data?.repositories || []
 
   // Get archives for selected repository
-  const { data: archivesData, isLoading: loadingArchives } = useQuery({
-    queryKey: ['restore-archives', selectedRepository?.id],
-    queryFn: () => restoreAPI.getArchives(selectedRepository!.id),
-    enabled: !!selectedRepository
+  const { data: archives, isLoading: loadingArchives } = useQuery({
+    queryKey: ['repository-archives', selectedRepoData?.id],
+    queryFn: () => repositoriesAPI.listRepositoryArchives(selectedRepoData!.id),
+    enabled: !!selectedRepoData?.id
   })
 
-  const archives = archivesData?.data?.archives || []
-
-  // Get archive contents
-  const { data: archiveContentsData, isLoading: loadingContents } = useQuery({
-    queryKey: ['restore-contents', selectedRepository?.id, selectedArchive, currentPath],
-    queryFn: () => restoreAPI.getContents(selectedRepository!.id, selectedArchive, currentPath),
-    enabled: !!selectedRepository && !!selectedArchive
+  // Get repository info for statistics
+  const { data: repoInfo } = useQuery({
+    queryKey: ['repository-info', selectedRepoData?.id],
+    queryFn: () => repositoriesAPI.getRepositoryInfo(selectedRepoData!.id),
+    enabled: !!selectedRepoData?.id
   })
 
-  const archiveContents = archiveContentsData?.data?.items || []
+  // Get archive-specific info
+  const { data: archiveInfo, isLoading: loadingArchiveInfo } = useQuery({
+    queryKey: ['archive-info', selectedRepoData?.id, restoreArchive?.name],
+    queryFn: () => repositoriesAPI.getArchiveInfo(selectedRepoData!.id, restoreArchive!.name),
+    enabled: !!selectedRepoData && !!restoreArchive
+  })
 
-  // Preview restore mutation
-  const previewMutation = useMutation({
-    mutationFn: (paths: string[]) =>
-      restoreAPI.previewRestore(selectedRepository!.path, selectedArchive, paths),
+  // Get restore jobs with polling
+  const { data: restoreJobsData } = useQuery({
+    queryKey: ['restore-jobs'],
+    queryFn: restoreAPI.getRestoreJobs,
+    refetchInterval: 1000, // Poll every 1 second
+  })
+
+  // Restore mutation
+  const restoreMutation = useMutation({
+    mutationFn: ({ repository, archive, destination }: { repository: string; archive: string; destination: string }) =>
+      restoreAPI.startRestore(repository, archive, [], destination),
     onSuccess: () => {
-      setShowPreview(true)
-      toast.success('Restore preview generated!')
-    },
-    onError: (error: any) => {
-      toast.error(`Failed to generate preview: ${error.response?.data?.detail || error.message}`)
-    }
-  })
-
-  // Start restore mutation
-  const startRestoreMutation = useMutation({
-    mutationFn: ({ paths, destination }: { paths: string[]; destination: string }) =>
-      restoreAPI.startRestore(selectedRepository!.path, selectedArchive, paths, destination),
-    onSuccess: (data: any) => {
-      setRestoreJobId(data.data?.job_id)
-      toast.success('Restore completed successfully!')
-      queryClient.invalidateQueries({ queryKey: ['restore-status'] })
+      toast.success('Restore job started!')
+      queryClient.invalidateQueries({ queryKey: ['restore-jobs'] })
+      setRestoreArchive(null)
+      setDestination('')
     },
     onError: (error: any) => {
       toast.error(`Failed to start restore: ${error.response?.data?.detail || error.message}`)
@@ -132,527 +130,461 @@ const Restore: React.FC = () => {
   })
 
   // Handle repository selection
-  const handleRepositorySelect = (repository: Repository) => {
-    setSelectedRepository(repository)
-    setSelectedArchive('')
-    setSelectedFiles([])
-    setCurrentPath('')
-    setShowPreview(false)
-    setRestoreJobId(null)
+  const handleRepositoryChange = (repoPath: string) => {
+    setSelectedRepository(repoPath)
+    const repo = repositories.find((r: Repository) => r.path === repoPath)
+    setSelectedRepoData(repo || null)
   }
 
-  // Handle archive selection
-  const handleArchiveSelect = (archive: string) => {
-    setSelectedArchive(archive)
-    setSelectedFiles([])
-    setCurrentPath('')
-    setShowPreview(false)
-    setRestoreJobId(null)
-  }
-
-  // Handle file/folder selection
-  const handleFileSelect = (filePath: string) => {
-    setSelectedFiles(prev => {
-      if (prev.includes(filePath)) {
-        return prev.filter(path => path !== filePath)
-      } else {
-        return [...prev, filePath]
-      }
-    })
-  }
-
-  // Handle file/folder click
-  const handleItemClick = (item: ArchiveFile) => {
-    if (item.type === 'directory') {
-      const newPath = currentPath ? `${currentPath}/${item.name}` : item.name
-      setCurrentPath(newPath)
-    }
-  }
-
-  // Handle navigation breadcrumb
-  const handleBreadcrumbClick = (index: number) => {
-    if (index === 0) {
-      setCurrentPath('')
-    } else {
-      const pathParts = currentPath.split('/')
-      const newPath = pathParts.slice(0, index).join('/')
-      setCurrentPath(newPath)
-    }
-  }
-
-  // Handle preview restore
-  const handlePreviewRestore = () => {
-    if (selectedFiles.length === 0) {
-      toast.error('Please select files to restore')
+  // Handle restore
+  const handleRestore = () => {
+    if (!destination) {
+      toast.error('Please select a destination path')
       return
     }
-    previewMutation.mutate(selectedFiles)
+    if (selectedRepository && restoreArchive) {
+      restoreMutation.mutate({
+        repository: selectedRepository,
+        archive: restoreArchive.name,
+        destination
+      })
+    }
   }
 
-  // Handle start restore
-  const handleStartRestore = () => {
-    if (selectedFiles.length === 0) {
-      toast.error('Please select files to restore')
-      return
+  // Get repositories from API response
+  const repositories = repositoriesData?.data?.repositories || []
+  const archivesList = (archives?.data?.archives || []).sort((a: Archive, b: Archive) => {
+    return new Date(b.start).getTime() - new Date(a.start).getTime()
+  })
+
+  // Get archive statistics
+  const archiveStats = useMemo(() => {
+    if (!archiveInfo?.data?.archive?.stats) return null
+    return archiveInfo.data.archive.stats
+  }, [archiveInfo])
+
+  // Get status color for Chip
+  const getStatusColor = (status: string): 'info' | 'success' | 'error' | 'default' => {
+    switch (status) {
+      case 'running':
+        return 'info'
+      case 'completed':
+        return 'success'
+      case 'failed':
+        return 'error'
+      case 'cancelled':
+        return 'default'
+      default:
+        return 'default'
     }
-    if (!destinationPath.trim()) {
-      toast.error('Please specify a destination path')
-      return
-    }
-    startRestoreMutation.mutate({ paths: selectedFiles, destination: destinationPath })
   }
 
-  // Filter archives based on search
-  const filteredArchives = archives.filter((archive: Archive) =>
-    archive.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (archive.timestamp && archive.timestamp.includes(searchQuery))
-  )
-
-  // Format file size
-  const formatFileSize = (size?: number) => {
-    if (!size) return ''
-    const units = ['B', 'KB', 'MB', 'GB', 'TB']
-    let formattedSize = size
-    let unitIndex = 0
-    while (formattedSize >= 1024 && unitIndex < units.length - 1) {
-      formattedSize /= 1024
-      unitIndex++
+  // Get status icon
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'running':
+        return <RefreshCw size={18} className="animate-spin" />
+      case 'completed':
+        return <CheckCircle size={18} />
+      case 'failed':
+        return <AlertCircle size={18} />
+      default:
+        return <Clock size={18} />
     }
-    return `${formattedSize.toFixed(1)} ${units[unitIndex]}`
   }
 
-  // Get breadcrumb parts
-  const breadcrumbParts = currentPath ? ['root', ...currentPath.split('/')] : ['root']
+  const runningJobs = restoreJobsData?.data?.jobs?.filter((job: RestoreJob) => job.status === 'running') || []
+  const recentJobs = restoreJobsData?.data?.jobs?.slice(0, 10) || []
 
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <Box>
-          <Typography variant="h4" fontWeight={600} gutterBottom>
-            Restore Operations
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Restore files and folders from backup archives
-          </Typography>
-        </Box>
-        <Button
-          variant="outlined"
-          startIcon={<RefreshCw size={18} />}
-          onClick={() => queryClient.invalidateQueries({ queryKey: ['restore-archives', selectedRepository] })}
-        >
-          Refresh
-        </Button>
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" fontWeight={600} gutterBottom>
+          Restore Archives
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Select an archive to restore from backup
+        </Typography>
       </Box>
 
-      <Stack direction={{ xs: 'column', lg: 'row' }} spacing={3}>
-        {/* Repository and Archive Selection */}
-        <Box sx={{ flex: { xs: '1 1 100%', lg: '0 0 350px' } }}>
-          <Stack spacing={3}>
-            {/* Repository Selection */}
-            <Card>
-              <CardContent>
-                <Typography variant="h6" fontWeight={600} gutterBottom>
-                  Repository
-                </Typography>
-                {loadingRepositories ? (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
-                    <CircularProgress size={32} />
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-                      Loading repositories...
-                    </Typography>
-                  </Box>
-                ) : repositories.length === 0 ? (
-                  <Box sx={{ textAlign: 'center', py: 4 }}>
-                    <HardDrive size={32} color="rgba(0,0,0,0.3)" style={{ marginBottom: 8 }} />
-                    <Typography variant="caption" color="text.secondary">
-                      No repositories found
-                    </Typography>
-                  </Box>
-                ) : (
-                  <List>
-                    {repositories.map((repo: Repository) => (
-                      <ListItem key={repo.id} disablePadding sx={{ mb: 1 }}>
-                        <ListItemButton
-                          selected={selectedRepository?.id === repo.id}
-                          onClick={() => handleRepositorySelect(repo)}
-                          sx={{
-                            borderRadius: 1,
-                            '&.Mui-selected': {
-                              backgroundColor: 'primary.lighter',
-                            },
-                          }}
-                        >
-                          <ListItemIcon>
-                            <HardDrive size={20} />
-                          </ListItemIcon>
-                          <ListItemText
-                            primary={repo.name}
-                            secondary={repo.path}
-                            primaryTypographyProps={{ fontWeight: 500, fontSize: '0.875rem' }}
-                            secondaryTypographyProps={{ fontSize: '0.75rem' }}
-                          />
-                        </ListItemButton>
-                      </ListItem>
-                    ))}
-                  </List>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Archive Selection */}
-            {selectedRepository && (
-              <Card>
-                <CardContent>
-                  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-                    <Typography variant="h6" fontWeight={600}>
-                      Archive
-                    </Typography>
-                    <TextField
-                      size="small"
-                      placeholder="Search..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <Search size={16} />
-                          </InputAdornment>
-                        ),
-                      }}
-                      sx={{ width: 150 }}
-                    />
-                  </Stack>
-
-                  {loadingArchives ? (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
-                      <CircularProgress size={32} />
-                      <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-                        Loading archives...
-                      </Typography>
-                    </Box>
-                  ) : filteredArchives.length === 0 ? (
-                    <Box sx={{ textAlign: 'center', py: 4 }}>
-                      <Folder size={32} color="rgba(0,0,0,0.3)" style={{ marginBottom: 8 }} />
-                      <Typography variant="caption" color="text.secondary">
-                        No archives found
-                      </Typography>
-                    </Box>
-                  ) : (
-                    <Stack spacing={1}>
-                      {filteredArchives.map((archive: Archive) => (
-                        <Card
-                          key={archive.id}
-                          variant="outlined"
-                          sx={{
-                            cursor: 'pointer',
-                            borderColor: selectedArchive === archive.name ? 'primary.main' : 'divider',
-                            backgroundColor: selectedArchive === archive.name ? 'primary.lighter' : 'background.paper',
-                            '&:hover': { borderColor: 'primary.main' },
-                          }}
-                          onClick={() => handleArchiveSelect(archive.name)}
-                        >
-                          <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                            <Stack direction="row" spacing={1} alignItems="center">
-                              <Folder size={16} color="#1976d2" />
-                              <Box>
-                                <Typography variant="body2" fontWeight={500}>
-                                  {archive.name}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                  <Calendar size={12} />
-                                  {formatDate(archive.timestamp)}
-                                </Typography>
-                              </Box>
-                            </Stack>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </Stack>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+      {/* Repository Selector */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+            <Database size={20} color="#2e7d32" />
+            <Typography variant="h6" fontWeight={600}>
+              Select Repository
+            </Typography>
           </Stack>
-        </Box>
+          <FormControl fullWidth sx={{ minWidth: { xs: '100%', sm: 300 } }}>
+            <InputLabel id="repository-select-label">Repository</InputLabel>
+            <Select
+              labelId="repository-select-label"
+              id="repository-select"
+              value={selectedRepository}
+              onChange={(e) => handleRepositoryChange(e.target.value)}
+              label="Repository"
+              disabled={loadingRepositories}
+              sx={{ height: { xs: 48, sm: 56 } }}
+            >
+              <MenuItem value="" disabled>
+                {loadingRepositories ? 'Loading repositories...' : 'Select a repository...'}
+              </MenuItem>
+              {repositories.map((repo: Repository) => (
+                <MenuItem key={repo.id} value={repo.path}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Database size={16} />
+                    <Box>
+                      <Typography variant="body2" fontWeight={500}>{repo.name}</Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                        {repo.path}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </CardContent>
+      </Card>
 
-        {/* File Browser and Selection */}
-        <Box sx={{ flex: 1 }}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" fontWeight={600} gutterBottom>
-                File Selection
+      {/* Repository Info */}
+      {selectedRepoData && repoInfo?.data?.info && (
+        <Box sx={{ mb: 3 }}>
+          <RepositoryInfo
+            repoInfo={repoInfo.data.info}
+            archivesCount={archivesList.length}
+            loading={loadingArchives}
+          />
+        </Box>
+      )}
+
+      {/* Archives Section */}
+      {selectedRepository && (
+        <>
+          <Alert severity="info" sx={{ mb: 3 }}>
+            Select an archive below to restore its contents. The entire archive will be restored to the destination path you specify.
+          </Alert>
+
+          {loadingArchives ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
+              <CircularProgress size={48} />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                Loading archives...
               </Typography>
-              {selectedArchive && (
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Select files and folders to restore from {selectedArchive}
-                </Typography>
-              )}
+            </Box>
+          ) : archivesList.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 8 }}>
+              <ArchiveIcon size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
+              <Typography variant="body1" color="text.secondary">
+                No archives found in this repository
+              </Typography>
+            </Box>
+          ) : (
+            <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 3 }}>
+              <Table>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: 'grey.50' }}>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Archive Name</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Created</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600, color: 'text.secondary' }}>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {archivesList.map((archive: Archive) => (
+                    <TableRow
+                      key={archive.id}
+                      hover
+                      sx={{ '&:last-child td': { borderBottom: 0 } }}
+                    >
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={500}>
+                          {archive.name}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          {formatDate(archive.start)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button
+                          variant="contained"
+                          color="primary"
+                          size="small"
+                          startIcon={<Download size={16} />}
+                          onClick={() => setRestoreArchive(archive)}
+                          sx={{ textTransform: 'none' }}
+                        >
+                          Restore
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </>
+      )}
 
-              {!selectedArchive ? (
-                <Box sx={{ textAlign: 'center', py: 8 }}>
-                  <Folder size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
-                  <Typography variant="body1" color="text.secondary">
-                    Select an archive to browse files
-                  </Typography>
-                </Box>
-              ) : (
-                <>
-                  {/* Breadcrumb */}
-                  <Breadcrumbs separator={<ChevronRight size={16} />} sx={{ mb: 2, fontSize: '0.875rem' }}>
-                    {breadcrumbParts.map((part, index) => (
-                      <Link
-                        key={index}
-                        component="button"
-                        variant="body2"
-                        onClick={() => handleBreadcrumbClick(index)}
-                        sx={{
-                          textDecoration: 'none',
-                          color: index === breadcrumbParts.length - 1 ? 'text.primary' : 'text.secondary',
-                          fontWeight: index === breadcrumbParts.length - 1 ? 600 : 400,
-                          '&:hover': { color: 'primary.main' },
-                        }}
-                      >
-                        {part}
-                      </Link>
-                    ))}
-                  </Breadcrumbs>
-
-                  {/* File List */}
-                  {loadingContents ? (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
-                      <CircularProgress size={48} />
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                        Loading contents...
-                      </Typography>
-                    </Box>
-                  ) : archiveContents?.data?.length === 0 ? (
-                    <Box sx={{ textAlign: 'center', py: 8 }}>
-                      <Folder size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
-                      <Typography variant="body1" color="text.secondary">
-                        This directory is empty
-                      </Typography>
-                    </Box>
-                  ) : (
-                    <List>
-                      {archiveContents.map((item: ArchiveFile, index: number) => {
-                        const isSelected = selectedFiles.includes(item.path)
-
-                        return (
-                          <ListItem
-                            key={index}
-                            disablePadding
-                            secondaryAction={
-                              item.size && (
-                                <Typography variant="caption" color="text.secondary">
-                                  {formatFileSize(item.size)}
-                                </Typography>
-                              )
-                            }
-                          >
-                            <Checkbox
-                              checked={isSelected}
-                              onChange={() => handleFileSelect(item.path)}
-                              sx={{ mr: 1 }}
-                            />
-                            <ListItemButton onClick={() => handleItemClick(item)} disabled={item.type !== 'directory'} sx={{ borderRadius: 1 }}>
-                              <ListItemIcon>
-                                {item.type === 'directory' ? (
-                                  <Folder size={20} color="#1976d2" />
-                                ) : (
-                                  <File size={20} color="rgba(0,0,0,0.5)" />
-                                )}
-                              </ListItemIcon>
-                              <ListItemText primary={item.name} primaryTypographyProps={{ fontSize: '0.875rem' }} />
-                            </ListItemButton>
-                          </ListItem>
-                        )
-                      })}
-                    </List>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </Box>
-      </Stack>
-
-      {/* Restore Configuration */}
-      {selectedFiles.length > 0 && (
-        <Card sx={{ mt: 3 }}>
+      {/* Running Jobs */}
+      {runningJobs.length > 0 && (
+        <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography variant="h6" fontWeight={600} gutterBottom>
-              Restore Configuration
+              Running Restores
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Currently active restore operations
             </Typography>
 
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={3}>
-              {/* Selected Files */}
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="body2" fontWeight={500} gutterBottom>
-                  Selected Files ({selectedFiles.length})
-                </Typography>
-                <Box
-                  sx={{
-                    maxHeight: 120,
-                    overflowY: 'auto',
-                    border: 1,
-                    borderColor: 'divider',
-                    borderRadius: 1,
-                    p: 2,
-                    backgroundColor: 'grey.50',
-                  }}
-                >
-                  {selectedFiles.map((file, index) => (
-                    <Typography key={index} variant="caption" display="block" sx={{ mb: 0.5 }}>
-                      {file}
-                    </Typography>
-                  ))}
-                </Box>
-              </Box>
+            <Stack spacing={3}>
+              {runningJobs.map((job: RestoreJob) => (
+                <Paper key={job.id} variant="outlined" sx={{ p: 3 }}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
+                    <Stack direction="row" spacing={2} alignItems="center">
+                      <Box sx={{ color: 'info.main' }}>
+                        {getStatusIcon(job.status)}
+                      </Box>
+                      <Box>
+                        <Typography variant="body1" fontWeight={500}>
+                          Restore Job #{job.id}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Archive: {job.archive}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Destination: {job.destination}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </Stack>
 
-              {/* Destination Path */}
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="body2" fontWeight={500} gutterBottom>
-                  Destination Path
-                </Typography>
-                <TextField
-                  fullWidth
-                  value={destinationPath}
-                  onChange={(e) => setDestinationPath(e.target.value)}
-                  placeholder="/path/to/restore/destination"
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <MapPin size={18} />
-                      </InputAdornment>
-                    ),
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          onClick={() => setShowDestinationExplorer(true)}
-                          edge="end"
-                          size="small"
-                          title="Browse filesystem"
-                        >
-                          <FolderOpen size={18} />
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-              </Box>
-            </Stack>
+                  <Box sx={{ mb: 2 }}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Box
+                          sx={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            bgcolor: 'info.main',
+                            animation: 'pulse 2s ease-in-out infinite',
+                            '@keyframes pulse': {
+                              '0%, 100%': { opacity: 1 },
+                              '50%': { opacity: 0.5 },
+                            },
+                          }}
+                        />
+                        <Typography variant="body2" fontWeight={500} color="info.main">
+                          Restoring files...
+                        </Typography>
+                      </Stack>
+                      <Typography variant="body2" color="text.secondary">
+                        {formatTimeRange(job.started_at, job.completed_at, job.status)}
+                      </Typography>
+                    </Stack>
+                  </Box>
 
-            {/* Action Buttons */}
-            <Stack direction="row" spacing={2} sx={{ mt: 3 }}>
-              <Button
-                variant="contained"
-                color="info"
-                startIcon={previewMutation.isLoading ? <CircularProgress size={16} color="inherit" /> : <Eye size={18} />}
-                onClick={handlePreviewRestore}
-                disabled={previewMutation.isLoading}
-              >
-                {previewMutation.isLoading ? 'Generating Preview...' : 'Preview Restore'}
-              </Button>
+                  {job.progress_details?.current_file && (
+                    <Alert severity="info" sx={{ mb: 2, py: 0.5 }}>
+                      <Typography variant="caption" fontWeight={500}>
+                        Current File:
+                      </Typography>
+                      <Typography variant="caption" sx={{ fontFamily: 'monospace', display: 'block', mt: 0.5, wordBreak: 'break-all' }}>
+                        {job.progress_details.current_file}
+                      </Typography>
+                    </Alert>
+                  )}
 
-              <Button
-                variant="contained"
-                color="success"
-                startIcon={startRestoreMutation.isLoading ? <CircularProgress size={16} color="inherit" /> : <Play size={18} />}
-                onClick={handleStartRestore}
-                disabled={startRestoreMutation.isLoading || !destinationPath.trim()}
-              >
-                {startRestoreMutation.isLoading ? 'Starting Restore...' : 'Start Restore'}
-              </Button>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 2 }}>
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Files Restored:
+                      </Typography>
+                      <Typography variant="body2" fontWeight={500}>
+                        {job.progress_details?.nfiles?.toLocaleString() || '0'}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Progress:
+                      </Typography>
+                      <Typography variant="body2" fontWeight={500} color="primary.main">
+                        {job.progress_details?.progress_percent?.toFixed(1) || '0'}%
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Paper>
+              ))}
             </Stack>
           </CardContent>
         </Card>
       )}
 
-      {/* Restore Preview Dialog */}
-      <Dialog open={showPreview} onClose={() => setShowPreview(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Restore Preview</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <Stack direction="row" flexWrap="wrap" spacing={2}>
-              <Box sx={{ flex: '1 1 45%', minWidth: 150 }}>
-                <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                  Files to restore
-                </Typography>
-                <Typography variant="body2">{selectedFiles.length}</Typography>
-              </Box>
-              <Box sx={{ flex: '1 1 45%', minWidth: 150 }}>
-                <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                  Destination
-                </Typography>
-                <Typography variant="body2">{destinationPath || 'Not specified'}</Typography>
-              </Box>
-            </Stack>
+      {/* Recent Jobs */}
+      <Card>
+        <CardContent>
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}>
+            <Clock size={20} color="rgba(0,0,0,0.6)" />
+            <Typography variant="h6" fontWeight={600}>
+              Recent Restores
+            </Typography>
+          </Stack>
 
-            <Box>
-              <Typography variant="caption" color="text.secondary" fontWeight={600} gutterBottom>
-                Selected files
+          {recentJobs.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 8 }}>
+              <Clock size={48} color="rgba(0,0,0,0.3)" />
+              <Typography variant="body1" color="text.secondary" sx={{ mt: 2 }}>
+                No restore jobs found
               </Typography>
-              <Box
-                sx={{
-                  maxHeight: 120,
-                  overflowY: 'auto',
-                  border: 1,
-                  borderColor: 'divider',
-                  borderRadius: 1,
-                  p: 2,
-                  backgroundColor: 'grey.50',
-                }}
-              >
-                {selectedFiles.map((file, index) => (
-                  <Typography key={index} variant="caption" display="block" sx={{ mb: 0.5 }}>
-                    {file}
-                  </Typography>
-                ))}
-              </Box>
+            </Box>
+          ) : (
+            <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+              <Table>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: 'grey.50' }}>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Job ID</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Archive</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Destination</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Status</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Duration</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Started</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {recentJobs.map((job: RestoreJob) => (
+                    <TableRow
+                      key={job.id}
+                      hover
+                      sx={{ '&:last-child td': { borderBottom: 0 } }}
+                    >
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={600} color="primary">
+                          #{job.id}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={500}>
+                          {job.archive}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                          {job.destination}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          icon={getStatusIcon(job.status)}
+                          label={job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+                          color={getStatusColor(job.status)}
+                          size="small"
+                          sx={{ fontWeight: 500 }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          {formatTimeRange(job.started_at, job.completed_at, job.status)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          {job.started_at ? formatDate(job.started_at) : 'N/A'}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Restore Dialog */}
+      <Dialog
+        open={!!restoreArchive}
+        onClose={() => !restoreMutation.isLoading && setRestoreArchive(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <Download size={24} />
+            <Box>
+              <Typography variant="h6" fontWeight={600}>
+                Restore Archive
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {restoreArchive?.name}
+              </Typography>
             </Box>
           </Stack>
+        </DialogTitle>
+        <DialogContent>
+          {loadingArchiveInfo ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
+              <CircularProgress size={48} />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                Loading archive details...
+              </Typography>
+            </Box>
+          ) : (
+            <Stack spacing={3}>
+              {archiveStats && (
+                <Alert severity="info">
+                  <Typography variant="body2" fontWeight={500} gutterBottom>
+                    Archive Information
+                  </Typography>
+                  <Typography variant="body2">
+                    Files: {archiveStats.nfiles?.toLocaleString() || 'N/A'}
+                  </Typography>
+                  <Typography variant="body2">
+                    Size: {archiveStats.original_size ? formatBytesUtil(archiveStats.original_size) : 'N/A'}
+                  </Typography>
+                </Alert>
+              )}
+
+              <Alert severity="warning">
+                <Typography variant="body2" fontWeight={500} gutterBottom>
+                  Important
+                </Typography>
+                <Typography variant="body2">
+                  This will restore the entire archive to the destination path. Existing files may be overwritten.
+                </Typography>
+              </Alert>
+
+              <PathSelectorField
+                label="Destination Path"
+                value={destination}
+                onChange={setDestination}
+                placeholder="/path/to/restore/location"
+                helperText="Select the directory where you want to restore the archive"
+                disabled={restoreMutation.isLoading}
+                required
+                selectMode="directories"
+              />
+            </Stack>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShowPreview(false)}>Close</Button>
+          <Button onClick={() => setRestoreArchive(null)} disabled={restoreMutation.isLoading}>
+            Cancel
+          </Button>
           <Button
             variant="contained"
-            color="success"
-            onClick={() => {
-              setShowPreview(false)
-              handleStartRestore()
-            }}
-            disabled={!destinationPath.trim()}
+            color="primary"
+            onClick={handleRestore}
+            disabled={restoreMutation.isLoading || !destination}
+            startIcon={restoreMutation.isLoading ? <CircularProgress size={16} color="inherit" /> : <Download size={16} />}
           >
-            Start Restore
+            {restoreMutation.isLoading ? 'Starting...' : 'Start Restore'}
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* Restore Job Status */}
-      {restoreJobId && (
-        <Alert severity="success" icon={<CheckCircle size={20} />} sx={{ mt: 3 }}>
-          <AlertTitle fontWeight={600}>Restore Job Started</AlertTitle>
-          <Typography variant="body2">Job ID: {restoreJobId}</Typography>
-          <Typography variant="body2">Check the Backup page to monitor progress</Typography>
-        </Alert>
-      )}
-
-      {/* File Explorer Dialog */}
-      <FileExplorerDialog
-        open={showDestinationExplorer}
-        onClose={() => setShowDestinationExplorer(false)}
-        onSelect={(paths) => {
-          if (paths.length > 0) {
-            setDestinationPath(paths[0])
-          }
-        }}
-        title="Select Destination Directory"
-        initialPath="/"
-        multiSelect={false}
-        connectionType="local"
-        selectMode="directories"
-      />
     </Box>
   )
 }
