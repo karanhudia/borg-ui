@@ -590,7 +590,16 @@ const Archives: React.FC = () => {
                                 <Typography variant="body2" color="text.secondary" sx={{ minWidth: 60, textAlign: 'right' }}>
                                   {file.size ? formatBytesUtil(file.size) : '0 B'}
                                 </Typography>
-                                <IconButton size="small" sx={{ color: 'text.secondary' }}>
+                                <IconButton
+                                  size="small"
+                                  sx={{ color: 'text.secondary' }}
+                                  onClick={() => {
+                                    if (selectedRepository && viewArchive) {
+                                      archivesAPI.downloadFile(selectedRepository.path, viewArchive.name, file.path)
+                                    }
+                                  }}
+                                  title="Download file"
+                                >
                                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                                     <polyline points="7 10 12 15 17 10" />

@@ -100,12 +100,18 @@ export const backupAPI = {
 
 export const archivesAPI = {
   listArchives: (repository: string) => api.get(`/archives/${repository}`),
-  getArchiveInfo: (repository: string, archive: string) => 
+  getArchiveInfo: (repository: string, archive: string) =>
     api.get(`/archives/${repository}/${archive}`),
   listContents: (repository: string, archive: string, path?: string) =>
     api.get(`/archives/${repository}/${archive}/contents`, { params: { path } }),
   deleteArchive: (repository: string, archive: string) =>
     api.delete(`/archives/${repository}/${archive}`),
+  downloadFile: (repository: string, archive: string, filePath: string) => {
+    const token = localStorage.getItem('access_token')
+    const encodedFilePath = encodeURIComponent(filePath)
+    const encodedRepository = encodeURIComponent(repository)
+    window.open(`${API_BASE_URL}/archives/${encodedRepository}/${archive}/download?file_path=${encodedFilePath}&token=${token}`, '_blank')
+  },
 }
 
 export const restoreAPI = {
