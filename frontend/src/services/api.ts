@@ -109,10 +109,9 @@ export const archivesAPI = {
   downloadFile: (repository: string, archive: string, filePath: string) => {
     const token = localStorage.getItem('access_token')
     const encodedFilePath = encodeURIComponent(filePath)
-    // Strip leading slash to avoid double slash in URL path
-    const repoPath = repository.startsWith('/') ? repository.substring(1) : repository
-    const encodedRepository = encodeURIComponent(repoPath)
-    window.open(`${API_BASE_URL}/archives/${encodedRepository}/${archive}/download?file_path=${encodedFilePath}&token=${token}`, '_blank')
+    const encodedRepository = encodeURIComponent(repository)
+    const encodedArchive = encodeURIComponent(archive)
+    window.open(`${API_BASE_URL}/archives/download?repository=${encodedRepository}&archive=${encodedArchive}&file_path=${encodedFilePath}&token=${token}`, '_blank')
   },
 }
 
