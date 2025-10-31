@@ -382,7 +382,7 @@ const Archives: React.FC = () => {
             </Box>
           ) : archivesList.length === 0 ? (
             /* Empty State */
-            <Box sx={{ textAlign: 'center', py: 8 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', py: 8 }}>
               <FolderOpen size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
               <Typography variant="body1" color="text.secondary">
                 No archives found in this repository

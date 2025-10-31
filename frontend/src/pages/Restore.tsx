@@ -280,7 +280,7 @@ const Restore: React.FC = () => {
               </Typography>
             </Box>
           ) : archivesList.length === 0 ? (
-            <Box sx={{ textAlign: 'center', py: 8 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', py: 8 }}>
               <ArchiveIcon size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
               <Typography variant="body1" color="text.secondary">
                 No archives found in this repository
@@ -440,7 +440,7 @@ const Restore: React.FC = () => {
           </Stack>
 
           {recentJobs.length === 0 ? (
-            <Box sx={{ textAlign: 'center', py: 8 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', py: 8 }}>
               <Clock size={48} color="rgba(0,0,0,0.3)" />
               <Typography variant="body1" color="text.secondary" sx={{ mt: 2 }}>
                 No restore jobs found
