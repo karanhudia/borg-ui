@@ -59,6 +59,8 @@ docker compose up -d
 
 Access at `http://localhost:8081` (default credentials: `admin` / `admin123`)
 
+⚠️ **Security Note**: The default configuration mounts the entire host filesystem (`/:/local:rw`). For production use, consider restricting access by customizing the volume mount to only the directories you need for backups. See [Volume Mount Security](#volume-mount-security) below.
+
 ---
 
 ## 📖 New to Borg Web UI?
@@ -156,6 +158,115 @@ Manage backups for multiple servers from a central web interface:
 - Monitor backup health across infrastructure
 - Restore files quickly when needed
 - Maintain backup retention policies
+
+---
+
+## Volume Mount Security
+
+### Understanding the Default Configuration
+
+By default, Borg Web UI mounts the entire host filesystem to provide maximum flexibility:
+
+```yaml
+volumes:
+  - /:/local:rw  # Entire filesystem with read-write access
+```
+
+This design choice enables:
+- **Zero-configuration setup** - Works immediately without customization
+- **Flexible backup sources** - Access any directory for backups
+- **Easy repository management** - Store backups anywhere on the system
+
+**However**, for security-conscious environments, you should customize this to follow the principle of least privilege.
+
+### Customizing Volume Mounts (Recommended)
+
+Instead of mounting the entire filesystem, restrict access to only what you need:
+
+#### Option 1: Mount Specific Directories
+
+```yaml
+volumes:
+  # Mount only what you need to backup and where to store it
+  - /home/user/documents:/source:ro           # Source: read-only
+  - /mnt/backup-storage:/destination:rw       # Destination: read-write
+```
+
+#### Option 2: Mount User Directories Only
+
+```yaml
+volumes:
+  # Linux/Raspberry Pi
+  - /home:/local:rw
+
+  # macOS
+  - /Users:/local:rw
+```
+
+#### Option 3: Mount Only Backup Storage
+
+```yaml
+volumes:
+  # Only mount external backup storage
+  - /mnt/nas:/local:rw
+  - /mnt/usb-backup:/local:rw
+```
+
+### Security Best Practices
+
+1. **Principle of Least Privilege**: Only mount directories necessary for backup operations
+2. **Read-Only Source Mounts**: Mount backup sources as `:ro` to prevent accidental modifications
+3. **Separate Mounts**: Use different mount points for sources and destinations
+4. **Audit Before Production**: Review mounted directories before deploying in production
+5. **Use PUID/PGID**: Run container as non-root user matching your host user
+
+### Example: Secure Production Setup
+
+```yaml
+version: '3.8'
+
+services:
+  app:
+    image: ainullcode/borg-ui:latest
+    container_name: borg-web-ui
+    restart: unless-stopped
+
+    ports:
+      - "8081:8081"
+
+    volumes:
+      - borg_data:/data
+      # Mount specific directories with appropriate permissions
+      - /home/user/important-data:/backup-source:ro
+      - /mnt/backup-drive/borg-repos:/backup-destination:rw
+
+    environment:
+      - PUID=1000
+      - PGID=1000
+
+volumes:
+  borg_data:
+```
+
+Then create repositories using:
+- Source: `/backup-source`
+- Destination: `/backup-destination/my-repo`
+
+### Trust and Transparency
+
+We understand the security concerns around giving container access to your filesystem. That's why:
+
+1. **Open Source**: All code is publicly available for audit at [github.com/karanhudia/borg-ui](https://github.com/karanhudia/borg-ui)
+2. **Customizable**: Full control over what directories are mounted
+3. **Container Isolation**: Runs in isolated Docker environment
+4. **Non-Root User**: Container runs as user `borg` (not root)
+5. **No Network Dependencies**: Works completely offline once deployed
+
+**We encourage users to**:
+- Review the source code
+- Customize volume mounts for your needs
+- Run security audits before production use
+- Report security concerns via GitHub issues
 
 ---
 
