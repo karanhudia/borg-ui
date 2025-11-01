@@ -277,33 +277,87 @@ The container automatically mounts your host filesystem at `/local` to:
 ### Default Configuration
 
 By default, the container mounts:
-- **All Systems**: `/` (root filesystem) → `/local` in container
+- **All Systems**: `/` (root filesystem) → `/local` in container with read-write access
 - **Custom**: Any directory via `LOCAL_STORAGE_PATH` environment variable
 
-### Setup Instructions
+⚠️ **Security Consideration**: The default configuration mounts the entire host filesystem with read-write access. While this provides maximum flexibility for backup operations, you should customize the mount based on your specific needs and security requirements.
 
-**Step 1**: (Optional) Customize the mount path
+### Customizing Volume Mounts (Recommended for Security)
 
-Create `.env` file or set environment variable:
+Instead of mounting the entire filesystem, you can restrict access to specific directories:
+
+**Step 1**: Customize the mount in your `docker-compose.yml`:
+
+```yaml
+volumes:
+  # Option 1: Mount specific backup source and destination directories
+  - /home/user/my/source/repo:/source:ro    # Source: read-only
+  - /home/user/my/destination:/destination:rw  # Destination: read-write
+
+  # Option 2: Mount only user directories (Linux)
+  - /home:/local:rw
+
+  # Option 3: Mount only user directories (macOS)
+  - /Users:/local:rw
+
+  # Option 4: Mount only NAS or external storage
+  - /mnt/nas:/local:rw
+
+  # Option 5: Mount specific backup directories
+  - /mnt/backup-storage:/local:rw
+```
+
+Or use the `LOCAL_STORAGE_PATH` environment variable in `.env`:
 
 ```bash
-# .env file
-# Default: Mount entire filesystem
-LOCAL_STORAGE_PATH=/
+# Only mount specific directories you need for backups
+LOCAL_STORAGE_PATH=/home/user/backups
 
-# Custom examples:
+# Examples for different use cases:
 # LOCAL_STORAGE_PATH=/Users        # Only user directories (macOS)
 # LOCAL_STORAGE_PATH=/home          # Only user directories (Linux)
 # LOCAL_STORAGE_PATH=/mnt/nas       # Only NAS mount point
+# LOCAL_STORAGE_PATH=/mnt/backups   # Only backup storage location
 ```
 
-**Step 2**: Create repositories in the UI using `/local/` prefix
+**Step 2**: Update repository paths in the UI based on your mount configuration
 
-Examples (with default `/` mount):
+Examples with customized mounts:
+
+| Mount Configuration | Repository Path in UI |
+|---------------------|----------------------|
+| `/home:/local:rw` | `/local/username/backups/my-repo` |
+| `/Users:/local:rw` | `/local/username/backups/my-repo` |
+| `/mnt/nas:/local:rw` | `/local/borg-backups/my-repo` |
+| `/home/user/my/destination:/destination:rw` | `/destination/my-repo` |
+
+Examples with default `/` mount:
 - **macOS**: `/local/Users/your-username/backups/my-repo`
 - **Linux**: `/local/home/your-username/backups/my-repo`
 - **External Drive**: `/local/mnt/external-drive/backups/important-data`
 - **NAS**: `/local/mnt/nas-mount/borg-backups/project-repo`
+
+### Security Best Practices
+
+1. **Principle of Least Privilege**: Only mount directories that are necessary for your backup operations
+2. **Use Read-Only Mounts for Source Data**: When backing up data, mount source directories as read-only (`:ro`) to prevent accidental modifications:
+   ```yaml
+   volumes:
+     - /home/user/documents:/source:ro
+     - /mnt/backup-drive:/destination:rw
+   ```
+3. **Separate Source and Destination**: Keep backup sources and backup destinations on separate mounts with appropriate permissions
+4. **Audit Your Setup**: Before deploying to production, review what directories are mounted and whether the container truly needs access to them
+5. **Container Runs as Non-Root**: The container runs as user `borg` (configurable via PUID/PGID) which provides an additional security layer
+
+### Why the Default Mounts Root Filesystem
+
+The default configuration (`/:/local:rw`) is designed for:
+- **Quick Start Experience**: Works out-of-the-box without configuration
+- **Maximum Flexibility**: Access any directory for backups without reconfiguration
+- **Docker Container Isolation**: The container itself provides isolation from the host
+
+However, for production deployments or security-conscious environments, we **strongly recommend** customizing the volume mounts to restrict access to only the directories you need.
 
 ### For Remote Storage (Raspberry Pi, NAS)
 

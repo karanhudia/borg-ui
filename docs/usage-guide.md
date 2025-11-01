@@ -227,30 +227,50 @@ Now that your repository is created, let's create your first backup (called an "
 
 ---
 
-### Customizing Local Mount
+### Customizing Local Mount for Security
 
-By default, the entire host filesystem (`/`) is mounted at `/local`. You can restrict this:
+By default, the entire host filesystem (`/`) is mounted at `/local` with read-write access. **For security-conscious deployments, you should restrict this to only the directories you need.**
 
-**Edit `docker-compose.yml` or `.env`:**
+⚠️ **Security Recommendation**: Follow the principle of least privilege by mounting only the directories necessary for your backup operations.
+
+**Edit `docker-compose.yml`:**
 
 ```yaml
 volumes:
-  # Option 1: Mount only user directories (Linux)
+  # Recommended: Mount specific directories with appropriate permissions
+
+  # Option 1: Separate source (read-only) and destination (read-write)
+  - /home/user/documents:/source:ro           # What to backup (read-only)
+  - /mnt/backup-drive:/destination:rw         # Where to store backups (read-write)
+
+  # Option 2: Mount only user directories (Linux)
   - /home:/local:rw
 
-  # Option 2: Mount only user directories (macOS)
+  # Option 3: Mount only user directories (macOS)
   - /Users:/local:rw
 
-  # Option 3: Mount only NAS
+  # Option 4: Mount only backup storage location
   - /mnt/nas:/local:rw
+
+  # Option 5: Mount only specific backup directory
+  - /mnt/backup-storage:/local:rw
 ```
 
-Or in `.env`:
+Or use the `LOCAL_STORAGE_PATH` environment variable in `.env`:
 ```bash
+# Only mount what you need for backups
 LOCAL_STORAGE_PATH=/home
+
+# Other examples:
+# LOCAL_STORAGE_PATH=/Users                    # macOS user directories
+# LOCAL_STORAGE_PATH=/mnt/backup-storage       # Only backup storage
+# LOCAL_STORAGE_PATH=/home/user/backups        # Specific directory
 ```
 
-Then use repository paths like `/local/username/backups/repo`.
+**Important**: After customizing mounts, adjust your repository paths accordingly:
+- With `/home:/local:rw` → Use `/local/username/backups/repo`
+- With `/mnt/nas:/local:rw` → Use `/local/borg-repos/repo`
+- With `/home/user/documents:/source:ro` → Use `/source` for backup source
 
 ---
 
@@ -594,12 +614,28 @@ When a scheduled backup is running, you'll see it in the **"Running Scheduled Ba
 
 ## Best Practices
 
+### Security Considerations
+
+1. **Customize Volume Mounts** - Don't use the default `/:/local:rw` mount in production. Mount only directories you need:
+   ```yaml
+   volumes:
+     - /home/user/documents:/source:ro        # Read-only source
+     - /mnt/backup-drive:/destination:rw      # Read-write destination
+   ```
+2. **Use Read-Only Mounts for Sources** - Mount backup source directories as `:ro` to prevent accidental modifications
+3. **Run as Non-Root User** - Set `PUID` and `PGID` to match your host user (not root)
+4. **Audit Before Production** - Review all mounted directories before deploying
+5. **Keep Software Updated** - Regularly update to the latest version for security patches
+6. **Use Strong Passphrases** - Both for repository encryption and SSH keys
+7. **Review Code** - The project is open source - audit it before trusting it with sensitive data
+
 ### For Local Backups
 
 1. **Use external storage** - Don't backup to the same drive as your data
 2. **Test restores regularly** - Backups are useless if you can't restore
 3. **Consider off-site copies** - Add an SSH backup for critical data
 4. **Monitor disk space** - Set up pruning/retention policies
+5. **Restrict container access** - Mount only necessary directories (see Security Considerations above)
 
 ### For SSH Backups
 
