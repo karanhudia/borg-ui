@@ -1,4 +1,3 @@
-# Borg Web UI
 
 [![Docker Hub](https://img.shields.io/docker/pulls/ainullcode/borg-ui)](https://hub.docker.com/r/ainullcode/borg-ui)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
@@ -41,27 +40,38 @@ This project solves my personal backup management headaches, and I hope it solve
 ## Screenshots
 
 ### Dashboard
-<img width="800" alt="dashboard" src="https://github.com/user-attachments/assets/998e9216-ed2d-494b-8cb1-6a1b2a330df9" />
+
+<img width="800" alt="dashboard" src="https://github.com/user-attachments/assets/9478189e-4b47-46ae-b672-ad77df6d7040" />
 
 *Real-time system monitoring with Borg status, CPU, memory, and disk usage metrics, plus recent backup job history*
 
 ### Backup Operations
-<img width="800" alt="backup-live-progress" src="https://github.com/user-attachments/assets/6a6099f2-de79-4bf1-9b26-32cab6a52173" />
+<img width="800" alt="backup-live-progress" src="https://github.com/user-attachments/assets/550e396e-ec36-4737-9821-899c99265f64" />
 
 *Live backup progress tracking showing current file being processed, files count, original size, compressed size, and deduplicated data*
 
-<img width="800" alt="backup-job-history" src="https://github.com/user-attachments/assets/a4272a93-4f56-4640-ab57-6ed6164b415f" />
-
-*Complete backup job history with status, duration, progress tracking, and quick access to logs*
-
 ### Repository Management
-<img width="800" alt="repository-details" src="https://github.com/user-attachments/assets/8aa0dffc-c45d-4336-bb81-3e6918f49591" />
+<img width="800" alt="repository-details" src="https://github.com/user-attachments/assets/4d85cc2f-cfe6-489f-bdb9-67c1ca2e4035" />
 
 *Repository overview showing SSH connection details, compression settings, archive count, and configured source paths*
 
 <img width="800" alt="create-repository" src="https://github.com/user-attachments/assets/d7bba4d2-0fec-4257-8aa2-f72ccfeeb30a" />
 
 *Intuitive repository creation with command preview, encryption options, compression settings, and source directory configuration*
+<img width="800" alt="Screenshot 2025-10-31 at 6 36 22 PM" src="https://github.com/user-attachments/assets/52579dae-54d1-4aaf-ad10-aebe93be7d6d" /># Borg Web UI
+
+### Archive Management
+
+<img width="800" alt="archive-view" src="https://github.com/user-attachments/assets/617f6ef5-0bbc-468b-981a-7e6bf8065986" />
+<img width="800" alt="archive-explorer" src="https://github.com/user-attachments/assets/92384dcc-b272-444e-b11b-b970d176ccd2" />
+
+### Restore
+
+<img width="800" alt="restore" src="https://github.com/user-attachments/assets/912f8b1d-67e7-44bf-86a1-d36730c7ed05" />
+
+### Scheduling
+
+<img width="800" alt="schedule" src="https://github.com/user-attachments/assets/6ec49db9-8b68-4131-9c19-b102ab77a8c4" />
 
 ---
 
