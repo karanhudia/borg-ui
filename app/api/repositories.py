@@ -38,6 +38,20 @@ class RepositoryCreate(BaseModel):
     ssh_key_id: Optional[int] = None  # Associated SSH key ID
     remote_path: Optional[str] = None  # Path to borg on remote server (e.g., /usr/local/bin/borg)
 
+class RepositoryImport(BaseModel):
+    name: str
+    path: str
+    passphrase: Optional[str] = None  # Required if repository is encrypted
+    compression: str = "lz4"  # Default compression for future backups
+    source_directories: Optional[List[str]] = None  # List of directories to backup
+    exclude_patterns: Optional[List[str]] = None  # List of exclude patterns
+    repository_type: str = "local"  # local, ssh, sftp
+    host: Optional[str] = None  # For SSH repositories
+    port: Optional[int] = 22  # SSH port
+    username: Optional[str] = None  # SSH username
+    ssh_key_id: Optional[int] = None  # Associated SSH key ID
+    remote_path: Optional[str] = None  # Path to borg on remote server
+
 class RepositoryUpdate(BaseModel):
     name: Optional[str] = None
     path: Optional[str] = None
@@ -101,8 +115,15 @@ async def create_repository(
     """Create a new repository"""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     try:
+        # Validate source directories are provided
+        if not repo_data.source_directories or len(repo_data.source_directories) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="At least one source directory is required. Source directories specify what data will be backed up to this repository."
+            )
+
         # Validate passphrase for encrypted repositories
         if repo_data.encryption in ["repokey", "keyfile", "repokey-blake2", "keyfile-blake2"]:
             if not repo_data.passphrase or repo_data.passphrase.strip() == "":
@@ -316,6 +337,193 @@ async def create_repository(
     except Exception as e:
         logger.error("Failed to create repository", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to create repository: {str(e)}")
+
+@router.post("/import")
+async def import_repository(
+    repo_data: RepositoryImport,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Import an existing Borg repository"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        # Validate repository type and path
+        repo_path = repo_data.path.strip()
+
+        if repo_data.repository_type == "local":
+            # For local repositories, ensure path is absolute
+            if not os.path.isabs(repo_path):
+                # If relative path, make it relative to data directory
+                repo_path = os.path.join(settings.data_dir, repo_path)
+
+            # Validate that the path is a valid absolute path
+            repo_path = os.path.abspath(repo_path)
+
+            # Check if repository directory exists
+            if not os.path.exists(repo_path):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Repository directory does not exist: {repo_path}"
+                )
+
+            # Check if it's a valid Borg repository by looking for config file
+            config_path = os.path.join(repo_path, "config")
+            if not os.path.exists(config_path):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Not a valid Borg repository: {repo_path}. Missing 'config' file."
+                )
+
+        elif repo_data.repository_type in ["ssh", "sftp"]:
+            # For SSH repositories, validate required fields
+            if not repo_data.host:
+                raise HTTPException(status_code=400, detail="Host is required for SSH repositories")
+            if not repo_data.username:
+                raise HTTPException(status_code=400, detail="Username is required for SSH repositories")
+            if not repo_data.ssh_key_id:
+                raise HTTPException(status_code=400, detail="SSH key is required for SSH repositories")
+
+            # Check if borg is installed on remote machine
+            logger.info("Checking if borg is installed on remote machine",
+                       host=repo_data.host,
+                       username=repo_data.username)
+
+            remote_check = await check_remote_borg_installation(
+                repo_data.host,
+                repo_data.username,
+                repo_data.port,
+                repo_data.ssh_key_id
+            )
+
+            if not remote_check.get("has_borg"):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Borg Backup is not installed on {repo_data.username}@{repo_data.host}. "
+                           f"Please install it first:\n\n"
+                           f"Ubuntu/Debian: sudo apt-get update && sudo apt-get install borgbackup\n"
+                           f"Fedora/RHEL: sudo dnf install borgbackup\n"
+                           f"Arch: sudo pacman -S borg\n\n"
+                           f"Or visit: https://borgbackup.readthedocs.io/en/stable/installation.html"
+                )
+
+            # Build SSH repository path
+            if repo_path.startswith("ssh://"):
+                # Parse the SSH URL to extract the path component
+                import re
+                match = re.match(r"ssh://[^/]+(/.*)", repo_path)
+                if match:
+                    repo_path = match.group(1)
+                else:
+                    repo_path = repo_path.split("/", 3)[-1] if "/" in repo_path else repo_path
+
+            repo_path = f"ssh://{repo_data.username}@{repo_data.host}:{repo_data.port}/{repo_path.lstrip('/')}"
+        else:
+            raise HTTPException(status_code=400, detail="Invalid repository type. Must be 'local', 'ssh', or 'sftp'")
+
+        # Check if repository name already exists
+        existing_repo = db.query(Repository).filter(Repository.name == repo_data.name).first()
+        if existing_repo:
+            raise HTTPException(status_code=400, detail="Repository name already exists in the database")
+
+        # Check if repository path already exists in database
+        existing_path = db.query(Repository).filter(Repository.path == repo_path).first()
+        if existing_path:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Repository path already exists in database with name '{existing_path.name}'"
+            )
+
+        # Verify repository is accessible by running borg info
+        logger.info("Verifying repository accessibility", path=repo_path)
+        verify_result = await verify_existing_repository(
+            repo_path,
+            repo_data.passphrase,
+            repo_data.ssh_key_id if repo_data.repository_type in ["ssh", "sftp"] else None,
+            repo_data.remote_path
+        )
+
+        if not verify_result["success"]:
+            error_msg = verify_result.get("error", "Unknown error")
+
+            # Provide helpful error messages
+            if "passphrase" in error_msg.lower() or "encrypted" in error_msg.lower():
+                raise HTTPException(
+                    status_code=400,
+                    detail="Repository is encrypted but passphrase is incorrect or missing. "
+                           "Please provide the correct passphrase."
+                )
+            elif "not a valid repository" in error_msg.lower():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Not a valid Borg repository: {repo_path}"
+                )
+            else:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to verify repository: {error_msg}"
+                )
+
+        # Extract repository info from verification
+        repo_info = verify_result.get("info", {})
+        encryption_mode = repo_info.get("encryption", {}).get("mode", "unknown")
+
+        # Serialize source directories as JSON
+        source_directories_json = None
+        if repo_data.source_directories:
+            source_directories_json = json.dumps(repo_data.source_directories)
+
+        # Serialize exclude patterns as JSON
+        exclude_patterns_json = None
+        if repo_data.exclude_patterns:
+            exclude_patterns_json = json.dumps(repo_data.exclude_patterns)
+
+        # Create repository record
+        repository = Repository(
+            name=repo_data.name,
+            path=repo_path,
+            encryption=encryption_mode,
+            compression=repo_data.compression,
+            passphrase=repo_data.passphrase,
+            source_directories=source_directories_json,
+            exclude_patterns=exclude_patterns_json,
+            repository_type=repo_data.repository_type,
+            host=repo_data.host,
+            port=repo_data.port,
+            username=repo_data.username,
+            ssh_key_id=repo_data.ssh_key_id,
+            remote_path=repo_data.remote_path,
+            archive_count=len(repo_info.get("archives", [])) if "archives" in repo_info else 0
+        )
+
+        db.add(repository)
+        db.commit()
+        db.refresh(repository)
+
+        logger.info("Repository imported successfully",
+                   name=repo_data.name,
+                   path=repo_path,
+                   user=current_user.username,
+                   archive_count=repository.archive_count)
+
+        return {
+            "success": True,
+            "message": "Repository imported successfully",
+            "repository": {
+                "id": repository.id,
+                "name": repository.name,
+                "path": repository.path,
+                "encryption": repository.encryption,
+                "compression": repository.compression,
+                "archive_count": repository.archive_count
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to import repository", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to import repository: {str(e)}")
 
 @router.get("/{repo_id}")
 async def get_repository(
@@ -698,6 +906,123 @@ async def check_remote_borg_installation(host: str, username: str, port: int, ss
             "has_borg": False
         }
     finally:
+        if temp_key_file and os.path.exists(temp_key_file):
+            try:
+                os.unlink(temp_key_file)
+            except Exception as e:
+                logger.warning("Failed to clean up temp SSH key", error=str(e))
+
+async def verify_existing_repository(path: str, passphrase: str = None, ssh_key_id: int = None, remote_path: str = None) -> Dict[str, Any]:
+    """Verify an existing Borg repository by running borg info"""
+    temp_key_file = None
+    try:
+        logger.info("Verifying existing repository", path=path, has_passphrase=bool(passphrase))
+
+        # Build borg info command
+        cmd = ["borg", "info", "--json"]
+
+        # Add remote-path if specified
+        if remote_path:
+            cmd.extend(["--remote-path", remote_path])
+
+        # Set up environment
+        env = os.environ.copy()
+        if passphrase:
+            env["BORG_PASSPHRASE"] = passphrase
+        env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+
+        # Handle SSH key for remote repositories
+        if ssh_key_id and path.startswith("ssh://"):
+            logger.info("Repository is SSH type, loading SSH key", ssh_key_id=ssh_key_id)
+
+            # Get SSH key from database
+            from app.database.models import SSHKey
+            from app.database.database import get_db
+            from cryptography.fernet import Fernet
+            import base64
+            import tempfile
+
+            db = next(get_db())
+            ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
+            if not ssh_key:
+                return {
+                    "success": False,
+                    "error": "SSH key not found"
+                }
+
+            # Decrypt private key
+            encryption_key = settings.secret_key.encode()[:32]
+            cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
+            private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+
+            # Create temporary key file
+            with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+                f.write(private_key)
+                temp_key_file = f.name
+
+            os.chmod(temp_key_file, 0o600)
+
+            # Set SSH key environment variable
+            borg_rsh = f"ssh -i {temp_key_file} -o StrictHostKeyChecking=no"
+            env["BORG_RSH"] = borg_rsh
+
+        # Add repository path
+        cmd.append(path)
+
+        # Execute command
+        logger.info("Executing borg info command", command=" ".join(cmd))
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env
+        )
+
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
+        stdout_str = stdout.decode() if stdout else ""
+        stderr_str = stderr.decode() if stderr else ""
+
+        if process.returncode == 0:
+            # Parse JSON output
+            try:
+                repo_info = json.loads(stdout_str)
+                logger.info("Repository verification successful",
+                           path=path,
+                           encryption=repo_info.get("encryption", {}).get("mode"),
+                           archive_count=len(repo_info.get("archives", [])))
+                return {
+                    "success": True,
+                    "info": repo_info
+                }
+            except json.JSONDecodeError as e:
+                logger.error("Failed to parse borg info output", error=str(e))
+                return {
+                    "success": False,
+                    "error": f"Failed to parse repository info: {str(e)}"
+                }
+        else:
+            logger.error("Repository verification failed",
+                        returncode=process.returncode,
+                        stderr=stderr_str)
+            return {
+                "success": False,
+                "error": stderr_str if stderr_str else "Repository verification failed"
+            }
+
+    except asyncio.TimeoutError:
+        logger.error("Repository verification timed out", path=path)
+        return {
+            "success": False,
+            "error": "Repository verification timed out"
+        }
+    except Exception as e:
+        logger.error("Failed to verify repository", path=path, error=str(e))
+        return {
+            "success": False,
+            "error": str(e)
+        }
+    finally:
+        # Clean up temporary SSH key file
         if temp_key_file and os.path.exists(temp_key_file):
             try:
                 os.unlink(temp_key_file)
