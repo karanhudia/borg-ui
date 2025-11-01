@@ -295,7 +295,7 @@ class BackupService:
             env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
 
             # Look up repository record to get passphrase, source directories, exclude patterns, and compression
-            source_paths = ["/data"]  # Default backup path
+            source_paths = None  # No default - must be configured
             exclude_patterns = []  # Default no exclusions
             compression = "lz4"  # Default compression
             try:
@@ -321,11 +321,17 @@ class BackupService:
                                           repository=repository,
                                           source_directories=source_paths)
                             else:
-                                logger.info("No source directories configured, using default /data",
-                                          repository=repository)
+                                error_msg = "No source directories configured for this repository. Please add source directories in repository settings."
+                                logger.error(error_msg, repository=repository)
+                                raise ValueError(error_msg)
                         except json.JSONDecodeError as e:
-                            logger.warning("Could not parse source_directories JSON, using default /data",
-                                         repository=repository, error=str(e))
+                            error_msg = f"Could not parse source_directories JSON: {str(e)}"
+                            logger.error(error_msg, repository=repository)
+                            raise ValueError(error_msg)
+                    else:
+                        error_msg = "No source directories configured for this repository. Please add source directories in repository settings."
+                        logger.error(error_msg, repository=repository)
+                        raise ValueError(error_msg)
 
                     # Parse exclude patterns from JSON if available
                     if repo_record.exclude_patterns:
@@ -340,9 +346,16 @@ class BackupService:
                             logger.warning("Could not parse exclude_patterns JSON",
                                          repository=repository, error=str(e))
                 else:
-                    logger.warning("Repository record not found, using defaults", repository=repository)
+                    error_msg = f"Repository record not found in database: {repository}"
+                    logger.error(error_msg, repository=repository)
+                    raise ValueError(error_msg)
+            except ValueError:
+                # Re-raise ValueError (from source_directories validation)
+                raise
             except Exception as e:
-                logger.warning("Could not look up repository record", error=str(e))
+                error_msg = f"Could not look up repository record: {str(e)}"
+                logger.error(error_msg, error=str(e))
+                raise ValueError(error_msg)
 
             # Calculate total expected size of source directories
             logger.info("Calculating total size of source directories", source_paths=source_paths)

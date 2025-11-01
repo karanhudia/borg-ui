@@ -162,6 +162,7 @@ export const eventsAPI = {
 export const repositoriesAPI = {
   getRepositories: () => api.get('/repositories/'),
   createRepository: (data: any) => api.post('/repositories/', data),
+  importRepository: (data: any) => api.post('/repositories/import', data),
   getRepository: (id: number) => api.get(`/repositories/${id}`),
   updateRepository: (id: number, data: any) => api.put(`/repositories/${id}`, data),
   deleteRepository: (id: number) => api.delete(`/repositories/${id}`),

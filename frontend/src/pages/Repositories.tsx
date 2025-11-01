@@ -41,6 +41,7 @@ import {
   DataUsage,
   Compress,
   Inventory,
+  FileUpload,
 } from '@mui/icons-material'
 import { repositoriesAPI, sshKeysAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
@@ -86,6 +87,7 @@ export default function Repositories() {
   const queryClient = useQueryClient()
   const appState = useAppState()
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
   const [editingRepository, setEditingRepository] = useState<Repository | null>(null)
   const [viewingInfoRepository, setViewingInfoRepository] = useState<Repository | null>(null)
   const [compactingRepository, setCompactingRepository] = useState<Repository | null>(null)
@@ -158,6 +160,24 @@ export default function Repositories() {
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to create repository')
+    },
+  })
+
+  const importRepositoryMutation = useMutation({
+    mutationFn: repositoriesAPI.importRepository,
+    onSuccess: (response: any) => {
+      const message = response?.data?.message || 'Repository imported successfully'
+      const archiveCount = response?.data?.repository?.archive_count || 0
+
+      toast.success(`${message}${archiveCount > 0 ? ` (${archiveCount} archives found)` : ''}`, { duration: 5000 })
+
+      queryClient.invalidateQueries({ queryKey: ['repositories'] })
+      queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
+      appState.refetch()
+      setShowImportModal(false)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to import repository')
     },
   })
 
@@ -250,11 +270,29 @@ export default function Repositories() {
     remote_path: '',
   })
 
+  const [importForm, setImportForm] = useState({
+    name: '',
+    path: '',
+    passphrase: '',
+    compression: 'lz4',
+    source_directories: [] as string[],
+    exclude_patterns: [] as string[],
+    repository_type: 'local',
+    host: '',
+    port: 22,
+    username: '',
+    ssh_key_id: null as number | null,
+    remote_path: '',
+  })
+
   const [newSourceDir, setNewSourceDir] = useState('')
   const [newExcludePattern, setNewExcludePattern] = useState('')
   const [showPathExplorer, setShowPathExplorer] = useState(false)
   const [showSourceDirExplorer, setShowSourceDirExplorer] = useState(false)
   const [showExcludeExplorer, setShowExcludeExplorer] = useState(false)
+  const [showImportPathExplorer, setShowImportPathExplorer] = useState(false)
+  const [showImportSourceDirExplorer, setShowImportSourceDirExplorer] = useState(false)
+  const [showImportExcludeExplorer, setShowImportExcludeExplorer] = useState(false)
 
   const [editForm, setEditForm] = useState({
     name: '',
@@ -375,6 +413,31 @@ export default function Repositories() {
     setNewExcludePattern('')
   }
 
+  const openImportModal = () => {
+    setShowImportModal(true)
+    setImportForm({
+      name: '',
+      path: '',
+      passphrase: '',
+      compression: 'lz4',
+      source_directories: [],
+      exclude_patterns: [],
+      repository_type: 'local',
+      host: '',
+      port: 22,
+      username: '',
+      ssh_key_id: null,
+      remote_path: '',
+    })
+    setNewSourceDir('')
+    setNewExcludePattern('')
+  }
+
+  const handleImportRepository = (e: React.FormEvent) => {
+    e.preventDefault()
+    importRepositoryMutation.mutate(importForm)
+  }
+
   const openEditModal = (repository: Repository) => {
     setEditingRepository(repository)
     setEditForm({
@@ -480,14 +543,24 @@ export default function Repositories() {
             </Typography>
           </Box>
           {user?.is_admin && (
-            <Button
-              variant="contained"
-              startIcon={<Add />}
-              onClick={openCreateModal}
-              sx={{ flexShrink: 0 }}
-            >
-              Create Repository
-            </Button>
+            <Stack direction="row" spacing={2}>
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={openCreateModal}
+                sx={{ flexShrink: 0 }}
+              >
+                Create Repository
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<FileUpload />}
+                onClick={openImportModal}
+                sx={{ flexShrink: 0 }}
+              >
+                Import Existing
+              </Button>
+            </Stack>
           )}
         </Box>
 
@@ -925,11 +998,17 @@ export default function Repositories() {
               {/* Source Directories */}
               <Box>
                 <Typography variant="subtitle2" gutterBottom>
-                  Source Directories (Optional)
+                  Source Directories <Box component="span" sx={{ color: 'error.main' }}>*</Box>
                 </Typography>
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-                  Specify which directories to backup to this repository
+                  Specify which directories to backup to this repository (at least one required)
                 </Typography>
+
+                {createForm.source_directories.length === 0 && (
+                  <Alert severity="warning" sx={{ mb: 1.5 }}>
+                    At least one source directory is required. Add the directories you want to backup.
+                  </Alert>
+                )}
 
                 {createForm.source_directories.length > 0 && (
                   <Stack spacing={0.5} sx={{ mb: 1.5 }}>
@@ -1093,8 +1172,226 @@ export default function Repositories() {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setShowCreateModal(false)}>Cancel</Button>
-            <Button type="submit" variant="contained" disabled={createRepositoryMutation.isLoading}>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={createRepositoryMutation.isLoading || createForm.source_directories.length === 0}
+            >
               {createRepositoryMutation.isLoading ? 'Creating...' : 'Create'}
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+
+      {/* Import Existing Repository Dialog */}
+      <Dialog open={showImportModal} onClose={() => setShowImportModal(false)} maxWidth="sm" fullWidth>
+        <form onSubmit={handleImportRepository}>
+          <DialogTitle>Import Existing Repository</DialogTitle>
+          <DialogContent>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Import a Borg repository that already exists. The repository will be verified before import.
+            </Alert>
+
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+              <TextField
+                label="Repository Name"
+                value={importForm.name}
+                onChange={(e) => setImportForm({ ...importForm, name: e.target.value })}
+                required
+                fullWidth
+                helperText="A friendly name to identify this repository in the UI"
+              />
+
+              <FormControl fullWidth>
+                <InputLabel>Repository Type</InputLabel>
+                <Select
+                  value={importForm.repository_type}
+                  label="Repository Type"
+                  onChange={(e) => setImportForm({ ...importForm, repository_type: e.target.value })}
+                >
+                  <MenuItem value="local">Local</MenuItem>
+                  <MenuItem value="ssh">SSH</MenuItem>
+                </Select>
+              </FormControl>
+
+              {importForm.repository_type !== 'local' && (
+                <>
+                  <TextField
+                    label="Host"
+                    value={importForm.host}
+                    onChange={(e) => setImportForm({ ...importForm, host: e.target.value })}
+                    placeholder="192.168.1.100"
+                    required
+                    fullWidth
+                  />
+
+                  <TextField
+                    label="Username"
+                    value={importForm.username}
+                    onChange={(e) => setImportForm({ ...importForm, username: e.target.value })}
+                    placeholder="user"
+                    required
+                    fullWidth
+                  />
+
+                  <TextField
+                    label="Port"
+                    type="number"
+                    value={importForm.port}
+                    onChange={(e) => setImportForm({ ...importForm, port: parseInt(e.target.value) })}
+                    required
+                    fullWidth
+                  />
+
+                  <FormControl fullWidth>
+                    <InputLabel>SSH Key</InputLabel>
+                    <Select
+                      value={importForm.ssh_key_id ?? ''}
+                      label="SSH Key"
+                      onChange={(e) => setImportForm({ ...importForm, ssh_key_id: e.target.value ? Number(e.target.value) : null })}
+                    >
+                      <MenuItem value="">Select SSH Key</MenuItem>
+                      {sshKeysData?.data?.ssh_keys?.map((key: SSHKey) => (
+                        <MenuItem key={key.id} value={key.id}>
+                          {key.name} ({key.key_type})
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+
+                  <TextField
+                    label="Remote Borg Path (Optional)"
+                    value={importForm.remote_path}
+                    onChange={(e) => setImportForm({ ...importForm, remote_path: e.target.value })}
+                    placeholder="/usr/local/bin/borg"
+                    fullWidth
+                  />
+                </>
+              )}
+
+              <TextField
+                label="Repository Path"
+                value={importForm.path}
+                onChange={(e) => setImportForm({ ...importForm, path: e.target.value })}
+                placeholder={importForm.repository_type === 'local' ? '/local/path/to/existing/repo' : '/path/to/existing/repo'}
+                required
+                fullWidth
+                helperText={importForm.repository_type === 'local' ? 'Full path to the existing Borg repository' : 'Path to repository on remote server'}
+                InputProps={{
+                  endAdornment: importForm.repository_type === 'local' && (
+                    <InputAdornment position="end">
+                      <IconButton onClick={() => setShowImportPathExplorer(true)} edge="end">
+                        <FolderOpen />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+
+              <TextField
+                label="Passphrase"
+                type="password"
+                value={importForm.passphrase}
+                onChange={(e) => setImportForm({ ...importForm, passphrase: e.target.value })}
+                placeholder="Repository passphrase (if encrypted)"
+                fullWidth
+                helperText="Required if the repository is encrypted"
+              />
+
+              <FormControl fullWidth>
+                <InputLabel>Default Compression</InputLabel>
+                <Select
+                  value={importForm.compression}
+                  label="Default Compression"
+                  onChange={(e) => setImportForm({ ...importForm, compression: e.target.value })}
+                >
+                  <MenuItem value="lz4">LZ4 (Fast)</MenuItem>
+                  <MenuItem value="zstd">Zstandard</MenuItem>
+                  <MenuItem value="zlib">Zlib</MenuItem>
+                  <MenuItem value="none">None</MenuItem>
+                </Select>
+              </FormControl>
+
+              <Divider />
+
+              <Typography variant="subtitle2" fontWeight={600}>
+                Optional: Configure for Future Backups
+              </Typography>
+
+              <Box>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  Source Directories (optional)
+                </Typography>
+                {importForm.source_directories.length > 0 && (
+                  <Stack spacing={0.5} sx={{ mb: 1.5 }}>
+                    {importForm.source_directories.map((dir, index) => (
+                      <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', flex: 1 }}>
+                          {dir}
+                        </Typography>
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setImportForm({
+                              ...importForm,
+                              source_directories: importForm.source_directories.filter((_, i) => i !== index)
+                            })
+                          }}
+                        >
+                          <Delete fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    ))}
+                  </Stack>
+                )}
+
+                <Stack direction="row" spacing={1}>
+                  <TextField
+                    size="small"
+                    placeholder="/path/to/source"
+                    value={newSourceDir}
+                    onChange={(e) => setNewSourceDir(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        if (newSourceDir.trim()) {
+                          setImportForm({
+                            ...importForm,
+                            source_directories: [...importForm.source_directories, newSourceDir.trim()]
+                          })
+                          setNewSourceDir('')
+                        }
+                      }
+                    }}
+                    fullWidth
+                  />
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => {
+                      if (newSourceDir.trim()) {
+                        setImportForm({
+                          ...importForm,
+                          source_directories: [...importForm.source_directories, newSourceDir.trim()]
+                        })
+                        setNewSourceDir('')
+                      }
+                    }}
+                  >
+                    Add
+                  </Button>
+                  <IconButton size="small" onClick={() => setShowImportSourceDirExplorer(true)}>
+                    <FolderOpen />
+                  </IconButton>
+                </Stack>
+              </Box>
+            </Box>
+          </DialogContent>
+
+          <DialogActions>
+            <Button onClick={() => setShowImportModal(false)}>Cancel</Button>
+            <Button type="submit" variant="contained" disabled={importRepositoryMutation.isLoading}>
+              {importRepositoryMutation.isLoading ? 'Importing...' : 'Import'}
             </Button>
           </DialogActions>
         </form>
@@ -1870,6 +2167,84 @@ export default function Repositories() {
         initialPath="/"
         multiSelect={true}
         connectionType="local"
+        selectMode="both"
+      />
+
+      {/* File Explorer Dialogs for Import */}
+      <FileExplorerDialog
+        open={showImportPathExplorer}
+        onClose={() => setShowImportPathExplorer(false)}
+        onSelect={(paths) => {
+          if (paths.length > 0) {
+            setImportForm({ ...importForm, path: paths[0] })
+          }
+        }}
+        title="Select Repository Path"
+        initialPath="/"
+        multiSelect={false}
+        connectionType={importForm.repository_type === 'local' ? 'local' : 'ssh'}
+        sshConfig={
+          importForm.repository_type !== 'local' && importForm.ssh_key_id
+            ? {
+                ssh_key_id: importForm.ssh_key_id,
+                host: importForm.host,
+                username: importForm.username,
+                port: importForm.port,
+              }
+            : undefined
+        }
+        selectMode="directories"
+      />
+
+      <FileExplorerDialog
+        open={showImportSourceDirExplorer}
+        onClose={() => setShowImportSourceDirExplorer(false)}
+        onSelect={(paths) => {
+          setImportForm({
+            ...importForm,
+            source_directories: [...importForm.source_directories, ...paths],
+          })
+        }}
+        title="Select Source Directories"
+        initialPath="/"
+        multiSelect={true}
+        connectionType={importForm.repository_type === 'local' ? 'local' : 'ssh'}
+        sshConfig={
+          importForm.repository_type !== 'local' && importForm.ssh_key_id
+            ? {
+                ssh_key_id: importForm.ssh_key_id,
+                host: importForm.host,
+                username: importForm.username,
+                port: importForm.port,
+              }
+            : undefined
+        }
+        selectMode="directories"
+      />
+
+      <FileExplorerDialog
+        open={showImportExcludeExplorer}
+        onClose={() => setShowImportExcludeExplorer(false)}
+        onSelect={(paths) => {
+          setImportForm({
+            ...importForm,
+            exclude_patterns: [...importForm.exclude_patterns, ...paths],
+          })
+        }}
+        title="Select Directories to Exclude"
+        initialPath="/"
+        multiSelect={true}
+        connectionType={importForm.repository_type === 'local' ? 'local' : 'ssh'}
+        sshConfig={
+          importForm.repository_type !== 'local' && importForm.ssh_key_id
+            ? {
+                ssh_key_id: importForm.ssh_key_id,
+                host: importForm.host,
+                username: importForm.username,
+                port: importForm.port,
+              }
+            : undefined
+        }
         selectMode="both"
       />
     </Box>
