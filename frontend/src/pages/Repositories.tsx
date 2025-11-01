@@ -1315,12 +1315,21 @@ export default function Repositories() {
               <Divider />
 
               <Typography variant="subtitle2" fontWeight={600}>
-                Optional: Configure for Future Backups
+                Source Directories <Box component="span" sx={{ color: 'error.main' }}>*</Box>
               </Typography>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+                Specify which directories to backup to this repository (at least one required)
+              </Typography>
+
+              {importForm.source_directories.length === 0 && (
+                <Alert severity="warning" sx={{ mb: 1.5 }}>
+                  At least one source directory is required. Add the directories you want to backup.
+                </Alert>
+              )}
 
               <Box>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Source Directories (optional)
+                  Directories to backup:
                 </Typography>
                 {importForm.source_directories.length > 0 && (
                   <Stack spacing={0.5} sx={{ mb: 1.5 }}>
@@ -1390,7 +1399,11 @@ export default function Repositories() {
 
           <DialogActions>
             <Button onClick={() => setShowImportModal(false)}>Cancel</Button>
-            <Button type="submit" variant="contained" disabled={importRepositoryMutation.isLoading}>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={importRepositoryMutation.isLoading || importForm.source_directories.length === 0}
+            >
               {importRepositoryMutation.isLoading ? 'Importing...' : 'Import'}
             </Button>
           </DialogActions>

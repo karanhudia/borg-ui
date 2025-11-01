@@ -349,6 +349,13 @@ async def import_repository(
         raise HTTPException(status_code=403, detail="Admin access required")
 
     try:
+        # Validate source directories are provided
+        if not repo_data.source_directories or len(repo_data.source_directories) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="At least one source directory is required. Source directories specify what data will be backed up to this repository."
+            )
+
         # Validate repository type and path
         repo_path = repo_data.path.strip()
 
