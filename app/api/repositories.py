@@ -120,7 +120,11 @@ async def get_repositories(
                     "total_size": repo.total_size,
                     "archive_count": repo.archive_count,
                     "created_at": format_datetime(repo.created_at),
-                    "updated_at": format_datetime(repo.updated_at)
+                    "updated_at": format_datetime(repo.updated_at),
+                    "pre_backup_script": repo.pre_backup_script,
+                    "post_backup_script": repo.post_backup_script,
+                    "hook_timeout": repo.hook_timeout,
+                    "continue_on_hook_failure": repo.continue_on_hook_failure
                 }
                 for repo in repositories
             ]
