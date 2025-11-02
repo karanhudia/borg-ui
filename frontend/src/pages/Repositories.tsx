@@ -422,6 +422,10 @@ export default function Repositories() {
       ssh_key_id: null,
       connection_id: null,
       remote_path: '',
+      pre_backup_script: '',
+      post_backup_script: '',
+      hook_timeout: 300,
+      continue_on_hook_failure: false,
     })
     setNewSourceDir('')
     setNewExcludePattern('')
