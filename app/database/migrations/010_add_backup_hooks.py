@@ -16,7 +16,8 @@ def upgrade(connection):
         WHERE type='table' AND name='repositories'
     """))
 
-    table_sql = result.fetchone()[0] if result.fetchone() else ""
+    row = result.fetchone()
+    table_sql = row[0] if row else ""
 
     columns_to_add = []
 
