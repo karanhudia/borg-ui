@@ -16,7 +16,7 @@ export default function CodeEditor({
   onChange,
   label,
   helperText,
-  placeholder = '#!/bin/bash\n',
+  placeholder: _placeholder = '#!/bin/bash\n',
   height = '180px',
   language = 'shell'
 }: CodeEditorProps) {
