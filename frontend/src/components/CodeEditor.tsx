@@ -29,16 +29,16 @@ export default function CodeEditor({
       )}
       <Box
         sx={{
-          border: '1px solid',
+          border: '2px solid',
           borderColor: 'divider',
           borderRadius: 1,
           overflow: 'hidden',
+          transition: 'border-color 0.2s',
           '&:hover': {
-            borderColor: 'text.primary',
+            borderColor: 'text.secondary',
           },
           '&:focus-within': {
             borderColor: 'primary.main',
-            borderWidth: '2px',
           },
         }}
       >
