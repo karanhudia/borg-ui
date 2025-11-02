@@ -50,6 +50,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useAppState } from '../context/AppContext'
 import { formatDateShort, formatBytes } from '../utils/dateUtils'
 import FileExplorerDialog from '../components/FileExplorerDialog'
+import CodeEditor from '../components/CodeEditor'
 import { FolderOpen } from '@mui/icons-material'
 
 interface Repository {
@@ -1204,32 +1205,22 @@ export default function Repositories() {
                 Run custom scripts before and after backups (e.g., wake up NAS, send notifications)
               </Typography>
 
-              <TextField
+              <CodeEditor
                 label="Pre-Backup Script"
-                multiline
-                rows={4}
                 value={createForm.pre_backup_script}
-                onChange={(e) => setCreateForm({ ...createForm, pre_backup_script: e.target.value })}
+                onChange={(value) => setCreateForm({ ...createForm, pre_backup_script: value })}
                 placeholder="#!/bin/bash&#10;echo 'Pre-backup hook started'&#10;wakeonlan AA:BB:CC:DD:EE:FF&#10;sleep 60"
-                fullWidth
                 helperText="Shell script to run before backup starts"
-                InputProps={{
-                  style: { fontFamily: 'monospace', fontSize: '0.875rem' }
-                }}
+                height="150px"
               />
 
-              <TextField
+              <CodeEditor
                 label="Post-Backup Script"
-                multiline
-                rows={4}
                 value={createForm.post_backup_script}
-                onChange={(e) => setCreateForm({ ...createForm, post_backup_script: e.target.value })}
-                placeholder="#!/bin/bash&#10;echo 'Post-backup hook started'&#10;ssh nas@192.168.1.100 'sudo poweroff'"
-                fullWidth
+                onChange={(value) => setCreateForm({ ...createForm, post_backup_script: value })}
+                placeholder="#!/bin/bash&#10;echo 'Post-backup hook completed'&#10;ssh nas@192.168.1.100 'sudo poweroff'"
                 helperText="Shell script to run after successful backup"
-                InputProps={{
-                  style: { fontFamily: 'monospace', fontSize: '0.875rem' }
-                }}
+                height="150px"
               />
 
               <Box sx={{ display: 'flex', gap: 2 }}>
@@ -1488,32 +1479,22 @@ export default function Repositories() {
                 Run custom scripts before and after backups (e.g., wake up NAS, send notifications)
               </Typography>
 
-              <TextField
+              <CodeEditor
                 label="Pre-Backup Script"
-                multiline
-                rows={4}
                 value={importForm.pre_backup_script}
-                onChange={(e) => setImportForm({ ...importForm, pre_backup_script: e.target.value })}
+                onChange={(value) => setImportForm({ ...importForm, pre_backup_script: value })}
                 placeholder="#!/bin/bash&#10;echo 'Pre-backup hook started'&#10;wakeonlan AA:BB:CC:DD:EE:FF&#10;sleep 60"
-                fullWidth
                 helperText="Shell script to run before backup starts"
-                InputProps={{
-                  style: { fontFamily: 'monospace', fontSize: '0.875rem' }
-                }}
+                height="150px"
               />
 
-              <TextField
+              <CodeEditor
                 label="Post-Backup Script"
-                multiline
-                rows={4}
                 value={importForm.post_backup_script}
-                onChange={(e) => setImportForm({ ...importForm, post_backup_script: e.target.value })}
-                placeholder="#!/bin/bash&#10;echo 'Post-backup hook started'&#10;ssh nas@192.168.1.100 'sudo poweroff'"
-                fullWidth
+                onChange={(value) => setImportForm({ ...importForm, post_backup_script: value })}
+                placeholder="#!/bin/bash&#10;echo 'Post-backup hook completed'&#10;ssh nas@192.168.1.100 'sudo poweroff'"
                 helperText="Shell script to run after successful backup"
-                InputProps={{
-                  style: { fontFamily: 'monospace', fontSize: '0.875rem' }
-                }}
+                height="150px"
               />
 
               <Box sx={{ display: 'flex', gap: 2 }}>
@@ -1774,32 +1755,22 @@ export default function Repositories() {
                 Run custom scripts before and after backups (e.g., wake up NAS, send notifications)
               </Typography>
 
-              <TextField
+              <CodeEditor
                 label="Pre-Backup Script"
-                multiline
-                rows={4}
                 value={editForm.pre_backup_script}
-                onChange={(e) => setEditForm({ ...editForm, pre_backup_script: e.target.value })}
+                onChange={(value) => setEditForm({ ...editForm, pre_backup_script: value })}
                 placeholder="#!/bin/bash&#10;echo 'Pre-backup hook started'&#10;wakeonlan AA:BB:CC:DD:EE:FF&#10;sleep 60"
-                fullWidth
                 helperText="Shell script to run before backup starts"
-                InputProps={{
-                  style: { fontFamily: 'monospace', fontSize: '0.875rem' }
-                }}
+                height="150px"
               />
 
-              <TextField
+              <CodeEditor
                 label="Post-Backup Script"
-                multiline
-                rows={4}
                 value={editForm.post_backup_script}
-                onChange={(e) => setEditForm({ ...editForm, post_backup_script: e.target.value })}
-                placeholder="#!/bin/bash&#10;echo 'Post-backup hook started'&#10;ssh nas@192.168.1.100 'sudo poweroff'"
-                fullWidth
+                onChange={(value) => setEditForm({ ...editForm, post_backup_script: value })}
+                placeholder="#!/bin/bash&#10;echo 'Post-backup hook completed'&#10;ssh nas@192.168.1.100 'sudo poweroff'"
                 helperText="Shell script to run after successful backup"
-                InputProps={{
-                  style: { fontFamily: 'monospace', fontSize: '0.875rem' }
-                }}
+                height="150px"
               />
 
               <Box sx={{ display: 'flex', gap: 2 }}>
