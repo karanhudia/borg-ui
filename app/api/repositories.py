@@ -48,6 +48,10 @@ class RepositoryCreate(BaseModel):
     username: Optional[str] = None  # SSH username
     ssh_key_id: Optional[int] = None  # Associated SSH key ID
     remote_path: Optional[str] = None  # Path to borg on remote server (e.g., /usr/local/bin/borg)
+    pre_backup_script: Optional[str] = None  # Script to run before backup
+    post_backup_script: Optional[str] = None  # Script to run after backup
+    hook_timeout: Optional[int] = 300  # Hook timeout in seconds
+    continue_on_hook_failure: Optional[bool] = False  # Continue backup if pre-hook fails
 
 class RepositoryImport(BaseModel):
     name: str
@@ -62,6 +66,10 @@ class RepositoryImport(BaseModel):
     username: Optional[str] = None  # SSH username
     ssh_key_id: Optional[int] = None  # Associated SSH key ID
     remote_path: Optional[str] = None  # Path to borg on remote server
+    pre_backup_script: Optional[str] = None  # Script to run before backup
+    post_backup_script: Optional[str] = None  # Script to run after backup
+    hook_timeout: Optional[int] = 300  # Hook timeout in seconds
+    continue_on_hook_failure: Optional[bool] = False  # Continue backup if pre-hook fails
 
 class RepositoryUpdate(BaseModel):
     name: Optional[str] = None
@@ -70,6 +78,10 @@ class RepositoryUpdate(BaseModel):
     source_directories: Optional[List[str]] = None
     exclude_patterns: Optional[List[str]] = None
     remote_path: Optional[str] = None
+    pre_backup_script: Optional[str] = None
+    post_backup_script: Optional[str] = None
+    hook_timeout: Optional[int] = None
+    continue_on_hook_failure: Optional[bool] = None
 
 class RepositoryInfo(BaseModel):
     id: int
@@ -315,7 +327,11 @@ async def create_repository(
             port=repo_data.port,
             username=repo_data.username,
             ssh_key_id=repo_data.ssh_key_id,
-            remote_path=repo_data.remote_path
+            remote_path=repo_data.remote_path,
+            pre_backup_script=repo_data.pre_backup_script,
+            post_backup_script=repo_data.post_backup_script,
+            hook_timeout=repo_data.hook_timeout,
+            continue_on_hook_failure=repo_data.continue_on_hook_failure
         )
 
         db.add(repository)
@@ -512,7 +528,11 @@ async def import_repository(
             username=repo_data.username,
             ssh_key_id=repo_data.ssh_key_id,
             remote_path=repo_data.remote_path,
-            archive_count=len(repo_info.get("archives", [])) if "archives" in repo_info else 0
+            archive_count=len(repo_info.get("archives", [])) if "archives" in repo_info else 0,
+            pre_backup_script=repo_data.pre_backup_script,
+            post_backup_script=repo_data.post_backup_script,
+            hook_timeout=repo_data.hook_timeout,
+            continue_on_hook_failure=repo_data.continue_on_hook_failure
         )
 
         db.add(repository)
@@ -628,6 +648,18 @@ async def update_repository(
 
         if repo_data.remote_path is not None:
             repository.remote_path = repo_data.remote_path
+
+        if repo_data.pre_backup_script is not None:
+            repository.pre_backup_script = repo_data.pre_backup_script
+
+        if repo_data.post_backup_script is not None:
+            repository.post_backup_script = repo_data.post_backup_script
+
+        if repo_data.hook_timeout is not None:
+            repository.hook_timeout = repo_data.hook_timeout
+
+        if repo_data.continue_on_hook_failure is not None:
+            repository.continue_on_hook_failure = repo_data.continue_on_hook_failure
 
         repository.updated_at = datetime.utcnow()
         db.commit()
