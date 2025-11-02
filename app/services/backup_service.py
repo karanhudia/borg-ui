@@ -271,7 +271,8 @@ class BackupService:
 
             # Build borg create command directly
             # Format: borg create --progress --stats --list REPOSITORY::ARCHIVE PATH [PATH ...]
-            archive_name = f"manual-backup-{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')}"
+            # Use local time for archive names so they're meaningful to users
+            archive_name = f"manual-backup-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
 
             # Set environment variables for borg
             env = os.environ.copy()
@@ -697,7 +698,7 @@ class BackupService:
             # CONDITIONAL LOG SAVING: Only save logs on failure/cancellation for debugging
             if job.status in ['failed', 'cancelled'] or process.returncode not in [0, None]:
                 # Save log buffer to file for debugging
-                log_file = self.log_dir / f"backup_job_{job_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.log"
+                log_file = self.log_dir / f"backup_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
                 try:
                     log_file.write_text('\n'.join(log_buffer))
                     job.logs = f"Logs saved to: {log_file.name}"
