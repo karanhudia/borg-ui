@@ -427,6 +427,9 @@ class BackupService:
                 logger.error(error_msg, error=str(e))
                 raise ValueError(error_msg)
 
+            # Initialize hook logs
+            hook_logs = []
+
             # Run pre-backup hook if configured
             if repo_record and repo_record.pre_backup_script:
                 logger.info("Running pre-backup hook", job_id=job_id, repository=repository)
@@ -438,6 +441,24 @@ class BackupService:
                     job_id
                 )
 
+                # Log hook output
+                hook_log_entry = [
+                    "=" * 80,
+                    "PRE-BACKUP HOOK",
+                    "=" * 80,
+                    f"Exit Code: {pre_hook_result['returncode']}",
+                    f"Status: {'SUCCESS' if pre_hook_result['success'] else 'FAILED'}",
+                    "",
+                    "STDOUT:",
+                    pre_hook_result['stdout'] if pre_hook_result['stdout'] else "(empty)",
+                    "",
+                    "STDERR:",
+                    pre_hook_result['stderr'] if pre_hook_result['stderr'] else "(empty)",
+                    "=" * 80,
+                    ""
+                ]
+                hook_logs.extend(hook_log_entry)
+
                 if not pre_hook_result["success"]:
                     error_msg = f"Pre-backup hook failed: {pre_hook_result['stderr']}"
                     logger.error(error_msg, job_id=job_id)
@@ -446,6 +467,7 @@ class BackupService:
                     if not repo_record.continue_on_hook_failure:
                         job.status = "failed"
                         job.error_message = error_msg
+                        job.logs = "\n".join(hook_logs)
                         job.completed_at = datetime.utcnow()
                         db.commit()
                         return
@@ -748,6 +770,24 @@ class BackupService:
                         job_id
                     )
 
+                    # Log post-hook output
+                    post_hook_log_entry = [
+                        "=" * 80,
+                        "POST-BACKUP HOOK",
+                        "=" * 80,
+                        f"Exit Code: {post_hook_result['returncode']}",
+                        f"Status: {'SUCCESS' if post_hook_result['success'] else 'FAILED'}",
+                        "",
+                        "STDOUT:",
+                        post_hook_result['stdout'] if post_hook_result['stdout'] else "(empty)",
+                        "",
+                        "STDERR:",
+                        post_hook_result['stderr'] if post_hook_result['stderr'] else "(empty)",
+                        "=" * 80,
+                        ""
+                    ]
+                    hook_logs.extend(post_hook_log_entry)
+
                     if not post_hook_result["success"]:
                         logger.warning("Post-backup hook failed",
                                      job_id=job_id,
@@ -776,6 +816,24 @@ class BackupService:
                         hook_timeout,
                         job_id
                     )
+
+                    # Log post-hook output
+                    post_hook_log_entry = [
+                        "=" * 80,
+                        "POST-BACKUP HOOK",
+                        "=" * 80,
+                        f"Exit Code: {post_hook_result['returncode']}",
+                        f"Status: {'SUCCESS' if post_hook_result['success'] else 'FAILED'}",
+                        "",
+                        "STDOUT:",
+                        post_hook_result['stdout'] if post_hook_result['stdout'] else "(empty)",
+                        "",
+                        "STDERR:",
+                        post_hook_result['stderr'] if post_hook_result['stderr'] else "(empty)",
+                        "=" * 80,
+                        ""
+                    ]
+                    hook_logs.extend(post_hook_log_entry)
 
                     if not post_hook_result["success"]:
                         logger.warning("Post-backup hook failed",
@@ -831,24 +889,30 @@ class BackupService:
                 job.completed_at = datetime.utcnow()
 
             # CONDITIONAL LOG SAVING: Only save logs on failure/cancellation for debugging
+            # Always save hook logs if present
             if job.status in ['failed', 'cancelled'] or process.returncode not in [0, None]:
                 # Save log buffer to file for debugging
                 log_file = self.log_dir / f"backup_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
                 try:
-                    log_file.write_text('\n'.join(log_buffer))
+                    combined_logs = hook_logs + log_buffer if hook_logs else log_buffer
+                    log_file.write_text('\n'.join(combined_logs))
                     job.logs = f"Logs saved to: {log_file.name}"
                     logger.warning("Backup failed/cancelled, logs saved for debugging",
                                  job_id=job_id,
                                  status=job.status,
                                  log_file=str(log_file),
-                                 log_lines=len(log_buffer))
+                                 log_lines=len(combined_logs))
                 except Exception as e:
                     job.logs = f"Failed to save logs: {str(e)}"
                     logger.error("Failed to save log buffer to file", job_id=job_id, error=str(e))
             else:
-                # Success - no logs needed, maximum performance
-                job.logs = None
-                logger.info("Backup completed successfully, no logs saved", job_id=job_id)
+                # Success - save hook logs if present, otherwise no logs for performance
+                if hook_logs:
+                    job.logs = "\n".join(hook_logs)
+                    logger.info("Backup completed successfully with hooks, hook logs saved", job_id=job_id)
+                else:
+                    job.logs = None
+                    logger.info("Backup completed successfully, no logs saved", job_id=job_id)
 
             db.commit()
             logger.info("Backup completed", job_id=job_id, status=job.status)
