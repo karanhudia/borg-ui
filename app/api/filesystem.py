@@ -275,7 +275,11 @@ async def browse_ssh_filesystem(
             )
 
         # Log raw output for debugging
-        logger.debug("SSH ls output", path=path, lines_count=len(result.stdout.strip().split('\n')))
+        output_lines = result.stdout.strip().split('\n')
+        logger.info("SSH ls output received",
+                    path=path,
+                    lines_count=len(output_lines),
+                    first_few_lines=output_lines[:5] if output_lines else [])
 
         # Parse ls output
         items = []
@@ -337,6 +341,7 @@ async def browse_ssh_filesystem(
                     permissions=permissions[1:] if len(permissions) > 1 else None
                 )
                 items.append(item)
+                logger.debug("Parsed SSH ls entry", name=name, is_dir=is_dir, path=full_path)
             except (ValueError, IndexError) as e:
                 logger.debug("Failed to parse ls line", line=line, error=str(e))
                 continue
