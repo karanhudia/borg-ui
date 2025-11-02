@@ -1207,23 +1207,29 @@ export default function Repositories() {
               <TextField
                 label="Pre-Backup Script"
                 multiline
-                rows={3}
+                rows={4}
                 value={createForm.pre_backup_script}
                 onChange={(e) => setCreateForm({ ...createForm, pre_backup_script: e.target.value })}
-                placeholder="#!/bin/bash&#10;wakeonlan AA:BB:CC:DD:EE:FF&#10;sleep 60"
+                placeholder="#!/bin/bash&#10;echo 'Pre-backup hook started'&#10;wakeonlan AA:BB:CC:DD:EE:FF&#10;sleep 60"
                 fullWidth
                 helperText="Shell script to run before backup starts"
+                InputProps={{
+                  style: { fontFamily: 'monospace', fontSize: '0.875rem' }
+                }}
               />
 
               <TextField
                 label="Post-Backup Script"
                 multiline
-                rows={3}
+                rows={4}
                 value={createForm.post_backup_script}
                 onChange={(e) => setCreateForm({ ...createForm, post_backup_script: e.target.value })}
-                placeholder="#!/bin/bash&#10;ssh nas@192.168.1.100 'sudo poweroff'"
+                placeholder="#!/bin/bash&#10;echo 'Post-backup hook started'&#10;ssh nas@192.168.1.100 'sudo poweroff'"
                 fullWidth
                 helperText="Shell script to run after successful backup"
+                InputProps={{
+                  style: { fontFamily: 'monospace', fontSize: '0.875rem' }
+                }}
               />
 
               <Box sx={{ display: 'flex', gap: 2 }}>
@@ -1485,23 +1491,29 @@ export default function Repositories() {
               <TextField
                 label="Pre-Backup Script"
                 multiline
-                rows={3}
+                rows={4}
                 value={importForm.pre_backup_script}
                 onChange={(e) => setImportForm({ ...importForm, pre_backup_script: e.target.value })}
-                placeholder="#!/bin/bash&#10;wakeonlan AA:BB:CC:DD:EE:FF&#10;sleep 60"
+                placeholder="#!/bin/bash&#10;echo 'Pre-backup hook started'&#10;wakeonlan AA:BB:CC:DD:EE:FF&#10;sleep 60"
                 fullWidth
                 helperText="Shell script to run before backup starts"
+                InputProps={{
+                  style: { fontFamily: 'monospace', fontSize: '0.875rem' }
+                }}
               />
 
               <TextField
                 label="Post-Backup Script"
                 multiline
-                rows={3}
+                rows={4}
                 value={importForm.post_backup_script}
                 onChange={(e) => setImportForm({ ...importForm, post_backup_script: e.target.value })}
-                placeholder="#!/bin/bash&#10;ssh nas@192.168.1.100 'sudo poweroff'"
+                placeholder="#!/bin/bash&#10;echo 'Post-backup hook started'&#10;ssh nas@192.168.1.100 'sudo poweroff'"
                 fullWidth
                 helperText="Shell script to run after successful backup"
+                InputProps={{
+                  style: { fontFamily: 'monospace', fontSize: '0.875rem' }
+                }}
               />
 
               <Box sx={{ display: 'flex', gap: 2 }}>
@@ -1765,23 +1777,29 @@ export default function Repositories() {
               <TextField
                 label="Pre-Backup Script"
                 multiline
-                rows={3}
+                rows={4}
                 value={editForm.pre_backup_script}
                 onChange={(e) => setEditForm({ ...editForm, pre_backup_script: e.target.value })}
-                placeholder="#!/bin/bash&#10;wakeonlan AA:BB:CC:DD:EE:FF&#10;sleep 60"
+                placeholder="#!/bin/bash&#10;echo 'Pre-backup hook started'&#10;wakeonlan AA:BB:CC:DD:EE:FF&#10;sleep 60"
                 fullWidth
                 helperText="Shell script to run before backup starts"
+                InputProps={{
+                  style: { fontFamily: 'monospace', fontSize: '0.875rem' }
+                }}
               />
 
               <TextField
                 label="Post-Backup Script"
                 multiline
-                rows={3}
+                rows={4}
                 value={editForm.post_backup_script}
                 onChange={(e) => setEditForm({ ...editForm, post_backup_script: e.target.value })}
-                placeholder="#!/bin/bash&#10;ssh nas@192.168.1.100 'sudo poweroff'"
+                placeholder="#!/bin/bash&#10;echo 'Post-backup hook started'&#10;ssh nas@192.168.1.100 'sudo poweroff'"
                 fullWidth
                 helperText="Shell script to run after successful backup"
+                InputProps={{
+                  style: { fontFamily: 'monospace', fontSize: '0.875rem' }
+                }}
               />
 
               <Box sx={{ display: 'flex', gap: 2 }}>
