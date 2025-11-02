@@ -50,6 +50,12 @@ class Repository(Base):
     last_auth_test = Column(DateTime, nullable=True)
     auth_error_message = Column(Text, nullable=True)
 
+    # Backup hooks
+    pre_backup_script = Column(Text, nullable=True)  # Shell script to run before backup
+    post_backup_script = Column(Text, nullable=True)  # Shell script to run after backup
+    hook_timeout = Column(Integer, default=300)  # Hook timeout in seconds (default 5 minutes)
+    continue_on_hook_failure = Column(Boolean, default=False)  # Whether to continue backup if pre-hook fails
+
     # Relationships
     ssh_key = relationship("SSHKey", back_populates="repositories")
 

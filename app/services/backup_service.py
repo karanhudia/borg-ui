@@ -21,6 +21,75 @@ class BackupService:
         self.running_processes = {}  # Track running backup processes by job_id
         self.error_msgids = {}  # Track error message IDs by job_id
 
+    async def _run_hook(self, script: str, hook_name: str, timeout: int, job_id: int) -> dict:
+        """
+        Run a pre or post backup hook script
+
+        Args:
+            script: Shell script to execute
+            hook_name: Name of the hook (for logging)
+            timeout: Timeout in seconds
+            job_id: Backup job ID
+
+        Returns:
+            dict with success, stdout, stderr, returncode
+        """
+        try:
+            logger.info(f"Running {hook_name} hook", job_id=job_id, script_preview=script[:100])
+
+            # Execute script in shell
+            process = await asyncio.create_subprocess_shell(
+                script,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=os.environ.copy()
+            )
+
+            # Wait with timeout
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(),
+                timeout=timeout
+            )
+
+            stdout_str = stdout.decode() if stdout else ""
+            stderr_str = stderr.decode() if stderr else ""
+
+            success = process.returncode == 0
+
+            if success:
+                logger.info(f"{hook_name} hook completed successfully",
+                           job_id=job_id,
+                           returncode=process.returncode)
+            else:
+                logger.warning(f"{hook_name} hook failed",
+                              job_id=job_id,
+                              returncode=process.returncode,
+                              stderr=stderr_str[:500])
+
+            return {
+                "success": success,
+                "returncode": process.returncode,
+                "stdout": stdout_str,
+                "stderr": stderr_str
+            }
+
+        except asyncio.TimeoutError:
+            logger.error(f"{hook_name} hook timed out", job_id=job_id, timeout=timeout)
+            return {
+                "success": False,
+                "returncode": -1,
+                "stdout": "",
+                "stderr": f"Hook timed out after {timeout} seconds"
+            }
+        except Exception as e:
+            logger.error(f"{hook_name} hook exception", job_id=job_id, error=str(e))
+            return {
+                "success": False,
+                "returncode": -1,
+                "stdout": "",
+                "stderr": f"Hook failed with exception: {str(e)}"
+            }
+
     def rotate_logs(self, max_age_days: int = 30, max_files: int = 100):
         """
         Rotate backup log files to prevent disk space issues
@@ -358,6 +427,35 @@ class BackupService:
                 logger.error(error_msg, error=str(e))
                 raise ValueError(error_msg)
 
+            # Run pre-backup hook if configured
+            if repo_record and repo_record.pre_backup_script:
+                logger.info("Running pre-backup hook", job_id=job_id, repository=repository)
+                hook_timeout = repo_record.hook_timeout or 300
+                pre_hook_result = await self._run_hook(
+                    repo_record.pre_backup_script,
+                    "pre-backup",
+                    hook_timeout,
+                    job_id
+                )
+
+                if not pre_hook_result["success"]:
+                    error_msg = f"Pre-backup hook failed: {pre_hook_result['stderr']}"
+                    logger.error(error_msg, job_id=job_id)
+
+                    # Check if we should continue or abort
+                    if not repo_record.continue_on_hook_failure:
+                        job.status = "failed"
+                        job.error_message = error_msg
+                        job.completed_at = datetime.utcnow()
+                        db.commit()
+                        return
+                    else:
+                        logger.warning("Pre-backup hook failed but continuing anyway",
+                                     job_id=job_id,
+                                     continue_on_failure=True)
+                else:
+                    logger.info("Pre-backup hook completed successfully", job_id=job_id)
+
             # Calculate total expected size of source directories
             logger.info("Calculating total size of source directories", source_paths=source_paths)
             total_expected_size = await self._calculate_source_size(source_paths)
@@ -638,6 +736,25 @@ class BackupService:
                 await self._update_archive_stats(db, job_id, repository, archive_name, env)
                 # Update repository statistics after successful backup
                 await self._update_repository_stats(db, repository, env)
+
+                # Run post-backup hook if configured
+                if repo_record and repo_record.post_backup_script:
+                    logger.info("Running post-backup hook", job_id=job_id, repository=repository)
+                    hook_timeout = repo_record.hook_timeout or 300
+                    post_hook_result = await self._run_hook(
+                        repo_record.post_backup_script,
+                        "post-backup",
+                        hook_timeout,
+                        job_id
+                    )
+
+                    if not post_hook_result["success"]:
+                        logger.warning("Post-backup hook failed",
+                                     job_id=job_id,
+                                     stderr=post_hook_result['stderr'])
+                        # Don't fail the backup job if post-hook fails, just log warning
+                    else:
+                        logger.info("Post-backup hook completed successfully", job_id=job_id)
             elif 100 <= process.returncode <= 127:
                 # Warning (modern exit code system)
                 job.status = "completed"
@@ -648,6 +765,24 @@ class BackupService:
                 await self._update_archive_stats(db, job_id, repository, archive_name, env)
                 # Update repository statistics even with warnings
                 await self._update_repository_stats(db, repository, env)
+
+                # Run post-backup hook even with warnings
+                if repo_record and repo_record.post_backup_script:
+                    logger.info("Running post-backup hook", job_id=job_id, repository=repository)
+                    hook_timeout = repo_record.hook_timeout or 300
+                    post_hook_result = await self._run_hook(
+                        repo_record.post_backup_script,
+                        "post-backup",
+                        hook_timeout,
+                        job_id
+                    )
+
+                    if not post_hook_result["success"]:
+                        logger.warning("Post-backup hook failed",
+                                     job_id=job_id,
+                                     stderr=post_hook_result['stderr'])
+                    else:
+                        logger.info("Post-backup hook completed successfully", job_id=job_id)
             else:
                 job.status = "failed"
                 # Build comprehensive error message with msgid details
