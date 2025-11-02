@@ -20,6 +20,17 @@ router = APIRouter(tags=["repositories"])
 # Initialize Borg interface
 borg = BorgInterface()
 
+# Helper function to format datetime with timezone
+def format_datetime(dt):
+    """Format datetime to ISO8601 with UTC timezone indicator"""
+    if dt is None:
+        return None
+    # If datetime is naive (no timezone), assume it's UTC and add timezone info
+    if dt.tzinfo is None:
+        from datetime import timezone
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat()
+
 # Pydantic models
 from pydantic import BaseModel
 
@@ -93,11 +104,11 @@ async def get_repositories(
                     "compression": repo.compression,
                     "source_directories": json.loads(repo.source_directories) if repo.source_directories else [],
                     "exclude_patterns": json.loads(repo.exclude_patterns) if repo.exclude_patterns else [],
-                    "last_backup": repo.last_backup.isoformat() if repo.last_backup else None,
+                    "last_backup": format_datetime(repo.last_backup),
                     "total_size": repo.total_size,
                     "archive_count": repo.archive_count,
-                    "created_at": repo.created_at.isoformat(),
-                    "updated_at": repo.updated_at.isoformat() if repo.updated_at else None
+                    "created_at": format_datetime(repo.created_at),
+                    "updated_at": format_datetime(repo.updated_at)
                 }
                 for repo in repositories
             ]
@@ -555,11 +566,11 @@ async def get_repository(
                 "path": repository.path,
                 "encryption": repository.encryption,
                 "compression": repository.compression,
-                "last_backup": repository.last_backup.isoformat() if repository.last_backup else None,
+                "last_backup": format_datetime(repository.last_backup),
                 "total_size": repository.total_size,
                 "archive_count": repository.archive_count,
-                "created_at": repository.created_at.isoformat(),
-                "updated_at": repository.updated_at.isoformat() if repository.updated_at else None,
+                "created_at": format_datetime(repository.created_at),
+                "updated_at": format_datetime(repository.updated_at),
                 "stats": stats
             }
         }

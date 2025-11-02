@@ -4,7 +4,7 @@ from sqlalchemy import func
 from pydantic import BaseModel
 import psutil
 import structlog
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any
 
 from app.database.database import get_db
@@ -14,6 +14,16 @@ from app.core.borg import borg
 
 logger = structlog.get_logger()
 router = APIRouter()
+
+# Helper function to format datetime with timezone
+def format_datetime(dt):
+    """Format datetime to ISO8601 with UTC timezone indicator"""
+    if dt is None:
+        return None
+    # If datetime is naive (no timezone), assume it's UTC and add timezone info
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat()
 
 # Pydantic models for responses
 class SystemMetrics(BaseModel):
@@ -139,8 +149,8 @@ def get_recent_jobs(db: Session, limit: int = 10) -> List[Dict[str, Any]]:
                 "id": job.id,
                 "repository": job.repository,
                 "status": job.status,
-                "started_at": job.started_at.isoformat() if job.started_at else None,
-                "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                "started_at": format_datetime(job.started_at),
+                "completed_at": format_datetime(job.completed_at),
                 "progress": job.progress,
                 "error_message": job.error_message
             })
@@ -183,7 +193,7 @@ async def get_dashboard_status(
             scheduled_jobs=scheduled_jobs,
             recent_jobs=recent_jobs,
             alerts=alerts,
-            last_updated=datetime.utcnow().isoformat()
+            last_updated=format_datetime(datetime.utcnow())
         )
     except Exception as e:
         logger.error("Error getting dashboard status", error=str(e))
@@ -244,7 +254,7 @@ async def get_dashboard_schedule(
         if jobs:
             # This is a simplified approach - in a real implementation,
             # you'd use a proper cron parser to calculate next execution
-            next_execution = datetime.utcnow().isoformat()
+            next_execution = format_datetime(datetime.utcnow())
         
         return ScheduleResponse(
             jobs=jobs,
@@ -337,7 +347,7 @@ async def get_dashboard_health(current_user: User = Depends(get_current_user)):
         return HealthResponse(
             status=overall_status,
             checks=checks,
-            timestamp=datetime.utcnow().isoformat()
+            timestamp=format_datetime(datetime.utcnow())
         )
     except Exception as e:
         logger.error("Error getting health status", error=str(e))
