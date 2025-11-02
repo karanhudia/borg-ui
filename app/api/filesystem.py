@@ -274,9 +274,13 @@ async def browse_ssh_filesystem(
                 detail=f"Failed to list remote directory: {result.stderr or 'Permission denied or path not found'}"
             )
 
+        # Log raw output for debugging
+        logger.debug("SSH ls output", path=path, lines_count=len(result.stdout.strip().split('\n')))
+
         # Parse ls output
         items = []
         lines = result.stdout.strip().split('\n')
+        seen_names = set()  # Track seen names to avoid duplicates
 
         for line in lines:
             if not line or line.startswith('total'):
@@ -287,16 +291,33 @@ async def browse_ssh_filesystem(
                 # Format: drwxr-xr-x 2 user group 4096 1234567890 name
                 parts = line.split(None, 8)
                 if len(parts) < 9:
+                    logger.debug("Skipping malformed line", line=line, parts_count=len(parts))
                     continue
 
                 permissions = parts[0]
-                size = int(parts[4])
-                timestamp = int(parts[5])
-                name = parts[8]
+                try:
+                    size = int(parts[4])
+                    timestamp = int(parts[5])
+                except (ValueError, IndexError) as e:
+                    logger.warning("Failed to parse size/timestamp", line=line, error=str(e))
+                    continue
+
+                name = parts[8].strip()
 
                 # Skip . and ..
                 if name in ['.', '..']:
                     continue
+
+                # Skip empty names
+                if not name:
+                    logger.debug("Skipping empty name", line=line)
+                    continue
+
+                # Skip duplicates
+                if name in seen_names:
+                    logger.warning("Skipping duplicate entry", name=name, path=path, line=line)
+                    continue
+                seen_names.add(name)
 
                 is_dir = permissions.startswith('d')
                 full_path = os.path.join(path, name)
