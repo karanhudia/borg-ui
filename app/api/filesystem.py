@@ -219,25 +219,40 @@ async def browse_ssh_filesystem(
     db: Session
 ) -> BrowseResponse:
     """Browse remote filesystem via SSH"""
+    import tempfile
+    from cryptography.fernet import Fernet
+    import base64
+    from app.config import settings
+
     # Get SSH key
     ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
     if not ssh_key:
         raise HTTPException(status_code=404, detail="SSH key not found")
 
-    ssh_key_path = ssh_key.private_key_path
+    # Decrypt private key
+    encryption_key = settings.secret_key.encode()[:32]
+    cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
+    private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
 
-    # Verify SSH key file exists
-    if not os.path.exists(ssh_key_path):
-        raise HTTPException(status_code=500, detail="SSH key file not found on server")
+    # Ensure private key ends with newline
+    if not private_key.endswith('\n'):
+        private_key += '\n'
 
+    # Create temporary key file
+    temp_key_file = None
     try:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+            f.write(private_key)
+            temp_key_file = f.name
+
+        os.chmod(temp_key_file, 0o600)
         # Use SSH to list directory contents
         # Format: ls -la --time-style=+%s output with parsing
         ls_cmd = f'ls -lA --time-style=+%s "{path}" 2>/dev/null || echo "ERROR"'
 
         ssh_cmd = [
             "ssh",
-            "-i", ssh_key_path,
+            "-i", temp_key_file,
             "-p", str(port),
             "-o", "StrictHostKeyChecking=no",
             "-o", "UserKnownHostsFile=/dev/null",
@@ -289,7 +304,7 @@ async def browse_ssh_filesystem(
                 # Check if directory is a Borg repository
                 is_borg = False
                 if is_dir:
-                    is_borg = is_borg_repository_ssh(host, username, ssh_key_path, full_path, port)
+                    is_borg = is_borg_repository_ssh(host, username, temp_key_file, full_path, port)
 
                 item = FileSystemItem(
                     name=name,
@@ -322,6 +337,13 @@ async def browse_ssh_filesystem(
     except Exception as e:
         logger.error("Error browsing SSH filesystem", host=host, path=path, error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to browse remote filesystem: {str(e)}")
+    finally:
+        # Clean up temporary key file
+        if temp_key_file and os.path.exists(temp_key_file):
+            try:
+                os.unlink(temp_key_file)
+            except Exception as e:
+                logger.warning("Failed to delete temporary SSH key file", error=str(e))
 
 
 @router.post("/validate-path")
@@ -352,6 +374,11 @@ async def validate_path(
                 "path": path
             }
         elif connection_type == "ssh":
+            import tempfile
+            from cryptography.fernet import Fernet
+            import base64
+            from app.config import settings
+
             if not all([ssh_key_id, host, username]):
                 raise HTTPException(status_code=400, detail="SSH parameters required")
 
@@ -359,33 +386,58 @@ async def validate_path(
             if not ssh_key:
                 raise HTTPException(status_code=404, detail="SSH key not found")
 
-            # Check if path exists via SSH
-            check_cmd = f'[ -e "{path}" ] && echo "exists" || echo "not_exists"; [ -d "{path}" ] && echo "is_dir" || echo "not_dir"'
+            # Decrypt private key
+            encryption_key = settings.secret_key.encode()[:32]
+            cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
+            private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
 
-            ssh_cmd = [
-                "ssh",
-                "-i", ssh_key.private_key_path,
-                "-p", str(port),
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "ConnectTimeout=5",
-                f"{username}@{host}",
-                check_cmd
-            ]
+            # Ensure private key ends with newline
+            if not private_key.endswith('\n'):
+                private_key += '\n'
 
-            result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=10)
-            lines = result.stdout.strip().split('\n')
+            # Create temporary key file
+            temp_key_file = None
+            try:
+                with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+                    f.write(private_key)
+                    temp_key_file = f.name
 
-            exists = lines[0] == "exists" if len(lines) > 0 else False
-            is_dir = lines[1] == "is_dir" if len(lines) > 1 else False
-            is_borg = is_borg_repository_ssh(host, username, ssh_key.private_key_path, path, port) if is_dir else False
+                os.chmod(temp_key_file, 0o600)
 
-            return {
-                "exists": exists,
-                "is_directory": is_dir,
-                "is_borg_repo": is_borg,
-                "path": path
-            }
+                # Check if path exists via SSH
+                check_cmd = f'[ -e "{path}" ] && echo "exists" || echo "not_exists"; [ -d "{path}" ] && echo "is_dir" || echo "not_dir"'
+
+                ssh_cmd = [
+                    "ssh",
+                    "-i", temp_key_file,
+                    "-p", str(port),
+                    "-o", "StrictHostKeyChecking=no",
+                    "-o", "UserKnownHostsFile=/dev/null",
+                    "-o", "ConnectTimeout=5",
+                    f"{username}@{host}",
+                    check_cmd
+                ]
+
+                result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=10)
+                lines = result.stdout.strip().split('\n')
+
+                exists = lines[0] == "exists" if len(lines) > 0 else False
+                is_dir = lines[1] == "is_dir" if len(lines) > 1 else False
+                is_borg = is_borg_repository_ssh(host, username, temp_key_file, path, port) if is_dir else False
+
+                return {
+                    "exists": exists,
+                    "is_directory": is_dir,
+                    "is_borg_repo": is_borg,
+                    "path": path
+                }
+            finally:
+                # Clean up temporary key file
+                if temp_key_file and os.path.exists(temp_key_file):
+                    try:
+                        os.unlink(temp_key_file)
+                    except Exception as e:
+                        logger.warning("Failed to delete temporary SSH key file", error=str(e))
         else:
             raise HTTPException(status_code=400, detail="Invalid connection type")
 
