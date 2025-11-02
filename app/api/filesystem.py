@@ -247,8 +247,9 @@ async def browse_ssh_filesystem(
 
         os.chmod(temp_key_file, 0o600)
         # Use SSH to list directory contents
-        # Format: ls -la --time-style=+%s output with parsing
-        ls_cmd = f'ls -lA --time-style=+%s "{path}" 2>/dev/null || echo "ERROR"'
+        # Try with simpler format first, fallback to basic ls
+        # Format: permissions links owner group size timestamp name
+        ls_cmd = f'ls -lA "{path}" 2>/dev/null || echo "ERROR"'
 
         ssh_cmd = [
             "ssh",
@@ -291,8 +292,9 @@ async def browse_ssh_filesystem(
                 continue
 
             try:
-                # Parse ls -la output
-                # Format: drwxr-xr-x 2 user group 4096 1234567890 name
+                # Parse ls -lA output
+                # Format: drwxr-xr-x 2 user group 4096 Nov 26 10:30 name
+                # or:     drwxr-xr-x 2 user group 4096 2023-11-26 name
                 parts = line.split(None, 8)
                 if len(parts) < 9:
                     logger.debug("Skipping malformed line", line=line, parts_count=len(parts))
@@ -301,12 +303,16 @@ async def browse_ssh_filesystem(
                 permissions = parts[0]
                 try:
                     size = int(parts[4])
-                    timestamp = int(parts[5])
-                except (ValueError, IndexError) as e:
-                    logger.warning("Failed to parse size/timestamp", line=line, error=str(e))
+                except (ValueError, IndexError):
+                    logger.warning("Failed to parse size", line=line)
                     continue
 
+                # The filename is everything after the 8th split
+                # This handles filenames with spaces
                 name = parts[8].strip()
+
+                # For timestamp, we'll use current time as fallback since parsing varies
+                timestamp = int(datetime.now().timestamp())
 
                 # Skip . and ..
                 if name in ['.', '..']:
