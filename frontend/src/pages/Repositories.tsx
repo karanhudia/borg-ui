@@ -22,6 +22,8 @@ import {
   Stack,
   Autocomplete,
   InputAdornment,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material'
 import {
   Add,
@@ -268,6 +270,10 @@ export default function Repositories() {
     ssh_key_id: null as number | null,
     connection_id: null as number | null,
     remote_path: '',
+    pre_backup_script: '',
+    post_backup_script: '',
+    hook_timeout: 300,
+    continue_on_hook_failure: false,
   })
 
   const [importForm, setImportForm] = useState({
@@ -283,6 +289,10 @@ export default function Repositories() {
     username: '',
     ssh_key_id: null as number | null,
     remote_path: '',
+    pre_backup_script: '',
+    post_backup_script: '',
+    hook_timeout: 300,
+    continue_on_hook_failure: false,
   })
 
   const [newSourceDir, setNewSourceDir] = useState('')
@@ -301,6 +311,10 @@ export default function Repositories() {
     source_directories: [] as string[],
     exclude_patterns: [] as string[],
     remote_path: '',
+    pre_backup_script: '',
+    post_backup_script: '',
+    hook_timeout: 300,
+    continue_on_hook_failure: false,
   })
 
   const [editNewSourceDir, setEditNewSourceDir] = useState('')
@@ -428,6 +442,10 @@ export default function Repositories() {
       username: '',
       ssh_key_id: null,
       remote_path: '',
+      pre_backup_script: '',
+      post_backup_script: '',
+      hook_timeout: 300,
+      continue_on_hook_failure: false,
     })
     setNewSourceDir('')
     setNewExcludePattern('')
@@ -447,6 +465,10 @@ export default function Repositories() {
       source_directories: repository.source_directories || [],
       exclude_patterns: repository.exclude_patterns || [],
       remote_path: (repository as any).remote_path || '',
+      pre_backup_script: (repository as any).pre_backup_script || '',
+      post_backup_script: (repository as any).post_backup_script || '',
+      hook_timeout: (repository as any).hook_timeout || 300,
+      continue_on_hook_failure: (repository as any).continue_on_hook_failure || false,
     })
     setEditNewSourceDir('')
     setEditNewExcludePattern('')
@@ -1168,6 +1190,58 @@ export default function Repositories() {
                   </Button>
                 </Box>
               </Box>
+
+              {/* Backup Hooks */}
+              <Divider sx={{ mt: 2 }} />
+              <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 2 }}>
+                Backup Hooks (Optional)
+              </Typography>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+                Run custom scripts before and after backups (e.g., wake up NAS, send notifications)
+              </Typography>
+
+              <TextField
+                label="Pre-Backup Script"
+                multiline
+                rows={3}
+                value={createForm.pre_backup_script}
+                onChange={(e) => setCreateForm({ ...createForm, pre_backup_script: e.target.value })}
+                placeholder="#!/bin/bash&#10;wakeonlan AA:BB:CC:DD:EE:FF&#10;sleep 60"
+                fullWidth
+                helperText="Shell script to run before backup starts"
+              />
+
+              <TextField
+                label="Post-Backup Script"
+                multiline
+                rows={3}
+                value={createForm.post_backup_script}
+                onChange={(e) => setCreateForm({ ...createForm, post_backup_script: e.target.value })}
+                placeholder="#!/bin/bash&#10;ssh nas@192.168.1.100 'sudo poweroff'"
+                fullWidth
+                helperText="Shell script to run after successful backup"
+              />
+
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <TextField
+                  label="Hook Timeout (seconds)"
+                  type="number"
+                  value={createForm.hook_timeout}
+                  onChange={(e) => setCreateForm({ ...createForm, hook_timeout: parseInt(e.target.value) || 300 })}
+                  fullWidth
+                  helperText="Maximum time to wait for hooks"
+                />
+
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={createForm.continue_on_hook_failure}
+                      onChange={(e) => setCreateForm({ ...createForm, continue_on_hook_failure: e.target.checked })}
+                    />
+                  }
+                  label="Continue if pre-hook fails"
+                />
+              </Box>
             </Box>
           </DialogContent>
           <DialogActions>
@@ -1393,6 +1467,58 @@ export default function Repositories() {
                     <FolderOpen />
                   </IconButton>
                 </Stack>
+              </Box>
+
+              {/* Backup Hooks */}
+              <Divider sx={{ mt: 2 }} />
+              <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 2 }}>
+                Backup Hooks (Optional)
+              </Typography>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+                Run custom scripts before and after backups (e.g., wake up NAS, send notifications)
+              </Typography>
+
+              <TextField
+                label="Pre-Backup Script"
+                multiline
+                rows={3}
+                value={importForm.pre_backup_script}
+                onChange={(e) => setImportForm({ ...importForm, pre_backup_script: e.target.value })}
+                placeholder="#!/bin/bash&#10;wakeonlan AA:BB:CC:DD:EE:FF&#10;sleep 60"
+                fullWidth
+                helperText="Shell script to run before backup starts"
+              />
+
+              <TextField
+                label="Post-Backup Script"
+                multiline
+                rows={3}
+                value={importForm.post_backup_script}
+                onChange={(e) => setImportForm({ ...importForm, post_backup_script: e.target.value })}
+                placeholder="#!/bin/bash&#10;ssh nas@192.168.1.100 'sudo poweroff'"
+                fullWidth
+                helperText="Shell script to run after successful backup"
+              />
+
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <TextField
+                  label="Hook Timeout (seconds)"
+                  type="number"
+                  value={importForm.hook_timeout}
+                  onChange={(e) => setImportForm({ ...importForm, hook_timeout: parseInt(e.target.value) || 300 })}
+                  fullWidth
+                  helperText="Maximum time to wait for hooks"
+                />
+
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={importForm.continue_on_hook_failure}
+                      onChange={(e) => setImportForm({ ...importForm, continue_on_hook_failure: e.target.checked })}
+                    />
+                  }
+                  label="Continue if pre-hook fails"
+                />
               </Box>
             </Box>
           </DialogContent>
@@ -1621,6 +1747,58 @@ export default function Repositories() {
                     Add
                   </Button>
                 </Box>
+              </Box>
+
+              {/* Backup Hooks */}
+              <Divider sx={{ mt: 2 }} />
+              <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 2 }}>
+                Backup Hooks (Optional)
+              </Typography>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+                Run custom scripts before and after backups (e.g., wake up NAS, send notifications)
+              </Typography>
+
+              <TextField
+                label="Pre-Backup Script"
+                multiline
+                rows={3}
+                value={editForm.pre_backup_script}
+                onChange={(e) => setEditForm({ ...editForm, pre_backup_script: e.target.value })}
+                placeholder="#!/bin/bash&#10;wakeonlan AA:BB:CC:DD:EE:FF&#10;sleep 60"
+                fullWidth
+                helperText="Shell script to run before backup starts"
+              />
+
+              <TextField
+                label="Post-Backup Script"
+                multiline
+                rows={3}
+                value={editForm.post_backup_script}
+                onChange={(e) => setEditForm({ ...editForm, post_backup_script: e.target.value })}
+                placeholder="#!/bin/bash&#10;ssh nas@192.168.1.100 'sudo poweroff'"
+                fullWidth
+                helperText="Shell script to run after successful backup"
+              />
+
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <TextField
+                  label="Hook Timeout (seconds)"
+                  type="number"
+                  value={editForm.hook_timeout}
+                  onChange={(e) => setEditForm({ ...editForm, hook_timeout: parseInt(e.target.value) || 300 })}
+                  fullWidth
+                  helperText="Maximum time to wait for hooks"
+                />
+
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={editForm.continue_on_hook_failure}
+                      onChange={(e) => setEditForm({ ...editForm, continue_on_hook_failure: e.target.checked })}
+                    />
+                  }
+                  label="Continue if pre-hook fails"
+                />
               </Box>
 
             </Box>
