@@ -55,7 +55,7 @@ export default function CodeEditor({
             lineNumbersMinChars: 3,
             glyphMargin: false,
             folding: false,
-            lineDecorationsWidth: 0,
+            lineDecorationsWidth: 5,
             roundedSelection: false,
             scrollBeyondLastLine: false,
             readOnly: false,
@@ -63,7 +63,7 @@ export default function CodeEditor({
             tabSize: 2,
             wordWrap: 'on',
             wrappingIndent: 'indent',
-            padding: { top: 4, bottom: 4 },
+            padding: { top: 8, bottom: 8 },
             suggest: {
               showKeywords: true,
               showSnippets: true,
