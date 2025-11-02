@@ -89,8 +89,8 @@ export default function Repositories() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const appState = useAppState()
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [showImportModal, setShowImportModal] = useState(false)
+  const [showRepositoryModal, setShowRepositoryModal] = useState(false)
+  const [repositoryModalMode, setRepositoryModalMode] = useState<'create' | 'import'>('create')
   const [editingRepository, setEditingRepository] = useState<Repository | null>(null)
   const [viewingInfoRepository, setViewingInfoRepository] = useState<Repository | null>(null)
   const [compactingRepository, setCompactingRepository] = useState<Repository | null>(null)
@@ -159,7 +159,7 @@ export default function Repositories() {
       // Invalidate AppContext query to update tab enablement immediately
       queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
       appState.refetch()
-      setShowCreateModal(false)
+      setShowRepositoryModal(false)
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to create repository')
@@ -177,7 +177,7 @@ export default function Repositories() {
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
       queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
       appState.refetch()
-      setShowImportModal(false)
+      setShowRepositoryModal(false)
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to import repository')
@@ -255,8 +255,8 @@ export default function Repositories() {
     },
   })
 
-  // Form states
-  const [createForm, setCreateForm] = useState({
+  // Unified form state for create/import
+  const [repositoryForm, setRepositoryForm] = useState({
     name: '',
     path: '',
     encryption: 'repokey',
@@ -270,25 +270,6 @@ export default function Repositories() {
     username: '',
     ssh_key_id: null as number | null,
     connection_id: null as number | null,
-    remote_path: '',
-    pre_backup_script: '',
-    post_backup_script: '',
-    hook_timeout: 300,
-    continue_on_hook_failure: false,
-  })
-
-  const [importForm, setImportForm] = useState({
-    name: '',
-    path: '',
-    passphrase: '',
-    compression: 'lz4',
-    source_directories: [] as string[],
-    exclude_patterns: [] as string[],
-    repository_type: 'local',
-    host: '',
-    port: 22,
-    username: '',
-    ssh_key_id: null as number | null,
     remote_path: '',
     pre_backup_script: '',
     post_backup_script: '',
@@ -324,9 +305,13 @@ export default function Repositories() {
   const [showEditExcludeExplorer, setShowEditExcludeExplorer] = useState(false)
 
   // Event handlers
-  const handleCreateRepository = (e: React.FormEvent) => {
+  const handleSubmitRepository = (e: React.FormEvent) => {
     e.preventDefault()
-    createRepositoryMutation.mutate(createForm)
+    if (repositoryModalMode === 'create') {
+      createRepositoryMutation.mutate(repositoryForm)
+    } else {
+      importRepositoryMutation.mutate(repositoryForm)
+    }
   }
 
   const handleUpdateRepository = (e: React.FormEvent) => {
@@ -395,8 +380,8 @@ export default function Repositories() {
 
   const handleConnectionSelect = (connection: SSHConnection | null) => {
     if (connection) {
-      setCreateForm({
-        ...createForm,
+      setRepositoryForm({
+        ...repositoryForm,
         connection_id: connection.id,
         ssh_key_id: connection.ssh_key_id,
         host: connection.host,
@@ -406,9 +391,10 @@ export default function Repositories() {
     }
   }
 
-  const openCreateModal = () => {
-    setShowCreateModal(true)
-    setCreateForm({
+  const openRepositoryModal = (mode: 'create' | 'import') => {
+    setRepositoryModalMode(mode)
+    setShowRepositoryModal(true)
+    setRepositoryForm({
       name: '',
       path: '',
       encryption: 'repokey',
@@ -430,35 +416,6 @@ export default function Repositories() {
     })
     setNewSourceDir('')
     setNewExcludePattern('')
-  }
-
-  const openImportModal = () => {
-    setShowImportModal(true)
-    setImportForm({
-      name: '',
-      path: '',
-      passphrase: '',
-      compression: 'lz4',
-      source_directories: [],
-      exclude_patterns: [],
-      repository_type: 'local',
-      host: '',
-      port: 22,
-      username: '',
-      ssh_key_id: null,
-      remote_path: '',
-      pre_backup_script: '',
-      post_backup_script: '',
-      hook_timeout: 300,
-      continue_on_hook_failure: false,
-    })
-    setNewSourceDir('')
-    setNewExcludePattern('')
-  }
-
-  const handleImportRepository = (e: React.FormEvent) => {
-    e.preventDefault()
-    importRepositoryMutation.mutate(importForm)
   }
 
   const openEditModal = (repository: Repository) => {
@@ -508,16 +465,16 @@ export default function Repositories() {
 
   // Generate borg init command preview
   const getBorgInitCommand = () => {
-    let repoPath = createForm.path || '/path/to/repository'
+    let repoPath = repositoryForm.path || '/path/to/repository'
 
     // Build full path for remote repository
-    if (createForm.repository_type === 'ssh' && createForm.host && createForm.username) {
-      repoPath = `ssh://${createForm.username}@${createForm.host}:${createForm.port}${repoPath.startsWith('/') ? '' : '/'}${repoPath}`
-    } else if (createForm.repository_type === 'local') {
+    if (repositoryForm.repository_type === 'ssh' && repositoryForm.host && repositoryForm.username) {
+      repoPath = `ssh://${repositoryForm.username}@${repositoryForm.host}:${repositoryForm.port}${repoPath.startsWith('/') ? '' : '/'}${repoPath}`
+    } else if (repositoryForm.repository_type === 'local') {
       repoPath = repoPath || '/path/to/local/repository'
     }
 
-    return `borg init --encryption ${createForm.encryption} ${repoPath}`
+    return `borg init --encryption ${repositoryForm.encryption} ${repoPath}`
   }
 
   // Utility functions
@@ -574,7 +531,7 @@ export default function Repositories() {
               <Button
                 variant="contained"
                 startIcon={<Add />}
-                onClick={openCreateModal}
+                onClick={() => openRepositoryModal('create')}
                 sx={{ flexShrink: 0 }}
               >
                 Create Repository
@@ -582,7 +539,7 @@ export default function Repositories() {
               <Button
                 variant="outlined"
                 startIcon={<FileUpload />}
-                onClick={openImportModal}
+                onClick={() => openRepositoryModal('import')}
                 sx={{ flexShrink: 0 }}
               >
                 Import Existing
@@ -662,8 +619,8 @@ export default function Repositories() {
                   variant="contained"
                   startIcon={<Computer />}
                   onClick={() => {
-                    openCreateModal()
-                    setCreateForm({ ...createForm, repository_type: 'local' })
+                    openRepositoryModal("create")
+                    setRepositoryForm({ ...repositoryForm, repository_type: 'local' })
                   }}
                 >
                   Create Local Repository
@@ -672,8 +629,8 @@ export default function Repositories() {
                   variant="outlined"
                   startIcon={<Wifi />}
                   onClick={() => {
-                    openCreateModal()
-                    setCreateForm({ ...createForm, repository_type: 'ssh' })
+                    openRepositoryModal("create")
+                    setRepositoryForm({ ...repositoryForm, repository_type: 'ssh' })
                   }}
                 >
                   Create Remote Repository (SSH)
@@ -839,33 +796,39 @@ export default function Repositories() {
       )}
 
       {/* Create Repository Dialog */}
-      <Dialog open={showCreateModal} onClose={() => setShowCreateModal(false)} maxWidth="sm" fullWidth>
-        <form onSubmit={handleCreateRepository}>
-          <DialogTitle>Create Repository</DialogTitle>
+      <Dialog open={showRepositoryModal} onClose={() => setShowRepositoryModal(false)} maxWidth="sm" fullWidth>
+        <form onSubmit={handleSubmitRepository}>
+          <DialogTitle>{repositoryModalMode === 'create' ? 'Create' : 'Import'} Repository</DialogTitle>
           <DialogContent>
-            {/* Command Preview */}
-            <Alert severity="info" sx={{ mb: 2 }}>
-              <Typography variant="subtitle2" gutterBottom>
-                Command Preview
-              </Typography>
-              <Box sx={{
-                bgcolor: 'grey.900',
-                color: 'grey.100',
-                p: 1.5,
-                borderRadius: 1,
-                fontFamily: 'monospace',
-                fontSize: '0.875rem',
-                overflow: 'auto'
-              }}>
-                {getBorgInitCommand()}
-              </Box>
-            </Alert>
+            {/* Info Alert */}
+            {repositoryModalMode === 'create' ? (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Command Preview
+                </Typography>
+                <Box sx={{
+                  bgcolor: 'grey.900',
+                  color: 'grey.100',
+                  p: 1.5,
+                  borderRadius: 1,
+                  fontFamily: 'monospace',
+                  fontSize: '0.875rem',
+                  overflow: 'auto'
+                }}>
+                  {getBorgInitCommand()}
+                </Box>
+              </Alert>
+            ) : (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Import a Borg repository that already exists. The repository will be verified before import.
+              </Alert>
+            )}
 
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
               <TextField
                 label="Name"
-                value={createForm.name}
-                onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                value={repositoryForm.name}
+                onChange={(e) => setRepositoryForm({ ...repositoryForm, name: e.target.value })}
                 required
                 fullWidth
               />
@@ -873,9 +836,9 @@ export default function Repositories() {
               <FormControl fullWidth>
                 <InputLabel>Repository Type</InputLabel>
                 <Select
-                  value={createForm.repository_type}
+                  value={repositoryForm.repository_type}
                   label="Repository Type"
-                  onChange={(e) => setCreateForm({ ...createForm, repository_type: e.target.value })}
+                  onChange={(e) => setRepositoryForm({ ...repositoryForm, repository_type: e.target.value })}
                 >
                   <MenuItem value="local">Local</MenuItem>
                   <MenuItem value="ssh">SSH</MenuItem>
@@ -883,7 +846,7 @@ export default function Repositories() {
                 </Select>
               </FormControl>
 
-              {createForm.repository_type !== 'local' && (
+              {repositoryForm.repository_type !== 'local' && (
                 <>
                   <Alert severity="info">
                     Select an existing SSH connection or enter connection details manually
@@ -906,8 +869,8 @@ export default function Repositories() {
 
                   <TextField
                     label="Host"
-                    value={createForm.host}
-                    onChange={(e) => setCreateForm({ ...createForm, host: e.target.value })}
+                    value={repositoryForm.host}
+                    onChange={(e) => setRepositoryForm({ ...repositoryForm, host: e.target.value })}
                     placeholder="192.168.1.100"
                     required
                     fullWidth
@@ -915,8 +878,8 @@ export default function Repositories() {
 
                   <TextField
                     label="Username"
-                    value={createForm.username}
-                    onChange={(e) => setCreateForm({ ...createForm, username: e.target.value })}
+                    value={repositoryForm.username}
+                    onChange={(e) => setRepositoryForm({ ...repositoryForm, username: e.target.value })}
                     placeholder="user"
                     required
                     fullWidth
@@ -925,8 +888,8 @@ export default function Repositories() {
                   <TextField
                     label="Port"
                     type="number"
-                    value={createForm.port}
-                    onChange={(e) => setCreateForm({ ...createForm, port: parseInt(e.target.value) })}
+                    value={repositoryForm.port}
+                    onChange={(e) => setRepositoryForm({ ...repositoryForm, port: parseInt(e.target.value) })}
                     required
                     fullWidth
                   />
@@ -934,9 +897,9 @@ export default function Repositories() {
                   <FormControl fullWidth required>
                     <InputLabel>SSH Key</InputLabel>
                     <Select
-                      value={createForm.ssh_key_id ?? ''}
+                      value={repositoryForm.ssh_key_id ?? ''}
                       label="SSH Key"
-                      onChange={(e) => setCreateForm({ ...createForm, ssh_key_id: e.target.value ? Number(e.target.value) : null })}
+                      onChange={(e) => setRepositoryForm({ ...repositoryForm, ssh_key_id: e.target.value ? Number(e.target.value) : null })}
                     >
                       <MenuItem value="">Select SSH Key</MenuItem>
                       {sshKeys
@@ -951,8 +914,8 @@ export default function Repositories() {
 
                   <TextField
                     label="Remote Borg Path (Optional)"
-                    value={createForm.remote_path}
-                    onChange={(e) => setCreateForm({ ...createForm, remote_path: e.target.value })}
+                    value={repositoryForm.remote_path}
+                    onChange={(e) => setRepositoryForm({ ...repositoryForm, remote_path: e.target.value })}
                     placeholder="/usr/local/bin/borg"
                     fullWidth
                     helperText="Path to borg executable on remote server. Leave empty if borg is in PATH."
@@ -962,9 +925,9 @@ export default function Repositories() {
 
               <TextField
                 label="Path"
-                value={createForm.path}
-                onChange={(e) => setCreateForm({ ...createForm, path: e.target.value })}
-                placeholder={createForm.repository_type === 'local' ? '/path/to/repository' : '/path/to/repository'}
+                value={repositoryForm.path}
+                onChange={(e) => setRepositoryForm({ ...repositoryForm, path: e.target.value })}
+                placeholder={repositoryForm.repository_type === 'local' ? '/path/to/repository' : '/path/to/repository'}
                 required
                 fullWidth
                 helperText="Any path is allowed. Directory will be created automatically."
@@ -984,25 +947,27 @@ export default function Repositories() {
                 }}
               />
 
-              <FormControl fullWidth>
-                <InputLabel>Encryption</InputLabel>
-                <Select
-                  value={createForm.encryption}
-                  label="Encryption"
-                  onChange={(e) => setCreateForm({ ...createForm, encryption: e.target.value })}
-                >
-                  <MenuItem value="repokey">Repokey (Recommended)</MenuItem>
-                  <MenuItem value="keyfile">Keyfile</MenuItem>
-                  <MenuItem value="none">None (Unencrypted)</MenuItem>
-                </Select>
-              </FormControl>
+              {repositoryModalMode === 'create' && (
+                <FormControl fullWidth>
+                  <InputLabel>Encryption</InputLabel>
+                  <Select
+                    value={repositoryForm.encryption}
+                    label="Encryption"
+                    onChange={(e) => setRepositoryForm({ ...repositoryForm, encryption: e.target.value })}
+                  >
+                    <MenuItem value="repokey">Repokey (Recommended)</MenuItem>
+                    <MenuItem value="keyfile">Keyfile</MenuItem>
+                    <MenuItem value="none">None (Unencrypted)</MenuItem>
+                  </Select>
+                </FormControl>
+              )}
 
               <FormControl fullWidth>
                 <InputLabel>Compression</InputLabel>
                 <Select
-                  value={createForm.compression}
+                  value={repositoryForm.compression}
                   label="Compression"
-                  onChange={(e) => setCreateForm({ ...createForm, compression: e.target.value })}
+                  onChange={(e) => setRepositoryForm({ ...repositoryForm, compression: e.target.value })}
                 >
                   <MenuItem value="lz4">LZ4 (Fast)</MenuItem>
                   <MenuItem value="zstd">Zstandard</MenuItem>
@@ -1011,12 +976,12 @@ export default function Repositories() {
                 </Select>
               </FormControl>
 
-              {createForm.encryption !== 'none' && (
+              {repositoryForm.encryption !== 'none' && (
                 <TextField
                   label="Passphrase"
                   type="password"
-                  value={createForm.passphrase}
-                  onChange={(e) => setCreateForm({ ...createForm, passphrase: e.target.value })}
+                  value={repositoryForm.passphrase}
+                  onChange={(e) => setRepositoryForm({ ...repositoryForm, passphrase: e.target.value })}
                   placeholder="Enter passphrase"
                   fullWidth
                 />
@@ -1031,15 +996,15 @@ export default function Repositories() {
                   Specify which directories to backup to this repository (at least one required)
                 </Typography>
 
-                {createForm.source_directories.length === 0 && (
+                {repositoryForm.source_directories.length === 0 && (
                   <Alert severity="warning" sx={{ mb: 1.5 }}>
                     At least one source directory is required. Add the directories you want to backup.
                   </Alert>
                 )}
 
-                {createForm.source_directories.length > 0 && (
+                {repositoryForm.source_directories.length > 0 && (
                   <Stack spacing={0.5} sx={{ mb: 1.5 }}>
-                    {createForm.source_directories.map((dir, index) => (
+                    {repositoryForm.source_directories.map((dir, index) => (
                       <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Typography variant="body2" sx={{ fontFamily: 'monospace', flex: 1 }}>
                           {dir}
@@ -1047,9 +1012,9 @@ export default function Repositories() {
                         <IconButton
                           size="small"
                           onClick={() => {
-                            setCreateForm({
-                              ...createForm,
-                              source_directories: createForm.source_directories.filter((_, i) => i !== index)
+                            setRepositoryForm({
+                              ...repositoryForm,
+                              source_directories: repositoryForm.source_directories.filter((_, i) => i !== index)
                             })
                           }}
                         >
@@ -1071,9 +1036,9 @@ export default function Repositories() {
                       if (e.key === 'Enter') {
                         e.preventDefault()
                         if (newSourceDir.trim()) {
-                          setCreateForm({
-                            ...createForm,
-                            source_directories: [...createForm.source_directories, newSourceDir.trim()]
+                          setRepositoryForm({
+                            ...repositoryForm,
+                            source_directories: [...repositoryForm.source_directories, newSourceDir.trim()]
                           })
                           setNewSourceDir('')
                         }
@@ -1099,9 +1064,9 @@ export default function Repositories() {
                     size="small"
                     onClick={() => {
                       if (newSourceDir.trim()) {
-                        setCreateForm({
-                          ...createForm,
-                          source_directories: [...createForm.source_directories, newSourceDir.trim()]
+                        setRepositoryForm({
+                          ...repositoryForm,
+                          source_directories: [...repositoryForm.source_directories, newSourceDir.trim()]
                         })
                         setNewSourceDir('')
                       }
@@ -1121,9 +1086,9 @@ export default function Repositories() {
                   Specify patterns to exclude from backup (e.g., *.log, *.tmp, __pycache__, node_modules)
                 </Typography>
 
-                {createForm.exclude_patterns.length > 0 && (
+                {repositoryForm.exclude_patterns.length > 0 && (
                   <Stack spacing={0.5} sx={{ mb: 1.5 }}>
-                    {createForm.exclude_patterns.map((pattern, index) => (
+                    {repositoryForm.exclude_patterns.map((pattern, index) => (
                       <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Typography variant="body2" sx={{ fontFamily: 'monospace', flex: 1 }}>
                           {pattern}
@@ -1131,9 +1096,9 @@ export default function Repositories() {
                         <IconButton
                           size="small"
                           onClick={() => {
-                            setCreateForm({
-                              ...createForm,
-                              exclude_patterns: createForm.exclude_patterns.filter((_, i) => i !== index)
+                            setRepositoryForm({
+                              ...repositoryForm,
+                              exclude_patterns: repositoryForm.exclude_patterns.filter((_, i) => i !== index)
                             })
                           }}
                         >
@@ -1155,9 +1120,9 @@ export default function Repositories() {
                       if (e.key === 'Enter') {
                         e.preventDefault()
                         if (newExcludePattern.trim()) {
-                          setCreateForm({
-                            ...createForm,
-                            exclude_patterns: [...createForm.exclude_patterns, newExcludePattern.trim()]
+                          setRepositoryForm({
+                            ...repositoryForm,
+                            exclude_patterns: [...repositoryForm.exclude_patterns, newExcludePattern.trim()]
                           })
                           setNewExcludePattern('')
                         }
@@ -1183,9 +1148,9 @@ export default function Repositories() {
                     size="small"
                     onClick={() => {
                       if (newExcludePattern.trim()) {
-                        setCreateForm({
-                          ...createForm,
-                          exclude_patterns: [...createForm.exclude_patterns, newExcludePattern.trim()]
+                        setRepositoryForm({
+                          ...repositoryForm,
+                          exclude_patterns: [...repositoryForm.exclude_patterns, newExcludePattern.trim()]
                         })
                         setNewExcludePattern('')
                       }
@@ -1207,8 +1172,8 @@ export default function Repositories() {
 
               <CodeEditor
                 label="Pre-Backup Script"
-                value={createForm.pre_backup_script}
-                onChange={(value) => setCreateForm({ ...createForm, pre_backup_script: value })}
+                value={repositoryForm.pre_backup_script}
+                onChange={(value) => setRepositoryForm({ ...repositoryForm, pre_backup_script: value })}
                 placeholder="#!/bin/bash&#10;echo 'Pre-backup hook started'&#10;wakeonlan AA:BB:CC:DD:EE:FF&#10;sleep 60"
                 helperText="Shell script to run before backup starts"
                 height="150px"
@@ -1216,8 +1181,8 @@ export default function Repositories() {
 
               <CodeEditor
                 label="Post-Backup Script"
-                value={createForm.post_backup_script}
-                onChange={(value) => setCreateForm({ ...createForm, post_backup_script: value })}
+                value={repositoryForm.post_backup_script}
+                onChange={(value) => setRepositoryForm({ ...repositoryForm, post_backup_script: value })}
                 placeholder="#!/bin/bash&#10;echo 'Post-backup hook completed'&#10;ssh nas@192.168.1.100 'sudo poweroff'"
                 helperText="Shell script to run after successful backup"
                 height="150px"
@@ -1227,8 +1192,8 @@ export default function Repositories() {
                 <TextField
                   label="Hook Timeout (seconds)"
                   type="number"
-                  value={createForm.hook_timeout}
-                  onChange={(e) => setCreateForm({ ...createForm, hook_timeout: parseInt(e.target.value) || 300 })}
+                  value={repositoryForm.hook_timeout}
+                  onChange={(e) => setRepositoryForm({ ...repositoryForm, hook_timeout: parseInt(e.target.value) || 300 })}
                   fullWidth
                   helperText="Maximum time to wait for hooks"
                 />
@@ -1236,8 +1201,8 @@ export default function Repositories() {
                 <FormControlLabel
                   control={
                     <Checkbox
-                      checked={createForm.continue_on_hook_failure}
-                      onChange={(e) => setCreateForm({ ...createForm, continue_on_hook_failure: e.target.checked })}
+                      checked={repositoryForm.continue_on_hook_failure}
+                      onChange={(e) => setRepositoryForm({ ...repositoryForm, continue_on_hook_failure: e.target.checked })}
                     />
                   }
                   label="Continue if pre-hook fails"
@@ -1246,292 +1211,23 @@ export default function Repositories() {
             </Box>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setShowCreateModal(false)}>Cancel</Button>
+            <Button onClick={() => setShowRepositoryModal(false)}>Cancel</Button>
             <Button
               type="submit"
               variant="contained"
-              disabled={createRepositoryMutation.isLoading || createForm.source_directories.length === 0}
+              disabled={
+                (repositoryModalMode === 'create' ? createRepositoryMutation.isLoading : importRepositoryMutation.isLoading) ||
+                repositoryForm.source_directories.length === 0
+              }
             >
-              {createRepositoryMutation.isLoading ? 'Creating...' : 'Create'}
+              {repositoryModalMode === 'create'
+                ? (createRepositoryMutation.isLoading ? 'Creating...' : 'Create')
+                : (importRepositoryMutation.isLoading ? 'Importing...' : 'Import')}
             </Button>
           </DialogActions>
         </form>
       </Dialog>
 
-      {/* Import Existing Repository Dialog */}
-      <Dialog open={showImportModal} onClose={() => setShowImportModal(false)} maxWidth="sm" fullWidth>
-        <form onSubmit={handleImportRepository}>
-          <DialogTitle>Import Existing Repository</DialogTitle>
-          <DialogContent>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              Import a Borg repository that already exists. The repository will be verified before import.
-            </Alert>
-
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-              <TextField
-                label="Repository Name"
-                value={importForm.name}
-                onChange={(e) => setImportForm({ ...importForm, name: e.target.value })}
-                required
-                fullWidth
-                helperText="A friendly name to identify this repository in the UI"
-              />
-
-              <FormControl fullWidth>
-                <InputLabel>Repository Type</InputLabel>
-                <Select
-                  value={importForm.repository_type}
-                  label="Repository Type"
-                  onChange={(e) => setImportForm({ ...importForm, repository_type: e.target.value })}
-                >
-                  <MenuItem value="local">Local</MenuItem>
-                  <MenuItem value="ssh">SSH</MenuItem>
-                </Select>
-              </FormControl>
-
-              {importForm.repository_type !== 'local' && (
-                <>
-                  <TextField
-                    label="Host"
-                    value={importForm.host}
-                    onChange={(e) => setImportForm({ ...importForm, host: e.target.value })}
-                    placeholder="192.168.1.100"
-                    required
-                    fullWidth
-                  />
-
-                  <TextField
-                    label="Username"
-                    value={importForm.username}
-                    onChange={(e) => setImportForm({ ...importForm, username: e.target.value })}
-                    placeholder="user"
-                    required
-                    fullWidth
-                  />
-
-                  <TextField
-                    label="Port"
-                    type="number"
-                    value={importForm.port}
-                    onChange={(e) => setImportForm({ ...importForm, port: parseInt(e.target.value) })}
-                    required
-                    fullWidth
-                  />
-
-                  <FormControl fullWidth>
-                    <InputLabel>SSH Key</InputLabel>
-                    <Select
-                      value={importForm.ssh_key_id ?? ''}
-                      label="SSH Key"
-                      onChange={(e) => setImportForm({ ...importForm, ssh_key_id: e.target.value ? Number(e.target.value) : null })}
-                    >
-                      <MenuItem value="">Select SSH Key</MenuItem>
-                      {sshKeysData?.data?.ssh_keys?.map((key: SSHKey) => (
-                        <MenuItem key={key.id} value={key.id}>
-                          {key.name} ({key.key_type})
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-
-                  <TextField
-                    label="Remote Borg Path (Optional)"
-                    value={importForm.remote_path}
-                    onChange={(e) => setImportForm({ ...importForm, remote_path: e.target.value })}
-                    placeholder="/usr/local/bin/borg"
-                    fullWidth
-                  />
-                </>
-              )}
-
-              <TextField
-                label="Repository Path"
-                value={importForm.path}
-                onChange={(e) => setImportForm({ ...importForm, path: e.target.value })}
-                placeholder={importForm.repository_type === 'local' ? '/local/path/to/existing/repo' : '/path/to/existing/repo'}
-                required
-                fullWidth
-                helperText={importForm.repository_type === 'local' ? 'Full path to the existing Borg repository' : 'Path to repository on remote server'}
-                InputProps={{
-                  endAdornment: importForm.repository_type === 'local' && (
-                    <InputAdornment position="end">
-                      <IconButton onClick={() => setShowImportPathExplorer(true)} edge="end">
-                        <FolderOpen />
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
-              />
-
-              <TextField
-                label="Passphrase"
-                type="password"
-                value={importForm.passphrase}
-                onChange={(e) => setImportForm({ ...importForm, passphrase: e.target.value })}
-                placeholder="Repository passphrase (if encrypted)"
-                fullWidth
-                helperText="Required if the repository is encrypted"
-              />
-
-              <FormControl fullWidth>
-                <InputLabel>Default Compression</InputLabel>
-                <Select
-                  value={importForm.compression}
-                  label="Default Compression"
-                  onChange={(e) => setImportForm({ ...importForm, compression: e.target.value })}
-                >
-                  <MenuItem value="lz4">LZ4 (Fast)</MenuItem>
-                  <MenuItem value="zstd">Zstandard</MenuItem>
-                  <MenuItem value="zlib">Zlib</MenuItem>
-                  <MenuItem value="none">None</MenuItem>
-                </Select>
-              </FormControl>
-
-              <Divider />
-
-              <Typography variant="subtitle2" fontWeight={600}>
-                Source Directories <Box component="span" sx={{ color: 'error.main' }}>*</Box>
-              </Typography>
-              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-                Specify which directories to backup to this repository (at least one required)
-              </Typography>
-
-              {importForm.source_directories.length === 0 && (
-                <Alert severity="warning" sx={{ mb: 1.5 }}>
-                  At least one source directory is required. Add the directories you want to backup.
-                </Alert>
-              )}
-
-              <Box>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Directories to backup:
-                </Typography>
-                {importForm.source_directories.length > 0 && (
-                  <Stack spacing={0.5} sx={{ mb: 1.5 }}>
-                    {importForm.source_directories.map((dir, index) => (
-                      <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', flex: 1 }}>
-                          {dir}
-                        </Typography>
-                        <IconButton
-                          size="small"
-                          onClick={() => {
-                            setImportForm({
-                              ...importForm,
-                              source_directories: importForm.source_directories.filter((_, i) => i !== index)
-                            })
-                          }}
-                        >
-                          <Delete fontSize="small" />
-                        </IconButton>
-                      </Box>
-                    ))}
-                  </Stack>
-                )}
-
-                <Stack direction="row" spacing={1}>
-                  <TextField
-                    size="small"
-                    placeholder="/path/to/source"
-                    value={newSourceDir}
-                    onChange={(e) => setNewSourceDir(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        if (newSourceDir.trim()) {
-                          setImportForm({
-                            ...importForm,
-                            source_directories: [...importForm.source_directories, newSourceDir.trim()]
-                          })
-                          setNewSourceDir('')
-                        }
-                      }
-                    }}
-                    fullWidth
-                  />
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => {
-                      if (newSourceDir.trim()) {
-                        setImportForm({
-                          ...importForm,
-                          source_directories: [...importForm.source_directories, newSourceDir.trim()]
-                        })
-                        setNewSourceDir('')
-                      }
-                    }}
-                  >
-                    Add
-                  </Button>
-                  <IconButton size="small" onClick={() => setShowImportSourceDirExplorer(true)}>
-                    <FolderOpen />
-                  </IconButton>
-                </Stack>
-              </Box>
-
-              {/* Backup Hooks */}
-              <Divider sx={{ mt: 2 }} />
-              <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 2 }}>
-                Backup Hooks (Optional)
-              </Typography>
-              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-                Run custom scripts before and after backups (e.g., wake up NAS, send notifications)
-              </Typography>
-
-              <CodeEditor
-                label="Pre-Backup Script"
-                value={importForm.pre_backup_script}
-                onChange={(value) => setImportForm({ ...importForm, pre_backup_script: value })}
-                placeholder="#!/bin/bash&#10;echo 'Pre-backup hook started'&#10;wakeonlan AA:BB:CC:DD:EE:FF&#10;sleep 60"
-                helperText="Shell script to run before backup starts"
-                height="150px"
-              />
-
-              <CodeEditor
-                label="Post-Backup Script"
-                value={importForm.post_backup_script}
-                onChange={(value) => setImportForm({ ...importForm, post_backup_script: value })}
-                placeholder="#!/bin/bash&#10;echo 'Post-backup hook completed'&#10;ssh nas@192.168.1.100 'sudo poweroff'"
-                helperText="Shell script to run after successful backup"
-                height="150px"
-              />
-
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                <TextField
-                  label="Hook Timeout (seconds)"
-                  type="number"
-                  value={importForm.hook_timeout}
-                  onChange={(e) => setImportForm({ ...importForm, hook_timeout: parseInt(e.target.value) || 300 })}
-                  fullWidth
-                  helperText="Maximum time to wait for hooks"
-                />
-
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={importForm.continue_on_hook_failure}
-                      onChange={(e) => setImportForm({ ...importForm, continue_on_hook_failure: e.target.checked })}
-                    />
-                  }
-                  label="Continue if pre-hook fails"
-                />
-              </Box>
-            </Box>
-          </DialogContent>
-
-          <DialogActions>
-            <Button onClick={() => setShowImportModal(false)}>Cancel</Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={importRepositoryMutation.isLoading || importForm.source_directories.length === 0}
-            >
-              {importRepositoryMutation.isLoading ? 'Importing...' : 'Import'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
 
       {/* Edit Repository Dialog */}
       <Dialog open={!!editingRepository} onClose={() => setEditingRepository(null)} maxWidth="sm" fullWidth>
@@ -2249,20 +1945,20 @@ export default function Repositories() {
         onClose={() => setShowPathExplorer(false)}
         onSelect={(paths) => {
           if (paths.length > 0) {
-            setCreateForm({ ...createForm, path: paths[0] })
+            setRepositoryForm({ ...repositoryForm, path: paths[0] })
           }
         }}
         title="Select Repository Path"
         initialPath="/"
         multiSelect={false}
-        connectionType={createForm.repository_type === 'local' ? 'local' : 'ssh'}
+        connectionType={repositoryForm.repository_type === 'local' ? 'local' : 'ssh'}
         sshConfig={
-          createForm.repository_type !== 'local' && createForm.ssh_key_id
+          repositoryForm.repository_type !== 'local' && repositoryForm.ssh_key_id
             ? {
-                ssh_key_id: createForm.ssh_key_id,
-                host: createForm.host,
-                username: createForm.username,
-                port: createForm.port,
+                ssh_key_id: repositoryForm.ssh_key_id,
+                host: repositoryForm.host,
+                username: repositoryForm.username,
+                port: repositoryForm.port,
               }
             : undefined
         }
@@ -2273,22 +1969,22 @@ export default function Repositories() {
         open={showSourceDirExplorer}
         onClose={() => setShowSourceDirExplorer(false)}
         onSelect={(paths) => {
-          setCreateForm({
-            ...createForm,
-            source_directories: [...createForm.source_directories, ...paths],
+          setRepositoryForm({
+            ...repositoryForm,
+            source_directories: [...repositoryForm.source_directories, ...paths],
           })
         }}
         title="Select Source Directories"
         initialPath="/"
         multiSelect={true}
-        connectionType={createForm.repository_type === 'local' ? 'local' : 'ssh'}
+        connectionType={repositoryForm.repository_type === 'local' ? 'local' : 'ssh'}
         sshConfig={
-          createForm.repository_type !== 'local' && createForm.ssh_key_id
+          repositoryForm.repository_type !== 'local' && repositoryForm.ssh_key_id
             ? {
-                ssh_key_id: createForm.ssh_key_id,
-                host: createForm.host,
-                username: createForm.username,
-                port: createForm.port,
+                ssh_key_id: repositoryForm.ssh_key_id,
+                host: repositoryForm.host,
+                username: repositoryForm.username,
+                port: repositoryForm.port,
               }
             : undefined
         }
@@ -2299,22 +1995,22 @@ export default function Repositories() {
         open={showExcludeExplorer}
         onClose={() => setShowExcludeExplorer(false)}
         onSelect={(paths) => {
-          setCreateForm({
-            ...createForm,
-            exclude_patterns: [...createForm.exclude_patterns, ...paths],
+          setRepositoryForm({
+            ...repositoryForm,
+            exclude_patterns: [...repositoryForm.exclude_patterns, ...paths],
           })
         }}
         title="Select Directories to Exclude"
         initialPath="/"
         multiSelect={true}
-        connectionType={createForm.repository_type === 'local' ? 'local' : 'ssh'}
+        connectionType={repositoryForm.repository_type === 'local' ? 'local' : 'ssh'}
         sshConfig={
-          createForm.repository_type !== 'local' && createForm.ssh_key_id
+          repositoryForm.repository_type !== 'local' && repositoryForm.ssh_key_id
             ? {
-                ssh_key_id: createForm.ssh_key_id,
-                host: createForm.host,
-                username: createForm.username,
-                port: createForm.port,
+                ssh_key_id: repositoryForm.ssh_key_id,
+                host: repositoryForm.host,
+                username: repositoryForm.username,
+                port: repositoryForm.port,
               }
             : undefined
         }
@@ -2360,20 +2056,20 @@ export default function Repositories() {
         onClose={() => setShowImportPathExplorer(false)}
         onSelect={(paths) => {
           if (paths.length > 0) {
-            setImportForm({ ...importForm, path: paths[0] })
+            setRepositoryForm({ ...repositoryForm, path: paths[0] })
           }
         }}
         title="Select Repository Path"
         initialPath="/"
         multiSelect={false}
-        connectionType={importForm.repository_type === 'local' ? 'local' : 'ssh'}
+        connectionType={repositoryForm.repository_type === 'local' ? 'local' : 'ssh'}
         sshConfig={
-          importForm.repository_type !== 'local' && importForm.ssh_key_id
+          repositoryForm.repository_type !== 'local' && repositoryForm.ssh_key_id
             ? {
-                ssh_key_id: importForm.ssh_key_id,
-                host: importForm.host,
-                username: importForm.username,
-                port: importForm.port,
+                ssh_key_id: repositoryForm.ssh_key_id,
+                host: repositoryForm.host,
+                username: repositoryForm.username,
+                port: repositoryForm.port,
               }
             : undefined
         }
@@ -2384,22 +2080,22 @@ export default function Repositories() {
         open={showImportSourceDirExplorer}
         onClose={() => setShowImportSourceDirExplorer(false)}
         onSelect={(paths) => {
-          setImportForm({
-            ...importForm,
-            source_directories: [...importForm.source_directories, ...paths],
+          setRepositoryForm({
+            ...repositoryForm,
+            source_directories: [...repositoryForm.source_directories, ...paths],
           })
         }}
         title="Select Source Directories"
         initialPath="/"
         multiSelect={true}
-        connectionType={importForm.repository_type === 'local' ? 'local' : 'ssh'}
+        connectionType={repositoryForm.repository_type === 'local' ? 'local' : 'ssh'}
         sshConfig={
-          importForm.repository_type !== 'local' && importForm.ssh_key_id
+          repositoryForm.repository_type !== 'local' && repositoryForm.ssh_key_id
             ? {
-                ssh_key_id: importForm.ssh_key_id,
-                host: importForm.host,
-                username: importForm.username,
-                port: importForm.port,
+                ssh_key_id: repositoryForm.ssh_key_id,
+                host: repositoryForm.host,
+                username: repositoryForm.username,
+                port: repositoryForm.port,
               }
             : undefined
         }
@@ -2410,22 +2106,22 @@ export default function Repositories() {
         open={showImportExcludeExplorer}
         onClose={() => setShowImportExcludeExplorer(false)}
         onSelect={(paths) => {
-          setImportForm({
-            ...importForm,
-            exclude_patterns: [...importForm.exclude_patterns, ...paths],
+          setRepositoryForm({
+            ...repositoryForm,
+            exclude_patterns: [...repositoryForm.exclude_patterns, ...paths],
           })
         }}
         title="Select Directories to Exclude"
         initialPath="/"
         multiSelect={true}
-        connectionType={importForm.repository_type === 'local' ? 'local' : 'ssh'}
+        connectionType={repositoryForm.repository_type === 'local' ? 'local' : 'ssh'}
         sshConfig={
-          importForm.repository_type !== 'local' && importForm.ssh_key_id
+          repositoryForm.repository_type !== 'local' && repositoryForm.ssh_key_id
             ? {
-                ssh_key_id: importForm.ssh_key_id,
-                host: importForm.host,
-                username: importForm.username,
-                port: importForm.port,
+                ssh_key_id: repositoryForm.ssh_key_id,
+                host: repositoryForm.host,
+                username: repositoryForm.username,
+                port: repositoryForm.port,
               }
             : undefined
         }
