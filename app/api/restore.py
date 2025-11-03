@@ -165,7 +165,13 @@ async def get_archive_contents(
         seen_paths = set()
 
         if result.get("stdout"):
-            for line in result["stdout"].strip().split("\n"):
+            lines = result["stdout"].strip().split("\n")
+            logger.info("Parsing archive contents",
+                       archive=archive_name,
+                       path=path,
+                       total_lines=len(lines))
+
+            for line in lines:
                 if line:
                     try:
                         item_data = json.loads(line)
@@ -210,6 +216,12 @@ async def get_archive_contents(
 
         # Sort: directories first, then by name
         items.sort(key=lambda x: (x["type"] != "directory", x["name"].lower()))
+
+        logger.info("Archive contents parsed",
+                   archive=archive_name,
+                   path=path,
+                   items_count=len(items),
+                   first_few_items=[item["name"] for item in items[:10]])
 
         return {"items": items}
     except HTTPException:
