@@ -1,0 +1,2 @@
+- Always run test suite before pushing to github
+- Always add a new test or update existing when a new feature is added or a bug is fixed
