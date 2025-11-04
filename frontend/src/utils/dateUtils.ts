@@ -8,7 +8,14 @@ export const formatDate = (dateString: string | null | undefined): string => {
   if (!dateString) return 'Never'
 
   try {
-    const date = new Date(dateString)
+    // If the date string is in ISO format without timezone (e.g., 2025-11-04T06:56:38),
+    // treat it as UTC by appending 'Z'
+    let normalizedDate = dateString
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(dateString)) {
+      normalizedDate = dateString + 'Z'
+    }
+
+    const date = new Date(normalizedDate)
     const day = date.getDate()
 
     const getOrdinalSuffix = (d: number) => {
