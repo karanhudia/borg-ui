@@ -1974,20 +1974,10 @@ export default function Repositories() {
             source_directories: [...repositoryForm.source_directories, ...paths],
           })
         }}
-        title="Select Source Directories"
-        initialPath="/"
+        title="Select Source Directories (Local Machine)"
+        initialPath="/local"
         multiSelect={true}
-        connectionType={repositoryForm.repository_type === 'local' ? 'local' : 'ssh'}
-        sshConfig={
-          repositoryForm.repository_type !== 'local' && repositoryForm.ssh_key_id
-            ? {
-                ssh_key_id: repositoryForm.ssh_key_id,
-                host: repositoryForm.host,
-                username: repositoryForm.username,
-                port: repositoryForm.port,
-              }
-            : undefined
-        }
+        connectionType="local"
         selectMode="directories"
       />
 
@@ -2027,8 +2017,8 @@ export default function Repositories() {
             source_directories: [...editForm.source_directories, ...paths],
           })
         }}
-        title="Select Source Directories"
-        initialPath="/"
+        title="Select Source Directories (Local Machine)"
+        initialPath="/local"
         multiSelect={true}
         connectionType="local"
         selectMode="directories"
@@ -2085,20 +2075,10 @@ export default function Repositories() {
             source_directories: [...repositoryForm.source_directories, ...paths],
           })
         }}
-        title="Select Source Directories"
-        initialPath="/"
+        title="Select Source Directories (Local Machine)"
+        initialPath="/local"
         multiSelect={true}
-        connectionType={repositoryForm.repository_type === 'local' ? 'local' : 'ssh'}
-        sshConfig={
-          repositoryForm.repository_type !== 'local' && repositoryForm.ssh_key_id
-            ? {
-                ssh_key_id: repositoryForm.ssh_key_id,
-                host: repositoryForm.host,
-                username: repositoryForm.username,
-                port: repositoryForm.port,
-              }
-            : undefined
-        }
+        connectionType="local"
         selectMode="directories"
       />
 
