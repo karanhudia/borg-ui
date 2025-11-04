@@ -464,7 +464,7 @@ const Archives: React.FC = () => {
           ) : archiveContents?.data?.items ? (
             <Stack spacing={3}>
               {/* Interactive File Browser */}
-              {archiveContents?.data?.items && archiveContents.data.items.length > 0 && (
+              {archiveContents?.data?.items && archiveContents.data.items.length > 0 ? (
                 <Box>
                   {/* Breadcrumb Navigation */}
                   <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
@@ -595,6 +595,16 @@ const Archives: React.FC = () => {
                       )
                     })()}
                   </Box>
+                </Box>
+              ) : (
+                <Box sx={{ textAlign: 'center', py: 8 }}>
+                  <AlertCircle size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: '16px' }} />
+                  <Typography variant="h6" color="text.secondary" gutterBottom>
+                    This archive is empty
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    No files were backed up in this archive. This may happen if the source directory was empty or inaccessible during the backup.
+                  </Typography>
                 </Box>
               )}
             </Stack>
