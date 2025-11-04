@@ -76,11 +76,17 @@ const Archives: React.FC = () => {
     enabled: !!selectedRepositoryId
   })
 
-  // Get archive-specific info for modal
-  const { data: archiveInfo, isLoading: loadingArchiveInfo } = useQuery({
-    queryKey: ['archive-info', selectedRepositoryId, viewArchive?.name],
-    queryFn: () => repositoriesAPI.getArchiveInfo(selectedRepositoryId!, viewArchive!.name),
-    enabled: !!selectedRepositoryId && !!viewArchive
+  // Get archive contents for current path (on-demand, one level at a time)
+  const { data: archiveContents, isLoading: loadingArchiveContents } = useQuery({
+    queryKey: ['archive-contents', selectedRepositoryId, viewArchive?.name, currentPath],
+    queryFn: async () => {
+      if (!selectedRepository || !viewArchive) {
+        throw new Error('Repository or archive not selected')
+      }
+      const path = currentPath === '/' ? '' : currentPath.replace(/^\//, '')
+      return await archivesAPI.listContents(selectedRepository.path, viewArchive.name, path)
+    },
+    enabled: !!selectedRepositoryId && !!viewArchive && !!selectedRepository
   })
 
   // Delete archive mutation
@@ -120,51 +126,26 @@ const Archives: React.FC = () => {
 
   // File browser helper functions
   const getFilesInCurrentPath = () => {
-    if (!archiveInfo?.data?.archive?.files) return { folders: [], files: [] }
+    if (!archiveContents?.data?.items) return { folders: [], files: [] }
 
-    const allFiles = archiveInfo.data.archive.files
+    const items = archiveContents.data.items
     const folders: any[] = []
     const files: any[] = []
-    const seenFolders = new Set<string>()
 
-    // Normalize current path - remove leading and trailing slashes
-    const normalizedPath = currentPath === '/' ? '' : currentPath.replace(/^\/|\/$/g, '')
-
-    allFiles.forEach((file: any) => {
-      let filePath = file.path.startsWith('/') ? file.path.substring(1) : file.path
-
-      // Check if file is in current directory
-      if (normalizedPath) {
-        if (!filePath.startsWith(normalizedPath + '/')) return
-        filePath = filePath.substring(normalizedPath.length + 1)
-      }
-
-      // Skip if empty after normalization
-      if (!filePath) return
-
-      const parts = filePath.split('/')
-
-      if (parts.length === 1) {
-        // Direct child - either file or folder
-        if (file.type === 'd') {
-          if (!seenFolders.has(parts[0])) {
-            folders.push({ ...file, name: parts[0], path: file.path })
-            seenFolders.add(parts[0])
-          }
-        } else {
-          files.push({ ...file, name: parts[0] })
-        }
-      } else if (parts.length > 1) {
-        // Nested item - show as folder
-        const folderName = parts[0]
-        if (!seenFolders.has(folderName)) {
-          folders.push({
-            type: 'd',
-            name: folderName,
-            path: normalizedPath ? `${normalizedPath}/${folderName}` : folderName
-          })
-          seenFolders.add(folderName)
-        }
+    items.forEach((item: any) => {
+      if (item.type === 'directory') {
+        folders.push({
+          name: item.name,
+          path: item.path,
+          type: 'd'
+        })
+      } else {
+        files.push({
+          name: item.name,
+          path: item.path,
+          size: item.size,
+          type: 'f'
+        })
       }
     })
 
@@ -473,17 +454,17 @@ const Archives: React.FC = () => {
           </Stack>
         </DialogTitle>
         <DialogContent>
-          {loadingArchiveInfo ? (
+          {loadingArchiveContents ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
               <CircularProgress size={48} />
               <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                Loading archive details...
+                Loading archive contents...
               </Typography>
             </Box>
-          ) : archiveInfo?.data?.archive ? (
+          ) : archiveContents?.data?.items ? (
             <Stack spacing={3}>
               {/* Interactive File Browser */}
-              {archiveInfo?.data?.archive?.files && archiveInfo.data.archive.files.length > 0 && (
+              {archiveContents?.data?.items && archiveContents.data.items.length > 0 && (
                 <Box>
                   {/* Breadcrumb Navigation */}
                   <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
@@ -532,8 +513,7 @@ const Archives: React.FC = () => {
                             <Box
                               key={`folder-${index}`}
                               onClick={() => {
-                                const newPath = currentPath === '/' ? `/${folder.name}` : `${currentPath}/${folder.name}`
-                                navigateToPath(newPath)
+                                navigateToPath(folder.path)
                               }}
                               sx={{
                                 display: 'flex',
