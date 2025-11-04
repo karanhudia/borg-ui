@@ -168,13 +168,16 @@ class BorgInterface:
         return await self._execute_command(cmd, env=env if env else None)
 
     async def list_archive_contents(self, repository: str, archive: str, path: str = "", remote_path: str = None, passphrase: str = None) -> Dict:
-        """List contents of an archive"""
+        """List contents of an archive
+
+        Note: borg list doesn't support path filtering as an argument,
+        so we always fetch all items and filter them in the caller.
+        """
         cmd = [self.borg_cmd, "list"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
         cmd.extend([f"{repository}::{archive}", "--json-lines"])
-        if path:
-            cmd.append(path)
+        # Note: path parameter is not passed to borg, filtering happens in the API layer
 
         env = {}
         if passphrase:
