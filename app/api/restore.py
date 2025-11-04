@@ -189,6 +189,13 @@ async def get_archive_contents(
                         else:
                             relative_path = item_path
 
+                        # Strip leading slash for proper path handling
+                        relative_path = relative_path.lstrip("/")
+
+                        # Skip if empty after stripping
+                        if not relative_path:
+                            continue
+
                         # Only show immediate children
                         if "/" in relative_path:
                             # This is a nested item, show only the directory
