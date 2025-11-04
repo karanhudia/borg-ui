@@ -6,7 +6,7 @@ import structlog
 import os
 from dotenv import load_dotenv
 
-from app.api import auth, dashboard, backup, archives, restore, schedule, settings as settings_api, events, repositories, ssh_keys, system, filesystem
+from app.api import auth, dashboard, backup, archives, restore, schedule, settings as settings_api, events, repositories, ssh_keys, system, filesystem, browse
 from app.database.database import engine
 from app.database.models import Base
 from app.core.security import create_first_user
@@ -73,6 +73,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(backup.router, prefix="/api/backup", tags=["Backup"])
 app.include_router(archives.router, prefix="/api/archives", tags=["Archives"])
+app.include_router(browse.router, prefix="/api/browse", tags=["Browse"])
 app.include_router(restore.router, prefix="/api/restore", tags=["Restore"])
 app.include_router(schedule.router, prefix="/api/schedule", tags=["Schedule"])
 app.include_router(settings_api.router, prefix="/api/settings", tags=["Settings"])

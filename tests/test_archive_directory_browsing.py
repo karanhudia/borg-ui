@@ -128,7 +128,7 @@ class ArchiveBrowsingTester:
             params = {"path": path}
 
             response = self.session.get(
-                f"{self.base_url}/api/restore/contents/{repo_id}/{archive_name}",
+                f"{self.base_url}/api/browse/{repo_id}/{archive_name}",
                 headers=headers,
                 params=params,
                 timeout=30
@@ -213,7 +213,7 @@ class ArchiveBrowsingTester:
             params = {"path": path}
 
             response = self.session.get(
-                f"{self.base_url}/api/restore/contents/{repo_id}/{archive_name}",
+                f"{self.base_url}/api/browse/{repo_id}/{archive_name}",
                 headers=headers,
                 params=params,
                 timeout=30
