@@ -30,7 +30,7 @@ import {
   Gauge,
   Layers,
 } from 'lucide-react'
-import { archivesAPI, repositoriesAPI } from '../services/api'
+import { archivesAPI, repositoriesAPI, restoreAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { formatDate, formatBytes as formatBytesUtil } from '../utils/dateUtils'
 
@@ -80,13 +80,13 @@ const Archives: React.FC = () => {
   const { data: archiveContents, isLoading: loadingArchiveContents } = useQuery({
     queryKey: ['archive-contents', selectedRepositoryId, viewArchive?.name, currentPath],
     queryFn: async () => {
-      if (!selectedRepository || !viewArchive) {
+      if (!selectedRepositoryId || !viewArchive) {
         throw new Error('Repository or archive not selected')
       }
       const path = currentPath === '/' ? '' : currentPath.replace(/^\//, '')
-      return await archivesAPI.listContents(selectedRepository.path, viewArchive.name, path)
+      return await restoreAPI.getContents(selectedRepositoryId, viewArchive.name, path)
     },
-    enabled: !!selectedRepositoryId && !!viewArchive && !!selectedRepository
+    enabled: !!selectedRepositoryId && !!viewArchive
   })
 
   // Delete archive mutation
