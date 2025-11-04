@@ -30,7 +30,7 @@ import {
   Gauge,
   Layers,
 } from 'lucide-react'
-import { archivesAPI, repositoriesAPI, restoreAPI } from '../services/api'
+import { archivesAPI, repositoriesAPI, browseAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { formatDate, formatBytes as formatBytesUtil } from '../utils/dateUtils'
 
@@ -84,7 +84,7 @@ const Archives: React.FC = () => {
         throw new Error('Repository or archive not selected')
       }
       const path = currentPath === '/' ? '' : currentPath.replace(/^\//, '')
-      return await restoreAPI.getContents(selectedRepositoryId, viewArchive.name, path)
+      return await browseAPI.getContents(selectedRepositoryId, viewArchive.name, path)
     },
     enabled: !!selectedRepositoryId && !!viewArchive
   })
