@@ -56,11 +56,18 @@ async def browse_archive_contents(
                             continue
 
                         # Get relative path from current directory
-                        if path and item_path.startswith(path + "/"):
-                            relative_path = item_path[len(path) + 1:]
-                        elif path and item_path == path:
-                            continue
+                        if path:
+                            # If we're in a subdirectory, only show items under that path
+                            if item_path.startswith(path + "/"):
+                                relative_path = item_path[len(path) + 1:]
+                            elif item_path == path:
+                                # Skip the directory itself
+                                continue
+                            else:
+                                # Item is not in this directory, skip it
+                                continue
                         else:
+                            # Root level - show everything
                             relative_path = item_path
 
                         # Strip leading slash for proper path handling
