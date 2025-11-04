@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 import structlog
 import json
+import hashlib
+from datetime import datetime, timedelta
 
 from app.database.models import User, Repository
 from app.database.database import get_db
@@ -11,6 +13,12 @@ from app.core.borg import borg
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()
+
+# In-memory cache for borg list results
+# Key: (repository_id, archive_name)
+# Value: {"data": list_of_items, "timestamp": datetime}
+_archive_cache = {}
+CACHE_TTL_SECONDS = 300  # 5 minutes
 
 @router.get("/{repository_id}/{archive_name}")
 async def browse_archive_contents(
@@ -26,81 +34,118 @@ async def browse_archive_contents(
         if not repository:
             raise HTTPException(status_code=404, detail="Repository not found")
 
-        result = await borg.list_archive_contents(
-            repository.path,
-            archive_name,
-            path=path,
-            remote_path=repository.remote_path,
-            passphrase=repository.passphrase
-        )
+        # Check cache first
+        cache_key = (repository_id, archive_name)
+        now = datetime.utcnow()
 
-        # Parse borg list output
+        if cache_key in _archive_cache:
+            cache_entry = _archive_cache[cache_key]
+            cache_age = (now - cache_entry["timestamp"]).total_seconds()
+            if cache_age < CACHE_TTL_SECONDS:
+                logger.info("Using cached archive contents",
+                           archive=archive_name,
+                           cache_age_seconds=int(cache_age))
+                all_items = cache_entry["data"]
+            else:
+                # Cache expired, remove it
+                del _archive_cache[cache_key]
+                all_items = None
+        else:
+            all_items = None
+
+        # If not in cache or expired, fetch from borg
+        if all_items is None:
+            result = await borg.list_archive_contents(
+                repository.path,
+                archive_name,
+                path="",  # Always fetch all items
+                remote_path=repository.remote_path,
+                passphrase=repository.passphrase
+            )
+
+            # Parse and cache all items
+            all_items = []
+            if result.get("stdout"):
+                lines = result["stdout"].strip().split("\n")
+                logger.info("Fetching and caching archive contents",
+                           archive=archive_name,
+                           total_lines=len(lines))
+
+                for line in lines:
+                    if line:
+                        try:
+                            item_data = json.loads(line)
+                            item_path = item_data.get("path", "")
+                            if item_path:
+                                all_items.append({
+                                    "path": item_path,
+                                    "type": item_data.get("type", ""),
+                                    "size": item_data.get("size")
+                                })
+                        except json.JSONDecodeError:
+                            continue
+
+                # Store in cache
+                _archive_cache[cache_key] = {
+                    "data": all_items,
+                    "timestamp": now
+                }
+                logger.info("Cached archive contents",
+                           archive=archive_name,
+                           items_count=len(all_items))
+
+        # Now filter the cached items for the requested path
         items = []
         seen_paths = set()
 
-        if result.get("stdout"):
-            lines = result["stdout"].strip().split("\n")
-            logger.info("Parsing archive contents for browsing",
-                       archive=archive_name,
-                       path=path,
-                       total_lines=len(lines))
+        for item in all_items:
+            item_path = item["path"]
+            item_type = item["type"]
+            item_size = item.get("size")
 
-            for line in lines:
-                if line:
-                    try:
-                        item_data = json.loads(line)
-                        item_path = item_data.get("path", "")
+            # Get relative path from current directory
+            if path:
+                # If we're in a subdirectory, only show items under that path
+                if item_path.startswith(path + "/"):
+                    relative_path = item_path[len(path) + 1:]
+                elif item_path == path:
+                    # Skip the directory itself
+                    continue
+                else:
+                    # Item is not in this directory, skip it
+                    continue
+            else:
+                # Root level - show everything
+                relative_path = item_path
 
-                        # Skip empty paths
-                        if not item_path:
-                            continue
+            # Strip leading slash for proper path handling
+            relative_path = relative_path.lstrip("/")
 
-                        # Get relative path from current directory
-                        if path:
-                            # If we're in a subdirectory, only show items under that path
-                            if item_path.startswith(path + "/"):
-                                relative_path = item_path[len(path) + 1:]
-                            elif item_path == path:
-                                # Skip the directory itself
-                                continue
-                            else:
-                                # Item is not in this directory, skip it
-                                continue
-                        else:
-                            # Root level - show everything
-                            relative_path = item_path
+            # Skip if empty after stripping
+            if not relative_path:
+                continue
 
-                        # Strip leading slash for proper path handling
-                        relative_path = relative_path.lstrip("/")
-
-                        # Skip if empty after stripping
-                        if not relative_path:
-                            continue
-
-                        # Only show immediate children
-                        if "/" in relative_path:
-                            # This is a nested item, show only the directory
-                            dir_name = relative_path.split("/")[0]
-                            if dir_name not in seen_paths:
-                                seen_paths.add(dir_name)
-                                items.append({
-                                    "name": dir_name,
-                                    "type": "directory",
-                                    "path": f"{path}/{dir_name}" if path else dir_name
-                                })
-                        else:
-                            # This is an immediate child
-                            if relative_path not in seen_paths:
-                                seen_paths.add(relative_path)
-                                item_type = item_data.get("type", "")
-                                items.append({
-                                    "name": relative_path,
-                                    "type": "directory" if item_type == "d" else "file",
-                                    "size": item_data.get("size"),
-                                    "path": f"{path}/{relative_path}" if path else relative_path
-                                })
-                    except json.JSONDecodeError:
-                        continue
+            # Only show immediate children
+            if "/" in relative_path:
+                # This is a nested item, show only the directory
+                dir_name = relative_path.split("/")[0]
+                if dir_name not in seen_paths:
+                    seen_paths.add(dir_name)
+                    items.append({
+                        "name": dir_name,
+                        "type": "directory",
+                        "path": f"{path}/{dir_name}" if path else dir_name
+                    })
+            else:
+                # This is an immediate child
+                if relative_path not in seen_paths:
+                    seen_paths.add(relative_path)
+                    items.append({
+                        "name": relative_path,
+                        "type": "directory" if item_type == "d" else "file",
+                        "size": item_size,
+                        "path": f"{path}/{relative_path}" if path else relative_path
+                    })
 
         # Sort: directories first, then by name
         items.sort(key=lambda x: (x["type"] != "directory", x["name"].lower()))
