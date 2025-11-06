@@ -162,8 +162,7 @@ jobs:
       - name: Start Borg UI backend
         run: |
           mkdir -p data logs
-          cd app
-          uvicorn main:app --host 0.0.0.0 --port 8082 &
+          uvicorn app.main:app --host 0.0.0.0 --port 8082 &
           echo $! > /tmp/borg-ui.pid
         env:
           REDIS_HOST: localhost
@@ -183,17 +182,17 @@ jobs:
 
       - name: Run archive contents tests
         run: |
-          python3 tests/test_archive_contents.py --url http://localhost:8082
+          python3 tests/integration/test_archive_contents.py --url http://localhost:8082
         continue-on-error: true
 
       - name: Run multiple source directories test
         run: |
-          python3 tests/test_multiple_source_dirs.py --url http://localhost:8082
+          python3 tests/integration/test_multiple_source_dirs.py --url http://localhost:8082
         continue-on-error: true
 
       - name: Run archive browsing test
         run: |
-          python3 tests/test_archive_directory_browsing.py --url http://localhost:8082
+          python3 tests/integration/test_archive_directory_browsing.py --url http://localhost:8082
         continue-on-error: true
 
       - name: Stop Borg UI
