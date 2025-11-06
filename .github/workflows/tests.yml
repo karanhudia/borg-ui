@@ -71,7 +71,7 @@ jobs:
           REDIS_PORT: 6379
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           file: ./coverage.xml
           flags: backend
@@ -79,7 +79,7 @@ jobs:
           fail_ci_if_error: false
 
       - name: Upload coverage HTML report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage-report-backend
@@ -203,7 +203,7 @@ jobs:
           fi
 
       - name: Upload test artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: test-artifacts
@@ -245,7 +245,17 @@ jobs:
       - name: Check build output
         run: |
           cd frontend
-          ls -lah dist/
+          if [ -d "dist" ]; then
+            echo "✅ Build successful - dist directory created"
+            ls -lah dist/ | head -20
+          elif [ -d "build" ]; then
+            echo "✅ Build successful - build directory created"
+            ls -lah build/ | head -20
+          else
+            echo "❌ Build directory not found"
+            ls -lah
+            exit 1
+          fi
 
   test-results:
     name: Test Results Summary
