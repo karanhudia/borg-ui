@@ -64,9 +64,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files for frontend
-app.mount("/assets", StaticFiles(directory="app/static/assets"), name="assets")
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+# Mount static files for frontend (only if directories exist)
+if os.path.exists("app/static/assets"):
+    app.mount("/assets", StaticFiles(directory="app/static/assets"), name="assets")
+if os.path.exists("app/static"):
+    app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Include API routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
