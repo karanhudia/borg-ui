@@ -2,6 +2,8 @@
 [![Docker Hub](https://img.shields.io/docker/pulls/ainullcode/borg-ui)](https://hub.docker.com/r/ainullcode/borg-ui)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
 [![GitHub Actions](https://github.com/karanhudia/borg-ui/workflows/Build%20and%20Publish%20Docker%20Images/badge.svg)](https://github.com/karanhudia/borg-ui/actions)
+[![Tests](https://github.com/karanhudia/borg-ui/workflows/Tests/badge.svg)](https://github.com/karanhudia/borg-ui/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/karanhudia/borg-ui/branch/main/graph/badge.svg)](https://codecov.io/gh/karanhudia/borg-ui)
 
 A modern, user-friendly web interface for [Borg Backup](https://borgbackup.readthedocs.io/) management. **Zero-configuration deployment** - just run `docker compose up` and you're done!
 
@@ -642,6 +644,62 @@ npm run build
 # Run tests
 npm test
 ```
+
+### Testing
+
+Borg UI has a comprehensive test suite covering backend API, integration tests, and end-to-end workflows.
+
+**Quick Start:**
+```bash
+# Install test dependencies
+pip install -r requirements.txt
+
+# Run all tests with coverage
+pytest
+
+# Run only unit tests (fast)
+pytest -m "not requires_ui"
+
+# Run integration tests (requires Borg UI running)
+pytest -m integration
+```
+
+**Test Categories:**
+
+1. **Unit Tests** (`tests/`) - Fast, no external dependencies
+   - Archive browsing logic
+   - Directory navigation
+   - Multiple source directories
+
+2. **Integration Tests** (`test_app.py`) - Requires running server
+   - API endpoints
+   - Authentication
+   - Repository operations
+   - Config validation
+   - Health checks
+
+3. **End-to-End Tests** - Full workflow testing
+   - Backup operations
+   - Archive contents validation
+   - Restore operations
+
+**Coverage Reports:**
+
+View coverage locally:
+```bash
+pytest --cov=app --cov-report=html
+open htmlcov/index.html
+```
+
+**CI/CD:**
+
+Tests run automatically on every push and pull request via GitHub Actions:
+- Backend unit tests with coverage
+- Integration tests with real Borg repositories
+- Frontend build verification
+- Coverage reports uploaded to Codecov
+
+See [tests/README.md](tests/README.md) for detailed testing documentation.
 
 ### Project Structure
 

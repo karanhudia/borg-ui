@@ -1,0 +1,95 @@
+# Coverage.py configuration for Borg UI
+# https://coverage.readthedocs.io/
+
+[run]
+# Source code to measure coverage for
+source = app
+
+# Omit these files from coverage
+omit =
+    */tests/*
+    */test_*.py
+    */__pycache__/*
+    */node_modules/*
+    */venv/*
+    */env/*
+    */.venv/*
+    */migrations/*
+    */alembic/*
+    setup.py
+    */site-packages/*
+
+# Enable branch coverage (if statements, loops, etc.)
+branch = True
+
+# Measure coverage for code called by subprocess
+parallel = False
+
+# Store coverage data in this file
+data_file = .coverage
+
+[report]
+# Show lines that weren't covered
+show_missing = True
+
+# Precision for coverage percentages
+precision = 2
+
+# Skip files with 100% coverage in the report
+skip_covered = False
+
+# Skip empty files
+skip_empty = True
+
+# Fail if coverage is below this percentage
+fail_under = 0
+
+# Sort the report by these criteria
+sort = Cover
+
+# Exclude these lines from coverage
+exclude_lines =
+    # Have to re-enable the standard pragma
+    pragma: no cover
+
+    # Don't complain about missing debug-only code
+    def __repr__
+    def __str__
+
+    # Don't complain if tests don't hit defensive assertion code
+    raise AssertionError
+    raise NotImplementedError
+
+    # Don't complain if non-runnable code isn't run
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    if typing.TYPE_CHECKING:
+
+    # Don't complain about abstract methods
+    @abc.abstractmethod
+    @abstractmethod
+
+    # Don't complain about ellipsis in protocols/stubs
+    \.\.\.
+
+    # Don't complain about pass statements
+    pass
+
+[html]
+# Directory for HTML report
+directory = htmlcov
+
+# Title for HTML report
+title = Borg UI Coverage Report
+
+[xml]
+# Output file for XML report (for CI/CD tools)
+output = coverage.xml
+
+[json]
+# Output file for JSON report
+output = coverage.json
+
+# Pretty print JSON
+pretty_print = True
+show_contexts = True

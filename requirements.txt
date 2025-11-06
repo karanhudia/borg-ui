@@ -18,6 +18,8 @@ fastapi-cache2==0.2.1
 redis==5.0.1
 pytest==7.4.3
 pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+coverage[toml]==7.3.2
 httpx==0.25.2
 requests==2.32.4
 croniter==1.4.1 
