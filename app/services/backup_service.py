@@ -16,7 +16,7 @@ class BackupService:
     """Service for executing backups with real-time log streaming"""
 
     def __init__(self):
-        self.log_dir = Path("/data/logs")
+        self.log_dir = Path(settings.data_dir) / "logs"
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.running_processes = {}  # Track running backup processes by job_id
         self.error_msgids = {}  # Track error message IDs by job_id
