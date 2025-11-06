@@ -13,9 +13,11 @@ import os
 @pytest.mark.requires_borg
 def test_api_endpoints(test_base_url):
     """Test all API endpoints using test_app.py"""
+    # test_app.py is in the project root, not in tests/
+    project_root = os.path.join(os.path.dirname(__file__), "..", "..")
     result = subprocess.run(
         [sys.executable, "test_app.py", "--url", test_base_url],
-        cwd=os.path.join(os.path.dirname(__file__), ".."),
+        cwd=project_root,
         capture_output=True,
         text=True
     )
@@ -37,9 +39,10 @@ def test_archive_contents(test_base_url, test_directory):
     if not os.path.exists(test_directory):
         pytest.skip(f"Test directory {test_directory} not found. Run setup_test_env.sh first.")
 
+    project_root = os.path.join(os.path.dirname(__file__), "..", "..")
     result = subprocess.run(
-        [sys.executable, "tests/test_archive_contents.py", test_directory, "--url", test_base_url],
-        cwd=os.path.join(os.path.dirname(__file__), ".."),
+        [sys.executable, "tests/integration/test_archive_contents.py", test_directory, "--url", test_base_url],
+        cwd=project_root,
         capture_output=True,
         text=True
     )
@@ -60,9 +63,10 @@ def test_archive_contents(test_base_url, test_directory):
 @pytest.mark.slow
 def test_multiple_source_directories(test_base_url):
     """Test multiple source directories backup using test_multiple_source_dirs.py"""
+    project_root = os.path.join(os.path.dirname(__file__), "..", "..")
     result = subprocess.run(
-        [sys.executable, "tests/test_multiple_source_dirs.py", "--url", test_base_url],
-        cwd=os.path.join(os.path.dirname(__file__), ".."),
+        [sys.executable, "tests/integration/test_multiple_source_dirs.py", "--url", test_base_url],
+        cwd=project_root,
         capture_output=True,
         text=True
     )
@@ -82,9 +86,10 @@ def test_multiple_source_directories(test_base_url):
 @pytest.mark.requires_borg
 def test_archive_directory_browsing(test_base_url):
     """Test archive directory browsing using test_archive_directory_browsing.py"""
+    project_root = os.path.join(os.path.dirname(__file__), "..", "..")
     result = subprocess.run(
-        [sys.executable, "tests/test_archive_directory_browsing.py", "--url", test_base_url],
-        cwd=os.path.join(os.path.dirname(__file__), ".."),
+        [sys.executable, "tests/integration/test_archive_directory_browsing.py", "--url", test_base_url],
+        cwd=project_root,
         capture_output=True,
         text=True
     )

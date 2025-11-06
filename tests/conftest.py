@@ -1,5 +1,8 @@
 """
 Pytest configuration and fixtures for Borg UI tests
+
+This is the main conftest.py that configures pytest and imports
+fixtures from the fixtures/ directory.
 """
 import pytest
 import os
@@ -14,6 +17,12 @@ os.environ["ENVIRONMENT"] = "test"
 
 # Add parent directory to path so we can import from app/
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# Import fixtures from fixtures directory
+pytest_plugins = [
+    "tests.fixtures.database",
+    "tests.fixtures.api",
+]
 
 
 def pytest_configure(config):
