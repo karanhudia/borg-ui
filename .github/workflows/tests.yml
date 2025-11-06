@@ -154,6 +154,16 @@ jobs:
           cd frontend
           npm run build
 
+      - name: Copy frontend build to static directory
+        run: |
+          mkdir -p app/static
+          cp -r frontend/build/* app/static/
+          # Rename build assets to assets directory if needed
+          if [ -d "app/static/assets" ]; then
+            echo "✅ Frontend assets directory found"
+            ls -la app/static/assets/ | head -10
+          fi
+
       - name: Create test directories and data
         run: |
           chmod +x tests/setup_test_env.sh
