@@ -165,6 +165,9 @@ jobs:
           uvicorn app.main:app --host 0.0.0.0 --port 8082 &
           echo $! > /tmp/borg-ui.pid
         env:
+          DATA_DIR: ${{ github.workspace }}/data
+          SECRET_KEY: test-secret-key-for-ci-only
+          DATABASE_URL: sqlite:///${{ github.workspace }}/data/test.db
           REDIS_HOST: localhost
           REDIS_PORT: 6379
 
