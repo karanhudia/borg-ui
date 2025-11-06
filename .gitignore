@@ -103,3 +103,18 @@ tmp/
 # Data directories (runtime generated)
 data/
 backups/
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+coverage.json
+.tox/
+.nox/
+*.cover
+.hypothesis/
+.pytest_cache/
+junit.xml
+test-results/
