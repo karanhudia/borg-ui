@@ -24,9 +24,15 @@ export default function Login() {
   const onSubmit = async (data: LoginForm) => {
     setIsLoading(true)
     try {
-      await login(data.username, data.password)
-      toast.success('Login successful!')
-      navigate('/dashboard')
+      const mustChangePassword = await login(data.username, data.password)
+
+      if (mustChangePassword) {
+        toast.success('Login successful! Please change your password.')
+        navigate('/settings')
+      } else {
+        toast.success('Login successful!')
+        navigate('/dashboard')
+      }
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Login failed')
     } finally {
