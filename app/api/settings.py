@@ -36,6 +36,9 @@ class PasswordChange(BaseModel):
     current_password: str
     new_password: str
 
+class PasswordReset(BaseModel):
+    new_password: str
+
 class SystemSettingsUpdate(BaseModel):
     backup_timeout: Optional[int] = None
     max_concurrent_backups: Optional[int] = None
@@ -317,20 +320,20 @@ async def delete_user(
 @router.post("/users/{user_id}/reset-password")
 async def reset_user_password(
     user_id: int,
-    new_password: str,
+    password_data: PasswordReset,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Reset user password (admin only)"""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     try:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        
-        hashed_password = get_password_hash(new_password)
+
+        hashed_password = get_password_hash(password_data.new_password)
         user.password_hash = hashed_password
         user.updated_at = datetime.utcnow()
         db.commit()
