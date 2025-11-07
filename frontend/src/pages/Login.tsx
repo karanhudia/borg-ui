@@ -24,16 +24,9 @@ export default function Login() {
   const onSubmit = async (data: LoginForm) => {
     setIsLoading(true)
     try {
-      const mustChangePassword = await login(data.username, data.password)
-
-      if (mustChangePassword) {
-        toast.success('Login successful! Please change your password.')
-        // TODO: Redirect to dedicated password change page
-        navigate('/dashboard')
-      } else {
-        toast.success('Login successful!')
-        navigate('/dashboard')
-      }
+      await login(data.username, data.password)
+      toast.success('Login successful!')
+      navigate('/dashboard')
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Login failed')
     } finally {
