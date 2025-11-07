@@ -17,7 +17,7 @@ class TestSystemEndpoints:
         data = response.json()
         assert isinstance(data, dict)
         # Should contain basic system info
-        assert "platform" in data or "system" in data or "version" in data
+        assert "app_version" in data or "borg_version" in data or "platform" in data or "system" in data
 
     def test_system_info_unauthorized(self, test_client: TestClient):
         """Test system info without authentication"""
