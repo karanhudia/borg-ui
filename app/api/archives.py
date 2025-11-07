@@ -19,18 +19,29 @@ router = APIRouter()
 @router.get("/list")
 async def list_archives(
     repository: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """List archives in a repository"""
     try:
+        # Validate repository exists
+        repo = db.query(Repository).filter(Repository.path == repository).first()
+        if not repo:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Repository not found"
+            )
+
         result = await borg.list_archives(repository)
         if not result["success"]:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to list archives: {result['stderr']}"
             )
-        
+
         return {"archives": result["stdout"]}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to list archives", error=str(e))
         raise HTTPException(
@@ -44,10 +55,19 @@ async def get_archive_info(
     archive_id: str,
     include_files: bool = False,
     file_limit: int = 1000,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """Get detailed information about a specific archive including command line, metadata, and optionally file listing"""
     try:
+        # Validate repository exists
+        repo = db.query(Repository).filter(Repository.path == repository).first()
+        if not repo:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Repository not found"
+            )
+
         result = await borg.info_archive(repository, archive_id)
         if not result["success"]:
             raise HTTPException(
@@ -130,6 +150,8 @@ async def get_archive_info(
             logger.warning("Archive info is not JSON, returning raw output")
             return {"info": result["stdout"]}
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to get archive info", error=str(e))
         raise HTTPException(
@@ -142,18 +164,29 @@ async def get_archive_contents(
     repository: str,
     archive_id: str,
     path: str = "",
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """Get contents of an archive"""
     try:
+        # Validate repository exists
+        repo = db.query(Repository).filter(Repository.path == repository).first()
+        if not repo:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Repository not found"
+            )
+
         result = await borg.list_archive_contents(repository, archive_id, path)
         if not result["success"]:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to get archive contents: {result['stderr']}"
             )
-        
+
         return {"contents": result["stdout"]}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to get archive contents", error=str(e))
         raise HTTPException(
@@ -170,6 +203,14 @@ async def delete_archive(
 ):
     """Delete an archive"""
     try:
+        # Validate repository exists first
+        repo = db.query(Repository).filter(Repository.path == repository).first()
+        if not repo:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Repository not found"
+            )
+
         result = await borg.delete_archive(repository, archive_id)
         if not result["success"]:
             raise HTTPException(
@@ -179,31 +220,30 @@ async def delete_archive(
 
         # Update archive count after successful deletion
         try:
-            # Find repository by path
-            repo = db.query(Repository).filter(Repository.path == repository).first()
-            if repo:
-                # List archives to get updated count
-                list_result = await borg.list_archives(
-                    repo.path,
-                    remote_path=repo.remote_path,
-                    passphrase=repo.passphrase
-                )
-                if list_result.get("success"):
-                    try:
-                        archives_data = json.loads(list_result.get("stdout", "{}"))
-                        if isinstance(archives_data, dict):
-                            archive_count = len(archives_data.get("archives", []))
-                            repo.archive_count = archive_count
-                            db.commit()
-                            logger.info("Updated archive count after deletion",
-                                      repository=repo.name,
-                                      count=archive_count)
-                    except json.JSONDecodeError:
-                        logger.warning("Failed to parse archive list after deletion")
+            # List archives to get updated count
+            list_result = await borg.list_archives(
+                repo.path,
+                remote_path=repo.remote_path,
+                passphrase=repo.passphrase
+            )
+            if list_result.get("success"):
+                try:
+                    archives_data = json.loads(list_result.get("stdout", "{}"))
+                    if isinstance(archives_data, dict):
+                        archive_count = len(archives_data.get("archives", []))
+                        repo.archive_count = archive_count
+                        db.commit()
+                        logger.info("Updated archive count after deletion",
+                                  repository=repo.name,
+                                  count=archive_count)
+                except json.JSONDecodeError:
+                    logger.warning("Failed to parse archive list after deletion")
         except Exception as e:
             logger.warning("Failed to update archive count after deletion", error=str(e))
 
         return {"message": "Archive deleted successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to delete archive", error=str(e))
         raise HTTPException(
