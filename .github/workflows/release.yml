@@ -1,0 +1,77 @@
+name: Create GitHub Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags (e.g., v1.1.0)
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for changelog generation
+
+      - name: Get version from tag
+        id: version
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"  # Remove 'v' prefix
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+
+      - name: Get previous tag
+        id: previous_tag
+        run: |
+          PREVIOUS_TAG=$(git tag --sort=-v:refname | grep -A 1 "${{ github.ref_name }}" | tail -1)
+          if [ -z "$PREVIOUS_TAG" ] || [ "$PREVIOUS_TAG" == "${{ github.ref_name }}" ]; then
+            # No previous tag, use initial commit
+            PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
+          fi
+          echo "tag=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
+          echo "Previous tag: $PREVIOUS_TAG"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          {
+            echo 'changelog<<EOF'
+            echo "## What's Changed"
+            echo ""
+
+            # Get commits between previous tag and current tag
+            git log ${{ steps.previous_tag.outputs.tag }}..${{ github.ref_name }} \
+              --pretty=format:"* %s (%h)" \
+              --no-merges \
+              | grep -v "^* chore: bump version" || echo "* Initial release"
+
+            echo ""
+            echo ""
+            echo "## Docker Images"
+            echo ""
+            echo "Published to Docker Hub:"
+            echo '```'
+            echo "docker pull ainullcode/borg-ui:${{ steps.version.outputs.version }}"
+            echo "docker pull ainullcode/borg-ui:latest"
+            echo '```'
+            echo ""
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.previous_tag.outputs.tag }}...${{ github.ref_name }}"
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ steps.version.outputs.version }}
+          body: ${{ steps.changelog.outputs.changelog }}
+          draft: false
+          prerelease: false
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
