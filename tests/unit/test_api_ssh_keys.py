@@ -44,7 +44,7 @@ class TestSSHKeysEndpoints:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 400, 403, 405, 422]
+        assert response.status_code in [400, 403, 422]  # May return forbidden
 
     def test_upload_ssh_key_missing_fields(self, test_client: TestClient, admin_headers):
         """Test uploading SSH key with missing fields"""
@@ -88,4 +88,4 @@ class TestSSHKeysEndpoints:
             headers=admin_headers
         )
 
-        assert response.status_code in [400, 403, 404, 405, 500]
+        assert response.status_code in [404, 405]  # Not found or not implemented

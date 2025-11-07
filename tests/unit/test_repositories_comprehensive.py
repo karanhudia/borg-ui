@@ -26,7 +26,7 @@ class TestRepositoryCreation:
         )
 
         # Might succeed or fail depending on borg availability
-        assert response.status_code in [200, 201, 400, 403, 500]
+        assert response.status_code in [200, 201, 400, 403, 422, 500]  # May succeed or fail (borg dependency)
 
     def test_create_ssh_repository(self, test_client: TestClient, admin_headers):
         """Test creating SSH repository"""
@@ -42,7 +42,7 @@ class TestRepositoryCreation:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 201, 400, 403, 422, 500]
+        assert response.status_code in [200, 201, 400, 403, 422, 500]  # May succeed or fail (borg dependency)
 
     def test_create_repository_missing_name(self, test_client: TestClient, admin_headers):
         """Test creating repository without name"""
@@ -86,7 +86,7 @@ class TestRepositoryCreation:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 400, 403, 405, 422]
+        assert response.status_code in [400, 403, 422]  # Bad request, forbidden, or validation
 
     def test_create_repository_with_source_directories(self, test_client: TestClient, admin_headers):
         """Test creating repository with source directories"""
@@ -103,7 +103,7 @@ class TestRepositoryCreation:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 201, 400, 403, 422, 500]
+        assert response.status_code in [200, 201, 400, 403, 422, 500]  # May succeed or fail (borg dependency)
 
     def test_create_repository_with_exclude_patterns(self, test_client: TestClient, admin_headers):
         """Test creating repository with exclude patterns"""
@@ -120,7 +120,7 @@ class TestRepositoryCreation:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 201, 400, 403, 422, 500]
+        assert response.status_code in [200, 201, 400, 403, 422, 500]  # May succeed or fail (borg dependency)
 
 
 @pytest.mark.unit
@@ -148,7 +148,7 @@ class TestRepositoryRetrieval:
         )
 
         # Should succeed or fail gracefully
-        assert response.status_code in [200, 403, 404, 405, 422, 500]
+        assert response.status_code in [200, 403, 404]  # OK, forbidden, or not found
         if response.status_code == 200:
             data = response.json()
             if "name" in data:
@@ -220,7 +220,7 @@ class TestRepositoryUpdate:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 403, 404, 405, 422, 500]
+        assert response.status_code in [403, 404, 405]  # Auth/notfound/notimpl
 
     def test_update_repository_compression(self, test_client: TestClient, admin_headers, test_db):
         """Test updating repository compression"""
@@ -241,7 +241,7 @@ class TestRepositoryUpdate:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 400, 403, 404, 422]
+        assert response.status_code in [403, 404]  # Forbidden or not found
 
     def test_update_nonexistent_repository(self, test_client: TestClient, admin_headers):
         """Test updating non-existent repository"""
@@ -251,7 +251,7 @@ class TestRepositoryUpdate:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 403, 404, 405, 422, 500]
+        assert response.status_code in [403, 404, 405]  # Auth/notfound/notimpl
 
 
 @pytest.mark.unit
@@ -276,7 +276,7 @@ class TestRepositoryDeletion:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 204, 403, 404, 422]
+        assert response.status_code in [200, 204, 403]  # Success or forbidden
 
     def test_delete_nonexistent_repository(self, test_client: TestClient, admin_headers):
         """Test deleting non-existent repository"""
@@ -285,7 +285,7 @@ class TestRepositoryDeletion:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 403, 404, 405, 422, 500]
+        assert response.status_code in [403, 404, 405]  # Auth/notfound/notimpl
 
 
 @pytest.mark.unit

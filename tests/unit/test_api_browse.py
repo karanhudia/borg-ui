@@ -23,7 +23,7 @@ class TestBrowseEndpoints:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 404, 405, 422, 500]
+        assert response.status_code in [404, 405]  # Not found or not implemented
 
     def test_browse_archive_root(self, test_client: TestClient, admin_headers, test_db):
         """Test browsing archive root directory"""
@@ -74,7 +74,7 @@ class TestBrowseEndpoints:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 404, 405, 422, 500]
+        assert response.status_code in [404, 405]  # Not found or not implemented
 
     def test_search_archive_invalid(self, test_client: TestClient, admin_headers):
         """Test searching in invalid archive"""
@@ -84,7 +84,7 @@ class TestBrowseEndpoints:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 404, 405, 422, 500]
+        assert response.status_code in [404, 405]  # Not found or not implemented
 
 
 @pytest.mark.unit
