@@ -21,6 +21,7 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     expires_in: int
+    must_change_password: bool = False
 
 class UserCreate(BaseModel):
     username: str
@@ -43,6 +44,7 @@ class UserResponse(BaseModel):
     email: str = None
     is_active: bool
     is_admin: bool
+    must_change_password: bool = False
     created_at: datetime
 
     class Config:
@@ -75,11 +77,12 @@ async def login(
     )
     
     logger.info("User logged in successfully", username=user.username)
-    
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "expires_in": settings.access_token_expire_minutes * 60
+        "expires_in": settings.access_token_expire_minutes * 60,
+        "must_change_password": user.must_change_password
     }
 
 @router.post("/logout")
@@ -242,6 +245,10 @@ async def change_password(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update password"
         )
-    
+
+    # Clear must_change_password flag after successful password change
+    current_user.must_change_password = False
+    db.commit()
+
     logger.info("Password changed", username=current_user.username)
     return {"message": "Password changed successfully"} 

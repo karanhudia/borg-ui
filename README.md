@@ -121,14 +121,15 @@ This project solves my personal backup management headaches, and I hope it solve
 - 512MB RAM minimum (1GB recommended)
 - Network access to backup destinations
 
-### Default Credentials
+### First-Time Login
 
 After installation, access the web interface at `http://localhost:8081`
 
+On first login, you'll need to use the default credentials:
 - **Username**: `admin`
-- **Password**: `admin123`
+- **Password**: `admin123` (or custom password if you set `INITIAL_ADMIN_PASSWORD` environment variable)
 
-⚠️ **Change the default password immediately after first login!**
+🔒 **Security Feature**: You will be automatically prompted to change your password on first login. The system requires a new password before you can access other features.
 
 ---
 

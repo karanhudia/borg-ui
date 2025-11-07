@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from 'react-query'
 import {
   Box,
   Card,
-  CardContent,
   Typography,
   Button,
   TextField,
@@ -25,41 +24,18 @@ import {
   Chip,
   FormControlLabel,
   Checkbox,
-  Alert,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
 } from '@mui/material'
 import {
-  Settings as SettingsIcon,
   Users,
-  User,
-  Shield,
-  Save,
   Trash2,
   Plus,
   Edit,
   Key,
-  RefreshCw,
-  Server,
   AlertCircle,
 } from 'lucide-react'
 import { settingsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
-
-interface SystemSettings {
-  backup_timeout: number
-  max_concurrent_backups: number
-  log_retention_days: number
-  email_notifications: boolean
-  webhook_url: string
-  auto_cleanup: boolean
-  cleanup_retention_days: number
-  borg_version: string
-  app_version: string
-}
 
 interface UserType {
   id: number
@@ -81,22 +57,6 @@ const Settings: React.FC = () => {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<UserType | null>(null)
 
-  // System settings
-  const { data: systemSettings, isLoading: loadingSettings } = useQuery({
-    queryKey: ['systemSettings'],
-    queryFn: settingsAPI.getSystemSettings,
-  })
-
-  const updateSystemSettingsMutation = useMutation({
-    mutationFn: settingsAPI.updateSystemSettings,
-    onSuccess: () => {
-      toast.success('System settings updated successfully')
-      queryClient.invalidateQueries({ queryKey: ['systemSettings'] })
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to update system settings')
-    },
-  })
 
   // Users
   const { data: usersData, isLoading: loadingUsers } = useQuery({
@@ -155,19 +115,7 @@ const Settings: React.FC = () => {
     },
   })
 
-  // System cleanup
-  const cleanupMutation = useMutation({
-    mutationFn: settingsAPI.cleanupSystem,
-    onSuccess: () => {
-      toast.success('System cleanup completed')
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to run system cleanup')
-    },
-  })
-
   // Form states
-  const [systemForm, setSystemForm] = useState<Partial<SystemSettings>>({})
   const [userForm, setUserForm] = useState({
     username: '',
     email: '',
@@ -177,18 +125,6 @@ const Settings: React.FC = () => {
   const [passwordForm, setPasswordForm] = useState({
     new_password: '',
   })
-
-  // Initialize form when data loads
-  React.useEffect(() => {
-    if (systemSettings?.data?.settings) {
-      setSystemForm(systemSettings.data.settings)
-    }
-  }, [systemSettings])
-
-  const handleSystemSettingsSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    updateSystemSettingsMutation.mutate(systemForm)
-  }
 
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault()
@@ -219,10 +155,6 @@ const Settings: React.FC = () => {
     if (deleteConfirmUser) {
       deleteUserMutation.mutate(deleteConfirmUser.id)
     }
-  }
-
-  const handleCleanup = () => {
-    cleanupMutation.mutate()
   }
 
   const openPasswordModal = (userId: number) => {
@@ -266,12 +198,6 @@ const Settings: React.FC = () => {
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={activeTab} onChange={(_, value) => setActiveTab(value)}>
-          <Tab
-            icon={<SettingsIcon size={18} />}
-            iconPosition="start"
-            label="System Settings"
-            sx={{ textTransform: 'none', minHeight: 48 }}
-          />
           {user?.is_admin && (
             <Tab
               icon={<Users size={18} />}
@@ -280,209 +206,11 @@ const Settings: React.FC = () => {
               sx={{ textTransform: 'none', minHeight: 48 }}
             />
           )}
-          <Tab
-            icon={<User size={18} />}
-            iconPosition="start"
-            label="Profile"
-            sx={{ textTransform: 'none', minHeight: 48 }}
-          />
         </Tabs>
       </Box>
 
-      {/* System Settings Tab */}
-      {activeTab === 0 && (
-        <Box>
-          {loadingSettings ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
-              <CircularProgress size={48} />
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                Loading system settings...
-              </Typography>
-            </Box>
-          ) : (
-            <Stack direction={{ xs: 'column', lg: 'row' }} spacing={3}>
-              {/* System Settings Form */}
-              <Box sx={{ flex: 1 }}>
-                <Card>
-                  <CardContent>
-                    <Typography variant="h6" fontWeight={600} gutterBottom>
-                      System Configuration
-                    </Typography>
-                    <form onSubmit={handleSystemSettingsSubmit}>
-                      <Stack spacing={3} sx={{ mt: 2 }}>
-                        <TextField
-                          label="Backup Timeout (seconds)"
-                          type="number"
-                          value={systemForm.backup_timeout || ''}
-                          onChange={(e) =>
-                            setSystemForm({ ...systemForm, backup_timeout: Number(e.target.value) })
-                          }
-                          inputProps={{ min: 300, max: 86400 }}
-                          fullWidth
-                        />
-
-                        <TextField
-                          label="Max Concurrent Backups"
-                          type="number"
-                          value={systemForm.max_concurrent_backups || ''}
-                          onChange={(e) =>
-                            setSystemForm({
-                              ...systemForm,
-                              max_concurrent_backups: Number(e.target.value),
-                            })
-                          }
-                          inputProps={{ min: 1, max: 10 }}
-                          fullWidth
-                        />
-
-                        <TextField
-                          label="Log Retention (days)"
-                          type="number"
-                          value={systemForm.log_retention_days || ''}
-                          onChange={(e) =>
-                            setSystemForm({
-                              ...systemForm,
-                              log_retention_days: Number(e.target.value),
-                            })
-                          }
-                          inputProps={{ min: 1, max: 365 }}
-                          fullWidth
-                        />
-
-                        <TextField
-                          label="Cleanup Retention (days)"
-                          type="number"
-                          value={systemForm.cleanup_retention_days || ''}
-                          onChange={(e) =>
-                            setSystemForm({
-                              ...systemForm,
-                              cleanup_retention_days: Number(e.target.value),
-                            })
-                          }
-                          inputProps={{ min: 1, max: 365 }}
-                          fullWidth
-                        />
-
-                        <FormControlLabel
-                          control={
-                            <Checkbox
-                              checked={systemForm.email_notifications || false}
-                              onChange={(e) =>
-                                setSystemForm({
-                                  ...systemForm,
-                                  email_notifications: e.target.checked,
-                                })
-                              }
-                            />
-                          }
-                          label="Enable Email Notifications"
-                        />
-
-                        <FormControlLabel
-                          control={
-                            <Checkbox
-                              checked={systemForm.auto_cleanup || false}
-                              onChange={(e) =>
-                                setSystemForm({ ...systemForm, auto_cleanup: e.target.checked })
-                              }
-                            />
-                          }
-                          label="Enable Auto Cleanup"
-                        />
-
-                        <TextField
-                          label="Webhook URL"
-                          type="url"
-                          value={systemForm.webhook_url || ''}
-                          onChange={(e) =>
-                            setSystemForm({ ...systemForm, webhook_url: e.target.value })
-                          }
-                          placeholder="https://example.com/webhook"
-                          fullWidth
-                        />
-
-                        <Button
-                          type="submit"
-                          variant="contained"
-                          startIcon={<Save size={18} />}
-                          disabled={updateSystemSettingsMutation.isLoading}
-                          fullWidth
-                        >
-                          {updateSystemSettingsMutation.isLoading ? 'Saving...' : 'Save Settings'}
-                        </Button>
-                      </Stack>
-                    </form>
-                  </CardContent>
-                </Card>
-              </Box>
-
-              {/* System Information & Maintenance */}
-              <Box sx={{ flex: 1 }}>
-                <Stack spacing={3}>
-                  {/* System Information */}
-                  <Card>
-                    <CardContent>
-                      <Typography variant="h6" fontWeight={600} gutterBottom>
-                        System Information
-                      </Typography>
-                      <List>
-                        <ListItem>
-                          <ListItemIcon>
-                            <Server size={20} />
-                          </ListItemIcon>
-                          <ListItemText
-                            primary="App Version"
-                            secondary={systemForm.app_version}
-                            primaryTypographyProps={{ variant: 'body2' }}
-                            secondaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
-                          />
-                        </ListItem>
-                        <ListItem>
-                          <ListItemIcon>
-                            <Shield size={20} />
-                          </ListItemIcon>
-                          <ListItemText
-                            primary="Borg Version"
-                            secondary={systemForm.borg_version}
-                            primaryTypographyProps={{ variant: 'body2' }}
-                            secondaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
-                          />
-                        </ListItem>
-                      </List>
-                    </CardContent>
-                  </Card>
-
-                  {/* System Maintenance */}
-                  <Card>
-                    <CardContent>
-                      <Typography variant="h6" fontWeight={600} gutterBottom>
-                        System Maintenance
-                      </Typography>
-                      <Button
-                        variant="contained"
-                        color="warning"
-                        startIcon={<RefreshCw size={18} />}
-                        onClick={handleCleanup}
-                        disabled={cleanupMutation.isLoading}
-                        fullWidth
-                        sx={{ mt: 2 }}
-                      >
-                        {cleanupMutation.isLoading ? 'Running...' : 'Run System Cleanup'}
-                      </Button>
-                      <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                        Cleans up old logs, temporary files, and expired backups
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Stack>
-              </Box>
-            </Stack>
-          )}
-        </Box>
-      )}
-
       {/* User Management Tab */}
-      {activeTab === 1 && user?.is_admin && (
+      {activeTab === 0 && user?.is_admin && (
         <Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
             <Typography variant="h6" fontWeight={600}>
@@ -586,20 +314,6 @@ const Settings: React.FC = () => {
             </Card>
           )}
         </Box>
-      )}
-
-      {/* Profile Tab */}
-      {activeTab === 2 && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" fontWeight={600} gutterBottom>
-              Profile Settings
-            </Typography>
-            <Alert severity="info" sx={{ mt: 2 }}>
-              Profile management coming soon...
-            </Alert>
-          </CardContent>
-        </Card>
       )}
 
       {/* Create/Edit User Modal */}

@@ -35,12 +35,18 @@ export const authAPI = {
     api.post('/auth/login', `username=${username}&password=${password}`, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     }),
-  
+
   logout: () => api.post('/auth/logout'),
-  
+
   refresh: () => api.post('/auth/refresh'),
-  
+
   getProfile: () => api.get('/auth/me'),
+
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.post('/auth/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
 }
 
 export const dashboardAPI = {
