@@ -363,6 +363,7 @@ async def change_password(
         # Update password
         hashed_password = get_password_hash(password_data.new_password)
         current_user.password_hash = hashed_password
+        current_user.must_change_password = False  # Clear the flag after password change
         current_user.updated_at = datetime.utcnow()
         db.commit()
         
