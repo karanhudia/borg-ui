@@ -46,13 +46,13 @@ class TestScheduleEndpoints:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 400, 403, 404, 422, 500]
+        assert response.status_code in [200, 403, 404, 422]  # May return 200 with error or 422 validation error
 
     def test_get_schedule_nonexistent(self, test_client: TestClient, admin_headers):
         """Test getting non-existent schedule"""
         response = test_client.get("/api/schedule/99999", headers=admin_headers)
 
-        assert response.status_code in [200, 403, 404, 405, 422, 500]
+        assert response.status_code in [403, 404, 405]  # Auth/notfound/notimpl
 
     def test_update_schedule_nonexistent(self, test_client: TestClient, admin_headers):
         """Test updating non-existent schedule"""
@@ -65,13 +65,13 @@ class TestScheduleEndpoints:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 403, 404, 405, 422, 500]
+        assert response.status_code in [403, 404, 405]  # Auth/notfound/notimpl
 
     def test_delete_schedule_nonexistent(self, test_client: TestClient, admin_headers):
         """Test deleting non-existent schedule"""
         response = test_client.delete("/api/schedule/99999", headers=admin_headers)
 
-        assert response.status_code in [200, 403, 404, 405, 422, 500]
+        assert response.status_code in [403, 404, 405]  # Auth/notfound/notimpl
 
     def test_toggle_schedule_nonexistent(self, test_client: TestClient, admin_headers):
         """Test toggling non-existent schedule"""
@@ -80,7 +80,7 @@ class TestScheduleEndpoints:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 403, 404, 405, 422, 500]
+        assert response.status_code in [403, 404, 405]  # Auth/notfound/notimpl
 
     def test_run_schedule_now_nonexistent(self, test_client: TestClient, admin_headers):
         """Test running non-existent schedule immediately"""
@@ -89,10 +89,10 @@ class TestScheduleEndpoints:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 403, 404, 405, 422, 500]
+        assert response.status_code in [403, 404, 405]  # Auth/notfound/notimpl
 
     def test_get_schedule_history(self, test_client: TestClient, admin_headers):
         """Test getting schedule execution history"""
         response = test_client.get("/api/schedule/history", headers=admin_headers)
 
-        assert response.status_code in [200, 403, 404, 422, 500]
+        assert response.status_code in [200, 403, 404, 422]  # May return validation error
