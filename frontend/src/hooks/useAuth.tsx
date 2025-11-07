@@ -6,13 +6,15 @@ interface User {
   username: string
   email: string
   is_admin: boolean
+  must_change_password?: boolean
 }
 
 interface AuthContextType {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
-  login: (username: string, password: string) => Promise<void>
+  mustChangePassword: boolean
+  login: (username: string, password: string) => Promise<boolean>
   logout: () => Promise<void>
 }
 
@@ -41,13 +43,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  const login = async (username: string, password: string) => {
+  const login = async (username: string, password: string): Promise<boolean> => {
     const response = await authAPI.login(username, password)
-    const { access_token } = response.data
+    const { access_token, must_change_password } = response.data
     localStorage.setItem('access_token', access_token)
-    
+
     const profileResponse = await authAPI.getProfile()
     setUser(profileResponse.data)
+
+    // Return true if user must change password
+    return must_change_password || false
   }
 
   const logout = async () => {
@@ -64,6 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     isAuthenticated: !!user,
     isLoading,
+    mustChangePassword: user?.must_change_password || false,
     login,
     logout,
   }

@@ -24,9 +24,16 @@ export default function Login() {
   const onSubmit = async (data: LoginForm) => {
     setIsLoading(true)
     try {
-      await login(data.username, data.password)
-      toast.success('Login successful!')
-      navigate('/dashboard')
+      const mustChangePassword = await login(data.username, data.password)
+
+      if (mustChangePassword) {
+        toast.success('Login successful! Please change your password.')
+        // TODO: Redirect to dedicated password change page
+        navigate('/dashboard')
+      } else {
+        toast.success('Login successful!')
+        navigate('/dashboard')
+      }
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Login failed')
     } finally {
@@ -98,12 +105,6 @@ export default function Login() {
             >
               {isLoading ? 'Signing in...' : 'Sign in'}
             </button>
-          </div>
-
-          <div className="text-center">
-            <p className="text-sm text-gray-600">
-              Default credentials: admin / admin123
-            </p>
           </div>
         </form>
       </div>

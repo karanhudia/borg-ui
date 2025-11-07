@@ -128,7 +128,8 @@ async def create_first_user():
                 password_hash=hashed_password,
                 email="admin@borg.local",
                 is_active=True,
-                is_admin=True
+                is_admin=True,
+                must_change_password=True  # Force password change on first login
             )
             
             db.add(admin_user)
