@@ -56,7 +56,24 @@ const Settings: React.FC = () => {
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<UserType | null>(null)
+  const [changePasswordForm, setChangePasswordForm] = useState({
+    current_password: '',
+    new_password: '',
+    confirm_password: '',
+  })
 
+  // Change password mutation (for current user)
+  const changePasswordMutation = useMutation({
+    mutationFn: (passwordData: { current_password: string; new_password: string }) =>
+      settingsAPI.changePassword(passwordData),
+    onSuccess: () => {
+      toast.success('Password changed successfully')
+      setChangePasswordForm({ current_password: '', new_password: '', confirm_password: '' })
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to change password')
+    },
+  })
 
   // Users
   const { data: usersData, isLoading: loadingUsers } = useQuery({
@@ -198,6 +215,12 @@ const Settings: React.FC = () => {
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={activeTab} onChange={(_, value) => setActiveTab(value)}>
+          <Tab
+            icon={<Key size={18} />}
+            iconPosition="start"
+            label="Profile"
+            sx={{ textTransform: 'none', minHeight: 48 }}
+          />
           {user?.is_admin && (
             <Tab
               icon={<Users size={18} />}
@@ -209,8 +232,94 @@ const Settings: React.FC = () => {
         </Tabs>
       </Box>
 
+      {/* Profile Tab */}
+      {activeTab === 0 && (
+        <Box>
+          <Card sx={{ maxWidth: 600 }}>
+            <Box sx={{ p: 3 }}>
+              <Typography variant="h6" fontWeight={600} gutterBottom>
+                Change Password
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                Update your password to keep your account secure
+              </Typography>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  if (changePasswordForm.new_password !== changePasswordForm.confirm_password) {
+                    toast.error('New passwords do not match')
+                    return
+                  }
+                  changePasswordMutation.mutate({
+                    current_password: changePasswordForm.current_password,
+                    new_password: changePasswordForm.new_password,
+                  })
+                }}
+              >
+                <Stack spacing={3}>
+                  <TextField
+                    label="Current Password"
+                    type="password"
+                    value={changePasswordForm.current_password}
+                    onChange={(e) =>
+                      setChangePasswordForm({ ...changePasswordForm, current_password: e.target.value })
+                    }
+                    required
+                    fullWidth
+                  />
+
+                  <TextField
+                    label="New Password"
+                    type="password"
+                    value={changePasswordForm.new_password}
+                    onChange={(e) =>
+                      setChangePasswordForm({ ...changePasswordForm, new_password: e.target.value })
+                    }
+                    required
+                    fullWidth
+                  />
+
+                  <TextField
+                    label="Confirm New Password"
+                    type="password"
+                    value={changePasswordForm.confirm_password}
+                    onChange={(e) =>
+                      setChangePasswordForm({ ...changePasswordForm, confirm_password: e.target.value })
+                    }
+                    required
+                    fullWidth
+                    error={
+                      changePasswordForm.confirm_password !== '' &&
+                      changePasswordForm.new_password !== changePasswordForm.confirm_password
+                    }
+                    helperText={
+                      changePasswordForm.confirm_password !== '' &&
+                      changePasswordForm.new_password !== changePasswordForm.confirm_password
+                        ? 'Passwords do not match'
+                        : ''
+                    }
+                  />
+
+                  <Box>
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      disabled={changePasswordMutation.isLoading}
+                      startIcon={changePasswordMutation.isLoading ? <CircularProgress size={16} /> : null}
+                    >
+                      {changePasswordMutation.isLoading ? 'Changing Password...' : 'Change Password'}
+                    </Button>
+                  </Box>
+                </Stack>
+              </form>
+            </Box>
+          </Card>
+        </Box>
+      )}
+
       {/* User Management Tab */}
-      {activeTab === 0 && user?.is_admin && (
+      {activeTab === (user?.is_admin ? 1 : 0) && user?.is_admin && (
         <Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
             <Typography variant="h6" fontWeight={600}>
