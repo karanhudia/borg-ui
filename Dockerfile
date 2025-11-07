@@ -48,7 +48,7 @@ LABEL com.borg-ui.icon.color="#00dd00"
 
 WORKDIR /app
 
-# Install system dependencies including packages needed for borg
+# Install system dependencies including borg and related packages
 RUN apt-get update && apt-get install -y \
     # Core system packages
     cron \
@@ -57,17 +57,9 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     lsb-release \
     gosu \
-    # Build dependencies for borgbackup
-    gcc \
-    g++ \
-    make \
-    libssl-dev \
-    libacl1-dev \
-    libacl1 \
-    liblz4-dev \
-    libzstd-dev \
-    libxxhash-dev \
-    pkg-config \
+    # Borg and related packages
+    borgbackup \
+    borgbackup-doc \
     # Additional useful packages
     rsync \
     openssh-client \
@@ -76,8 +68,7 @@ RUN apt-get update && apt-get install -y \
     # Cleanup
     && rm -rf /var/lib/apt/lists/*
 
-# Install borgbackup 1.4.2 from pip
-RUN pip3 install --no-cache-dir borgbackup==1.4.2
+# No additional Python packages needed - borg is already installed
 
 # Install additional useful tools
 RUN apt-get update && apt-get install -y \
@@ -166,4 +157,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8081}/ || exit 1
 
 # Use entrypoint that handles UID/GID changes
-ENTRYPOINT ["/entrypoint.sh"] 
+ENTRYPOINT ["/entrypoint.sh"]
