@@ -23,8 +23,16 @@ logger = structlog.get_logger()
 # Value: asyncio.Lock instance
 _repository_locks: Dict[Union[int, str], asyncio.Lock] = {}
 
-# Lock for managing the locks dictionary itself
-_locks_dict_lock = asyncio.Lock()
+# Lock for managing the locks dictionary itself (lazily initialized)
+_locks_dict_lock: Union[asyncio.Lock, None] = None
+
+
+def _get_locks_dict_lock() -> asyncio.Lock:
+    """Get or create the locks dictionary lock (lazy initialization)"""
+    global _locks_dict_lock
+    if _locks_dict_lock is None:
+        _locks_dict_lock = asyncio.Lock()
+    return _locks_dict_lock
 
 
 async def get_repository_lock(repo_identifier: Union[int, str]) -> asyncio.Lock:
@@ -37,7 +45,8 @@ async def get_repository_lock(repo_identifier: Union[int, str]) -> asyncio.Lock:
     Returns:
         asyncio.Lock instance for the repository
     """
-    async with _locks_dict_lock:
+    locks_dict_lock = _get_locks_dict_lock()
+    async with locks_dict_lock:
         if repo_identifier not in _repository_locks:
             _repository_locks[repo_identifier] = asyncio.Lock()
             logger.debug("Created new lock for repository", repo_id=repo_identifier)
@@ -129,7 +138,8 @@ async def cleanup_unused_locks():
     Remove locks that are not currently held.
     This can be called periodically to prevent memory buildup.
     """
-    async with _locks_dict_lock:
+    locks_dict_lock = _get_locks_dict_lock()
+    async with locks_dict_lock:
         repo_ids_to_remove = [
             repo_id for repo_id, lock in _repository_locks.items()
             if not lock.locked()
