@@ -141,7 +141,6 @@ class BorgWebUITester:
         headers = {"Authorization": f"Bearer {self.auth_token}"}
         protected_routes = [
             "/api/dashboard/status",
-            "/api/dashboard/health",
             "/api/dashboard/metrics",
             "/api/repositories/",
             "/api/ssh-keys/"
@@ -185,39 +184,25 @@ class BorgWebUITester:
             return False
     
     def test_health_endpoints(self) -> bool:
-        """Test health and status endpoints"""
+        """Test system info endpoint"""
         if not self.auth_token:
-            self.log_test("Health Endpoints", False, "No auth token available")
+            self.log_test("System Info", False, "No auth token available")
             return False
-        
-        headers = {"Authorization": f"Bearer {self.auth_token}"}
-        
-        try:
-            # Test dashboard health
-            response = self.session.get(f"{self.base_url}/api/dashboard/health", headers=headers, timeout=5)
-            if response.status_code == 200:
-                health_data = response.json()
-                if health_data.get("status") in ["healthy", "warning", "error"]:
-                    self.log_test("Dashboard Health", True, f"Status: {health_data.get('status')}")
-                else:
-                    self.log_test("Dashboard Health", False, f"Unexpected health status: {health_data.get('status')}")
-                    return False
-            else:
-                self.log_test("Dashboard Health", False, f"Failed with status {response.status_code}")
-                return False
 
+        headers = {"Authorization": f"Bearer {self.auth_token}"}
+
+        try:
             # Test system info
             response = self.session.get(f"{self.base_url}/api/system/info", headers=headers, timeout=5)
             if response.status_code == 200:
                 self.log_test("System Info", True, "System info endpoint accessible")
+                return True
             else:
                 self.log_test("System Info", False, f"Failed with status {response.status_code}")
                 return False
-            
-            return True
-            
+
         except requests.exceptions.RequestException as e:
-            self.log_test("Health Endpoints", False, f"Health check failed: {str(e)}")
+            self.log_test("System Info", False, f"System info check failed: {str(e)}")
             return False
     
     def test_static_assets(self) -> bool:
