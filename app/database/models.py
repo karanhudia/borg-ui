@@ -171,5 +171,16 @@ class ScheduledJob(Base):
     last_run = Column(DateTime, nullable=True)  # Last execution time
     next_run = Column(DateTime, nullable=True)  # Next scheduled execution time
     description = Column(Text, nullable=True)  # User description of the job
+
+    # Prune and compact settings
+    run_prune_after = Column(Boolean, default=False)  # Run prune after backup
+    run_compact_after = Column(Boolean, default=False)  # Run compact after prune
+    prune_keep_daily = Column(Integer, default=7)  # Keep N daily backups
+    prune_keep_weekly = Column(Integer, default=4)  # Keep N weekly backups
+    prune_keep_monthly = Column(Integer, default=6)  # Keep N monthly backups
+    prune_keep_yearly = Column(Integer, default=1)  # Keep N yearly backups
+    last_prune = Column(DateTime, nullable=True)  # Last prune execution time
+    last_compact = Column(DateTime, nullable=True)  # Last compact execution time
+
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, nullable=True) 
