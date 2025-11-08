@@ -74,6 +74,12 @@ class RestoreService:
             if repository and repository.passphrase:
                 env["BORG_PASSPHRASE"] = repository.passphrase
 
+            # Configure lock behavior to prevent timeout issues with SSH repositories
+            # Wait up to 180 seconds (3 minutes) for locks instead of default 1 second
+            env["BORG_LOCK_WAIT"] = "180"
+            # Mark this container's hostname as unique to avoid lock conflicts
+            env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
+
             # Add SSH options
             ssh_opts = [
                 "-o", "StrictHostKeyChecking=no",

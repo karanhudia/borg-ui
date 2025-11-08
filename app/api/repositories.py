@@ -20,6 +20,32 @@ router = APIRouter(tags=["repositories"])
 # Initialize Borg interface
 borg = BorgInterface()
 
+# Helper function to setup Borg environment with proper lock configuration
+def setup_borg_env(base_env=None, passphrase=None, ssh_opts=None):
+    """Setup Borg environment variables with lock and timeout configuration"""
+    env = base_env.copy() if base_env else os.environ.copy()
+
+    # Set passphrase if provided
+    if passphrase:
+        env["BORG_PASSPHRASE"] = passphrase
+
+    # Allow non-interactive access to unencrypted repositories
+    env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+
+    # Configure lock behavior to prevent timeout issues
+    # Wait up to 180 seconds (3 minutes) for locks instead of default 1 second
+    env["BORG_LOCK_WAIT"] = "180"
+
+    # Mark this container's hostname as unique to avoid lock conflicts
+    # This prevents issues when multiple operations run on same repository
+    env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
+
+    # Set SSH options if provided
+    if ssh_opts:
+        env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+
+    return env
+
 # Helper function to format datetime with timezone
 def format_datetime(dt):
     """Format datetime to ISO8601 with UTC timezone indicator"""
@@ -1256,20 +1282,16 @@ async def list_repository_archives(
 
         cmd.extend(["--json", repository.path])
 
-        # Set up environment
-        env = os.environ.copy()
-        if repository.passphrase:
-            env["BORG_PASSPHRASE"] = repository.passphrase
-        # Allow non-interactive access to unencrypted repositories
-        env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
-
-        # Add SSH options to disable host key checking for remote repos
+        # Set up environment with proper lock configuration
         ssh_opts = [
             "-o", "StrictHostKeyChecking=no",
             "-o", "UserKnownHostsFile=/dev/null",
             "-o", "LogLevel=ERROR"
         ]
-        env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+        env = setup_borg_env(
+            passphrase=repository.passphrase,
+            ssh_opts=ssh_opts
+        )
 
         # Execute command
         process = await asyncio.create_subprocess_exec(
@@ -1331,20 +1353,16 @@ async def get_repository_info(
 
         cmd.extend(["--json", repository.path])
 
-        # Set up environment
-        env = os.environ.copy()
-        if repository.passphrase:
-            env["BORG_PASSPHRASE"] = repository.passphrase
-        # Allow non-interactive access to unencrypted repositories
-        env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
-
-        # Add SSH options to disable host key checking for remote repos
+        # Set up environment with proper lock configuration
         ssh_opts = [
             "-o", "StrictHostKeyChecking=no",
             "-o", "UserKnownHostsFile=/dev/null",
             "-o", "LogLevel=ERROR"
         ]
-        env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+        env = setup_borg_env(
+            passphrase=repository.passphrase,
+            ssh_opts=ssh_opts
+        )
 
         # Execute command
         process = await asyncio.create_subprocess_exec(
@@ -1414,20 +1432,16 @@ async def get_archive_info(
 
         cmd.extend(["--json", archive_path])
 
-        # Set up environment
-        env = os.environ.copy()
-        if repository.passphrase:
-            env["BORG_PASSPHRASE"] = repository.passphrase
-        # Allow non-interactive access to unencrypted repositories
-        env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
-
-        # Add SSH options to disable host key checking for remote repos
+        # Set up environment with proper lock configuration
         ssh_opts = [
             "-o", "StrictHostKeyChecking=no",
             "-o", "UserKnownHostsFile=/dev/null",
             "-o", "LogLevel=ERROR"
         ]
-        env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+        env = setup_borg_env(
+            passphrase=repository.passphrase,
+            ssh_opts=ssh_opts
+        )
 
         # Execute command
         process = await asyncio.create_subprocess_exec(
@@ -1570,20 +1584,16 @@ async def list_archive_files(
         # Use --json-lines for file listing
         cmd.extend(["--json-lines", archive_path])
 
-        # Set up environment
-        env = os.environ.copy()
-        if repository.passphrase:
-            env["BORG_PASSPHRASE"] = repository.passphrase
-        # Allow non-interactive access to unencrypted repositories
-        env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
-
-        # Add SSH options to disable host key checking for remote repos
+        # Set up environment with proper lock configuration
         ssh_opts = [
             "-o", "StrictHostKeyChecking=no",
             "-o", "UserKnownHostsFile=/dev/null",
             "-o", "LogLevel=ERROR"
         ]
-        env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+        env = setup_borg_env(
+            passphrase=repository.passphrase,
+            ssh_opts=ssh_opts
+        )
 
         # Execute command
         process = await asyncio.create_subprocess_exec(
