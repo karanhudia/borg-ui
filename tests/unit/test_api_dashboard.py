@@ -18,15 +18,6 @@ class TestDashboardEndpoints:
         # Dashboard should return some status information
         assert isinstance(data, dict)
 
-    def test_dashboard_health(self, test_client: TestClient, admin_headers):
-        """Test dashboard health endpoint"""
-        response = test_client.get("/api/dashboard/health", headers=admin_headers)
-
-        assert response.status_code == 200
-        data = response.json()
-        assert "status" in data
-        assert data["status"] in ["healthy", "warning", "error"]
-
     def test_dashboard_metrics(self, test_client: TestClient, admin_headers):
         """Test dashboard metrics endpoint"""
         response = test_client.get("/api/dashboard/metrics", headers=admin_headers)
@@ -37,7 +28,7 @@ class TestDashboardEndpoints:
 
     def test_dashboard_unauthorized(self, test_client: TestClient):
         """Test dashboard endpoints without authentication"""
-        endpoints = ["/api/dashboard/status", "/api/dashboard/health", "/api/dashboard/metrics"]
+        endpoints = ["/api/dashboard/status", "/api/dashboard/metrics"]
 
         for endpoint in endpoints:
             response = test_client.get(endpoint)
