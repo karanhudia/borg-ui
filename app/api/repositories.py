@@ -1339,47 +1339,75 @@ async def get_repository_info(
     db: Session = Depends(get_db)
 ):
     """Get detailed repository information using borg info"""
+    max_retries = 3
+    retry_delay = 2  # seconds
+
+    for attempt in range(max_retries):
+        try:
+            repository = db.query(Repository).filter(Repository.id == repo_id).first()
+            if not repository:
+                raise HTTPException(status_code=404, detail="Repository not found")
+
+            # Build borg info command
+            cmd = ["borg", "info"]
+
+            # Add remote-path if specified
+            if repository.remote_path:
+                cmd.extend(["--remote-path", repository.remote_path])
+
+            cmd.extend(["--json", repository.path])
+
+            # Set up environment with proper lock configuration
+            ssh_opts = [
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "UserKnownHostsFile=/dev/null",
+                "-o", "LogLevel=ERROR"
+            ]
+            env = setup_borg_env(
+                passphrase=repository.passphrase,
+                ssh_opts=ssh_opts
+            )
+
+            # Execute command
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env
+            )
+
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+
+            if process.returncode != 0:
+                error_msg = stderr.decode() if stderr else "Unknown error"
+
+                # Check if it's a lock timeout error and we have retries left
+                if "lock" in error_msg.lower() and "timeout" in error_msg.lower() and attempt < max_retries - 1:
+                    logger.warning(f"Lock timeout on attempt {attempt + 1}/{max_retries}, retrying in {retry_delay}s",
+                                 repo_id=repo_id, error=error_msg)
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                    continue
+
+                logger.error("Failed to get repository info", error=error_msg)
+                raise HTTPException(status_code=500, detail=f"Failed to get repository info: {error_msg}")
+
+            # Success - break out of retry loop
+            break
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"Error on attempt {attempt + 1}/{max_retries}, retrying", repo_id=repo_id, error=str(e))
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 2
+                continue
+            logger.error("Failed to get repository info after retries", error=str(e))
+            raise HTTPException(status_code=500, detail=f"Failed to get repository info: {str(e)}")
+
+    # Parse JSON output
     try:
-        repository = db.query(Repository).filter(Repository.id == repo_id).first()
-        if not repository:
-            raise HTTPException(status_code=404, detail="Repository not found")
-
-        # Build borg info command
-        cmd = ["borg", "info"]
-
-        # Add remote-path if specified
-        if repository.remote_path:
-            cmd.extend(["--remote-path", repository.remote_path])
-
-        cmd.extend(["--json", repository.path])
-
-        # Set up environment with proper lock configuration
-        ssh_opts = [
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "LogLevel=ERROR"
-        ]
-        env = setup_borg_env(
-            passphrase=repository.passphrase,
-            ssh_opts=ssh_opts
-        )
-
-        # Execute command
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env
-        )
-
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
-
-        if process.returncode != 0:
-            error_msg = stderr.decode() if stderr else "Unknown error"
-            logger.error("Failed to get repository info", error=error_msg)
-            raise HTTPException(status_code=500, detail=f"Failed to get repository info: {error_msg}")
-
-        # Parse JSON output
         info_data = json.loads(stdout.decode())
 
         # Extract relevant information
