@@ -70,7 +70,7 @@ const Archives: React.FC = () => {
   })
 
   // Get repository info for statistics
-  const { data: repoInfo } = useQuery({
+  const { data: repoInfo, isLoading: loadingRepoInfo } = useQuery({
     queryKey: ['repository-info', selectedRepositoryId],
     queryFn: () => repositoriesAPI.getRepositoryInfo(selectedRepositoryId!),
     enabled: !!selectedRepositoryId
@@ -230,7 +230,25 @@ const Archives: React.FC = () => {
       </Card>
 
       {/* Repository Statistics */}
-      {selectedRepositoryId && repoInfo?.data?.info?.cache?.stats && (
+      {selectedRepositoryId && loadingRepoInfo && (
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(5, 1fr)' }, gap: 2, mb: 4 }}>
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Card key={i}>
+              <CardContent>
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <CircularProgress size={24} />
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Loading...
+                    </Typography>
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
+          ))}
+        </Box>
+      )}
+      {selectedRepositoryId && !loadingRepoInfo && repoInfo?.data?.info?.cache?.stats && (
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(5, 1fr)' }, gap: 2, mb: 4 }}>
           {/* Total Archives */}
           <Card sx={{ backgroundColor: '#e3f2fd' }}>
