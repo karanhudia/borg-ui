@@ -6,6 +6,11 @@ on:
       - 'v*'  # Only build on version tags (e.g., v1.0.1)
   workflow_dispatch:  # Allow manual triggers from GitHub UI
 
+# Ensure only one Docker build runs at a time for the same tag
+concurrency:
+  group: docker-build-${{ github.ref }}
+  cancel-in-progress: false  # Don't cancel, let it finish
+
 env:
   REGISTRY: docker.io
   IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/borg-ui

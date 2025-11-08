@@ -7,6 +7,11 @@ on:
     branches: [ main, develop ]
   workflow_dispatch:  # Allow manual trigger
 
+# Cancel in-progress runs for same workflow on same branch/PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   PYTHON_VERSION: '3.11'
   NODE_VERSION: '18'
