@@ -110,7 +110,26 @@ class BorgInterface:
                 "stderr": str(e),
                 "success": False
             }
-    
+
+    async def break_lock(self, repository: str, remote_path: str = None, passphrase: str = None) -> Dict:
+        """Break a stale lock on a repository"""
+        logger.warning("Breaking stale lock", repository=repository)
+
+        cmd = [self.borg_cmd, "break-lock"]
+
+        # Add remote-path if specified
+        if remote_path:
+            cmd.extend(["--remote-path", remote_path])
+
+        cmd.append(repository)
+
+        # Set passphrase environment variable if provided
+        env = {}
+        if passphrase:
+            env["BORG_PASSPHRASE"] = passphrase
+
+        return await self._execute_command(cmd, timeout=30, env=env if env else None)
+
     async def run_backup(self, repository: str, source_paths: List[str],
                         compression: str = "lz4", archive_name: str = None, remote_path: str = None, passphrase: str = None) -> Dict:
         """Execute backup operation with direct parameters"""

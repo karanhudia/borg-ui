@@ -1314,8 +1314,23 @@ async def list_repository_archives(
 
                 # Check if it's a lock timeout error and we have retries left
                 if "lock" in error_msg.lower() and "timeout" in error_msg.lower() and attempt < max_retries - 1:
-                    logger.warning(f"Lock timeout on attempt {attempt + 1}/{max_retries}, retrying in {retry_delay}s",
+                    logger.warning(f"Lock timeout on attempt {attempt + 1}/{max_retries}, breaking lock and retrying",
                                  repo_id=repo_id, error=error_msg)
+
+                    # Try to break the stale lock
+                    try:
+                        break_result = await borg.break_lock(
+                            repository.path,
+                            remote_path=repository.remote_path,
+                            passphrase=repository.passphrase
+                        )
+                        if break_result.get("success"):
+                            logger.info("Successfully broke stale lock", repo_id=repo_id)
+                        else:
+                            logger.warning("Failed to break lock, will retry anyway", repo_id=repo_id)
+                    except Exception as break_err:
+                        logger.warning("Error breaking lock, will retry anyway", repo_id=repo_id, error=str(break_err))
+
                     await asyncio.sleep(retry_delay)
                     retry_delay *= 2  # Exponential backoff
                     continue
@@ -1409,8 +1424,23 @@ async def get_repository_info(
 
                 # Check if it's a lock timeout error and we have retries left
                 if "lock" in error_msg.lower() and "timeout" in error_msg.lower() and attempt < max_retries - 1:
-                    logger.warning(f"Lock timeout on attempt {attempt + 1}/{max_retries}, retrying in {retry_delay}s",
+                    logger.warning(f"Lock timeout on attempt {attempt + 1}/{max_retries}, breaking lock and retrying",
                                  repo_id=repo_id, error=error_msg)
+
+                    # Try to break the stale lock
+                    try:
+                        break_result = await borg.break_lock(
+                            repository.path,
+                            remote_path=repository.remote_path,
+                            passphrase=repository.passphrase
+                        )
+                        if break_result.get("success"):
+                            logger.info("Successfully broke stale lock", repo_id=repo_id)
+                        else:
+                            logger.warning("Failed to break lock, will retry anyway", repo_id=repo_id)
+                    except Exception as break_err:
+                        logger.warning("Error breaking lock, will retry anyway", repo_id=repo_id, error=str(break_err))
+
                     await asyncio.sleep(retry_delay)
                     retry_delay *= 2  # Exponential backoff
                     continue
