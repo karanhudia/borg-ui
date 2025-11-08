@@ -30,6 +30,13 @@ class ScheduledJobCreate(BaseModel):
     config_file: Optional[str] = None
     enabled: bool = True
     description: Optional[str] = None
+    # Prune and compact settings
+    run_prune_after: bool = False
+    run_compact_after: bool = False
+    prune_keep_daily: int = 7
+    prune_keep_weekly: int = 4
+    prune_keep_monthly: int = 6
+    prune_keep_yearly: int = 1
 
 class ScheduledJobUpdate(BaseModel):
     name: Optional[str] = None
@@ -38,6 +45,13 @@ class ScheduledJobUpdate(BaseModel):
     config_file: Optional[str] = None
     enabled: Optional[bool] = None
     description: Optional[str] = None
+    # Prune and compact settings
+    run_prune_after: Optional[bool] = None
+    run_compact_after: Optional[bool] = None
+    prune_keep_daily: Optional[int] = None
+    prune_keep_weekly: Optional[int] = None
+    prune_keep_monthly: Optional[int] = None
+    prune_keep_yearly: Optional[int] = None
 
 class CronExpression(BaseModel):
     minute: str = "*"
@@ -67,7 +81,16 @@ async def get_scheduled_jobs(
                     "next_run": job.next_run.replace(tzinfo=timezone.utc).isoformat() if job.next_run else None,
                     "created_at": job.created_at.replace(tzinfo=timezone.utc).isoformat() if job.created_at else None,
                     "updated_at": job.updated_at.replace(tzinfo=timezone.utc).isoformat() if job.updated_at else None,
-                    "description": job.description
+                    "description": job.description,
+                    # Prune and compact settings
+                    "run_prune_after": job.run_prune_after,
+                    "run_compact_after": job.run_compact_after,
+                    "prune_keep_daily": job.prune_keep_daily,
+                    "prune_keep_weekly": job.prune_keep_weekly,
+                    "prune_keep_monthly": job.prune_keep_monthly,
+                    "prune_keep_yearly": job.prune_keep_yearly,
+                    "last_prune": job.last_prune.replace(tzinfo=timezone.utc).isoformat() if job.last_prune else None,
+                    "last_compact": job.last_compact.replace(tzinfo=timezone.utc).isoformat() if job.last_compact else None,
                 }
                 for job in jobs
             ]
@@ -107,7 +130,14 @@ async def create_scheduled_job(
             config_file=job_data.config_file,
             enabled=job_data.enabled,
             next_run=next_run,
-            description=job_data.description
+            description=job_data.description,
+            # Prune and compact settings
+            run_prune_after=job_data.run_prune_after,
+            run_compact_after=job_data.run_compact_after,
+            prune_keep_daily=job_data.prune_keep_daily,
+            prune_keep_weekly=job_data.prune_keep_weekly,
+            prune_keep_monthly=job_data.prune_keep_monthly,
+            prune_keep_yearly=job_data.prune_keep_yearly
         )
         
         db.add(scheduled_job)
@@ -334,6 +364,25 @@ async def update_scheduled_job(
         if job_data.description is not None:
             job.description = job_data.description
 
+        # Update prune and compact settings
+        if job_data.run_prune_after is not None:
+            job.run_prune_after = job_data.run_prune_after
+
+        if job_data.run_compact_after is not None:
+            job.run_compact_after = job_data.run_compact_after
+
+        if job_data.prune_keep_daily is not None:
+            job.prune_keep_daily = job_data.prune_keep_daily
+
+        if job_data.prune_keep_weekly is not None:
+            job.prune_keep_weekly = job_data.prune_keep_weekly
+
+        if job_data.prune_keep_monthly is not None:
+            job.prune_keep_monthly = job_data.prune_keep_monthly
+
+        if job_data.prune_keep_yearly is not None:
+            job.prune_keep_yearly = job_data.prune_keep_yearly
+
         job.updated_at = datetime.now(timezone.utc)
         db.commit()
         
@@ -487,6 +536,87 @@ async def validate_cron_expression(
         raise HTTPException(status_code=500, detail=f"Failed to validate cron expression: {str(e)}")
 
 # Background task to check and run scheduled jobs
+async def execute_scheduled_backup_with_maintenance(backup_job_id: int, repository_path: str,
+                                                     config_file: str, scheduled_job_id: int):
+    """Execute backup and optionally run prune/compact after successful backup"""
+    from app.database.models import Repository, BackupJob
+    from app.services.backup_service import backup_service
+
+    db = next(get_db())
+    try:
+        # Execute the backup
+        await backup_service.execute_backup(backup_job_id, repository_path, config_file, db)
+
+        # Check if backup was successful
+        backup_job = db.query(BackupJob).filter(BackupJob.id == backup_job_id).first()
+        if not backup_job or backup_job.status != "completed":
+            logger.info("Backup did not complete successfully, skipping prune/compact",
+                       backup_job_id=backup_job_id)
+            return
+
+        # Get scheduled job to check prune/compact settings
+        scheduled_job = db.query(ScheduledJob).filter(ScheduledJob.id == scheduled_job_id).first()
+        if not scheduled_job:
+            return
+
+        # Get repository info for prune/compact
+        repo = db.query(Repository).filter(Repository.path == repository_path).first()
+        if not repo:
+            logger.error("Repository not found for prune/compact", repository=repository_path)
+            return
+
+        # Run prune if enabled
+        if scheduled_job.run_prune_after:
+            try:
+                logger.info("Running scheduled prune", scheduled_job_id=scheduled_job_id, repository=repository_path)
+
+                prune_result = await borg.prune_archives(
+                    repository=repo.path,
+                    keep_daily=scheduled_job.prune_keep_daily,
+                    keep_weekly=scheduled_job.prune_keep_weekly,
+                    keep_monthly=scheduled_job.prune_keep_monthly,
+                    keep_yearly=scheduled_job.prune_keep_yearly,
+                    dry_run=False,
+                    remote_path=repo.remote_path,
+                    passphrase=repo.passphrase
+                )
+
+                if prune_result.get("success"):
+                    scheduled_job.last_prune = datetime.now(timezone.utc)
+                    db.commit()
+                    logger.info("Scheduled prune completed", scheduled_job_id=scheduled_job_id)
+                else:
+                    logger.error("Scheduled prune failed", scheduled_job_id=scheduled_job_id,
+                                error=prune_result.get("stderr"))
+
+            except Exception as e:
+                logger.error("Failed to run scheduled prune", scheduled_job_id=scheduled_job_id, error=str(e))
+
+        # Run compact if enabled (only after successful prune or if prune not enabled)
+        if scheduled_job.run_compact_after and (scheduled_job.run_prune_after or not scheduled_job.run_prune_after):
+            try:
+                logger.info("Running scheduled compact", scheduled_job_id=scheduled_job_id, repository=repository_path)
+
+                compact_result = await borg.compact_repository(
+                    repository=repo.path,
+                    remote_path=repo.remote_path,
+                    passphrase=repo.passphrase
+                )
+
+                if compact_result.get("success"):
+                    scheduled_job.last_compact = datetime.now(timezone.utc)
+                    db.commit()
+                    logger.info("Scheduled compact completed", scheduled_job_id=scheduled_job_id)
+                else:
+                    logger.error("Scheduled compact failed", scheduled_job_id=scheduled_job_id,
+                                error=compact_result.get("stderr"))
+
+            except Exception as e:
+                logger.error("Failed to run scheduled compact", scheduled_job_id=scheduled_job_id, error=str(e))
+
+    finally:
+        db.close()
+
 async def check_scheduled_jobs():
     """Check and execute scheduled jobs"""
     while True:
@@ -496,7 +626,7 @@ async def check_scheduled_jobs():
                 ScheduledJob.enabled == True,
                 ScheduledJob.next_run <= datetime.now(timezone.utc)
             ).all()
-            
+
             for job in jobs:
                 try:
                     logger.info("Running scheduled job", job_id=job.id, name=job.name)
@@ -520,13 +650,13 @@ async def check_scheduled_jobs():
                     db.commit()
                     db.refresh(backup_job)
 
-                    # Execute backup asynchronously (non-blocking)
+                    # Execute backup with optional prune/compact asynchronously (non-blocking)
                     asyncio.create_task(
-                        backup_service.execute_backup(
+                        execute_scheduled_backup_with_maintenance(
                             backup_job.id,
                             job.repository,
                             job.config_file,
-                            db
+                            job.id
                         )
                     )
 
@@ -546,11 +676,11 @@ async def check_scheduled_jobs():
                     # Update last run time even if failed
                     job.last_run = datetime.now(timezone.utc)
                     db.commit()
-            
+
             db.close()
-            
+
         except Exception as e:
             logger.error("Error in scheduled job checker", error=str(e))
-        
+
         # Wait for 1 minute before next check
         await asyncio.sleep(60) 
