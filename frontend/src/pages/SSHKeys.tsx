@@ -7,9 +7,7 @@ import {
   Trash2,
   TestTube,
   Settings,
-  Rocket,
-  Copy,
-  CheckCircle
+  Rocket
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { sshKeysAPI } from '../services/api'
@@ -39,8 +37,6 @@ const SSHKeys: React.FC = () => {
   const [showTestModal, setShowTestModal] = useState(false)
   const [editingKey, setEditingKey] = useState<SSHKey | null>(null)
   const [selectedKey, setSelectedKey] = useState<SSHKey | null>(null)
-  const [generatedPublicKey, setGeneratedPublicKey] = useState<string | null>(null)
-  const [copiedToClipboard, setCopiedToClipboard] = useState(false)
 
   const queryClient = useQueryClient()
 
@@ -81,27 +77,18 @@ const SSHKeys: React.FC = () => {
     onSuccess: (data: any) => {
       queryClient.invalidateQueries(['ssh-keys'])
       queryClient.invalidateQueries(['ssh-connections'])
-
-      // If deployment was skipped, show the public key for manual deployment
-      if (data.data?.skipped_deployment || data.data?.public_key) {
-        setGeneratedPublicKey(data.data.public_key)
-        toast.success('SSH key generated! Copy and deploy it manually to your server.')
-        // Keep modal open to show the public key
+      setShowQuickSetupModal(false)
+      
+      // Show appropriate message based on the result
+      if (data.success) {
+        toast.success('SSH key generated and deployed successfully!')
       } else {
-        setShowQuickSetupModal(false)
-        setGeneratedPublicKey(null)
-
-        // Show appropriate message based on the result
-        if (data.success) {
-          toast.success('SSH key generated and deployed successfully!')
-        } else {
-          // Key was generated but deployment failed
-          toast.error(`SSH key generated but deployment failed: ${data.detail || 'Connection failed'}`)
-          // Show a more detailed message about what happened
-          setTimeout(() => {
-            toast.error('You can retry the connection from the Connections tab', { duration: 5000 })
-          }, 1000)
-        }
+        // Key was generated but deployment failed
+        toast.error(`SSH key generated but deployment failed: ${data.detail || 'Connection failed'}`)
+        // Show a more detailed message about what happened
+        setTimeout(() => {
+          toast.error('You can retry the connection from the Connections tab', { duration: 5000 })
+        }, 1000)
       }
     },
     onError: (error: any) => {
@@ -292,8 +279,6 @@ const SSHKeys: React.FC = () => {
 
   const openQuickSetupModal = () => {
     setShowQuickSetupModal(true)
-    setGeneratedPublicKey(null)
-    setCopiedToClipboard(false)
     setQuickSetupForm({
       name: '',
       key_type: 'ed25519',
@@ -305,17 +290,6 @@ const SSHKeys: React.FC = () => {
       password: '',
       skip_deployment: false,
     })
-  }
-
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopiedToClipboard(true)
-      toast.success('Public key copied to clipboard!')
-      setTimeout(() => setCopiedToClipboard(false), 3000)
-    } catch (err) {
-      toast.error('Failed to copy to clipboard')
-    }
   }
 
   const openDeployModal = (sshKey: SSHKey) => {
@@ -606,69 +580,9 @@ const SSHKeys: React.FC = () => {
       {/* Modals */}
       {showQuickSetupModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white max-h-[90vh] overflow-y-auto">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
             <div className="mt-3">
               <h3 className="text-lg font-medium text-gray-900 mb-4">🚀 Quick SSH Setup</h3>
-
-              {/* Show public key if generated with skip_deployment */}
-              {generatedPublicKey && (
-                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center">
-                      <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
-                      <h4 className="text-sm font-semibold text-green-900">SSH Key Generated!</h4>
-                    </div>
-                  </div>
-                  <p className="text-sm text-green-800 mb-3">
-                    Copy this public key and add it to your server's <code className="bg-green-100 px-1 rounded">~/.ssh/authorized_keys</code> file:
-                  </p>
-                  <div className="relative">
-                    <textarea
-                      readOnly
-                      value={generatedPublicKey}
-                      className="block w-full px-3 py-2 border border-green-300 rounded-md shadow-sm text-xs font-mono bg-white"
-                      rows={3}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(generatedPublicKey)}
-                      className="absolute top-2 right-2 p-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                      title="Copy to clipboard"
-                    >
-                      {copiedToClipboard ? (
-                        <CheckCircle className="w-4 h-4" />
-                      ) : (
-                        <Copy className="w-4 h-4" />
-                      )}
-                    </button>
-                  </div>
-                  <div className="mt-3 text-xs text-green-700 space-y-1">
-                    <p><strong>Manual deployment steps:</strong></p>
-                    <ol className="list-decimal ml-4 space-y-1">
-                      <li>Copy the public key above</li>
-                      <li>SSH into your server</li>
-                      <li>Run: <code className="bg-green-100 px-1 rounded">echo "PUBLIC_KEY" &gt;&gt; ~/.ssh/authorized_keys</code></li>
-                      <li>Test the connection using the "Test" button below</li>
-                    </ol>
-                  </div>
-                  <div className="mt-4 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowQuickSetupModal(false)
-                        setGeneratedPublicKey(null)
-                        setCopiedToClipboard(false)
-                      }}
-                      className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
-                    >
-                      Done
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Only show form if key hasn't been generated yet */}
-              {!generatedPublicKey && (
               <form onSubmit={handleQuickSetup} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Key Name</label>
@@ -788,7 +702,6 @@ const SSHKeys: React.FC = () => {
                   </button>
                 </div>
               </form>
-              )}
             </div>
           </div>
         </div>
