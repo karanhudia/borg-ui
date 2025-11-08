@@ -29,8 +29,6 @@ import {
   Alert,
   Tooltip,
   InputAdornment,
-  Checkbox,
-  FormControlLabel,
 } from '@mui/material'
 import {
   Key,
@@ -65,13 +63,18 @@ export default function SSHConnectionsSingleKey() {
   // State
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false)
   const [deployDialogOpen, setDeployDialogOpen] = useState(false)
+  const [testConnectionDialogOpen, setTestConnectionDialogOpen] = useState(false)
   const [keyType, setKeyType] = useState('ed25519')
-  const [manualDeployment, setManualDeployment] = useState(false)
   const [connectionForm, setConnectionForm] = useState({
     host: '',
     username: '',
     port: 22,
     password: '',
+  })
+  const [testConnectionForm, setTestConnectionForm] = useState({
+    host: '',
+    username: '',
+    port: 22,
   })
 
   // Queries
@@ -166,26 +169,20 @@ export default function SSHConnectionsSingleKey() {
 
   const handleDeployKey = () => {
     if (!systemKey) return
+    deployKeyMutation.mutate({
+      keyId: systemKey.id,
+      connectionData: connectionForm,
+    })
+  }
 
-    // If manual deployment, create connection via test endpoint (skip ssh-copy-id)
-    if (manualDeployment) {
-      testConnectionMutation.mutate({
-        keyId: systemKey.id,
-        connectionData: {
-          host: connectionForm.host,
-          username: connectionForm.username,
-          port: connectionForm.port,
-        },
-      })
-      setDeployDialogOpen(false)
-      setConnectionForm({ host: '', username: '', port: 22, password: '' })
-      setManualDeployment(false)
-    } else {
-      deployKeyMutation.mutate({
-        keyId: systemKey.id,
-        connectionData: connectionForm,
-      })
-    }
+  const handleTestManualConnection = () => {
+    if (!systemKey) return
+    testConnectionMutation.mutate({
+      keyId: systemKey.id,
+      connectionData: testConnectionForm,
+    })
+    setTestConnectionDialogOpen(false)
+    setTestConnectionForm({ host: '', username: '', port: 22 })
   }
 
   const handleTestConnection = (connection: SSHConnection) => {
@@ -463,21 +460,32 @@ export default function SSHConnectionsSingleKey() {
                 </Box>
 
                 {/* Action Buttons */}
-                <Stack direction="row" spacing={2}>
-                  <Button
-                    variant="contained"
-                    startIcon={<Plus size={18} />}
-                    onClick={() => setDeployDialogOpen(true)}
-                  >
-                    Deploy to Server
-                  </Button>
+                <Stack direction="row" spacing={2} flexWrap="wrap">
+                  <Tooltip title="Automatically deploy SSH key using password authentication">
+                    <Button
+                      variant="contained"
+                      startIcon={<Plus size={18} />}
+                      onClick={() => setDeployDialogOpen(true)}
+                    >
+                      Deploy to Server
+                    </Button>
+                  </Tooltip>
+                  <Tooltip title="Add a connection for a manually deployed SSH key">
+                    <Button
+                      variant="outlined"
+                      startIcon={<Wifi size={18} />}
+                      onClick={() => setTestConnectionDialogOpen(true)}
+                    >
+                      Add Manual Connection
+                    </Button>
+                  </Tooltip>
                   <Tooltip title="Copy public key to clipboard">
                     <Button
                       variant="outlined"
                       startIcon={<Copy size={18} />}
                       onClick={handleCopyPublicKey}
                     >
-                      Copy Public Key
+                      Copy Key
                     </Button>
                   </Tooltip>
                 </Stack>
@@ -636,48 +644,13 @@ export default function SSHConnectionsSingleKey() {
       {/* Deploy Key Dialog */}
       <Dialog
         open={deployDialogOpen}
-        onClose={() => {
-          setDeployDialogOpen(false)
-          setManualDeployment(false)
-        }}
+        onClose={() => setDeployDialogOpen(false)}
         maxWidth="sm"
         fullWidth
       >
         <DialogTitle>Deploy SSH Key to Server</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            {/* Manual Deployment Option */}
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={manualDeployment}
-                  onChange={(e) => setManualDeployment(e.target.checked)}
-                />
-              }
-              label="I deployed the SSH key manually"
-            />
-
-            {/* Show public key and instructions when manual deployment is selected */}
-            {manualDeployment && (
-              <Alert severity="info" sx={{ fontSize: '0.85rem' }}>
-                <Typography variant="body2" fontWeight={600} gutterBottom>
-                  Manual Deployment Instructions:
-                </Typography>
-                <Typography variant="caption" component="div" sx={{ mb: 1 }}>
-                  1. Copy the public key above (from the System SSH Key section)
-                </Typography>
-                <Typography variant="caption" component="div" sx={{ mb: 1 }}>
-                  2. SSH into your server
-                </Typography>
-                <Typography variant="caption" component="div" sx={{ mb: 1 }}>
-                  3. Add it to: <code style={{ background: '#e3f2fd', padding: '2px 4px', borderRadius: '2px' }}>~/.ssh/authorized_keys</code>
-                </Typography>
-                <Typography variant="caption" component="div">
-                  4. Enter your server details below to test the connection
-                </Typography>
-              </Alert>
-            )}
-
             <TextField
               label="Host"
               fullWidth
@@ -711,59 +684,132 @@ export default function SSHConnectionsSingleKey() {
               }
               InputLabelProps={{ shrink: true }}
             />
-
-            {/* Only show password field if NOT manual deployment */}
-            {!manualDeployment && (
-              <>
-                <TextField
-                  label="Password"
-                  type="password"
-                  fullWidth
-                  value={connectionForm.password}
-                  onChange={(e) =>
-                    setConnectionForm({ ...connectionForm, password: e.target.value })
-                  }
-                  placeholder="Server password (for initial deployment)"
-                  InputLabelProps={{ shrink: true }}
-                  InputProps={{
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <Tooltip title="Password is only used once to deploy the key">
-                          <AlertTriangle size={18} />
-                        </Tooltip>
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-                <Alert severity="info" sx={{ fontSize: '0.85rem' }}>
-                  The password is used to deploy your public key to the server's
-                  authorized_keys file. After deployment, you'll connect using the SSH
-                  key.
-                </Alert>
-              </>
-            )}
+            <TextField
+              label="Password"
+              type="password"
+              fullWidth
+              value={connectionForm.password}
+              onChange={(e) =>
+                setConnectionForm({ ...connectionForm, password: e.target.value })
+              }
+              placeholder="Server password (for initial deployment)"
+              InputLabelProps={{ shrink: true }}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <Tooltip title="Password is only used once to deploy the key">
+                      <AlertTriangle size={18} />
+                    </Tooltip>
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <Alert severity="info" sx={{ fontSize: '0.85rem' }}>
+              The password is used to deploy your public key to the server's
+              authorized_keys file. After deployment, you'll connect using the SSH
+              key.
+            </Alert>
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => {
-            setDeployDialogOpen(false)
-            setManualDeployment(false)
-          }}>
-            Cancel
-          </Button>
+          <Button onClick={() => setDeployDialogOpen(false)}>Cancel</Button>
           <Button
             variant="contained"
             onClick={handleDeployKey}
             disabled={
-              (deployKeyMutation.isLoading || testConnectionMutation.isLoading) ||
+              deployKeyMutation.isLoading ||
               !connectionForm.host ||
               !connectionForm.username ||
-              (!manualDeployment && !connectionForm.password)
+              !connectionForm.password
             }
           >
-            {(deployKeyMutation.isLoading || testConnectionMutation.isLoading)
-              ? (manualDeployment ? 'Testing...' : 'Deploying...')
-              : (manualDeployment ? 'Test Connection' : 'Deploy Key')}
+            {deployKeyMutation.isLoading ? 'Deploying...' : 'Deploy Key'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Test Manual Connection Dialog */}
+      <Dialog
+        open={testConnectionDialogOpen}
+        onClose={() => setTestConnectionDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Add Manual Connection</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Alert severity="info" sx={{ fontSize: '0.85rem' }}>
+              <Typography variant="body2" fontWeight={600} gutterBottom>
+                Before adding this connection:
+              </Typography>
+              <Typography variant="caption" component="div" sx={{ mb: 0.5 }}>
+                1. Copy the public key from above
+              </Typography>
+              <Typography variant="caption" component="div" sx={{ mb: 0.5 }}>
+                2. SSH into your server
+              </Typography>
+              <Typography variant="caption" component="div">
+                3. Add it to <code style={{ background: '#e3f2fd', padding: '2px 4px', borderRadius: '2px' }}>~/.ssh/authorized_keys</code>
+              </Typography>
+            </Alert>
+
+            <TextField
+              label="Host"
+              fullWidth
+              value={testConnectionForm.host}
+              onChange={(e) =>
+                setTestConnectionForm({ ...testConnectionForm, host: e.target.value })
+              }
+              placeholder="192.168.1.100 or example.com"
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="Username"
+              fullWidth
+              value={testConnectionForm.username}
+              onChange={(e) =>
+                setTestConnectionForm({
+                  ...testConnectionForm,
+                  username: e.target.value,
+                })
+              }
+              placeholder="root"
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="Port"
+              type="number"
+              fullWidth
+              value={testConnectionForm.port}
+              onChange={(e) =>
+                setTestConnectionForm({
+                  ...testConnectionForm,
+                  port: parseInt(e.target.value),
+                })
+              }
+              InputLabelProps={{ shrink: true }}
+            />
+
+            <Alert severity="success" sx={{ fontSize: '0.85rem' }}>
+              This will test the connection and add it to your connections list if
+              successful.
+            </Alert>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTestConnectionDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleTestManualConnection}
+            disabled={
+              testConnectionMutation.isLoading ||
+              !testConnectionForm.host ||
+              !testConnectionForm.username
+            }
+          >
+            {testConnectionMutation.isLoading ? 'Testing...' : 'Test & Add Connection'}
           </Button>
         </DialogActions>
       </Dialog>
