@@ -73,8 +73,9 @@ RUN apt-get update && apt-get install -y \
     # Cleanup
     && rm -rf /var/lib/apt/lists/*
 
-# Install latest stable Borg via pip (1.4.2)
-RUN pip install --no-cache-dir borgbackup==1.4.2
+# Install Borg via pip (auto-update patch versions within 1.4.x)
+# This allows automatic security/bug fixes while preventing breaking changes
+RUN pip install --no-cache-dir 'borgbackup>=1.4.2,<1.5.0'
 
 # Install additional useful tools
 RUN apt-get update && apt-get install -y \
