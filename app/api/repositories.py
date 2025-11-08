@@ -1312,28 +1312,20 @@ async def list_repository_archives(
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
 
-                # Check if it's a lock timeout error and we have retries left
-                if "lock" in error_msg.lower() and "timeout" in error_msg.lower() and attempt < max_retries - 1:
-                    logger.warning(f"Lock timeout on attempt {attempt + 1}/{max_retries}, breaking lock and retrying",
+                # Check if it's a lock timeout error - return special error for user prompt
+                if "lock" in error_msg.lower() and "timeout" in error_msg.lower():
+                    logger.warning(f"Lock timeout detected on attempt {attempt + 1}/{max_retries}",
                                  repo_id=repo_id, error=error_msg)
-
-                    # Try to break the stale lock
-                    try:
-                        break_result = await borg.break_lock(
-                            repository.path,
-                            remote_path=repository.remote_path,
-                            passphrase=repository.passphrase
-                        )
-                        if break_result.get("success"):
-                            logger.info("Successfully broke stale lock", repo_id=repo_id)
-                        else:
-                            logger.warning("Failed to break lock, will retry anyway", repo_id=repo_id)
-                    except Exception as break_err:
-                        logger.warning("Error breaking lock, will retry anyway", repo_id=repo_id, error=str(break_err))
-
-                    await asyncio.sleep(retry_delay)
-                    retry_delay *= 2  # Exponential backoff
-                    continue
+                    raise HTTPException(
+                        status_code=423,  # 423 Locked status code
+                        detail={
+                            "error": "repository_locked",
+                            "message": "Repository is locked by another process or has a stale lock",
+                            "suggestion": "If no backup is currently running, this is likely a stale lock. You can break the lock to continue.",
+                            "repository_id": repo_id,
+                            "can_break_lock": True
+                        }
+                    )
 
                 logger.error("Failed to list archives", error=error_msg)
                 raise HTTPException(status_code=500, detail=f"Failed to list archives: {error_msg}")
@@ -1422,28 +1414,20 @@ async def get_repository_info(
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
 
-                # Check if it's a lock timeout error and we have retries left
-                if "lock" in error_msg.lower() and "timeout" in error_msg.lower() and attempt < max_retries - 1:
-                    logger.warning(f"Lock timeout on attempt {attempt + 1}/{max_retries}, breaking lock and retrying",
+                # Check if it's a lock timeout error - return special error for user prompt
+                if "lock" in error_msg.lower() and "timeout" in error_msg.lower():
+                    logger.warning(f"Lock timeout detected on attempt {attempt + 1}/{max_retries}",
                                  repo_id=repo_id, error=error_msg)
-
-                    # Try to break the stale lock
-                    try:
-                        break_result = await borg.break_lock(
-                            repository.path,
-                            remote_path=repository.remote_path,
-                            passphrase=repository.passphrase
-                        )
-                        if break_result.get("success"):
-                            logger.info("Successfully broke stale lock", repo_id=repo_id)
-                        else:
-                            logger.warning("Failed to break lock, will retry anyway", repo_id=repo_id)
-                    except Exception as break_err:
-                        logger.warning("Error breaking lock, will retry anyway", repo_id=repo_id, error=str(break_err))
-
-                    await asyncio.sleep(retry_delay)
-                    retry_delay *= 2  # Exponential backoff
-                    continue
+                    raise HTTPException(
+                        status_code=423,  # 423 Locked status code
+                        detail={
+                            "error": "repository_locked",
+                            "message": "Repository is locked by another process or has a stale lock",
+                            "suggestion": "If no backup is currently running, this is likely a stale lock. You can break the lock to continue.",
+                            "repository_id": repo_id,
+                            "can_break_lock": True
+                        }
+                    )
 
                 logger.error("Failed to get repository info", error=error_msg)
                 raise HTTPException(status_code=500, detail=f"Failed to get repository info: {error_msg}")
@@ -1490,6 +1474,44 @@ async def get_repository_info(
     except Exception as e:
         logger.error("Failed to get repository info", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to get repository info: {str(e)}")
+
+@router.post("/{repo_id}/break-lock")
+async def break_repository_lock(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Break a stale lock on a repository (user-initiated)"""
+    try:
+        repository = db.query(Repository).filter(Repository.id == repo_id).first()
+        if not repository:
+            raise HTTPException(status_code=404, detail="Repository not found")
+
+        logger.warning("User requested lock break", repo_id=repo_id, user=current_user.username)
+
+        # Break the lock using borg break-lock
+        result = await borg.break_lock(
+            repository.path,
+            remote_path=repository.remote_path,
+            passphrase=repository.passphrase
+        )
+
+        if result.get("success"):
+            logger.info("Successfully broke repository lock", repo_id=repo_id, user=current_user.username)
+            return {
+                "success": True,
+                "message": "Lock successfully broken. You can now retry your operation."
+            }
+        else:
+            error_msg = result.get("stderr", "Unknown error")
+            logger.error("Failed to break lock", repo_id=repo_id, error=error_msg)
+            raise HTTPException(status_code=500, detail=f"Failed to break lock: {error_msg}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error breaking repository lock", repo_id=repo_id, error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to break lock: {str(e)}")
 
 @router.get("/{repo_id}/archives/{archive_name}/info")
 @with_repository_lock('repo_id')
