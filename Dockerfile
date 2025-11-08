@@ -48,7 +48,7 @@ LABEL com.borg-ui.icon.color="#00dd00"
 
 WORKDIR /app
 
-# Install system dependencies including borg and related packages
+# Install system dependencies (excluding borg, will install via pip for latest version)
 RUN apt-get update && apt-get install -y \
     # Core system packages
     cron \
@@ -57,9 +57,14 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     lsb-release \
     gosu \
-    # Borg and related packages
-    borgbackup \
-    borgbackup-doc \
+    # Borg dependencies (but not borgbackup package itself)
+    libacl1-dev \
+    libssl-dev \
+    liblz4-dev \
+    libzstd-dev \
+    libxxhash-dev \
+    build-essential \
+    pkg-config \
     # Additional useful packages
     rsync \
     openssh-client \
@@ -68,7 +73,8 @@ RUN apt-get update && apt-get install -y \
     # Cleanup
     && rm -rf /var/lib/apt/lists/*
 
-# No additional Python packages needed - borg is already installed
+# Install latest stable Borg via pip (1.4.2)
+RUN pip install --no-cache-dir borgbackup==1.4.2
 
 # Install additional useful tools
 RUN apt-get update && apt-get install -y \
