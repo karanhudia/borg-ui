@@ -39,7 +39,7 @@ class SystemMetrics(BaseModel):
 class BackupStatus(BaseModel):
     repository: str
     status: str
-    last_backup: str = "Never"
+    last_backup: str | None = None
     archive_count: int = 0
     total_size: str = "0"
     health: str = "unknown"
@@ -72,10 +72,6 @@ class ScheduleResponse(BaseModel):
     jobs: List[ScheduledJobInfo]
     next_execution: str = None
 
-class HealthResponse(BaseModel):
-    status: str
-    checks: Dict[str, Dict[str, Any]]
-    timestamp: str
 
 def get_system_metrics() -> SystemMetrics:
     """Get system resource metrics"""
@@ -271,90 +267,3 @@ async def get_dashboard_schedule(
             detail="Failed to get schedule"
         )
 
-@router.get("/health", response_model=HealthResponse)
-async def get_dashboard_health(current_user: User = Depends(get_current_user)):
-    """Get system health status"""
-    try:
-        checks = {}
-        
-        # Check system resources
-        try:
-            cpu_usage = psutil.cpu_percent(interval=1)
-            memory = psutil.virtual_memory()
-            disk = psutil.disk_usage('/')
-            
-            checks["system"] = {
-                "status": "healthy" if cpu_usage < 90 and memory.percent < 90 and disk.percent < 90 else "warning",
-                "cpu_usage": cpu_usage,
-                "memory_usage": memory.percent,
-                "disk_usage": disk.percent
-            }
-        except Exception as e:
-            checks["system"] = {
-                "status": "error",
-                "error": str(e)
-            }
-        
-        # Check borg availability
-        try:
-            system_info = await borg.get_system_info()
-            checks["borg"] = {
-                "status": "healthy" if system_info["success"] else "error",
-                "version": system_info.get("borg_version", "Unknown"),
-                "data_dir": system_info.get("data_dir", "Unknown")
-            }
-        except Exception as e:
-            checks["borg"] = {
-                "status": "error",
-                "error": str(e)
-            }
-        
-        # Check backup repositories
-        try:
-            from app.database.models import Repository
-
-            repositories = db.query(Repository).all()
-            total_repos = len(repositories)
-
-            # If no repositories are configured, that's fine - not a warning
-            if total_repos == 0:
-                checks["repositories"] = {
-                    "status": "healthy",
-                    "healthy_count": 0,
-                    "total_count": 0,
-                    "message": "No repositories configured"
-                }
-            else:
-                # Consider a repository healthy if it has been backed up at least once
-                healthy_repos = sum(1 for repo in repositories if repo.last_backup is not None)
-
-                checks["repositories"] = {
-                    "status": "healthy" if healthy_repos == total_repos else "warning",
-                    "healthy_count": healthy_repos,
-                    "total_count": total_repos,
-                    "message": f"{healthy_repos}/{total_repos} repositories have backups"
-                }
-        except Exception as e:
-            checks["repositories"] = {
-                "status": "error",
-                "error": str(e)
-            }
-        
-        # Overall status
-        overall_status = "healthy"
-        if any(check["status"] == "error" for check in checks.values()):
-            overall_status = "error"
-        elif any(check["status"] == "warning" for check in checks.values()):
-            overall_status = "warning"
-        
-        return HealthResponse(
-            status=overall_status,
-            checks=checks,
-            timestamp=format_datetime(datetime.utcnow())
-        )
-    except Exception as e:
-        logger.error("Error getting health status", error=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get health status"
-        ) 
