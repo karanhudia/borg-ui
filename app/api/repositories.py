@@ -1271,7 +1271,7 @@ async def list_repository_archives(
 ):
     """List all archives in a repository using borg list"""
     max_retries = 3
-    retry_delay = 2  # seconds
+    retry_delay = 1  # seconds - quick retry after breaking lock
 
     for attempt in range(max_retries):
         try:
@@ -1307,7 +1307,7 @@ async def list_repository_archives(
                 env=env
             )
 
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=200)
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
 
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
@@ -1381,7 +1381,7 @@ async def get_repository_info(
 ):
     """Get detailed repository information using borg info"""
     max_retries = 3
-    retry_delay = 2  # seconds
+    retry_delay = 1  # seconds - quick retry after breaking lock
 
     for attempt in range(max_retries):
         try:
@@ -1417,7 +1417,7 @@ async def get_repository_info(
                 env=env
             )
 
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=200)
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
 
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
