@@ -918,9 +918,31 @@ const Schedule: React.FC = () => {
                         <Typography variant="body2">
                           {getRepositoryName(job.repository)}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" color="text.secondary" display="block">
                           {job.repository}
                         </Typography>
+                        {job.maintenance_status && (
+                          <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                            {(job.maintenance_status.includes('prune') || job.maintenance_status === 'maintenance_completed') && (
+                              <Chip
+                                label={job.maintenance_status.includes('prune_failed') ? 'Prune ✗' : 'Prune ✓'}
+                                size="small"
+                                color={job.maintenance_status.includes('prune_failed') ? 'error' : 'success'}
+                                variant="outlined"
+                                sx={{ height: 18, fontSize: '0.65rem' }}
+                              />
+                            )}
+                            {(job.maintenance_status.includes('compact') || job.maintenance_status === 'maintenance_completed') && (
+                              <Chip
+                                label={job.maintenance_status.includes('compact_failed') ? 'Compact ✗' : 'Compact ✓'}
+                                size="small"
+                                color={job.maintenance_status.includes('compact_failed') ? 'error' : 'success'}
+                                variant="outlined"
+                                sx={{ height: 18, fontSize: '0.65rem' }}
+                              />
+                            )}
+                          </Box>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Chip
@@ -930,6 +952,15 @@ const Schedule: React.FC = () => {
                           color={getBackupStatusColor(job.status)}
                           sx={{ minWidth: 100 }}
                         />
+                        {job.maintenance_status && job.maintenance_status.includes('running') && (
+                          <Chip
+                            icon={<RefreshCw size={12} className="animate-spin" />}
+                            label={job.maintenance_status === 'running_prune' ? 'Pruning' : 'Compacting'}
+                            size="small"
+                            color="info"
+                            sx={{ minWidth: 90, mt: 0.5, display: 'block' }}
+                          />
+                        )}
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">

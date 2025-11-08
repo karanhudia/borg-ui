@@ -348,11 +348,6 @@ const Archives: React.FC = () => {
             </Typography>
           </Box>
 
-          {/* Info Banner */}
-          <Alert severity="info" sx={{ mb: 3 }}>
-            Showing the most recent archives. Use the Borg command line to view older archives if needed.
-          </Alert>
-
           {/* Loading State */}
           {loadingArchives ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
