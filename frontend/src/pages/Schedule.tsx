@@ -60,6 +60,14 @@ interface ScheduledJob {
   created_at: string
   updated_at: string | null
   description: string | null
+  run_prune_after: boolean
+  run_compact_after: boolean
+  prune_keep_daily: number
+  prune_keep_weekly: number
+  prune_keep_monthly: number
+  prune_keep_yearly: number
+  last_prune: string | null
+  last_compact: string | null
 }
 
 interface BackupJob {
@@ -200,6 +208,12 @@ const Schedule: React.FC = () => {
     repository: '',
     enabled: true,
     description: '',
+    run_prune_after: false,
+    run_compact_after: false,
+    prune_keep_daily: 7,
+    prune_keep_weekly: 4,
+    prune_keep_monthly: 6,
+    prune_keep_yearly: 1,
   })
 
   const [editForm, setEditForm] = useState({
@@ -208,6 +222,12 @@ const Schedule: React.FC = () => {
     repository: '',
     enabled: true,
     description: '',
+    run_prune_after: false,
+    run_compact_after: false,
+    prune_keep_daily: 7,
+    prune_keep_weekly: 4,
+    prune_keep_monthly: 6,
+    prune_keep_yearly: 1,
   })
 
   const resetCreateForm = () => {
@@ -217,6 +237,12 @@ const Schedule: React.FC = () => {
       repository: '',
       enabled: true,
       description: '',
+      run_prune_after: false,
+      run_compact_after: false,
+      prune_keep_daily: 7,
+      prune_keep_weekly: 4,
+      prune_keep_monthly: 6,
+      prune_keep_yearly: 1,
     })
   }
 
@@ -284,6 +310,12 @@ const Schedule: React.FC = () => {
       repository: job.repository || '',
       enabled: job.enabled,
       description: job.description || '',
+      run_prune_after: job.run_prune_after || false,
+      run_compact_after: job.run_compact_after || false,
+      prune_keep_daily: job.prune_keep_daily || 7,
+      prune_keep_weekly: job.prune_keep_weekly || 4,
+      prune_keep_monthly: job.prune_keep_monthly || 6,
+      prune_keep_yearly: job.prune_keep_yearly || 1,
     })
   }
 
@@ -636,9 +668,21 @@ const Schedule: React.FC = () => {
                           {job.name}
                         </Typography>
                         {job.description && (
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" color="text.secondary" display="block">
                             {job.description}
                           </Typography>
+                        )}
+                        {(job.run_prune_after || job.run_compact_after) && (
+                          <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                            {job.run_prune_after && (
+                              <Tooltip title={`Prune: Keep ${job.prune_keep_daily}d/${job.prune_keep_weekly}w/${job.prune_keep_monthly}m/${job.prune_keep_yearly}y`} arrow>
+                                <Chip label="Prune" size="small" color="primary" variant="outlined" sx={{ height: 18, fontSize: '0.65rem' }} />
+                              </Tooltip>
+                            )}
+                            {job.run_compact_after && (
+                              <Chip label="Compact" size="small" color="secondary" variant="outlined" sx={{ height: 18, fontSize: '0.65rem' }} />
+                            )}
+                          </Box>
                         )}
                       </TableCell>
                       <TableCell>
@@ -666,9 +710,23 @@ const Schedule: React.FC = () => {
                             <Typography variant="body2">
                               {formatDate(job.last_run)}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" color="text.secondary" display="block">
                               {formatRelativeTime(job.last_run)}
                             </Typography>
+                            {(job.last_prune || job.last_compact) && (
+                              <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                                {job.last_prune && (
+                                  <Tooltip title={`Last pruned: ${formatDate(job.last_prune)}`} arrow>
+                                    <Chip label="P" size="small" color="primary" sx={{ height: 16, fontSize: '0.6rem', minWidth: 20 }} />
+                                  </Tooltip>
+                                )}
+                                {job.last_compact && (
+                                  <Tooltip title={`Last compacted: ${formatDate(job.last_compact)}`} arrow>
+                                    <Chip label="C" size="small" color="secondary" sx={{ height: 16, fontSize: '0.6rem', minWidth: 20 }} />
+                                  </Tooltip>
+                                )}
+                              </Box>
+                            )}
                           </>
                         ) : (
                           <Typography variant="body2" color="text.secondary">
@@ -988,6 +1046,84 @@ const Schedule: React.FC = () => {
                 }
                 label="Enable immediately"
               />
+
+              {/* Maintenance Section */}
+              <Box sx={{ mt: 2, p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                  Maintenance Options
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+                  Automatically run prune and compact operations after successful backups
+                </Typography>
+
+                <Stack spacing={2}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={createForm.run_prune_after}
+                        onChange={(e) => setCreateForm({ ...createForm, run_prune_after: e.target.checked })}
+                      />
+                    }
+                    label="Run prune after backup"
+                  />
+
+                  {createForm.run_prune_after && (
+                    <Box sx={{ pl: 4, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+                      <TextField
+                        label="Keep Daily"
+                        type="number"
+                        value={createForm.prune_keep_daily}
+                        onChange={(e) => setCreateForm({ ...createForm, prune_keep_daily: parseInt(e.target.value) || 0 })}
+                        inputProps={{ min: 0 }}
+                        size="small"
+                        helperText="Daily backups to keep"
+                      />
+                      <TextField
+                        label="Keep Weekly"
+                        type="number"
+                        value={createForm.prune_keep_weekly}
+                        onChange={(e) => setCreateForm({ ...createForm, prune_keep_weekly: parseInt(e.target.value) || 0 })}
+                        inputProps={{ min: 0 }}
+                        size="small"
+                        helperText="Weekly backups to keep"
+                      />
+                      <TextField
+                        label="Keep Monthly"
+                        type="number"
+                        value={createForm.prune_keep_monthly}
+                        onChange={(e) => setCreateForm({ ...createForm, prune_keep_monthly: parseInt(e.target.value) || 0 })}
+                        inputProps={{ min: 0 }}
+                        size="small"
+                        helperText="Monthly backups to keep"
+                      />
+                      <TextField
+                        label="Keep Yearly"
+                        type="number"
+                        value={createForm.prune_keep_yearly}
+                        onChange={(e) => setCreateForm({ ...createForm, prune_keep_yearly: parseInt(e.target.value) || 0 })}
+                        inputProps={{ min: 0 }}
+                        size="small"
+                        helperText="Yearly backups to keep"
+                      />
+                    </Box>
+                  )}
+
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={createForm.run_compact_after}
+                        onChange={(e) => setCreateForm({ ...createForm, run_compact_after: e.target.checked })}
+                      />
+                    }
+                    label="Run compact after prune"
+                  />
+                  {createForm.run_compact_after && (
+                    <Alert severity="info" sx={{ ml: 4 }}>
+                      Compact will reclaim disk space after removing old archives
+                    </Alert>
+                  )}
+                </Stack>
+              </Box>
             </Stack>
           </DialogContent>
           <DialogActions>
@@ -1119,6 +1255,84 @@ const Schedule: React.FC = () => {
                 }
                 label="Enabled"
               />
+
+              {/* Maintenance Section */}
+              <Box sx={{ mt: 2, p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                  Maintenance Options
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+                  Automatically run prune and compact operations after successful backups
+                </Typography>
+
+                <Stack spacing={2}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={editForm.run_prune_after}
+                        onChange={(e) => setEditForm({ ...editForm, run_prune_after: e.target.checked })}
+                      />
+                    }
+                    label="Run prune after backup"
+                  />
+
+                  {editForm.run_prune_after && (
+                    <Box sx={{ pl: 4, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+                      <TextField
+                        label="Keep Daily"
+                        type="number"
+                        value={editForm.prune_keep_daily}
+                        onChange={(e) => setEditForm({ ...editForm, prune_keep_daily: parseInt(e.target.value) || 0 })}
+                        inputProps={{ min: 0 }}
+                        size="small"
+                        helperText="Daily backups to keep"
+                      />
+                      <TextField
+                        label="Keep Weekly"
+                        type="number"
+                        value={editForm.prune_keep_weekly}
+                        onChange={(e) => setEditForm({ ...editForm, prune_keep_weekly: parseInt(e.target.value) || 0 })}
+                        inputProps={{ min: 0 }}
+                        size="small"
+                        helperText="Weekly backups to keep"
+                      />
+                      <TextField
+                        label="Keep Monthly"
+                        type="number"
+                        value={editForm.prune_keep_monthly}
+                        onChange={(e) => setEditForm({ ...editForm, prune_keep_monthly: parseInt(e.target.value) || 0 })}
+                        inputProps={{ min: 0 }}
+                        size="small"
+                        helperText="Monthly backups to keep"
+                      />
+                      <TextField
+                        label="Keep Yearly"
+                        type="number"
+                        value={editForm.prune_keep_yearly}
+                        onChange={(e) => setEditForm({ ...editForm, prune_keep_yearly: parseInt(e.target.value) || 0 })}
+                        inputProps={{ min: 0 }}
+                        size="small"
+                        helperText="Yearly backups to keep"
+                      />
+                    </Box>
+                  )}
+
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={editForm.run_compact_after}
+                        onChange={(e) => setEditForm({ ...editForm, run_compact_after: e.target.checked })}
+                      />
+                    }
+                    label="Run compact after prune"
+                  />
+                  {editForm.run_compact_after && (
+                    <Alert severity="info" sx={{ ml: 4 }}>
+                      Compact will reclaim disk space after removing old archives
+                    </Alert>
+                  )}
+                </Stack>
+              </Box>
             </Stack>
           </DialogContent>
           <DialogActions>
