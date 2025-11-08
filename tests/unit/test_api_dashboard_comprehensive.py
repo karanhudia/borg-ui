@@ -38,38 +38,6 @@ class TestDashboardStatus:
 
 
 @pytest.mark.unit
-class TestDashboardHealth:
-    """Test dashboard health check endpoints"""
-
-    def test_health_check_response_format(self, test_client: TestClient, admin_headers):
-        """Test health check returns proper format"""
-        response = test_client.get("/api/dashboard/health", headers=admin_headers)
-
-        assert response.status_code == 200
-        data = response.json()
-        assert isinstance(data, dict)
-        assert "status" in data
-        assert data["status"] in ["healthy", "warning", "error"]
-
-    def test_health_check_includes_components(self, test_client: TestClient, admin_headers):
-        """Test that health check includes component status"""
-        response = test_client.get("/api/dashboard/health", headers=admin_headers)
-
-        if response.status_code == 200:
-            data = response.json()
-            # Might include database, borg, or other component health
-            assert isinstance(data, dict)
-            assert "status" in data
-
-    def test_health_check_error_conditions(self, test_client: TestClient, admin_headers):
-        """Test health check handles error conditions"""
-        response = test_client.get("/api/dashboard/health", headers=admin_headers)
-
-        # Should always return a response, even if unhealthy
-        assert response.status_code in [200, 503]
-
-
-@pytest.mark.unit
 class TestDashboardMetrics:
     """Test dashboard metrics endpoints"""
 

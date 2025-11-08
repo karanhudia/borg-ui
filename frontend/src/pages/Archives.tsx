@@ -231,21 +231,13 @@ const Archives: React.FC = () => {
 
       {/* Repository Statistics */}
       {selectedRepositoryId && loadingRepoInfo && (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(5, 1fr)' }, gap: 2, mb: 4 }}>
-          {[1, 2, 3, 4, 5].map((i) => (
-            <Card key={i}>
-              <CardContent>
-                <Stack direction="row" spacing={2} alignItems="center">
-                  <CircularProgress size={24} />
-                  <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      Loading...
-                    </Typography>
-                  </Box>
-                </Stack>
-              </CardContent>
-            </Card>
-          ))}
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '120px', mb: 4 }}>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <CircularProgress size={32} />
+            <Typography variant="body1" color="text.secondary">
+              Loading repository statistics...
+            </Typography>
+          </Stack>
         </Box>
       )}
       {selectedRepositoryId && !loadingRepoInfo && repoInfo?.data?.info?.cache?.stats && (
