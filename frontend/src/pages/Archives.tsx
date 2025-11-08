@@ -32,6 +32,7 @@ import {
 } from 'lucide-react'
 import { archivesAPI, repositoriesAPI, browseAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
+import LockErrorDialog from '../components/LockErrorDialog'
 import { formatDate, formatBytes as formatBytesUtil } from '../utils/dateUtils'
 
 interface Repository {
@@ -54,6 +55,7 @@ const Archives: React.FC = () => {
   const [viewArchive, setViewArchive] = useState<Archive | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
   const [currentPath, setCurrentPath] = useState<string>('/')
+  const [lockError, setLockError] = useState<{ repositoryId: number, repositoryName: string } | null>(null)
   const queryClient = useQueryClient()
 
   // Get repositories list
@@ -66,14 +68,32 @@ const Archives: React.FC = () => {
   const { data: archives, isLoading: loadingArchives } = useQuery({
     queryKey: ['repository-archives', selectedRepositoryId],
     queryFn: () => repositoriesAPI.listRepositoryArchives(selectedRepositoryId!),
-    enabled: !!selectedRepositoryId
+    enabled: !!selectedRepositoryId,
+    onError: (error: any) => {
+      if (error?.response?.status === 423) {
+        setLockError({
+          repositoryId: selectedRepositoryId!,
+          repositoryName: selectedRepository?.name || 'Unknown'
+        })
+      }
+    },
+    retry: false
   })
 
   // Get repository info for statistics
   const { data: repoInfo, isLoading: loadingRepoInfo } = useQuery({
     queryKey: ['repository-info', selectedRepositoryId],
     queryFn: () => repositoriesAPI.getRepositoryInfo(selectedRepositoryId!),
-    enabled: !!selectedRepositoryId
+    enabled: !!selectedRepositoryId,
+    onError: (error: any) => {
+      if (error?.response?.status === 423) {
+        setLockError({
+          repositoryId: selectedRepositoryId!,
+          repositoryName: selectedRepository?.name || 'Unknown'
+        })
+      }
+    },
+    retry: false
   })
 
   // Get archive contents for current path (on-demand, one level at a time)
@@ -231,13 +251,11 @@ const Archives: React.FC = () => {
 
       {/* Repository Statistics */}
       {selectedRepositoryId && loadingRepoInfo && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '120px', mb: 4 }}>
-          <Stack direction="row" spacing={2} alignItems="center">
-            <CircularProgress size={32} />
-            <Typography variant="body1" color="text.secondary">
-              Loading repository statistics...
-            </Typography>
-          </Stack>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '120px', mb: 4 }}>
+          <CircularProgress size={48} />
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+            Loading repository statistics...
+          </Typography>
         </Box>
       )}
       {selectedRepositoryId && !loadingRepoInfo && repoInfo?.data?.info?.cache?.stats && (
@@ -677,6 +695,21 @@ const Archives: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Lock Error Dialog */}
+      {lockError && (
+        <LockErrorDialog
+          open={!!lockError}
+          onClose={() => setLockError(null)}
+          repositoryId={lockError.repositoryId}
+          repositoryName={lockError.repositoryName}
+          onLockBroken={() => {
+            // Invalidate queries to retry
+            queryClient.invalidateQueries(['repository-archives', lockError.repositoryId])
+            queryClient.invalidateQueries(['repository-info', lockError.repositoryId])
+          }}
+        />
+      )}
     </Box>
   )
 }
