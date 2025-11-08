@@ -124,6 +124,7 @@ export default function Repositories() {
     queryKey: ['repository-info', viewingInfoRepository?.id],
     queryFn: () => repositoriesAPI.getRepositoryInfo(viewingInfoRepository!.id),
     enabled: !!viewingInfoRepository,
+    keepPreviousData: true, // Keep showing data during dialog close animation
   })
 
   // Get default configuration to show source directories
