@@ -52,6 +52,7 @@ import { formatDateShort, formatBytes } from '../utils/dateUtils'
 import FileExplorerDialog from '../components/FileExplorerDialog'
 import CodeEditor from '../components/CodeEditor'
 import { FolderOpen } from '@mui/icons-material'
+import LockErrorDialog from '../components/LockErrorDialog'
 
 interface Repository {
   id: number
@@ -102,6 +103,7 @@ export default function Repositories() {
     keep_yearly: 1,
   })
   const [pruneResults, setPruneResults] = useState<any>(null)
+  const [lockError, setLockError] = useState<{ repositoryId: number, repositoryName: string } | null>(null)
 
   // Queries
   const { data: repositoriesData, isLoading } = useQuery({
@@ -125,6 +127,15 @@ export default function Repositories() {
     queryFn: () => repositoriesAPI.getRepositoryInfo(viewingInfoRepository!.id),
     enabled: !!viewingInfoRepository,
     keepPreviousData: true, // Keep showing data during dialog close animation
+    onError: (error: any) => {
+      if (error?.response?.status === 423) {
+        setLockError({
+          repositoryId: viewingInfoRepository!.id,
+          repositoryName: viewingInfoRepository!.name
+        })
+      }
+    },
+    retry: false
   })
 
   // Get default configuration to show source directories
@@ -2108,6 +2119,19 @@ export default function Repositories() {
         }
         selectMode="both"
       />
+
+      {/* Lock Error Dialog */}
+      {lockError && (
+        <LockErrorDialog
+          open={!!lockError}
+          onClose={() => setLockError(null)}
+          repositoryId={lockError.repositoryId}
+          repositoryName={lockError.repositoryName}
+          onLockBroken={() => {
+            queryClient.invalidateQueries(['repository-info', lockError.repositoryId])
+          }}
+        />
+      )}
     </Box>
   )
 }
