@@ -112,23 +112,27 @@ def get_system_metrics() -> SystemMetrics:
 async def get_backup_status() -> List[BackupStatus]:
     """Get backup status for all repositories"""
     try:
-        repo_status = await borg.get_repository_status()
-        if not repo_status["success"]:
-            logger.warning("Failed to get repository status", error=repo_status.get("error"))
-            return []
-        
-        status_list = []
-        for repo in repo_status["repositories"]:
-            status_list.append(BackupStatus(
-                repository=repo["name"],
-                status=repo["status"],
-                last_backup=repo["last_backup"],
-                archive_count=repo["archive_count"],
-                total_size=repo["total_size"],
-                health=repo["status"]
-            ))
-        
-        return status_list
+        from app.database.models import Repository
+        from app.database.database import get_db
+
+        db = next(get_db())
+        try:
+            repositories = db.query(Repository).all()
+            status_list = []
+
+            for repo in repositories:
+                status_list.append(BackupStatus(
+                    repository=repo.name,
+                    status="active" if repo.last_backup else "idle",
+                    last_backup=repo.last_backup.isoformat() if repo.last_backup else None,
+                    archive_count=repo.archive_count or 0,
+                    total_size=repo.total_size or "0 B",
+                    health="active" if repo.last_backup else "idle"
+                ))
+
+            return status_list
+        finally:
+            db.close()
     except Exception as e:
         logger.error("Failed to get backup status", error=str(e))
         return []
@@ -307,29 +311,28 @@ async def get_dashboard_health(current_user: User = Depends(get_current_user)):
         
         # Check backup repositories
         try:
-            repo_status = await borg.get_repository_status()
-            if repo_status["success"]:
-                healthy_repos = sum(1 for repo in repo_status["repositories"] if repo["status"] == "healthy")
-                total_repos = len(repo_status["repositories"])
-                
-                # If no repositories are configured, that's fine - not a warning
-                if total_repos == 0:
-                    checks["repositories"] = {
-                        "status": "healthy",
-                        "healthy_count": 0,
-                        "total_count": 0,
-                        "message": "No repositories configured"
-                    }
-                else:
-                    checks["repositories"] = {
-                        "status": "healthy" if healthy_repos == total_repos else "warning",
-                        "healthy_count": healthy_repos,
-                        "total_count": total_repos
-                    }
-            else:
+            from app.database.models import Repository
+
+            repositories = db.query(Repository).all()
+            total_repos = len(repositories)
+
+            # If no repositories are configured, that's fine - not a warning
+            if total_repos == 0:
                 checks["repositories"] = {
-                    "status": "error",
-                    "error": repo_status.get("error", "Unknown error")
+                    "status": "healthy",
+                    "healthy_count": 0,
+                    "total_count": 0,
+                    "message": "No repositories configured"
+                }
+            else:
+                # Consider a repository healthy if it has been backed up at least once
+                healthy_repos = sum(1 for repo in repositories if repo.last_backup is not None)
+
+                checks["repositories"] = {
+                    "status": "healthy" if healthy_repos == total_repos else "warning",
+                    "healthy_count": healthy_repos,
+                    "total_count": total_repos,
+                    "message": f"{healthy_repos}/{total_repos} repositories have backups"
                 }
         except Exception as e:
             checks["repositories"] = {
