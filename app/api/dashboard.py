@@ -36,14 +36,6 @@ class SystemMetrics(BaseModel):
     disk_free: int
     uptime: int
 
-class BackupStatus(BaseModel):
-    repository: str
-    status: str
-    last_backup: str | None = None
-    archive_count: int = 0
-    total_size: str = "0"
-    health: str = "unknown"
-
 class ScheduledJobInfo(BaseModel):
     id: int
     name: str
@@ -54,7 +46,6 @@ class ScheduledJobInfo(BaseModel):
     next_run: str = None
 
 class DashboardStatus(BaseModel):
-    backup_status: List[BackupStatus]
     system_metrics: SystemMetrics
     scheduled_jobs: List[ScheduledJobInfo]
     recent_jobs: List[Dict[str, Any]]
@@ -105,34 +96,6 @@ def get_system_metrics() -> SystemMetrics:
             detail="Failed to get system metrics"
         )
 
-async def get_backup_status() -> List[BackupStatus]:
-    """Get backup status for all repositories"""
-    try:
-        from app.database.models import Repository
-        from app.database.database import get_db
-
-        db = next(get_db())
-        try:
-            repositories = db.query(Repository).all()
-            status_list = []
-
-            for repo in repositories:
-                status_list.append(BackupStatus(
-                    repository=repo.name,
-                    status="active" if repo.last_backup else "idle",
-                    last_backup=repo.last_backup.isoformat() if repo.last_backup else None,
-                    archive_count=repo.archive_count or 0,
-                    total_size=repo.total_size or "0 B",
-                    health="active" if repo.last_backup else "idle"
-                ))
-
-            return status_list
-        finally:
-            db.close()
-    except Exception as e:
-        logger.error("Failed to get backup status", error=str(e))
-        return []
-
 def get_scheduled_jobs(db: Session) -> List[ScheduledJobInfo]:
     """Get scheduled jobs information"""
     # TODO: Implement when ScheduledJob model is added back
@@ -172,23 +135,19 @@ async def get_dashboard_status(
 ):
     """Get comprehensive dashboard status"""
     try:
-        # Get backup status
-        backup_status = await get_backup_status()
-        
         # Get system metrics
         system_metrics = get_system_metrics()
-        
+
         # Get scheduled jobs
         scheduled_jobs = get_scheduled_jobs(db)
-        
+
         # Get recent jobs
         recent_jobs = get_recent_jobs(db)
-        
+
         # Get alerts
         alerts = get_alerts(db)
-        
+
         return DashboardStatus(
-            backup_status=backup_status,
             system_metrics=system_metrics,
             scheduled_jobs=scheduled_jobs,
             recent_jobs=recent_jobs,
