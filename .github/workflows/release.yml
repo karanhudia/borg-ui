@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'  # Trigger on version tags (e.g., v1.1.0)
 
+# Ensure only one release creation runs at a time for the same tag
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false  # Don't cancel, let it finish
+
 permissions:
   contents: write
 
