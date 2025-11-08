@@ -43,6 +43,13 @@ class BorgInterface:
         # Set up environment with SSH options for remote repositories
         exec_env = os.environ.copy()
 
+        # Configure lock behavior to prevent timeout issues
+        # Wait up to 180 seconds (3 minutes) for locks instead of default 1 second
+        exec_env["BORG_LOCK_WAIT"] = "180"
+
+        # Mark this container's hostname as unique to avoid lock conflicts
+        exec_env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
+
         # Add SSH options to disable host key checking for remote repos
         # This allows automatic connection to new hosts without manual intervention
         ssh_opts = [
