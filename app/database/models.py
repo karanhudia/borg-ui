@@ -136,6 +136,9 @@ class BackupJob(Base):
     total_expected_size = Column(BigInteger, default=0)  # Total size of source directories (calculated before backup)
     estimated_time_remaining = Column(Integer, default=0)  # Estimated seconds remaining
 
+    # Maintenance status tracking
+    maintenance_status = Column(String, nullable=True)  # null, "running_prune", "prune_completed", "prune_failed", "running_compact", "compact_completed", "compact_failed", "maintenance_completed"
+
     created_at = Column(DateTime, default=utc_now)
 
 class RestoreJob(Base):

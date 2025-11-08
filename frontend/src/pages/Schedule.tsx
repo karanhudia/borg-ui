@@ -78,6 +78,7 @@ interface BackupJob {
   completed_at?: string
   error_message?: string
   has_logs?: boolean
+  maintenance_status?: string | null
   progress_details?: {
     original_size: number
     compressed_size: number
@@ -385,10 +386,45 @@ const Schedule: React.FC = () => {
     }
   }
 
+  const getMaintenanceStatusLabel = (maintenanceStatus: string | null | undefined): string | null => {
+    if (!maintenanceStatus) return null
+
+    switch (maintenanceStatus) {
+      case 'running_prune':
+        return 'Pruning archives...'
+      case 'prune_completed':
+        return 'Prune completed ✓'
+      case 'prune_failed':
+        return 'Prune failed ✗'
+      case 'running_compact':
+        return 'Compacting repository...'
+      case 'compact_completed':
+        return 'Compact completed ✓'
+      case 'compact_failed':
+        return 'Compact failed ✗'
+      case 'maintenance_completed':
+        return 'Maintenance completed ✓'
+      default:
+        return null
+    }
+  }
+
+  const getMaintenanceStatusColor = (maintenanceStatus: string | null | undefined): 'success' | 'info' | 'error' | 'warning' => {
+    if (!maintenanceStatus) return 'info'
+
+    if (maintenanceStatus.includes('running')) return 'info'
+    if (maintenanceStatus.includes('completed')) return 'success'
+    if (maintenanceStatus.includes('failed')) return 'error'
+    return 'info'
+  }
+
   const jobs = jobsData?.data?.jobs || []
   const repositories = repositoriesData?.data?.repositories || []
   const allBackupJobs = backupJobsData?.data?.jobs || []
-  const runningBackupJobs = allBackupJobs.filter((job: BackupJob) => job.status === 'running')
+  const runningBackupJobs = allBackupJobs.filter((job: BackupJob) =>
+    job.status === 'running' ||
+    (job.maintenance_status && job.maintenance_status.includes('running'))
+  )
   const recentBackupJobs = allBackupJobs.slice(0, 10)
   const upcomingJobs = upcomingData?.data?.upcoming_jobs || []
 
@@ -480,6 +516,19 @@ const Schedule: React.FC = () => {
                       </Typography>
                       <Typography variant="caption" sx={{ fontFamily: 'monospace', display: 'block', mt: 0.5, wordBreak: 'break-all' }}>
                         {job.progress_details.current_file}
+                      </Typography>
+                    </Alert>
+                  )}
+
+                  {/* Maintenance Status */}
+                  {job.maintenance_status && getMaintenanceStatusLabel(job.maintenance_status) && (
+                    <Alert
+                      severity={getMaintenanceStatusColor(job.maintenance_status)}
+                      sx={{ mb: 2, py: 0.5 }}
+                      icon={job.maintenance_status.includes('running') ? <RefreshCw size={16} className="animate-spin" /> : undefined}
+                    >
+                      <Typography variant="caption" fontWeight={500}>
+                        {getMaintenanceStatusLabel(job.maintenance_status)}
                       </Typography>
                     </Alert>
                   )}

@@ -570,6 +570,10 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
             try:
                 logger.info("Running scheduled prune", scheduled_job_id=scheduled_job_id, repository=repository_path)
 
+                # Update backup job status to show prune is running
+                backup_job.maintenance_status = "running_prune"
+                db.commit()
+
                 prune_result = await borg.prune_archives(
                     repository=repo.path,
                     keep_daily=scheduled_job.prune_keep_daily,
@@ -583,19 +587,28 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
 
                 if prune_result.get("success"):
                     scheduled_job.last_prune = datetime.now(timezone.utc)
+                    backup_job.maintenance_status = "prune_completed"
                     db.commit()
                     logger.info("Scheduled prune completed", scheduled_job_id=scheduled_job_id)
                 else:
+                    backup_job.maintenance_status = "prune_failed"
+                    db.commit()
                     logger.error("Scheduled prune failed", scheduled_job_id=scheduled_job_id,
                                 error=prune_result.get("stderr"))
 
             except Exception as e:
+                backup_job.maintenance_status = "prune_failed"
+                db.commit()
                 logger.error("Failed to run scheduled prune", scheduled_job_id=scheduled_job_id, error=str(e))
 
         # Run compact if enabled (only after successful prune or if prune not enabled)
         if scheduled_job.run_compact_after and (scheduled_job.run_prune_after or not scheduled_job.run_prune_after):
             try:
                 logger.info("Running scheduled compact", scheduled_job_id=scheduled_job_id, repository=repository_path)
+
+                # Update backup job status to show compact is running
+                backup_job.maintenance_status = "running_compact"
+                db.commit()
 
                 compact_result = await borg.compact_repository(
                     repository=repo.path,
@@ -605,14 +618,24 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
 
                 if compact_result.get("success"):
                     scheduled_job.last_compact = datetime.now(timezone.utc)
+                    backup_job.maintenance_status = "compact_completed"
                     db.commit()
                     logger.info("Scheduled compact completed", scheduled_job_id=scheduled_job_id)
                 else:
+                    backup_job.maintenance_status = "compact_failed"
+                    db.commit()
                     logger.error("Scheduled compact failed", scheduled_job_id=scheduled_job_id,
                                 error=compact_result.get("stderr"))
 
             except Exception as e:
+                backup_job.maintenance_status = "compact_failed"
+                db.commit()
                 logger.error("Failed to run scheduled compact", scheduled_job_id=scheduled_job_id, error=str(e))
+
+        # Mark maintenance as fully completed if we got this far
+        if backup_job.maintenance_status and "failed" not in backup_job.maintenance_status:
+            backup_job.maintenance_status = "maintenance_completed"
+            db.commit()
 
     finally:
         db.close()

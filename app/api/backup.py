@@ -103,6 +103,7 @@ async def get_all_backup_jobs(
                     "progress": job.progress,
                     "error_message": job.error_message,
                     "has_logs": bool(job.logs),  # Indicate if logs are available
+                    "maintenance_status": job.maintenance_status,
                     "progress_details": {
                         "original_size": job.original_size or 0,
                         "compressed_size": job.compressed_size or 0,
@@ -149,6 +150,7 @@ async def get_backup_status(
             "progress": job.progress,
             "error_message": job.error_message,
             "logs": job.logs,
+            "maintenance_status": job.maintenance_status,
             # Detailed progress from JSON parsing
             "progress_details": {
                 "original_size": job.original_size or 0,
