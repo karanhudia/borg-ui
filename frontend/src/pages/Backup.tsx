@@ -42,6 +42,7 @@ import {
 import { backupAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { formatDate, formatRelativeTime, formatTimeRange, formatBytes as formatBytesUtil, formatDurationSeconds } from '../utils/dateUtils'
+import LockErrorDialog from '../components/LockErrorDialog'
 
 interface BackupJob {
   id: string
@@ -71,6 +72,7 @@ interface BackupJob {
 
 const Backup: React.FC = () => {
   const [selectedRepository, setSelectedRepository] = useState<string>('')
+  const [lockError, setLockError] = useState<{ repositoryId: number, repositoryName: string } | null>(null)
   const queryClient = useQueryClient()
 
   // Get backup status and history (manual backups only)
@@ -97,6 +99,15 @@ const Backup: React.FC = () => {
     queryKey: ['repository-archives', selectedRepoData?.id],
     queryFn: () => repositoriesAPI.listRepositoryArchives(selectedRepoData.id),
     enabled: !!selectedRepoData?.id,
+    onError: (error: any) => {
+      if (error?.response?.status === 423 && selectedRepoData) {
+        setLockError({
+          repositoryId: selectedRepoData.id,
+          repositoryName: selectedRepoData.name
+        })
+      }
+    },
+    retry: false
   })
 
   // Get repository info for size statistics
@@ -104,6 +115,15 @@ const Backup: React.FC = () => {
     queryKey: ['repository-info', selectedRepoData?.id],
     queryFn: () => repositoriesAPI.getRepositoryInfo(selectedRepoData.id),
     enabled: !!selectedRepoData?.id,
+    onError: (error: any) => {
+      if (error?.response?.status === 423 && selectedRepoData) {
+        setLockError({
+          repositoryId: selectedRepoData.id,
+          repositoryName: selectedRepoData.name
+        })
+      }
+    },
+    retry: false
   })
 
   // Calculate live statistics from fetched data
@@ -881,6 +901,20 @@ const Backup: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Lock Error Dialog */}
+      {lockError && (
+        <LockErrorDialog
+          open={!!lockError}
+          onClose={() => setLockError(null)}
+          repositoryId={lockError.repositoryId}
+          repositoryName={lockError.repositoryName}
+          onLockBroken={() => {
+            queryClient.invalidateQueries(['repository-archives', lockError.repositoryId])
+            queryClient.invalidateQueries(['repository-info', lockError.repositoryId])
+          }}
+        />
+      )}
     </Box>
   )
 }

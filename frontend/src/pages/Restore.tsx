@@ -40,6 +40,7 @@ import { toast } from 'react-hot-toast'
 import { formatDate, formatBytes as formatBytesUtil, formatTimeRange } from '../utils/dateUtils'
 import RepositoryInfo from '../components/RepositoryInfo'
 import PathSelectorField from '../components/PathSelectorField'
+import LockErrorDialog from '../components/LockErrorDialog'
 
 interface Repository {
   id: number
@@ -78,6 +79,7 @@ const Restore: React.FC = () => {
   const [selectedRepoData, setSelectedRepoData] = useState<Repository | null>(null)
   const [restoreArchive, setRestoreArchive] = useState<Archive | null>(null)
   const [destination, setDestination] = useState<string>('')
+  const [lockError, setLockError] = useState<{ repositoryId: number, repositoryName: string } | null>(null)
   const queryClient = useQueryClient()
 
   // Get repositories list
@@ -90,21 +92,48 @@ const Restore: React.FC = () => {
   const { data: archives, isLoading: loadingArchives } = useQuery({
     queryKey: ['repository-archives', selectedRepoData?.id],
     queryFn: () => repositoriesAPI.listRepositoryArchives(selectedRepoData!.id),
-    enabled: !!selectedRepoData?.id
+    enabled: !!selectedRepoData?.id,
+    onError: (error: any) => {
+      if (error?.response?.status === 423 && selectedRepoData) {
+        setLockError({
+          repositoryId: selectedRepoData.id,
+          repositoryName: selectedRepoData.name
+        })
+      }
+    },
+    retry: false
   })
 
   // Get repository info for statistics
   const { data: repoInfo } = useQuery({
     queryKey: ['repository-info', selectedRepoData?.id],
     queryFn: () => repositoriesAPI.getRepositoryInfo(selectedRepoData!.id),
-    enabled: !!selectedRepoData?.id
+    enabled: !!selectedRepoData?.id,
+    onError: (error: any) => {
+      if (error?.response?.status === 423 && selectedRepoData) {
+        setLockError({
+          repositoryId: selectedRepoData.id,
+          repositoryName: selectedRepoData.name
+        })
+      }
+    },
+    retry: false
   })
 
   // Get archive-specific info
   const { data: archiveInfo, isLoading: loadingArchiveInfo } = useQuery({
     queryKey: ['archive-info', selectedRepoData?.id, restoreArchive?.name],
     queryFn: () => repositoriesAPI.getArchiveInfo(selectedRepoData!.id, restoreArchive!.name),
-    enabled: !!selectedRepoData && !!restoreArchive
+    enabled: !!selectedRepoData && !!restoreArchive,
+    onError: (error: any) => {
+      if (error?.response?.status === 423 && selectedRepoData) {
+        setLockError({
+          repositoryId: selectedRepoData.id,
+          repositoryName: selectedRepoData.name
+        })
+      }
+    },
+    retry: false
   })
 
   // Get restore jobs with polling
@@ -590,6 +619,21 @@ const Restore: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Lock Error Dialog */}
+      {lockError && (
+        <LockErrorDialog
+          open={!!lockError}
+          onClose={() => setLockError(null)}
+          repositoryId={lockError.repositoryId}
+          repositoryName={lockError.repositoryName}
+          onLockBroken={() => {
+            queryClient.invalidateQueries(['repository-archives', lockError.repositoryId])
+            queryClient.invalidateQueries(['repository-info', lockError.repositoryId])
+            queryClient.invalidateQueries(['archive-info', lockError.repositoryId])
+          }}
+        />
+      )}
     </Box>
   )
 }
