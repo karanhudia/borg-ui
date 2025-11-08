@@ -12,6 +12,7 @@ from app.database.database import get_db
 from app.database.models import User, Repository
 from app.core.security import get_current_user
 from app.core.borg import BorgInterface
+from app.core.repository_locks import with_repository_lock
 from app.config import settings
 
 logger = structlog.get_logger()
@@ -1262,53 +1263,82 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
                              error=str(e))
 
 @router.get("/{repo_id}/archives")
+@with_repository_lock('repo_id')
 async def list_repository_archives(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """List all archives in a repository using borg list"""
+    max_retries = 3
+    retry_delay = 2  # seconds
+
+    for attempt in range(max_retries):
+        try:
+            repository = db.query(Repository).filter(Repository.id == repo_id).first()
+            if not repository:
+                raise HTTPException(status_code=404, detail="Repository not found")
+
+            # Build borg list command
+            cmd = ["borg", "list"]
+
+            # Add remote-path if specified
+            if repository.remote_path:
+                cmd.extend(["--remote-path", repository.remote_path])
+
+            cmd.extend(["--json", repository.path])
+
+            # Set up environment with proper lock configuration
+            ssh_opts = [
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "UserKnownHostsFile=/dev/null",
+                "-o", "LogLevel=ERROR"
+            ]
+            env = setup_borg_env(
+                passphrase=repository.passphrase,
+                ssh_opts=ssh_opts
+            )
+
+            # Execute command with increased timeout to match BORG_LOCK_WAIT
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env
+            )
+
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=200)
+
+            if process.returncode != 0:
+                error_msg = stderr.decode() if stderr else "Unknown error"
+
+                # Check if it's a lock timeout error and we have retries left
+                if "lock" in error_msg.lower() and "timeout" in error_msg.lower() and attempt < max_retries - 1:
+                    logger.warning(f"Lock timeout on attempt {attempt + 1}/{max_retries}, retrying in {retry_delay}s",
+                                 repo_id=repo_id, error=error_msg)
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                    continue
+
+                logger.error("Failed to list archives", error=error_msg)
+                raise HTTPException(status_code=500, detail=f"Failed to list archives: {error_msg}")
+
+            # Success - break out of retry loop
+            break
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"Error on attempt {attempt + 1}/{max_retries}, retrying", repo_id=repo_id, error=str(e))
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 2
+                continue
+            logger.error("Failed to list archives after retries", error=str(e))
+            raise HTTPException(status_code=500, detail=f"Failed to list archives: {str(e)}")
+
+    # Parse JSON output
     try:
-        repository = db.query(Repository).filter(Repository.id == repo_id).first()
-        if not repository:
-            raise HTTPException(status_code=404, detail="Repository not found")
-
-        # Build borg list command
-        cmd = ["borg", "list"]
-
-        # Add remote-path if specified
-        if repository.remote_path:
-            cmd.extend(["--remote-path", repository.remote_path])
-
-        cmd.extend(["--json", repository.path])
-
-        # Set up environment with proper lock configuration
-        ssh_opts = [
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "LogLevel=ERROR"
-        ]
-        env = setup_borg_env(
-            passphrase=repository.passphrase,
-            ssh_opts=ssh_opts
-        )
-
-        # Execute command
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env
-        )
-
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
-
-        if process.returncode != 0:
-            error_msg = stderr.decode() if stderr else "Unknown error"
-            logger.error("Failed to list archives", error=error_msg)
-            raise HTTPException(status_code=500, detail=f"Failed to list archives: {error_msg}")
-
-        # Parse JSON output
         archives_data = json.loads(stdout.decode())
         archives = archives_data.get("archives", [])
 
@@ -1323,16 +1353,12 @@ async def list_repository_archives(
                 "path": repository.path
             }
         }
-    except HTTPException:
-        raise
     except json.JSONDecodeError as e:
         logger.error("Failed to parse borg list output", error=str(e))
         raise HTTPException(status_code=500, detail="Failed to parse archive list")
-    except Exception as e:
-        logger.error("Failed to list archives", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to list archives: {str(e)}")
 
 @router.get("/{repo_id}/info")
+@with_repository_lock('repo_id')
 async def get_repository_info(
     repo_id: int,
     current_user: User = Depends(get_current_user),
@@ -1368,7 +1394,7 @@ async def get_repository_info(
                 ssh_opts=ssh_opts
             )
 
-            # Execute command
+            # Execute command with increased timeout to match BORG_LOCK_WAIT
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
@@ -1376,7 +1402,7 @@ async def get_repository_info(
                 env=env
             )
 
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=200)
 
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
@@ -1436,6 +1462,7 @@ async def get_repository_info(
         raise HTTPException(status_code=500, detail=f"Failed to get repository info: {str(e)}")
 
 @router.get("/{repo_id}/archives/{archive_name}/info")
+@with_repository_lock('repo_id')
 async def get_archive_info(
     repo_id: int,
     archive_name: str,
@@ -1471,7 +1498,7 @@ async def get_archive_info(
             ssh_opts=ssh_opts
         )
 
-        # Execute command
+        # Execute command with increased timeout to match BORG_LOCK_WAIT
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
@@ -1479,7 +1506,7 @@ async def get_archive_info(
             env=env
         )
 
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=200)
 
         if process.returncode != 0:
             error_msg = stderr.decode() if stderr else "Unknown error"
