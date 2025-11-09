@@ -113,7 +113,7 @@ class BorgInterface:
             }
 
     async def break_lock(self, repository: str, remote_path: str = None, passphrase: str = None) -> Dict:
-        """Break a stale lock on a repository"""
+        """Break a stale lock on a repository and its cache"""
         logger.warning("Breaking stale lock", repository=repository)
 
         cmd = [self.borg_cmd, "break-lock"]
@@ -129,7 +129,38 @@ class BorgInterface:
         if passphrase:
             env["BORG_PASSPHRASE"] = passphrase
 
-        return await self._execute_command(cmd, timeout=30, env=env if env else None)
+        # Break repository lock
+        result = await self._execute_command(cmd, timeout=30, env=env if env else None)
+
+        # Also try to break cache lock by deleting cache lock files
+        # This handles the case where cache locks remain after repository locks are broken
+        try:
+            import hashlib
+            import glob
+
+            # Calculate repository ID hash (same as Borg does)
+            # Borg uses: hashlib.sha256(repository_location.encode()).hexdigest()
+            repo_id = hashlib.sha256(repository.encode()).hexdigest()
+            cache_dir = os.path.expanduser(f"~/.cache/borg/{repo_id}")
+
+            if os.path.exists(cache_dir):
+                # Remove lock files in cache directory
+                lock_files = glob.glob(f"{cache_dir}/lock.*")
+                for lock_file in lock_files:
+                    try:
+                        if os.path.isfile(lock_file):
+                            os.unlink(lock_file)
+                            logger.info("Removed cache lock file", file=lock_file)
+                        elif os.path.isdir(lock_file):
+                            import shutil
+                            shutil.rmtree(lock_file)
+                            logger.info("Removed cache lock directory", dir=lock_file)
+                    except Exception as e:
+                        logger.warning("Failed to remove cache lock", file=lock_file, error=str(e))
+        except Exception as e:
+            logger.warning("Failed to clean cache locks", error=str(e))
+
+        return result
 
     async def run_backup(self, repository: str, source_paths: List[str],
                         compression: str = "lz4", archive_name: str = None, remote_path: str = None, passphrase: str = None) -> Dict:

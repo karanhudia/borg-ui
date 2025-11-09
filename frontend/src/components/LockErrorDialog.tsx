@@ -78,6 +78,7 @@ export default function LockErrorDialog({
           <li>Previous backup was interrupted or crashed</li>
           <li>Network connection dropped during SSH backup</li>
           <li>Container was restarted during an operation</li>
+          <li>Repository cache locks from stale operations</li>
         </Typography>
 
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
@@ -86,6 +87,7 @@ export default function LockErrorDialog({
         <Typography variant="body2" color="text.secondary" component="ul" sx={{ pl: 2 }}>
           <li>Make sure no backup process is currently running</li>
           <li>Check that no other client is accessing this repository</li>
+          <li>This will break both repository and cache locks</li>
         </Typography>
       </DialogContent>
 
