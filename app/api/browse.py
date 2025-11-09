@@ -9,7 +9,6 @@ from app.database.models import User, Repository
 from app.database.database import get_db
 from app.api.auth import get_current_user
 from app.core.borg import borg
-from app.core.repository_locks import with_repository_lock
 
 logger = structlog.get_logger(__name__)
 
@@ -22,7 +21,6 @@ _archive_cache = {}
 CACHE_TTL_SECONDS = 300  # 5 minutes
 
 @router.get("/{repository_id}/{archive_name}")
-@with_repository_lock('repository_id')
 async def browse_archive_contents(
     repository_id: int,
     archive_name: str,
