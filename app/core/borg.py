@@ -135,28 +135,49 @@ class BorgInterface:
         # Also try to break cache lock by deleting cache lock files
         # This handles the case where cache locks remain after repository locks are broken
         try:
-            import hashlib
             import glob
 
-            # Calculate repository ID hash (same as Borg does)
-            # Borg uses: hashlib.sha256(repository_location.encode()).hexdigest()
-            repo_id = hashlib.sha256(repository.encode()).hexdigest()
-            cache_dir = os.path.expanduser(f"~/.cache/borg/{repo_id}")
+            # Get the actual repository ID from borg info (most reliable method)
+            # This ensures we target the correct cache directory
+            info_cmd = [self.borg_cmd, "info", "--json"]
+            if remote_path:
+                info_cmd.extend(["--remote-path", remote_path])
+            info_cmd.append(repository)
 
-            if os.path.exists(cache_dir):
-                # Remove lock files in cache directory
-                lock_files = glob.glob(f"{cache_dir}/lock.*")
-                for lock_file in lock_files:
-                    try:
-                        if os.path.isfile(lock_file):
-                            os.unlink(lock_file)
-                            logger.info("Removed cache lock file", file=lock_file)
-                        elif os.path.isdir(lock_file):
-                            import shutil
-                            shutil.rmtree(lock_file)
-                            logger.info("Removed cache lock directory", dir=lock_file)
-                    except Exception as e:
-                        logger.warning("Failed to remove cache lock", file=lock_file, error=str(e))
+            info_result = await self._execute_command(info_cmd, timeout=30, env=env if env else None)
+
+            if info_result.get("success"):
+                info_data = json.loads(info_result["stdout"])
+                repo_id = info_data.get("repository", {}).get("id")
+
+                if repo_id:
+                    logger.info("Found repository ID for cache cleanup", repo_id=repo_id)
+                    cache_dir = os.path.expanduser(f"~/.cache/borg/{repo_id}")
+
+                    if os.path.exists(cache_dir):
+                        # Remove lock files in cache directory
+                        lock_files = glob.glob(f"{cache_dir}/lock.*")
+                        if lock_files:
+                            logger.info("Breaking cache locks", cache_dir=cache_dir, count=len(lock_files))
+                            for lock_file in lock_files:
+                                try:
+                                    if os.path.isfile(lock_file):
+                                        os.unlink(lock_file)
+                                        logger.info("Removed cache lock file", file=lock_file)
+                                    elif os.path.isdir(lock_file):
+                                        import shutil
+                                        shutil.rmtree(lock_file)
+                                        logger.info("Removed cache lock directory", dir=lock_file)
+                                except Exception as e:
+                                    logger.warning("Failed to remove cache lock", file=lock_file, error=str(e))
+                        else:
+                            logger.info("No cache locks found", cache_dir=cache_dir)
+                    else:
+                        logger.info("Cache directory does not exist", cache_dir=cache_dir)
+                else:
+                    logger.warning("Could not extract repository ID from borg info")
+            else:
+                logger.warning("Could not get repository info for cache cleanup", error=info_result.get("stderr"))
         except Exception as e:
             logger.warning("Failed to clean cache locks", error=str(e))
 
