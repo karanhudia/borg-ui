@@ -188,11 +188,11 @@ class CheckService:
                                     current = json_msg.get('current', 0)
                                     total = json_msg.get('total', 1)
 
-                                    # Use Borg's message directly (already contains percentage)
-                                    # Don't show operation counts as they confuse users
-                                    # Only update if message is not empty (finished messages have no text)
+                                    # Build progress message with operation counts when available
+                                    # Skip appending counts when message is empty (phase transitions)
                                     if message:
-                                        job.progress_message = message
+                                        job.progress_message = f"{message} ({current}/{total})"
+                                    # Don't update progress_message when message is empty (keeps last good message)
 
                                     if not finished:
                                         # Extract percentage from current/total
