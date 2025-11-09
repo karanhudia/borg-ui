@@ -117,6 +117,17 @@ async def startup_event():
     except Exception as e:
         logger.warning("Failed to rotate logs", error=str(e))
 
+    # Cleanup orphaned jobs from container restarts
+    from app.utils.process_utils import cleanup_orphaned_jobs
+    from app.database.database import SessionLocal
+    try:
+        db = SessionLocal()
+        cleanup_orphaned_jobs(db)
+        db.close()
+        logger.info("Orphaned job cleanup completed")
+    except Exception as e:
+        logger.error("Failed to cleanup orphaned jobs", error=str(e))
+
     # Start scheduled backup checker (background task)
     from app.api.schedule import check_scheduled_jobs
     import asyncio

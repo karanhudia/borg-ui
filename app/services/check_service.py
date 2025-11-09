@@ -12,6 +12,23 @@ from app.config import settings
 
 logger = structlog.get_logger()
 
+def get_process_start_time(pid: int) -> int:
+    """
+    Read process start time from /proc/[pid]/stat
+    Returns: jiffies since system boot (unique per process)
+    """
+    try:
+        with open(f'/proc/{pid}/stat', 'r') as f:
+            stat_data = f.read()
+        # Parse: pid (comm) state ppid ... starttime (22nd field)
+        # Split by ) to handle process names with spaces/parens
+        fields = stat_data.split(')')[1].split()
+        starttime = int(fields[19])  # 22nd field overall
+        return starttime
+    except Exception as e:
+        logger.error("Failed to read process start time", pid=pid, error=str(e))
+        return 0
+
 class CheckService:
     """Service for executing repository check operations with real-time progress tracking"""
 
@@ -60,11 +77,14 @@ class CheckService:
             env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
             env["BORG_SHOW_PROGRESS"] = "1"  # Force progress output even when not in a TTY
 
-            # Add SSH options for remote repos
+            # Add SSH options for remote repos with keepalive for orphan prevention
             ssh_opts = [
                 "-o", "StrictHostKeyChecking=no",
                 "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "LogLevel=ERROR"
+                "-o", "LogLevel=ERROR",
+                "-o", "ServerAliveInterval=15",   # Send keepalive every 15s
+                "-o", "ServerAliveCountMax=3",    # Give up after 3 failures (~45s)
+                "-o", "TCPKeepAlive=yes"          # Enable TCP-level keepalives
             ]
             env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
 
@@ -89,6 +109,16 @@ class CheckService:
                 stderr=asyncio.subprocess.PIPE,  # Capture stderr separately for progress
                 env=env
             )
+
+            # Store PID and start time for orphan detection on container restart
+            job.process_pid = process.pid
+            job.process_start_time = get_process_start_time(process.pid)
+            db.commit()
+
+            logger.info("Stored PID tracking info",
+                       job_id=job_id,
+                       pid=job.process_pid,
+                       start_time=job.process_start_time)
 
             # Track this process so it can be cancelled
             self.running_processes[job_id] = process
