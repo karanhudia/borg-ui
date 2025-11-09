@@ -12,7 +12,6 @@ from app.database.database import get_db
 from app.database.models import User, Repository
 from app.core.security import get_current_user
 from app.core.borg import BorgInterface
-from app.core.repository_locks import with_repository_lock
 from app.config import settings
 
 logger = structlog.get_logger()
@@ -1263,7 +1262,6 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
                              error=str(e))
 
 @router.get("/{repo_id}/archives")
-@with_repository_lock('repo_id')
 async def list_repository_archives(
     repo_id: int,
     current_user: User = Depends(get_current_user),
@@ -1365,7 +1363,6 @@ async def list_repository_archives(
         raise HTTPException(status_code=500, detail="Failed to parse archive list")
 
 @router.get("/{repo_id}/info")
-@with_repository_lock('repo_id')
 async def get_repository_info(
     repo_id: int,
     current_user: User = Depends(get_current_user),
@@ -1514,7 +1511,6 @@ async def break_repository_lock(
         raise HTTPException(status_code=500, detail=f"Failed to break lock: {str(e)}")
 
 @router.get("/{repo_id}/archives/{archive_name}/info")
-@with_repository_lock('repo_id')
 async def get_archive_info(
     repo_id: int,
     archive_name: str,
