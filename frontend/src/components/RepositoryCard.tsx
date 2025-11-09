@@ -202,7 +202,7 @@ export default function RepositoryCard({
                 sx={{ textTransform: 'none' }}
                 color={checkJob ? 'primary' : 'inherit'}
               >
-                {checkJob ? `Check ${checkJob.progress}%` : 'Check'}
+                Check
               </Button>
               <Button
                 variant="outlined"
@@ -213,7 +213,7 @@ export default function RepositoryCard({
                 color={compactJob ? 'primary' : 'warning'}
                 sx={{ textTransform: 'none' }}
               >
-                {compactJob ? `Compact ${compactJob.progress}%` : 'Compact'}
+                Compact
               </Button>
               <Button
                 variant="outlined"
