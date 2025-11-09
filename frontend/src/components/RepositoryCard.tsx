@@ -210,7 +210,7 @@ export default function RepositoryCard({
                 startIcon={compactJob ? <Refresh className="animate-spin" /> : <Refresh />}
                 onClick={onCompact}
                 disabled={isMaintenanceRunning}
-                color="warning"
+                color={compactJob ? 'primary' : 'warning'}
                 sx={{ textTransform: 'none' }}
               >
                 {compactJob ? `Compact ${compactJob.progress}%` : 'Compact'}
