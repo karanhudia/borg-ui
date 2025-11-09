@@ -320,7 +320,7 @@ class BackupService:
             logger.error("Failed to calculate total source size", error=str(e))
             return 0
 
-    async def execute_backup(self, job_id: int, repository: str, config_file: str, db: Session = None):
+    async def execute_backup(self, job_id: int, repository: str, db: Session = None):
         """Execute backup using borg directly for better control"""
 
         # Create a new database session for this background task

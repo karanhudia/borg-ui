@@ -18,7 +18,6 @@ router = APIRouter()
 # Pydantic models
 class BackupRequest(BaseModel):
     repository: str = None
-    config_file: str = None
 
 class BackupResponse(BaseModel):
     job_id: int
@@ -47,7 +46,6 @@ async def start_backup(
             backup_service.execute_backup(
                 backup_job.id,
                 backup_request.repository,
-                backup_request.config_file,
                 db
             )
         )
