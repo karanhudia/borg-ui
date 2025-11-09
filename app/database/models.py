@@ -203,6 +203,8 @@ class CheckJob(Base):
     error_message = Column(Text, nullable=True)
     logs = Column(Text, nullable=True)  # Full logs (stored after completion)
     max_duration = Column(Integer, nullable=True)  # Maximum duration in seconds (for partial checks)
+    process_pid = Column(Integer, nullable=True)  # Container PID for orphan detection
+    process_start_time = Column(BigInteger, nullable=True)  # Process start time in jiffies for PID uniqueness
     created_at = Column(DateTime, default=utc_now)
 
 class CompactJob(Base):
@@ -217,4 +219,6 @@ class CompactJob(Base):
     progress_message = Column(String, nullable=True)  # Current progress message (e.g., "Compacting segments 50%")
     error_message = Column(Text, nullable=True)
     logs = Column(Text, nullable=True)  # Full logs (stored after completion)
+    process_pid = Column(Integer, nullable=True)  # Container PID for orphan detection
+    process_start_time = Column(BigInteger, nullable=True)  # Process start time in jiffies for PID uniqueness
     created_at = Column(DateTime, default=utc_now) 
