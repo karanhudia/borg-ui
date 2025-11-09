@@ -177,8 +177,11 @@ class CompactService:
                                     current = json_msg.get('current', 0)
                                     total = json_msg.get('total', 1)
 
-                                    # Update progress message with segment count
-                                    job.progress_message = f"{message} ({current}/{total})"
+                                    # Build progress message with operation counts when available
+                                    # Skip appending counts when message is empty (phase transitions)
+                                    if message:
+                                        job.progress_message = f"{message} ({current}/{total})"
+                                    # Don't update progress_message when message is empty (keeps last good message)
 
                                     if not finished:
                                         # Extract percentage from current/total
