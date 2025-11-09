@@ -239,7 +239,7 @@ export default function RepositoryCard({
             </Box>
             {/* Progress message */}
             {(checkJob?.progress_message || compactJob?.progress_message) && (
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+              <Typography variant="caption" color="primary" sx={{ mt: 1.5, display: 'block' }}>
                 {checkJob?.progress_message || compactJob?.progress_message}
               </Typography>
             )}
