@@ -78,29 +78,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Use global defaults for staleTime/cacheTime (SWR strategy)
   })
 
-  // Check for archives (simplified - just check if we have repositories)
-  const { data: archiveCheck, isLoading: loadingArchives, refetch: refetchArchives } = useQuery({
-    queryKey: ['app-archives-check'],
-    queryFn: async () => {
-      if (!repositories || repositories.length === 0) {
-        return { hasArchives: false }
-      }
-      try {
-        // Check first repository for archives using the new endpoint
-        const response = await repositoriesAPI.listRepositoryArchives(repositories[0].id)
-        return { hasArchives: response.data?.archives && response.data.archives.length > 0 }
-      } catch (error) {
-        return { hasArchives: false }
-      }
-    },
-    enabled: !authLoading && isAuthenticated && !!repositories && repositories.length > 0,
-    retry: false,
-    refetchInterval: 60000, // Check less frequently
-  })
+  // Check for archives - use archive_count from repositories data instead of making API calls
+  // This avoids lock errors when a repository is under maintenance
+  const archiveCheck = useMemo(() => {
+    if (!repositories || repositories.length === 0) {
+      return { hasArchives: false }
+    }
+    // Check if any repository has archives
+    const hasArchives = repositories.some((repo: any) => repo.archive_count > 0)
+    return { hasArchives }
+  }, [repositories])
 
   // Update app state based on queries
   useEffect(() => {
-    const isLoading = loadingSSH || loadingRepos || loadingArchives
+    const isLoading = loadingSSH || loadingRepos
 
     setAppState({
       hasSSHKey: !!(sshKeys && sshKeys.length > 0),
@@ -110,10 +101,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       refetch: () => {
         refetchSSH()
         refetchRepos()
-        refetchArchives()
       },
     })
-  }, [sshKeys, repositories, archiveCheck, loadingSSH, loadingRepos, loadingArchives])
+  }, [sshKeys, repositories, archiveCheck, loadingSSH, loadingRepos])
 
   // Calculate tab enablement based on app state
   // Simplified: Only need SSH key + repositories for all features

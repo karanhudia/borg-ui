@@ -33,6 +33,8 @@ class Repository(Base):
     source_directories = Column(Text, nullable=True)  # JSON array of directories to backup
     exclude_patterns = Column(Text, nullable=True)  # JSON array of exclude patterns (e.g., ["*.log", "*.tmp"])
     last_backup = Column(DateTime, nullable=True)
+    last_check = Column(DateTime, nullable=True)  # Last successful check completion
+    last_compact = Column(DateTime, nullable=True)  # Last successful compact completion
     total_size = Column(String, nullable=True)
     archive_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=utc_now)
@@ -186,4 +188,33 @@ class ScheduledJob(Base):
     last_compact = Column(DateTime, nullable=True)  # Last compact execution time
 
     created_at = Column(DateTime, default=utc_now)
-    updated_at = Column(DateTime, nullable=True) 
+    updated_at = Column(DateTime, nullable=True)
+
+class CheckJob(Base):
+    __tablename__ = "check_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=False)
+    status = Column(String, default="pending")  # pending, running, completed, failed, cancelled
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    progress = Column(Integer, default=0)  # 0-100 percentage
+    progress_message = Column(String, nullable=True)  # Current progress message (e.g., "Checking segments 25%")
+    error_message = Column(Text, nullable=True)
+    logs = Column(Text, nullable=True)  # Full logs (stored after completion)
+    max_duration = Column(Integer, nullable=True)  # Maximum duration in seconds (for partial checks)
+    created_at = Column(DateTime, default=utc_now)
+
+class CompactJob(Base):
+    __tablename__ = "compact_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=False)
+    status = Column(String, default="pending")  # pending, running, completed, failed, cancelled
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    progress = Column(Integer, default=0)  # 0-100 percentage
+    progress_message = Column(String, nullable=True)  # Current progress message (e.g., "Compacting segments 50%")
+    error_message = Column(Text, nullable=True)
+    logs = Column(Text, nullable=True)  # Full logs (stored after completion)
+    created_at = Column(DateTime, default=utc_now) 

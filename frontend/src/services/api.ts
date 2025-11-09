@@ -176,13 +176,20 @@ export const repositoriesAPI = {
   getRepository: (id: number) => api.get(`/repositories/${id}`),
   updateRepository: (id: number, data: any) => api.put(`/repositories/${id}`, data),
   deleteRepository: (id: number) => api.delete(`/repositories/${id}`),
-  checkRepository: (id: number) => api.post(`/repositories/${id}/check`),
+  checkRepository: (id: number, maxDuration: number = 3600) =>
+    api.post(`/repositories/${id}/check`, { max_duration: maxDuration }),
   compactRepository: (id: number) => api.post(`/repositories/${id}/compact`),
   pruneRepository: (id: number, data: any) => api.post(`/repositories/${id}/prune`, data),
   breakLock: (id: number) => api.post(`/repositories/${id}/break-lock`),
   getRepositoryStats: (id: number) => api.get(`/repositories/${id}/stats`),
   listRepositoryArchives: (id: number) => api.get(`/repositories/${id}/archives`),
   getRepositoryInfo: (id: number) => api.get(`/repositories/${id}/info`),
+  // Check/Compact job management
+  getCheckJobStatus: (jobId: number) => api.get(`/repositories/check-jobs/${jobId}`),
+  getRepositoryCheckJobs: (id: number, limit?: number) => api.get(`/repositories/${id}/check-jobs`, { params: { limit } }),
+  getCompactJobStatus: (jobId: number) => api.get(`/repositories/compact-jobs/${jobId}`),
+  getRepositoryCompactJobs: (id: number, limit?: number) => api.get(`/repositories/${id}/compact-jobs`, { params: { limit } }),
+  getRunningJobs: (id: number) => api.get(`/repositories/${id}/running-jobs`),
   getArchiveInfo: (repoId: number, archiveName: string, includeFiles: boolean = true, fileLimit: number = 1000) =>
     api.get(`/repositories/${repoId}/archives/${archiveName}/info`, {
       params: { include_files: includeFiles, file_limit: fileLimit }

@@ -39,6 +39,7 @@ interface Repository {
   id: number
   name: string
   path: string
+  has_running_maintenance?: boolean
 }
 
 interface Archive {
@@ -232,11 +233,14 @@ const Archives: React.FC = () => {
                 {loadingRepositories ? 'Loading repositories...' : 'Select a repository...'}
               </MenuItem>
               {repositories.map((repo: Repository) => (
-                <MenuItem key={repo.id} value={repo.id}>
+                <MenuItem key={repo.id} value={repo.id} disabled={repo.has_running_maintenance}>
                   <Stack direction="row" spacing={1} alignItems="center">
                     <Database size={16} />
                     <Box>
-                      <Typography variant="body2" fontWeight={500}>{repo.name}</Typography>
+                      <Typography variant="body2" fontWeight={500}>
+                        {repo.name}
+                        {repo.has_running_maintenance && <Typography component="span" variant="caption" color="warning.main" sx={{ ml: 1 }}>(Maintenance Running)</Typography>}
+                      </Typography>
                       <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
                         {repo.path}
                       </Typography>

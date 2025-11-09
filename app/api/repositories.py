@@ -9,10 +9,12 @@ import asyncio
 import json
 
 from app.database.database import get_db
-from app.database.models import User, Repository
+from app.database.models import User, Repository, CheckJob, CompactJob
 from app.core.security import get_current_user
 from app.core.borg import BorgInterface
 from app.config import settings
+from app.services.check_service import check_service
+from app.services.compact_service import compact_service
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["repositories"])
@@ -131,29 +133,46 @@ async def get_repositories(
     """Get all repositories"""
     try:
         repositories = db.query(Repository).all()
+
+        # Check for running maintenance jobs for each repository
+        repo_list = []
+        for repo in repositories:
+            # Check if this repository has running check or compact jobs
+            has_check = db.query(CheckJob).filter(
+                CheckJob.repository_id == repo.id,
+                CheckJob.status == "running"
+            ).first() is not None
+
+            has_compact = db.query(CompactJob).filter(
+                CompactJob.repository_id == repo.id,
+                CompactJob.status == "running"
+            ).first() is not None
+
+            repo_list.append({
+                "id": repo.id,
+                "name": repo.name,
+                "path": repo.path,
+                "encryption": repo.encryption,
+                "compression": repo.compression,
+                "source_directories": json.loads(repo.source_directories) if repo.source_directories else [],
+                "exclude_patterns": json.loads(repo.exclude_patterns) if repo.exclude_patterns else [],
+                "last_backup": format_datetime(repo.last_backup),
+                "last_check": format_datetime(repo.last_check),
+                "last_compact": format_datetime(repo.last_compact),
+                "total_size": repo.total_size,
+                "archive_count": repo.archive_count,
+                "created_at": format_datetime(repo.created_at),
+                "updated_at": format_datetime(repo.updated_at),
+                "pre_backup_script": repo.pre_backup_script,
+                "post_backup_script": repo.post_backup_script,
+                "hook_timeout": repo.hook_timeout,
+                "continue_on_hook_failure": repo.continue_on_hook_failure,
+                "has_running_maintenance": has_check or has_compact
+            })
+
         return {
             "success": True,
-            "repositories": [
-                {
-                    "id": repo.id,
-                    "name": repo.name,
-                    "path": repo.path,
-                    "encryption": repo.encryption,
-                    "compression": repo.compression,
-                    "source_directories": json.loads(repo.source_directories) if repo.source_directories else [],
-                    "exclude_patterns": json.loads(repo.exclude_patterns) if repo.exclude_patterns else [],
-                    "last_backup": format_datetime(repo.last_backup),
-                    "total_size": repo.total_size,
-                    "archive_count": repo.archive_count,
-                    "created_at": format_datetime(repo.created_at),
-                    "updated_at": format_datetime(repo.updated_at),
-                    "pre_backup_script": repo.pre_backup_script,
-                    "post_backup_script": repo.post_backup_script,
-                    "hook_timeout": repo.hook_timeout,
-                    "continue_on_hook_failure": repo.continue_on_hook_failure
-                }
-                for repo in repositories
-            ]
+            "repositories": repo_list
         }
     except Exception as e:
         logger.error("Failed to get repositories", error=str(e))
@@ -753,31 +772,62 @@ async def delete_repository(
 @router.post("/{repo_id}/check")
 async def check_repository(
     repo_id: int,
+    request: dict = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Check repository integrity"""
+    """Start a background check job for repository integrity"""
     try:
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
             raise HTTPException(status_code=404, detail="Repository not found")
-        
-        # Run repository check
-        check_result = await borg.check_repository(
-            repository.path,
-            remote_path=repository.remote_path,
-            passphrase=repository.passphrase
+
+        # Check if there's already a running check job for this repository
+        running_job = db.query(CheckJob).filter(
+            CheckJob.repository_id == repo_id,
+            CheckJob.status == "running"
+        ).first()
+
+        if running_job:
+            raise HTTPException(
+                status_code=409,
+                detail=f"A check operation is already running for this repository (Job ID: {running_job.id})"
+            )
+
+        # Extract max_duration from request body (default to 3600)
+        max_duration = request.get("max_duration", 3600) if request else 3600
+
+        # Create check job record
+        check_job = CheckJob(
+            repository_id=repo_id,
+            status="pending",
+            max_duration=max_duration
         )
-        
+        db.add(check_job)
+        db.commit()
+        db.refresh(check_job)
+
+        # Execute check asynchronously (non-blocking)
+        asyncio.create_task(
+            check_service.execute_check(
+                check_job.id,
+                repo_id,
+                db
+            )
+        )
+
+        logger.info("Check job created", job_id=check_job.id, repository_id=repo_id, user=current_user.username)
+
         return {
-            "success": True,
-            "check_result": check_result
+            "job_id": check_job.id,
+            "status": "pending",
+            "message": "Check job started"
         }
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to check repository", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to check repository: {str(e)}")
+        logger.error("Failed to start check job", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to start check: {str(e)}")
 
 @router.post("/{repo_id}/compact")
 async def compact_repository(
@@ -785,7 +835,7 @@ async def compact_repository(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Compact repository to free space"""
+    """Start a background compact job to free space"""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
 
@@ -794,22 +844,48 @@ async def compact_repository(
         if not repository:
             raise HTTPException(status_code=404, detail="Repository not found")
 
-        # Run repository compaction
-        compact_result = await borg.compact_repository(
-            repository.path,
-            remote_path=repository.remote_path,
-            passphrase=repository.passphrase
+        # Check if there's already a running compact job for this repository
+        running_job = db.query(CompactJob).filter(
+            CompactJob.repository_id == repo_id,
+            CompactJob.status == "running"
+        ).first()
+
+        if running_job:
+            raise HTTPException(
+                status_code=409,
+                detail=f"A compact operation is already running for this repository (Job ID: {running_job.id})"
+            )
+
+        # Create compact job record
+        compact_job = CompactJob(
+            repository_id=repo_id,
+            status="pending"
+        )
+        db.add(compact_job)
+        db.commit()
+        db.refresh(compact_job)
+
+        # Execute compact asynchronously (non-blocking)
+        asyncio.create_task(
+            compact_service.execute_compact(
+                compact_job.id,
+                repo_id,
+                db
+            )
         )
 
+        logger.info("Compact job created", job_id=compact_job.id, repository_id=repo_id, user=current_user.username)
+
         return {
-            "success": True,
-            "compact_result": compact_result
+            "job_id": compact_job.id,
+            "status": "pending",
+            "message": "Compact job started"
         }
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to compact repository", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to compact repository: {str(e)}")
+        logger.error("Failed to start compact job", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to start compact: {str(e)}")
 
 @router.post("/{repo_id}/prune")
 async def prune_repository(
@@ -1889,3 +1965,170 @@ async def break_repository_lock(
             status_code=500,
             detail=f"Failed to break lock: {str(e)}"
         )
+
+# Check job endpoints
+@router.get("/check-jobs/{job_id}")
+async def get_check_job_status(
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get status of a check job"""
+    try:
+        job = db.query(CheckJob).filter(CheckJob.id == job_id).first()
+        if not job:
+            raise HTTPException(status_code=404, detail="Check job not found")
+
+        return {
+            "id": job.id,
+            "repository_id": job.repository_id,
+            "status": job.status,
+            "started_at": job.started_at.isoformat() if job.started_at else None,
+            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+            "progress": job.progress,
+            "progress_message": job.progress_message,
+            "error_message": job.error_message,
+            "logs": job.logs
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get check job status", error=str(e), job_id=job_id)
+        raise HTTPException(status_code=500, detail=f"Failed to get job status: {str(e)}")
+
+@router.get("/{repo_id}/check-jobs")
+async def get_repository_check_jobs(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    limit: int = 10
+):
+    """Get recent check jobs for a repository"""
+    try:
+        jobs = db.query(CheckJob).filter(
+            CheckJob.repository_id == repo_id
+        ).order_by(CheckJob.id.desc()).limit(limit).all()
+
+        return {
+            "jobs": [
+                {
+                    "id": job.id,
+                    "repository_id": job.repository_id,
+                    "status": job.status,
+                    "started_at": job.started_at.isoformat() if job.started_at else None,
+                    "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                    "progress": job.progress,
+                    "progress_message": job.progress_message,
+                    "error_message": job.error_message,
+                }
+                for job in jobs
+            ]
+        }
+    except Exception as e:
+        logger.error("Failed to get check jobs", error=str(e), repository_id=repo_id)
+        raise HTTPException(status_code=500, detail=f"Failed to get check jobs: {str(e)}")
+
+# Compact job endpoints
+@router.get("/compact-jobs/{job_id}")
+async def get_compact_job_status(
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get status of a compact job"""
+    try:
+        job = db.query(CompactJob).filter(CompactJob.id == job_id).first()
+        if not job:
+            raise HTTPException(status_code=404, detail="Compact job not found")
+
+        return {
+            "id": job.id,
+            "repository_id": job.repository_id,
+            "status": job.status,
+            "started_at": job.started_at.isoformat() if job.started_at else None,
+            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+            "progress": job.progress,
+            "progress_message": job.progress_message,
+            "error_message": job.error_message,
+            "logs": job.logs
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get compact job status", error=str(e), job_id=job_id)
+        raise HTTPException(status_code=500, detail=f"Failed to get job status: {str(e)}")
+
+@router.get("/{repo_id}/compact-jobs")
+async def get_repository_compact_jobs(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    limit: int = 10
+):
+    """Get recent compact jobs for a repository"""
+    try:
+        jobs = db.query(CompactJob).filter(
+            CompactJob.repository_id == repo_id
+        ).order_by(CompactJob.id.desc()).limit(limit).all()
+
+        return {
+            "jobs": [
+                {
+                    "id": job.id,
+                    "repository_id": job.repository_id,
+                    "status": job.status,
+                    "started_at": job.started_at.isoformat() if job.started_at else None,
+                    "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                    "progress": job.progress,
+                    "progress_message": job.progress_message,
+                    "error_message": job.error_message,
+                }
+                for job in jobs
+            ]
+        }
+    except Exception as e:
+        logger.error("Failed to get compact jobs", error=str(e), repository_id=repo_id)
+        raise HTTPException(status_code=500, detail=f"Failed to get compact jobs: {str(e)}")
+
+# Helper endpoint to check if repository has running maintenance jobs
+@router.get("/{repo_id}/running-jobs")
+async def get_running_jobs(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Check if repository has any running check or compact jobs"""
+    try:
+        # Force refresh from database to get latest values
+        db.expire_all()
+
+        check_job = db.query(CheckJob).filter(
+            CheckJob.repository_id == repo_id,
+            CheckJob.status == "running"
+        ).first()
+
+        compact_job = db.query(CompactJob).filter(
+            CompactJob.repository_id == repo_id,
+            CompactJob.status == "running"
+        ).first()
+
+        result = {
+            "has_running_jobs": bool(check_job or compact_job),
+            "check_job": {
+                "id": check_job.id,
+                "progress": check_job.progress,
+                "progress_message": check_job.progress_message
+            } if check_job else None,
+            "compact_job": {
+                "id": compact_job.id,
+                "progress": compact_job.progress,
+                "progress_message": compact_job.progress_message
+            } if compact_job else None
+        }
+
+        logger.info("Running jobs API response", repository_id=repo_id, result=result)
+
+        return result
+    except Exception as e:
+        logger.error("Failed to get running jobs", error=str(e), repository_id=repo_id)
+        raise HTTPException(status_code=500, detail=f"Failed to get running jobs: {str(e)}")
