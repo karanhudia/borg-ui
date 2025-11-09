@@ -311,11 +311,14 @@ const Backup: React.FC = () => {
                   {loadingRepositories ? 'Loading repositories...' : 'Select a repository...'}
                 </MenuItem>
                 {repositoriesData?.data?.repositories?.map((repo: any) => (
-                  <MenuItem key={repo.id} value={repo.path}>
+                  <MenuItem key={repo.id} value={repo.path} disabled={repo.has_running_maintenance}>
                     <Stack direction="row" spacing={1} alignItems="center">
                       <Database size={16} />
                       <Box>
-                        <Typography variant="body2" fontWeight={500}>{repo.name}</Typography>
+                        <Typography variant="body2" fontWeight={500}>
+                          {repo.name}
+                          {repo.has_running_maintenance && <Typography component="span" variant="caption" color="warning.main" sx={{ ml: 1 }}>(Maintenance Running)</Typography>}
+                        </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
                           {repo.path}
                         </Typography>

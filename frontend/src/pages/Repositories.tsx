@@ -27,14 +27,8 @@ import {
 } from '@mui/material'
 import {
   Add,
-  Edit,
   Delete,
-  CheckCircle as CheckCircleIcon,
-  Refresh,
   Storage,
-  Shield,
-  Description,
-  Warning,
   Computer,
   Wifi,
   Info,
@@ -53,6 +47,9 @@ import FileExplorerDialog from '../components/FileExplorerDialog'
 import CodeEditor from '../components/CodeEditor'
 import { FolderOpen } from '@mui/icons-material'
 import LockErrorDialog from '../components/LockErrorDialog'
+import CheckWarningDialog from '../components/CheckWarningDialog'
+import CompactWarningDialog from '../components/CompactWarningDialog'
+import RepositoryCard from '../components/RepositoryCard'
 
 interface Repository {
   id: number
@@ -63,10 +60,13 @@ interface Repository {
   source_directories: string[]
   exclude_patterns: string[]
   last_backup: string | null
+  last_check: string | null
+  last_compact: string | null
   total_size: string | null
   archive_count: number
   created_at: string
   updated_at: string | null
+  has_running_maintenance?: boolean
 }
 
 interface SSHKey {
@@ -94,6 +94,7 @@ export default function Repositories() {
   const [repositoryModalMode, setRepositoryModalMode] = useState<'create' | 'import'>('create')
   const [editingRepository, setEditingRepository] = useState<Repository | null>(null)
   const [viewingInfoRepository, setViewingInfoRepository] = useState<Repository | null>(null)
+  const [checkingRepository, setCheckingRepository] = useState<Repository | null>(null)
   const [compactingRepository, setCompactingRepository] = useState<Repository | null>(null)
   const [pruningRepository, setPruningRepository] = useState<Repository | null>(null)
   const [pruneForm, setPruneForm] = useState({
@@ -104,6 +105,9 @@ export default function Repositories() {
   })
   const [pruneResults, setPruneResults] = useState<any>(null)
   const [lockError, setLockError] = useState<{ repositoryId: number, repositoryName: string } | null>(null)
+
+  // Track repositories with running jobs for polling
+  const [repositoriesWithJobs, setRepositoriesWithJobs] = useState<Set<number>>(new Set())
 
   // Queries
   const { data: repositoriesData, isLoading } = useQuery({
@@ -227,25 +231,47 @@ export default function Repositories() {
   })
 
   const checkRepositoryMutation = useMutation({
-    mutationFn: repositoriesAPI.checkRepository,
-    onSuccess: () => {
-      toast.success('Repository check completed')
+    mutationFn: ({ repositoryId, maxDuration }: { repositoryId: number; maxDuration: number }) =>
+      repositoriesAPI.checkRepository(repositoryId, maxDuration),
+    onSuccess: (_response: any, variables: { repositoryId: number; maxDuration: number }) => {
+      toast.success('Check operation started')
+      setCheckingRepository(null) // Close dialog
+      // Add repository to polling set
+      setRepositoriesWithJobs((prev) => new Set(prev).add(variables.repositoryId))
+      // Immediately refetch running jobs to show progress
+      queryClient.invalidateQueries({ queryKey: ['running-jobs', variables.repositoryId] })
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to check repository')
+      const detail = error.response?.data?.detail || 'Failed to start check'
+      // Handle concurrent operation error (409)
+      if (error.response?.status === 409) {
+        toast.error(detail, { duration: 5000 })
+      } else {
+        toast.error(detail)
+      }
+      setCheckingRepository(null)
     },
   })
 
   const compactRepositoryMutation = useMutation({
     mutationFn: repositoriesAPI.compactRepository,
-    onSuccess: () => {
-      toast.success('Repository compaction completed successfully!')
-      setCompactingRepository(null)
-      queryClient.invalidateQueries({ queryKey: ['repositories'] })
-      queryClient.invalidateQueries({ queryKey: ['repository-info', compactingRepository?.id] })
+    onSuccess: (_response: any, repositoryId: number) => {
+      toast.success('Compact operation started')
+      setCompactingRepository(null) // Close dialog
+      // Add repository to polling set
+      setRepositoriesWithJobs((prev) => new Set(prev).add(repositoryId))
+      // Immediately refetch running jobs to show progress
+      queryClient.invalidateQueries({ queryKey: ['running-jobs', repositoryId] })
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to compact repository')
+      const detail = error.response?.data?.detail || 'Failed to start compact'
+      // Handle concurrent operation error (409)
+      if (error.response?.status === 409) {
+        toast.error(detail, { duration: 5000 })
+      } else {
+        toast.error(detail)
+      }
+      setCompactingRepository(null)
     },
   })
 
@@ -343,7 +369,13 @@ export default function Repositories() {
   }
 
   const handleCheckRepository = (repository: Repository) => {
-    checkRepositoryMutation.mutate(repository.id)
+    setCheckingRepository(repository)
+  }
+
+  const handleConfirmCheck = (maxDuration: number) => {
+    if (checkingRepository) {
+      checkRepositoryMutation.mutate({ repositoryId: checkingRepository.id, maxDuration })
+    }
   }
 
   const handleCompactRepository = (repository: Repository) => {
@@ -354,6 +386,15 @@ export default function Repositories() {
     if (compactingRepository) {
       compactRepositoryMutation.mutate(compactingRepository.id)
     }
+  }
+
+  const handleJobCompleted = (repositoryId: number) => {
+    // Remove from polling set when jobs complete
+    setRepositoriesWithJobs((prev) => {
+      const newSet = new Set(prev)
+      newSet.delete(repositoryId)
+      return newSet
+    })
   }
 
   const handlePruneRepository = (repository: Repository) => {
@@ -490,19 +531,6 @@ export default function Repositories() {
   }
 
   // Utility functions
-  const getEncryptionIcon = (encryption: string) => {
-    switch (encryption) {
-      case 'repokey':
-        return <Shield sx={{ fontSize: 20, color: 'success.main' }} />
-      case 'keyfile':
-        return <Description sx={{ fontSize: 20, color: 'primary.main' }} />
-      case 'none':
-        return <Warning sx={{ fontSize: 20, color: 'warning.main' }} />
-      default:
-        return <Shield sx={{ fontSize: 20, color: 'text.disabled' }} />
-    }
-  }
-
   const getCompressionLabel = (compression: string) => {
     switch (compression) {
       case 'lz4':
@@ -654,158 +682,40 @@ export default function Repositories() {
       ) : (
         <Stack spacing={2}>
           {repositories.map((repository: Repository) => (
-            <Card
+            <RepositoryCard
               key={repository.id}
-              variant="outlined"
-              sx={{
-                border: 1,
-                borderColor: 'divider',
-                transition: 'all 0.2s',
-                '&:hover': {
-                  borderColor: 'primary.main',
-                  boxShadow: 1,
-                },
-              }}
-            >
-              <CardContent sx={{ py: 2.5 }}>
-                {/* Repository Header */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 2 }}>
-                  <Box sx={{ flex: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                      <Storage sx={{ fontSize: 28, color: 'primary.main' }} />
-                      <Typography variant="h5" fontWeight={600}>
-                        {repository.name}
-                      </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 1 }}>
-                        {getEncryptionIcon(repository.encryption)}
-                        <Typography variant="caption" color="text.secondary">
-                          {repository.encryption}
-                        </Typography>
-                      </Box>
-                    </Box>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ fontFamily: 'monospace', fontSize: '0.85rem', ml: 4.5 }}
-                    >
-                      {repository.path}
-                    </Typography>
-                  </Box>
-                </Box>
-
-                {/* Repository Stats - Horizontal Layout */}
-                <Box sx={{ display: 'flex', gap: 4, mb: 2, ml: 4.5, flexWrap: 'wrap' }}>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" display="block">
-                      Archives
-                    </Typography>
-                    <Typography variant="h6" fontWeight={600}>
-                      {repository.archive_count}
-                    </Typography>
-                  </Box>
-
-                  {repository.last_backup && (
-                    <Box>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        Last Backup
-                      </Typography>
-                      <Typography variant="body2" fontWeight={500}>
-                        {formatDateShort(repository.last_backup)}
-                      </Typography>
-                    </Box>
-                  )}
-
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" display="block">
-                      Compression
-                    </Typography>
-                    <Typography variant="body2" fontWeight={500}>
-                      {getCompressionLabel(repository.compression)}
-                    </Typography>
-                  </Box>
-
-                  {repository.source_directories && repository.source_directories.length > 0 && (
-                    <Box>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        Source Paths
-                      </Typography>
-                      <Typography variant="body2" fontWeight={500}>
-                        {repository.source_directories.length} {repository.source_directories.length === 1 ? 'path' : 'paths'}
-                      </Typography>
-                    </Box>
-                  )}
-                </Box>
-
-                {/* Action Buttons */}
-                {user?.is_admin && (
-                  <Box sx={{ display: 'flex', gap: 1, ml: 4.5, flexWrap: 'wrap' }}>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      startIcon={<Info />}
-                      onClick={() => setViewingInfoRepository(repository)}
-                      sx={{ textTransform: 'none' }}
-                    >
-                      Info
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      startIcon={<CheckCircleIcon />}
-                      onClick={() => handleCheckRepository(repository)}
-                      disabled={checkRepositoryMutation.isLoading}
-                      sx={{ textTransform: 'none' }}
-                    >
-                      Check
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      startIcon={<Refresh />}
-                      onClick={() => handleCompactRepository(repository)}
-                      disabled={compactRepositoryMutation.isLoading}
-                      color="warning"
-                      sx={{ textTransform: 'none' }}
-                    >
-                      Compact
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      startIcon={<Delete />}
-                      onClick={() => handlePruneRepository(repository)}
-                      disabled={pruneRepositoryMutation.isLoading}
-                      color="secondary"
-                      sx={{ textTransform: 'none' }}
-                    >
-                      Prune
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      startIcon={<Edit />}
-                      onClick={() => openEditModal(repository)}
-                      sx={{ textTransform: 'none' }}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      startIcon={<Delete />}
-                      onClick={() => handleDeleteRepository(repository)}
-                      color="error"
-                      sx={{ textTransform: 'none' }}
-                    >
-                      Delete
-                    </Button>
-                  </Box>
-                )}
-              </CardContent>
-            </Card>
+              repository={repository}
+              isInJobsSet={repositoriesWithJobs.has(repository.id)}
+              onViewInfo={() => setViewingInfoRepository(repository)}
+              onCheck={() => handleCheckRepository(repository)}
+              onCompact={() => handleCompactRepository(repository)}
+              onPrune={() => handlePruneRepository(repository)}
+              onEdit={() => openEditModal(repository)}
+              onDelete={() => handleDeleteRepository(repository)}
+              getCompressionLabel={getCompressionLabel}
+              isAdmin={user?.is_admin || false}
+              onJobCompleted={handleJobCompleted}
+            />
           ))}
         </Stack>
       )}
+
+      {/* Warning Dialogs */}
+      <CheckWarningDialog
+        open={!!checkingRepository}
+        repositoryName={checkingRepository?.name || ''}
+        onConfirm={handleConfirmCheck}
+        onCancel={() => setCheckingRepository(null)}
+        isLoading={checkRepositoryMutation.isLoading}
+      />
+
+      <CompactWarningDialog
+        open={!!compactingRepository}
+        repositoryName={compactingRepository?.name || ''}
+        onConfirm={handleConfirmCompact}
+        onCancel={() => setCompactingRepository(null)}
+        isLoading={compactRepositoryMutation.isLoading}
+      />
 
       {/* Create Repository Dialog */}
       <Dialog open={showRepositoryModal} onClose={() => setShowRepositoryModal(false)} maxWidth="sm" fullWidth>
@@ -1682,63 +1592,6 @@ export default function Repositories() {
         <DialogActions>
           <Button onClick={() => setViewingInfoRepository(null)} variant="contained">
             Close
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Compact Repository Dialog */}
-      <Dialog
-        open={!!compactingRepository}
-        onClose={() => setCompactingRepository(null)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Refresh color="warning" />
-            <Typography variant="h6" fontWeight={600}>
-              Compact Repository
-            </Typography>
-          </Box>
-        </DialogTitle>
-        <DialogContent>
-          <Alert severity="info" sx={{ mb: 2 }}>
-            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-              What does compacting do?
-            </Typography>
-            <Typography variant="body2">
-              Compacting reclaims space from deleted archives. When you delete archives, the space isn't immediately freed.
-              Running compact will reorganize repository segments and free up disk space.
-            </Typography>
-          </Alert>
-
-          <Box sx={{ bgcolor: 'grey.50', p: 2, borderRadius: 1 }}>
-            <Typography variant="body2" gutterBottom>
-              <strong>Repository:</strong> {compactingRepository?.name}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
-              {compactingRepository?.path}
-            </Typography>
-          </Box>
-
-          <Alert severity="warning" sx={{ mt: 2 }}>
-            <Typography variant="body2">
-              This operation can take several minutes depending on repository size. The repository will remain accessible during compaction.
-            </Typography>
-          </Alert>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCompactingRepository(null)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleConfirmCompact}
-            variant="contained"
-            color="warning"
-            disabled={compactRepositoryMutation.isLoading}
-            startIcon={compactRepositoryMutation.isLoading ? <Refresh className="animate-spin" /> : <Refresh />}
-          >
-            {compactRepositoryMutation.isLoading ? 'Compacting...' : 'Start Compacting'}
           </Button>
         </DialogActions>
       </Dialog>

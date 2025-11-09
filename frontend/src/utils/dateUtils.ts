@@ -284,3 +284,27 @@ export const convertCronToLocal = (cronExpression: string): string => {
     return cronExpression
   }
 }
+
+/**
+ * Format a date string to full datetime with timezone
+ * Example: "2025-11-09T14:56:53Z" -> "November 9, 2025 at 2:56:53 PM UTC"
+ */
+export const formatDateTimeFull = (dateString: string | null | undefined): string => {
+  if (!dateString) return 'Never'
+
+  try {
+    // If the date string is in ISO format without timezone, treat it as UTC by appending 'Z'
+    let normalizedDate = dateString
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(dateString)) {
+      normalizedDate = dateString + 'Z'
+    }
+
+    const date = new Date(normalizedDate)
+
+    // Format: "November 9, 2025 at 2:56:53 PM UTC"
+    return format(date, "MMMM d, yyyy 'at' h:mm:ss a 'UTC'")
+  } catch (error) {
+    console.error('Error formatting full datetime:', error)
+    return dateString
+  }
+}

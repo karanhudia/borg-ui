@@ -57,34 +57,36 @@ export default function LockErrorDialog({
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <AlertCircle size={24} color="#f57c00" />
-          <Typography variant="h6">Repository Locked</Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+            <Typography variant="h6">Repository Locked</Typography>
+            <Typography variant="body2" color="text.secondary">
+              <strong>{repositoryName}</strong> is locked by another process or has a stale lock.
+            </Typography>
+          </Box>
         </Box>
       </DialogTitle>
 
       <DialogContent>
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          <Typography variant="body2" sx={{ mb: 1 }}>
-            <strong>{repositoryName}</strong> is locked by another process or has a stale lock.
-          </Typography>
+        <Alert severity="warning" sx={{ mb: 1.5 }}>
           <Typography variant="body2">
             If no backup is currently running, this is likely a stale lock from a crashed backup.
           </Typography>
         </Alert>
 
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
           <strong>What causes this?</strong>
         </Typography>
-        <Typography variant="body2" color="text.secondary" component="ul" sx={{ pl: 2, mb: 2, mt: 0 }}>
+        <Typography variant="body2" color="text.secondary" component="ul" sx={{ pl: 2, mb: 1.5, mt: 0 }}>
           <li>Previous backup was interrupted or crashed</li>
           <li>Network connection dropped during SSH backup</li>
           <li>Container was restarted during an operation</li>
           <li>Repository cache locks from stale operations</li>
         </Typography>
 
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
           <strong>Before breaking the lock:</strong>
         </Typography>
-        <Typography variant="body2" color="text.secondary" component="ul" sx={{ pl: 2, mt: 0 }}>
+        <Typography variant="body2" color="text.secondary" component="ul" sx={{ pl: 2, mt: 0, mb: 0 }}>
           <li>Make sure no backup process is currently running</li>
           <li>Check that no other client is accessing this repository</li>
           <li>This will break both repository and cache locks</li>
