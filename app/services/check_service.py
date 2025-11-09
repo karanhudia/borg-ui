@@ -92,8 +92,9 @@ class CheckService:
             cmd = ["borg", "check", "--progress", "--log-json"]
 
             # Add max-duration if specified and not 0 (unlimited)
+            # Note: --repository-only is required when using --max-duration
             if job.max_duration and job.max_duration > 0:
-                cmd.extend(["--max-duration", str(job.max_duration)])
+                cmd.extend(["--repository-only", "--max-duration", str(job.max_duration)])
 
             if repository.remote_path:
                 cmd.extend(["--remote-path", repository.remote_path])
