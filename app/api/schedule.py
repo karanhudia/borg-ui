@@ -27,7 +27,6 @@ class ScheduledJobCreate(BaseModel):
     name: str
     cron_expression: str
     repository: Optional[str] = None
-    config_file: Optional[str] = None
     enabled: bool = True
     description: Optional[str] = None
     # Prune and compact settings
@@ -42,7 +41,6 @@ class ScheduledJobUpdate(BaseModel):
     name: Optional[str] = None
     cron_expression: Optional[str] = None
     repository: Optional[str] = None
-    config_file: Optional[str] = None
     enabled: Optional[bool] = None
     description: Optional[str] = None
     # Prune and compact settings
@@ -127,7 +125,6 @@ async def create_scheduled_job(
             name=job_data.name,
             cron_expression=job_data.cron_expression,
             repository=job_data.repository,
-            config_file=job_data.config_file,
             enabled=job_data.enabled,
             next_run=next_run,
             description=job_data.description,
@@ -300,7 +297,6 @@ async def get_scheduled_job(
                 "name": job.name,
                 "cron_expression": job.cron_expression,
                 "repository": job.repository,
-                "config_file": job.config_file,
                 "enabled": job.enabled,
                 "last_run": job.last_run.replace(tzinfo=timezone.utc).isoformat() if job.last_run else None,
                 "next_run": job.next_run.replace(tzinfo=timezone.utc).isoformat() if job.next_run else None,
@@ -354,10 +350,7 @@ async def update_scheduled_job(
         
         if job_data.repository is not None:
             job.repository = job_data.repository
-        
-        if job_data.config_file is not None:
-            job.config_file = job_data.config_file
-        
+
         if job_data.enabled is not None:
             job.enabled = job_data.enabled
         
@@ -477,8 +470,7 @@ async def run_scheduled_job_now(
         
         # Execute backup
         result = await borg.run_backup(
-            repository=job.repository,
-            config_file=job.config_file
+            repository=job.repository
         )
         
         # Update last run time
@@ -537,7 +529,7 @@ async def validate_cron_expression(
 
 # Background task to check and run scheduled jobs
 async def execute_scheduled_backup_with_maintenance(backup_job_id: int, repository_path: str,
-                                                     config_file: str, scheduled_job_id: int):
+                                                     scheduled_job_id: int):
     """Execute backup and optionally run prune/compact after successful backup"""
     from app.database.models import Repository, BackupJob
     from app.services.backup_service import backup_service
@@ -545,7 +537,7 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
     db = next(get_db())
     try:
         # Execute the backup
-        await backup_service.execute_backup(backup_job_id, repository_path, config_file, db)
+        await backup_service.execute_backup(backup_job_id, repository_path, db)
 
         # Check if backup was successful
         backup_job = db.query(BackupJob).filter(BackupJob.id == backup_job_id).first()
@@ -678,7 +670,6 @@ async def check_scheduled_jobs():
                         execute_scheduled_backup_with_maintenance(
                             backup_job.id,
                             job.repository,
-                            job.config_file,
                             job.id
                         )
                     )

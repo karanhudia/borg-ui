@@ -447,7 +447,6 @@ Only one volume is needed:
 - SQLite database (`borg.db`)
 - Auto-generated SECRET_KEY (`.secret_key`)
 - SSH keys
-- Configuration files
 - Application logs
 
 ### Viewing Volume Data
