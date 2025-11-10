@@ -2117,12 +2117,14 @@ async def get_running_jobs(
             "check_job": {
                 "id": check_job.id,
                 "progress": check_job.progress,
-                "progress_message": check_job.progress_message
+                "progress_message": check_job.progress_message,
+                "started_at": check_job.started_at.isoformat() + 'Z' if check_job.started_at else None
             } if check_job else None,
             "compact_job": {
                 "id": compact_job.id,
                 "progress": compact_job.progress,
-                "progress_message": compact_job.progress_message
+                "progress_message": compact_job.progress_message,
+                "started_at": compact_job.started_at.isoformat() + 'Z' if compact_job.started_at else None
             } if compact_job else None
         }
 

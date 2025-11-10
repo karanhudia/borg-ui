@@ -1,8 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, CardContent, Box, Typography, Button, Tooltip } from '@mui/material'
 import { Info, CheckCircle as CheckCircleIcon, Refresh, Delete } from '@mui/icons-material'
 import { useMaintenanceJobs } from '../hooks/useMaintenanceJobs'
-import { formatDateShort, formatDateTimeFull } from '../utils/dateUtils'
+import { formatDateShort, formatDateTimeFull, formatElapsedTime } from '../utils/dateUtils'
 import { useQueryClient } from 'react-query'
 
 interface Repository {
@@ -61,6 +61,31 @@ export default function RepositoryCard({
   // Determine if maintenance is running
   // Prioritize hasRunningJobs from polling (more up-to-date) over API flag
   const isMaintenanceRunning = hasRunningJobs
+
+  // State to track elapsed time display (updates every 3 seconds)
+  const [elapsedTime, setElapsedTime] = useState('')
+
+  // Update elapsed time periodically for running jobs
+  useEffect(() => {
+    if (!hasRunningJobs) {
+      setElapsedTime('')
+      return
+    }
+
+    // Get the earliest start time from running jobs
+    const startTime = checkJob?.started_at || compactJob?.started_at
+    if (!startTime) return
+
+    // Update immediately
+    setElapsedTime(formatElapsedTime(startTime))
+
+    // Update every 3 seconds to keep it fresh
+    const interval = setInterval(() => {
+      setElapsedTime(formatElapsedTime(startTime))
+    }, 3000)
+
+    return () => clearInterval(interval)
+  }, [hasRunningJobs, checkJob?.started_at, compactJob?.started_at])
 
   // Handle job completion - when polling detects completion, refresh repositories list
   useEffect(() => {
@@ -237,11 +262,20 @@ export default function RepositoryCard({
                 Delete
               </Button>
             </Box>
-            {/* Progress message */}
-            {(checkJob?.progress_message || compactJob?.progress_message) && (
-              <Typography variant="caption" color="primary" sx={{ mt: 1.5, display: 'block' }}>
-                {checkJob?.progress_message || compactJob?.progress_message}
-              </Typography>
+            {/* Progress message and elapsed time */}
+            {(checkJob?.progress_message || compactJob?.progress_message || elapsedTime) && (
+              <Box sx={{ mt: 1.5 }}>
+                {(checkJob?.progress_message || compactJob?.progress_message) && (
+                  <Typography variant="caption" color="primary" sx={{ display: 'block' }}>
+                    {checkJob?.progress_message || compactJob?.progress_message}
+                  </Typography>
+                )}
+                {elapsedTime && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                    {elapsedTime}
+                  </Typography>
+                )}
+              </Box>
             )}
           </Box>
         )}
