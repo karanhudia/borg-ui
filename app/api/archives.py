@@ -12,6 +12,7 @@ from app.database.database import get_db
 from app.database.models import User, Repository
 from app.core.security import get_current_user
 from app.core.borg import borg
+from app.api.repositories import update_repository_archive_count
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -219,27 +220,7 @@ async def delete_archive(
             )
 
         # Update archive count after successful deletion
-        try:
-            # List archives to get updated count
-            list_result = await borg.list_archives(
-                repo.path,
-                remote_path=repo.remote_path,
-                passphrase=repo.passphrase
-            )
-            if list_result.get("success"):
-                try:
-                    archives_data = json.loads(list_result.get("stdout", "{}"))
-                    if isinstance(archives_data, dict):
-                        archive_count = len(archives_data.get("archives", []))
-                        repo.archive_count = archive_count
-                        db.commit()
-                        logger.info("Updated archive count after deletion",
-                                  repository=repo.name,
-                                  count=archive_count)
-                except json.JSONDecodeError:
-                    logger.warning("Failed to parse archive list after deletion")
-        except Exception as e:
-            logger.warning("Failed to update archive count after deletion", error=str(e))
+        await update_repository_archive_count(repo, db)
 
         return {"message": "Archive deleted successfully"}
     except HTTPException:

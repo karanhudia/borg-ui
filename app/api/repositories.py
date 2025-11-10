@@ -48,6 +48,48 @@ def setup_borg_env(base_env=None, passphrase=None, ssh_opts=None):
 
     return env
 
+# Helper function to update repository archive count
+async def update_repository_archive_count(repository: Repository, db: Session) -> bool:
+    """
+    Update the archive count for a repository by querying Borg.
+    Returns True if successful, False otherwise.
+    """
+    try:
+        list_result = await borg.list_archives(
+            repository.path,
+            remote_path=repository.remote_path,
+            passphrase=repository.passphrase
+        )
+
+        if list_result.get("success"):
+            try:
+                archives_data = json.loads(list_result.get("stdout", "{}"))
+                if isinstance(archives_data, dict):
+                    archive_count = len(archives_data.get("archives", []))
+                    old_count = repository.archive_count
+                    repository.archive_count = archive_count
+                    db.commit()
+                    logger.info("Updated archive count",
+                              repository=repository.name,
+                              old_count=old_count,
+                              new_count=archive_count)
+                    return True
+            except json.JSONDecodeError as e:
+                logger.error("Failed to parse archive list JSON",
+                           repository=repository.name,
+                           error=str(e),
+                           stdout=list_result.get("stdout", "")[:200])
+        else:
+            logger.error("Failed to list archives for count update",
+                       repository=repository.name,
+                       stderr=list_result.get("stderr", "")[:200])
+        return False
+    except Exception as e:
+        logger.error("Exception while updating archive count",
+                   repository=repository.name,
+                   error=str(e))
+        return False
+
 # Helper function to format datetime with timezone
 def format_datetime(dt):
     """Format datetime to ISO8601 with UTC timezone indicator"""
@@ -924,26 +966,7 @@ async def prune_repository(
 
         # Update archive count after successful prune (not dry run)
         if not dry_run and prune_result.get("success"):
-            try:
-                # List archives to get updated count
-                list_result = await borg.list_archives(
-                    repository.path,
-                    remote_path=repository.remote_path,
-                    passphrase=repository.passphrase
-                )
-                if list_result.get("success"):
-                    try:
-                        # Parse JSON stdout
-                        archives_data = json.loads(list_result.get("stdout", "{}"))
-                        if isinstance(archives_data, dict):
-                            archive_count = len(archives_data.get("archives", []))
-                            repository.archive_count = archive_count
-                            db.commit()
-                            logger.info("Updated archive count after prune", repository=repository.name, count=archive_count)
-                    except json.JSONDecodeError:
-                        logger.warning("Failed to parse archive list after prune")
-            except Exception as e:
-                logger.warning("Failed to update archive count after prune", error=str(e))
+            await update_repository_archive_count(repository, db)
 
         return {
             "success": True,
