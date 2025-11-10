@@ -47,10 +47,12 @@ services:
       - "8081:8081"
     volumes:
       - borg_data:/data
+      - borg_cache:/home/borg/.cache/borg
       - ${LOCAL_STORAGE_PATH:-/}:/local:rw
 
 volumes:
   borg_data:
+  borg_cache:
 EOF
 
 # Start the container
@@ -236,6 +238,7 @@ services:
 
     volumes:
       - borg_data:/data
+      - borg_cache:/home/borg/.cache/borg
       # Mount specific directories with appropriate permissions
       - /home/user/important-data:/backup-source:ro
       - /mnt/backup-drive/borg-repos:/backup-destination:rw
@@ -246,6 +249,7 @@ services:
 
 volumes:
   borg_data:
+  borg_cache:
 ```
 
 Then create repositories using:
