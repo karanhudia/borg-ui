@@ -112,7 +112,7 @@ export const archivesAPI = {
   listContents: (repository: string, archive: string, path?: string) =>
     api.get(`/archives/${repository}/${archive}/contents`, { params: { path } }),
   deleteArchive: (repository: string, archive: string) =>
-    api.delete(`/archives/${repository}/${archive}`),
+    api.delete(`/archives/${encodeURIComponent(archive)}?repository=${encodeURIComponent(repository)}`),
   downloadFile: (repository: string, archive: string, filePath: string) => {
     const token = localStorage.getItem('access_token')
     const encodedFilePath = encodeURIComponent(filePath)
