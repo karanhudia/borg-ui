@@ -118,7 +118,3 @@ coverage.json
 .pytest_cache/
 junit.xml
 test-results/
-
-# Release build artifacts
-build/
-release/
