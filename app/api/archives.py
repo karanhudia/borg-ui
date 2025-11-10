@@ -212,7 +212,12 @@ async def delete_archive(
                 detail="Repository not found"
             )
 
-        result = await borg.delete_archive(repository, archive_id)
+        result = await borg.delete_archive(
+            repository,
+            archive_id,
+            remote_path=repo.remote_path,
+            passphrase=repo.passphrase
+        )
         if not result["success"]:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

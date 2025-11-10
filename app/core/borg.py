@@ -289,13 +289,18 @@ class BorgInterface:
         # Use cwd parameter to change to destination directory
         return await self._execute_command(cmd, timeout=settings.backup_timeout, cwd=destination, env=env if env else None)
 
-    async def delete_archive(self, repository: str, archive: str, remote_path: str = None) -> Dict:
+    async def delete_archive(self, repository: str, archive: str, remote_path: str = None, passphrase: str = None) -> Dict:
         """Delete an archive"""
         cmd = [self.borg_cmd, "delete"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
         cmd.append(f"{repository}::{archive}")
-        return await self._execute_command(cmd)
+
+        env = {}
+        if passphrase:
+            env["BORG_PASSPHRASE"] = passphrase
+
+        return await self._execute_command(cmd, env=env)
 
     async def prune_archives(self, repository: str, keep_daily: int = 7, keep_weekly: int = 4,
                            keep_monthly: int = 6, keep_yearly: int = 1, dry_run: bool = False,
