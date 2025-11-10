@@ -65,9 +65,27 @@ jobs:
             echo "docker pull ainullcode/borg-ui:latest"
             echo '```'
             echo ""
+            echo "## Release Bundle"
+            echo ""
+            echo "Download the standalone release bundle (includes frontend + backend):"
+            echo "- **borg-ui-v${{ steps.version.outputs.version }}.tar.gz** - Complete application bundle"
+            echo "- **borg-ui-v${{ steps.version.outputs.version }}.sha256** - SHA256 checksum"
+            echo ""
             echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.previous_tag.outputs.tag }}...${{ github.ref_name }}"
             echo 'EOF'
           } >> $GITHUB_OUTPUT
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build release bundle
+        run: |
+          chmod +x scripts/build-release.sh
+          ./scripts/build-release.sh
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
@@ -78,5 +96,8 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: false
+          files: |
+            release/borg-ui-v${{ steps.version.outputs.version }}.tar.gz
+            release/borg-ui-v${{ steps.version.outputs.version }}.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
