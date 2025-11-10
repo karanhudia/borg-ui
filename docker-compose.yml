@@ -27,6 +27,10 @@ services:
       # Single data volume for all persistent data
       - borg_data:/data:rw
 
+      # Borg cache volume for persistent repository caches
+      # Prevents cache loss on container updates/rebuilds
+      - borg_cache:/home/borg/.cache/borg:rw
+
       # System volumes (read-only)
       - /etc/cron.d:/etc/cron.d:ro
       - /etc/localtime:/etc/localtime:ro
@@ -63,7 +67,7 @@ networks:
     name: borg_network
     driver: bridge
 
-# Single volume for all persistent data
+# Persistent data volumes
 volumes:
   borg_data:
     name: borg_data
@@ -73,3 +77,12 @@ volumes:
     #   type: none
     #   o: bind
     #   device: /mnt/storage/borg-data
+
+  borg_cache:
+    name: borg_cache
+    driver: local
+    # Optional: Mount to custom location on host
+    # driver_opts:
+    #   type: none
+    #   o: bind
+    #   device: /mnt/storage/borg-cache

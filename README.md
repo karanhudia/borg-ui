@@ -439,9 +439,9 @@ No need for a separate `borg_backups` volume!
 
 ## Data Persistence
 
-### Single Volume for Everything
+### Docker Volumes
 
-Only one volume is needed:
+Two volumes are used for persistent data:
 
 **`borg_data`** - Contains:
 - SQLite database (`borg.db`)
@@ -449,20 +449,35 @@ Only one volume is needed:
 - SSH keys
 - Application logs
 
+**`borg_cache`** - Contains:
+- Borg repository caches
+- Persists across container updates/rebuilds
+- Improves performance by avoiding cache regeneration
+
 ### Viewing Volume Data
 
 ```bash
+# View application data
 docker run --rm -v borg_data:/data alpine ls -la /data
+
+# View borg cache
+docker run --rm -v borg_cache:/cache alpine ls -la /cache
 ```
 
-### Backup and Restore Volume
+### Backup and Restore Volumes
 
 ```bash
 # Backup borg_data to tar file
 docker run --rm -v borg_data:/data -v $(pwd):/backup alpine tar czf /backup/borg_data_backup.tar.gz -C /data .
 
+# Backup borg_cache to tar file (optional, can be regenerated)
+docker run --rm -v borg_cache:/cache -v $(pwd):/backup alpine tar czf /backup/borg_cache_backup.tar.gz -C /cache .
+
 # Restore borg_data from tar file
 docker run --rm -v borg_data:/data -v $(pwd):/backup alpine tar xzf /backup/borg_data_backup.tar.gz -C /data
+
+# Restore borg_cache from tar file
+docker run --rm -v borg_cache:/cache -v $(pwd):/backup alpine tar xzf /backup/borg_cache_backup.tar.gz -C /cache
 ```
 
 ### Mounting to Custom Location
