@@ -159,6 +159,7 @@ services:
 
     volumes:
       - borg_data:/data
+      - borg_cache:/home/borg/.cache/borg
       - ${LOCAL_STORAGE_PATH:-/}:/local:rw
 
     environment:
@@ -168,6 +169,8 @@ services:
 volumes:
   borg_data:
     name: borg_data
+  borg_cache:
+    name: borg_cache
 ```
 
 #### Step 2: Deploy Stack
@@ -184,10 +187,11 @@ Open `http://your-server-ip:8081` and login with default credentials.
 
 For quick deployment using Docker CLI.
 
-#### Step 1: Create Docker Volume
+#### Step 1: Create Docker Volumes
 
 ```bash
 docker volume create borg_data
+docker volume create borg_cache
 ```
 
 #### Step 2: Run Container
@@ -200,6 +204,7 @@ docker run -d \
   -e PUID=1000 \
   -e PGID=1000 \
   -v borg_data:/data \
+  -v borg_cache:/home/borg/.cache/borg \
   -v /:/local:rw \
   ainullcode/borg-ui:latest
 ```
@@ -245,6 +250,7 @@ services:
 
     volumes:
       - borg_data:/data
+      - borg_cache:/home/borg/.cache/borg
       - ${LOCAL_STORAGE_PATH:-/}:/local:rw
 
     environment:
@@ -257,6 +263,8 @@ services:
 volumes:
   borg_data:
     name: borg_data
+  borg_cache:
+    name: borg_cache
 ```
 
 #### Step 3: Start Services
@@ -490,6 +498,13 @@ volumes:
       type: none
       o: bind
       device: /mnt/storage/borg-data
+
+  borg_cache:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/storage/borg-cache
 ```
 
 ---
