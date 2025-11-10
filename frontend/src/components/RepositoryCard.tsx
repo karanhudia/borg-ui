@@ -62,10 +62,10 @@ export default function RepositoryCard({
   // Prioritize hasRunningJobs from polling (more up-to-date) over API flag
   const isMaintenanceRunning = hasRunningJobs
 
-  // State to track elapsed time display (updates every 3 seconds)
+  // State to track elapsed time display (updates every second for real-time UX)
   const [elapsedTime, setElapsedTime] = useState('')
 
-  // Update elapsed time periodically for running jobs
+  // Update elapsed time in real-time for running jobs (every second for smooth UX)
   useEffect(() => {
     if (!hasRunningJobs) {
       setElapsedTime('')
@@ -79,10 +79,10 @@ export default function RepositoryCard({
     // Update immediately
     setElapsedTime(formatElapsedTime(startTime))
 
-    // Update every 3 seconds to keep it fresh
+    // Update every second for real-time display
     const interval = setInterval(() => {
       setElapsedTime(formatElapsedTime(startTime))
-    }, 3000)
+    }, 1000)
 
     return () => clearInterval(interval)
   }, [hasRunningJobs, checkJob?.started_at, compactJob?.started_at])
