@@ -138,6 +138,31 @@ export const formatTimeRange = (
 }
 
 /**
+ * Calculate elapsed time from a start date to now
+ * Example: "2025-11-09T14:56:53Z" -> "Running for 2 hours"
+ */
+export const formatElapsedTime = (startTime: string | null | undefined): string => {
+  if (!startTime) return ''
+
+  try {
+    // Normalize date string - ensure it has 'Z' for UTC timezone
+    let normalizedDate = startTime
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(startTime)) {
+      normalizedDate = startTime + 'Z'
+    }
+
+    const start = new Date(normalizedDate)
+    const durationMs = Date.now() - start.getTime()
+    const durationSec = Math.floor(durationMs / 1000)
+
+    return `Running for ${formatDurationSeconds(durationSec)}`
+  } catch (error) {
+    console.error('Error formatting elapsed time:', error)
+    return ''
+  }
+}
+
+/**
  * Format bytes to human-readable format
  * Example: 1024 -> "1.00 KB"
  */

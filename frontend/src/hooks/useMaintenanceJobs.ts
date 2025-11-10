@@ -5,6 +5,7 @@ interface MaintenanceJob {
   id: number
   progress: number
   progress_message: string | null
+  started_at: string | null
 }
 
 interface RunningJobsResponse {
