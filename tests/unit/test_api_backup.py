@@ -299,11 +299,11 @@ class TestBackupCancel:
         assert response.status_code in [404, 405]  # Not found or not implemented
 
     def test_cancel_backup_nonexistent_new_endpoint(self, test_client: TestClient, admin_headers):
-        """Test cancelling non-existent backup returns 500 (exception wrapped)"""
+        """Test cancelling non-existent backup returns 404 (with proper exception handling)"""
         response = test_client.post("/api/backup/cancel/99999", headers=admin_headers)
 
-        # The except Exception block catches HTTPException and converts to 500
-        assert response.status_code == 500
+        # HTTPException is re-raised properly to preserve status codes
+        assert response.status_code == 404
 
     def test_cancel_backup_already_completed(self, test_client: TestClient, admin_headers, test_db):
         """Test cancelling completed backup returns 400"""
