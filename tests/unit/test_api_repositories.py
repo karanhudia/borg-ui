@@ -1,9 +1,20 @@
 """
 Comprehensive unit tests for repositories API endpoints
+
+These tests focus on:
+- Authentication and authorization
+- CRUD operations (database only)
+- Input validation
+- Error handling
+
+Integration tests (test_api_repositories_integration.py) handle:
+- Real borg repository operations
+- Repository initialization
+- Stats and info retrieval
+- Import existing repositories
 """
 import pytest
 import json
-from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
 from app.database.models import Repository, ScheduledJob
 
@@ -133,42 +144,8 @@ class TestRepositoriesListAndGet:
         # Might be 200, 404, or 422 depending on implementation
         assert response.status_code in [200, 404, 422]
 
-    def test_get_repository_by_id_success(self, test_client: TestClient, admin_headers, test_db):
-        """Test getting repository by ID returns 200 with mocked stats"""
-        repo = Repository(name="Test Repo", path="/test/repo", encryption="none", repository_type="local")
-        test_db.add(repo)
-        test_db.commit()
-        test_db.refresh(repo)
-
-        # Mock the stats call to ensure success
-        with patch('app.api.repositories.get_repository_stats', new_callable=AsyncMock) as mock_stats:
-            mock_stats.return_value = {
-                "total_size": 1000000,
-                "compressed_size": 500000,
-                "deduplicated_size": 250000
-            }
-
-            response = test_client.get(f"/api/repositories/{repo.id}", headers=admin_headers)
-
-            assert response.status_code == 200
-            data = response.json()
-            assert "repository" in data
-            assert data["repository"]["name"] == "Test Repo"
-
-    def test_get_repository_by_id_stats_failure(self, test_client: TestClient, admin_headers, test_db):
-        """Test getting repository when stats call fails returns 500"""
-        repo = Repository(name="Test Repo", path="/test/repo", encryption="none", repository_type="local")
-        test_db.add(repo)
-        test_db.commit()
-        test_db.refresh(repo)
-
-        # Mock the stats call to fail
-        with patch('app.api.repositories.get_repository_stats', new_callable=AsyncMock) as mock_stats:
-            mock_stats.side_effect = Exception("Stats retrieval failed")
-
-            response = test_client.get(f"/api/repositories/{repo.id}", headers=admin_headers)
-
-            assert response.status_code == 500
+    # NOTE: Repository retrieval with stats is tested in integration tests
+    # (test_api_repositories_integration.py) with real borg repositories
 
     def test_get_nonexistent_repository(self, test_client: TestClient, admin_headers):
         """Test getting a repository that doesn't exist"""

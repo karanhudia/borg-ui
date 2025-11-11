@@ -33,7 +33,11 @@ async def list_archives(
                 detail="Repository not found"
             )
 
-        result = await borg.list_archives(repository)
+        result = await borg.list_archives(
+            repository,
+            remote_path=repo.remote_path,
+            passphrase=repo.passphrase
+        )
         if not result["success"]:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -69,7 +73,12 @@ async def get_archive_info(
                 detail="Repository not found"
             )
 
-        result = await borg.info_archive(repository, archive_id)
+        result = await borg.info_archive(
+            repository,
+            archive_id,
+            remote_path=repo.remote_path,
+            passphrase=repo.passphrase
+        )
         if not result["success"]:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -113,7 +122,12 @@ async def get_archive_info(
 
             # Optionally fetch file listing
             if include_files:
-                list_result = await borg.list_archive_contents(repository, archive_id)
+                list_result = await borg.list_archive_contents(
+                    repository,
+                    archive_id,
+                    remote_path=repo.remote_path,
+                    passphrase=repo.passphrase
+                )
                 if list_result["success"]:
                     try:
                         # Parse JSON-lines output
@@ -178,7 +192,13 @@ async def get_archive_contents(
                 detail="Repository not found"
             )
 
-        result = await borg.list_archive_contents(repository, archive_id, path)
+        result = await borg.list_archive_contents(
+            repository,
+            archive_id,
+            path,
+            remote_path=repo.remote_path,
+            passphrase=repo.passphrase
+        )
         if not result["success"]:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
