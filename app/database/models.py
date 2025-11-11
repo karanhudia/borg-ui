@@ -220,4 +220,18 @@ class CompactJob(Base):
     logs = Column(Text, nullable=True)  # Full logs (stored after completion)
     process_pid = Column(Integer, nullable=True)  # Container PID for orphan detection
     process_start_time = Column(BigInteger, nullable=True)  # Process start time in jiffies for PID uniqueness
-    created_at = Column(DateTime, default=utc_now) 
+    created_at = Column(DateTime, default=utc_now)
+
+class SystemSettings(Base):
+    __tablename__ = "system_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    backup_timeout = Column(Integer, default=3600)  # Default 1 hour in seconds
+    max_concurrent_backups = Column(Integer, default=1)
+    log_retention_days = Column(Integer, default=30)
+    email_notifications = Column(Boolean, default=False)
+    webhook_url = Column(String, nullable=True)
+    auto_cleanup = Column(Boolean, default=False)
+    cleanup_retention_days = Column(Integer, default=90)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now) 

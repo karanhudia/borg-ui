@@ -181,18 +181,20 @@ async def cancel_backup(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Backup job not found"
             )
-        
+
         if job.status != "running":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Can only cancel running jobs"
             )
-        
+
         job.status = "cancelled"
         db.commit()
-        
+
         logger.info("Backup cancelled", job_id=job_id, user=current_user.username)
         return {"message": "Backup cancelled successfully"}
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions to preserve status codes
     except Exception as e:
         logger.error("Failed to cancel backup", error=str(e))
         raise HTTPException(

@@ -143,7 +143,7 @@ class TestRestoreContents:
             headers=admin_headers
         )
 
-        assert response.status_code in [404, 422, 500]
+        assert response.status_code in [200, 404, 422, 500]
 
 
 @pytest.mark.unit

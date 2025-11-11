@@ -5,7 +5,7 @@ from datetime import datetime
 import structlog
 
 from app.database.database import get_db, engine
-from app.database.models import User, SSHKey, SSHConnection, Repository, BackupJob
+from app.database.models import User, SSHKey, SSHConnection, Repository, BackupJob, SystemSettings
 from app.core.security import get_current_user, get_password_hash, verify_password
 from sqlalchemy import text
 from app.core.borg import BorgInterface
@@ -339,11 +339,13 @@ async def reset_user_password(
         db.commit()
         
         logger.info("User password reset", user_id=user_id, reset_by=current_user.username)
-        
+
         return {
             "success": True,
             "message": "Password reset successfully"
         }
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions to preserve status codes
     except Exception as e:
         logger.error("Failed to reset user password", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to reset password: {str(e)}")
