@@ -15,7 +15,7 @@ from app.core.security import get_password_hash, create_access_token
 
 @pytest.fixture(scope="function")
 def test_db():
-    """Create a test database"""
+    """Create a test database with shared session"""
     # Import app FIRST, before doing anything else
     from app.main import app as application
 
@@ -27,21 +27,24 @@ def test_db():
     Base.metadata.create_all(bind=engine)
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+    # Create a single session that will be shared
+    shared_session = TestingSessionLocal()
+
     def override_get_db():
+        """Return the same session for all requests in this test"""
         try:
-            db = TestingSessionLocal()
-            yield db
-        finally:
-            db.close()
+            yield shared_session
+        except Exception:
+            shared_session.rollback()
+            raise
 
     # Override BEFORE yielding the session
     application.dependency_overrides[get_db] = override_get_db
 
-    db = TestingSessionLocal()
     try:
-        yield db
+        yield shared_session
     finally:
-        db.close()
+        shared_session.close()
         Base.metadata.drop_all(bind=engine)
         application.dependency_overrides.clear()
 
@@ -74,7 +77,8 @@ def admin_user(test_db):
     user = User(
         username="admin",
         password_hash=get_password_hash("admin123"),
-        is_active=True
+        is_active=True,
+        is_admin=True  # CRITICAL: Admin user must have admin privileges!
     )
     test_db.add(user)
     test_db.commit()
