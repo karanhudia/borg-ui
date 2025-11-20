@@ -130,11 +130,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       dashboard: true,
       sshKeys: true, // Always accessible
       connections: true, // Always accessible - needed to generate SSH keys
-      repositories: appState.hasSSHKey,
-      backups: appState.hasSSHKey && appState.hasRepositories,
-      archives: appState.hasSSHKey && appState.hasRepositories,
-      restore: appState.hasSSHKey && appState.hasRepositories && appState.hasArchives, // Requires archives to restore from
-      schedule: appState.hasSSHKey && appState.hasRepositories, // Requires SSH key and repositories
+      repositories: true, // Always accessible - local repositories don't need SSH keys
+      backups: appState.hasRepositories, // Only requires repositories (can be local)
+      archives: appState.hasRepositories, // Only requires repositories
+      restore: appState.hasRepositories && appState.hasArchives, // Requires archives to restore from
+      schedule: appState.hasRepositories, // Only requires repositories for scheduling
       settings: true,
     }
   }, [appState.hasSSHKey, appState.hasRepositories, appState.hasArchives, fetchedSSH, fetchedRepos, authLoading, isAuthenticated])
@@ -146,23 +146,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
 
     switch (tab) {
-      case 'connections':
-      case 'repositories':
-        return 'Please generate or upload an SSH key first'
       case 'backups':
       case 'archives':
       case 'schedule':
-        if (!appState.hasSSHKey) {
-          return 'Please generate or upload an SSH key first'
-        }
         if (!appState.hasRepositories) {
           return 'Please create a repository first'
         }
         return null
       case 'restore':
-        if (!appState.hasSSHKey) {
-          return 'Please generate or upload an SSH key first'
-        }
         if (!appState.hasRepositories) {
           return 'Please create a repository first'
         }
@@ -173,7 +164,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       default:
         return null
     }
-  }, [tabEnablement, appState.hasSSHKey, appState.hasRepositories, appState.hasArchives])
+  }, [tabEnablement, appState.hasRepositories, appState.hasArchives])
 
   const value: AppContextValue = {
     appState,
