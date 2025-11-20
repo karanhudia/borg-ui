@@ -290,17 +290,10 @@ async def create_repository(
                            f"Or visit: https://borgbackup.readthedocs.io/en/stable/installation.html"
                 )
 
-            # Log the check result
-            is_restricted = remote_check.get("is_restricted", False)
-            if is_restricted:
-                logger.info("Remote host is restricted SSH environment (SFTP-only)",
-                           host=repo_data.host,
-                           message=remote_check.get("message"))
-            else:
-                logger.info("Remote borg check passed",
-                           host=repo_data.host,
-                           has_borg=remote_check.get("has_borg"),
-                           borg_path=remote_check.get("borg_path"))
+            logger.info("Remote borg check passed",
+                       host=repo_data.host,
+                       has_borg=remote_check.get("has_borg"),
+                       borg_path=remote_check.get("borg_path"))
 
             # Build SSH repository path
             # If path already starts with ssh://, extract just the remote path
@@ -539,18 +532,6 @@ async def import_repository(
                            f"Arch: sudo pacman -S borg\n\n"
                            f"Or visit: https://borgbackup.readthedocs.io/en/stable/installation.html"
                 )
-
-            # Log the check result
-            is_restricted = remote_check.get("is_restricted", False)
-            if is_restricted:
-                logger.info("Remote host is restricted SSH environment (SFTP-only)",
-                           host=repo_data.host,
-                           message=remote_check.get("message"))
-            else:
-                logger.info("Remote borg check passed",
-                           host=repo_data.host,
-                           has_borg=remote_check.get("has_borg"),
-                           borg_path=remote_check.get("borg_path"))
 
             # Build SSH repository path
             if repo_path.startswith("ssh://"):
@@ -1024,14 +1005,7 @@ async def get_repository_statistics(
         raise HTTPException(status_code=500, detail=f"Failed to get repository statistics: {str(e)}")
 
 async def check_remote_borg_installation(host: str, username: str, port: int, ssh_key_id: int) -> Dict[str, Any]:
-    """
-    Check if borg is installed on remote machine.
-
-    For restricted SSH environments (like Hetzner Storagebox, rsync.net, BorgBase),
-    command execution may not be allowed. In these cases, we return has_borg=True
-    with is_restricted=True, indicating that Borg doesn't need to be installed on
-    the remote server - it only needs to support SFTP.
-    """
+    """Check if borg is installed on remote machine"""
     temp_key_file = None
     try:
         logger.info("Checking remote borg installation", host=host, username=username, port=port)
@@ -1068,52 +1042,7 @@ async def check_remote_borg_installation(host: str, username: str, port: int, ss
 
         os.chmod(temp_key_file, 0o600)
 
-        # First, test SSH connectivity with a simple command
-        test_cmd = [
-            "ssh", "-i", temp_key_file,
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "ConnectTimeout=10",
-            "-p", str(port),
-            f"{username}@{host}",
-            "echo 'test'"
-        ]
-
-        test_process = await asyncio.create_subprocess_exec(
-            *test_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        test_stdout, test_stderr = await asyncio.wait_for(test_process.communicate(), timeout=15)
-        test_stderr_str = test_stderr.decode().lower()
-
-        # Check if this is a restricted SSH environment
-        # Common indicators: "command not allowed", "restricted", "this service allows sftp"
-        is_restricted = any(phrase in test_stderr_str for phrase in [
-            "command not allowed",
-            "not allowed",
-            "restricted",
-            "this service allows sftp",
-            "sftp only",
-            "pure-ftpd",
-            "storagebox"
-        ])
-
-        if is_restricted or test_process.returncode != 0:
-            logger.info("Detected restricted SSH environment (SFTP-only)",
-                       host=host,
-                       stderr_snippet=test_stderr_str[:200])
-
-            # For restricted environments, Borg doesn't need to be installed remotely
-            # Borg will use SFTP protocol to access the repository
-            return {
-                "success": True,
-                "has_borg": True,  # True because SFTP access is sufficient
-                "is_restricted": True,
-                "borg_path": None,
-                "message": "Detected SFTP-only environment (Borg will use SFTP protocol)"
-            }
-
-        # If SSH commands work, check for borg installation
+        # Check for borg
         borg_cmd = [
             "ssh", "-i", temp_key_file,
             "-o", "StrictHostKeyChecking=no",
@@ -1133,13 +1062,11 @@ async def check_remote_borg_installation(host: str, username: str, port: int, ss
 
         logger.info("Remote borg check completed",
                    host=host,
-                   has_borg=has_borg,
-                   is_restricted=False)
+                   has_borg=has_borg)
 
         return {
             "success": True,
             "has_borg": has_borg,
-            "is_restricted": False,
             "borg_path": borg_stdout.decode().strip() if has_borg else None
         }
 
