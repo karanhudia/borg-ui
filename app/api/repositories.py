@@ -266,34 +266,13 @@ async def create_repository(
             if not repo_data.ssh_key_id:
                 raise HTTPException(status_code=400, detail="SSH key is required for SSH repositories")
 
-            # Check if borg is installed on remote machine
-            logger.info("Checking if borg is installed on remote machine",
+            # Note: We don't check if borg is installed on the remote machine.
+            # Some SSH hosts (like Hetzner Storagebox) use restricted shells that block
+            # diagnostic commands like "which borg", but Borg commands still work.
+            # If Borg is truly not installed, the borg init command will fail with a clear error.
+            logger.info("Skipping remote borg check for SSH repository",
                        host=repo_data.host,
                        username=repo_data.username)
-
-            remote_check = await check_remote_borg_installation(
-                repo_data.host,
-                repo_data.username,
-                repo_data.port,
-                repo_data.ssh_key_id
-            )
-
-            if not remote_check.get("has_borg"):
-                install_cmd = "apt-get install borgbackup" if "debian" in remote_check.get("error", "").lower() else "yum install borgbackup"
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Borg Backup is not installed on {repo_data.username}@{repo_data.host}. "
-                           f"Please install it first:\n\n"
-                           f"Ubuntu/Debian: sudo apt-get update && sudo apt-get install borgbackup\n"
-                           f"Fedora/RHEL: sudo dnf install borgbackup\n"
-                           f"Arch: sudo pacman -S borg\n\n"
-                           f"Or visit: https://borgbackup.readthedocs.io/en/stable/installation.html"
-                )
-
-            logger.info("Remote borg check passed",
-                       host=repo_data.host,
-                       has_borg=remote_check.get("has_borg"),
-                       borg_path=remote_check.get("borg_path"))
 
             # Build SSH repository path
             # If path already starts with ssh://, extract just the remote path
@@ -510,28 +489,13 @@ async def import_repository(
             if not repo_data.ssh_key_id:
                 raise HTTPException(status_code=400, detail="SSH key is required for SSH repositories")
 
-            # Check if borg is installed on remote machine
-            logger.info("Checking if borg is installed on remote machine",
+            # Note: We don't check if borg is installed on the remote machine.
+            # Some SSH hosts (like Hetzner Storagebox) use restricted shells that block
+            # diagnostic commands like "which borg", but Borg commands still work.
+            # If Borg is truly not installed, the borg info command will fail with a clear error.
+            logger.info("Skipping remote borg check for SSH repository",
                        host=repo_data.host,
                        username=repo_data.username)
-
-            remote_check = await check_remote_borg_installation(
-                repo_data.host,
-                repo_data.username,
-                repo_data.port,
-                repo_data.ssh_key_id
-            )
-
-            if not remote_check.get("has_borg"):
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Borg Backup is not installed on {repo_data.username}@{repo_data.host}. "
-                           f"Please install it first:\n\n"
-                           f"Ubuntu/Debian: sudo apt-get update && sudo apt-get install borgbackup\n"
-                           f"Fedora/RHEL: sudo dnf install borgbackup\n"
-                           f"Arch: sudo pacman -S borg\n\n"
-                           f"Or visit: https://borgbackup.readthedocs.io/en/stable/installation.html"
-                )
 
             # Build SSH repository path
             if repo_path.startswith("ssh://"):
