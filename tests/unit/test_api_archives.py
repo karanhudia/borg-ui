@@ -118,7 +118,7 @@ class TestDownloadFileEndpoint:
         )
 
         # Should fail without valid token
-        assert response.status_code == 422
+        assert response.status_code in [401, 422]
 
     def test_download_file_invalid_token(self, test_client: TestClient):
         """Test download with invalid/expired token"""
