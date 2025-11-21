@@ -84,6 +84,7 @@ This project solves my personal backup management headaches, and I hope it solve
   - [Method 1: Portainer](#method-1-portainer-recommended)
   - [Method 2: Docker Run](#method-2-docker-run)
   - [Method 3: Docker Compose](#method-3-docker-compose)
+  - [Method 4: Unraid](#method-4-unraid)
 - [Mounting Host Filesystem](#mounting-host-filesystem)
 - [Configuration](#configuration)
 - [Data Persistence](#data-persistence)
@@ -282,6 +283,100 @@ docker compose logs -f app
 #### Step 5: Access Application
 
 Open `http://localhost:8081` and login.
+
+---
+
+### Method 4: Unraid
+
+For Unraid NAS servers, you have two installation options.
+
+#### Option A: Docker Compose (Recommended)
+
+Unraid supports Docker Compose through the **Compose Manager** plugin.
+
+**Step 1: Install Compose Manager Plugin**
+1. Go to **Plugins** > **Install Plugin**
+2. Search for "Compose Manager" and install
+
+**Step 2: Create Stack**
+1. Go to **Docker** > **Compose** > **Add New Stack**
+2. Name: `borg-ui`
+3. Paste configuration:
+
+```yaml
+services:
+  borg-ui:
+    image: ainullcode/borg-ui:latest
+    container_name: borg-web-ui
+    restart: unless-stopped
+
+    ports:
+      - "8081:8081"
+
+    volumes:
+      - /mnt/user/appdata/borg-ui:/data
+      - /mnt/user/appdata/borg-ui/cache:/home/borg/.cache/borg
+      - /mnt/user:/local:rw  # Adjust to your backup source/destination
+
+    environment:
+      - PUID=99   # Unraid default user ID
+      - PGID=100  # Unraid default group ID
+```
+
+**Step 3: Deploy and Access**
+- Click **Compose Up** to start the container
+- Access at `http://your-unraid-ip:8081`
+- Login with default credentials: `admin` / `admin123`
+
+#### Option B: Unraid Web UI
+
+Add the container manually through Unraid's Docker interface.
+
+**Step 1: Add Container**
+1. Go to **Docker** tab
+2. Click **Add Container**
+
+**Step 2: Configure Container**
+- **Name**: `borg-web-ui`
+- **Repository**: `ainullcode/borg-ui:latest`
+- **Network Type**: `Bridge`
+
+**Port Mappings**:
+- **Container Port**: `8081` → **Host Port**: `8081` (or your preferred port)
+
+**Volume Mappings**:
+| Container Path | Host Path | Access Mode |
+|----------------|-----------|-------------|
+| `/data` | `/mnt/user/appdata/borg-ui` | Read/Write |
+| `/home/borg/.cache/borg` | `/mnt/user/appdata/borg-ui/cache` | Read/Write |
+| `/local` | `/mnt/user` | Read/Write |
+
+**Environment Variables**:
+| Variable | Value |
+|----------|-------|
+| `PUID` | `99` |
+| `PGID` | `100` |
+
+**Step 3: Apply and Start**
+- Click **Apply** to create the container
+- Access at `http://your-unraid-ip:8081`
+
+#### Unraid Tips
+
+**Customizing Volume Mounts**:
+- To backup specific shares only, change `/mnt/user` to specific shares:
+  - `/mnt/user/Documents:/documents:ro` (read-only)
+  - `/mnt/user/Media:/media:ro` (read-only)
+  - `/mnt/user/Backups:/backups:rw` (read-write for backup destination)
+
+**Array vs Cache**:
+- Store `/data` on cache drive for better performance
+- Borg cache (`/home/borg/.cache/borg`) should be on cache or SSD
+
+**Backing Up Unraid Shares**:
+- Mount shares you want to backup as read-only (`:ro`)
+- Create a separate backup destination share with read-write (`:rw`)
+- Example: Backup `/mnt/user/Documents` to `/mnt/user/Backups/borg-repos`
 
 ---
 
