@@ -202,21 +202,29 @@ class NotificationService:
                                "• Telegram: telegram://bot_token/chat_id"
                 }
 
-            # Send test notification
+            # Send test notification with detailed logging
+            logger.info("Attempting to send test notification", service_url_prefix=service_url.split(':')[0])
+
             success = apobj.notify(
                 title="🔔 Borg UI Test Notification",
                 body="This is a test notification from Borg Web UI. If you received this, your notification service is configured correctly!"
             )
 
             if success:
+                logger.info("Test notification sent successfully")
                 return {
                     "success": True,
-                    "message": "Test notification sent successfully"
+                    "message": "Test notification sent successfully! Check your inbox/service."
                 }
             else:
+                logger.error("Test notification failed to send", service_url_prefix=service_url.split(':')[0])
                 return {
                     "success": False,
-                    "message": "Failed to send test notification. The URL format is valid, but sending failed. Check your credentials and network connectivity."
+                    "message": "Failed to send test notification. Possible causes:\n" +
+                               "• For Gmail: Check App Password is correct (16 chars, no spaces)\n" +
+                               "• For Gmail: Ensure 2-Step Verification is enabled\n" +
+                               "• Check SMTP server is reachable (firewall/network)\n" +
+                               "• Verify credentials are correct"
                 }
 
         except Exception as e:
