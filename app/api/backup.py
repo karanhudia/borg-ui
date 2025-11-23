@@ -5,7 +5,7 @@ import structlog
 import asyncio
 import os
 from typing import List, Dict, Any
-from datetime import timezone
+from datetime import datetime, timezone
 
 from app.database.database import get_db
 from app.database.models import User, BackupJob
@@ -188,11 +188,24 @@ async def cancel_backup(
                 detail="Can only cancel running jobs"
             )
 
+        # Try to terminate the actual process
+        from app.services.backup_service import backup_service
+        process_killed = await backup_service.cancel_backup(job_id)
+
+        # Update job status in database
         job.status = "cancelled"
+        job.completed_at = datetime.utcnow()
+        if process_killed:
+            job.error_message = "Backup cancelled by user"
+        else:
+            job.error_message = "Backup cancelled by user (process not found, may have already completed)"
         db.commit()
 
-        logger.info("Backup cancelled", job_id=job_id, user=current_user.username)
-        return {"message": "Backup cancelled successfully"}
+        logger.info("Backup cancelled", job_id=job_id, user=current_user.username, process_killed=process_killed)
+        return {
+            "message": "Backup cancelled successfully",
+            "process_terminated": process_killed
+        }
     except HTTPException:
         raise  # Re-raise HTTP exceptions to preserve status codes
     except Exception as e:
