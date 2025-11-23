@@ -15,6 +15,15 @@ from app.database.models import NotificationSettings
 logger = structlog.get_logger()
 
 
+def _format_bytes(bytes_value: int) -> str:
+    """Format bytes into human-readable size."""
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if bytes_value < 1024.0:
+            return f"{bytes_value:.2f} {unit}"
+        bytes_value /= 1024.0
+    return f"{bytes_value:.2f} PB"
+
+
 class NotificationService:
     """Service for sending notifications via Apprise."""
 
@@ -42,19 +51,33 @@ class NotificationService:
         if not settings:
             return
 
-        title = f"✅ Backup Successful: {repository_name}"
-        body = f"Archive created: {archive_name}"
+        # Format body with better structure
+        body_lines = [
+            f"Archive: {archive_name}",
+            f"Repository: {repository_name}",
+        ]
 
         if stats:
-            body += f"\n\nStatistics:"
-            if "original_size" in stats:
-                body += f"\n• Original size: {stats['original_size']}"
-            if "compressed_size" in stats:
-                body += f"\n• Compressed size: {stats['compressed_size']}"
-            if "deduplicated_size" in stats:
-                body += f"\n• Deduplicated size: {stats['deduplicated_size']}"
+            body_lines.append("")
+            body_lines.append("Statistics:")
+            if "original_size" in stats and stats["original_size"]:
+                body_lines.append(f"  • Original size: {_format_bytes(stats['original_size'])}")
+            if "compressed_size" in stats and stats["compressed_size"]:
+                body_lines.append(f"  • Compressed size: {_format_bytes(stats['compressed_size'])}")
+            if "deduplicated_size" in stats and stats["deduplicated_size"] is not None:
+                body_lines.append(f"  • Deduplicated size: {_format_bytes(stats['deduplicated_size'])}")
 
-        await NotificationService._send_to_services(db, settings, title, body)
+        body_lines.append("")
+        body_lines.append(f"✓ Completed at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
+
+        body = "\n".join(body_lines)
+
+        for setting in settings:
+            title = "✅ Backup Successful"
+            if setting.title_prefix:
+                title = f"{setting.title_prefix} {title}"
+
+            await NotificationService._send_to_service(db, setting, title, body)
 
     @staticmethod
     async def send_backup_failure(
@@ -80,13 +103,29 @@ class NotificationService:
         if not settings:
             return
 
-        title = f"❌ Backup Failed: {repository_name}"
-        body = f"Error: {error_message}"
+        # Format body with better structure
+        body_lines = [
+            f"Repository: {repository_name}",
+            "",
+            "Error Details:",
+            f"  {error_message}",
+        ]
 
         if job_id:
-            body += f"\n\nJob ID: {job_id}"
+            body_lines.append("")
+            body_lines.append(f"Job ID: {job_id}")
 
-        await NotificationService._send_to_services(db, settings, title, body)
+        body_lines.append("")
+        body_lines.append(f"⚠ Failed at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
+
+        body = "\n".join(body_lines)
+
+        for setting in settings:
+            title = "❌ Backup Failed"
+            if setting.title_prefix:
+                title = f"{setting.title_prefix} {title}"
+
+            await NotificationService._send_to_service(db, setting, title, body)
 
     @staticmethod
     async def send_restore_success(
@@ -112,10 +151,23 @@ class NotificationService:
         if not settings:
             return
 
-        title = f"✅ Restore Successful: {repository_name}"
-        body = f"Archive: {archive_name}\nRestored to: {target_path}"
+        # Format body with better structure
+        body_lines = [
+            f"Archive: {archive_name}",
+            f"Repository: {repository_name}",
+            f"Destination: {target_path}",
+            "",
+            f"✓ Completed at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"
+        ]
 
-        await NotificationService._send_to_services(db, settings, title, body)
+        body = "\n".join(body_lines)
+
+        for setting in settings:
+            title = "✅ Restore Successful"
+            if setting.title_prefix:
+                title = f"{setting.title_prefix} {title}"
+
+            await NotificationService._send_to_service(db, setting, title, body)
 
     @staticmethod
     async def send_restore_failure(
@@ -141,10 +193,25 @@ class NotificationService:
         if not settings:
             return
 
-        title = f"❌ Restore Failed: {repository_name}"
-        body = f"Archive: {archive_name}\nError: {error_message}"
+        # Format body with better structure
+        body_lines = [
+            f"Archive: {archive_name}",
+            f"Repository: {repository_name}",
+            "",
+            "Error Details:",
+            f"  {error_message}",
+            "",
+            f"⚠ Failed at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"
+        ]
 
-        await NotificationService._send_to_services(db, settings, title, body)
+        body = "\n".join(body_lines)
+
+        for setting in settings:
+            title = "❌ Restore Failed"
+            if setting.title_prefix:
+                title = f"{setting.title_prefix} {title}"
+
+            await NotificationService._send_to_service(db, setting, title, body)
 
     @staticmethod
     async def send_schedule_failure(
@@ -170,10 +237,25 @@ class NotificationService:
         if not settings:
             return
 
-        title = f"❌ Scheduled Backup Failed: {schedule_name}"
-        body = f"Repository: {repository_name}\nError: {error_message}"
+        # Format body with better structure
+        body_lines = [
+            f"Schedule: {schedule_name}",
+            f"Repository: {repository_name}",
+            "",
+            "Error Details:",
+            f"  {error_message}",
+            "",
+            f"⚠ Failed at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"
+        ]
 
-        await NotificationService._send_to_services(db, settings, title, body)
+        body = "\n".join(body_lines)
+
+        for setting in settings:
+            title = "❌ Scheduled Backup Failed"
+            if setting.title_prefix:
+                title = f"{setting.title_prefix} {title}"
+
+            await NotificationService._send_to_service(db, setting, title, body)
 
     @staticmethod
     async def test_notification(service_url: str) -> dict:
@@ -235,6 +317,51 @@ class NotificationService:
             }
 
     @staticmethod
+    async def _send_to_service(
+        db: Session,
+        setting: NotificationSettings,
+        title: str,
+        body: str
+    ) -> None:
+        """
+        Send notification to a single service.
+
+        Args:
+            db: Database session
+            setting: Notification setting
+            title: Notification title
+            body: Notification body
+        """
+        try:
+            apobj = apprise.Apprise()
+            apobj.add(setting.service_url)
+
+            success = apobj.notify(title=title, body=body)
+
+            if success:
+                # Update last_used_at timestamp
+                setting.last_used_at = datetime.utcnow()
+                db.commit()
+                logger.info(
+                    "notification_sent",
+                    service=setting.name,
+                    title=title
+                )
+            else:
+                logger.warning(
+                    "notification_failed",
+                    service=setting.name,
+                    title=title
+                )
+
+        except Exception as e:
+            logger.error(
+                "notification_error",
+                service=setting.name,
+                error=str(e)
+            )
+
+    @staticmethod
     async def _send_to_services(
         db: Session,
         settings: List[NotificationSettings],
@@ -242,7 +369,7 @@ class NotificationService:
         body: str
     ) -> None:
         """
-        Send notification to multiple services.
+        Send notification to multiple services (legacy).
 
         Args:
             db: Database session
@@ -251,34 +378,7 @@ class NotificationService:
             body: Notification body
         """
         for setting in settings:
-            try:
-                apobj = apprise.Apprise()
-                apobj.add(setting.service_url)
-
-                success = apobj.notify(title=title, body=body)
-
-                if success:
-                    # Update last_used_at timestamp
-                    setting.last_used_at = datetime.utcnow()
-                    db.commit()
-                    logger.info(
-                        "notification_sent",
-                        service=setting.name,
-                        title=title
-                    )
-                else:
-                    logger.warning(
-                        "notification_failed",
-                        service=setting.name,
-                        title=title
-                    )
-
-            except Exception as e:
-                logger.error(
-                    "notification_error",
-                    service=setting.name,
-                    error=str(e)
-                )
+            await NotificationService._send_to_service(db, setting, title, body)
 
 
 # Global instance

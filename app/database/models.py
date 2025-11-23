@@ -248,6 +248,9 @@ class NotificationSettings(Base):
     service_url = Column(Text, nullable=False)  # Apprise URL (e.g., "slack://TokenA/TokenB/TokenC/")
     enabled = Column(Boolean, default=True, nullable=False)
 
+    # Customization
+    title_prefix = Column(String(100), nullable=True)  # Optional custom prefix for notification titles (e.g., "[Production]")
+
     # Event triggers
     notify_on_backup_success = Column(Boolean, default=False, nullable=False)
     notify_on_backup_failure = Column(Boolean, default=True, nullable=False)

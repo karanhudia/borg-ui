@@ -45,6 +45,7 @@ interface NotificationSetting {
   name: string
   service_url: string
   enabled: boolean
+  title_prefix: string | null
   notify_on_backup_success: boolean
   notify_on_backup_failure: boolean
   notify_on_restore_success: boolean
@@ -67,6 +68,7 @@ const NotificationsTab: React.FC = () => {
     name: '',
     service_url: '',
     enabled: true,
+    title_prefix: '',
     notify_on_backup_success: false,
     notify_on_backup_failure: true,
     notify_on_restore_success: false,
@@ -147,6 +149,7 @@ const NotificationsTab: React.FC = () => {
       name: '',
       service_url: '',
       enabled: true,
+      title_prefix: '',
       notify_on_backup_success: false,
       notify_on_backup_failure: true,
       notify_on_restore_success: false,
@@ -161,6 +164,7 @@ const NotificationsTab: React.FC = () => {
       name: notification.name,
       service_url: notification.service_url,
       enabled: notification.enabled,
+      title_prefix: notification.title_prefix || '',
       notify_on_backup_success: notification.notify_on_backup_success,
       notify_on_backup_failure: notification.notify_on_backup_failure,
       notify_on_restore_success: notification.notify_on_restore_success,
@@ -238,7 +242,7 @@ const NotificationsTab: React.FC = () => {
             Apprise URL Examples:
           </Typography>
           <Stack spacing={0.5} sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
-            <Typography>• <strong>Email (Gmail):</strong> mailtos://user:password@gmail.com</Typography>
+            <Typography>• <strong>Email (Gmail):</strong> mailto://user:app_password@gmail.com?smtp=smtp.gmail.com&mode=starttls</Typography>
             <Typography>• <strong>Slack:</strong> slack://TokenA/TokenB/TokenC/</Typography>
             <Typography>• <strong>Discord:</strong> discord://webhook_id/webhook_token</Typography>
             <Typography>• <strong>Telegram:</strong> telegram://bot_token/chat_id</Typography>
@@ -406,6 +410,15 @@ const NotificationsTab: React.FC = () => {
               fullWidth
               required
               helperText="Use Apprise URL format. See examples above."
+            />
+
+            <TextField
+              label="Title Prefix (Optional)"
+              value={formData.title_prefix}
+              onChange={(e) => setFormData({ ...formData, title_prefix: e.target.value })}
+              placeholder="e.g., [Production] or [Dev]"
+              fullWidth
+              helperText="Add a custom prefix to all notification titles (e.g., '[Production] ✅ Backup Successful')"
             />
 
             <FormControlLabel
