@@ -1,3 +1,8 @@
+---
+layout: default
+title: Notifications Setup
+---
+
 # Notifications Setup
 
 Get real-time alerts for backup failures, restore completions, and scheduled job issues via 100+ notification services.
