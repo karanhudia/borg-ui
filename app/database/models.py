@@ -175,6 +175,7 @@ class ScheduledJob(Base):
     last_run = Column(DateTime, nullable=True)  # Last execution time
     next_run = Column(DateTime, nullable=True)  # Next scheduled execution time
     description = Column(Text, nullable=True)  # User description of the job
+    archive_name_template = Column(String, nullable=True)  # Template for archive names (e.g., "{job_name}-{now}")
 
     # Prune and compact settings
     run_prune_after = Column(Boolean, default=False)  # Run prune after backup

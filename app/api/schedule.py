@@ -30,6 +30,7 @@ class ScheduledJobCreate(BaseModel):
     repository: Optional[str] = None
     enabled: bool = True
     description: Optional[str] = None
+    archive_name_template: Optional[str] = None  # Template for archive names (e.g., "{job_name}-{now}")
     # Prune and compact settings
     run_prune_after: bool = False
     run_compact_after: bool = False
@@ -44,6 +45,7 @@ class ScheduledJobUpdate(BaseModel):
     repository: Optional[str] = None
     enabled: Optional[bool] = None
     description: Optional[str] = None
+    archive_name_template: Optional[str] = None  # Template for archive names (e.g., "{job_name}-{now}")
     # Prune and compact settings
     run_prune_after: Optional[bool] = None
     run_compact_after: Optional[bool] = None
@@ -81,6 +83,7 @@ async def get_scheduled_jobs(
                     "created_at": job.created_at.replace(tzinfo=timezone.utc).isoformat() if job.created_at else None,
                     "updated_at": job.updated_at.replace(tzinfo=timezone.utc).isoformat() if job.updated_at else None,
                     "description": job.description,
+                    "archive_name_template": job.archive_name_template,
                     # Prune and compact settings
                     "run_prune_after": job.run_prune_after,
                     "run_compact_after": job.run_compact_after,
@@ -129,6 +132,7 @@ async def create_scheduled_job(
             enabled=job_data.enabled,
             next_run=next_run,
             description=job_data.description,
+            archive_name_template=job_data.archive_name_template,
             # Prune and compact settings
             run_prune_after=job_data.run_prune_after,
             run_compact_after=job_data.run_compact_after,
@@ -304,7 +308,17 @@ async def get_scheduled_job(
                 "next_runs": next_runs,
                 "created_at": job.created_at.replace(tzinfo=timezone.utc).isoformat() if job.created_at else None,
                 "updated_at": job.updated_at.replace(tzinfo=timezone.utc).isoformat() if job.updated_at else None,
-                "description": job.description
+                "description": job.description,
+                "archive_name_template": job.archive_name_template,
+                # Prune and compact settings
+                "run_prune_after": job.run_prune_after,
+                "run_compact_after": job.run_compact_after,
+                "prune_keep_daily": job.prune_keep_daily,
+                "prune_keep_weekly": job.prune_keep_weekly,
+                "prune_keep_monthly": job.prune_keep_monthly,
+                "prune_keep_yearly": job.prune_keep_yearly,
+                "last_prune": job.last_prune.replace(tzinfo=timezone.utc).isoformat() if job.last_prune else None,
+                "last_compact": job.last_compact.replace(tzinfo=timezone.utc).isoformat() if job.last_compact else None,
             }
         }
     except HTTPException:
@@ -357,6 +371,9 @@ async def update_scheduled_job(
         
         if job_data.description is not None:
             job.description = job_data.description
+
+        if job_data.archive_name_template is not None:
+            job.archive_name_template = job_data.archive_name_template
 
         # Update prune and compact settings
         if job_data.run_prune_after is not None:
@@ -463,28 +480,65 @@ async def run_scheduled_job_now(
     """Run a scheduled job immediately"""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     try:
+        from app.database.models import BackupJob, Repository
+        from app.services.backup_service import backup_service
+
         job = db.query(ScheduledJob).filter(ScheduledJob.id == job_id).first()
         if not job:
             raise HTTPException(status_code=404, detail="Scheduled job not found")
-        
-        # Execute backup
-        result = await borg.run_backup(
-            repository=job.repository
+
+        # Get repository info
+        repo = db.query(Repository).filter(Repository.path == job.repository).first()
+        if not repo:
+            raise HTTPException(status_code=404, detail="Repository not found for scheduled job")
+
+        # Create backup job record with scheduled_job_id
+        backup_job = BackupJob(
+            repository=job.repository or "default",
+            status="pending",
+            scheduled_job_id=job.id  # Link to scheduled job
         )
-        
+        db.add(backup_job)
+        db.commit()
+        db.refresh(backup_job)
+
+        # Generate archive name from template
+        archive_name = None
+        if job.archive_name_template:
+            # Replace template placeholders
+            archive_name = job.archive_name_template
+            archive_name = archive_name.replace("{job_name}", job.name)
+            archive_name = archive_name.replace("{now}", datetime.now().strftime('%Y-%m-%dT%H:%M:%S'))
+            archive_name = archive_name.replace("{date}", datetime.now().strftime('%Y-%m-%d'))
+            archive_name = archive_name.replace("{time}", datetime.now().strftime('%H:%M:%S'))
+            archive_name = archive_name.replace("{timestamp}", str(int(datetime.now().timestamp())))
+        else:
+            # Default template if none specified: use job name
+            archive_name = f"{job.name}-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
+
+        # Execute backup with optional prune/compact asynchronously (non-blocking)
+        asyncio.create_task(
+            execute_scheduled_backup_with_maintenance(
+                backup_job.id,
+                job.repository,
+                job.id,
+                archive_name=archive_name
+            )
+        )
+
         # Update last run time
         job.last_run = datetime.now(timezone.utc)
         job.updated_at = datetime.now(timezone.utc)
         db.commit()
-        
-        logger.info("Scheduled job run manually", job_id=job_id, user=current_user.username)
-        
+
+        logger.info("Scheduled job run manually", job_id=job_id, user=current_user.username, backup_job_id=backup_job.id)
+
         return {
-            "success": True,
-            "message": "Scheduled job executed successfully",
-            "result": result
+            "job_id": backup_job.id,
+            "status": "pending",
+            "message": "Scheduled job started successfully"
         }
     except HTTPException:
         raise
@@ -530,15 +584,22 @@ async def validate_cron_expression(
 
 # Background task to check and run scheduled jobs
 async def execute_scheduled_backup_with_maintenance(backup_job_id: int, repository_path: str,
-                                                     scheduled_job_id: int):
-    """Execute backup and optionally run prune/compact after successful backup"""
+                                                     scheduled_job_id: int, archive_name: str = None):
+    """Execute backup and optionally run prune/compact after successful backup
+
+    Args:
+        backup_job_id: Backup job ID
+        repository_path: Repository path
+        scheduled_job_id: Scheduled job ID
+        archive_name: Optional custom archive name
+    """
     from app.database.models import Repository, BackupJob
     from app.services.backup_service import backup_service
 
     db = next(get_db())
     try:
-        # Execute the backup
-        await backup_service.execute_backup(backup_job_id, repository_path, db)
+        # Execute the backup with custom archive name if provided
+        await backup_service.execute_backup(backup_job_id, repository_path, db, archive_name=archive_name)
 
         # Check if backup was successful
         backup_job = db.query(BackupJob).filter(BackupJob.id == backup_job_id).first()
@@ -666,12 +727,27 @@ async def check_scheduled_jobs():
                     db.commit()
                     db.refresh(backup_job)
 
+                    # Generate archive name from template
+                    archive_name = None
+                    if job.archive_name_template:
+                        # Replace template placeholders
+                        archive_name = job.archive_name_template
+                        archive_name = archive_name.replace("{job_name}", job.name)
+                        archive_name = archive_name.replace("{now}", datetime.now().strftime('%Y-%m-%dT%H:%M:%S'))
+                        archive_name = archive_name.replace("{date}", datetime.now().strftime('%Y-%m-%d'))
+                        archive_name = archive_name.replace("{time}", datetime.now().strftime('%H:%M:%S'))
+                        archive_name = archive_name.replace("{timestamp}", str(int(datetime.now().timestamp())))
+                    else:
+                        # Default template if none specified: use job name
+                        archive_name = f"{job.name}-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
+
                     # Execute backup with optional prune/compact asynchronously (non-blocking)
                     asyncio.create_task(
                         execute_scheduled_backup_with_maintenance(
                             backup_job.id,
                             job.repository,
-                            job.id
+                            job.id,
+                            archive_name=archive_name
                         )
                     )
 
