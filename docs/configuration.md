@@ -1,3 +1,8 @@
+---
+layout: default
+title: Configuration Guide
+---
+
 # Configuration Guide
 
 Customize Borg Web UI for your environment.

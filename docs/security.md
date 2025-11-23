@@ -1,3 +1,8 @@
+---
+layout: default
+title: Security Guide
+---
+
 # Security Guide
 
 Best practices for securing your Borg Web UI installation.

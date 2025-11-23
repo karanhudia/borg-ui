@@ -98,14 +98,14 @@ docker run -d \
 
 ## Documentation
 
-📚 **[Full Documentation](https://karanhudia.github.io/borg-ui)** - Complete guides and tutorials
+**[Full Documentation](https://karanhudia.github.io/borg-ui)** - Complete guides and tutorials
 
-- **[Installation Guide](https://karanhudia.github.io/borg-ui/installation/)** - Detailed installation for all platforms (Portainer, Unraid, etc.)
-- **[Configuration](https://karanhudia.github.io/borg-ui/configuration/)** - Environment variables and setup options
-- **[Notifications Setup](https://karanhudia.github.io/borg-ui/notifications/)** - Configure email, Slack, Discord, and other notification services
-- **[SSH Keys Guide](https://karanhudia.github.io/borg-ui/ssh-keys/)** - Setting up SSH for remote backups
-- **[Security Guide](https://karanhudia.github.io/borg-ui/security/)** - Best practices and security recommendations
-- **[API Documentation](http://localhost:8081/api/docs)** - Interactive API docs (after installation)
+- [Installation Guide](https://karanhudia.github.io/borg-ui/installation) - Detailed installation for all platforms
+- [Configuration Guide](https://karanhudia.github.io/borg-ui/configuration) - Environment variables and setup options
+- [Notifications Setup](https://karanhudia.github.io/borg-ui/notifications) - Configure alerts via email, Slack, Discord, and more
+- [SSH Keys Guide](https://karanhudia.github.io/borg-ui/ssh-keys) - Setting up SSH for remote backups
+- [Security Guide](https://karanhudia.github.io/borg-ui/security) - Best practices and security recommendations
+- [API Documentation](http://localhost:8081/api/docs) - Interactive API docs (after installation)
 
 ---
 

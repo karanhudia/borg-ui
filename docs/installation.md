@@ -1,3 +1,8 @@
+---
+layout: default
+title: Installation Guide
+---
+
 # Installation Guide
 
 Complete installation instructions for all platforms.

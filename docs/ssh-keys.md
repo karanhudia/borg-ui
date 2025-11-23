@@ -1,3 +1,8 @@
+---
+layout: default
+title: SSH Keys Guide
+---
+
 # SSH Keys Guide
 
 Set up SSH keys for remote backup repositories.
