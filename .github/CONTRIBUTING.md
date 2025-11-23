@@ -1,111 +1,71 @@
-# Contributing to Borg UI
+# Contributing to Borg Web UI
 
-Thank you for your interest in contributing to Borg UI!
+Thank you for your interest in contributing to Borg Web UI!
 
-## Important: No Forking Policy
+## Quick Start
 
-⚠️ **This repository uses a proprietary license that does NOT allow forking.**
-
-Please do NOT fork this repository. Instead, follow the contribution process below.
-
-## How to Contribute
-
-### 1. Report Issues
-- Go to [Issues](https://github.com/karanhudia/borg-ui/issues)
-- Check if the issue already exists
-- If not, create a new issue with:
-  - Clear description of the problem
-  - Steps to reproduce
-  - Expected vs actual behavior
-  - Screenshots if applicable
-
-### 2. Propose Features
-- Open an issue with the "enhancement" label
-- Describe the feature and use case
-- Wait for discussion and approval before coding
-
-### 3. Submit Code Changes
-
-**Step-by-step process:**
+### Fork and Clone
 
 ```bash
-# 1. Clone the repository (do NOT fork)
-git clone https://github.com/karanhudia/borg-ui.git
+# Fork the repository on GitHub, then:
+git clone https://github.com/YOUR_USERNAME/borg-ui.git
 cd borg-ui
 
-# 2. Create a feature branch
-git checkout -b feature/your-feature-name
-
-# 3. Make your changes
-# - Follow the existing code style
-# - Add tests if applicable
-# - Update documentation
-
-# 4. Test your changes
-docker-compose up -d --build
-./test.sh
-
-# 5. Commit your changes
-git add .
-git commit -m "feat: description of your change"
-
-# 6. Push to a NEW branch on the main repo (requires write access)
-# OR create a patch file
-git format-patch main --stdout > your-feature.patch
+# Add upstream remote
+git remote add upstream https://github.com/karanhudia/borg-ui.git
 ```
 
-**For contributors without write access:**
-1. Create an issue describing your change
-2. Attach your patch file to the issue
-3. The maintainer will review and apply the patch
+### Create a Branch
 
-**For contributors with write access:**
-1. Push your branch to the repository
-2. Create a pull request
-3. Wait for review
+```bash
+git checkout -b feature/your-feature-name
+```
 
-### 4. Pull Request Guidelines
+### Make Changes
 
-Your PR should:
-- Reference the related issue (e.g., "Fixes #123")
-- Have a clear title and description
-- Include tests for new features
-- Pass all existing tests
 - Follow the existing code style
+- Add tests for new features
 - Update documentation as needed
 
-### 5. Code Review Process
+### Test Your Changes
 
-1. Maintainer reviews your PR
-2. Address any feedback
-3. Once approved, maintainer merges
-4. Your contribution becomes part of the project
+```bash
+# Backend tests
+python3 -m pytest tests/
 
-## Contribution License Agreement
+# Frontend build
+cd frontend && npm run build
 
-By submitting a pull request or patch, you agree that:
+# Start the application
+docker compose up -d --build
+```
 
-1. You grant the copyright holder (Karan Hudia) a perpetual, worldwide, non-exclusive, royalty-free, irrevocable license to use, modify, and distribute your contributions
-2. You represent that you are legally entitled to grant the above license
-3. Your contributions will be licensed under the same proprietary license as this project
-4. You will not fork, copy, or redistribute this repository
+### Submit a Pull Request
 
-## Code Style
+1. Push your changes to your fork
+2. Open a pull request against `main`
+3. Describe your changes clearly
+4. Link any related issues
 
-### Python (Backend)
+## Contribution Guidelines
+
+### Code Style
+
+**Python (Backend)**
 - Follow PEP 8
 - Use type hints
 - Add docstrings to functions
 - Maximum line length: 100 characters
 
-### TypeScript/React (Frontend)
+**TypeScript/React (Frontend)**
 - Use functional components with hooks
 - Use TypeScript for type safety
 - Follow existing component structure
-- Use Tailwind CSS for styling
 
 ### Commit Messages
+
 Follow conventional commits:
+
 - `feat:` - New feature
 - `fix:` - Bug fix
 - `docs:` - Documentation changes
@@ -115,10 +75,19 @@ Follow conventional commits:
 
 Examples:
 ```
-feat: add SSH key rotation feature
-fix: resolve database migration issue
-docs: update installation guide
+feat: add notification system with Apprise integration
+fix: resolve database migration issue in notifications
+docs: update installation guide for Unraid
 ```
+
+### Pull Request Requirements
+
+Your PR should:
+- Reference related issues (e.g., "Fixes #123")
+- Have a clear title and description
+- Include tests for new features
+- Pass all existing tests
+- Update documentation as needed
 
 ## Testing
 
@@ -126,50 +95,94 @@ Before submitting:
 
 ```bash
 # Backend tests
-python -m pytest tests/
+python3 -m pytest tests/ -v
 
-# Frontend tests
+# Frontend tests (if you modified frontend)
 cd frontend && npm test
 
-# Integration tests
-./test.sh
+# Frontend build (must succeed)
+cd frontend && npm run build
 ```
+
+## Development Setup
+
+### Prerequisites
+
+- Docker and Docker Compose
+- Python 3.9+
+- Node.js 18+
+
+### Local Development
+
+```bash
+# Start development environment
+docker compose up -d --build
+
+# View logs
+docker compose logs -f
+
+# Access the application
+# Frontend: http://localhost:8081
+# API Docs: http://localhost:8081/api/docs
+```
+
+### Frontend Development (with hot reload)
+
+```bash
+cd frontend
+npm install
+npm run dev
+# Access at http://localhost:5173
+```
+
+## What We're Looking For
+
+We welcome contributions for:
+
+- Bug fixes
+- Documentation improvements
+- New features (discuss first via issues)
+- Test coverage improvements
+- UI/UX enhancements
+- Performance optimizations
+
+## Reporting Issues
+
+- Check if the issue already exists
+- Provide clear description and reproduction steps
+- Include relevant logs, screenshots, or error messages
+- Specify your environment (OS, Docker version, etc.)
 
 ## Questions?
 
 - Open an issue with the "question" label
-- Provide context and what you've tried
+- Check existing issues and discussions
 - Be respectful and patient
 
-## What We're Looking For
+## License
 
-We especially welcome contributions for:
-- 🐛 Bug fixes
-- 📖 Documentation improvements
-- ✨ New features (after discussion)
-- 🧪 Test coverage improvements
-- 🎨 UI/UX enhancements
-- 🌍 Internationalization
+By contributing, you agree that your contributions will be licensed under the GNU General Public License v3.0, the same license as this project.
 
-## What We Won't Accept
-
-- Forks or copies of the repository
-- Code that violates the license
-- Breaking changes without discussion
-- Poorly tested code
-- Code without documentation
+All contributions become part of the project and are subject to the terms in the [LICENSE](../LICENSE) file.
 
 ## Recognition
 
-Contributors will be:
-- Listed in CONTRIBUTORS.md
-- Credited in release notes
-- Mentioned in documentation
+Contributors will be recognized in:
+- Release notes
+- Project documentation
+- GitHub contributors page
 
-## Thank You!
+## Code of Conduct
 
-Your contributions help make Borg UI better for everyone! 🎉
+- Be respectful and inclusive
+- Provide constructive feedback
+- Focus on the code, not the person
+- Help make this a welcoming community
 
----
+## Need Help?
 
-**License:** By contributing, you agree to the terms in the [LICENSE](../LICENSE) file.
+- **Documentation**: [Full Documentation](https://karanhudia.github.io/borg-ui)
+- **Issues**: [GitHub Issues](https://github.com/karanhudia/borg-ui/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/karanhudia/borg-ui/discussions)
+
+Thank you for contributing to Borg Web UI!
