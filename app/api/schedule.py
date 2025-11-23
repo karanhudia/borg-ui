@@ -13,6 +13,7 @@ from app.database.models import User, ScheduledJob
 from app.core.security import get_current_user
 from app.core.borg import BorgInterface
 from app.config import settings
+from app.services.notification_service import notification_service
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["schedule"])
@@ -690,6 +691,16 @@ async def check_scheduled_jobs():
                     # Update last run time even if failed
                     job.last_run = datetime.now(timezone.utc)
                     db.commit()
+
+                    # Send failure notification
+                    try:
+                        asyncio.create_task(
+                            notification_service.send_schedule_failure(
+                                db, job.name, job.repository, str(e)
+                            )
+                        )
+                    except Exception as notif_error:
+                        logger.warning("Failed to send schedule failure notification", error=str(notif_error))
 
             db.close()
 

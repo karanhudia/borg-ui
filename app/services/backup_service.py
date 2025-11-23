@@ -9,6 +9,7 @@ from app.database.models import BackupJob, Repository
 from app.database.database import SessionLocal
 from app.config import settings
 from app.core.borg_errors import format_error_message, get_error_details
+from app.services.notification_service import notification_service
 
 logger = structlog.get_logger()
 
@@ -765,6 +766,19 @@ class BackupService:
                 # Update repository statistics after successful backup
                 await self._update_repository_stats(db, repository, env)
 
+                # Send success notification
+                try:
+                    stats = {
+                        "original_size": job.original_size,
+                        "compressed_size": job.compressed_size,
+                        "deduplicated_size": job.deduplicated_size
+                    }
+                    await notification_service.send_backup_success(
+                        db, repository, archive_name, stats
+                    )
+                except Exception as e:
+                    logger.warning("Failed to send backup success notification", error=str(e))
+
                 # Run post-backup hook if configured
                 if repo_record and repo_record.post_backup_script:
                     logger.info("Running post-backup hook", job_id=job_id, repository=repository)
@@ -923,12 +937,29 @@ class BackupService:
             db.commit()
             logger.info("Backup completed", job_id=job_id, status=job.status)
 
+            # Send failure notification if backup failed
+            if job.status == "failed":
+                try:
+                    await notification_service.send_backup_failure(
+                        db, repository, job.error_message or "Unknown error", job_id
+                    )
+                except Exception as e:
+                    logger.warning("Failed to send backup failure notification", error=str(e))
+
         except Exception as e:
             logger.error("Backup execution failed", job_id=job_id, error=str(e))
             job.status = "failed"
             job.error_message = str(e)
             job.completed_at = datetime.utcnow()
             db.commit()
+
+            # Send failure notification
+            try:
+                await notification_service.send_backup_failure(
+                    db, repository, str(e), job_id
+                )
+            except Exception as notif_error:
+                logger.warning("Failed to send backup failure notification", error=str(notif_error))
         finally:
             # Remove from running processes
             if job_id in self.running_processes:

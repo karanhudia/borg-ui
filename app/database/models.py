@@ -235,3 +235,30 @@ class SystemSettings(Base):
     cleanup_retention_days = Column(Integer, default=90)
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now) 
+class NotificationSettings(Base):
+    """
+    Notification settings model.
+
+    Stores Apprise-compatible notification URLs and configuration.
+    """
+    __tablename__ = "notification_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)  # User-friendly name (e.g., "Slack - DevOps Channel")
+    service_url = Column(Text, nullable=False)  # Apprise URL (e.g., "slack://TokenA/TokenB/TokenC/")
+    enabled = Column(Boolean, default=True, nullable=False)
+
+    # Event triggers
+    notify_on_backup_success = Column(Boolean, default=False, nullable=False)
+    notify_on_backup_failure = Column(Boolean, default=True, nullable=False)
+    notify_on_restore_success = Column(Boolean, default=False, nullable=False)
+    notify_on_restore_failure = Column(Boolean, default=True, nullable=False)
+    notify_on_schedule_failure = Column(Boolean, default=True, nullable=False)
+
+    # Timestamps
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+    last_used_at = Column(DateTime, nullable=True)  # Last successful notification sent
+
+    def __repr__(self):
+        return f"<NotificationSettings(id={self.id}, name='{self.name}', enabled={self.enabled})>"
