@@ -234,4 +234,13 @@ export const scheduleAPI = {
   getUpcomingJobs: (hours?: number) => api.get('/schedule/upcoming-jobs', { params: { hours } }),
 }
 
+export const notificationsAPI = {
+  list: () => api.get('/notifications'),
+  get: (id: number) => api.get(`/notifications/${id}`),
+  create: (data: any) => api.post('/notifications', data),
+  update: (id: number, data: any) => api.put(`/notifications/${id}`, data),
+  delete: (id: number) => api.delete(`/notifications/${id}`),
+  test: (serviceUrl: string) => api.post('/notifications/test', { service_url: serviceUrl }),
+}
+
 export default api 

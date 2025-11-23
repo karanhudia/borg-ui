@@ -32,10 +32,12 @@ import {
   Edit,
   Key,
   AlertCircle,
+  Bell,
 } from 'lucide-react'
 import { settingsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
+import NotificationsTab from '../components/NotificationsTab'
 
 interface UserType {
   id: number
@@ -221,6 +223,12 @@ const Settings: React.FC = () => {
             label="Profile"
             sx={{ textTransform: 'none', minHeight: 48 }}
           />
+          <Tab
+            icon={<Bell size={18} />}
+            iconPosition="start"
+            label="Notifications"
+            sx={{ textTransform: 'none', minHeight: 48 }}
+          />
           {user?.is_admin && (
             <Tab
               icon={<Users size={18} />}
@@ -318,8 +326,11 @@ const Settings: React.FC = () => {
         </Box>
       )}
 
+      {/* Notifications Tab */}
+      {activeTab === 1 && <NotificationsTab />}
+
       {/* User Management Tab */}
-      {activeTab === (user?.is_admin ? 1 : 0) && user?.is_admin && (
+      {activeTab === (user?.is_admin ? 2 : 1) && user?.is_admin && (
         <Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
             <Typography variant="h6" fontWeight={600}>
