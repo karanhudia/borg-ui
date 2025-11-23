@@ -81,10 +81,12 @@ Both methods use the same simple workflow. The guide covers everything step-by-s
 
 ### Core Guides
 
-- **[📖 Usage Guide](usage-guide.md)** - **Step-by-step guides for creating local and SSH backups**
-- **[Installation Guide](https://github.com/karanhudia/borg-ui#installation-methods)** - Multiple deployment methods (Portainer, Docker Run, Docker Compose)
-- **[Configuration Guide](https://github.com/karanhudia/borg-ui#configuration)** - Environment variables and settings
-- **[Troubleshooting](https://github.com/karanhudia/borg-ui#troubleshooting)** - Common issues and solutions
+- **[Installation Guide](installation.md)** - Multiple deployment methods (Portainer, Docker Run, Docker Compose, Unraid)
+- **[Configuration Guide](configuration.md)** - Environment variables, volumes, and security setup
+- **[Usage Guide](usage-guide.md)** - Step-by-step guides for creating local and SSH backups
+- **[Notifications Setup](notifications.md)** - Configure email, Slack, Discord, and other notification services
+- **[SSH Keys Guide](ssh-keys.md)** - Generate and deploy SSH keys for remote backups
+- **[Security Guide](security.md)** - Best practices and security recommendations
 
 ### Technical Documentation
 
