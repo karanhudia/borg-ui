@@ -318,4 +318,52 @@ async def get_restore_status(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get restore status"
+        )
+
+@router.post("/cancel/{job_id}")
+async def cancel_restore(
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Cancel a running restore job"""
+    try:
+        job = db.query(RestoreJob).filter(RestoreJob.id == job_id).first()
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Restore job not found"
+            )
+
+        if job.status != "running":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Can only cancel running jobs"
+            )
+
+        # Try to terminate the actual process
+        from datetime import datetime
+        process_killed = await restore_service.cancel_restore(job_id)
+
+        # Update job status in database
+        job.status = "cancelled"
+        job.completed_at = datetime.now(timezone.utc)
+        if process_killed:
+            job.error_message = "Restore cancelled by user"
+        else:
+            job.error_message = "Restore cancelled by user (process not found, may have already completed)"
+        db.commit()
+
+        logger.info("Restore cancelled", job_id=job_id, user=current_user.username, process_killed=process_killed)
+        return {
+            "message": "Restore cancelled successfully",
+            "process_terminated": process_killed
+        }
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions to preserve status codes
+    except Exception as e:
+        logger.error("Failed to cancel restore", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to cancel restore"
         ) 

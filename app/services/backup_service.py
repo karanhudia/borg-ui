@@ -973,5 +973,41 @@ class BackupService:
             # Close the database session
             db.close()
 
+    async def cancel_backup(self, job_id: int) -> bool:
+        """
+        Cancel a running backup job by terminating its process
+
+        Args:
+            job_id: The backup job ID to cancel
+
+        Returns:
+            True if the process was found and terminated, False otherwise
+        """
+        if job_id not in self.running_processes:
+            logger.warning("No running process found for job", job_id=job_id)
+            return False
+
+        process = self.running_processes[job_id]
+
+        try:
+            # Try to terminate the process gracefully first
+            process.terminate()
+            logger.info("Sent SIGTERM to backup process", job_id=job_id, pid=process.pid)
+
+            # Wait up to 5 seconds for graceful termination
+            try:
+                await asyncio.wait_for(process.wait(), timeout=5.0)
+                logger.info("Backup process terminated gracefully", job_id=job_id)
+            except asyncio.TimeoutError:
+                # Force kill if it doesn't terminate gracefully
+                process.kill()
+                logger.warning("Force killed backup process (SIGKILL)", job_id=job_id, pid=process.pid)
+                await process.wait()
+
+            return True
+        except Exception as e:
+            logger.error("Failed to cancel backup process", job_id=job_id, error=str(e))
+            return False
+
 # Global instance
 backup_service = BackupService()

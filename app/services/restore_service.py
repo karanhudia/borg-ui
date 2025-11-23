@@ -17,6 +17,9 @@ logger = structlog.get_logger()
 class RestoreService:
     """Service for managing restore operations"""
 
+    def __init__(self):
+        self.running_processes = {}  # Track running restore processes by job_id
+
     async def execute_restore(
         self,
         job_id: int,
@@ -99,6 +102,9 @@ class RestoreService:
                 cwd=destination,
                 env=env
             )
+
+            # Track this process so it can be cancelled
+            self.running_processes[job_id] = process
 
             # Track progress
             current_file = ""
@@ -265,7 +271,48 @@ class RestoreService:
             except Exception as update_error:
                 logger.error("Failed to update job status", error=str(update_error))
         finally:
+            # Remove from running processes
+            if job_id in self.running_processes:
+                del self.running_processes[job_id]
+                logger.debug("Removed restore process from tracking", job_id=job_id)
+
             db_session.close()
+
+    async def cancel_restore(self, job_id: int) -> bool:
+        """
+        Cancel a running restore job by terminating its process
+
+        Args:
+            job_id: The restore job ID to cancel
+
+        Returns:
+            True if the process was found and terminated, False otherwise
+        """
+        if job_id not in self.running_processes:
+            logger.warning("No running process found for job", job_id=job_id)
+            return False
+
+        process = self.running_processes[job_id]
+
+        try:
+            # Try to terminate the process gracefully first
+            process.terminate()
+            logger.info("Sent SIGTERM to restore process", job_id=job_id, pid=process.pid)
+
+            # Wait up to 5 seconds for graceful termination
+            try:
+                await asyncio.wait_for(process.wait(), timeout=5.0)
+                logger.info("Restore process terminated gracefully", job_id=job_id)
+            except asyncio.TimeoutError:
+                # Force kill if it doesn't terminate gracefully
+                process.kill()
+                logger.warning("Force killed restore process (SIGKILL)", job_id=job_id, pid=process.pid)
+                await process.wait()
+
+            return True
+        except Exception as e:
+            logger.error("Failed to cancel restore process", job_id=job_id, error=str(e))
+            return False
 
 
 # Global instance
