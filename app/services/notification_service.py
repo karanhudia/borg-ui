@@ -45,40 +45,38 @@ def _create_html_email(title: str, content_blocks: list, footer: str = None) -> 
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            line-height: 1.6;
+            line-height: 1.4;
             color: #333;
             max-width: 600px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 10px;
             background-color: #f5f5f5;
         }
         .email-container {
             background-color: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             overflow: hidden;
         }
         .email-header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 30px 20px;
+            padding: 16px;
             text-align: center;
         }
         .email-header h1 {
             margin: 0;
-            font-size: 24px;
+            font-size: 18px;
             font-weight: 600;
         }
         .email-body {
-            padding: 30px 20px;
-        }
-        .info-section {
-            margin-bottom: 25px;
+            padding: 16px;
         }
         .info-row {
             display: flex;
-            padding: 12px 0;
+            padding: 8px 0;
             border-bottom: 1px solid #eee;
+            font-size: 14px;
         }
         .info-row:last-child {
             border-bottom: none;
@@ -86,7 +84,7 @@ def _create_html_email(title: str, content_blocks: list, footer: str = None) -> 
         .info-label {
             font-weight: 600;
             color: #555;
-            min-width: 140px;
+            min-width: 100px;
             flex-shrink: 0;
         }
         .info-value {
@@ -95,54 +93,51 @@ def _create_html_email(title: str, content_blocks: list, footer: str = None) -> 
         }
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin: 20px 0;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 12px 0;
         }
         .stat-card {
             background-color: #f8f9fa;
-            border-left: 4px solid #667eea;
-            padding: 15px;
-            border-radius: 4px;
+            border-left: 3px solid #667eea;
+            padding: 10px;
+            border-radius: 3px;
         }
         .stat-label {
-            font-size: 12px;
+            font-size: 10px;
             color: #666;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
         }
         .stat-value {
-            font-size: 20px;
+            font-size: 16px;
             font-weight: 600;
             color: #333;
         }
         .email-footer {
             background-color: #f8f9fa;
-            padding: 20px;
+            padding: 12px;
             text-align: center;
-            font-size: 13px;
+            font-size: 12px;
             color: #666;
             border-top: 1px solid #eee;
         }
-        .success-icon {
-            font-size: 48px;
-            margin-bottom: 10px;
-        }
         .error-box {
             background-color: #fff3cd;
-            border-left: 4px solid #ffc107;
-            padding: 15px;
-            margin: 15px 0;
-            border-radius: 4px;
+            border-left: 3px solid #ffc107;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 3px;
+            font-size: 13px;
         }
         .error-box pre {
-            margin: 10px 0 0 0;
-            padding: 10px;
+            margin: 8px 0 0 0;
+            padding: 8px;
             background-color: #fff;
-            border-radius: 4px;
+            border-radius: 3px;
             overflow-x: auto;
-            font-size: 12px;
+            font-size: 11px;
         }
     </style>
 </head>
