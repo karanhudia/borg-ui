@@ -148,7 +148,7 @@ export default function Dashboard() {
                   alignSelf: 'center',
                 }}
               >
-                <Activity size={28} color="#1976d2" />
+                <Activity size={28} color="white" />
               </Box>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="body2" color="text.secondary" noWrap>
@@ -193,7 +193,7 @@ export default function Dashboard() {
                     alignSelf: 'center',
                   }}
                 >
-                  <Cpu size={28} color="#0288d1" />
+                  <Cpu size={28} color="white" />
                 </Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography variant="body2" color="text.secondary" noWrap>
@@ -230,7 +230,7 @@ export default function Dashboard() {
                     alignSelf: 'center',
                   }}
                 >
-                  <MemoryStick size={28} color="#2e7d32" />
+                  <MemoryStick size={28} color="white" />
                 </Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography variant="body2" color="text.secondary" noWrap>
@@ -267,7 +267,7 @@ export default function Dashboard() {
                     alignSelf: 'center',
                   }}
                 >
-                  <HardDrive size={28} color="#ed6c02" />
+                  <HardDrive size={28} color="white" />
                 </Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography variant="body2" color="text.secondary" noWrap>
