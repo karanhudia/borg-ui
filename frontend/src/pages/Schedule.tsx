@@ -44,6 +44,7 @@ import {
   Calendar,
   RefreshCw,
   Download,
+  X,
 } from 'lucide-react'
 import { scheduleAPI, repositoriesAPI, backupAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
@@ -196,9 +197,22 @@ const Schedule: React.FC = () => {
       toast.success('Job started successfully')
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['backup-status'] })
+      queryClient.invalidateQueries({ queryKey: ['backup-jobs-scheduled'] })
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to run job')
+    },
+  })
+
+  // Cancel backup job mutation
+  const cancelBackupMutation = useMutation({
+    mutationFn: (jobId: string) => backupAPI.cancelJob(jobId),
+    onSuccess: () => {
+      toast.success('Backup cancelled successfully')
+      queryClient.invalidateQueries({ queryKey: ['backup-jobs-scheduled'] })
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to cancel backup')
     },
   })
 
@@ -976,27 +990,45 @@ const Schedule: React.FC = () => {
                         </Typography>
                       </TableCell>
                       <TableCell align="right">
-                        {job.has_logs && (
-                          <Tooltip title="Download Logs" arrow>
-                            <IconButton
-                              size="small"
-                              color="primary"
-                              onClick={() => backupAPI.downloadLogs(job.id)}
-                            >
-                              <Download size={16} />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                        {job.error_message && (
-                          <Tooltip title={job.error_message} arrow>
-                            <IconButton
-                              size="small"
-                              color="error"
-                            >
-                              <AlertCircle size={16} />
-                            </IconButton>
-                          </Tooltip>
-                        )}
+                        <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                          {job.status === 'running' && (
+                            <Tooltip title="Cancel Backup" arrow>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => {
+                                  if (window.confirm('Are you sure you want to cancel this backup?')) {
+                                    cancelBackupMutation.mutate(job.id)
+                                  }
+                                }}
+                                disabled={cancelBackupMutation.isLoading}
+                              >
+                                <X size={16} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          {job.has_logs && (
+                            <Tooltip title="Download Logs" arrow>
+                              <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={() => backupAPI.downloadLogs(job.id)}
+                              >
+                                <Download size={16} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          {job.error_message && (
+                            <Tooltip title={job.error_message} arrow>
+                              <IconButton
+                                size="small"
+                                color="error"
+                              >
+                                <AlertCircle size={16} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Stack>
                       </TableCell>
                     </TableRow>
                   ))}
