@@ -6,7 +6,7 @@ import subprocess
 import structlog
 from datetime import datetime
 from sqlalchemy.orm import Session
-from app.database.models import CheckJob, CompactJob, Repository
+from app.database.models import CheckJob, CompactJob, BackupJob, RestoreJob, Repository
 
 logger = structlog.get_logger()
 
@@ -125,6 +125,16 @@ def cleanup_orphaned_jobs(db: Session):
     """
     logger.info("Checking for orphaned jobs...")
 
+    # Find all running backup jobs
+    running_backup_jobs = db.query(BackupJob).filter(
+        BackupJob.status == "running"
+    ).all()
+
+    # Find all running restore jobs
+    running_restore_jobs = db.query(RestoreJob).filter(
+        RestoreJob.status == "running"
+    ).all()
+
     # Find all running check jobs
     running_check_jobs = db.query(CheckJob).filter(
         CheckJob.status == "running"
@@ -135,14 +145,38 @@ def cleanup_orphaned_jobs(db: Session):
         CompactJob.status == "running"
     ).all()
 
-    total_jobs = len(running_check_jobs) + len(running_compact_jobs)
+    total_jobs = len(running_backup_jobs) + len(running_restore_jobs) + len(running_check_jobs) + len(running_compact_jobs)
     logger.info("Found running jobs",
+               backup_jobs=len(running_backup_jobs),
+               restore_jobs=len(running_restore_jobs),
                check_jobs=len(running_check_jobs),
                compact_jobs=len(running_compact_jobs))
 
     if total_jobs == 0:
         logger.info("No orphaned jobs found")
         return
+
+    # Process backup jobs
+    for job in running_backup_jobs:
+        # Backup jobs don't have process_pid tracking, so we mark them all as failed on restart
+        job.status = "failed"
+        job.error_message = "Container restarted during backup operation"
+        job.completed_at = datetime.utcnow()
+
+        logger.info("Orphaned backup job detected",
+                   job_id=job.id,
+                   repository=job.repository)
+
+    # Process restore jobs
+    for job in running_restore_jobs:
+        # Restore jobs don't have process_pid tracking, so we mark them all as failed on restart
+        job.status = "failed"
+        job.error_message = "Container restarted during restore operation"
+        job.completed_at = datetime.utcnow()
+
+        logger.info("Orphaned restore job detected",
+                   job_id=job.id,
+                   repository=job.repository)
 
     # Process check jobs
     for job in running_check_jobs:
