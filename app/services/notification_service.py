@@ -24,6 +24,41 @@ def _format_bytes(bytes_value: int) -> str:
     return f"{bytes_value:.2f} PB"
 
 
+def _create_markdown_message(title: str, content_blocks: list, footer: str = None) -> str:
+    """
+    Create a well-formatted Markdown message for chat services (Slack, Discord, Telegram, etc.).
+
+    Args:
+        title: Message title/header
+        content_blocks: List of dicts with 'label'/'value' pairs or 'html' key (ignored for markdown)
+        footer: Optional footer text
+
+    Returns:
+        Markdown formatted string
+    """
+    lines = [f"**{title}**", ""]
+
+    for block in content_blocks:
+        if 'label' in block and 'value' in block:
+            lines.append(f"**{block['label']}:** {block['value']}")
+        elif 'html' in block:
+            # Skip HTML blocks - these are statistics that we'll format differently
+            # Extract stats from the HTML if needed, or just skip for now
+            pass
+
+    if footer:
+        lines.append("")
+        lines.append(f"_{footer}_")
+
+    return "\n".join(lines)
+
+
+def _is_email_service(service_url: str) -> bool:
+    """Check if the service URL is for an email service."""
+    email_prefixes = ['mailto://', 'mailtos://', 'smtp://', 'smtps://']
+    return any(service_url.lower().startswith(prefix) for prefix in email_prefixes)
+
+
 def _create_html_email(title: str, content_blocks: list, footer: str = None) -> str:
     """
     Create a well-formatted HTML email template.
@@ -209,13 +244,14 @@ class NotificationService:
         if not settings:
             return
 
-        # Build content blocks for HTML email
+        # Build content blocks for HTML email and markdown
         content_blocks = [
             {'label': 'Archive', 'value': archive_name},
             {'label': 'Repository', 'value': repository_name},
         ]
 
-        # Add statistics as a grid if available
+        # Add statistics as a grid for HTML, and as simple blocks for markdown
+        stats_blocks = []
         if stats:
             stats_html = '<div class="stats-grid">'
 
@@ -225,6 +261,7 @@ class NotificationService:
                     <div class="stat-label">Original Size</div>
                     <div class="stat-value">{_format_bytes(stats['original_size'])}</div>
                 </div>'''
+                stats_blocks.append({'label': 'Original Size', 'value': _format_bytes(stats['original_size'])})
 
             if "compressed_size" in stats and stats["compressed_size"]:
                 stats_html += f'''
@@ -232,6 +269,7 @@ class NotificationService:
                     <div class="stat-label">Compressed</div>
                     <div class="stat-value">{_format_bytes(stats['compressed_size'])}</div>
                 </div>'''
+                stats_blocks.append({'label': 'Compressed', 'value': _format_bytes(stats['compressed_size'])})
 
             if "deduplicated_size" in stats and stats["deduplicated_size"] is not None:
                 stats_html += f'''
@@ -239,6 +277,7 @@ class NotificationService:
                     <div class="stat-label">Deduplicated</div>
                     <div class="stat-value">{_format_bytes(stats['deduplicated_size'])}</div>
                 </div>'''
+                stats_blocks.append({'label': 'Deduplicated', 'value': _format_bytes(stats['deduplicated_size'])})
 
             stats_html += '</div>'
             content_blocks.append({'html': stats_html})
@@ -247,37 +286,33 @@ class NotificationService:
         completed_at = completion_time or datetime.now()
         timestamp_str = completed_at.strftime('%Y-%m-%d %H:%M:%S')
 
-        # Create HTML body
+        # Create content blocks for markdown (including stats)
+        markdown_blocks = [
+            {'label': 'Archive', 'value': archive_name},
+            {'label': 'Repository', 'value': repository_name},
+        ]
+        markdown_blocks.extend(stats_blocks)
+
+        # Create HTML body for email
         html_body = _create_html_email(
             title="✅ Backup Successful",
             content_blocks=content_blocks,
             footer=f"Completed at {timestamp_str}"
         )
 
-        # Fallback plain text body for non-HTML clients
-        body_lines = [
-            f"Archive: {archive_name}",
-            f"Repository: {repository_name}",
-        ]
-        if stats:
-            body_lines.append("")
-            body_lines.append("Statistics:")
-            if "original_size" in stats and stats["original_size"]:
-                body_lines.append(f"  • Original size: {_format_bytes(stats['original_size'])}")
-            if "compressed_size" in stats and stats["compressed_size"]:
-                body_lines.append(f"  • Compressed size: {_format_bytes(stats['compressed_size'])}")
-            if "deduplicated_size" in stats and stats["deduplicated_size"] is not None:
-                body_lines.append(f"  • Deduplicated size: {_format_bytes(stats['deduplicated_size'])}")
-        body_lines.append("")
-        body_lines.append(f"✓ Completed at {timestamp_str}")
-        text_body = "\n".join(body_lines)
+        # Create Markdown body for chat services
+        markdown_body = _create_markdown_message(
+            title="✅ Backup Successful",
+            content_blocks=markdown_blocks,
+            footer=f"Completed at {timestamp_str}"
+        )
 
         for setting in settings:
             title = "✅ Backup Successful"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
 
-            await NotificationService._send_to_service(db, setting, title, html_body, text_body)
+            await NotificationService._send_to_service(db, setting, title, html_body, markdown_body)
 
     @staticmethod
     async def send_backup_failure(
@@ -303,7 +338,7 @@ class NotificationService:
         if not settings:
             return
 
-        # Build content blocks for HTML
+        # Build content blocks
         content_blocks = [
             {'label': 'Repository', 'value': repository_name},
         ]
@@ -311,7 +346,7 @@ class NotificationService:
         if job_id:
             content_blocks.append({'label': 'Job ID', 'value': str(job_id)})
 
-        # Add error box
+        # Add error box for HTML
         error_html = f'''
         <div class="error-box">
             <strong>Error Details:</strong>
@@ -326,26 +361,26 @@ class NotificationService:
             footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
-        # Fallback plain text body
-        body_lines = [
-            f"Repository: {repository_name}",
-            "",
-            "Error Details:",
-            f"  {error_message}",
+        # Create markdown body (without HTML error box)
+        markdown_blocks = [
+            {'label': 'Repository', 'value': repository_name},
         ]
         if job_id:
-            body_lines.append("")
-            body_lines.append(f"Job ID: {job_id}")
-        body_lines.append("")
-        body_lines.append(f"⚠ Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        text_body = "\n".join(body_lines)
+            markdown_blocks.append({'label': 'Job ID', 'value': str(job_id)})
+        markdown_blocks.append({'label': 'Error', 'value': f"```\n{error_message}\n```"})
+
+        markdown_body = _create_markdown_message(
+            title="❌ Backup Failed",
+            content_blocks=markdown_blocks,
+            footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
 
         for setting in settings:
             title = "❌ Backup Failed"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
 
-            await NotificationService._send_to_service(db, setting, title, html_body, text_body)
+            await NotificationService._send_to_service(db, setting, title, html_body, markdown_body)
 
     @staticmethod
     async def send_restore_success(
@@ -373,7 +408,7 @@ class NotificationService:
         if not settings:
             return
 
-        # Build content blocks for HTML
+        # Build content blocks
         content_blocks = [
             {'label': 'Archive', 'value': archive_name},
             {'label': 'Repository', 'value': repository_name},
@@ -390,19 +425,18 @@ class NotificationService:
             footer=f"Completed at {timestamp_str}"
         )
 
-        # Fallback plain text
-        text_body = f"""Archive: {archive_name}
-Repository: {repository_name}
-Destination: {target_path}
-
-✓ Completed at {timestamp_str}"""
+        markdown_body = _create_markdown_message(
+            title="✅ Restore Successful",
+            content_blocks=content_blocks,
+            footer=f"Completed at {timestamp_str}"
+        )
 
         for setting in settings:
             title = "✅ Restore Successful"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
 
-            await NotificationService._send_to_service(db, setting, title, html_body, text_body)
+            await NotificationService._send_to_service(db, setting, title, html_body, markdown_body)
 
     @staticmethod
     async def send_restore_failure(
@@ -428,7 +462,7 @@ Destination: {target_path}
         if not settings:
             return
 
-        # Build content blocks for HTML
+        # Build content blocks
         content_blocks = [
             {'label': 'Archive', 'value': archive_name},
             {'label': 'Repository', 'value': repository_name},
@@ -447,21 +481,25 @@ Destination: {target_path}
             footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
-        # Fallback plain text
-        text_body = f"""Archive: {archive_name}
-Repository: {repository_name}
+        # Create markdown body
+        markdown_blocks = [
+            {'label': 'Archive', 'value': archive_name},
+            {'label': 'Repository', 'value': repository_name},
+            {'label': 'Error', 'value': f"```\n{error_message}\n```"},
+        ]
 
-Error Details:
-  {error_message}
-
-⚠ Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
+        markdown_body = _create_markdown_message(
+            title="❌ Restore Failed",
+            content_blocks=markdown_blocks,
+            footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
 
         for setting in settings:
             title = "❌ Restore Failed"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
 
-            await NotificationService._send_to_service(db, setting, title, html_body, text_body)
+            await NotificationService._send_to_service(db, setting, title, html_body, markdown_body)
 
     @staticmethod
     async def send_schedule_failure(
@@ -487,7 +525,7 @@ Error Details:
         if not settings:
             return
 
-        # Build content blocks for HTML
+        # Build content blocks
         content_blocks = [
             {'label': 'Schedule', 'value': schedule_name},
             {'label': 'Repository', 'value': repository_name},
@@ -506,21 +544,25 @@ Error Details:
             footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
-        # Fallback plain text
-        text_body = f"""Schedule: {schedule_name}
-Repository: {repository_name}
+        # Create markdown body
+        markdown_blocks = [
+            {'label': 'Schedule', 'value': schedule_name},
+            {'label': 'Repository', 'value': repository_name},
+            {'label': 'Error', 'value': f"```\n{error_message}\n```"},
+        ]
 
-Error Details:
-  {error_message}
-
-⚠ Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
+        markdown_body = _create_markdown_message(
+            title="❌ Scheduled Backup Failed",
+            content_blocks=markdown_blocks,
+            footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
 
         for setting in settings:
             title = "❌ Scheduled Backup Failed"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
 
-            await NotificationService._send_to_service(db, setting, title, html_body, text_body)
+            await NotificationService._send_to_service(db, setting, title, html_body, markdown_body)
 
     @staticmethod
     async def test_notification(service_url: str) -> dict:
@@ -586,44 +628,42 @@ Error Details:
         db: Session,
         setting: NotificationSettings,
         title: str,
-        body: str,
-        body_format: str = None
+        html_body: str,
+        markdown_body: str
     ) -> None:
         """
         Send notification to a single service.
+
+        Automatically chooses the appropriate format based on service type:
+        - Email services: HTML format
+        - Chat services (Slack, Discord, Telegram, etc.): Markdown format
 
         Args:
             db: Database session
             setting: Notification setting
             title: Notification title
-            body: Notification body (HTML or plain text)
-            body_format: Optional plain text fallback for HTML emails
+            html_body: HTML formatted body (for email)
+            markdown_body: Markdown formatted body (for chat services)
         """
         try:
             apobj = apprise.Apprise()
             apobj.add(setting.service_url)
 
-            # Determine body format - use HTML if body looks like HTML
-            notify_type = apprise.NotifyType.INFO
-
-            # For email services, use HTML format if body contains HTML tags
-            if body_format:
-                # Send HTML with plain text fallback
+            # Choose format based on service type
+            if _is_email_service(setting.service_url):
+                # Email service - use HTML format
                 success = apobj.notify(
                     title=title,
-                    body=body,
-                    body_format=apprise.NotifyFormat.HTML
-                )
-            elif '<html' in body.lower() or '<div' in body.lower():
-                # Looks like HTML
-                success = apobj.notify(
-                    title=title,
-                    body=body,
+                    body=html_body,
                     body_format=apprise.NotifyFormat.HTML
                 )
             else:
-                # Plain text
-                success = apobj.notify(title=title, body=body)
+                # Chat service - use Markdown format
+                success = apobj.notify(
+                    title=title,
+                    body=markdown_body,
+                    body_format=apprise.NotifyFormat.MARKDOWN
+                )
 
             if success:
                 # Update last_used_at timestamp
