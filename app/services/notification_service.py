@@ -188,7 +188,8 @@ class NotificationService:
         db: Session,
         repository_name: str,
         archive_name: str,
-        stats: Optional[dict] = None
+        stats: Optional[dict] = None,
+        completion_time: Optional[datetime] = None
     ) -> None:
         """
         Send notification for successful backup.
@@ -198,6 +199,7 @@ class NotificationService:
             repository_name: Name of repository
             archive_name: Name of created archive
             stats: Backup statistics (optional)
+            completion_time: When the backup completed (optional, defaults to now)
         """
         settings = db.query(NotificationSettings).filter(
             NotificationSettings.enabled == True,
@@ -241,11 +243,15 @@ class NotificationService:
             stats_html += '</div>'
             content_blocks.append({'html': stats_html})
 
+        # Use provided completion time or current time as fallback
+        completed_at = completion_time or datetime.now()
+        timestamp_str = completed_at.strftime('%Y-%m-%d %H:%M:%S')
+
         # Create HTML body
         html_body = _create_html_email(
             title="✅ Backup Successful",
             content_blocks=content_blocks,
-            footer=f"Completed at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"
+            footer=f"Completed at {timestamp_str}"
         )
 
         # Fallback plain text body for non-HTML clients
@@ -263,7 +269,7 @@ class NotificationService:
             if "deduplicated_size" in stats and stats["deduplicated_size"] is not None:
                 body_lines.append(f"  • Deduplicated size: {_format_bytes(stats['deduplicated_size'])}")
         body_lines.append("")
-        body_lines.append(f"✓ Completed at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
+        body_lines.append(f"✓ Completed at {timestamp_str}")
         text_body = "\n".join(body_lines)
 
         for setting in settings:
@@ -317,7 +323,7 @@ class NotificationService:
         html_body = _create_html_email(
             title="❌ Backup Failed",
             content_blocks=content_blocks,
-            footer=f"Failed at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"
+            footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
         # Fallback plain text body
@@ -331,7 +337,7 @@ class NotificationService:
             body_lines.append("")
             body_lines.append(f"Job ID: {job_id}")
         body_lines.append("")
-        body_lines.append(f"⚠ Failed at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
+        body_lines.append(f"⚠ Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         text_body = "\n".join(body_lines)
 
         for setting in settings:
@@ -346,7 +352,8 @@ class NotificationService:
         db: Session,
         repository_name: str,
         archive_name: str,
-        target_path: str
+        target_path: str,
+        completion_time: Optional[datetime] = None
     ) -> None:
         """
         Send notification for successful restore.
@@ -356,6 +363,7 @@ class NotificationService:
             repository_name: Name of repository
             archive_name: Name of restored archive
             target_path: Restore destination
+            completion_time: When the restore completed (optional, defaults to now)
         """
         settings = db.query(NotificationSettings).filter(
             NotificationSettings.enabled == True,
@@ -372,10 +380,14 @@ class NotificationService:
             {'label': 'Destination', 'value': target_path},
         ]
 
+        # Use provided completion time or current time as fallback
+        completed_at = completion_time or datetime.now()
+        timestamp_str = completed_at.strftime('%Y-%m-%d %H:%M:%S')
+
         html_body = _create_html_email(
             title="✅ Restore Successful",
             content_blocks=content_blocks,
-            footer=f"Completed at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"
+            footer=f"Completed at {timestamp_str}"
         )
 
         # Fallback plain text
@@ -383,7 +395,7 @@ class NotificationService:
 Repository: {repository_name}
 Destination: {target_path}
 
-✓ Completed at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"""
+✓ Completed at {timestamp_str}"""
 
         for setting in settings:
             title = "✅ Restore Successful"
@@ -432,7 +444,7 @@ Destination: {target_path}
         html_body = _create_html_email(
             title="❌ Restore Failed",
             content_blocks=content_blocks,
-            footer=f"Failed at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"
+            footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
         # Fallback plain text
@@ -442,7 +454,7 @@ Repository: {repository_name}
 Error Details:
   {error_message}
 
-⚠ Failed at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"""
+⚠ Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
 
         for setting in settings:
             title = "❌ Restore Failed"
@@ -491,7 +503,7 @@ Error Details:
         html_body = _create_html_email(
             title="❌ Scheduled Backup Failed",
             content_blocks=content_blocks,
-            footer=f"Failed at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"
+            footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
         # Fallback plain text
@@ -501,7 +513,7 @@ Repository: {repository_name}
 Error Details:
   {error_message}
 
-⚠ Failed at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"""
+⚠ Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
 
         for setting in settings:
             title = "❌ Scheduled Backup Failed"

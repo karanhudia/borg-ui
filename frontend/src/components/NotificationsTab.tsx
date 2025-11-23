@@ -344,7 +344,15 @@ const NotificationsTab: React.FC = () => {
                     <TableCell>
                       <Typography variant="body2" color="text.secondary">
                         {notification.last_used_at
-                          ? new Date(notification.last_used_at).toLocaleString()
+                          ? new Date(notification.last_used_at).toLocaleString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit',
+                              hour12: false
+                            })
                           : 'Never'}
                       </Typography>
                     </TableCell>
