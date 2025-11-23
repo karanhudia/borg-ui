@@ -1,6 +1,8 @@
 ---
 layout: default
-title: Usage Guide - Borg Web UI
+title: Usage Guide
+nav_order: 4
+description: "How to create and manage backups"
 ---
 
 # Usage Guide: Creating Backups

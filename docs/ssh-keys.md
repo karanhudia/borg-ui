@@ -1,6 +1,8 @@
 ---
 layout: default
-title: SSH Keys Guide
+title: SSH Keys
+nav_order: 6
+description: "Set up SSH keys for remote backup repositories"
 ---
 
 # SSH Keys Guide
