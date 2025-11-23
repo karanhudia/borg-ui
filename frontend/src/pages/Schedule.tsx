@@ -224,7 +224,7 @@ const Schedule: React.FC = () => {
     repository: '',
     enabled: true,
     description: '',
-    archive_name_template: '',
+    archive_name_template: '{job_name}-{now}',
     run_prune_after: false,
     run_compact_after: false,
     prune_keep_daily: 7,
@@ -255,7 +255,7 @@ const Schedule: React.FC = () => {
       repository: '',
       enabled: true,
       description: '',
-      archive_name_template: '',
+      archive_name_template: '{job_name}-{now}',
       run_prune_after: false,
       run_compact_after: false,
       prune_keep_daily: 7,
@@ -329,7 +329,7 @@ const Schedule: React.FC = () => {
       repository: job.repository || '',
       enabled: job.enabled,
       description: job.description || '',
-      archive_name_template: job.archive_name_template || '',
+      archive_name_template: job.archive_name_template || '{job_name}-{now}',
       run_prune_after: job.run_prune_after || false,
       run_compact_after: job.run_compact_after || false,
       prune_keep_daily: job.prune_keep_daily || 7,
@@ -1175,10 +1175,9 @@ const Schedule: React.FC = () => {
                 label="Archive Name Template"
                 value={createForm.archive_name_template}
                 onChange={(e) => setCreateForm({ ...createForm, archive_name_template: e.target.value })}
-                placeholder="{job_name}-{now} (default)"
                 fullWidth
                 size="medium"
-                helperText="Customize archive naming. Available: {job_name}, {now}, {date}, {time}, {timestamp}"
+                helperText="Customize archive naming. Available placeholders: {job_name}, {now}, {date}, {time}, {timestamp}"
                 InputProps={{
                   sx: { fontSize: '1.1rem', fontFamily: 'monospace' }
                 }}
@@ -1400,10 +1399,9 @@ const Schedule: React.FC = () => {
                 label="Archive Name Template"
                 value={editForm.archive_name_template}
                 onChange={(e) => setEditForm({ ...editForm, archive_name_template: e.target.value })}
-                placeholder="{job_name}-{now} (default)"
                 fullWidth
                 size="medium"
-                helperText="Customize archive naming. Available: {job_name}, {now}, {date}, {time}, {timestamp}"
+                helperText="Customize archive naming. Available placeholders: {job_name}, {now}, {date}, {time}, {timestamp}"
                 InputProps={{
                   sx: { fontSize: '1.1rem', fontFamily: 'monospace' }
                 }}
