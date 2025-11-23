@@ -7,6 +7,7 @@ Provides CRUD operations for notification configurations.
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
+from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.database.database import get_db
@@ -50,12 +51,15 @@ class NotificationSettingsResponse(BaseModel):
     notify_on_restore_success: bool
     notify_on_restore_failure: bool
     notify_on_schedule_failure: bool
-    created_at: str
-    updated_at: str
-    last_used_at: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    last_used_at: Optional[datetime]
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat() if v else None
+        }
 
 
 class TestNotificationRequest(BaseModel):
