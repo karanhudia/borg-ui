@@ -61,6 +61,7 @@ interface ScheduledJob {
   created_at: string
   updated_at: string | null
   description: string | null
+  archive_name_template: string | null
   run_prune_after: boolean
   run_compact_after: boolean
   prune_keep_daily: number
@@ -223,6 +224,7 @@ const Schedule: React.FC = () => {
     repository: '',
     enabled: true,
     description: '',
+    archive_name_template: '',
     run_prune_after: false,
     run_compact_after: false,
     prune_keep_daily: 7,
@@ -237,6 +239,7 @@ const Schedule: React.FC = () => {
     repository: '',
     enabled: true,
     description: '',
+    archive_name_template: '',
     run_prune_after: false,
     run_compact_after: false,
     prune_keep_daily: 7,
@@ -252,6 +255,7 @@ const Schedule: React.FC = () => {
       repository: '',
       enabled: true,
       description: '',
+      archive_name_template: '',
       run_prune_after: false,
       run_compact_after: false,
       prune_keep_daily: 7,
@@ -325,6 +329,7 @@ const Schedule: React.FC = () => {
       repository: job.repository || '',
       enabled: job.enabled,
       description: job.description || '',
+      archive_name_template: job.archive_name_template || '',
       run_prune_after: job.run_prune_after || false,
       run_compact_after: job.run_compact_after || false,
       prune_keep_daily: job.prune_keep_daily || 7,
@@ -517,9 +522,26 @@ const Schedule: React.FC = () => {
                         Job #{job.id} - {getRepositoryName(job.repository)}
                       </Typography>
                     </Stack>
-                    <Typography variant="caption" color="text.secondary">
-                      Started: {formatRelativeTime(job.started_at)}
-                    </Typography>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Typography variant="caption" color="text.secondary">
+                        Started: {formatRelativeTime(job.started_at)}
+                      </Typography>
+                      <Tooltip title="Cancel Backup" arrow>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => {
+                            if (window.confirm(`Are you sure you want to cancel backup job #${job.id}?`)) {
+                              cancelBackupMutation.mutate(job.id)
+                            }
+                          }}
+                          disabled={cancelBackupMutation.isLoading}
+                          sx={{ ml: 1 }}
+                        >
+                          <X size={16} />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
                   </Stack>
 
                   {/* Current File Being Processed */}
@@ -1149,6 +1171,22 @@ const Schedule: React.FC = () => {
                 }}
               />
 
+              <TextField
+                label="Archive Name Template"
+                value={createForm.archive_name_template}
+                onChange={(e) => setCreateForm({ ...createForm, archive_name_template: e.target.value })}
+                placeholder="{job_name}-{now} (default)"
+                fullWidth
+                size="medium"
+                helperText="Customize archive naming. Available: {job_name}, {now}, {date}, {time}, {timestamp}"
+                InputProps={{
+                  sx: { fontSize: '1.1rem', fontFamily: 'monospace' }
+                }}
+                InputLabelProps={{
+                  sx: { fontSize: '1.1rem' }
+                }}
+              />
+
               <FormControlLabel
                 control={
                   <Switch
@@ -1352,6 +1390,22 @@ const Schedule: React.FC = () => {
                 size="medium"
                 InputProps={{
                   sx: { fontSize: '1.1rem' }
+                }}
+                InputLabelProps={{
+                  sx: { fontSize: '1.1rem' }
+                }}
+              />
+
+              <TextField
+                label="Archive Name Template"
+                value={editForm.archive_name_template}
+                onChange={(e) => setEditForm({ ...editForm, archive_name_template: e.target.value })}
+                placeholder="{job_name}-{now} (default)"
+                fullWidth
+                size="medium"
+                helperText="Customize archive naming. Available: {job_name}, {now}, {date}, {time}, {timestamp}"
+                InputProps={{
+                  sx: { fontSize: '1.1rem', fontFamily: 'monospace' }
                 }}
                 InputLabelProps={{
                   sx: { fontSize: '1.1rem' }

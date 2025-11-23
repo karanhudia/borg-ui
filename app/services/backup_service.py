@@ -321,8 +321,15 @@ class BackupService:
             logger.error("Failed to calculate total source size", error=str(e))
             return 0
 
-    async def execute_backup(self, job_id: int, repository: str, db: Session = None):
-        """Execute backup using borg directly for better control"""
+    async def execute_backup(self, job_id: int, repository: str, db: Session = None, archive_name: str = None):
+        """Execute backup using borg directly for better control
+
+        Args:
+            job_id: Backup job ID
+            repository: Repository path
+            db: Database session (optional, will create new if not provided)
+            archive_name: Optional custom archive name (if None, will use default manual-backup naming)
+        """
 
         # Create a new database session for this background task
         db = SessionLocal()
@@ -342,7 +349,8 @@ class BackupService:
             # Build borg create command directly
             # Format: borg create --progress --stats --list REPOSITORY::ARCHIVE PATH [PATH ...]
             # Use local time for archive names so they're meaningful to users
-            archive_name = f"manual-backup-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
+            if not archive_name:
+                archive_name = f"manual-backup-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
 
             # Set environment variables for borg
             env = os.environ.copy()
