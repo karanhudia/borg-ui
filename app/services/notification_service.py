@@ -191,9 +191,15 @@ class NotificationService:
             result = apobj.add(service_url)
 
             if not result:
+                # Try to provide helpful error message based on URL prefix
+                service_type = service_url.split(':')[0] if ':' in service_url else 'unknown'
                 return {
                     "success": False,
-                    "message": "Invalid service URL format"
+                    "message": f"Invalid URL format for '{service_type}' service. Please check the URL syntax. Example formats:\n" +
+                               "• Email: mailtos://user:password@smtp.gmail.com\n" +
+                               "• Slack: slack://TokenA/TokenB/TokenC/\n" +
+                               "• Discord: discord://webhook_id/webhook_token\n" +
+                               "• Telegram: telegram://bot_token/chat_id"
                 }
 
             # Send test notification
@@ -210,7 +216,7 @@ class NotificationService:
             else:
                 return {
                     "success": False,
-                    "message": "Failed to send test notification"
+                    "message": "Failed to send test notification. The URL format is valid, but sending failed. Check your credentials and network connectivity."
                 }
 
         except Exception as e:
