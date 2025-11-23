@@ -1,6 +1,8 @@
 ---
 layout: default
-title: Configuration Guide
+title: Configuration
+nav_order: 3
+description: "Environment variables, volumes, and settings"
 ---
 
 # Configuration Guide

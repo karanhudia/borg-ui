@@ -1,40 +1,60 @@
 title: Borg Web UI
 description: A modern, user-friendly web interface for Borg Backup management
-theme: jekyll-theme-cayman
+remote_theme: just-the-docs/just-the-docs
 baseurl: /borg-ui
 url: https://karanhudia.github.io
 
 # GitHub metadata
 repository: karanhudia/borg-ui
 
+# Color scheme
+color_scheme: dark
+
+# Logo
+logo: "/assets/images/logo.png"
+
+# Footer content
+footer_content: "Copyright &copy; 2024 Karan Hudia. Distributed under the GPL-3.0 License."
+
+# Back to top link
+back_to_top: true
+back_to_top_text: "Back to top"
+
+# Aux links (top right)
+aux_links:
+  "GitHub":
+    - "//github.com/karanhudia/borg-ui"
+  "Docker Hub":
+    - "//hub.docker.com/r/ainullcode/borg-ui"
+
+# Aux links new tab
+aux_links_new_tab: true
+
+# Search
+search_enabled: true
+search:
+  heading_level: 2
+  previews: 3
+  preview_words_before: 5
+  preview_words_after: 10
+  tokenizer_separator: /[\s/]+/
+  rel_url: true
+  button: false
+
+# Heading anchors
+heading_anchors: true
+
+# Enable copy button on code blocks
+enable_copy_code_button: true
+
 # Build settings
 markdown: kramdown
 kramdown:
   input: GFM
   syntax_highlighter: rouge
-
-# Plugins
-plugins:
-  - jekyll-relative-links
-  - jekyll-optional-front-matter
-  - jekyll-readme-index
-  - jekyll-titles-from-headings
-
-# Plugin settings
-relative_links:
-  enabled: true
-  collections: false
-
-optional_front_matter:
-  remove_originals: false
-
-titles_from_headings:
-  enabled: true
-  strip_title: true
-  collections: false
-
-# Navigation
-show_downloads: true
+  syntax_highlighter_opts:
+    block:
+      line_numbers: false
 
 # Exclude from processing
 exclude:

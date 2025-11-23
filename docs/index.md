@@ -1,6 +1,9 @@
 ---
 layout: default
-title: Borg Web UI Documentation
+title: Home
+nav_order: 1
+description: "A modern web interface for Borg Backup"
+permalink: /
 ---
 
 # Borg Web UI

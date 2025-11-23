@@ -1,3 +1,10 @@
+---
+layout: default
+title: Technical Specification
+nav_order: 8
+description: "Architecture and technical details"
+---
+
 # Borg Web UI - Technical Specification
 
 ## 1. Executive Summary

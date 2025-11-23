@@ -1,6 +1,8 @@
 ---
 layout: default
-title: Notifications Setup
+title: Notifications
+nav_order: 5
+description: "Configure alerts via email, Slack, Discord, and 100+ services"
 ---
 
 # Notifications Setup

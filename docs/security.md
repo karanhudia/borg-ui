@@ -1,6 +1,8 @@
 ---
 layout: default
-title: Security Guide
+title: Security
+nav_order: 7
+description: "Best practices and security recommendations"
 ---
 
 # Security Guide

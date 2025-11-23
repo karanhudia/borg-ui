@@ -1,6 +1,8 @@
 ---
 layout: default
-title: Installation Guide
+title: Installation
+nav_order: 2
+description: "How to install Borg Web UI on various platforms"
 ---
 
 # Installation Guide
