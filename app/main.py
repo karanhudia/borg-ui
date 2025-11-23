@@ -6,7 +6,7 @@ import structlog
 import os
 from dotenv import load_dotenv
 
-from app.api import auth, dashboard, backup, archives, restore, schedule, settings as settings_api, events, repositories, ssh_keys, system, filesystem, browse
+from app.api import auth, dashboard, backup, archives, restore, schedule, settings as settings_api, events, repositories, ssh_keys, system, filesystem, browse, notifications
 from app.database.database import engine
 from app.database.models import Base
 from app.core.security import create_first_user
@@ -84,6 +84,7 @@ app.include_router(repositories.router, prefix="/api/repositories", tags=["Repos
 app.include_router(ssh_keys.router, prefix="/api/ssh-keys", tags=["SSH Keys"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
 app.include_router(filesystem.router, prefix="/api/filesystem", tags=["Filesystem"])
+app.include_router(notifications.router)
 
 @app.on_event("startup")
 async def startup_event():

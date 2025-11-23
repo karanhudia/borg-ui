@@ -9,6 +9,7 @@ from typing import Optional
 from app.database.models import RestoreJob, Repository
 from app.core.borg import borg
 from app.database.database import SessionLocal
+from app.services.notification_service import notification_service
 
 logger = structlog.get_logger()
 
@@ -210,6 +211,14 @@ class RestoreService:
                            job_id=job_id,
                            repository=repository_path,
                            archive=archive_name)
+
+                # Send success notification
+                try:
+                    await notification_service.send_restore_success(
+                        db_session, repository_path, archive_name, target_path
+                    )
+                except Exception as e:
+                    logger.warning("Failed to send restore success notification", error=str(e))
             else:
                 job.status = "failed"
                 stderr_output = "\n".join(stderr_lines)
@@ -221,6 +230,14 @@ class RestoreService:
                             job_id=job_id,
                             return_code=process.returncode,
                             error=stderr_output)
+
+                # Send failure notification
+                try:
+                    await notification_service.send_restore_failure(
+                        db_session, repository_path, archive_name, job.error_message
+                    )
+                except Exception as e:
+                    logger.warning("Failed to send restore failure notification", error=str(e))
 
             db_session.commit()
 
@@ -237,6 +254,14 @@ class RestoreService:
                     job.error_message = str(e)
                     job.completed_at = datetime.now(timezone.utc)
                     db_session.commit()
+
+                    # Send failure notification
+                    try:
+                        await notification_service.send_restore_failure(
+                            db_session, repository_path, archive_name, str(e)
+                        )
+                    except Exception as notif_error:
+                        logger.warning("Failed to send restore failure notification", error=str(notif_error))
             except Exception as update_error:
                 logger.error("Failed to update job status", error=str(update_error))
         finally:

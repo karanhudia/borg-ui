@@ -22,4 +22,5 @@ pytest-cov==4.1.0
 coverage[toml]==7.3.2
 httpx==0.25.2
 requests==2.32.4
-croniter==1.4.1 
+croniter==1.4.1
+apprise==1.9.0 
