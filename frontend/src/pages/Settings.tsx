@@ -38,6 +38,7 @@ import { settingsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
 import NotificationsTab from '../components/NotificationsTab'
+import { formatDateShort } from '../utils/dateUtils'
 
 interface UserType {
   id: number
@@ -395,14 +396,12 @@ const Settings: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2">
-                            {new Date(user.created_at).toLocaleDateString()}
+                            {formatDateShort(user.created_at)}
                           </Typography>
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2" color="text.secondary">
-                            {user.last_login
-                              ? new Date(user.last_login).toLocaleDateString()
-                              : 'Never'}
+                            {formatDateShort(user.last_login)}
                           </Typography>
                         </TableCell>
                         <TableCell align="right">
