@@ -45,6 +45,9 @@ services:
       # Optional overrides (all have smart defaults)
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - PORT=${PORT:-8081}
+      # Timezone configuration (defaults to host timezone via /etc/localtime mount)
+      # Override if needed: TZ=Asia/Kolkata, TZ=America/New_York, etc.
+      - TZ=${TZ:-}
       # User/Group ID for file permissions (LinuxServer.io style)
       - PUID=${PUID:-1001}
       - PGID=${PGID:-1001}
