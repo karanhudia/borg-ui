@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import { sshKeysAPI } from '../services/api'
+import { formatDate } from '../utils/dateUtils'
 import {
   Box,
   Card,
@@ -574,9 +575,7 @@ export default function SSHConnectionsSingleKey() {
                         </TableCell>
                         <TableCell>
                           <Typography variant="caption" color="text.secondary">
-                            {connection.last_test
-                              ? new Date(connection.last_test).toLocaleString()
-                              : 'Never'}
+                            {formatDate(connection.last_test)}
                           </Typography>
                         </TableCell>
                         <TableCell align="right">
