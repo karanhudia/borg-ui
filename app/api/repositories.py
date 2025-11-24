@@ -15,6 +15,7 @@ from app.core.borg import BorgInterface
 from app.config import settings
 from app.services.check_service import check_service
 from app.services.compact_service import compact_service
+from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["repositories"])
@@ -93,13 +94,7 @@ async def update_repository_archive_count(repository: Repository, db: Session) -
 # Helper function to format datetime with timezone
 def format_datetime(dt):
     """Format datetime to ISO8601 with UTC timezone indicator"""
-    if dt is None:
-        return None
-    # If datetime is naive (no timezone), assume it's UTC and add timezone info
-    if dt.tzinfo is None:
-        from datetime import timezone
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.isoformat()
+    return serialize_datetime(dt)
 
 # Pydantic models
 from pydantic import BaseModel
@@ -1970,8 +1965,8 @@ async def get_check_job_status(
             "id": job.id,
             "repository_id": job.repository_id,
             "status": job.status,
-            "started_at": job.started_at.isoformat() if job.started_at else None,
-            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+            "started_at": serialize_datetime(job.started_at),
+            "completed_at": serialize_datetime(job.completed_at),
             "progress": job.progress,
             "progress_message": job.progress_message,
             "error_message": job.error_message,
@@ -2002,8 +1997,8 @@ async def get_repository_check_jobs(
                     "id": job.id,
                     "repository_id": job.repository_id,
                     "status": job.status,
-                    "started_at": job.started_at.isoformat() if job.started_at else None,
-                    "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                    "started_at": serialize_datetime(job.started_at),
+                    "completed_at": serialize_datetime(job.completed_at),
                     "progress": job.progress,
                     "progress_message": job.progress_message,
                     "error_message": job.error_message,
@@ -2032,8 +2027,8 @@ async def get_compact_job_status(
             "id": job.id,
             "repository_id": job.repository_id,
             "status": job.status,
-            "started_at": job.started_at.isoformat() if job.started_at else None,
-            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+            "started_at": serialize_datetime(job.started_at),
+            "completed_at": serialize_datetime(job.completed_at),
             "progress": job.progress,
             "progress_message": job.progress_message,
             "error_message": job.error_message,
@@ -2064,8 +2059,8 @@ async def get_repository_compact_jobs(
                     "id": job.id,
                     "repository_id": job.repository_id,
                     "status": job.status,
-                    "started_at": job.started_at.isoformat() if job.started_at else None,
-                    "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                    "started_at": serialize_datetime(job.started_at),
+                    "completed_at": serialize_datetime(job.completed_at),
                     "progress": job.progress,
                     "progress_message": job.progress_message,
                     "error_message": job.error_message,
@@ -2105,13 +2100,13 @@ async def get_running_jobs(
                 "id": check_job.id,
                 "progress": check_job.progress,
                 "progress_message": check_job.progress_message,
-                "started_at": check_job.started_at.isoformat() + 'Z' if check_job.started_at else None
+                "started_at": serialize_datetime(check_job.started_at)
             } if check_job else None,
             "compact_job": {
                 "id": compact_job.id,
                 "progress": compact_job.progress,
                 "progress_message": compact_job.progress_message,
-                "started_at": compact_job.started_at.isoformat() + 'Z' if compact_job.started_at else None
+                "started_at": serialize_datetime(compact_job.started_at)
             } if compact_job else None
         }
 
