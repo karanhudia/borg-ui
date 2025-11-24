@@ -503,68 +503,6 @@ const Backup: React.FC = () => {
                   </Table>
                 </TableContainer>
               </Box>
-
-              <Divider />
-
-              {/* Backup Statistics */}
-              <Box>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
-                  <Archive size={18} color="rgba(0,0,0,0.6)" />
-                  <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
-                    Backup Statistics
-                  </Typography>
-                </Stack>
-                <TableContainer sx={{ pl: 3.5 }}>
-                  <Table size="small">
-                    <TableBody>
-                      <TableRow>
-                        <TableCell sx={{ fontWeight: 500, color: 'text.secondary', width: '30%', border: 'none', py: 0.5 }}>
-                          Last Backup
-                        </TableCell>
-                        <TableCell sx={{ border: 'none', py: 0.5 }}>
-                          {liveStats.lastBackup ? formatRelativeTime(liveStats.lastBackup) : 'Never'}
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}>
-                          Total Archive Count
-                        </TableCell>
-                        <TableCell sx={{ border: 'none', py: 0.5 }}>
-                          {liveStats.archiveCount} {liveStats.archiveCount === 1 ? 'archive' : 'archives'}
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}>
-                          Total Repository Size
-                        </TableCell>
-                        <TableCell sx={{ border: 'none', py: 0.5 }}>
-                          {liveStats.totalSize || 'Unknown'}
-                        </TableCell>
-                      </TableRow>
-                      {liveStats.lastArchive && (
-                        <>
-                          <TableRow>
-                            <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}>
-                              Last Archive
-                            </TableCell>
-                            <TableCell sx={{ border: 'none', py: 0.5 }}>
-                              {liveStats.lastArchive.name}
-                            </TableCell>
-                          </TableRow>
-                          <TableRow>
-                            <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}>
-                              Last Archive Created
-                            </TableCell>
-                            <TableCell sx={{ border: 'none', py: 0.5 }}>
-                              {formatRelativeTime(liveStats.lastArchive.start)}
-                            </TableCell>
-                          </TableRow>
-                        </>
-                      )}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Box>
             </Stack>
           </CardContent>
         </Card>
