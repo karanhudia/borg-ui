@@ -232,7 +232,9 @@ const Connections: React.FC = () => {
               <p className="text-sm font-medium text-gray-500">Total Connections</p>
               <p className="text-3xl font-bold text-gray-900 mt-2">{connections.length}</p>
             </div>
-            <Wifi className="w-10 h-10 text-indigo-500" strokeWidth={1.5} />
+            <div className="bg-indigo-500 rounded-full p-3">
+              <Wifi className="w-10 h-10 text-white" strokeWidth={1.5} />
+            </div>
           </div>
         </div>
 
@@ -242,7 +244,9 @@ const Connections: React.FC = () => {
               <p className="text-sm font-medium text-gray-500">Active Connections</p>
               <p className="text-3xl font-bold text-green-600 mt-2">{connectedCount}</p>
             </div>
-            <CheckCircle className="w-10 h-10 text-green-500" strokeWidth={1.5} />
+            <div className="bg-green-500 rounded-full p-3">
+              <CheckCircle className="w-10 h-10 text-white" strokeWidth={1.5} />
+            </div>
           </div>
         </div>
 
@@ -252,7 +256,9 @@ const Connections: React.FC = () => {
               <p className="text-sm font-medium text-gray-500">Failed Connections</p>
               <p className="text-3xl font-bold text-red-600 mt-2">{failedCount}</p>
             </div>
-            <XCircle className="w-10 h-10 text-red-500" strokeWidth={1.5} />
+            <div className="bg-red-500 rounded-full p-3">
+              <XCircle className="w-10 h-10 text-white" strokeWidth={1.5} />
+            </div>
           </div>
         </div>
       </div>
