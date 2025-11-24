@@ -359,10 +359,10 @@ const Settings: React.FC = () => {
                     {mode === 'dark' ? <Moon size={24} /> : <Sun size={24} />}
                     <Box>
                       <Typography variant="subtitle1" fontWeight={500}>
-                        Dark Mode
+                        Theme
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Switch between light and dark themes
+                        Choose a theme
                       </Typography>
                     </Box>
                   </Box>
