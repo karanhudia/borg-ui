@@ -1039,11 +1039,11 @@ async def test_ssh_key_connection(ssh_key: SSHKey, host: str, username: str, por
             key_file=key_file_path
         )
 
-        # Test SSH connection
+        # Test SSH connection using 'pwd' command (more compatible with restricted shells like Hetzner Storage Box)
         cmd = [
             "ssh", "-i", key_file_path, "-o", "StrictHostKeyChecking=no",
             "-o", "ConnectTimeout=10", "-p", str(port),
-            f"{username}@{host}", "echo 'SSH connection successful'"
+            f"{username}@{host}", "pwd"
         ]
 
         cmd_str = " ".join(cmd)
@@ -1076,10 +1076,13 @@ async def test_ssh_key_connection(ssh_key: SSHKey, host: str, username: str, por
             else:
                 stdout_str = stdout.decode() if stdout else ""
                 stderr_str = stderr.decode() if stderr else ""
-                error_msg = stderr_str or "SSH connection failed"
+                error_msg = stderr_str or stdout_str or "SSH connection failed"
 
                 # Parse common errors with helpful hints
-                if "Connection refused" in error_msg:
+                if "Command not found" in error_msg or "Command not found" in stdout_str:
+                    error_summary = f"SSH connection works but remote shell is restricted"
+                    helpful_hint = "Server uses restricted shell (e.g., Hetzner Storage Box). Connection is valid for borg/rsync/sftp operations."
+                elif "Connection refused" in error_msg:
                     error_summary = f"Cannot connect to {host}:{port} - SSH service not accessible"
                     helpful_hint = "Verify SSH server is running and port is correct"
                 elif "Permission denied" in error_msg:
