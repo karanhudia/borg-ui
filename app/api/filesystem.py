@@ -7,7 +7,7 @@ from typing import List, Optional
 import os
 import subprocess
 import structlog
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.core.security import get_current_user
 from app.database.database import get_db
@@ -187,7 +187,7 @@ async def browse_local_filesystem(path: str) -> BrowseResponse:
                     path=full_path,
                     is_directory=is_dir,
                     size=stat_info.st_size if not is_dir else None,
-                    modified=datetime.fromtimestamp(stat_info.st_mtime).isoformat(),
+                    modified=datetime.fromtimestamp(stat_info.st_mtime, tz=timezone.utc).isoformat(),
                     is_borg_repo=is_borg,
                     permissions=oct(stat_info.st_mode)[-3:]
                 )
@@ -342,7 +342,7 @@ async def browse_ssh_filesystem(
                     path=full_path,
                     is_directory=is_dir,
                     size=size if not is_dir else None,
-                    modified=datetime.fromtimestamp(timestamp).isoformat(),
+                    modified=datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat(),
                     is_borg_repo=is_borg,
                     permissions=permissions[1:] if len(permissions) > 1 else None
                 )

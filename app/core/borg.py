@@ -5,7 +5,7 @@ import yaml
 import os
 import structlog
 from typing import Dict, List, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from app.config import settings
 
 logger = structlog.get_logger()
@@ -400,7 +400,8 @@ class BorgInterface:
                 last_backup = None
                 if archives:
                     latest_archive = max(archives, key=lambda x: x.get("time", 0))
-                    last_backup = datetime.fromtimestamp(latest_archive["time"]).strftime("%Y-%m-%d %H:%M:%S")
+                    # Convert Unix timestamp to timezone-aware UTC datetime, then to ISO format
+                    last_backup = datetime.fromtimestamp(latest_archive["time"], tz=timezone.utc).isoformat()
                 
                 # Check disk usage
                 disk_usage = 0
