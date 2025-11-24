@@ -150,13 +150,13 @@ const Connections: React.FC = () => {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'connected':
-        return <CheckCircle className="w-5 h-5 text-green-500" />
+        return <CheckCircle className="w-5 h-5 text-green-500" strokeWidth={1.5} />
       case 'failed':
-        return <XCircle className="w-5 h-5 text-red-500" />
+        return <XCircle className="w-5 h-5 text-red-500" strokeWidth={1.5} />
       case 'testing':
-        return <Clock className="w-5 h-5 text-yellow-500" />
+        return <Clock className="w-5 h-5 text-yellow-500" strokeWidth={1.5} />
       default:
-        return <AlertTriangle className="w-5 h-5 text-gray-500" />
+        return <AlertTriangle className="w-5 h-5 text-gray-500" strokeWidth={1.5} />
     }
   }
 
@@ -211,14 +211,14 @@ const Connections: React.FC = () => {
             disabled={loadingConnections}
             className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
           >
-            <RefreshCw className={`w-4 h-4 mr-2 ${loadingConnections ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 mr-2 ${loadingConnections ? 'animate-spin' : ''}`} strokeWidth={1.5} />
             Refresh
           </button>
           <button
             onClick={() => setShowAddConnectionModal(true)}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
-            <Plus className="w-4 h-4 mr-2" />
+            <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} />
             Add Connection
           </button>
         </div>
@@ -232,7 +232,7 @@ const Connections: React.FC = () => {
               <p className="text-sm font-medium text-gray-500">Total Connections</p>
               <p className="text-3xl font-bold text-gray-900 mt-2">{connections.length}</p>
             </div>
-            <Wifi className="w-10 h-10 text-indigo-500" />
+            <Wifi className="w-10 h-10 text-indigo-500" strokeWidth={1.5} />
           </div>
         </div>
 
@@ -242,7 +242,7 @@ const Connections: React.FC = () => {
               <p className="text-sm font-medium text-gray-500">Active Connections</p>
               <p className="text-3xl font-bold text-green-600 mt-2">{connectedCount}</p>
             </div>
-            <CheckCircle className="w-10 h-10 text-green-500" />
+            <CheckCircle className="w-10 h-10 text-green-500" strokeWidth={1.5} />
           </div>
         </div>
 
@@ -252,7 +252,7 @@ const Connections: React.FC = () => {
               <p className="text-sm font-medium text-gray-500">Failed Connections</p>
               <p className="text-3xl font-bold text-red-600 mt-2">{failedCount}</p>
             </div>
-            <XCircle className="w-10 h-10 text-red-500" />
+            <XCircle className="w-10 h-10 text-red-500" strokeWidth={1.5} />
           </div>
         </div>
       </div>
@@ -261,7 +261,7 @@ const Connections: React.FC = () => {
       {failedCount > 0 && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
           <div className="flex">
-            <AlertTriangle className="w-5 h-5 text-yellow-400 mr-2 mt-0.5" />
+            <AlertTriangle className="w-5 h-5 text-yellow-400 mr-2 mt-0.5" strokeWidth={1.5} />
             <div>
               <h3 className="text-sm font-medium text-yellow-800">
                 Failed Connections Detected
@@ -283,7 +283,7 @@ const Connections: React.FC = () => {
           </div>
         ) : connections.length === 0 ? (
           <div className="bg-white rounded-lg border shadow-sm p-12 text-center">
-            <Wifi className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <Wifi className="w-16 h-16 text-gray-400 mx-auto mb-4" strokeWidth={1.5} />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No Connections Yet</h3>
             <p className="text-gray-500 mb-6">
               Start by adding a new connection to a remote machine using an existing SSH key.
@@ -292,7 +292,7 @@ const Connections: React.FC = () => {
               onClick={() => setShowAddConnectionModal(true)}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
             >
-              <Plus className="w-4 h-4 mr-2" />
+              <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} />
               Add Your First Connection
             </button>
           </div>
@@ -314,7 +314,7 @@ const Connections: React.FC = () => {
 
                     <div className="flex items-center space-x-4 text-sm text-gray-500 mb-3">
                       <span className="inline-flex items-center">
-                        <CheckCircle className="w-4 h-4 mr-1" />
+                        <CheckCircle className="w-4 h-4 mr-1" strokeWidth={1.5} />
                         SSH Key: <span className="font-medium ml-1">{connection.ssh_key_name}</span>
                       </span>
                     </div>
@@ -351,7 +351,7 @@ const Connections: React.FC = () => {
                     {testConnectionMutation.isLoading ? (
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600 mr-2"></div>
                     ) : (
-                      <TestTube className="w-4 h-4 mr-2" />
+                      <TestTube className="w-4 h-4 mr-2" strokeWidth={1.5} />
                     )}
                     Test
                   </button>
@@ -365,7 +365,7 @@ const Connections: React.FC = () => {
                       {retryConnectionMutation.isLoading ? (
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
                       ) : (
-                        <RefreshCw className="w-4 h-4 mr-2" />
+                        <RefreshCw className="w-4 h-4 mr-2" strokeWidth={1.5} />
                       )}
                       Retry
                     </button>
