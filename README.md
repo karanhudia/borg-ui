@@ -28,6 +28,7 @@ A modern web interface for [Borg Backup](https://borgbackup.readthedocs.io/). Ze
 - **Archive Browser** - Browse and restore files from any backup archive
 - **Repository Management** - Support for local, SSH, and SFTP repositories with multiple compression options
 - **Scheduling** - Visual cron job builder with execution history
+- **Pre/Post Backup Hooks** - Run custom scripts before/after backups (e.g., stop Docker containers, database dumps)
 - **Notifications** - Get alerts for backup failures and completions via 100+ services (Email, Slack, Discord, Telegram, Pushover, etc.)
 - **SSH Key Management** - Generate, import, and deploy SSH keys for remote repositories
 - **Real-time Monitoring** - Live backup progress, system metrics, and health checks
@@ -104,6 +105,7 @@ docker run -d \
 
 - [Installation Guide](https://karanhudia.github.io/borg-ui/installation) - Detailed installation for all platforms
 - [Configuration Guide](https://karanhudia.github.io/borg-ui/configuration) - Environment variables and setup options
+- [Docker Container Hooks](docs/docker-hooks.md) - Stop/start Docker containers during backups
 - [Notifications Setup](https://karanhudia.github.io/borg-ui/notifications) - Configure alerts via email, Slack, Discord, and more
 - [SSH Keys Guide](https://karanhudia.github.io/borg-ui/ssh-keys) - Setting up SSH for remote backups
 - [Security Guide](https://karanhudia.github.io/borg-ui/security) - Best practices and security recommendations
