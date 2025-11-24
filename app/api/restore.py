@@ -12,6 +12,7 @@ from app.database.database import get_db
 from app.core.security import get_current_user
 from app.core.borg import borg
 from app.services.restore_service import restore_service
+from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -259,8 +260,8 @@ async def get_restore_jobs(
                     "archive": job.archive,
                     "destination": job.destination,
                     "status": job.status,
-                    "started_at": job.started_at.replace(tzinfo=timezone.utc).isoformat() if job.started_at else None,
-                    "completed_at": job.completed_at.replace(tzinfo=timezone.utc).isoformat() if job.completed_at else None,
+                    "started_at": serialize_datetime(job.started_at),
+                    "completed_at": serialize_datetime(job.completed_at),
                     "progress": job.progress,
                     "error_message": job.error_message,
                     "progress_details": {
@@ -300,8 +301,8 @@ async def get_restore_status(
             "archive": job.archive,
             "destination": job.destination,
             "status": job.status,
-            "started_at": job.started_at.replace(tzinfo=timezone.utc).isoformat() if job.started_at else None,
-            "completed_at": job.completed_at.replace(tzinfo=timezone.utc).isoformat() if job.completed_at else None,
+            "started_at": serialize_datetime(job.started_at),
+            "completed_at": serialize_datetime(job.completed_at),
             "progress": job.progress,
             "error_message": job.error_message,
             "logs": job.logs,
