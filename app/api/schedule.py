@@ -14,6 +14,7 @@ from app.core.security import get_current_user
 from app.core.borg import BorgInterface
 from app.config import settings
 from app.services.notification_service import notification_service
+from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["schedule"])
@@ -78,10 +79,10 @@ async def get_scheduled_jobs(
                     "cron_expression": job.cron_expression,
                     "repository": job.repository,
                     "enabled": job.enabled,
-                    "last_run": job.last_run.replace(tzinfo=timezone.utc).isoformat() if job.last_run else None,
-                    "next_run": job.next_run.replace(tzinfo=timezone.utc).isoformat() if job.next_run else None,
-                    "created_at": job.created_at.replace(tzinfo=timezone.utc).isoformat() if job.created_at else None,
-                    "updated_at": job.updated_at.replace(tzinfo=timezone.utc).isoformat() if job.updated_at else None,
+                    "last_run": serialize_datetime(job.last_run),
+                    "next_run": serialize_datetime(job.next_run),
+                    "created_at": serialize_datetime(job.created_at),
+                    "updated_at": serialize_datetime(job.updated_at),
                     "description": job.description,
                     "archive_name_template": job.archive_name_template,
                     # Prune and compact settings
@@ -91,8 +92,8 @@ async def get_scheduled_jobs(
                     "prune_keep_weekly": job.prune_keep_weekly,
                     "prune_keep_monthly": job.prune_keep_monthly,
                     "prune_keep_yearly": job.prune_keep_yearly,
-                    "last_prune": job.last_prune.replace(tzinfo=timezone.utc).isoformat() if job.last_prune else None,
-                    "last_compact": job.last_compact.replace(tzinfo=timezone.utc).isoformat() if job.last_compact else None,
+                    "last_prune": serialize_datetime(job.last_prune),
+                    "last_compact": serialize_datetime(job.last_compact),
                 }
                 for job in jobs
             ]
@@ -157,7 +158,7 @@ async def create_scheduled_job(
                 "cron_expression": scheduled_job.cron_expression,
                 "repository": scheduled_job.repository,
                 "enabled": scheduled_job.enabled,
-                "next_run": scheduled_job.next_run.replace(tzinfo=timezone.utc).isoformat() if scheduled_job.next_run else None
+                "next_run": serialize_datetime(scheduled_job.next_run)
             }
         }
     except HTTPException:
@@ -255,7 +256,7 @@ async def get_upcoming_jobs(
                         "id": job.id,
                         "name": job.name,
                         "repository": job.repository,
-                        "next_run": next_run.replace(tzinfo=timezone.utc).isoformat() if next_run.tzinfo is None else next_run.isoformat(),
+                        "next_run": serialize_datetime(next_run),
                         "cron_expression": job.cron_expression
                     })
             except:
@@ -291,7 +292,7 @@ async def get_scheduled_job(
             next_runs = []
             for i in range(5):  # Get next 5 run times
                 next_dt = cron.get_next(datetime)
-                next_runs.append(next_dt.replace(tzinfo=timezone.utc).isoformat() if next_dt.tzinfo is None else next_dt.isoformat())
+                next_runs.append(serialize_datetime(next_dt))
         except:
             next_runs = []
 
@@ -303,11 +304,11 @@ async def get_scheduled_job(
                 "cron_expression": job.cron_expression,
                 "repository": job.repository,
                 "enabled": job.enabled,
-                "last_run": job.last_run.replace(tzinfo=timezone.utc).isoformat() if job.last_run else None,
-                "next_run": job.next_run.replace(tzinfo=timezone.utc).isoformat() if job.next_run else None,
+                "last_run": serialize_datetime(job.last_run),
+                "next_run": serialize_datetime(job.next_run),
                 "next_runs": next_runs,
-                "created_at": job.created_at.replace(tzinfo=timezone.utc).isoformat() if job.created_at else None,
-                "updated_at": job.updated_at.replace(tzinfo=timezone.utc).isoformat() if job.updated_at else None,
+                "created_at": serialize_datetime(job.created_at),
+                "updated_at": serialize_datetime(job.updated_at),
                 "description": job.description,
                 "archive_name_template": job.archive_name_template,
                 # Prune and compact settings
@@ -317,8 +318,8 @@ async def get_scheduled_job(
                 "prune_keep_weekly": job.prune_keep_weekly,
                 "prune_keep_monthly": job.prune_keep_monthly,
                 "prune_keep_yearly": job.prune_keep_yearly,
-                "last_prune": job.last_prune.replace(tzinfo=timezone.utc).isoformat() if job.last_prune else None,
-                "last_compact": job.last_compact.replace(tzinfo=timezone.utc).isoformat() if job.last_compact else None,
+                "last_prune": serialize_datetime(job.last_prune),
+                "last_compact": serialize_datetime(job.last_compact),
             }
         }
     except HTTPException:
@@ -570,7 +571,7 @@ async def validate_cron_expression(
         next_runs = []
         for i in range(10):
             next_dt = cron.get_next(datetime)
-            next_runs.append(next_dt.replace(tzinfo=timezone.utc).isoformat() if next_dt.tzinfo is None else next_dt.isoformat())
+            next_runs.append(serialize_datetime(next_dt))
 
         return {
             "success": True,

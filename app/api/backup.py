@@ -11,6 +11,7 @@ from app.database.database import get_db
 from app.database.models import User, BackupJob
 from app.core.security import get_current_user
 from app.services.backup_service import backup_service
+from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -96,8 +97,8 @@ async def get_all_backup_jobs(
                     "id": job.id,
                     "repository": job.repository,
                     "status": job.status,
-                    "started_at": job.started_at.replace(tzinfo=timezone.utc).isoformat() if job.started_at else None,
-                    "completed_at": job.completed_at.replace(tzinfo=timezone.utc).isoformat() if job.completed_at else None,
+                    "started_at": serialize_datetime(job.started_at),
+                    "completed_at": serialize_datetime(job.completed_at),
                     "progress": job.progress,
                     "error_message": job.error_message,
                     "has_logs": bool(job.logs),  # Indicate if logs are available
@@ -143,8 +144,8 @@ async def get_backup_status(
             "id": job.id,
             "repository": job.repository,
             "status": job.status,
-            "started_at": job.started_at.replace(tzinfo=timezone.utc).isoformat() if job.started_at else None,
-            "completed_at": job.completed_at.replace(tzinfo=timezone.utc).isoformat() if job.completed_at else None,
+            "started_at": serialize_datetime(job.started_at),
+            "completed_at": serialize_datetime(job.completed_at),
             "progress": job.progress,
             "error_message": job.error_message,
             "logs": job.logs,
