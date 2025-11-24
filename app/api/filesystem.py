@@ -87,8 +87,9 @@ def is_borg_repository_ssh(host: str, username: str, ssh_key_path: str, remote_p
     Detect if a remote directory is a Borg repository via SSH.
     """
     try:
-        # Check for config file and data directory
-        check_cmd = f'[ -f "{remote_path}/config" ] && [ -d "{remote_path}/data" ] && echo "true" || echo "false"'
+        # Check for config file and data directory using 'ls' (compatible with restricted shells)
+        # We'll check if both config and data exist
+        check_cmd = f'ls "{remote_path}/config" "{remote_path}/data"'
 
         ssh_cmd = [
             "ssh",
@@ -108,7 +109,10 @@ def is_borg_repository_ssh(host: str, username: str, ssh_key_path: str, remote_p
             timeout=10
         )
 
-        return result.stdout.strip() == "true"
+        # If both files exist, ls will output both paths
+        # Check if output contains both "config" and "data"
+        output = result.stdout.strip()
+        return "config" in output and "data" in output and result.returncode == 0
     except Exception as e:
         logger.warning("Error checking remote Borg repo", host=host, path=remote_path, error=str(e))
         return False
@@ -246,10 +250,9 @@ async def browse_ssh_filesystem(
             temp_key_file = f.name
 
         os.chmod(temp_key_file, 0o600)
-        # Use SSH to list directory contents
-        # Try with simpler format first, fallback to basic ls
+        # Use SSH to list directory contents (compatible with restricted shells like Hetzner Storage Box)
         # Format: permissions links owner group size timestamp name
-        ls_cmd = f'ls -lA "{path}" 2>/dev/null || echo "ERROR"'
+        ls_cmd = f'ls -lA "{path}"'
 
         ssh_cmd = [
             "ssh",
@@ -269,10 +272,10 @@ async def browse_ssh_filesystem(
             timeout=30
         )
 
-        if result.returncode != 0 or "ERROR" in result.stdout:
+        if result.returncode != 0:
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to list remote directory: {result.stderr or 'Permission denied or path not found'}"
+                detail=f"Failed to list remote directory: {result.stderr or result.stdout or 'Permission denied or path not found'}"
             )
 
         # Log raw output for debugging
@@ -436,8 +439,9 @@ async def validate_path(
 
                 os.chmod(temp_key_file, 0o600)
 
-                # Check if path exists via SSH
-                check_cmd = f'[ -e "{path}" ] && echo "exists" || echo "not_exists"; [ -d "{path}" ] && echo "is_dir" || echo "not_dir"'
+                # Check if path exists via SSH using 'stat' (compatible with restricted shells like Hetzner Storage Box)
+                # stat returns exit code 0 if path exists, non-zero if not
+                check_cmd = f'stat "{path}"'
 
                 ssh_cmd = [
                     "ssh",
@@ -451,10 +455,15 @@ async def validate_path(
                 ]
 
                 result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=10)
-                lines = result.stdout.strip().split('\n')
 
-                exists = lines[0] == "exists" if len(lines) > 0 else False
-                is_dir = lines[1] == "is_dir" if len(lines) > 1 else False
+                # Parse stat output to determine if path exists and is a directory
+                exists = result.returncode == 0
+                is_dir = False
+                if exists and result.stdout:
+                    # stat output contains file type info
+                    # Look for "directory" in the output (works on Linux/BSD/restricted shells)
+                    output_lower = result.stdout.lower()
+                    is_dir = "directory" in output_lower or "dir" in output_lower
                 is_borg = is_borg_repository_ssh(host, username, temp_key_file, path, port) if is_dir else False
 
                 return {
