@@ -189,3 +189,17 @@ export const darkTheme = createTheme({
     },
   },
 });
+
+export type ThemeMode = 'light' | 'dark';
+
+export const themes: Record<ThemeMode, typeof theme> = {
+  light: theme,
+  dark: darkTheme,
+};
+
+export const availableThemes = [
+  { id: 'light', label: 'Light', icon: 'Sun' },
+  { id: 'dark', label: 'Dark', icon: 'Moon' },
+];
+
+export const getTheme = (mode: ThemeMode) => themes[mode];

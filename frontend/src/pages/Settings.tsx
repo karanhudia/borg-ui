@@ -44,6 +44,7 @@ import { settingsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../context/ThemeContext'
+import { availableThemes } from '../theme'
 import NotificationsTab from '../components/NotificationsTab'
 import { formatDateShort } from '../utils/dateUtils'
 
@@ -369,22 +370,18 @@ const Settings: React.FC = () => {
                   <FormControl sx={{ minWidth: 120 }} size="small">
                     <Select
                       value={mode}
-                      onChange={(e) => setTheme(e.target.value as 'light' | 'dark')}
+                      onChange={(e) => setTheme(e.target.value as any)}
                       displayEmpty
                       inputProps={{ 'aria-label': 'Theme mode' }}
                     >
-                      <MenuItem value="light">
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Sun size={16} />
-                          Light
-                        </Box>
-                      </MenuItem>
-                      <MenuItem value="dark">
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Moon size={16} />
-                          Dark
-                        </Box>
-                      </MenuItem>
+                      {availableThemes.map((themeOption) => (
+                        <MenuItem key={themeOption.id} value={themeOption.id}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {themeOption.icon === 'Sun' ? <Sun size={16} /> : <Moon size={16} />}
+                            {themeOption.label}
+                          </Box>
+                        </MenuItem>
+                      ))}
                     </Select>
                   </FormControl>
                 </Box>
