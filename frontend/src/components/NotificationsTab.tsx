@@ -238,7 +238,7 @@ const NotificationsTab: React.FC = () => {
       </Alert>
 
       <Collapse in={showExamples}>
-        <Card sx={{ mb: 3, p: 2, bgcolor: 'grey.50' }}>
+        <Card sx={{ mb: 3, p: 2, bgcolor: 'background.default', border: 1, borderColor: 'divider' }}>
           <Typography variant="subtitle2" fontWeight={600} gutterBottom>
             Apprise URL Examples:
           </Typography>
