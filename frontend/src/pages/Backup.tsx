@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import {
   Box,
@@ -92,38 +92,6 @@ const Backup: React.FC = () => {
     if (!selectedRepository || !repositoriesData?.data?.repositories) return null
     return repositoriesData.data.repositories.find((repo: any) => repo.path === selectedRepository)
   }, [selectedRepository, repositoriesData])
-
-  // Get archives for selected repository
-  const { data: archivesData } = useQuery({
-    queryKey: ['repository-archives', selectedRepoData?.id],
-    queryFn: () => repositoriesAPI.listRepositoryArchives(selectedRepoData.id),
-    enabled: !!selectedRepoData?.id,
-    onError: (error: any) => {
-      if (error?.response?.status === 423 && selectedRepoData) {
-        setLockError({
-          repositoryId: selectedRepoData.id,
-          repositoryName: selectedRepoData.name
-        })
-      }
-    },
-    retry: false
-  })
-
-  // Get repository info for size statistics
-  const { data: repoInfoData } = useQuery({
-    queryKey: ['repository-info', selectedRepoData?.id],
-    queryFn: () => repositoriesAPI.getRepositoryInfo(selectedRepoData.id),
-    enabled: !!selectedRepoData?.id,
-    onError: (error: any) => {
-      if (error?.response?.status === 423 && selectedRepoData) {
-        setLockError({
-          repositoryId: selectedRepoData.id,
-          repositoryName: selectedRepoData.name
-        })
-      }
-    },
-    retry: false
-  })
 
   // Start backup mutation
   const startBackupMutation = useMutation({
