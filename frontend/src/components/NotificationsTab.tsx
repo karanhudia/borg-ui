@@ -39,6 +39,7 @@ import {
 } from 'lucide-react'
 import { notificationsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
+import { formatDate } from '../utils/dateUtils'
 
 interface NotificationSetting {
   id: number
@@ -343,17 +344,7 @@ const NotificationsTab: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" color="text.secondary">
-                        {notification.last_used_at
-                          ? new Date(notification.last_used_at).toLocaleString('en-US', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              second: '2-digit',
-                              hour12: false
-                            })
-                          : 'Never'}
+                        {formatDate(notification.last_used_at)}
                       </Typography>
                     </TableCell>
                     <TableCell align="right">

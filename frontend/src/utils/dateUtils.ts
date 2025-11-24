@@ -8,14 +8,7 @@ export const formatDate = (dateString: string | null | undefined): string => {
   if (!dateString) return 'Never'
 
   try {
-    // If the date string is in ISO format without timezone (e.g., 2025-11-04T06:56:38),
-    // treat it as UTC by appending 'Z'
-    let normalizedDate = dateString
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(dateString)) {
-      normalizedDate = dateString + 'Z'
-    }
-
-    const date = new Date(normalizedDate)
+    const date = new Date(dateString)
     const day = date.getDate()
 
     const getOrdinalSuffix = (d: number) => {
@@ -145,13 +138,7 @@ export const formatElapsedTime = (startTime: string | null | undefined): string 
   if (!startTime) return ''
 
   try {
-    // Normalize date string - ensure it has 'Z' for UTC timezone
-    let normalizedDate = startTime
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(startTime)) {
-      normalizedDate = startTime + 'Z'
-    }
-
-    const start = new Date(normalizedDate)
+    const start = new Date(startTime)
     const durationMs = Date.now() - start.getTime()
     const durationSec = Math.floor(durationMs / 1000)
 
@@ -318,13 +305,7 @@ export const formatDateTimeFull = (dateString: string | null | undefined): strin
   if (!dateString) return 'Never'
 
   try {
-    // If the date string is in ISO format without timezone, treat it as UTC by appending 'Z'
-    let normalizedDate = dateString
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(dateString)) {
-      normalizedDate = dateString + 'Z'
-    }
-
-    const date = new Date(normalizedDate)
+    const date = new Date(dateString)
 
     // Format: "November 9, 2025 at 2:56:53 PM UTC"
     return format(date, "MMMM d, yyyy 'at' h:mm:ss a 'UTC'")
