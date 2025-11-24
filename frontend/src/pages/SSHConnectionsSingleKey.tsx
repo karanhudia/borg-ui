@@ -748,12 +748,7 @@ export default function SSHConnectionsSingleKey() {
                 2. SSH into your server
               </Typography>
               <Typography variant="caption" component="div">
-                3. Add it to <code style={{
-                  backgroundColor: 'rgba(144, 202, 249, 0.2)',
-                  padding: '2px 4px',
-                  borderRadius: '2px',
-                  color: 'inherit'
-                }}>~/.ssh/authorized_keys</code>
+                3. Add it to <code style={{ background: '#e3f2fd', padding: '2px 4px', borderRadius: '2px' }}>~/.ssh/authorized_keys</code>
               </Typography>
             </Alert>
 
