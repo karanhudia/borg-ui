@@ -200,13 +200,13 @@ export default function SSHConnectionsSingleKey() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'connected':
-        return <Wifi size={18} color="#2e7d32" />
+        return <Wifi size={18} color="#ffffff" strokeWidth={1.5} />
       case 'failed':
-        return <WifiOff size={18} color="#d32f2f" />
+        return <WifiOff size={18} color="#ffffff" strokeWidth={1.5} />
       case 'testing':
         return <CircularProgress size={18} />
       default:
-        return <AlertTriangle size={18} color="#ed6c02" />
+        return <AlertTriangle size={18} color="#ffffff" strokeWidth={1.5} />
     }
   }
 
@@ -281,7 +281,7 @@ export default function SSHConnectionsSingleKey() {
                     display: 'flex',
                   }}
                 >
-                  <Wifi size={24} color="primary" />
+                  <Wifi size={24} color="#ffffff" strokeWidth={1.5} />
                 </Box>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
@@ -306,7 +306,7 @@ export default function SSHConnectionsSingleKey() {
                     display: 'flex',
                   }}
                 >
-                  <CheckCircle size={24} color="#2e7d32" />
+                  <CheckCircle size={24} color="#ffffff" strokeWidth={1.5} />
                 </Box>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
@@ -331,7 +331,7 @@ export default function SSHConnectionsSingleKey() {
                     display: 'flex',
                   }}
                 >
-                  <XCircle size={24} color="#d32f2f" />
+                  <XCircle size={24} color="#ffffff" strokeWidth={1.5} />
                 </Box>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
