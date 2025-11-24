@@ -56,6 +56,7 @@ services:
       - borg_cache:/home/borg/.cache/borg
       - /:/local:rw
     environment:
+      - TZ=America/Chicago  # Set your timezone
       - PUID=1000
       - PGID=1000
 
@@ -84,6 +85,7 @@ docker run -d \
   --name borg-web-ui \
   --restart unless-stopped \
   -p 8081:8081 \
+  -e TZ=America/Chicago \
   -e PUID=1000 \
   -e PGID=1000 \
   -v borg_data:/data \
@@ -122,6 +124,7 @@ docker run -d \
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `PORT` | Application port | `8081` |
+| `TZ` | Timezone (e.g., `America/Chicago`, `Europe/London`, `Asia/Kolkata`) | Host timezone |
 | `PUID` | User ID for file permissions | `1001` |
 | `PGID` | Group ID for file permissions | `1001` |
 | `LOG_LEVEL` | Logging level | `INFO` |
