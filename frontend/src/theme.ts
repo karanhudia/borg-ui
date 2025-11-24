@@ -180,12 +180,12 @@ export const darkTheme = createTheme({
       contrastText: '#ffffff',
     },
     background: {
-      default: '#111827', // Gray 900
-      paper: '#1f2937', // Gray 800
+      default: '#09090b', // Zinc 950
+      paper: '#18181b', // Zinc 900
     },
     text: {
-      primary: '#f9fafb', // Gray 50
-      secondary: '#9ca3af', // Gray 400
+      primary: '#fafafa', // Zinc 50
+      secondary: '#a1a1aa', // Zinc 400
     },
   },
 });
