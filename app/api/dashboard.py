@@ -11,6 +11,7 @@ from app.database.database import get_db
 from app.database.models import User, BackupJob
 from app.core.security import get_current_user
 from app.core.borg import borg
+from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -18,12 +19,7 @@ router = APIRouter()
 # Helper function to format datetime with timezone
 def format_datetime(dt):
     """Format datetime to ISO8601 with UTC timezone indicator"""
-    if dt is None:
-        return None
-    # If datetime is naive (no timezone), assume it's UTC and add timezone info
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.isoformat()
+    return serialize_datetime(dt)
 
 # Pydantic models for responses
 class SystemMetrics(BaseModel):

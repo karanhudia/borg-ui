@@ -10,6 +10,7 @@ from app.core.security import get_current_user
 from app.database.models import User
 from app.database.database import get_db
 from app.core.borg import BorgInterface
+from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["events"])
@@ -54,7 +55,7 @@ class EventManager:
         event = {
             "type": event_type,
             "data": data,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": serialize_datetime(datetime.utcnow())
         }
 
         async with self.lock:
@@ -94,7 +95,7 @@ async def event_generator(user_id: str) -> AsyncGenerator[str, None]:
         yield format_sse_event({
             "type": "connection_established",
             "data": {"message": "SSE connection established"},
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": serialize_datetime(datetime.utcnow())
         })
         
         # Keep connection alive and send events

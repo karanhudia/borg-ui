@@ -14,6 +14,7 @@ from app.database.database import get_db
 from app.database.models import User, SSHKey, SSHConnection
 from app.core.security import get_current_user
 from app.config import settings
+from app.utils.datetime_utils import serialize_datetime
 import hashlib
 
 logger = structlog.get_logger()
@@ -109,8 +110,8 @@ async def get_system_key(
                 "public_key": system_key.public_key,
                 "fingerprint": system_key.fingerprint,
                 "is_active": system_key.is_active,
-                "created_at": system_key.created_at.isoformat(),
-                "updated_at": system_key.updated_at.isoformat() if system_key.updated_at else None,
+                "created_at": serialize_datetime(system_key.created_at),
+                "updated_at": serialize_datetime(system_key.updated_at),
                 "connection_count": len(system_key.connections),
                 "active_connections": len([c for c in system_key.connections if c.status == "connected"])
             }
@@ -140,8 +141,8 @@ async def get_ssh_keys(
                     "fingerprint": key.fingerprint,
                     "is_system_key": key.is_system_key,
                     "is_active": key.is_active,
-                    "created_at": key.created_at.isoformat(),
-                    "updated_at": key.updated_at.isoformat() if key.updated_at else None,
+                    "created_at": serialize_datetime(key.created_at),
+                    "updated_at": serialize_datetime(key.updated_at),
                     "connection_count": len(key.connections),
                     "active_connections": len([c for c in key.connections if c.status == "connected"])
                 }
@@ -527,10 +528,10 @@ async def get_ssh_connections(
                     "username": conn.username,
                     "port": conn.port,
                     "status": conn.status,
-                    "last_test": conn.last_test.isoformat() if conn.last_test else None,
-                    "last_success": conn.last_success.isoformat() if conn.last_success else None,
+                    "last_test": serialize_datetime(conn.last_test),
+                    "last_success": serialize_datetime(conn.last_success),
                     "error_message": conn.error_message,
-                    "created_at": conn.created_at.isoformat()
+                    "created_at": serialize_datetime(conn.created_at)
                 }
                 for conn in connections
             ]
@@ -630,8 +631,8 @@ async def get_ssh_key(
                 "key_type": ssh_key.key_type,
                 "public_key": ssh_key.public_key,
                 "is_active": ssh_key.is_active,
-                "created_at": ssh_key.created_at.isoformat(),
-                "updated_at": ssh_key.updated_at.isoformat() if ssh_key.updated_at else None,
+                "created_at": serialize_datetime(ssh_key.created_at),
+                "updated_at": serialize_datetime(ssh_key.updated_at),
                 "connections": [
                     {
                         "id": conn.id,
@@ -639,8 +640,8 @@ async def get_ssh_key(
                         "username": conn.username,
                         "port": conn.port,
                         "status": conn.status,
-                        "last_test": conn.last_test.isoformat() if conn.last_test else None,
-                        "last_success": conn.last_success.isoformat() if conn.last_success else None,
+                        "last_test": serialize_datetime(conn.last_test),
+                        "last_success": serialize_datetime(conn.last_success),
                         "error_message": conn.error_message
                     }
                     for conn in ssh_key.connections
@@ -702,8 +703,8 @@ async def update_ssh_key(
                 "key_type": ssh_key.key_type,
                 "public_key": ssh_key.public_key,
                 "is_active": ssh_key.is_active,
-                "created_at": ssh_key.created_at.isoformat(),
-                "updated_at": ssh_key.updated_at.isoformat()
+                "created_at": serialize_datetime(ssh_key.created_at),
+                "updated_at": serialize_datetime(ssh_key.updated_at)
             }
         }
     except HTTPException:

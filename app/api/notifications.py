@@ -14,6 +14,7 @@ from app.database.database import get_db
 from app.database.models import NotificationSettings
 from app.services.notification_service import notification_service
 from app.api.auth import get_current_user, User
+from app.utils.datetime_utils import serialize_datetime
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
@@ -61,7 +62,7 @@ class NotificationSettingsResponse(BaseModel):
     class Config:
         from_attributes = True
         json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
+            datetime: lambda v: serialize_datetime(v)
         }
 
 
