@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import {
   Box,
@@ -35,13 +35,12 @@ import {
   HardDrive,
   Folder,
   Database,
-  Archive,
   Info,
   Unlock,
 } from 'lucide-react'
 import { backupAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
-import { formatDate, formatRelativeTime, formatTimeRange, formatBytes as formatBytesUtil, formatDurationSeconds } from '../utils/dateUtils'
+import { formatDate, formatTimeRange, formatBytes as formatBytesUtil, formatDurationSeconds } from '../utils/dateUtils'
 import LockErrorDialog from '../components/LockErrorDialog'
 
 interface BackupJob {
@@ -125,29 +124,6 @@ const Backup: React.FC = () => {
     },
     retry: false
   })
-
-  // Calculate live statistics from fetched data
-  const liveStats = useMemo(() => {
-    const archives = archivesData?.data?.archives || []
-    const repoInfo = repoInfoData?.data?.info || {}
-
-    // Get last backup time from most recent archive
-    const lastBackup = archives.length > 0 ? archives[0].start : null
-
-    // Get archive count
-    const archiveCount = archives.length
-
-    // Get total size from repository cache stats (deduplicated size)
-    const cacheStats = repoInfo.cache?.stats
-    const totalSize = cacheStats?.unique_size ? formatBytesUtil(cacheStats.unique_size) : null
-
-    return {
-      lastBackup,
-      archiveCount,
-      totalSize,
-      lastArchive: archives.length > 0 ? archives[0] : null
-    }
-  }, [archivesData, repoInfoData])
 
   // Start backup mutation
   const startBackupMutation = useMutation({
