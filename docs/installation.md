@@ -20,6 +20,7 @@ docker run -d \
   --name borg-web-ui \
   --restart unless-stopped \
   -p 8081:8081 \
+  -e TZ=America/Chicago \
   -e PUID=1000 \
   -e PGID=1000 \
   -v borg_data:/data \
@@ -55,6 +56,7 @@ services:
       - borg_cache:/home/borg/.cache/borg
       - /:/local:rw
     environment:
+      - TZ=America/Chicago  # Set your timezone
       - PUID=1000
       - PGID=1000
 
@@ -99,6 +101,7 @@ services:
       - /mnt/user/appdata/borg-ui/cache:/home/borg/.cache/borg
       - /mnt/user:/local:rw
     environment:
+      - TZ=America/Chicago  # Set your timezone
       - PUID=99
       - PGID=100
 ```
@@ -124,6 +127,7 @@ services:
 | `/local` | `/mnt/user` | Read/Write |
 
 **Environment Variables:**
+- `TZ`: `America/Chicago` (your timezone)
 - `PUID`: `99`
 - `PGID`: `100`
 
@@ -159,6 +163,32 @@ INFO: Uvicorn running on http://0.0.0.0:8081
 ---
 
 ## Customization
+
+### Set Timezone (Recommended)
+
+Set your local timezone for correct archive timestamps and scheduling:
+
+```yaml
+environment:
+  - TZ=America/Chicago  # Set your timezone
+  - PUID=1000
+  - PGID=1000
+```
+
+**Common timezones:**
+- **US East Coast**: `America/New_York`
+- **US Central**: `America/Chicago`
+- **US West Coast**: `America/Los_Angeles`
+- **UK**: `Europe/London`
+- **Central Europe**: `Europe/Paris`
+- **India**: `Asia/Kolkata`
+- **Japan**: `Asia/Tokyo`
+- **Australia (Sydney)**: `Australia/Sydney`
+
+[Full timezone list →](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)
+
+{: .note }
+> **Why set timezone?** Docker containers default to UTC. Without setting `TZ`, your archive names and timestamps will show UTC time instead of your local time, which can be confusing.
 
 ### Change Port
 
@@ -262,6 +292,25 @@ sudo ufw allow 8081
 
 # Check container is running
 docker ps | grep borg-web-ui
+```
+
+### Wrong Timestamps in Archives
+
+If archive timestamps show UTC instead of your local time:
+
+```yaml
+environment:
+  - TZ=Asia/Kolkata  # Add your timezone
+```
+
+Then restart:
+```bash
+docker compose down && docker compose up -d
+```
+
+Verify:
+```bash
+docker exec borg-web-ui date
 ```
 
 ---
