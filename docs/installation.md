@@ -255,6 +255,71 @@ docker rm borg-web-ui
 
 ---
 
+## Advanced Configuration
+
+### Docker Container Management (Optional)
+
+If you need to stop/start Docker containers during backups (e.g., for database consistency), you can mount the Docker socket:
+
+**⚠️ Security Warning:** Mounting `/var/run/docker.sock` gives the container access to your Docker daemon (equivalent to root access). Only enable if you need this functionality.
+
+#### Enable Docker Socket Access
+
+Edit your `docker-compose.yml` and add the docker.sock volume:
+
+```yaml
+services:
+  borg-ui:
+    image: ainullcode/borg-ui:latest
+    container_name: borg-web-ui
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    volumes:
+      - borg_data:/data
+      - borg_cache:/home/borg/.cache/borg
+      - /:/local:rw
+      # Add this line for Docker container management:
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+    environment:
+      - TZ=America/Chicago
+      - PUID=1000
+      - PGID=1000
+```
+
+Restart the container:
+```bash
+docker compose down
+docker compose up -d
+```
+
+#### Usage
+
+Once enabled, you can use pre/post backup scripts in your repository configuration to control containers:
+
+**Pre-backup script example:**
+```bash
+#!/bin/bash
+# Install Docker CLI if not present
+if ! command -v docker &> /dev/null; then
+    curl -fsSL https://get.docker.com | sh
+fi
+
+# Stop database container
+docker stop postgres-db
+```
+
+**Post-backup script example:**
+```bash
+#!/bin/bash
+# Restart database container
+docker start postgres-db
+```
+
+See the **[Docker Container Hooks Guide](../docs/docker-hooks.md)** for detailed examples, security considerations, and best practices.
+
+---
+
 ## Troubleshooting
 
 ### Container Won't Start
