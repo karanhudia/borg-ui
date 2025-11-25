@@ -55,7 +55,9 @@ services:
     volumes:
       - borg_data:/data
       - borg_cache:/home/borg/.cache/borg
-      - /:/local:rw
+      # Mount directories you want to backup (customize these paths)
+      - ${HOME}:/local/home:rw              # Your home directory
+      # - /mnt/data:/local/data:rw          # Additional directories as needed
     environment:
       - TZ=America/Chicago  # Set your timezone
       - PUID=1000
@@ -65,6 +67,8 @@ volumes:
   borg_data:
   borg_cache:
 ```
+
+**⚠️ Security Note:** The example above mounts your home directory. Customize the volume mounts to only include directories you want to backup. See the [Configuration Guide](https://karanhudia.github.io/borg-ui/configuration) for more examples and security best practices.
 
 Start the container:
 
@@ -91,11 +95,14 @@ docker run -d \
   -e PGID=1000 \
   -v borg_data:/data \
   -v borg_cache:/home/borg/.cache/borg \
-  -v /:/local:rw \
+  -v $HOME:/local/home:rw \
   ainullcode/borg-ui:latest
 ```
 
-**Note:** Replace `1000` with your user/group ID. Find yours with `id -u && id -g`
+**Notes:**
+- Replace `1000` with your user/group ID. Find yours with `id -u && id -g`
+- The example mounts your home directory. Add more `-v` flags for additional directories you want to backup
+- See [Configuration Guide](https://karanhudia.github.io/borg-ui/configuration) for security best practices
 
 ---
 
@@ -140,9 +147,27 @@ Two volumes are used for persistent data:
 - **`borg_data`** - Application data, database, SSH keys, logs
 - **`borg_cache`** - Borg repository caches for better performance
 
-The container mounts your host filesystem at `/local` to access backup sources and destinations. For security, you can customize this mount to restrict access to specific directories.
+### Volume Mounts for Backup Sources
 
-See the [Configuration Guide](https://karanhudia.github.io/borg-ui/configuration/) for details.
+**⚠️ Important Security Consideration:**
+
+The container needs access to directories you want to backup. Instead of mounting your entire filesystem (`/:/local:rw`), **mount only specific directories** you need:
+
+```yaml
+volumes:
+  # ✅ Recommended: Mount specific directories
+  - ${HOME}:/local/home:rw
+  - /mnt/data:/local/data:rw
+
+  # ❌ NOT Recommended: Full filesystem access
+  # - /:/local:rw  # Security risk - avoid unless absolutely necessary
+```
+
+**Best Practices:**
+- Mount only directories that contain data to backup
+- Use read-only (`:ro`) for backup-only directories if you don't need to restore to them
+- For multiple directories, add multiple volume mounts instead of mounting root
+- See the [Configuration Guide](https://karanhudia.github.io/borg-ui/configuration/) for detailed examples
 
 ---
 
