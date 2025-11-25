@@ -386,6 +386,11 @@ class BackupService:
             try:
                 repo_record = db.query(Repository).filter(Repository.path == repository).first()
                 if repo_record:
+                    # Check if repository is in observability-only mode
+                    if repo_record.mode == "observe":
+                        error_msg = "Cannot create backups for observability-only repositories. This repository is configured for browsing and restoring existing archives only."
+                        logger.error(error_msg, repository=repository, mode=repo_record.mode)
+                        raise ValueError(error_msg)
                     # Set passphrase if available
                     if repo_record.passphrase:
                         env['BORG_PASSPHRASE'] = repo_record.passphrase
@@ -518,6 +523,25 @@ class BackupService:
             # Add exclude patterns
             for pattern in exclude_patterns:
                 cmd.extend(["--exclude", pattern])
+
+            # Add custom flags if specified
+            if repo_record and repo_record.custom_flags:
+                custom_flags = repo_record.custom_flags.strip()
+                if custom_flags:
+                    # Split custom flags by whitespace and add to command
+                    # This allows users to specify multiple flags like "--stats --list"
+                    import shlex
+                    try:
+                        custom_flag_list = shlex.split(custom_flags)
+                        cmd.extend(custom_flag_list)
+                        logger.info("Added custom flags to borg create command",
+                                  job_id=job_id,
+                                  custom_flags=custom_flags)
+                    except ValueError as e:
+                        logger.warning("Failed to parse custom flags, skipping",
+                                     job_id=job_id,
+                                     custom_flags=custom_flags,
+                                     error=str(e))
 
             # Add repository::archive
             cmd.append(f"{repository}::{archive_name}")

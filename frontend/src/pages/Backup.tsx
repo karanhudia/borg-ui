@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { useQuery, useMutation, useQueryClient } from 'react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
   Card,
@@ -17,13 +17,11 @@ import {
   TableBody,
   TableCell,
   TableContainer,
-  TableHead,
   TableRow,
   Paper,
   Alert,
   Divider,
   Tooltip,
-  useTheme,
 } from '@mui/material'
 import {
   Play,
@@ -43,6 +41,7 @@ import { backupAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { formatDate, formatTimeRange, formatBytes as formatBytesUtil, formatDurationSeconds } from '../utils/dateUtils'
 import LockErrorDialog from '../components/LockErrorDialog'
+import DataTable, { Column, ActionButton } from '../components/DataTable'
 
 interface BackupJob {
   id: string
@@ -71,7 +70,6 @@ interface BackupJob {
 }
 
 const Backup: React.FC = () => {
-  const theme = useTheme()
   const [selectedRepository, setSelectedRepository] = useState<string>('')
   const [lockError, setLockError] = useState<{ repositoryId: number, repositoryName: string } | null>(null)
   const queryClient = useQueryClient()
@@ -212,6 +210,134 @@ const Backup: React.FC = () => {
   const runningJobs = backupStatus?.data?.jobs?.filter((job: BackupJob) => job.status === 'running') || []
   const recentJobs = backupStatus?.data?.jobs?.slice(0, 10) || []
 
+  // Define columns for Recent Jobs table
+  const jobColumns: Column<BackupJob>[] = [
+    {
+      id: 'id',
+      label: 'Job ID',
+      align: 'left',
+      render: (job) => (
+        <Typography variant="body2" fontWeight={600} color="primary">
+          #{job.id}
+        </Typography>
+      ),
+    },
+    {
+      id: 'repository',
+      label: 'Repository',
+      align: 'left',
+      minWidth: '250px',
+      render: (job) => (
+        <Tooltip title={job.repository} placement="top" arrow>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <HardDrive size={16} color="rgba(0,0,0,0.4)" />
+            <Box>
+              <Typography variant="body2" fontWeight={500}>
+                {getRepositoryName(job.repository)}
+              </Typography>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{
+                  fontFamily: 'monospace',
+                  fontSize: '0.7rem',
+                  maxWidth: 250,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  display: 'block'
+                }}
+              >
+                {job.repository}
+              </Typography>
+            </Box>
+          </Stack>
+        </Tooltip>
+      ),
+    },
+    {
+      id: 'status',
+      label: 'Status',
+      align: 'left',
+      render: (job) => (
+        <Chip
+          icon={getStatusIcon(job.status)}
+          label={job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+          color={getStatusColor(job.status)}
+          size="small"
+          sx={{ fontWeight: 500 }}
+        />
+      ),
+    },
+    {
+      id: 'started_at',
+      label: 'Started',
+      align: 'left',
+      render: (job) => (
+        <Typography variant="body2" color="text.secondary">
+          {formatDate(job.started_at)}
+        </Typography>
+      ),
+    },
+    {
+      id: 'duration',
+      label: 'Duration',
+      align: 'left',
+      render: (job) => (
+        <Typography variant="body2" color="text.secondary">
+          {formatTimeRange(job.started_at, job.completed_at, job.status)}
+        </Typography>
+      ),
+    },
+  ]
+
+  // Define action buttons for Recent Jobs table
+  const jobActions: ActionButton<BackupJob>[] = [
+    {
+      icon: <Unlock size={16} />,
+      label: 'Break Lock',
+      color: 'warning',
+      show: (job) => {
+        if (job.status !== 'failed' || !job.error_message?.includes('LOCK_ERROR::')) return false
+        const repoPath = job.error_message.match(/LOCK_ERROR::(.+)/)?.[1].split('\n')[0]
+        const repo = repositoriesData?.data?.repositories?.find((r: any) => r.path === repoPath)
+        return !!repo
+      },
+      onClick: async (job) => {
+        const repoPath = job.error_message?.match(/LOCK_ERROR::(.+)/)?.[1].split('\n')[0]
+        const repo = repositoriesData?.data?.repositories?.find((r: any) => r.path === repoPath)
+        if (!repo) return
+
+        if (window.confirm('Are you CERTAIN no backup is currently running on this repository? Breaking the lock while a backup is running can corrupt your repository!')) {
+          try {
+            await repositoriesAPI.breakLock(repo.id)
+            toast.success('Lock removed successfully! You can now start a new backup.')
+            queryClient.invalidateQueries({ queryKey: ['backup-status'] })
+          } catch (error: any) {
+            toast.error(error.response?.data?.detail || 'Failed to break lock')
+          }
+        }
+      },
+      tooltip: 'Break stale repository lock',
+    },
+    {
+      icon: <Download size={16} />,
+      label: 'Download Logs',
+      color: 'info',
+      show: (job) => job.has_logs === true && job.status !== 'running',
+      onClick: (job) => handleDownloadLogs(job.id),
+      tooltip: 'Download logs',
+    },
+    {
+      icon: <Square size={14} />,
+      label: 'Cancel',
+      color: 'error',
+      show: (job) => job.status === 'running',
+      onClick: (job) => handleCancelBackup(job.id),
+      tooltip: 'Cancel backup',
+    },
+  ]
+
   return (
     <Box>
       {/* Header */}
@@ -256,7 +382,7 @@ const Backup: React.FC = () => {
                 <MenuItem value="" disabled>
                   {loadingRepositories ? 'Loading repositories...' : 'Select a repository...'}
                 </MenuItem>
-                {repositoriesData?.data?.repositories?.map((repo: any) => (
+                {repositoriesData?.data?.repositories?.filter((repo: any) => repo.mode !== 'observe').map((repo: any) => (
                   <MenuItem key={repo.id} value={repo.path} disabled={repo.has_running_maintenance}>
                     <Stack direction="row" spacing={1} alignItems="center">
                       <Database size={16} />
@@ -279,18 +405,27 @@ const Backup: React.FC = () => {
               variant="contained"
               color="success"
               size="large"
-              startIcon={startBackupMutation.isLoading ? <CircularProgress size={16} color="inherit" /> : <Play size={18} />}
+              startIcon={startBackupMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <Play size={18} />}
               onClick={handleStartBackup}
-              disabled={startBackupMutation.isLoading || !selectedRepository}
+              disabled={startBackupMutation.isPending || !selectedRepository}
               sx={{
                 minWidth: { xs: '100%', sm: 180 },
                 height: { xs: 48, sm: 56 },
                 fontWeight: 600
               }}
             >
-              {startBackupMutation.isLoading ? 'Starting...' : 'Start Backup'}
+              {startBackupMutation.isPending ? 'Starting...' : 'Start Backup'}
             </Button>
           </Stack>
+
+          {repositoriesData?.data?.repositories?.some((repo: any) => repo.mode === 'observe') && !loadingRepositories && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              <Typography variant="body2">
+                Some repositories are hidden because they are configured for observability only.
+                To create backups, switch them to full mode in Repository settings.
+              </Typography>
+            </Alert>
+          )}
 
           {!selectedRepository && !loadingRepositories && repositoriesData?.data?.repositories?.length > 0 && (
             <Alert severity="info" sx={{ mt: 2 }}>
@@ -351,8 +486,8 @@ const Backup: React.FC = () => {
             <Stack spacing={3}>
               {/* Source Directories */}
               <Box>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5, color: 'text.secondary' }}>
-                  <Folder size={18} />
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+                  <Folder size={18} color="rgba(0,0,0,0.6)" />
                   <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
                     Source Directories
                   </Typography>
@@ -488,7 +623,7 @@ const Backup: React.FC = () => {
                       size="small"
                       startIcon={<Square size={16} />}
                       onClick={() => handleCancelBackup(job.id)}
-                      disabled={cancelBackupMutation.isLoading}
+                      disabled={cancelBackupMutation.isPending}
                     >
                       Cancel
                     </Button>
@@ -515,8 +650,8 @@ const Backup: React.FC = () => {
                           {(job.progress || 0) === 0
                             ? 'Initializing backup...'
                             : (job.progress || 0) >= 100
-                              ? 'Finalizing...'
-                              : 'Processing files...'}
+                            ? 'Finalizing...'
+                            : 'Processing files...'}
                         </Typography>
                       </Stack>
                       <Typography variant="body2" color="text.secondary">
@@ -632,160 +767,20 @@ const Backup: React.FC = () => {
             History of backup operations
           </Typography>
 
-          {loadingStatus ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
-              <CircularProgress size={48} />
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                Loading backup history...
-              </Typography>
-            </Box>
-          ) : recentJobs.length === 0 ? (
-            <Box sx={{ textAlign: 'center', py: 8 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-                <Clock size={48} color="rgba(0,0,0,0.3)" />
-              </Box>
-              <Typography variant="body1" color="text.secondary">
-                No backup jobs found
-              </Typography>
-            </Box>
-          ) : (
-            <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: 'background.default' }}>
-                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Job ID</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Repository</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Status</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Started</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Duration</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {recentJobs.map((job: BackupJob) => (
-                    <TableRow
-                      key={job.id}
-                      hover
-                      sx={{
-                        '&:last-child td': { borderBottom: 0 },
-                        cursor: 'pointer',
-                        transition: 'background-color 0.2s'
-                      }}
-                    >
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={600} color="primary">
-                          #{job.id}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Tooltip title={job.repository} placement="top" arrow>
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <HardDrive size={16} color={theme.palette.mode === 'dark' ? theme.palette.text.secondary : 'rgba(0,0,0,0.4)'} />
-                            <Box>
-                              <Typography variant="body2" fontWeight={500}>
-                                {getRepositoryName(job.repository)}
-                              </Typography>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                                sx={{
-                                  fontFamily: 'monospace',
-                                  fontSize: '0.7rem',
-                                  maxWidth: 250,
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                  display: 'block'
-                                }}
-                              >
-                                {job.repository}
-                              </Typography>
-                            </Box>
-                          </Stack>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          icon={getStatusIcon(job.status)}
-                          label={job.status.charAt(0).toUpperCase() + job.status.slice(1)}
-                          color={getStatusColor(job.status)}
-                          size="small"
-                          sx={{ fontWeight: 500 }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary">
-                          {formatDate(job.started_at)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary">
-                          {formatTimeRange(job.started_at, job.completed_at, job.status)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Stack direction="row" spacing={1}>
-                          {/* Break Lock button - only for failed backups with lock errors */}
-                          {job.status === 'failed' && job.error_message?.includes('LOCK_ERROR::') && (() => {
-                            const repoPath = job.error_message.match(/LOCK_ERROR::(.+)/)?.[1].split('\n')[0]
-                            const repo = repositoriesData?.data?.repositories?.find((r: any) => r.path === repoPath)
-                            return repo ? (
-                              <Tooltip title="Break stale repository lock" arrow>
-                                <Button
-                                  size="small"
-                                  variant="contained"
-                                  color="warning"
-                                  onClick={async () => {
-                                    if (window.confirm('Are you CERTAIN no backup is currently running on this repository? Breaking the lock while a backup is running can corrupt your repository!')) {
-                                      try {
-                                        await repositoriesAPI.breakLock(repo.id)
-                                        toast.success('Lock removed successfully! You can now start a new backup.')
-                                        queryClient.invalidateQueries({ queryKey: ['backup-status'] })
-                                      } catch (error: any) {
-                                        toast.error(error.response?.data?.detail || 'Failed to break lock')
-                                      }
-                                    }
-                                  }}
-                                  sx={{ minWidth: 'auto', px: 1 }}
-                                >
-                                  <Unlock size={16} />
-                                </Button>
-                              </Tooltip>
-                            ) : null
-                          })()}
-                          {/* Download Logs button - only for completed failed/cancelled backups with logs */}
-                          {job.has_logs && job.status !== 'running' && (
-                            <Tooltip title="Download logs" arrow>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                color="info"
-                                onClick={() => handleDownloadLogs(job.id)}
-                                sx={{ minWidth: 'auto', px: 1 }}
-                              >
-                                <Download size={16} />
-                              </Button>
-                            </Tooltip>
-                          )}
-                          {job.status === 'running' && (
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              color="error"
-                              startIcon={<Square size={14} />}
-                              onClick={() => handleCancelBackup(job.id)}
-                            >
-                              Cancel
-                            </Button>
-                          )}
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+          <DataTable<BackupJob>
+            data={recentJobs}
+            columns={jobColumns}
+            actions={jobActions}
+            getRowKey={(job) => job.id}
+            headerBgColor="background.default"
+            enableHover={true}
+            enablePointer={false}
+            loading={loadingStatus}
+            emptyState={{
+              icon: <Clock size={48} color="rgba(0,0,0,0.3)" />,
+              title: 'No backup jobs found',
+            }}
+          />
         </CardContent>
       </Card>
 
@@ -797,8 +792,8 @@ const Backup: React.FC = () => {
           repositoryId={lockError.repositoryId}
           repositoryName={lockError.repositoryName}
           onLockBroken={() => {
-            queryClient.invalidateQueries(['repository-archives', lockError.repositoryId])
-            queryClient.invalidateQueries(['repository-info', lockError.repositoryId])
+            queryClient.invalidateQueries({ queryKey: ['repository-archives', lockError.repositoryId] })
+            queryClient.invalidateQueries({ queryKey: ['repository-info', lockError.repositoryId] })
           }}
         />
       )}

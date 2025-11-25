@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from 'react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { sshKeysAPI } from '../services/api'
 import { formatDate } from '../utils/dateUtils'
 import {
@@ -20,12 +20,6 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   CircularProgress,
   Alert,
   Tooltip,
@@ -41,8 +35,11 @@ import {
   XCircle,
   AlertTriangle,
   Plus,
+  Edit,
+  Trash2,
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
+import DataTable from '../components/DataTable'
 
 interface SSHConnection {
   id: number
@@ -65,6 +62,9 @@ export default function SSHConnectionsSingleKey() {
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false)
   const [deployDialogOpen, setDeployDialogOpen] = useState(false)
   const [testConnectionDialogOpen, setTestConnectionDialogOpen] = useState(false)
+  const [editConnectionDialogOpen, setEditConnectionDialogOpen] = useState(false)
+  const [deleteConnectionDialogOpen, setDeleteConnectionDialogOpen] = useState(false)
+  const [selectedConnection, setSelectedConnection] = useState<SSHConnection | null>(null)
   const [keyType, setKeyType] = useState('ed25519')
   const [connectionForm, setConnectionForm] = useState({
     host: '',
@@ -77,19 +77,24 @@ export default function SSHConnectionsSingleKey() {
     username: '',
     port: 22,
   })
+  const [editConnectionForm, setEditConnectionForm] = useState({
+    host: '',
+    username: '',
+    port: 22,
+  })
 
   // Queries
-  const { data: systemKeyData, isLoading: keyLoading } = useQuery(
-    'system-ssh-key',
-    sshKeysAPI.getSystemKey,
-    { refetchInterval: 30000 }
-  )
+  const { data: systemKeyData, isLoading: keyLoading } = useQuery({
+    queryKey: ['system-ssh-key'],
+    queryFn: sshKeysAPI.getSystemKey,
+    refetchInterval: 30000
+  })
 
-  const { data: connectionsData, isLoading: connectionsLoading } = useQuery(
-    'ssh-connections',
-    sshKeysAPI.getSSHConnections,
-    { refetchInterval: 30000 }
-  )
+  const { data: connectionsData, isLoading: connectionsLoading } = useQuery({
+    queryKey: ['ssh-connections'],
+    queryFn: sshKeysAPI.getSSHConnections,
+    refetchInterval: 30000
+  })
 
   const systemKey = systemKeyData?.data?.ssh_key
   const keyExists = systemKeyData?.data?.exists
@@ -103,54 +108,75 @@ export default function SSHConnectionsSingleKey() {
   }
 
   // Mutations
-  const generateKeyMutation = useMutation(
-    (data: { name: string; key_type: string; description?: string }) =>
+  const generateKeyMutation = useMutation({
+    mutationFn: (data: { name: string; key_type: string; description?: string }) =>
       sshKeysAPI.generateSSHKey(data),
-    {
-      onSuccess: () => {
-        toast.success('System SSH key generated successfully!')
-        queryClient.invalidateQueries('system-ssh-key')
-        setGenerateDialogOpen(false)
-      },
-      onError: (error: any) => {
-        toast.error(error.response?.data?.detail || 'Failed to generate SSH key')
-      },
-    }
-  )
+    onSuccess: () => {
+      toast.success('System SSH key generated successfully!')
+      queryClient.invalidateQueries({ queryKey: ['system-ssh-key'] })
+      setGenerateDialogOpen(false)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to generate SSH key')
+    },
+  })
 
-  const deployKeyMutation = useMutation(
-    (data: { keyId: number; connectionData: any }) =>
+  const deployKeyMutation = useMutation({
+    mutationFn: (data: { keyId: number; connectionData: any }) =>
       sshKeysAPI.deploySSHKey(data.keyId, data.connectionData),
-    {
-      onSuccess: () => {
-        toast.success('SSH key deployed successfully!')
-        queryClient.invalidateQueries('ssh-connections')
-        setDeployDialogOpen(false)
-        setConnectionForm({ host: '', username: '', port: 22, password: '' })
-      },
-      onError: (error: any) => {
-        toast.error(error.response?.data?.detail || 'Failed to deploy SSH key')
-      },
-    }
-  )
+    onSuccess: () => {
+      toast.success('SSH key deployed successfully!')
+      queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
+      setDeployDialogOpen(false)
+      setConnectionForm({ host: '', username: '', port: 22, password: '' })
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to deploy SSH key')
+    },
+  })
 
-  const testConnectionMutation = useMutation(
-    (data: { keyId: number; connectionData: any }) =>
+  const testConnectionMutation = useMutation({
+    mutationFn: (data: { keyId: number; connectionData: any }) =>
       sshKeysAPI.testSSHConnection(data.keyId, data.connectionData),
-    {
-      onSuccess: (response) => {
-        if (response.data.success) {
-          toast.success('Connection test successful!')
-        } else {
-          toast.error('Connection test failed')
-        }
-        queryClient.invalidateQueries('ssh-connections')
-      },
-      onError: (error: any) => {
-        toast.error(error.response?.data?.detail || 'Connection test failed')
-      },
-    }
-  )
+    onSuccess: (response) => {
+      if (response.data.success) {
+        toast.success('Connection test successful!')
+      } else {
+        toast.error('Connection test failed')
+      }
+      queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Connection test failed')
+    },
+  })
+
+  const updateConnectionMutation = useMutation({
+    mutationFn: (data: { connectionId: number; connectionData: any }) =>
+      sshKeysAPI.updateSSHConnection(data.connectionId, data.connectionData),
+    onSuccess: () => {
+      toast.success('Connection updated successfully!')
+      queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
+      setEditConnectionDialogOpen(false)
+      setSelectedConnection(null)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to update connection')
+    },
+  })
+
+  const deleteConnectionMutation = useMutation({
+    mutationFn: (connectionId: number) => sshKeysAPI.deleteSSHConnection(connectionId),
+    onSuccess: () => {
+      toast.success('Connection deleted successfully!')
+      queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
+      setDeleteConnectionDialogOpen(false)
+      setSelectedConnection(null)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to delete connection')
+    },
+  })
 
   // Handlers
   const handleGenerateKey = () => {
@@ -196,6 +222,34 @@ export default function SSHConnectionsSingleKey() {
         port: connection.port,
       },
     })
+  }
+
+  const handleEditConnection = (connection: SSHConnection) => {
+    setSelectedConnection(connection)
+    setEditConnectionForm({
+      host: connection.host,
+      username: connection.username,
+      port: connection.port,
+    })
+    setEditConnectionDialogOpen(true)
+  }
+
+  const handleUpdateConnection = () => {
+    if (!selectedConnection) return
+    updateConnectionMutation.mutate({
+      connectionId: selectedConnection.id,
+      connectionData: editConnectionForm,
+    })
+  }
+
+  const handleDeleteConnection = (connection: SSHConnection) => {
+    setSelectedConnection(connection)
+    setDeleteConnectionDialogOpen(true)
+  }
+
+  const confirmDeleteConnection = () => {
+    if (!selectedConnection) return
+    deleteConnectionMutation.mutate(selectedConnection.id)
   }
 
   const getStatusIcon = (status: string) => {
@@ -512,7 +566,7 @@ export default function SSHConnectionsSingleKey() {
               <Tooltip title="Refresh connections">
                 <IconButton
                   size="small"
-                  onClick={() => queryClient.invalidateQueries('ssh-connections')}
+                  onClick={() => queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })}
                 >
                   <RefreshCw size={18} />
                 </IconButton>
@@ -525,75 +579,95 @@ export default function SSHConnectionsSingleKey() {
                 started.
               </Alert>
             ) : (
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Status</TableCell>
-                      <TableCell>Host</TableCell>
-                      <TableCell>Username</TableCell>
-                      <TableCell>Port</TableCell>
-                      <TableCell>Last Test</TableCell>
-                      <TableCell align="right">Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {connections.map((connection) => (
-                      <TableRow key={connection.id}>
-                        <TableCell>
-                          <Stack direction="row" alignItems="center" spacing={1}>
-                            {getStatusIcon(connection.status)}
-                            <Chip
-                              label={connection.status}
-                              size="small"
-                              color={getStatusColor(connection.status)}
-                              sx={{ height: 20, fontSize: '0.7rem' }}
-                            />
-                          </Stack>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={500}>
-                            {connection.host}
+              <DataTable<SSHConnection>
+                data={connections}
+                columns={[
+                  {
+                    id: 'status',
+                    label: 'Status',
+                    render: (connection) => (
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        {getStatusIcon(connection.status)}
+                        <Chip
+                          label={connection.status}
+                          size="small"
+                          color={getStatusColor(connection.status)}
+                          sx={{ height: 20, fontSize: '0.7rem' }}
+                        />
+                      </Stack>
+                    ),
+                  },
+                  {
+                    id: 'host',
+                    label: 'Host',
+                    render: (connection) => (
+                      <Box>
+                        <Typography variant="body2" fontWeight={500}>
+                          {connection.host}
+                        </Typography>
+                        {connection.error_message && (
+                          <Typography
+                            variant="caption"
+                            color="error"
+                            sx={{ display: 'block', mt: 0.5 }}
+                          >
+                            {connection.error_message.substring(0, 50)}...
                           </Typography>
-                          {connection.error_message && (
-                            <Typography
-                              variant="caption"
-                              color="error"
-                              sx={{ display: 'block', mt: 0.5 }}
-                            >
-                              {connection.error_message.substring(0, 50)}...
-                            </Typography>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">
-                            {connection.username}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">{connection.port}</Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="caption" color="text.secondary">
-                            {formatDate(connection.last_test)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right">
-                          <Tooltip title="Test connection">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleTestConnection(connection)}
-                              disabled={testConnectionMutation.isLoading}
-                            >
-                              <RefreshCw size={16} />
-                            </IconButton>
-                          </Tooltip>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                        )}
+                      </Box>
+                    ),
+                  },
+                  {
+                    id: 'username',
+                    label: 'Username',
+                    render: (connection) => (
+                      <Typography variant="body2">{connection.username}</Typography>
+                    ),
+                  },
+                  {
+                    id: 'port',
+                    label: 'Port',
+                    render: (connection) => (
+                      <Typography variant="body2">{connection.port}</Typography>
+                    ),
+                  },
+                  {
+                    id: 'last_test',
+                    label: 'Last Test',
+                    render: (connection) => (
+                      <Typography variant="caption" color="text.secondary">
+                        {formatDate(connection.last_test)}
+                      </Typography>
+                    ),
+                  },
+                ]}
+                actions={[
+                  {
+                    icon: <Edit size={16} />,
+                    label: 'Edit connection',
+                    onClick: handleEditConnection,
+                    color: 'primary',
+                    tooltip: 'Edit connection',
+                  },
+                  {
+                    icon: <RefreshCw size={16} />,
+                    label: 'Test connection',
+                    onClick: handleTestConnection,
+                    tooltip: 'Test connection',
+                    disabled: () => testConnectionMutation.isPending,
+                  },
+                  {
+                    icon: <Trash2 size={16} />,
+                    label: 'Delete connection',
+                    onClick: handleDeleteConnection,
+                    color: 'error',
+                    tooltip: 'Delete connection',
+                  },
+                ]}
+                getRowKey={(connection) => connection.id}
+                variant="outlined"
+                enableHover={true}
+              />
             )}
           </CardContent>
         </Card>
@@ -633,9 +707,9 @@ export default function SSHConnectionsSingleKey() {
           <Button
             variant="contained"
             onClick={handleGenerateKey}
-            disabled={generateKeyMutation.isLoading}
+            disabled={generateKeyMutation.isPending}
           >
-            {generateKeyMutation.isLoading ? 'Generating...' : 'Generate Key'}
+            {generateKeyMutation.isPending ? 'Generating...' : 'Generate Key'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -716,13 +790,13 @@ export default function SSHConnectionsSingleKey() {
             variant="contained"
             onClick={handleDeployKey}
             disabled={
-              deployKeyMutation.isLoading ||
+              deployKeyMutation.isPending ||
               !connectionForm.host ||
               !connectionForm.username ||
               !connectionForm.password
             }
           >
-            {deployKeyMutation.isLoading ? 'Deploying...' : 'Deploy Key'}
+            {deployKeyMutation.isPending ? 'Deploying...' : 'Deploy Key'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -803,12 +877,141 @@ export default function SSHConnectionsSingleKey() {
             variant="contained"
             onClick={handleTestManualConnection}
             disabled={
-              testConnectionMutation.isLoading ||
+              testConnectionMutation.isPending ||
               !testConnectionForm.host ||
               !testConnectionForm.username
             }
           >
-            {testConnectionMutation.isLoading ? 'Testing...' : 'Test & Add Connection'}
+            {testConnectionMutation.isPending ? 'Testing...' : 'Test & Add Connection'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Connection Dialog */}
+      <Dialog
+        open={editConnectionDialogOpen}
+        onClose={() => {
+          setEditConnectionDialogOpen(false)
+          setSelectedConnection(null)
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Edit SSH Connection</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="Host"
+              fullWidth
+              value={editConnectionForm.host}
+              onChange={(e) =>
+                setEditConnectionForm({
+                  ...editConnectionForm,
+                  host: e.target.value,
+                })
+              }
+              placeholder="192.168.1.100 or example.com"
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="Username"
+              fullWidth
+              value={editConnectionForm.username}
+              onChange={(e) =>
+                setEditConnectionForm({
+                  ...editConnectionForm,
+                  username: e.target.value,
+                })
+              }
+              placeholder="root"
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="Port"
+              type="number"
+              fullWidth
+              value={editConnectionForm.port}
+              onChange={(e) =>
+                setEditConnectionForm({
+                  ...editConnectionForm,
+                  port: parseInt(e.target.value),
+                })
+              }
+              InputLabelProps={{ shrink: true }}
+            />
+            <Alert severity="info" sx={{ fontSize: '0.85rem' }}>
+              Update the connection details. You may want to test the connection after updating.
+            </Alert>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setEditConnectionDialogOpen(false)
+              setSelectedConnection(null)
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleUpdateConnection}
+            disabled={
+              updateConnectionMutation.isPending ||
+              !editConnectionForm.host ||
+              !editConnectionForm.username
+            }
+          >
+            {updateConnectionMutation.isPending ? 'Updating...' : 'Update Connection'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Connection Dialog */}
+      <Dialog
+        open={deleteConnectionDialogOpen}
+        onClose={() => {
+          setDeleteConnectionDialogOpen(false)
+          setSelectedConnection(null)
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Delete SSH Connection</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Are you sure you want to delete this connection?
+          </Alert>
+          {selectedConnection && (
+            <Stack spacing={1}>
+              <Typography variant="body2">
+                <strong>Host:</strong> {selectedConnection.host}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Username:</strong> {selectedConnection.username}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Port:</strong> {selectedConnection.port}
+              </Typography>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setDeleteConnectionDialogOpen(false)
+              setSelectedConnection(null)
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={confirmDeleteConnection}
+            disabled={deleteConnectionMutation.isPending}
+          >
+            {deleteConnectionMutation.isPending ? 'Deleting...' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>

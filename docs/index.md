@@ -22,13 +22,15 @@ docker run -d \
   -p 8081:8081 \
   -v borg_data:/data \
   -v borg_cache:/home/borg/.cache/borg \
-  -v /:/local:rw \
+  -v /home/yourusername:/local:rw \
   ainullcode/borg-ui:latest
 ```
 
+**Note:** Replace `/home/yourusername` with your actual directory path.
+
 Access at `http://localhost:8081` • Default login: `admin` / `admin123`
 
-See [Installation Guide](installation) for other methods (Docker Compose, Portainer, Unraid).
+See [Installation Guide](installation) for other methods and security best practices.
 
 ---
 
@@ -104,7 +106,7 @@ services:
     volumes:
       - borg_data:/data
       - borg_cache:/home/borg/.cache/borg
-      - /:/local:rw
+      - /home/yourusername:/local:rw  # Replace with your directory
     environment:
       - PUID=1000
       - PGID=1000
@@ -116,7 +118,7 @@ volumes:
 
 Start: `docker compose up -d`
 
-**Other platforms:** [Installation Guide](installation)
+**Other platforms:** [Installation Guide](installation) • **Security:** [Volume Mount Best Practices](configuration#filesystem-access)
 
 ---
 
@@ -134,20 +136,26 @@ environment:
 
 ### Volume Mounts
 
-**Default (maximum flexibility):**
+**⚠️ Security Best Practice:**
+
+Mount only the directories you need to backup:
+
 ```yaml
 volumes:
-  - /:/local:rw  # Access entire filesystem
+  # ✅ Recommended: Specific directories
+  - /home/yourusername:/local:rw       # Replace with your path
+  - /mnt/data:/local/data:rw           # Additional directories
+
+  # ❌ NOT Recommended: Full filesystem
+  # - /:/local:rw  # Avoid in production - use for testing only
 ```
 
-**Production (restricted access):**
-```yaml
-volumes:
-  - /home/user/data:/sources:ro        # Backup sources (read-only)
-  - /mnt/backups:/destinations:rw      # Backup destination
-```
+**Common Patterns:**
+- **Single directory:** `-v /home/john:/local:rw`
+- **Multiple directories:** Add more `-v` flags for each directory
+- **Read-only:** Use `:ro` for backup-only directories
 
-See [Configuration Guide](configuration) for details.
+See [Configuration Guide](configuration#filesystem-access) for detailed examples.
 
 ---
 

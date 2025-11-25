@@ -117,6 +117,8 @@ class RepositoryCreate(BaseModel):
     post_backup_script: Optional[str] = None  # Script to run after backup
     hook_timeout: Optional[int] = 300  # Hook timeout in seconds
     continue_on_hook_failure: Optional[bool] = False  # Continue backup if pre-hook fails
+    mode: str = "full"  # full: backups + observability, observe: observability-only
+    custom_flags: Optional[str] = None  # Custom command-line flags for borg create (e.g., "--stats --list")
 
 class RepositoryImport(BaseModel):
     name: str
@@ -135,6 +137,8 @@ class RepositoryImport(BaseModel):
     post_backup_script: Optional[str] = None  # Script to run after backup
     hook_timeout: Optional[int] = 300  # Hook timeout in seconds
     continue_on_hook_failure: Optional[bool] = False  # Continue backup if pre-hook fails
+    mode: str = "full"  # full: backups + observability, observe: observability-only
+    custom_flags: Optional[str] = None  # Custom command-line flags for borg create (e.g., "--stats --list")
 
 class RepositoryUpdate(BaseModel):
     name: Optional[str] = None
@@ -147,6 +151,8 @@ class RepositoryUpdate(BaseModel):
     post_backup_script: Optional[str] = None
     hook_timeout: Optional[int] = None
     continue_on_hook_failure: Optional[bool] = None
+    mode: Optional[str] = None  # full: backups + observability, observe: observability-only
+    custom_flags: Optional[str] = None  # Custom command-line flags for borg create
 
 class RepositoryInfo(BaseModel):
     id: int
@@ -204,6 +210,8 @@ async def get_repositories(
                 "post_backup_script": repo.post_backup_script,
                 "hook_timeout": repo.hook_timeout,
                 "continue_on_hook_failure": repo.continue_on_hook_failure,
+                "mode": repo.mode or "full",  # Default to "full" for backward compatibility
+                "custom_flags": repo.custom_flags,
                 "has_running_maintenance": has_check or has_compact
             })
 
@@ -226,12 +234,13 @@ async def create_repository(
         raise HTTPException(status_code=403, detail="Admin access required")
 
     try:
-        # Validate source directories are provided
-        if not repo_data.source_directories or len(repo_data.source_directories) == 0:
-            raise HTTPException(
-                status_code=400,
-                detail="At least one source directory is required. Source directories specify what data will be backed up to this repository."
-            )
+        # Validate source directories are provided (only for full mode repositories)
+        if repo_data.mode == "full":
+            if not repo_data.source_directories or len(repo_data.source_directories) == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="At least one source directory is required for full mode repositories. Source directories specify what data will be backed up to this repository."
+                )
 
         # Validate passphrase for encrypted repositories
         if repo_data.encryption in ["repokey", "keyfile", "repokey-blake2", "keyfile-blake2"]:
@@ -362,7 +371,8 @@ async def create_repository(
             repo_path,
             repo_data.encryption,
             repo_data.passphrase,
-            repo_data.ssh_key_id if repo_data.repository_type in ["ssh", "sftp"] else None
+            repo_data.ssh_key_id if repo_data.repository_type in ["ssh", "sftp"] else None,
+            repo_data.remote_path
         )
 
         if not init_result["success"]:
@@ -396,7 +406,9 @@ async def create_repository(
             pre_backup_script=repo_data.pre_backup_script,
             post_backup_script=repo_data.post_backup_script,
             hook_timeout=repo_data.hook_timeout,
-            continue_on_hook_failure=repo_data.continue_on_hook_failure
+            continue_on_hook_failure=repo_data.continue_on_hook_failure,
+            mode=repo_data.mode,
+            custom_flags=repo_data.custom_flags
         )
 
         db.add(repository)
@@ -441,12 +453,13 @@ async def import_repository(
         raise HTTPException(status_code=403, detail="Admin access required")
 
     try:
-        # Validate source directories are provided
-        if not repo_data.source_directories or len(repo_data.source_directories) == 0:
-            raise HTTPException(
-                status_code=400,
-                detail="At least one source directory is required. Source directories specify what data will be backed up to this repository."
-            )
+        # Validate source directories are provided (only for full mode repositories)
+        if repo_data.mode == "full":
+            if not repo_data.source_directories or len(repo_data.source_directories) == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="At least one source directory is required for full mode repositories. Source directories specify what data will be backed up to this repository."
+                )
 
         # Validate repository type and path
         repo_path = repo_data.path.strip()
@@ -582,7 +595,9 @@ async def import_repository(
             pre_backup_script=repo_data.pre_backup_script,
             post_backup_script=repo_data.post_backup_script,
             hook_timeout=repo_data.hook_timeout,
-            continue_on_hook_failure=repo_data.continue_on_hook_failure
+            continue_on_hook_failure=repo_data.continue_on_hook_failure,
+            mode=repo_data.mode,
+            custom_flags=repo_data.custom_flags
         )
 
         db.add(repository)
@@ -710,6 +725,21 @@ async def update_repository(
 
         if repo_data.continue_on_hook_failure is not None:
             repository.continue_on_hook_failure = repo_data.continue_on_hook_failure
+
+        if repo_data.mode is not None:
+            # Validate source directories when switching to full mode
+            if repo_data.mode == "full" and (not repository.source_directories or repository.source_directories == "[]"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot switch to full mode: at least one source directory is required"
+                )
+            repository.mode = repo_data.mode
+            # If switching to observe mode, log it
+            if repo_data.mode == "observe":
+                logger.info("Repository switched to observability-only mode", repo_id=repo_id)
+
+        if repo_data.custom_flags is not None:
+            repository.custom_flags = repo_data.custom_flags
 
         repository.updated_at = datetime.utcnow()
         db.commit()
@@ -1167,7 +1197,7 @@ async def verify_existing_repository(path: str, passphrase: str = None, ssh_key_
             except Exception as e:
                 logger.warning("Failed to clean up temp SSH key", error=str(e))
 
-async def initialize_borg_repository(path: str, encryption: str, passphrase: str = None, ssh_key_id: int = None) -> Dict[str, Any]:
+async def initialize_borg_repository(path: str, encryption: str, passphrase: str = None, ssh_key_id: int = None, remote_path: str = None) -> Dict[str, Any]:
     """Initialize a new Borg repository"""
     temp_key_file = None
     try:
@@ -1175,7 +1205,8 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
                    path=path,
                    encryption=encryption,
                    has_passphrase=bool(passphrase),
-                   ssh_key_id=ssh_key_id)
+                   ssh_key_id=ssh_key_id,
+                   remote_path=remote_path)
 
         # Check if borg is available locally
         try:
@@ -1198,6 +1229,12 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
 
         # Build borg init command
         cmd = ["borg", "init", "--encryption", encryption]
+
+        # Add remote-path argument if specified
+        if remote_path:
+            cmd.extend(["--remote-path", remote_path])
+            logger.info("Added remote-path to borg init command", remote_path=remote_path)
+
         logger.info("Built borg init command", command=" ".join(cmd))
 
         # Set up environment

@@ -618,18 +618,32 @@ When a scheduled backup is running, you'll see it in the **"Running Scheduled Ba
 
 ### Security Considerations
 
-1. **Customize Volume Mounts** - Don't use the default `/:/local:rw` mount in production. Mount only directories you need:
+1. **⚠️ Restrict Volume Mounts (Critical)** - Never use `/:/local:rw` in production. Mount only the specific directories you need:
    ```yaml
    volumes:
-     - /home/user/documents:/source:ro        # Read-only source
-     - /mnt/backup-drive:/destination:rw      # Read-write destination
+     # ✅ Recommended: Specific directories only
+     - /home/user/documents:/local:ro          # Backup source (read-only)
+     - /mnt/backup-drive:/local/backup:rw      # Backup destination (read-write)
+
+     # ❌ NEVER in production:
+     # - /:/local:rw  # Exposes entire filesystem - testing only!
    ```
-2. **Use Read-Only Mounts for Sources** - Mount backup source directories as `:ro` to prevent accidental modifications
-3. **Run as Non-Root User** - Set `PUID` and `PGID` to match your host user (not root)
-4. **Audit Before Production** - Review all mounted directories before deploying
-5. **Keep Software Updated** - Regularly update to the latest version for security patches
-6. **Use Strong Passphrases** - Both for repository encryption and SSH keys
-7. **Review Code** - The project is open source - audit it before trusting it with sensitive data
+
+2. **Use Read-Only Mounts for Sources** - Always mount backup sources as `:ro` to prevent accidental modifications or ransomware attacks
+
+3. **Run as Non-Root User** - Set `PUID` and `PGID` to match your host user (not root) to avoid permission issues
+
+4. **Audit Volume Mounts** - Before deploying to production, document and review every mounted directory
+
+5. **Keep Software Updated** - Regularly update to the latest version for security patches and bug fixes
+
+6. **Use Strong Passphrases** - Generate random passphrases (20+ characters) for both repository encryption and SSH keys
+
+7. **Enable Notifications** - Configure alerts for backup failures and errors to catch issues early
+
+8. **Test Restore Process** - Verify you can actually restore from backups before disaster strikes
+
+See [Security Guide](security) for comprehensive security recommendations.
 
 ### For Local Backups
 

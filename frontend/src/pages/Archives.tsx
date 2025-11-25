@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from 'react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
   Card,
@@ -68,36 +68,40 @@ const Archives: React.FC = () => {
   })
 
   // Get archives for selected repository
-  const { data: archives, isLoading: loadingArchives } = useQuery({
+  const { data: archives, isLoading: loadingArchives, error: archivesError } = useQuery({
     queryKey: ['repository-archives', selectedRepositoryId],
     queryFn: () => repositoriesAPI.listRepositoryArchives(selectedRepositoryId!),
     enabled: !!selectedRepositoryId,
-    onError: (error: any) => {
-      if (error?.response?.status === 423) {
-        setLockError({
-          repositoryId: selectedRepositoryId!,
-          repositoryName: selectedRepository?.name || 'Unknown'
-        })
-      }
-    },
     retry: false
   })
 
+  // Handle archives error
+  React.useEffect(() => {
+    if (archivesError && (archivesError as any)?.response?.status === 423 && selectedRepositoryId) {
+      setLockError({
+        repositoryId: selectedRepositoryId,
+        repositoryName: selectedRepository?.name || 'Unknown'
+      })
+    }
+  }, [archivesError, selectedRepositoryId, selectedRepository?.name])
+
   // Get repository info for statistics
-  const { data: repoInfo, isLoading: loadingRepoInfo } = useQuery({
+  const { data: repoInfo, isLoading: loadingRepoInfo, error: repoInfoError } = useQuery({
     queryKey: ['repository-info', selectedRepositoryId],
     queryFn: () => repositoriesAPI.getRepositoryInfo(selectedRepositoryId!),
     enabled: !!selectedRepositoryId,
-    onError: (error: any) => {
-      if (error?.response?.status === 423) {
-        setLockError({
-          repositoryId: selectedRepositoryId!,
-          repositoryName: selectedRepository?.name || 'Unknown'
-        })
-      }
-    },
     retry: false
   })
+
+  // Handle repo info error
+  React.useEffect(() => {
+    if (repoInfoError && (repoInfoError as any)?.response?.status === 423 && selectedRepositoryId) {
+      setLockError({
+        repositoryId: selectedRepositoryId,
+        repositoryName: selectedRepository?.name || 'Unknown'
+      })
+    }
+  }, [repoInfoError, selectedRepositoryId, selectedRepository?.name])
 
   // Get archive contents for current path (on-demand, one level at a time)
   const { data: archiveContents, isLoading: loadingArchiveContents } = useQuery({
@@ -310,7 +314,10 @@ const Archives: React.FC = () => {
                     Space Saved
                   </Typography>
                   <Typography variant="h4" fontWeight={700} sx={{ color: '#0277bd', fontSize: '1.5rem' }}>
-                    {formatBytesUtil(repoInfo.data.info.cache.stats.total_size - repoInfo.data.info.cache.stats.unique_csize)}
+                    {(() => {
+                      const saved = (repoInfo.data.info.cache.stats.total_size || 0) - (repoInfo.data.info.cache.stats.unique_csize || 0)
+                      return saved > 0 ? formatBytesUtil(saved) : '0 B'
+                    })()}
                   </Typography>
                 </Box>
               </Stack>
@@ -694,10 +701,10 @@ const Archives: React.FC = () => {
             variant="contained"
             color="error"
             onClick={() => handleDeleteArchive(showDeleteConfirm!)}
-            disabled={deleteArchiveMutation.isLoading}
-            startIcon={deleteArchiveMutation.isLoading ? <CircularProgress size={16} color="inherit" /> : <Trash2 size={16} />}
+            disabled={deleteArchiveMutation.isPending}
+            startIcon={deleteArchiveMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <Trash2 size={16} />}
           >
-            {deleteArchiveMutation.isLoading ? 'Deleting...' : 'Delete'}
+            {deleteArchiveMutation.isPending ? 'Deleting...' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -711,8 +718,8 @@ const Archives: React.FC = () => {
           repositoryName={lockError.repositoryName}
           onLockBroken={() => {
             // Invalidate queries to retry
-            queryClient.invalidateQueries(['repository-archives', lockError.repositoryId])
-            queryClient.invalidateQueries(['repository-info', lockError.repositoryId])
+            queryClient.invalidateQueries({ queryKey: ['repository-archives', lockError.repositoryId] })
+            queryClient.invalidateQueries({ queryKey: ['repository-info', lockError.repositoryId] })
           }}
         />
       )}

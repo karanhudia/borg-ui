@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Card, CardContent, Box, Typography, Button, Tooltip } from '@mui/material'
+import { Card, CardContent, Box, Typography, Button, Tooltip, Chip } from '@mui/material'
 import { Info, CheckCircle as CheckCircleIcon, Refresh, Delete } from '@mui/icons-material'
 import { useMaintenanceJobs } from '../hooks/useMaintenanceJobs'
 import { formatDateShort, formatDateTimeFull, formatElapsedTime } from '../utils/dateUtils'
-import { useQueryClient } from 'react-query'
+import { useQueryClient } from '@tanstack/react-query'
 
 interface Repository {
   id: number
@@ -20,6 +20,7 @@ interface Repository {
   archive_count: number
   created_at: string
   updated_at: string | null
+  mode: 'full' | 'observe'
   has_running_maintenance?: boolean
 }
 
@@ -112,9 +113,19 @@ export default function RepositoryCard({
       <CardContent>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
           <Box>
-            <Typography variant="h6" fontWeight={600} gutterBottom>
-              {repository.name}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+              <Typography variant="h6" fontWeight={600}>
+                {repository.name}
+              </Typography>
+              {repository.mode === 'observe' && (
+                <Chip
+                  label="Observe Only"
+                  size="small"
+                  color="info"
+                  sx={{ height: '20px', fontSize: '0.7rem' }}
+                />
+              )}
+            </Box>
             <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
               {repository.path}
             </Typography>

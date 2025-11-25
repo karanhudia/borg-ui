@@ -59,6 +59,12 @@ class Repository(Base):
     hook_timeout = Column(Integer, default=300)  # Hook timeout in seconds (default 5 minutes)
     continue_on_hook_failure = Column(Boolean, default=False)  # Whether to continue backup if pre-hook fails
 
+    # Repository mode (for observability-only repos)
+    mode = Column(String, default="full")  # full: backups + observability, observe: observability-only
+
+    # Custom flags for borg create command (advanced users)
+    custom_flags = Column(Text, nullable=True)  # Custom command-line flags for borg create (e.g., "--stats --progress")
+
     # Relationships
     ssh_key = relationship("SSHKey", back_populates="repositories")
 

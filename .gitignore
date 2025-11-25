@@ -3,6 +3,11 @@
 /frontend/build
 /frontend/dist
 
+# Root node_modules (should not exist)
+/node_modules
+/package-lock.json
+/package.json
+
 # Built static files (generated during Docker build)
 /app/static/*
 !/app/static/.gitkeep

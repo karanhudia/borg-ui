@@ -610,6 +610,78 @@ async def test_ssh_connection(
         logger.error("Failed to test SSH connection", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to test SSH connection: {str(e)}")
 
+@router.put("/connections/{connection_id}")
+async def update_ssh_connection(
+    connection_id: int,
+    connection_data: SSHConnectionTest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update an existing SSH connection"""
+    try:
+        connection = db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
+        if not connection:
+            raise HTTPException(status_code=404, detail="SSH connection not found")
+
+        # Update connection details
+        connection.host = connection_data.host
+        connection.username = connection_data.username
+        connection.port = connection_data.port
+        connection.updated_at = datetime.utcnow()
+
+        db.commit()
+        db.refresh(connection)
+
+        logger.info("SSH connection updated", connection_id=connection_id, user=current_user.username)
+
+        return {
+            "success": True,
+            "message": "SSH connection updated successfully",
+            "connection": {
+                "id": connection.id,
+                "host": connection.host,
+                "username": connection.username,
+                "port": connection.port,
+                "status": connection.status,
+                "last_test": serialize_datetime(connection.last_test),
+                "last_success": serialize_datetime(connection.last_success),
+                "error_message": connection.error_message
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to update SSH connection", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to update SSH connection: {str(e)}")
+
+@router.delete("/connections/{connection_id}")
+async def delete_ssh_connection(
+    connection_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete an SSH connection"""
+    try:
+        connection = db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
+        if not connection:
+            raise HTTPException(status_code=404, detail="SSH connection not found")
+
+        host = connection.host
+        db.delete(connection)
+        db.commit()
+
+        logger.info("SSH connection deleted", connection_id=connection_id, host=host, user=current_user.username)
+
+        return {
+            "success": True,
+            "message": "SSH connection deleted successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to delete SSH connection", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to delete SSH connection: {str(e)}")
+
 @router.get("/{key_id}")
 async def get_ssh_key(
     key_id: int,
