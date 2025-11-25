@@ -1563,7 +1563,7 @@ export default function Repositories() {
               {/* Compression Settings - Only show for full repositories */}
               {editForm.mode === 'full' && (
                 <Box>
-                  <Typography variant="subtitle2" gutterBottom>
+                  <Typography variant="subtitle2" gutterBottom sx={{ mb: 1.5 }}>
                     Compression Settings
                   </Typography>
 
