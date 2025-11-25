@@ -30,9 +30,6 @@ Fixes #
 <!-- Mark completed items with an 'x' -->
 
 - [ ] I have read the [CONTRIBUTING](CONTRIBUTING.md) guidelines
-- [ ] I agree to the terms of the proprietary license
-- [ ] I grant the copyright holder rights to use my contribution
-- [ ] I have NOT forked this repository
 - [ ] My code follows the style guidelines of this project
 - [ ] I have performed a self-review of my own code
 - [ ] I have commented my code, particularly in hard-to-understand areas
@@ -51,4 +48,4 @@ Fixes #
 
 ---
 
-**⚠️ Important:** By submitting this pull request, you agree that your contributions will be licensed under the same proprietary license as this project, and you grant the copyright holder perpetual rights to use, modify, and distribute your contributions.
+**Note:** By submitting this pull request, you agree that your contributions will be licensed under the GNU General Public License v3.0, the same license as this project.
