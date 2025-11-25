@@ -62,6 +62,9 @@ class Repository(Base):
     # Repository mode (for observability-only repos)
     mode = Column(String, default="full")  # full: backups + observability, observe: observability-only
 
+    # Custom flags for borg create command (advanced users)
+    custom_flags = Column(Text, nullable=True)  # Custom command-line flags for borg create (e.g., "--stats --progress")
+
     # Relationships
     ssh_key = relationship("SSHKey", back_populates="repositories")
 
