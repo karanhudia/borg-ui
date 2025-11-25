@@ -1415,13 +1415,41 @@ export default function Repositories() {
                 fullWidth
               />
 
-              {/* Compression Settings */}
-              <Box>
-                <Typography variant="subtitle2" gutterBottom>
-                  Compression Settings
-                </Typography>
+              {/* Repository Mode */}
+              <FormControl fullWidth>
+                <InputLabel>Repository Mode</InputLabel>
+                <Select
+                  value={editForm.mode}
+                  label="Repository Mode"
+                  onChange={(e) => setEditForm({ ...editForm, mode: e.target.value as 'full' | 'observe' })}
+                >
+                  <MenuItem value="full">
+                    <Box>
+                      <Typography variant="body2" fontWeight={600}>Full Repository</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Perform backups and view archives (default)
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                  <MenuItem value="observe">
+                    <Box>
+                      <Typography variant="body2" fontWeight={600}>Observability Only</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        View-only mode for archives created elsewhere
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                </Select>
+              </FormControl>
 
-                <Stack spacing={2}>
+              {/* Compression Settings - Only show for full repositories */}
+              {editForm.mode === 'full' && (
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Compression Settings
+                  </Typography>
+
+                  <Stack spacing={2}>
                   <FormControl fullWidth>
                     <InputLabel>Compression Algorithm</InputLabel>
                     <Select
@@ -1537,6 +1565,7 @@ export default function Repositories() {
                   )}
                 </Stack>
               </Box>
+              )}
 
               <TextField
                 label="Remote Borg Path (Optional)"
