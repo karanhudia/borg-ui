@@ -1085,15 +1085,6 @@ export default function Repositories() {
                         ))}
                     </Select>
                   </FormControl>
-
-                  <TextField
-                    label="Remote Borg Path (Optional)"
-                    value={repositoryForm.remote_path}
-                    onChange={(e) => setRepositoryForm({ ...repositoryForm, remote_path: e.target.value })}
-                    placeholder="/usr/local/bin/borg"
-                    fullWidth
-                    helperText="Path to borg executable on remote server. Leave empty if borg is in PATH."
-                  />
                 </>
               )}
 
@@ -1453,11 +1444,13 @@ export default function Repositories() {
               {/* Advanced Options */}
               <AdvancedRepositoryOptions
                 mode={repositoryForm.mode}
+                remotePath={repositoryForm.remote_path}
                 preBackupScript={repositoryForm.pre_backup_script}
                 postBackupScript={repositoryForm.post_backup_script}
                 hookTimeout={repositoryForm.hook_timeout}
                 continueOnHookFailure={repositoryForm.continue_on_hook_failure}
                 customFlags={repositoryForm.custom_flags}
+                onRemotePathChange={(value) => setRepositoryForm({ ...repositoryForm, remote_path: value })}
                 onPreBackupScriptChange={(value) => setRepositoryForm({ ...repositoryForm, pre_backup_script: value })}
                 onPostBackupScriptChange={(value) => setRepositoryForm({ ...repositoryForm, post_backup_script: value })}
                 onHookTimeoutChange={(value) => setRepositoryForm({ ...repositoryForm, hook_timeout: value })}
@@ -1692,15 +1685,6 @@ export default function Repositories() {
               </Box>
               )}
 
-              <TextField
-                label="Remote Borg Path (Optional)"
-                value={editForm.remote_path}
-                onChange={(e) => setEditForm({ ...editForm, remote_path: e.target.value })}
-                placeholder="/usr/local/bin/borg"
-                fullWidth
-                helperText="Path to borg executable on remote server. Leave empty if borg is in PATH."
-              />
-
               {/* Source Directories - Only show for full repositories */}
               {editForm.mode === 'full' && (
               <Box>
@@ -1876,11 +1860,13 @@ export default function Repositories() {
               {/* Advanced Options */}
               <AdvancedRepositoryOptions
                 mode={editForm.mode}
+                remotePath={editForm.remote_path}
                 preBackupScript={editForm.pre_backup_script}
                 postBackupScript={editForm.post_backup_script}
                 hookTimeout={editForm.hook_timeout}
                 continueOnHookFailure={editForm.continue_on_hook_failure}
                 customFlags={editForm.custom_flags}
+                onRemotePathChange={(value) => setEditForm({ ...editForm, remote_path: value })}
                 onPreBackupScriptChange={(value) => setEditForm({ ...editForm, pre_backup_script: value })}
                 onPostBackupScriptChange={(value) => setEditForm({ ...editForm, post_backup_script: value })}
                 onHookTimeoutChange={(value) => setEditForm({ ...editForm, hook_timeout: value })}

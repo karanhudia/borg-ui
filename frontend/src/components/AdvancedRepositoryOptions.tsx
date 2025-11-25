@@ -10,11 +10,13 @@ import CodeEditor from './CodeEditor'
 
 interface AdvancedRepositoryOptionsProps {
   mode: 'full' | 'observe'
+  remotePath: string
   preBackupScript: string
   postBackupScript: string
   hookTimeout: number
   continueOnHookFailure: boolean
   customFlags: string
+  onRemotePathChange: (value: string) => void
   onPreBackupScriptChange: (value: string) => void
   onPostBackupScriptChange: (value: string) => void
   onHookTimeoutChange: (value: number) => void
@@ -24,22 +26,19 @@ interface AdvancedRepositoryOptionsProps {
 
 export default function AdvancedRepositoryOptions({
   mode,
+  remotePath,
   preBackupScript,
   postBackupScript,
   hookTimeout,
   continueOnHookFailure,
   customFlags,
+  onRemotePathChange,
   onPreBackupScriptChange,
   onPostBackupScriptChange,
   onHookTimeoutChange,
   onContinueOnHookFailureChange,
   onCustomFlagsChange,
 }: AdvancedRepositoryOptionsProps) {
-  // Only show advanced options for full repositories
-  if (mode !== 'full') {
-    return null
-  }
-
   return (
     <>
       <Divider sx={{ mt: 2 }} />
@@ -47,66 +46,82 @@ export default function AdvancedRepositoryOptions({
         Advanced Options
       </Typography>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-        Configure backup hooks and custom borg flags for advanced use cases
+        Configure remote borg path, custom flags, and backup hooks for advanced use cases
       </Typography>
 
-      {/* Custom Flags */}
+      {/* Remote Path */}
       <TextField
-        label="Custom Flags (Optional)"
-        value={customFlags}
-        onChange={(e) => onCustomFlagsChange(e.target.value)}
-        placeholder="--stats --list --filter AME"
+        label="Remote Borg Path (Optional)"
+        value={remotePath}
+        onChange={(e) => onRemotePathChange(e.target.value)}
+        placeholder="/usr/local/bin/borg"
         fullWidth
-        helperText="Custom command-line flags for borg create (e.g., --stats, --progress, --list)"
+        helperText="Path to borg binary on remote server (leave empty for default)"
       />
 
-      {/* Backup Hooks */}
-      <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 2, mb: 1 }}>
-        Backup Hooks (Optional)
-      </Typography>
-      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-        Run custom scripts before and after backups (e.g., wake up NAS, send notifications)
-      </Typography>
-
-      <CodeEditor
-        label="Pre-Backup Script"
-        value={preBackupScript}
-        onChange={onPreBackupScriptChange}
-        placeholder="#!/bin/bash&#10;echo 'Pre-backup hook started'&#10;wakeonlan AA:BB:CC:DD:EE:FF&#10;sleep 60"
-        helperText="Shell script to run before backup starts"
-        height="150px"
-      />
-
-      <CodeEditor
-        label="Post-Backup Script"
-        value={postBackupScript}
-        onChange={onPostBackupScriptChange}
-        placeholder="#!/bin/bash&#10;echo 'Post-backup hook completed'&#10;ssh nas@192.168.1.100 'sudo poweroff'"
-        helperText="Shell script to run after successful backup"
-        height="150px"
-      />
-
-      <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+      {/* Custom Flags - Only show for full repositories */}
+      {mode === 'full' && (
         <TextField
-          label="Hook Timeout (seconds)"
-          type="number"
-          value={hookTimeout}
-          onChange={(e) => onHookTimeoutChange(parseInt(e.target.value) || 300)}
+          label="Custom Flags (Optional)"
+          value={customFlags}
+          onChange={(e) => onCustomFlagsChange(e.target.value)}
+          placeholder="--stats --list --filter AME"
           fullWidth
-          helperText="Maximum time to wait for hooks"
+          helperText="Custom command-line flags for borg create (e.g., --stats, --progress, --list)"
         />
+      )}
 
-        <FormControlLabel
-          control={
-            <Checkbox
-              checked={continueOnHookFailure}
-              onChange={(e) => onContinueOnHookFailureChange(e.target.checked)}
+      {/* Backup Hooks - Only show for full repositories */}
+      {mode === 'full' && (
+        <>
+          <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 2, mb: 1 }}>
+            Backup Hooks (Optional)
+          </Typography>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+            Run custom scripts before and after backups (e.g., wake up NAS, send notifications)
+          </Typography>
+
+          <CodeEditor
+            label="Pre-Backup Script"
+            value={preBackupScript}
+            onChange={onPreBackupScriptChange}
+            placeholder="#!/bin/bash&#10;echo 'Pre-backup hook started'&#10;wakeonlan AA:BB:CC:DD:EE:FF&#10;sleep 60"
+            helperText="Shell script to run before backup starts"
+            height="150px"
+          />
+
+          <CodeEditor
+            label="Post-Backup Script"
+            value={postBackupScript}
+            onChange={onPostBackupScriptChange}
+            placeholder="#!/bin/bash&#10;echo 'Post-backup hook completed'&#10;ssh nas@192.168.1.100 'sudo poweroff'"
+            helperText="Shell script to run after successful backup"
+            height="150px"
+          />
+
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+            <TextField
+              label="Hook Timeout (seconds)"
+              type="number"
+              value={hookTimeout}
+              onChange={(e) => onHookTimeoutChange(parseInt(e.target.value) || 300)}
+              fullWidth
+              helperText="Maximum time to wait for hooks"
             />
-          }
-          label="Continue if pre-hook fails"
-          sx={{ mt: 1 }}
-        />
-      </Box>
+
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={continueOnHookFailure}
+                  onChange={(e) => onContinueOnHookFailureChange(e.target.checked)}
+                />
+              }
+              label="Continue if pre-hook fails"
+              sx={{ mt: 1 }}
+            />
+          </Box>
+        </>
+      )}
     </>
   )
 }
