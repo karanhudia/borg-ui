@@ -118,6 +118,7 @@ class RepositoryCreate(BaseModel):
     hook_timeout: Optional[int] = 300  # Hook timeout in seconds
     continue_on_hook_failure: Optional[bool] = False  # Continue backup if pre-hook fails
     mode: str = "full"  # full: backups + observability, observe: observability-only
+    custom_flags: Optional[str] = None  # Custom command-line flags for borg create (e.g., "--stats --list")
 
 class RepositoryImport(BaseModel):
     name: str
@@ -137,6 +138,7 @@ class RepositoryImport(BaseModel):
     hook_timeout: Optional[int] = 300  # Hook timeout in seconds
     continue_on_hook_failure: Optional[bool] = False  # Continue backup if pre-hook fails
     mode: str = "full"  # full: backups + observability, observe: observability-only
+    custom_flags: Optional[str] = None  # Custom command-line flags for borg create (e.g., "--stats --list")
 
 class RepositoryUpdate(BaseModel):
     name: Optional[str] = None
@@ -150,6 +152,7 @@ class RepositoryUpdate(BaseModel):
     hook_timeout: Optional[int] = None
     continue_on_hook_failure: Optional[bool] = None
     mode: Optional[str] = None  # full: backups + observability, observe: observability-only
+    custom_flags: Optional[str] = None  # Custom command-line flags for borg create
 
 class RepositoryInfo(BaseModel):
     id: int
@@ -208,6 +211,7 @@ async def get_repositories(
                 "hook_timeout": repo.hook_timeout,
                 "continue_on_hook_failure": repo.continue_on_hook_failure,
                 "mode": repo.mode or "full",  # Default to "full" for backward compatibility
+                "custom_flags": repo.custom_flags,
                 "has_running_maintenance": has_check or has_compact
             })
 
@@ -403,7 +407,8 @@ async def create_repository(
             post_backup_script=repo_data.post_backup_script,
             hook_timeout=repo_data.hook_timeout,
             continue_on_hook_failure=repo_data.continue_on_hook_failure,
-            mode=repo_data.mode
+            mode=repo_data.mode,
+            custom_flags=repo_data.custom_flags
         )
 
         db.add(repository)
@@ -591,7 +596,8 @@ async def import_repository(
             post_backup_script=repo_data.post_backup_script,
             hook_timeout=repo_data.hook_timeout,
             continue_on_hook_failure=repo_data.continue_on_hook_failure,
-            mode=repo_data.mode
+            mode=repo_data.mode,
+            custom_flags=repo_data.custom_flags
         )
 
         db.add(repository)
@@ -731,6 +737,9 @@ async def update_repository(
             # If switching to observe mode, log it
             if repo_data.mode == "observe":
                 logger.info("Repository switched to observability-only mode", repo_id=repo_id)
+
+        if repo_data.custom_flags is not None:
+            repository.custom_flags = repo_data.custom_flags
 
         repository.updated_at = datetime.utcnow()
         db.commit()

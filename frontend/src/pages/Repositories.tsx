@@ -44,12 +44,12 @@ import { useAuth } from '../hooks/useAuth'
 import { useAppState } from '../context/AppContext'
 import { formatDateShort, formatBytes } from '../utils/dateUtils'
 import FileExplorerDialog from '../components/FileExplorerDialog'
-import CodeEditor from '../components/CodeEditor'
 import { FolderOpen } from '@mui/icons-material'
 import LockErrorDialog from '../components/LockErrorDialog'
 import CheckWarningDialog from '../components/CheckWarningDialog'
 import CompactWarningDialog from '../components/CompactWarningDialog'
 import RepositoryCard from '../components/RepositoryCard'
+import AdvancedRepositoryOptions from '../components/AdvancedRepositoryOptions'
 
 interface Repository {
   id: number
@@ -67,6 +67,7 @@ interface Repository {
   created_at: string
   updated_at: string | null
   mode: 'full' | 'observe'  // full: backups + observability, observe: observability-only
+  custom_flags?: string | null  // Custom command-line flags for borg create
   has_running_maintenance?: boolean
 }
 
@@ -321,6 +322,7 @@ export default function Repositories() {
     hook_timeout: 300,
     continue_on_hook_failure: false,
     mode: 'full' as 'full' | 'observe',
+    custom_flags: '',
   })
 
   const [newSourceDir, setNewSourceDir] = useState('')
@@ -348,6 +350,7 @@ export default function Repositories() {
     hook_timeout: 300,
     continue_on_hook_failure: false,
     mode: 'full' as 'full' | 'observe',
+    custom_flags: '',
   })
 
   const [editNewSourceDir, setEditNewSourceDir] = useState('')
@@ -484,6 +487,7 @@ export default function Repositories() {
       hook_timeout: 300,
       continue_on_hook_failure: false,
       mode: 'full',
+      custom_flags: '',
     })
     setNewSourceDir('')
     setNewExcludePattern('')
@@ -508,6 +512,7 @@ export default function Repositories() {
       hook_timeout: (repository as any).hook_timeout || 300,
       continue_on_hook_failure: (repository as any).continue_on_hook_failure || false,
       mode: repository.mode || 'full',
+      custom_flags: repository.custom_flags || '',
     })
     setEditNewSourceDir('')
     setEditNewExcludePattern('')
@@ -563,8 +568,8 @@ export default function Repositories() {
     return command
   }
 
-  // Generate borg info command preview for import
-  const getBorgInfoCommand = () => {
+  // Generate borg create command preview for create/import
+  const getBorgCreateCommand = () => {
     let repoPath = repositoryForm.path || '/path/to/repository'
 
     // Build full path for remote repository
@@ -574,32 +579,78 @@ export default function Repositories() {
       repoPath = repoPath || '/path/to/local/repository'
     }
 
-    let command = `borg info`
+    let command = `borg create`
 
     // Add remote-path if specified
     if (repositoryForm.remote_path) {
       command += ` --remote-path ${repositoryForm.remote_path}`
     }
 
-    command += ` ${repoPath}`
+    // Add compression
+    command += ` --compression ${repositoryForm.compression}`
+
+    // Add exclude patterns
+    if (repositoryForm.exclude_patterns.length > 0) {
+      repositoryForm.exclude_patterns.forEach(pattern => {
+        command += ` --exclude '${pattern}'`
+      })
+    }
+
+    // Add custom flags if specified
+    if (repositoryForm.custom_flags && repositoryForm.custom_flags.trim()) {
+      command += ` ${repositoryForm.custom_flags.trim()}`
+    }
+
+    // Add archive name and repository path
+    command += ` ${repoPath}::{hostname}-{now}`
+
+    // Add source directories
+    if (repositoryForm.source_directories.length > 0) {
+      command += ` ${repositoryForm.source_directories.map(dir => `'${dir}'`).join(' ')}`
+    } else {
+      command += ` /path/to/source`
+    }
 
     return command
   }
 
-  // Generate borg info command preview for edit
-  const getBorgInfoCommandForEdit = () => {
+  // Generate borg create command preview for edit
+  const getBorgCreateCommandForEdit = () => {
     if (!editingRepository) return ''
 
     let repoPath = editForm.path || '/path/to/repository'
 
-    let command = `borg info`
+    let command = `borg create`
 
     // Add remote-path if specified
     if (editForm.remote_path) {
       command += ` --remote-path ${editForm.remote_path}`
     }
 
-    command += ` ${repoPath}`
+    // Add compression
+    command += ` --compression ${editForm.compression}`
+
+    // Add exclude patterns
+    if (editForm.exclude_patterns.length > 0) {
+      editForm.exclude_patterns.forEach(pattern => {
+        command += ` --exclude '${pattern}'`
+      })
+    }
+
+    // Add custom flags if specified
+    if (editForm.custom_flags && editForm.custom_flags.trim()) {
+      command += ` ${editForm.custom_flags.trim()}`
+    }
+
+    // Add archive name and repository path
+    command += ` ${repoPath}::{hostname}-{now}`
+
+    // Add source directories
+    if (editForm.source_directories.length > 0) {
+      command += ` ${editForm.source_directories.map(dir => `'${dir}'`).join(' ')}`
+    } else {
+      command += ` /path/to/source`
+    }
 
     return command
   }
@@ -862,46 +913,57 @@ export default function Repositories() {
         <form onSubmit={handleSubmitRepository}>
           <DialogTitle>{repositoryModalMode === 'create' ? 'Create' : 'Import'} Repository</DialogTitle>
           <DialogContent>
-            {/* Info Alert */}
-            {repositoryModalMode === 'create' ? (
-              <Alert severity="info" sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Command Preview
+            {/* Command Preview */}
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                {repositoryModalMode === 'create' ? 'Commands that will run:' : 'Backup Command Preview:'}
+              </Typography>
+
+              {repositoryModalMode === 'create' && (
+                <>
+                  <Typography variant="caption" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
+                    1. Initialize Repository:
+                  </Typography>
+                  <Box sx={{
+                    bgcolor: 'grey.900',
+                    color: 'grey.100',
+                    p: 1.5,
+                    borderRadius: 1,
+                    fontFamily: 'monospace',
+                    fontSize: '0.875rem',
+                    overflow: 'auto',
+                    mb: 2
+                  }}>
+                    {getBorgInitCommand()}
+                  </Box>
+                </>
+              )}
+
+              {repositoryForm.mode === 'full' && (
+                <>
+                  <Typography variant="caption" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
+                    {repositoryModalMode === 'create' ? '2. Create Backup:' : 'Backup Command:'}
+                  </Typography>
+                  <Box sx={{
+                    bgcolor: 'grey.900',
+                    color: 'grey.100',
+                    p: 1.5,
+                    borderRadius: 1,
+                    fontFamily: 'monospace',
+                    fontSize: '0.875rem',
+                    overflow: 'auto'
+                  }}>
+                    {getBorgCreateCommand()}
+                  </Box>
+                </>
+              )}
+
+              {repositoryModalMode === 'import' && (
+                <Typography variant="body2" sx={{ mt: 1.5 }}>
+                  This command will be used for future backups. The repository will be verified before import.
                 </Typography>
-                <Box sx={{
-                  bgcolor: 'grey.900',
-                  color: 'grey.100',
-                  p: 1.5,
-                  borderRadius: 1,
-                  fontFamily: 'monospace',
-                  fontSize: '0.875rem',
-                  overflow: 'auto'
-                }}>
-                  {getBorgInitCommand()}
-                </Box>
-              </Alert>
-            ) : (
-              <Alert severity="info" sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Command Preview
-                </Typography>
-                <Box sx={{
-                  bgcolor: 'grey.900',
-                  color: 'grey.100',
-                  p: 1.5,
-                  borderRadius: 1,
-                  fontFamily: 'monospace',
-                  fontSize: '0.875rem',
-                  overflow: 'auto',
-                  mb: 1.5
-                }}>
-                  {getBorgInfoCommand()}
-                </Box>
-                <Typography variant="body2">
-                  Import a Borg repository that already exists. The repository will be verified before import.
-                </Typography>
-              </Alert>
-            )}
+              )}
+            </Alert>
 
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
               <TextField
@@ -1388,57 +1450,20 @@ export default function Repositories() {
               </Box>
               )}
 
-              {/* Backup Hooks */}
-              {repositoryForm.mode === 'full' && (
-              <>
-              <Divider sx={{ mt: 2 }} />
-              <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 2 }}>
-                Backup Hooks (Optional)
-              </Typography>
-              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-                Run custom scripts before and after backups (e.g., wake up NAS, send notifications)
-              </Typography>
-
-              <CodeEditor
-                label="Pre-Backup Script"
-                value={repositoryForm.pre_backup_script}
-                onChange={(value) => setRepositoryForm({ ...repositoryForm, pre_backup_script: value })}
-                placeholder="#!/bin/bash&#10;echo 'Pre-backup hook started'&#10;wakeonlan AA:BB:CC:DD:EE:FF&#10;sleep 60"
-                helperText="Shell script to run before backup starts"
-                height="150px"
+              {/* Advanced Options */}
+              <AdvancedRepositoryOptions
+                mode={repositoryForm.mode}
+                preBackupScript={repositoryForm.pre_backup_script}
+                postBackupScript={repositoryForm.post_backup_script}
+                hookTimeout={repositoryForm.hook_timeout}
+                continueOnHookFailure={repositoryForm.continue_on_hook_failure}
+                customFlags={repositoryForm.custom_flags}
+                onPreBackupScriptChange={(value) => setRepositoryForm({ ...repositoryForm, pre_backup_script: value })}
+                onPostBackupScriptChange={(value) => setRepositoryForm({ ...repositoryForm, post_backup_script: value })}
+                onHookTimeoutChange={(value) => setRepositoryForm({ ...repositoryForm, hook_timeout: value })}
+                onContinueOnHookFailureChange={(value) => setRepositoryForm({ ...repositoryForm, continue_on_hook_failure: value })}
+                onCustomFlagsChange={(value) => setRepositoryForm({ ...repositoryForm, custom_flags: value })}
               />
-
-              <CodeEditor
-                label="Post-Backup Script"
-                value={repositoryForm.post_backup_script}
-                onChange={(value) => setRepositoryForm({ ...repositoryForm, post_backup_script: value })}
-                placeholder="#!/bin/bash&#10;echo 'Post-backup hook completed'&#10;ssh nas@192.168.1.100 'sudo poweroff'"
-                helperText="Shell script to run after successful backup"
-                height="150px"
-              />
-
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                <TextField
-                  label="Hook Timeout (seconds)"
-                  type="number"
-                  value={repositoryForm.hook_timeout}
-                  onChange={(e) => setRepositoryForm({ ...repositoryForm, hook_timeout: parseInt(e.target.value) || 300 })}
-                  fullWidth
-                  helperText="Maximum time to wait for hooks"
-                />
-
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={repositoryForm.continue_on_hook_failure}
-                      onChange={(e) => setRepositoryForm({ ...repositoryForm, continue_on_hook_failure: e.target.checked })}
-                    />
-                  }
-                  label="Continue if pre-hook fails"
-                />
-              </Box>
-              </>
-              )}
             </Box>
           </DialogContent>
           <DialogActions>
@@ -1468,19 +1493,28 @@ export default function Repositories() {
             {/* Command Preview */}
             <Alert severity="info" sx={{ mb: 2, mt: 1 }}>
               <Typography variant="subtitle2" gutterBottom>
-                Command Preview
+                Backup Command Preview:
               </Typography>
-              <Box sx={{
-                bgcolor: 'grey.900',
-                color: 'grey.100',
-                p: 1.5,
-                borderRadius: 1,
-                fontFamily: 'monospace',
-                fontSize: '0.875rem',
-                overflow: 'auto'
-              }}>
-                {getBorgInfoCommandForEdit()}
-              </Box>
+
+              {editForm.mode === 'full' && (
+                <Box sx={{
+                  bgcolor: 'grey.900',
+                  color: 'grey.100',
+                  p: 1.5,
+                  borderRadius: 1,
+                  fontFamily: 'monospace',
+                  fontSize: '0.875rem',
+                  overflow: 'auto'
+                }}>
+                  {getBorgCreateCommandForEdit()}
+                </Box>
+              )}
+
+              {editForm.mode === 'observe' && (
+                <Typography variant="body2" color="text.secondary">
+                  Observability-only repositories do not create backups.
+                </Typography>
+              )}
             </Alert>
 
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
@@ -1839,57 +1873,20 @@ export default function Repositories() {
               </Box>
               )}
 
-              {/* Backup Hooks - Only show for full repositories */}
-              {editForm.mode === 'full' && (
-              <>
-              <Divider sx={{ mt: 2 }} />
-              <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 2 }}>
-                Backup Hooks (Optional)
-              </Typography>
-              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-                Run custom scripts before and after backups (e.g., wake up NAS, send notifications)
-              </Typography>
-
-              <CodeEditor
-                label="Pre-Backup Script"
-                value={editForm.pre_backup_script}
-                onChange={(value) => setEditForm({ ...editForm, pre_backup_script: value })}
-                placeholder="#!/bin/bash&#10;echo 'Pre-backup hook started'&#10;wakeonlan AA:BB:CC:DD:EE:FF&#10;sleep 60"
-                helperText="Shell script to run before backup starts"
-                height="150px"
+              {/* Advanced Options */}
+              <AdvancedRepositoryOptions
+                mode={editForm.mode}
+                preBackupScript={editForm.pre_backup_script}
+                postBackupScript={editForm.post_backup_script}
+                hookTimeout={editForm.hook_timeout}
+                continueOnHookFailure={editForm.continue_on_hook_failure}
+                customFlags={editForm.custom_flags}
+                onPreBackupScriptChange={(value) => setEditForm({ ...editForm, pre_backup_script: value })}
+                onPostBackupScriptChange={(value) => setEditForm({ ...editForm, post_backup_script: value })}
+                onHookTimeoutChange={(value) => setEditForm({ ...editForm, hook_timeout: value })}
+                onContinueOnHookFailureChange={(value) => setEditForm({ ...editForm, continue_on_hook_failure: value })}
+                onCustomFlagsChange={(value) => setEditForm({ ...editForm, custom_flags: value })}
               />
-
-              <CodeEditor
-                label="Post-Backup Script"
-                value={editForm.post_backup_script}
-                onChange={(value) => setEditForm({ ...editForm, post_backup_script: value })}
-                placeholder="#!/bin/bash&#10;echo 'Post-backup hook completed'&#10;ssh nas@192.168.1.100 'sudo poweroff'"
-                helperText="Shell script to run after successful backup"
-                height="150px"
-              />
-
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                <TextField
-                  label="Hook Timeout (seconds)"
-                  type="number"
-                  value={editForm.hook_timeout}
-                  onChange={(e) => setEditForm({ ...editForm, hook_timeout: parseInt(e.target.value) || 300 })}
-                  fullWidth
-                  helperText="Maximum time to wait for hooks"
-                />
-
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={editForm.continue_on_hook_failure}
-                      onChange={(e) => setEditForm({ ...editForm, continue_on_hook_failure: e.target.checked })}
-                    />
-                  }
-                  label="Continue if pre-hook fails"
-                />
-              </Box>
-              </>
-              )}
 
             </Box>
           </DialogContent>

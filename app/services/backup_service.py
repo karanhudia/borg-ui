@@ -524,6 +524,25 @@ class BackupService:
             for pattern in exclude_patterns:
                 cmd.extend(["--exclude", pattern])
 
+            # Add custom flags if specified
+            if repo_record and repo_record.custom_flags:
+                custom_flags = repo_record.custom_flags.strip()
+                if custom_flags:
+                    # Split custom flags by whitespace and add to command
+                    # This allows users to specify multiple flags like "--stats --list"
+                    import shlex
+                    try:
+                        custom_flag_list = shlex.split(custom_flags)
+                        cmd.extend(custom_flag_list)
+                        logger.info("Added custom flags to borg create command",
+                                  job_id=job_id,
+                                  custom_flags=custom_flags)
+                    except ValueError as e:
+                        logger.warning("Failed to parse custom flags, skipping",
+                                     job_id=job_id,
+                                     custom_flags=custom_flags,
+                                     error=str(e))
+
             # Add repository::archive
             cmd.append(f"{repository}::{archive_name}")
 
