@@ -650,7 +650,7 @@ const Backup: React.FC = () => {
             <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
               <Table>
                 <TableHead>
-                  <TableRow sx={{ bgcolor: 'grey.50' }}>
+                  <TableRow sx={{ bgcolor: 'background.default' }}>
                     <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Job ID</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Repository</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Status</TableCell>
