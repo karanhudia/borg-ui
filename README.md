@@ -12,6 +12,11 @@ A modern web interface for [Borg Backup](https://borgbackup.readthedocs.io/). Ze
 
 ---
 
+> [!NOTE]
+> This project uses [Claude Code](https://claude.ai/code) as a development assistant. I'm a full-stack developer with 10+ years of experience, and I personally review all AI-generated code before merging. Architecture decisions, security practices, and testing are human-driven. Claude Code is acknowledged as a co-author in git commits. All code is open source for community review - your backups deserve scrutiny, and I encourage it.
+
+---
+
 ## Screenshots
 
 <img width="800" alt="dashboard" src="https://github.com/user-attachments/assets/9478189e-4b47-46ae-b672-ad77df6d7040" />
