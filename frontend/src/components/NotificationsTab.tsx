@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from 'react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
   Card,
@@ -500,9 +500,9 @@ const NotificationsTab: React.FC = () => {
           <Button
             variant="contained"
             onClick={handleSubmit}
-            disabled={createMutation.isLoading || updateMutation.isLoading}
+            disabled={createMutation.isPending || updateMutation.isPending}
           >
-            {createMutation.isLoading || updateMutation.isLoading ? (
+            {createMutation.isPending || updateMutation.isPending ? (
               <CircularProgress size={20} />
             ) : editingNotification ? (
               'Update'
@@ -528,9 +528,9 @@ const NotificationsTab: React.FC = () => {
             color="error"
             variant="contained"
             onClick={() => deleteConfirm && deleteMutation.mutate(deleteConfirm.id)}
-            disabled={deleteMutation.isLoading}
+            disabled={deleteMutation.isPending}
           >
-            {deleteMutation.isLoading ? <CircularProgress size={20} /> : 'Delete'}
+            {deleteMutation.isPending ? <CircularProgress size={20} /> : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>

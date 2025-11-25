@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from 'react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
   Card,
@@ -391,10 +391,10 @@ const Settings: React.FC = () => {
                     <Button
                       type="submit"
                       variant="contained"
-                      disabled={changePasswordMutation.isLoading}
-                      startIcon={changePasswordMutation.isLoading ? <CircularProgress size={16} /> : null}
+                      disabled={changePasswordMutation.isPending}
+                      startIcon={changePasswordMutation.isPending ? <CircularProgress size={16} /> : null}
                     >
-                      {changePasswordMutation.isLoading ? 'Changing Password...' : 'Change Password'}
+                      {changePasswordMutation.isPending ? 'Changing Password...' : 'Change Password'}
                     </Button>
                   </Box>
                 </Stack>
@@ -588,10 +588,10 @@ const Settings: React.FC = () => {
             onClick={handleDeleteUser}
             variant="contained"
             color="error"
-            disabled={deleteUserMutation.isLoading}
-            startIcon={deleteUserMutation.isLoading ? <CircularProgress size={16} /> : null}
+            disabled={deleteUserMutation.isPending}
+            startIcon={deleteUserMutation.isPending ? <CircularProgress size={16} /> : null}
           >
-            {deleteUserMutation.isLoading ? 'Deleting...' : 'Delete'}
+            {deleteUserMutation.isPending ? 'Deleting...' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>

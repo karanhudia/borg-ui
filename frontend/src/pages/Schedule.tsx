@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from 'react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
   Card,
@@ -612,7 +612,7 @@ const Schedule: React.FC = () => {
       label: 'Run Now',
       onClick: (job) => handleRunJobNow(job),
       color: 'primary',
-      disabled: (job) => !job.enabled || runJobNowMutation.isLoading,
+      disabled: (job) => !job.enabled || runJobNowMutation.isPending,
       tooltip: 'Run Now',
     },
     {
@@ -741,7 +741,7 @@ const Schedule: React.FC = () => {
         }
       },
       color: 'error',
-      disabled: () => cancelBackupMutation.isLoading,
+      disabled: () => cancelBackupMutation.isPending,
       show: (job) => job.status === 'running',
     },
     {
@@ -849,7 +849,7 @@ const Schedule: React.FC = () => {
                               cancelBackupMutation.mutate(job.id)
                             }
                           }}
-                          disabled={cancelBackupMutation.isLoading}
+                          disabled={cancelBackupMutation.isPending}
                           sx={{ ml: 1 }}
                         >
                           <X size={16} />
@@ -1287,10 +1287,10 @@ const Schedule: React.FC = () => {
             <Button
               type="submit"
               variant="contained"
-              disabled={createJobMutation.isLoading}
-              startIcon={createJobMutation.isLoading ? <CircularProgress size={16} /> : <Plus size={16} />}
+              disabled={createJobMutation.isPending}
+              startIcon={createJobMutation.isPending ? <CircularProgress size={16} /> : <Plus size={16} />}
             >
-              {createJobMutation.isLoading ? 'Creating...' : 'Create Job'}
+              {createJobMutation.isPending ? 'Creating...' : 'Create Job'}
             </Button>
           </DialogActions>
         </form>
@@ -1517,10 +1517,10 @@ const Schedule: React.FC = () => {
             <Button
               type="submit"
               variant="contained"
-              disabled={updateJobMutation.isLoading}
-              startIcon={updateJobMutation.isLoading ? <CircularProgress size={16} /> : null}
+              disabled={updateJobMutation.isPending}
+              startIcon={updateJobMutation.isPending ? <CircularProgress size={16} /> : null}
             >
-              {updateJobMutation.isLoading ? 'Updating...' : 'Update Job'}
+              {updateJobMutation.isPending ? 'Updating...' : 'Update Job'}
             </Button>
           </DialogActions>
         </form>
@@ -1621,10 +1621,10 @@ const Schedule: React.FC = () => {
             onClick={handleDeleteJob}
             variant="contained"
             color="error"
-            disabled={deleteJobMutation.isLoading}
-            startIcon={deleteJobMutation.isLoading ? <CircularProgress size={16} /> : <Trash2 size={16} />}
+            disabled={deleteJobMutation.isPending}
+            startIcon={deleteJobMutation.isPending ? <CircularProgress size={16} /> : <Trash2 size={16} />}
           >
-            {deleteJobMutation.isLoading ? 'Deleting...' : 'Delete Job'}
+            {deleteJobMutation.isPending ? 'Deleting...' : 'Delete Job'}
           </Button>
         </DialogActions>
       </Dialog>

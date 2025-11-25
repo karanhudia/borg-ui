@@ -1,4 +1,4 @@
-import { useQuery } from 'react-query'
+import { useQuery } from '@tanstack/react-query'
 import { dashboardAPI } from '../services/api'
 import {
   Box,
@@ -51,11 +51,11 @@ interface DashboardStatus {
 
 export default function Dashboard() {
   // Poll data every 30 seconds for fresh data
-  const { data: status, isLoading } = useQuery<{ data: DashboardStatus }>(
-    'dashboard-status',
-    dashboardAPI.getStatus,
-    { refetchInterval: 30000 }
-  )
+  const { data: status, isLoading } = useQuery<{ data: DashboardStatus }>({
+    queryKey: ['dashboard-status'],
+    queryFn: dashboardAPI.getStatus,
+    refetchInterval: 30000
+  })
 
   if (isLoading) {
     return (

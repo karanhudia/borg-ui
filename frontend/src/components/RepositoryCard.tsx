@@ -3,7 +3,7 @@ import { Card, CardContent, Box, Typography, Button, Tooltip, Chip } from '@mui/
 import { Info, CheckCircle as CheckCircleIcon, Refresh, Delete } from '@mui/icons-material'
 import { useMaintenanceJobs } from '../hooks/useMaintenanceJobs'
 import { formatDateShort, formatDateTimeFull, formatElapsedTime } from '../utils/dateUtils'
-import { useQueryClient } from 'react-query'
+import { useQueryClient } from '@tanstack/react-query'
 
 interface Repository {
   id: number

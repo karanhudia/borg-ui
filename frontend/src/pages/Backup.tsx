@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { useQuery, useMutation, useQueryClient } from 'react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
   Card,
@@ -405,16 +405,16 @@ const Backup: React.FC = () => {
               variant="contained"
               color="success"
               size="large"
-              startIcon={startBackupMutation.isLoading ? <CircularProgress size={16} color="inherit" /> : <Play size={18} />}
+              startIcon={startBackupMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <Play size={18} />}
               onClick={handleStartBackup}
-              disabled={startBackupMutation.isLoading || !selectedRepository}
+              disabled={startBackupMutation.isPending || !selectedRepository}
               sx={{
                 minWidth: { xs: '100%', sm: 180 },
                 height: { xs: 48, sm: 56 },
                 fontWeight: 600
               }}
             >
-              {startBackupMutation.isLoading ? 'Starting...' : 'Start Backup'}
+              {startBackupMutation.isPending ? 'Starting...' : 'Start Backup'}
             </Button>
           </Stack>
 
@@ -623,7 +623,7 @@ const Backup: React.FC = () => {
                       size="small"
                       startIcon={<Square size={16} />}
                       onClick={() => handleCancelBackup(job.id)}
-                      disabled={cancelBackupMutation.isLoading}
+                      disabled={cancelBackupMutation.isPending}
                     >
                       Cancel
                     </Button>
@@ -792,8 +792,8 @@ const Backup: React.FC = () => {
           repositoryId={lockError.repositoryId}
           repositoryName={lockError.repositoryName}
           onLockBroken={() => {
-            queryClient.invalidateQueries(['repository-archives', lockError.repositoryId])
-            queryClient.invalidateQueries(['repository-info', lockError.repositoryId])
+            queryClient.invalidateQueries({ queryKey: ['repository-archives', lockError.repositoryId] })
+            queryClient.invalidateQueries({ queryKey: ['repository-info', lockError.repositoryId] })
           }}
         />
       )}
