@@ -98,53 +98,61 @@ volumes:
 
 ### Filesystem Access
 
-**Default configuration:**
+**⚠️ Important Security Note**
+
+The container needs access to directories you want to backup. **For production, mount only specific directories** you need:
 
 ```yaml
 volumes:
-  - /:/local:rw  # Mount entire host filesystem
+  # ✅ Recommended: Mount specific directories
+  - /home/yourusername:/local:rw      # Replace with your path
+  - /mnt/data:/local/data:rw          # Additional directories
+
+  # ❌ NOT Recommended: Full filesystem access
+  # - /:/local:rw  # Development/testing only - avoid in production
 ```
 
-**Why mount the host filesystem?**
-- Access backup sources anywhere on the system
-- Store backup repositories locally
-- Maximum flexibility for backup operations
+**Why limit filesystem access?**
+- Reduces security risk (principle of least privilege)
+- Prevents accidental access to sensitive system files
+- Makes it clear which directories are being backed up
+- Easier to troubleshoot permission issues
 
-**Security consideration:** The default mounts your entire filesystem. For production, restrict access to specific directories.
+### Mount Pattern Examples
 
-### Restricted Access (Recommended for Production)
-
-Mount only the directories you need:
-
+**Personal Computer:**
 ```yaml
 volumes:
-  # Backup sources (read-only)
-  - /home/user/documents:/sources/documents:ro
-  - /home/user/photos:/sources/photos:ro
-
-  # Backup destinations (read-write)
-  - /mnt/backup-drive:/backups:rw
-
-  # Required application volumes
   - borg_data:/data
   - borg_cache:/home/borg/.cache/borg
+  - /home/john:/local:rw              # Mount home directory
 ```
 
-**Example for NAS backup:**
-
+**Server with Multiple Directories:**
 ```yaml
 volumes:
-  # Source data
-  - /mnt/user/Documents:/sources/documents:ro
-  - /mnt/user/Media:/sources/media:ro
-
-  # Backup repository location
-  - /mnt/user/Backups:/backups:rw
-
-  # Application data
   - borg_data:/data
   - borg_cache:/home/borg/.cache/borg
+  - /var/www:/local/www:ro            # Website files (read-only)
+  - /home/appuser:/local/app:rw       # Application data
+  - /var/lib/postgresql:/local/db:rw  # Database directory
 ```
+
+**NAS Backup (Unraid/TrueNAS):**
+```yaml
+volumes:
+  - borg_data:/data
+  - borg_cache:/home/borg/.cache/borg
+  - /mnt/user/Documents:/local:ro     # Documents (read-only)
+  - /mnt/user/Media:/local/media:ro   # Media files
+  - /mnt/backup:/local/backup:rw      # Backup destination
+```
+
+**Best Practices:**
+- Use simple `/local` mount for single directory
+- Use `/local/subdir` pattern for multiple directories
+- Use `:ro` (read-only) when you only need to backup, not restore
+- Mount backup destinations as `:rw` if storing repositories locally
 
 ---
 
@@ -332,7 +340,7 @@ services:
     volumes:
       - borg_data:/data
       - borg_cache:/home/borg/.cache/borg
-      - /home:/local:rw
+      - /home/yourusername:/local:rw  # Replace with your home directory
     environment:
       - PUID=1000
       - PGID=1000
@@ -360,11 +368,11 @@ services:
       - borg_cache:/home/borg/.cache/borg
 
       # Backup sources (read-only)
-      - /var/www:/sources/www:ro
-      - /home/user:/sources/home:ro
+      - /var/www:/local/www:ro
+      - /home/appuser:/local/app:ro
 
       # Backup destination
-      - /mnt/backups:/backups:rw
+      - /mnt/backups:/local/backup:rw
     environment:
       - PUID=1000
       - PGID=1000
@@ -392,9 +400,9 @@ services:
     volumes:
       - /mnt/user/appdata/borg-ui:/data
       - /mnt/user/appdata/borg-ui/cache:/home/borg/.cache/borg
-      - /mnt/user/Documents:/sources/documents:ro
-      - /mnt/user/Media:/sources/media:ro
-      - /mnt/user/Backups:/backups:rw
+      - /mnt/user/Documents:/local:ro         # Documents share
+      - /mnt/user/Media:/local/media:ro       # Media share
+      - /mnt/user/Backups:/local/backup:rw    # Backup destination
     environment:
       - PUID=99
       - PGID=100
