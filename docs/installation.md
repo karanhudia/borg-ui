@@ -25,9 +25,11 @@ docker run -d \
   -e PGID=1000 \
   -v borg_data:/data \
   -v borg_cache:/home/borg/.cache/borg \
-  -v /:/local:rw \
+  -v /home/yourusername:/local:rw \
   ainullcode/borg-ui:latest
 ```
+
+**⚠️ Security Note:** Replace `/home/yourusername` with your actual directory path. See the [Restrict Filesystem Access](#restrict-filesystem-access) section below for details.
 
 Access at `http://localhost:8081`
 
@@ -54,7 +56,8 @@ services:
     volumes:
       - borg_data:/data
       - borg_cache:/home/borg/.cache/borg
-      - /:/local:rw
+      # Mount directories you want to backup (REPLACE with your actual paths)
+      - /home/yourusername:/local:rw     # Replace with your directory path
     environment:
       - TZ=America/Chicago  # Set your timezone
       - PUID=1000
@@ -64,6 +67,8 @@ volumes:
   borg_data:
   borg_cache:
 ```
+
+**⚠️ Security Note:** Replace `/home/yourusername` with your actual directory path. See the [Restrict Filesystem Access](#restrict-filesystem-access) section below for more information.
 
 Start the container:
 
@@ -99,12 +104,14 @@ services:
     volumes:
       - /mnt/user/appdata/borg-ui:/data
       - /mnt/user/appdata/borg-ui/cache:/home/borg/.cache/borg
-      - /mnt/user:/local:rw
+      - /mnt/user:/local:rw  # Customize to specific shares if needed
     environment:
       - TZ=America/Chicago  # Set your timezone
       - PUID=99
       - PGID=100
 ```
+
+**Note:** `/mnt/user` provides access to all Unraid shares. For better security, mount specific shares only (e.g., `/mnt/user/documents:/local:rw`).
 
 5. Click **Compose Up**
 
@@ -203,15 +210,50 @@ ports:
 
 ### Restrict Filesystem Access
 
-Instead of mounting the entire filesystem (`/:/local:rw`), mount only specific directories:
+**⚠️ Important Security Consideration**
+
+For production use, mount only the specific directories you need to backup instead of broad filesystem access:
 
 ```yaml
 volumes:
-  - /home/user/backups:/backups:rw
-  - /home/user/data:/data-source:ro
+  # ✅ Recommended: Mount specific directories
+  - /home/yourusername:/local:rw         # Replace with your path
+  - /mnt/data:/local/data:rw             # Additional directories as needed
+  - /opt/myapp:/local/myapp:ro           # Read-only if only backing up
+
+  # ❌ NOT Recommended: Full filesystem access
+  # - /:/local:rw  # Security risk - avoid in production
 ```
 
-See [Configuration Guide](configuration.md) for details.
+**Common Patterns:**
+
+**Personal Computer:**
+```yaml
+- /home/john:/local:rw           # Home directory
+- /home/john/documents:/local:rw # Or just documents
+```
+
+**Server:**
+```yaml
+- /var/www:/local/www:ro         # Website files (read-only)
+- /var/lib/postgresql:/local/db:rw  # Database directory
+- /opt/apps:/local/apps:rw       # Application data
+```
+
+**Multiple Users:**
+```yaml
+- /home/user1:/local/user1:rw
+- /home/user2:/local/user2:rw
+- /mnt/shared:/local/shared:rw
+```
+
+**Best Practices:**
+- Mount only directories that need backup
+- Use `:ro` (read-only) for backup-only directories where you won't restore files
+- For multiple directories, add multiple volume mounts
+- Never mount root (`/`) unless absolutely necessary for system-level backups
+
+See [Configuration Guide](configuration.md) for more examples and details.
 
 ### Set User/Group IDs
 
@@ -278,7 +320,7 @@ services:
     volumes:
       - borg_data:/data
       - borg_cache:/home/borg/.cache/borg
-      - /:/local:rw
+      - /home/yourusername:/local:rw  # Replace with your path
       # Add this line for Docker container management:
       - /var/run/docker.sock:/var/run/docker.sock:rw
     environment:
