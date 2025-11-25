@@ -308,7 +308,10 @@ const Archives: React.FC = () => {
                     Space Saved
                   </Typography>
                   <Typography variant="h4" fontWeight={700} sx={{ color: '#0277bd', fontSize: '1.5rem' }}>
-                    {formatBytesUtil(repoInfo.data.info.cache.stats.total_size - repoInfo.data.info.cache.stats.unique_csize)}
+                    {(() => {
+                      const saved = (repoInfo.data.info.cache.stats.total_size || 0) - (repoInfo.data.info.cache.stats.unique_csize || 0)
+                      return saved > 0 ? formatBytesUtil(saved) : '0 B'
+                    })()}
                   </Typography>
                 </Box>
               </Stack>

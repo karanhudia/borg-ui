@@ -66,6 +66,7 @@ interface Repository {
   archive_count: number
   created_at: string
   updated_at: string | null
+  mode: 'full' | 'observe'  // full: backups + observability, observe: observability-only
   has_running_maintenance?: boolean
 }
 
@@ -317,6 +318,7 @@ export default function Repositories() {
     post_backup_script: '',
     hook_timeout: 300,
     continue_on_hook_failure: false,
+    mode: 'full' as 'full' | 'observe',
   })
 
   const [newSourceDir, setNewSourceDir] = useState('')
@@ -343,6 +345,7 @@ export default function Repositories() {
     post_backup_script: '',
     hook_timeout: 300,
     continue_on_hook_failure: false,
+    mode: 'full' as 'full' | 'observe',
   })
 
   const [editNewSourceDir, setEditNewSourceDir] = useState('')
@@ -478,6 +481,7 @@ export default function Repositories() {
       post_backup_script: '',
       hook_timeout: 300,
       continue_on_hook_failure: false,
+      mode: 'full',
     })
     setNewSourceDir('')
     setNewExcludePattern('')
@@ -501,6 +505,7 @@ export default function Repositories() {
       post_backup_script: (repository as any).post_backup_script || '',
       hook_timeout: (repository as any).hook_timeout || 300,
       continue_on_hook_failure: (repository as any).continue_on_hook_failure || false,
+      mode: repository.mode || 'full',
     })
     setEditNewSourceDir('')
     setEditNewExcludePattern('')
@@ -838,6 +843,39 @@ export default function Repositories() {
                 fullWidth
               />
 
+              {/* Repository Mode Selector - Moved to top for clarity */}
+              <FormControl fullWidth>
+                <InputLabel>Repository Mode</InputLabel>
+                <Select
+                  value={repositoryForm.mode}
+                  label="Repository Mode"
+                  onChange={(e) => setRepositoryForm({ ...repositoryForm, mode: e.target.value as 'full' | 'observe' })}
+                >
+                  <MenuItem value="full">
+                    <Box>
+                      <Typography variant="body2" fontWeight={600}>Full Repository</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Create backups and browse existing archives
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                  <MenuItem value="observe">
+                    <Box>
+                      <Typography variant="body2" fontWeight={600}>Observability Only</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Browse and restore existing archives only (no backups)
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                </Select>
+              </FormControl>
+
+              {repositoryForm.mode === 'observe' && (
+                <Alert severity="info">
+                  Observability-only repositories can browse and restore existing archives but cannot create new backups or be used in scheduled jobs.
+                </Alert>
+              )}
+
               <FormControl fullWidth>
                 <InputLabel>Repository Type</InputLabel>
                 <Select
@@ -967,9 +1005,10 @@ export default function Repositories() {
                 </FormControl>
               )}
 
-              {/* Compression Settings */}
+              {/* Compression Settings - Only for full repositories */}
+              {repositoryForm.mode === 'full' && (
               <Box>
-                <Typography variant="subtitle2" gutterBottom>
+                <Typography variant="subtitle2" gutterBottom sx={{ mb: 1.5 }}>
                   Compression Settings
                 </Typography>
 
@@ -1089,6 +1128,7 @@ export default function Repositories() {
                   )}
                 </Stack>
               </Box>
+              )}
 
               {repositoryForm.encryption !== 'none' && (
                 <TextField
@@ -1102,19 +1142,20 @@ export default function Repositories() {
               )}
 
               {/* Source Directories */}
-              <Box>
-                <Typography variant="subtitle2" gutterBottom>
-                  Source Directories <Box component="span" sx={{ color: 'error.main' }}>*</Box>
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-                  Specify which directories to backup to this repository (at least one required)
-                </Typography>
+              {repositoryForm.mode === 'full' && (
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Source Directories <Box component="span" sx={{ color: 'error.main' }}>*</Box>
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+                    Specify which directories to backup to this repository (at least one required)
+                  </Typography>
 
-                {repositoryForm.source_directories.length === 0 && (
-                  <Alert severity="warning" sx={{ mb: 1.5 }}>
-                    At least one source directory is required. Add the directories you want to backup.
-                  </Alert>
-                )}
+                  {repositoryForm.source_directories.length === 0 && (
+                    <Alert severity="warning" sx={{ mb: 1.5 }}>
+                      At least one source directory is required. Add the directories you want to backup.
+                    </Alert>
+                  )}
 
                 {repositoryForm.source_directories.length > 0 && (
                   <Stack spacing={0.5} sx={{ mb: 1.5 }}>
@@ -1190,8 +1231,10 @@ export default function Repositories() {
                   </Button>
                 </Box>
               </Box>
+              )}
 
               {/* Exclude Patterns */}
+              {repositoryForm.mode === 'full' && (
               <Box>
                 <Typography variant="subtitle2" gutterBottom>
                   Exclude Patterns (Optional)
@@ -1274,8 +1317,11 @@ export default function Repositories() {
                   </Button>
                 </Box>
               </Box>
+              )}
 
               {/* Backup Hooks */}
+              {repositoryForm.mode === 'full' && (
+              <>
               <Divider sx={{ mt: 2 }} />
               <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 2 }}>
                 Backup Hooks (Optional)
@@ -1322,6 +1368,8 @@ export default function Repositories() {
                   label="Continue if pre-hook fails"
                 />
               </Box>
+              </>
+              )}
             </Box>
           </DialogContent>
           <DialogActions>
@@ -1331,7 +1379,7 @@ export default function Repositories() {
               variant="contained"
               disabled={
                 (repositoryModalMode === 'create' ? createRepositoryMutation.isLoading : importRepositoryMutation.isLoading) ||
-                repositoryForm.source_directories.length === 0
+                (repositoryForm.mode === 'full' && repositoryForm.source_directories.length === 0)
               }
             >
               {repositoryModalMode === 'create'

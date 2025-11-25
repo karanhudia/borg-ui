@@ -386,6 +386,11 @@ class BackupService:
             try:
                 repo_record = db.query(Repository).filter(Repository.path == repository).first()
                 if repo_record:
+                    # Check if repository is in observability-only mode
+                    if repo_record.mode == "observe":
+                        error_msg = "Cannot create backups for observability-only repositories. This repository is configured for browsing and restoring existing archives only."
+                        logger.error(error_msg, repository=repository, mode=repo_record.mode)
+                        raise ValueError(error_msg)
                     # Set passphrase if available
                     if repo_record.passphrase:
                         env['BORG_PASSPHRASE'] = repo_record.passphrase
