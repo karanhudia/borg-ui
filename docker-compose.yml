@@ -36,10 +36,25 @@ services:
       - /etc/localtime:/etc/localtime:ro
 
       # Host filesystem mount for local-style repository access
-      # Maps your host machine's root filesystem into the container at /local
-      # Default: / (entire host filesystem) - customize via LOCAL_STORAGE_PATH in .env
-      # Create repositories at /local/Users/username/backups (macOS) or /local/home/username/backups (Linux)
-      - ${LOCAL_STORAGE_PATH:-/}:/local:rw
+      # SECURITY: Uncomment ONE of the examples below and customize the path
+      # Only mount directories that need to be backed up - NEVER mount root (/) unless absolutely necessary
+      #
+      # Example 1: Mount your home directory only (recommended for personal use)
+      # - ${HOME}:/local/home:rw
+      #
+      # Example 2: Mount specific backup directories (recommended for servers)
+      # - /mnt/data:/local/data:rw
+      # - /var/www:/local/www:ro  # Read-only if only backing up, not restoring here
+      #
+      # Example 3: Mount multiple directories (safest approach)
+      # - /home/username/documents:/local/documents:rw
+      # - /opt/myapp:/local/myapp:rw
+      #
+      # ⚠️ ADVANCED ONLY: Full root access (NOT RECOMMENDED)
+      # WARNING: This gives the container read/write access to your entire filesystem
+      # Only use if you need to backup/restore system-wide directories
+      # Consider using more specific mounts instead for better security
+      # - /:/local:rw
 
       # OPTIONAL: Docker socket for container management in pre/post backup hooks
       # Uncomment to allow pre/post backup scripts to control Docker containers
