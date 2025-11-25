@@ -124,7 +124,17 @@ async def create_scheduled_job(
         existing_job = db.query(ScheduledJob).filter(ScheduledJob.name == job_data.name).first()
         if existing_job:
             raise HTTPException(status_code=400, detail="Job name already exists")
-        
+
+        # Validate repository is not in observability-only mode
+        if job_data.repository:
+            from app.database.models import Repository
+            repo = db.query(Repository).filter(Repository.path == job_data.repository).first()
+            if repo and repo.mode == "observe":
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot schedule backups for observability-only repositories. This repository is configured for browsing and restoring existing archives only."
+                )
+
         # Create scheduled job
         scheduled_job = ScheduledJob(
             name=job_data.name,
@@ -365,6 +375,14 @@ async def update_scheduled_job(
                 raise HTTPException(status_code=400, detail=f"Invalid cron expression: {str(e)}")
         
         if job_data.repository is not None:
+            # Validate repository is not in observability-only mode
+            from app.database.models import Repository
+            repo = db.query(Repository).filter(Repository.path == job_data.repository).first()
+            if repo and repo.mode == "observe":
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot schedule backups for observability-only repositories. This repository is configured for browsing and restoring existing archives only."
+                )
             job.repository = job_data.repository
 
         if job_data.enabled is not None:

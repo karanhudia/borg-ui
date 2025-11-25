@@ -254,7 +254,7 @@ const Backup: React.FC = () => {
                 <MenuItem value="" disabled>
                   {loadingRepositories ? 'Loading repositories...' : 'Select a repository...'}
                 </MenuItem>
-                {repositoriesData?.data?.repositories?.map((repo: any) => (
+                {repositoriesData?.data?.repositories?.filter((repo: any) => repo.mode !== 'observe').map((repo: any) => (
                   <MenuItem key={repo.id} value={repo.path} disabled={repo.has_running_maintenance}>
                     <Stack direction="row" spacing={1} alignItems="center">
                       <Database size={16} />
@@ -289,6 +289,15 @@ const Backup: React.FC = () => {
               {startBackupMutation.isLoading ? 'Starting...' : 'Start Backup'}
             </Button>
           </Stack>
+
+          {repositoriesData?.data?.repositories?.some((repo: any) => repo.mode === 'observe') && !loadingRepositories && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              <Typography variant="body2">
+                Some repositories are hidden because they are configured for observability only.
+                To create backups, switch them to full mode in Repository settings.
+              </Typography>
+            </Alert>
+          )}
 
           {!selectedRepository && !loadingRepositories && repositoriesData?.data?.repositories?.length > 0 && (
             <Alert severity="info" sx={{ mt: 2 }}>

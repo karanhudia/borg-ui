@@ -1104,7 +1104,7 @@ const Schedule: React.FC = () => {
                     },
                   }}
                 >
-                  {repositories.map((repo: any) => (
+                  {repositories.filter((repo: any) => repo.mode !== 'observe').map((repo: any) => (
                     <MenuItem key={repo.id} value={repo.path} sx={{ fontSize: '1rem' }}>
                       <Box>
                         <Typography variant="body2" sx={{ fontSize: '1rem' }}>{repo.name}</Typography>
@@ -1116,6 +1116,12 @@ const Schedule: React.FC = () => {
                   ))}
                 </Select>
               </FormControl>
+
+              {repositories.some((repo: any) => repo.mode === 'observe') && (
+                <Alert severity="info">
+                  Observability-only repositories cannot be used for scheduled backups.
+                </Alert>
+              )}
 
               <Box>
                 <TextField
@@ -1330,7 +1336,7 @@ const Schedule: React.FC = () => {
                     },
                   }}
                 >
-                  {repositories.map((repo: any) => (
+                  {repositories.filter((repo: any) => repo.mode !== 'observe').map((repo: any) => (
                     <MenuItem key={repo.id} value={repo.path} sx={{ fontSize: '1rem' }}>
                       <Box>
                         <Typography variant="body2" sx={{ fontSize: '1rem' }}>{repo.name}</Typography>
@@ -1342,6 +1348,12 @@ const Schedule: React.FC = () => {
                   ))}
                 </Select>
               </FormControl>
+
+              {repositories.some((repo: any) => repo.mode === 'observe') && (
+                <Alert severity="info">
+                  Observability-only repositories cannot be used for scheduled backups.
+                </Alert>
+              )}
 
               <Box>
                 <TextField

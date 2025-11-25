@@ -117,6 +117,7 @@ class RepositoryCreate(BaseModel):
     post_backup_script: Optional[str] = None  # Script to run after backup
     hook_timeout: Optional[int] = 300  # Hook timeout in seconds
     continue_on_hook_failure: Optional[bool] = False  # Continue backup if pre-hook fails
+    mode: str = "full"  # full: backups + observability, observe: observability-only
 
 class RepositoryImport(BaseModel):
     name: str
@@ -135,6 +136,7 @@ class RepositoryImport(BaseModel):
     post_backup_script: Optional[str] = None  # Script to run after backup
     hook_timeout: Optional[int] = 300  # Hook timeout in seconds
     continue_on_hook_failure: Optional[bool] = False  # Continue backup if pre-hook fails
+    mode: str = "full"  # full: backups + observability, observe: observability-only
 
 class RepositoryUpdate(BaseModel):
     name: Optional[str] = None
@@ -147,6 +149,7 @@ class RepositoryUpdate(BaseModel):
     post_backup_script: Optional[str] = None
     hook_timeout: Optional[int] = None
     continue_on_hook_failure: Optional[bool] = None
+    mode: Optional[str] = None  # full: backups + observability, observe: observability-only
 
 class RepositoryInfo(BaseModel):
     id: int
@@ -204,6 +207,7 @@ async def get_repositories(
                 "post_backup_script": repo.post_backup_script,
                 "hook_timeout": repo.hook_timeout,
                 "continue_on_hook_failure": repo.continue_on_hook_failure,
+                "mode": repo.mode or "full",  # Default to "full" for backward compatibility
                 "has_running_maintenance": has_check or has_compact
             })
 
@@ -226,12 +230,13 @@ async def create_repository(
         raise HTTPException(status_code=403, detail="Admin access required")
 
     try:
-        # Validate source directories are provided
-        if not repo_data.source_directories or len(repo_data.source_directories) == 0:
-            raise HTTPException(
-                status_code=400,
-                detail="At least one source directory is required. Source directories specify what data will be backed up to this repository."
-            )
+        # Validate source directories are provided (only for full mode repositories)
+        if repo_data.mode == "full":
+            if not repo_data.source_directories or len(repo_data.source_directories) == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="At least one source directory is required for full mode repositories. Source directories specify what data will be backed up to this repository."
+                )
 
         # Validate passphrase for encrypted repositories
         if repo_data.encryption in ["repokey", "keyfile", "repokey-blake2", "keyfile-blake2"]:
@@ -396,7 +401,8 @@ async def create_repository(
             pre_backup_script=repo_data.pre_backup_script,
             post_backup_script=repo_data.post_backup_script,
             hook_timeout=repo_data.hook_timeout,
-            continue_on_hook_failure=repo_data.continue_on_hook_failure
+            continue_on_hook_failure=repo_data.continue_on_hook_failure,
+            mode=repo_data.mode
         )
 
         db.add(repository)
@@ -441,12 +447,13 @@ async def import_repository(
         raise HTTPException(status_code=403, detail="Admin access required")
 
     try:
-        # Validate source directories are provided
-        if not repo_data.source_directories or len(repo_data.source_directories) == 0:
-            raise HTTPException(
-                status_code=400,
-                detail="At least one source directory is required. Source directories specify what data will be backed up to this repository."
-            )
+        # Validate source directories are provided (only for full mode repositories)
+        if repo_data.mode == "full":
+            if not repo_data.source_directories or len(repo_data.source_directories) == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="At least one source directory is required for full mode repositories. Source directories specify what data will be backed up to this repository."
+                )
 
         # Validate repository type and path
         repo_path = repo_data.path.strip()
@@ -582,7 +589,8 @@ async def import_repository(
             pre_backup_script=repo_data.pre_backup_script,
             post_backup_script=repo_data.post_backup_script,
             hook_timeout=repo_data.hook_timeout,
-            continue_on_hook_failure=repo_data.continue_on_hook_failure
+            continue_on_hook_failure=repo_data.continue_on_hook_failure,
+            mode=repo_data.mode
         )
 
         db.add(repository)
@@ -710,6 +718,18 @@ async def update_repository(
 
         if repo_data.continue_on_hook_failure is not None:
             repository.continue_on_hook_failure = repo_data.continue_on_hook_failure
+
+        if repo_data.mode is not None:
+            # Validate source directories when switching to full mode
+            if repo_data.mode == "full" and (not repository.source_directories or repository.source_directories == "[]"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot switch to full mode: at least one source directory is required"
+                )
+            repository.mode = repo_data.mode
+            # If switching to observe mode, log it
+            if repo_data.mode == "observe":
+                logger.info("Repository switched to observability-only mode", repo_id=repo_id)
 
         repository.updated_at = datetime.utcnow()
         db.commit()
