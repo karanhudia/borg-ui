@@ -218,6 +218,8 @@ export const sshKeysAPI = {
   deploySSHKey: (id: number, data: any) => api.post(`/ssh-keys/${id}/deploy`, data),
   testSSHConnection: (id: number, data: any) => api.post(`/ssh-keys/${id}/test-connection`, data),
   getSSHConnections: () => api.get('/ssh-keys/connections'),
+  updateSSHConnection: (connectionId: number, data: any) => api.put(`/ssh-keys/connections/${connectionId}`, data),
+  deleteSSHConnection: (connectionId: number) => api.delete(`/ssh-keys/connections/${connectionId}`),
 }
 
 // Schedule API
