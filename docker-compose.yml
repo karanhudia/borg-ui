@@ -43,15 +43,15 @@ services:
       #
       # 🔒 PRODUCTION EXAMPLES (recommended - comment out the line above and use these):
       #
-      # Example 1: Mount your home directory only (recommended for personal use)
-      # - ${HOME}:/local/home:rw
+      # Example 1: Mount your home directory (replace with your actual path)
+      # - /home/yourusername:/local:rw
       #
       # Example 2: Mount specific backup directories (recommended for servers)
-      # - /mnt/data:/local/data:rw
+      # - /mnt/data:/local:rw
       # - /var/www:/local/www:ro  # Read-only if only backing up, not restoring here
       #
       # Example 3: Mount multiple directories (safest approach)
-      # - /home/username/documents:/local/documents:rw
+      # - /home/yourusername/documents:/local:rw
       # - /opt/myapp:/local/myapp:rw
 
       # OPTIONAL: Docker socket for container management in pre/post backup hooks

@@ -55,9 +55,9 @@ services:
     volumes:
       - borg_data:/data
       - borg_cache:/home/borg/.cache/borg
-      # Mount directories you want to backup (customize these paths)
-      - ${HOME}:/local/home:rw              # Your home directory
-      # - /mnt/data:/local/data:rw          # Additional directories as needed
+      # Mount directories you want to backup (REPLACE with your actual paths)
+      - /home/yourusername:/local:rw           # Replace with your directory path
+      # - /mnt/data:/local/data:rw             # Additional directories as needed
     environment:
       - TZ=America/Chicago  # Set your timezone
       - PUID=1000
@@ -68,7 +68,7 @@ volumes:
   borg_cache:
 ```
 
-**⚠️ Security Note:** The example above mounts your home directory. Customize the volume mounts to only include directories you want to backup. See the [Configuration Guide](https://karanhudia.github.io/borg-ui/configuration) for more examples and security best practices.
+**⚠️ Security Note:** Replace `/home/yourusername` with your actual directory path. Only mount directories you want to backup. See the [Configuration Guide](https://karanhudia.github.io/borg-ui/configuration) for more examples and security best practices.
 
 Start the container:
 
@@ -95,13 +95,14 @@ docker run -d \
   -e PGID=1000 \
   -v borg_data:/data \
   -v borg_cache:/home/borg/.cache/borg \
-  -v $HOME:/local/home:rw \
+  -v /home/yourusername:/local:rw \
   ainullcode/borg-ui:latest
 ```
 
 **Notes:**
+- Replace `/home/yourusername` with your actual directory path (e.g., `/home/john`, `/Users/sarah`, `/mnt/data`)
 - Replace `1000` with your user/group ID. Find yours with `id -u && id -g`
-- The example mounts your home directory. Add more `-v` flags for additional directories you want to backup
+- Add more `-v` flags for additional directories you want to backup
 - See [Configuration Guide](https://karanhudia.github.io/borg-ui/configuration) for security best practices
 
 ---
@@ -156,8 +157,8 @@ The container needs access to directories you want to backup. Instead of mountin
 ```yaml
 volumes:
   # ✅ Recommended: Mount specific directories
-  - ${HOME}:/local/home:rw
-  - /mnt/data:/local/data:rw
+  - /home/yourusername:/local:rw       # Replace with your path
+  - /mnt/data:/local/data:rw           # Additional directories
 
   # ❌ NOT Recommended: Full filesystem access
   # - /:/local:rw  # Security risk - avoid unless absolutely necessary
