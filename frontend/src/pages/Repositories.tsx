@@ -1022,15 +1022,15 @@ export default function Repositories() {
                         }}
                         placeholder={
                           repositoryForm.compressionAlgorithm === 'zstd' ? '1-22 (default: 3)' :
-                          repositoryForm.compressionAlgorithm === 'zlib' ? '0-9 (default: 6)' :
-                          repositoryForm.compressionAlgorithm === 'lzma' ? '0-9 (default: 6, max useful: 6)' :
-                          'Leave empty for default'
+                            repositoryForm.compressionAlgorithm === 'zlib' ? '0-9 (default: 6)' :
+                              repositoryForm.compressionAlgorithm === 'lzma' ? '0-9 (default: 6, max useful: 6)' :
+                                'Leave empty for default'
                         }
                         helperText={
                           repositoryForm.compressionAlgorithm === 'zstd' ? 'zstd: Level 1-22. Higher = better compression but slower.' :
-                          repositoryForm.compressionAlgorithm === 'zlib' ? 'zlib: Level 0-9. Level 0 means no compression (use "none" instead).' :
-                          repositoryForm.compressionAlgorithm === 'lzma' ? 'lzma: Level 0-9. Levels above 6 are pointless and waste CPU/RAM.' :
-                          'Leave empty to use default level.'
+                            repositoryForm.compressionAlgorithm === 'zlib' ? 'zlib: Level 0-9. Level 0 means no compression (use "none" instead).' :
+                              repositoryForm.compressionAlgorithm === 'lzma' ? 'lzma: Level 0-9. Levels above 6 are pointless and waste CPU/RAM.' :
+                                'Leave empty to use default level.'
                         }
                         fullWidth
                       />
@@ -1420,15 +1420,15 @@ export default function Repositories() {
                         }}
                         placeholder={
                           editForm.compressionAlgorithm === 'zstd' ? '1-22 (default: 3)' :
-                          editForm.compressionAlgorithm === 'zlib' ? '0-9 (default: 6)' :
-                          editForm.compressionAlgorithm === 'lzma' ? '0-9 (default: 6, max useful: 6)' :
-                          'Leave empty for default'
+                            editForm.compressionAlgorithm === 'zlib' ? '0-9 (default: 6)' :
+                              editForm.compressionAlgorithm === 'lzma' ? '0-9 (default: 6, max useful: 6)' :
+                                'Leave empty for default'
                         }
                         helperText={
                           editForm.compressionAlgorithm === 'zstd' ? 'zstd: Level 1-22. Higher = better compression but slower.' :
-                          editForm.compressionAlgorithm === 'zlib' ? 'zlib: Level 0-9. Level 0 means no compression (use "none" instead).' :
-                          editForm.compressionAlgorithm === 'lzma' ? 'lzma: Level 0-9. Levels above 6 are pointless and waste CPU/RAM.' :
-                          'Leave empty to use default level.'
+                            editForm.compressionAlgorithm === 'zlib' ? 'zlib: Level 0-9. Level 0 means no compression (use "none" instead).' :
+                              editForm.compressionAlgorithm === 'lzma' ? 'lzma: Level 0-9. Levels above 6 are pointless and waste CPU/RAM.' :
+                                'Leave empty to use default level.'
                         }
                         fullWidth
                       />
@@ -1968,7 +1968,7 @@ export default function Repositories() {
             />
           </Box>
 
-          <Box sx={{ bgcolor: 'grey.50', p: 2, borderRadius: 1, mb: 2 }}>
+          <Box sx={{ bgcolor: 'background.default', p: 2, borderRadius: 1, mb: 2 }}>
             <Typography variant="body2" gutterBottom>
               <strong>Repository:</strong> {pruningRepository?.name}
             </Typography>
@@ -2020,7 +2020,7 @@ export default function Repositories() {
                           component="pre"
                           sx={{
                             p: 1.5,
-                            bgcolor: 'grey.50',
+                            bgcolor: 'background.default',
                             borderRadius: 1,
                             fontSize: '0.75rem',
                             overflow: 'auto',
@@ -2121,11 +2121,11 @@ export default function Repositories() {
         sshConfig={
           repositoryForm.repository_type !== 'local' && repositoryForm.ssh_key_id
             ? {
-                ssh_key_id: repositoryForm.ssh_key_id,
-                host: repositoryForm.host,
-                username: repositoryForm.username,
-                port: repositoryForm.port,
-              }
+              ssh_key_id: repositoryForm.ssh_key_id,
+              host: repositoryForm.host,
+              username: repositoryForm.username,
+              port: repositoryForm.port,
+            }
             : undefined
         }
         selectMode="directories"
@@ -2163,11 +2163,11 @@ export default function Repositories() {
         sshConfig={
           repositoryForm.repository_type !== 'local' && repositoryForm.ssh_key_id
             ? {
-                ssh_key_id: repositoryForm.ssh_key_id,
-                host: repositoryForm.host,
-                username: repositoryForm.username,
-                port: repositoryForm.port,
-              }
+              ssh_key_id: repositoryForm.ssh_key_id,
+              host: repositoryForm.host,
+              username: repositoryForm.username,
+              port: repositoryForm.port,
+            }
             : undefined
         }
         selectMode="both"
@@ -2222,11 +2222,11 @@ export default function Repositories() {
         sshConfig={
           repositoryForm.repository_type !== 'local' && repositoryForm.ssh_key_id
             ? {
-                ssh_key_id: repositoryForm.ssh_key_id,
-                host: repositoryForm.host,
-                username: repositoryForm.username,
-                port: repositoryForm.port,
-              }
+              ssh_key_id: repositoryForm.ssh_key_id,
+              host: repositoryForm.host,
+              username: repositoryForm.username,
+              port: repositoryForm.port,
+            }
             : undefined
         }
         selectMode="directories"
@@ -2264,11 +2264,11 @@ export default function Repositories() {
         sshConfig={
           repositoryForm.repository_type !== 'local' && repositoryForm.ssh_key_id
             ? {
-                ssh_key_id: repositoryForm.ssh_key_id,
-                host: repositoryForm.host,
-                username: repositoryForm.username,
-                port: repositoryForm.port,
-              }
+              ssh_key_id: repositoryForm.ssh_key_id,
+              host: repositoryForm.host,
+              username: repositoryForm.username,
+              port: repositoryForm.port,
+            }
             : undefined
         }
         selectMode="both"

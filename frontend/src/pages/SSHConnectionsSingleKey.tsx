@@ -438,11 +438,11 @@ export default function SSHConnectionsSingleKey() {
                   </Stack>
                   <Box
                     sx={{
-                      bgcolor: 'grey.100',
+                      bgcolor: 'background.default',
                       p: 1.5,
                       borderRadius: 1,
                       border: '1px solid',
-                      borderColor: 'grey.300',
+                      borderColor: 'divider',
                     }}
                   >
                     <Typography

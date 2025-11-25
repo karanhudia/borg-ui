@@ -323,7 +323,7 @@ const Restore: React.FC = () => {
             <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 3 }}>
               <Table>
                 <TableHead>
-                  <TableRow sx={{ bgcolor: 'grey.50' }}>
+                  <TableRow sx={{ bgcolor: 'background.default' }}>
                     <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Archive Name</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Created</TableCell>
                     <TableCell align="right" sx={{ fontWeight: 600, color: 'text.secondary' }}>Actions</TableCell>
@@ -483,7 +483,7 @@ const Restore: React.FC = () => {
             <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
               <Table>
                 <TableHead>
-                  <TableRow sx={{ bgcolor: 'grey.50' }}>
+                  <TableRow sx={{ bgcolor: 'background.default' }}>
                     <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Job ID</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Archive</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Destination</TableCell>

@@ -17,6 +17,7 @@ import {
   TableRow,
   Paper,
   Tooltip,
+  useTheme,
 } from '@mui/material'
 import {
   Activity,
@@ -56,6 +57,7 @@ interface DashboardStatus {
 }
 
 export default function Dashboard() {
+  const theme = useTheme()
   // Poll data every 30 seconds for fresh data
   const { data: status, isLoading } = useQuery<{ data: DashboardStatus }>(
     'dashboard-status',
@@ -306,7 +308,7 @@ export default function Dashboard() {
             <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
               <Table>
                 <TableHead>
-                  <TableRow sx={{ bgcolor: 'grey.50' }}>
+                  <TableRow sx={{ bgcolor: 'background.default' }}>
                     <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Job ID</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Repository</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Status</TableCell>
@@ -333,7 +335,7 @@ export default function Dashboard() {
                       <TableCell>
                         <Tooltip title={job.repository} placement="top" arrow>
                           <Stack direction="row" spacing={1} alignItems="center">
-                            <HardDrive size={16} color="rgba(0,0,0,0.4)" />
+                            <HardDrive size={16} color={theme.palette.mode === 'dark' ? theme.palette.text.secondary : 'rgba(0,0,0,0.4)'} />
                             <Box>
                               <Typography variant="body2" fontWeight={500}>
                                 {getRepositoryName(job.repository)}
@@ -396,8 +398,8 @@ export default function Dashboard() {
                               {(job.progress || 0) === 0
                                 ? 'Initializing...'
                                 : (job.progress || 0) >= 100
-                                ? 'Finalizing...'
-                                : 'Processing...'}
+                                  ? 'Finalizing...'
+                                  : 'Processing...'}
                             </Typography>
                           </Stack>
                         ) : (

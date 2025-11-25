@@ -23,6 +23,7 @@ import {
   Alert,
   Divider,
   Tooltip,
+  useTheme,
 } from '@mui/material'
 import {
   Play,
@@ -70,6 +71,7 @@ interface BackupJob {
 }
 
 const Backup: React.FC = () => {
+  const theme = useTheme()
   const [selectedRepository, setSelectedRepository] = useState<string>('')
   const [lockError, setLockError] = useState<{ repositoryId: number, repositoryName: string } | null>(null)
   const queryClient = useQueryClient()
@@ -349,8 +351,8 @@ const Backup: React.FC = () => {
             <Stack spacing={3}>
               {/* Source Directories */}
               <Box>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
-                  <Folder size={18} color="rgba(0,0,0,0.6)" />
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5, color: 'text.secondary' }}>
+                  <Folder size={18} />
                   <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
                     Source Directories
                   </Typography>
@@ -513,8 +515,8 @@ const Backup: React.FC = () => {
                           {(job.progress || 0) === 0
                             ? 'Initializing backup...'
                             : (job.progress || 0) >= 100
-                            ? 'Finalizing...'
-                            : 'Processing files...'}
+                              ? 'Finalizing...'
+                              : 'Processing files...'}
                         </Typography>
                       </Stack>
                       <Typography variant="body2" color="text.secondary">
@@ -650,7 +652,7 @@ const Backup: React.FC = () => {
             <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
               <Table>
                 <TableHead>
-                  <TableRow sx={{ bgcolor: 'grey.50' }}>
+                  <TableRow sx={{ bgcolor: 'background.default' }}>
                     <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Job ID</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Repository</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Status</TableCell>
@@ -678,7 +680,7 @@ const Backup: React.FC = () => {
                       <TableCell>
                         <Tooltip title={job.repository} placement="top" arrow>
                           <Stack direction="row" spacing={1} alignItems="center">
-                            <HardDrive size={16} color="rgba(0,0,0,0.4)" />
+                            <HardDrive size={16} color={theme.palette.mode === 'dark' ? theme.palette.text.secondary : 'rgba(0,0,0,0.4)'} />
                             <Box>
                               <Typography variant="body2" fontWeight={500}>
                                 {getRepositoryName(job.repository)}

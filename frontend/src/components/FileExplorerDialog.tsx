@@ -20,6 +20,7 @@ import {
   TextField,
   InputAdornment,
   Checkbox,
+  useTheme,
 } from '@mui/material'
 import {
   Folder,
@@ -69,6 +70,7 @@ export default function FileExplorerDialog({
   sshConfig,
   selectMode = 'directories',
 }: FileExplorerDialogProps) {
+  const theme = useTheme()
   const [currentPath, setCurrentPath] = useState(initialPath)
   const [items, setItems] = useState<FileSystemItem[]>([])
   const [loading, setLoading] = useState(false)
@@ -196,7 +198,7 @@ export default function FileExplorerDialog({
 
       <DialogContent sx={{ p: 0 }}>
         {/* Breadcrumb Navigation */}
-        <Box sx={{ px: 2, py: 1, bgcolor: 'grey.50', borderBottom: 1, borderColor: 'divider' }}>
+        <Box sx={{ px: 2, py: 1, bgcolor: 'background.default', borderBottom: 1, borderColor: 'divider' }}>
           <Breadcrumbs
             separator={<ChevronRight size={12} />}
             maxItems={6}
@@ -283,8 +285,8 @@ export default function FileExplorerDialog({
               }}
             >
               {filteredItems.length === 0 ? (
-                <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" py={4}>
-                  <Folder size={36} color="#ccc" />
+                <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" py={4} sx={{ color: 'text.secondary' }}>
+                  <Folder size={36} />
                   <Typography variant="body2" color="text.secondary" mt={1.5}>
                     No items found
                   </Typography>
@@ -341,7 +343,7 @@ export default function FileExplorerDialog({
                           {item.is_borg_repo ? (
                             <Archive size={18} color="#ff6b6b" />
                           ) : item.is_directory ? (
-                            <Folder size={18} color="#4A90E2" />
+                            <Folder size={18} color={theme.palette.mode === 'dark' ? theme.palette.text.primary : '#4A90E2'} />
                           ) : (
                             <File size={18} color="#999" />
                           )}

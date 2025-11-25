@@ -180,8 +180,8 @@ export const darkTheme = createTheme({
       contrastText: '#ffffff',
     },
     background: {
-      default: '#09090b', // Zinc 950
-      paper: '#18181b', // Zinc 900
+      default: '#1a1a1a', // Soft dark gray
+      paper: '#27272a', // Zinc 800
     },
     text: {
       primary: '#fafafa', // Zinc 50
