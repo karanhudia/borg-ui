@@ -17,12 +17,6 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Paper,
   Chip,
 } from '@mui/material'
@@ -41,6 +35,7 @@ import { formatDate, formatBytes as formatBytesUtil, formatTimeRange } from '../
 import RepositoryInfo from '../components/RepositoryInfo'
 import PathSelectorField from '../components/PathSelectorField'
 import LockErrorDialog from '../components/LockErrorDialog'
+import DataTable, { Column, ActionButton } from '../components/DataTable'
 
 interface Repository {
   id: number
@@ -231,6 +226,101 @@ const Restore: React.FC = () => {
   const runningJobs = restoreJobsData?.data?.jobs?.filter((job: RestoreJob) => job.status === 'running' || job.status === 'pending') || []
   const recentJobs = restoreJobsData?.data?.jobs?.slice(0, 10) || []
 
+  // Archives table columns
+  const archivesColumns: Column<Archive>[] = [
+    {
+      id: 'name',
+      label: 'Archive Name',
+      render: (archive) => (
+        <Typography variant="body2" fontWeight={500}>
+          {archive.name}
+        </Typography>
+      ),
+    },
+    {
+      id: 'created',
+      label: 'Created',
+      render: (archive) => (
+        <Typography variant="body2" color="text.secondary">
+          {formatDate(archive.start)}
+        </Typography>
+      ),
+    },
+  ]
+
+  // Archives table actions
+  const archivesActions: ActionButton<Archive>[] = [
+    {
+      icon: <Download size={16} />,
+      label: 'Restore',
+      onClick: (archive) => setRestoreArchive(archive),
+      color: 'primary',
+      tooltip: 'Restore this archive',
+    },
+  ]
+
+  // Recent Restore Jobs table columns
+  const restoreJobsColumns: Column<RestoreJob>[] = [
+    {
+      id: 'id',
+      label: 'Job ID',
+      render: (job) => (
+        <Typography variant="body2" fontWeight={600} color="primary">
+          #{job.id}
+        </Typography>
+      ),
+    },
+    {
+      id: 'archive',
+      label: 'Archive',
+      render: (job) => (
+        <Typography variant="body2" fontWeight={500}>
+          {job.archive}
+        </Typography>
+      ),
+    },
+    {
+      id: 'destination',
+      label: 'Destination',
+      render: (job) => (
+        <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+          {job.destination}
+        </Typography>
+      ),
+    },
+    {
+      id: 'status',
+      label: 'Status',
+      render: (job) => (
+        <Chip
+          icon={getStatusIcon(job.status)}
+          label={job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+          color={getStatusColor(job.status)}
+          size="small"
+          sx={{ fontWeight: 500 }}
+        />
+      ),
+    },
+    {
+      id: 'duration',
+      label: 'Duration',
+      render: (job) => (
+        <Typography variant="body2" color="text.secondary">
+          {formatTimeRange(job.started_at, job.completed_at, job.status)}
+        </Typography>
+      ),
+    },
+    {
+      id: 'started',
+      label: 'Started',
+      render: (job) => (
+        <Typography variant="body2" color="text.secondary">
+          {job.started_at ? formatDate(job.started_at) : 'N/A'}
+        </Typography>
+      ),
+    },
+  ]
+
   return (
     <Box>
       {/* Header */}
@@ -305,65 +395,22 @@ const Restore: React.FC = () => {
             Select an archive below to restore its contents. The entire archive will be restored to the destination path you specify.
           </Alert>
 
-          {loadingArchives ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
-              <CircularProgress size={48} />
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                Loading archives...
-              </Typography>
-            </Box>
-          ) : archivesList.length === 0 ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', py: 8 }}>
-              <ArchiveIcon size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
-              <Typography variant="body1" color="text.secondary">
-                No archives found in this repository
-              </Typography>
-            </Box>
-          ) : (
-            <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 3 }}>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: 'grey.50' }}>
-                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Archive Name</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Created</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600, color: 'text.secondary' }}>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {archivesList.map((archive: Archive) => (
-                    <TableRow
-                      key={archive.id}
-                      hover
-                      sx={{ '&:last-child td': { borderBottom: 0 } }}
-                    >
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={500}>
-                          {archive.name}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary">
-                          {formatDate(archive.start)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="right">
-                        <Button
-                          variant="contained"
-                          color="primary"
-                          size="small"
-                          startIcon={<Download size={16} />}
-                          onClick={() => setRestoreArchive(archive)}
-                          sx={{ textTransform: 'none' }}
-                        >
-                          Restore
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+          <Box sx={{ mb: 3 }}>
+            <DataTable
+              data={archivesList}
+              columns={archivesColumns}
+              actions={archivesActions}
+              getRowKey={(archive) => archive.id}
+              loading={loadingArchives}
+              emptyState={{
+                icon: <ArchiveIcon size={48} />,
+                title: 'No archives found in this repository',
+              }}
+              headerBgColor="grey.50"
+              enableHover={true}
+            />
+          </Box>
+
         </>
       )}
 
@@ -472,73 +519,18 @@ const Restore: React.FC = () => {
             </Typography>
           </Stack>
 
-          {recentJobs.length === 0 ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', py: 8 }}>
-              <Clock size={48} color="rgba(0,0,0,0.3)" />
-              <Typography variant="body1" color="text.secondary" sx={{ mt: 2 }}>
-                No restore jobs found
-              </Typography>
-            </Box>
-          ) : (
-            <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: 'grey.50' }}>
-                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Job ID</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Archive</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Destination</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Status</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Duration</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Started</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {recentJobs.map((job: RestoreJob) => (
-                    <TableRow
-                      key={job.id}
-                      hover
-                      sx={{ '&:last-child td': { borderBottom: 0 } }}
-                    >
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={600} color="primary">
-                          #{job.id}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={500}>
-                          {job.archive}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
-                          {job.destination}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          icon={getStatusIcon(job.status)}
-                          label={job.status.charAt(0).toUpperCase() + job.status.slice(1)}
-                          color={getStatusColor(job.status)}
-                          size="small"
-                          sx={{ fontWeight: 500 }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary">
-                          {formatTimeRange(job.started_at, job.completed_at, job.status)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary">
-                          {job.started_at ? formatDate(job.started_at) : 'N/A'}
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+          <DataTable
+            data={recentJobs}
+            columns={restoreJobsColumns}
+            getRowKey={(job) => job.id.toString()}
+            emptyState={{
+              icon: <Clock size={48} />,
+              title: 'No restore jobs found',
+            }}
+            headerBgColor="grey.50"
+            enableHover={true}
+            variant="outlined"
+          />
         </CardContent>
       </Card>
 

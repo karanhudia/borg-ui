@@ -17,13 +17,6 @@ import {
   Chip,
   FormControlLabel,
   Switch,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   Tooltip,
   Select,
   MenuItem,
@@ -31,6 +24,7 @@ import {
   InputLabel,
   InputAdornment,
   Alert,
+  Paper,
 } from '@mui/material'
 import {
   Plus,
@@ -49,6 +43,7 @@ import {
 import { scheduleAPI, repositoriesAPI, backupAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { formatDate, formatRelativeTime, formatTimeRange, formatBytes as formatBytesUtil, formatDurationSeconds, convertCronToUTC, convertCronToLocal } from '../utils/dateUtils'
+import DataTable, { Column, ActionButton } from '../components/DataTable'
 
 interface ScheduledJob {
   id: number
@@ -447,6 +442,325 @@ const Schedule: React.FC = () => {
   const recentBackupJobs = allBackupJobs.slice(0, 10)
   const upcomingJobs = upcomingData?.data?.upcoming_jobs || []
 
+  // Scheduled Jobs Table Column Definitions
+  const scheduledJobsColumns: Column<ScheduledJob>[] = [
+    {
+      id: 'status',
+      label: 'Status',
+      width: '5%',
+      render: (job) => (
+        <Tooltip title={job.enabled ? 'Enabled' : 'Disabled'} arrow>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            {job.enabled ? (
+              <CheckCircle size={18} color="#2e7d32" />
+            ) : (
+              <XCircle size={18} color="rgba(0,0,0,0.3)" />
+            )}
+          </Box>
+        </Tooltip>
+      ),
+    },
+    {
+      id: 'name',
+      label: 'Job Name',
+      width: '15%',
+      render: (job) => (
+        <>
+          <Typography variant="body2" fontWeight={500}>
+            {job.name}
+          </Typography>
+          {job.description && (
+            <Typography variant="caption" color="text.secondary" display="block">
+              {job.description}
+            </Typography>
+          )}
+          {(job.run_prune_after || job.run_compact_after) && (
+            <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+              {job.run_prune_after && (
+                <Tooltip title={`Prune: Keep ${job.prune_keep_daily}d/${job.prune_keep_weekly}w/${job.prune_keep_monthly}m/${job.prune_keep_yearly}y`} arrow>
+                  <Chip label="Prune" size="small" color="primary" variant="outlined" sx={{ height: 18, fontSize: '0.65rem' }} />
+                </Tooltip>
+              )}
+              {job.run_compact_after && (
+                <Chip label="Compact" size="small" color="secondary" variant="outlined" sx={{ height: 18, fontSize: '0.65rem' }} />
+              )}
+            </Box>
+          )}
+        </>
+      ),
+    },
+    {
+      id: 'repository',
+      label: 'Repository',
+      width: '30%',
+      render: (job) => (
+        <>
+          <Typography variant="body2">
+            {getRepositoryName(job.repository || '')}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+            {job.repository}
+          </Typography>
+        </>
+      ),
+    },
+    {
+      id: 'schedule',
+      label: 'Schedule',
+      width: '12%',
+      render: (job) => (
+        <>
+          <Chip
+            label={formatCronExpression(convertCronToLocal(job.cron_expression))}
+            size="small"
+            variant="outlined"
+            color="primary"
+          />
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+            {convertCronToLocal(job.cron_expression)}
+          </Typography>
+        </>
+      ),
+    },
+    {
+      id: 'last_run',
+      label: 'Last Run',
+      width: '13%',
+      render: (job) => (
+        <>
+          {job.last_run ? (
+            <>
+              <Typography variant="body2">
+                {formatDate(job.last_run)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" display="block">
+                {formatRelativeTime(job.last_run)}
+              </Typography>
+              {(job.last_prune || job.last_compact) && (
+                <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                  {job.last_prune && (
+                    <Tooltip title={`Last pruned: ${formatDate(job.last_prune)}`} arrow>
+                      <Chip label="P" size="small" color="primary" sx={{ height: 16, fontSize: '0.6rem', minWidth: 20 }} />
+                    </Tooltip>
+                  )}
+                  {job.last_compact && (
+                    <Tooltip title={`Last compacted: ${formatDate(job.last_compact)}`} arrow>
+                      <Chip label="C" size="small" color="secondary" sx={{ height: 16, fontSize: '0.6rem', minWidth: 20 }} />
+                    </Tooltip>
+                  )}
+                </Box>
+              )}
+            </>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              Never
+            </Typography>
+          )}
+        </>
+      ),
+    },
+    {
+      id: 'next_run',
+      label: 'Next Run',
+      width: '13%',
+      render: (job) => (
+        <>
+          {job.next_run ? (
+            <>
+              <Typography variant="body2" fontWeight={500}>
+                {formatDate(job.next_run)}
+              </Typography>
+              <Typography variant="caption" color="primary.main">
+                {formatRelativeTime(job.next_run)}
+              </Typography>
+            </>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              Never
+            </Typography>
+          )}
+        </>
+      ),
+    },
+    {
+      id: 'toggle',
+      label: 'Enabled',
+      width: '7%',
+      align: 'center',
+      render: (job) => (
+        <Tooltip title={job.enabled ? 'Disable' : 'Enable'} arrow>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={job.enabled}
+                onChange={() => handleToggleJob(job)}
+                size="small"
+                onClick={(e) => e.stopPropagation()}
+              />
+            }
+            label=""
+            sx={{ m: 0 }}
+          />
+        </Tooltip>
+      ),
+    },
+  ]
+
+  const scheduledJobsActions: ActionButton<ScheduledJob>[] = [
+    {
+      icon: <Play size={16} />,
+      label: 'Run Now',
+      onClick: (job) => handleRunJobNow(job),
+      color: 'primary',
+      disabled: (job) => !job.enabled || runJobNowMutation.isLoading,
+      tooltip: 'Run Now',
+    },
+    {
+      icon: <Edit size={16} />,
+      label: 'Edit',
+      onClick: (job) => openEditModal(job),
+      color: 'default',
+      tooltip: 'Edit',
+    },
+    {
+      icon: <Trash2 size={16} />,
+      label: 'Delete',
+      onClick: (job) => setDeleteConfirmJob(job),
+      color: 'error',
+      tooltip: 'Delete',
+    },
+  ]
+
+  // Backup History Table Column Definitions
+  const backupHistoryColumns: Column<BackupJob>[] = [
+    {
+      id: 'id',
+      label: 'Job ID',
+      render: (job) => (
+        <Chip
+          label={`#${job.id}`}
+          size="small"
+          variant="outlined"
+          sx={{ fontFamily: 'monospace' }}
+        />
+      ),
+    },
+    {
+      id: 'repository',
+      label: 'Repository',
+      render: (job) => (
+        <>
+          <Typography variant="body2">
+            {getRepositoryName(job.repository)}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" display="block">
+            {job.repository}
+          </Typography>
+          {job.maintenance_status && (
+            <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+              {(job.maintenance_status.includes('prune') || job.maintenance_status === 'maintenance_completed') && (
+                <Chip
+                  label={job.maintenance_status.includes('prune_failed') ? 'Prune ✗' : 'Prune ✓'}
+                  size="small"
+                  color={job.maintenance_status.includes('prune_failed') ? 'error' : 'success'}
+                  variant="outlined"
+                  sx={{ height: 18, fontSize: '0.65rem' }}
+                />
+              )}
+              {(job.maintenance_status.includes('compact') || job.maintenance_status === 'maintenance_completed') && (
+                <Chip
+                  label={job.maintenance_status.includes('compact_failed') ? 'Compact ✗' : 'Compact ✓'}
+                  size="small"
+                  color={job.maintenance_status.includes('compact_failed') ? 'error' : 'success'}
+                  variant="outlined"
+                  sx={{ height: 18, fontSize: '0.65rem' }}
+                />
+              )}
+            </Box>
+          )}
+        </>
+      ),
+    },
+    {
+      id: 'status',
+      label: 'Status',
+      render: (job) => (
+        <>
+          <Chip
+            icon={getBackupStatusIcon(job.status)}
+            label={job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+            size="small"
+            color={getBackupStatusColor(job.status)}
+            sx={{ minWidth: 100 }}
+          />
+          {job.maintenance_status && job.maintenance_status.includes('running') && (
+            <Chip
+              icon={<RefreshCw size={12} className="animate-spin" />}
+              label={job.maintenance_status === 'running_prune' ? 'Pruning' : 'Compacting'}
+              size="small"
+              color="info"
+              sx={{ minWidth: 90, mt: 0.5, display: 'block' }}
+            />
+          )}
+        </>
+      ),
+    },
+    {
+      id: 'started_at',
+      label: 'Started',
+      render: (job) => (
+        <>
+          <Typography variant="body2">
+            {formatDate(job.started_at)}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {formatRelativeTime(job.started_at)}
+          </Typography>
+        </>
+      ),
+    },
+    {
+      id: 'duration',
+      label: 'Duration',
+      render: (job) => (
+        <Typography variant="body2">
+          {job.completed_at ? formatTimeRange(job.started_at, job.completed_at) : 'Running...'}
+        </Typography>
+      ),
+    },
+  ]
+
+  // Backup History Table Action Buttons
+  const backupHistoryActions: ActionButton<BackupJob>[] = [
+    {
+      icon: <X size={16} />,
+      label: 'Cancel Backup',
+      onClick: (job) => {
+        if (window.confirm('Are you sure you want to cancel this backup?')) {
+          cancelBackupMutation.mutate(job.id)
+        }
+      },
+      color: 'error',
+      disabled: () => cancelBackupMutation.isLoading,
+      show: (job) => job.status === 'running',
+    },
+    {
+      icon: <Download size={16} />,
+      label: 'Download Logs',
+      onClick: (job) => backupAPI.downloadLogs(job.id),
+      color: 'primary',
+      show: (job) => !!job.has_logs,
+    },
+    {
+      icon: <AlertCircle size={16} />,
+      label: 'Error',
+      onClick: () => {},
+      color: 'error',
+      show: (job) => !!job.error_message,
+      tooltip: (job) => job.error_message || 'Error',
+    },
+  ]
+
   return (
     <Box>
       {/* Header */}
@@ -703,191 +1017,22 @@ const Schedule: React.FC = () => {
             All Scheduled Jobs
           </Typography>
 
-          {isLoading ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
-              <CircularProgress size={48} />
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                Loading scheduled jobs...
-              </Typography>
-            </Box>
-          ) : jobs.length === 0 ? (
-            <Box sx={{ textAlign: 'center', py: 6, px: 4 }}>
-              <Clock size={48} color="rgba(0,0,0,0.3)" style={{ margin: '0 auto' }} />
-              <Typography variant="body1" color="text.secondary" sx={{ mt: 2 }}>
-                No scheduled jobs found
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Create your first scheduled backup job
-              </Typography>
-            </Box>
-          ) : (
-            <TableContainer component={Paper} variant="outlined" sx={{ mt: 2 }}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell width="5%">Status</TableCell>
-                    <TableCell width="15%">Job Name</TableCell>
-                    <TableCell width="30%">Repository</TableCell>
-                    <TableCell width="12%">Schedule</TableCell>
-                    <TableCell width="13%">Last Run</TableCell>
-                    <TableCell width="13%">Next Run</TableCell>
-                    <TableCell width="12%" align="right">Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {jobs.map((job: ScheduledJob) => (
-                    <TableRow key={job.id} hover>
-                      <TableCell>
-                        <Tooltip title={job.enabled ? 'Enabled' : 'Disabled'} arrow>
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            {job.enabled ? (
-                              <CheckCircle size={18} color="#2e7d32" />
-                            ) : (
-                              <XCircle size={18} color="rgba(0,0,0,0.3)" />
-                            )}
-                          </Box>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={500}>
-                          {job.name}
-                        </Typography>
-                        {job.description && (
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            {job.description}
-                          </Typography>
-                        )}
-                        {(job.run_prune_after || job.run_compact_after) && (
-                          <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                            {job.run_prune_after && (
-                              <Tooltip title={`Prune: Keep ${job.prune_keep_daily}d/${job.prune_keep_weekly}w/${job.prune_keep_monthly}m/${job.prune_keep_yearly}y`} arrow>
-                                <Chip label="Prune" size="small" color="primary" variant="outlined" sx={{ height: 18, fontSize: '0.65rem' }} />
-                              </Tooltip>
-                            )}
-                            {job.run_compact_after && (
-                              <Chip label="Compact" size="small" color="secondary" variant="outlined" sx={{ height: 18, fontSize: '0.65rem' }} />
-                            )}
-                          </Box>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {getRepositoryName(job.repository || '')}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                          {job.repository}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={formatCronExpression(convertCronToLocal(job.cron_expression))}
-                          size="small"
-                          variant="outlined"
-                          color="primary"
-                        />
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                          {convertCronToLocal(job.cron_expression)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        {job.last_run ? (
-                          <>
-                            <Typography variant="body2">
-                              {formatDate(job.last_run)}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary" display="block">
-                              {formatRelativeTime(job.last_run)}
-                            </Typography>
-                            {(job.last_prune || job.last_compact) && (
-                              <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                                {job.last_prune && (
-                                  <Tooltip title={`Last pruned: ${formatDate(job.last_prune)}`} arrow>
-                                    <Chip label="P" size="small" color="primary" sx={{ height: 16, fontSize: '0.6rem', minWidth: 20 }} />
-                                  </Tooltip>
-                                )}
-                                {job.last_compact && (
-                                  <Tooltip title={`Last compacted: ${formatDate(job.last_compact)}`} arrow>
-                                    <Chip label="C" size="small" color="secondary" sx={{ height: 16, fontSize: '0.6rem', minWidth: 20 }} />
-                                  </Tooltip>
-                                )}
-                              </Box>
-                            )}
-                          </>
-                        ) : (
-                          <Typography variant="body2" color="text.secondary">
-                            Never
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {job.next_run ? (
-                          <>
-                            <Typography variant="body2" fontWeight={500}>
-                              {formatDate(job.next_run)}
-                            </Typography>
-                            <Typography variant="caption" color="primary.main">
-                              {formatRelativeTime(job.next_run)}
-                            </Typography>
-                          </>
-                        ) : (
-                          <Typography variant="body2" color="text.secondary">
-                            Never
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                          <Tooltip title={job.enabled ? 'Disable' : 'Enable'} arrow>
-                            <FormControlLabel
-                              control={
-                                <Switch
-                                  checked={job.enabled}
-                                  onChange={() => handleToggleJob(job)}
-                                  size="small"
-                                />
-                              }
-                              label=""
-                              sx={{ m: 0 }}
-                            />
-                          </Tooltip>
-                          <Tooltip title="Run Now" arrow>
-                            <span>
-                              <IconButton
-                                size="small"
-                                onClick={() => handleRunJobNow(job)}
-                                disabled={!job.enabled || runJobNowMutation.isLoading}
-                                color="primary"
-                              >
-                                <Play size={16} />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                          <Tooltip title="Edit" arrow>
-                            <IconButton
-                              size="small"
-                              onClick={() => openEditModal(job)}
-                              color="default"
-                            >
-                              <Edit size={16} />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Delete" arrow>
-                            <IconButton
-                              size="small"
-                              onClick={() => setDeleteConfirmJob(job)}
-                              color="error"
-                            >
-                              <Trash2 size={16} />
-                            </IconButton>
-                          </Tooltip>
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+          <Box sx={{ mt: 2 }}>
+            <DataTable
+              data={jobs}
+              columns={scheduledJobsColumns}
+              actions={scheduledJobsActions}
+              getRowKey={(job) => job.id}
+              loading={isLoading}
+              enableHover={true}
+              headerBgColor="grey.50"
+              emptyState={{
+                icon: <Clock size={48} />,
+                title: 'No scheduled jobs found',
+                description: 'Create your first scheduled backup job',
+              }}
+            />
+          </Box>
         </CardContent>
       </Card>
 
@@ -901,163 +1046,19 @@ const Schedule: React.FC = () => {
             Recent backup jobs from scheduled tasks
           </Typography>
 
-          {loadingBackupJobs ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
-              <CircularProgress size={48} />
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                Loading backup history...
-              </Typography>
-            </Box>
-          ) : recentBackupJobs.length === 0 ? (
-            <Box sx={{ textAlign: 'center', py: 6, px: 4 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-                <Clock size={48} color="rgba(0,0,0,0.3)" />
-              </Box>
-              <Typography variant="body1" color="text.secondary">
-                No backup jobs found
-              </Typography>
-            </Box>
-          ) : (
-            <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: 'grey.50' }}>
-                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Job ID</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Repository</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Status</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Started</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }}>Duration</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: 'text.secondary' }} align="right">Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {recentBackupJobs.map((job: BackupJob) => (
-                    <TableRow
-                      key={job.id}
-                      hover
-                      sx={{
-                        '&:hover': {
-                          backgroundColor: 'action.hover',
-                          cursor: 'pointer'
-                        }
-                      }}
-                    >
-                      <TableCell>
-                        <Chip
-                          label={`#${job.id}`}
-                          size="small"
-                          variant="outlined"
-                          sx={{ fontFamily: 'monospace' }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {getRepositoryName(job.repository)}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          {job.repository}
-                        </Typography>
-                        {job.maintenance_status && (
-                          <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                            {(job.maintenance_status.includes('prune') || job.maintenance_status === 'maintenance_completed') && (
-                              <Chip
-                                label={job.maintenance_status.includes('prune_failed') ? 'Prune ✗' : 'Prune ✓'}
-                                size="small"
-                                color={job.maintenance_status.includes('prune_failed') ? 'error' : 'success'}
-                                variant="outlined"
-                                sx={{ height: 18, fontSize: '0.65rem' }}
-                              />
-                            )}
-                            {(job.maintenance_status.includes('compact') || job.maintenance_status === 'maintenance_completed') && (
-                              <Chip
-                                label={job.maintenance_status.includes('compact_failed') ? 'Compact ✗' : 'Compact ✓'}
-                                size="small"
-                                color={job.maintenance_status.includes('compact_failed') ? 'error' : 'success'}
-                                variant="outlined"
-                                sx={{ height: 18, fontSize: '0.65rem' }}
-                              />
-                            )}
-                          </Box>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          icon={getBackupStatusIcon(job.status)}
-                          label={job.status.charAt(0).toUpperCase() + job.status.slice(1)}
-                          size="small"
-                          color={getBackupStatusColor(job.status)}
-                          sx={{ minWidth: 100 }}
-                        />
-                        {job.maintenance_status && job.maintenance_status.includes('running') && (
-                          <Chip
-                            icon={<RefreshCw size={12} className="animate-spin" />}
-                            label={job.maintenance_status === 'running_prune' ? 'Pruning' : 'Compacting'}
-                            size="small"
-                            color="info"
-                            sx={{ minWidth: 90, mt: 0.5, display: 'block' }}
-                          />
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {formatDate(job.started_at)}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {formatRelativeTime(job.started_at)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {job.completed_at ? formatTimeRange(job.started_at, job.completed_at) : 'Running...'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="right">
-                        <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                          {job.status === 'running' && (
-                            <Tooltip title="Cancel Backup" arrow>
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => {
-                                  if (window.confirm('Are you sure you want to cancel this backup?')) {
-                                    cancelBackupMutation.mutate(job.id)
-                                  }
-                                }}
-                                disabled={cancelBackupMutation.isLoading}
-                              >
-                                <X size={16} />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                          {job.has_logs && (
-                            <Tooltip title="Download Logs" arrow>
-                              <IconButton
-                                size="small"
-                                color="primary"
-                                onClick={() => backupAPI.downloadLogs(job.id)}
-                              >
-                                <Download size={16} />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                          {job.error_message && (
-                            <Tooltip title={job.error_message} arrow>
-                              <IconButton
-                                size="small"
-                                color="error"
-                              >
-                                <AlertCircle size={16} />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+          <DataTable
+            data={recentBackupJobs}
+            columns={backupHistoryColumns}
+            actions={backupHistoryActions}
+            getRowKey={(job) => job.id}
+            loading={loadingBackupJobs}
+            enableHover={true}
+            headerBgColor="grey.50"
+            emptyState={{
+              icon: <Clock size={48} />,
+              title: 'No backup jobs found',
+            }}
+          />
         </CardContent>
       </Card>
 
