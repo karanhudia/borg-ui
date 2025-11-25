@@ -1442,6 +1442,12 @@ export default function Repositories() {
                 </Select>
               </FormControl>
 
+              {editForm.mode === 'observe' && (
+                <Alert severity="info">
+                  Observability-only repositories can browse and restore existing archives but cannot create new backups or be used in scheduled jobs.
+                </Alert>
+              )}
+
               {/* Compression Settings - Only show for full repositories */}
               {editForm.mode === 'full' && (
                 <Box>
@@ -1576,7 +1582,8 @@ export default function Repositories() {
                 helperText="Path to borg executable on remote server. Leave empty if borg is in PATH."
               />
 
-              {/* Source Directories */}
+              {/* Source Directories - Only show for full repositories */}
+              {editForm.mode === 'full' && (
               <Box>
                 <Typography variant="subtitle2" gutterBottom>
                   Source Directories (Optional)
@@ -1659,8 +1666,10 @@ export default function Repositories() {
                   </Button>
                 </Box>
               </Box>
+              )}
 
-              {/* Exclude Patterns */}
+              {/* Exclude Patterns - Only show for full repositories */}
+              {editForm.mode === 'full' && (
               <Box>
                 <Typography variant="subtitle2" gutterBottom>
                   Exclude Patterns (Optional)
@@ -1743,8 +1752,11 @@ export default function Repositories() {
                   </Button>
                 </Box>
               </Box>
+              )}
 
-              {/* Backup Hooks */}
+              {/* Backup Hooks - Only show for full repositories */}
+              {editForm.mode === 'full' && (
+              <>
               <Divider sx={{ mt: 2 }} />
               <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 2 }}>
                 Backup Hooks (Optional)
@@ -1791,6 +1803,8 @@ export default function Repositories() {
                   label="Continue if pre-hook fails"
                 />
               </Box>
+              </>
+              )}
 
             </Box>
           </DialogContent>
