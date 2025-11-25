@@ -367,7 +367,8 @@ async def create_repository(
             repo_path,
             repo_data.encryption,
             repo_data.passphrase,
-            repo_data.ssh_key_id if repo_data.repository_type in ["ssh", "sftp"] else None
+            repo_data.ssh_key_id if repo_data.repository_type in ["ssh", "sftp"] else None,
+            repo_data.remote_path
         )
 
         if not init_result["success"]:
@@ -1187,7 +1188,7 @@ async def verify_existing_repository(path: str, passphrase: str = None, ssh_key_
             except Exception as e:
                 logger.warning("Failed to clean up temp SSH key", error=str(e))
 
-async def initialize_borg_repository(path: str, encryption: str, passphrase: str = None, ssh_key_id: int = None) -> Dict[str, Any]:
+async def initialize_borg_repository(path: str, encryption: str, passphrase: str = None, ssh_key_id: int = None, remote_path: str = None) -> Dict[str, Any]:
     """Initialize a new Borg repository"""
     temp_key_file = None
     try:
@@ -1195,7 +1196,8 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
                    path=path,
                    encryption=encryption,
                    has_passphrase=bool(passphrase),
-                   ssh_key_id=ssh_key_id)
+                   ssh_key_id=ssh_key_id,
+                   remote_path=remote_path)
 
         # Check if borg is available locally
         try:
@@ -1218,6 +1220,12 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
 
         # Build borg init command
         cmd = ["borg", "init", "--encryption", encryption]
+
+        # Add remote-path argument if specified
+        if remote_path:
+            cmd.extend(["--remote-path", remote_path])
+            logger.info("Added remote-path to borg init command", remote_path=remote_path)
+
         logger.info("Built borg init command", command=" ".join(cmd))
 
         # Set up environment
