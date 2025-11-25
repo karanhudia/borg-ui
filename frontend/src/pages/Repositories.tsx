@@ -551,7 +551,57 @@ export default function Repositories() {
       repoPath = repoPath || '/path/to/local/repository'
     }
 
-    return `borg init --encryption ${repositoryForm.encryption} ${repoPath}`
+    let command = `borg init --encryption ${repositoryForm.encryption}`
+
+    // Add remote-path if specified
+    if (repositoryForm.remote_path) {
+      command += ` --remote-path ${repositoryForm.remote_path}`
+    }
+
+    command += ` ${repoPath}`
+
+    return command
+  }
+
+  // Generate borg info command preview for import
+  const getBorgInfoCommand = () => {
+    let repoPath = repositoryForm.path || '/path/to/repository'
+
+    // Build full path for remote repository
+    if (repositoryForm.repository_type === 'ssh' && repositoryForm.host && repositoryForm.username) {
+      repoPath = `ssh://${repositoryForm.username}@${repositoryForm.host}:${repositoryForm.port}${repoPath.startsWith('/') ? '' : '/'}${repoPath}`
+    } else if (repositoryForm.repository_type === 'local') {
+      repoPath = repoPath || '/path/to/local/repository'
+    }
+
+    let command = `borg info`
+
+    // Add remote-path if specified
+    if (repositoryForm.remote_path) {
+      command += ` --remote-path ${repositoryForm.remote_path}`
+    }
+
+    command += ` ${repoPath}`
+
+    return command
+  }
+
+  // Generate borg info command preview for edit
+  const getBorgInfoCommandForEdit = () => {
+    if (!editingRepository) return ''
+
+    let repoPath = editForm.path || '/path/to/repository'
+
+    let command = `borg info`
+
+    // Add remote-path if specified
+    if (editForm.remote_path) {
+      command += ` --remote-path ${editForm.remote_path}`
+    }
+
+    command += ` ${repoPath}`
+
+    return command
   }
 
   // Utility functions
@@ -832,7 +882,24 @@ export default function Repositories() {
               </Alert>
             ) : (
               <Alert severity="info" sx={{ mb: 2 }}>
-                Import a Borg repository that already exists. The repository will be verified before import.
+                <Typography variant="subtitle2" gutterBottom>
+                  Command Preview
+                </Typography>
+                <Box sx={{
+                  bgcolor: 'grey.900',
+                  color: 'grey.100',
+                  p: 1.5,
+                  borderRadius: 1,
+                  fontFamily: 'monospace',
+                  fontSize: '0.875rem',
+                  overflow: 'auto',
+                  mb: 1.5
+                }}>
+                  {getBorgInfoCommand()}
+                </Box>
+                <Typography variant="body2">
+                  Import a Borg repository that already exists. The repository will be verified before import.
+                </Typography>
               </Alert>
             )}
 
@@ -1398,6 +1465,24 @@ export default function Repositories() {
         <form onSubmit={handleUpdateRepository}>
           <DialogTitle>Edit Repository</DialogTitle>
           <DialogContent>
+            {/* Command Preview */}
+            <Alert severity="info" sx={{ mb: 2, mt: 1 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Command Preview
+              </Typography>
+              <Box sx={{
+                bgcolor: 'grey.900',
+                color: 'grey.100',
+                p: 1.5,
+                borderRadius: 1,
+                fontFamily: 'monospace',
+                fontSize: '0.875rem',
+                overflow: 'auto'
+              }}>
+                {getBorgInfoCommandForEdit()}
+              </Box>
+            </Alert>
+
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
               <TextField
                 label="Name"
