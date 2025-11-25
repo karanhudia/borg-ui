@@ -20,12 +20,6 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   CircularProgress,
   Alert,
   Tooltip,
@@ -45,6 +39,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
+import DataTable from '../components/DataTable'
 
 interface SSHConnection {
   id: number
@@ -594,95 +589,95 @@ export default function SSHConnectionsSingleKey() {
                 started.
               </Alert>
             ) : (
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Status</TableCell>
-                      <TableCell>Host</TableCell>
-                      <TableCell>Username</TableCell>
-                      <TableCell>Port</TableCell>
-                      <TableCell>Last Test</TableCell>
-                      <TableCell align="right">Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {connections.map((connection) => (
-                      <TableRow key={connection.id}>
-                        <TableCell>
-                          <Stack direction="row" alignItems="center" spacing={1}>
-                            {getStatusIcon(connection.status)}
-                            <Chip
-                              label={connection.status}
-                              size="small"
-                              color={getStatusColor(connection.status)}
-                              sx={{ height: 20, fontSize: '0.7rem' }}
-                            />
-                          </Stack>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={500}>
-                            {connection.host}
+              <DataTable<SSHConnection>
+                data={connections}
+                columns={[
+                  {
+                    id: 'status',
+                    label: 'Status',
+                    render: (connection) => (
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        {getStatusIcon(connection.status)}
+                        <Chip
+                          label={connection.status}
+                          size="small"
+                          color={getStatusColor(connection.status)}
+                          sx={{ height: 20, fontSize: '0.7rem' }}
+                        />
+                      </Stack>
+                    ),
+                  },
+                  {
+                    id: 'host',
+                    label: 'Host',
+                    render: (connection) => (
+                      <Box>
+                        <Typography variant="body2" fontWeight={500}>
+                          {connection.host}
+                        </Typography>
+                        {connection.error_message && (
+                          <Typography
+                            variant="caption"
+                            color="error"
+                            sx={{ display: 'block', mt: 0.5 }}
+                          >
+                            {connection.error_message.substring(0, 50)}...
                           </Typography>
-                          {connection.error_message && (
-                            <Typography
-                              variant="caption"
-                              color="error"
-                              sx={{ display: 'block', mt: 0.5 }}
-                            >
-                              {connection.error_message.substring(0, 50)}...
-                            </Typography>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">
-                            {connection.username}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">{connection.port}</Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="caption" color="text.secondary">
-                            {formatDate(connection.last_test)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right">
-                          <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                            <Tooltip title="Edit connection">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleEditConnection(connection)}
-                                color="primary"
-                              >
-                                <Edit size={16} />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Test connection">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleTestConnection(connection)}
-                                disabled={testConnectionMutation.isLoading}
-                              >
-                                <RefreshCw size={16} />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Delete connection">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleDeleteConnection(connection)}
-                                color="error"
-                              >
-                                <Trash2 size={16} />
-                              </IconButton>
-                            </Tooltip>
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                        )}
+                      </Box>
+                    ),
+                  },
+                  {
+                    id: 'username',
+                    label: 'Username',
+                    render: (connection) => (
+                      <Typography variant="body2">{connection.username}</Typography>
+                    ),
+                  },
+                  {
+                    id: 'port',
+                    label: 'Port',
+                    render: (connection) => (
+                      <Typography variant="body2">{connection.port}</Typography>
+                    ),
+                  },
+                  {
+                    id: 'last_test',
+                    label: 'Last Test',
+                    render: (connection) => (
+                      <Typography variant="caption" color="text.secondary">
+                        {formatDate(connection.last_test)}
+                      </Typography>
+                    ),
+                  },
+                ]}
+                actions={[
+                  {
+                    icon: <Edit size={16} />,
+                    label: 'Edit connection',
+                    onClick: handleEditConnection,
+                    color: 'primary',
+                    tooltip: 'Edit connection',
+                  },
+                  {
+                    icon: <RefreshCw size={16} />,
+                    label: 'Test connection',
+                    onClick: handleTestConnection,
+                    tooltip: 'Test connection',
+                    disabled: () => testConnectionMutation.isLoading,
+                  },
+                  {
+                    icon: <Trash2 size={16} />,
+                    label: 'Delete connection',
+                    onClick: handleDeleteConnection,
+                    color: 'error',
+                    tooltip: 'Delete connection',
+                  },
+                ]}
+                getRowKey={(connection) => connection.id}
+                variant="outlined"
+                enableHover={true}
+              />
             )}
           </CardContent>
         </Card>

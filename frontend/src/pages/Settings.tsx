@@ -14,13 +14,6 @@ import {
   DialogActions,
   Tabs,
   Tab,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  IconButton,
   Chip,
   FormControlLabel,
   Checkbox,
@@ -39,6 +32,7 @@ import { toast } from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
 import NotificationsTab from '../components/NotificationsTab'
 import { formatDateShort } from '../utils/dateUtils'
+import DataTable, { Column, ActionButton } from '../components/DataTable'
 
 interface UserType {
   id: number
@@ -203,6 +197,89 @@ const Settings: React.FC = () => {
     })
   }
 
+  // Column definitions for Users table
+  const userColumns: Column<UserType>[] = [
+    {
+      id: 'user',
+      label: 'User',
+      render: (user) => (
+        <Box>
+          <Typography variant="body2" fontWeight={500}>
+            {user.username}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {user.email}
+          </Typography>
+        </Box>
+      ),
+    },
+    {
+      id: 'status',
+      label: 'Status',
+      render: (user) => (
+        <Chip
+          label={user.is_active ? 'Active' : 'Inactive'}
+          color={user.is_active ? 'success' : 'error'}
+          size="small"
+        />
+      ),
+    },
+    {
+      id: 'role',
+      label: 'Role',
+      render: (user) => (
+        <Chip
+          label={user.is_admin ? 'Admin' : 'User'}
+          color={user.is_admin ? 'secondary' : 'default'}
+          size="small"
+        />
+      ),
+    },
+    {
+      id: 'created_at',
+      label: 'Created',
+      render: (user) => (
+        <Typography variant="body2">
+          {formatDateShort(user.created_at)}
+        </Typography>
+      ),
+    },
+    {
+      id: 'last_login',
+      label: 'Last Login',
+      render: (user) => (
+        <Typography variant="body2" color="text.secondary">
+          {formatDateShort(user.last_login)}
+        </Typography>
+      ),
+    },
+  ]
+
+  // Action buttons for Users table
+  const userActions: ActionButton<UserType>[] = [
+    {
+      icon: <Edit size={16} />,
+      label: 'Edit User',
+      onClick: openEditUser,
+      color: 'primary',
+      tooltip: 'Edit User',
+    },
+    {
+      icon: <Key size={16} />,
+      label: 'Reset Password',
+      onClick: (user) => openPasswordModal(user.id),
+      color: 'warning',
+      tooltip: 'Reset Password',
+    },
+    {
+      icon: <Trash2 size={16} />,
+      label: 'Delete User',
+      onClick: setDeleteConfirmUser,
+      color: 'error',
+      tooltip: 'Delete User',
+    },
+  ]
+
   return (
     <Box>
       {/* Header */}
@@ -346,92 +423,19 @@ const Settings: React.FC = () => {
             </Button>
           </Box>
 
-          {loadingUsers ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
-              <CircularProgress size={48} />
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                Loading users...
-              </Typography>
-            </Box>
-          ) : (
-            <Card>
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>User</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell>Role</TableCell>
-                      <TableCell>Created</TableCell>
-                      <TableCell>Last Login</TableCell>
-                      <TableCell align="right">Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {usersData?.data?.users?.map((user: UserType) => (
-                      <TableRow key={user.id}>
-                        <TableCell>
-                          <Box>
-                            <Typography variant="body2" fontWeight={500}>
-                              {user.username}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {user.email}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={user.is_active ? 'Active' : 'Inactive'}
-                            color={user.is_active ? 'success' : 'error'}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={user.is_admin ? 'Admin' : 'User'}
-                            color={user.is_admin ? 'secondary' : 'default'}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">
-                            {formatDateShort(user.created_at)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" color="text.secondary">
-                            {formatDateShort(user.last_login)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right">
-                          <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                            <IconButton size="small" onClick={() => openEditUser(user)} color="primary">
-                              <Edit size={16} />
-                            </IconButton>
-                            <IconButton
-                              size="small"
-                              onClick={() => openPasswordModal(user.id)}
-                              color="warning"
-                            >
-                              <Key size={16} />
-                            </IconButton>
-                            <IconButton
-                              size="small"
-                              onClick={() => setDeleteConfirmUser(user)}
-                              color="error"
-                            >
-                              <Trash2 size={16} />
-                            </IconButton>
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Card>
-          )}
+          <DataTable
+            data={usersData?.data?.users || []}
+            columns={userColumns}
+            actions={userActions}
+            getRowKey={(user) => user.id}
+            loading={loadingUsers}
+            emptyState={{
+              icon: <Users size={48} />,
+              title: 'No users found',
+              description: 'Create your first user to get started',
+            }}
+            variant="outlined"
+          />
         </Box>
       )}
 
