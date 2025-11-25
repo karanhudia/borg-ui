@@ -143,26 +143,33 @@ For remote access, use VPN instead of exposing to internet:
 
 ### Restrict Volume Mounts
 
-**Default (too permissive for production):**
+**⚠️ Critical Security Practice**
+
+**Never mount the entire filesystem in production:**
 ```yaml
 volumes:
-  - /:/local:rw  # Access to entire filesystem
+  # ❌ DANGEROUS: Full filesystem access
+  - /:/local:rw  # Development/testing ONLY
 ```
 
-**Recommended (principle of least privilege):**
+**✅ Recommended (principle of least privilege):**
 ```yaml
 volumes:
-  # Backup sources (read-only)
-  - /home/user/documents:/sources/documents:ro
-  - /home/user/photos:/sources/photos:ro
-
-  # Backup destination (read-write)
-  - /mnt/backups:/backups:rw
-
-  # Application data
+  # Application data (required)
   - borg_data:/data
   - borg_cache:/home/borg/.cache/borg
+
+  # Backup sources - mount only what you need
+  - /home/username:/local:ro              # Home directory (read-only)
+  - /var/www:/local/www:ro                # Website files (read-only)
+  - /mnt/backups:/local/backup:rw         # Backup destination (read-write)
 ```
+
+**Why this matters:**
+- **Reduces attack surface** - Container can only access specified directories
+- **Prevents data leakage** - Accidental exposure is limited to mounted paths
+- **Audit trail** - Clear documentation of what's accessible
+- **Defense in depth** - If container is compromised, damage is contained
 
 ### Set Appropriate Permissions
 
@@ -181,14 +188,23 @@ This prevents:
 
 ### Read-Only Mounts for Sources
 
-Always mount backup sources as read-only:
+**Always mount backup sources as read-only when possible:**
 
 ```yaml
 volumes:
-  - /important/data:/sources/data:ro  # :ro = read-only
+  # ✅ Read-only for backup-only directories
+  - /var/www:/local/www:ro            # Can't be modified
+  - /home/user/documents:/local:ro    # Protected from writes
+
+  # ⚠️ Read-write only when needed for restores
+  - /mnt/backups:/local/backup:rw     # Backup storage location
 ```
 
-This prevents accidental modification or deletion during backups.
+**Benefits:**
+- Prevents accidental modification during backup operations
+- Protects against ransomware that might target backup source
+- Makes it clear which directories are backup sources vs. destinations
+- Additional layer of protection if backup script has bugs
 
 ---
 
