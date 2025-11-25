@@ -1,7 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from 'react-query'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
 import { ThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
@@ -18,7 +18,7 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       // SWR caching strategy: data stays fresh for 30s, cached for 5min
       staleTime: 30 * 1000, // 30 seconds - data considered fresh
-      cacheTime: 5 * 60 * 1000, // 5 minutes - data kept in cache
+      gcTime: 5 * 60 * 1000, // 5 minutes - data kept in cache (formerly cacheTime)
     },
   },
 })

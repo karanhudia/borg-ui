@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from 'react-query'
+import React, { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
 import {
   Box,
@@ -127,21 +127,23 @@ export default function Repositories() {
   })
 
   // Get repository info using borg info command
-  const { data: repositoryInfo, isLoading: loadingInfo } = useQuery({
+  const { data: repositoryInfo, isLoading: loadingInfo, error: infoError } = useQuery<any>({
     queryKey: ['repository-info', viewingInfoRepository?.id],
     queryFn: () => repositoriesAPI.getRepositoryInfo(viewingInfoRepository!.id),
     enabled: !!viewingInfoRepository,
-    keepPreviousData: true, // Keep showing data during dialog close animation
-    onError: (error: any) => {
-      if (error?.response?.status === 423) {
-        setLockError({
-          repositoryId: viewingInfoRepository!.id,
-          repositoryName: viewingInfoRepository!.name
-        })
-      }
-    },
+    placeholderData: (previousData: any) => previousData, // Keep showing data during dialog close animation (was keepPreviousData in v3)
     retry: false
   })
+
+  // Handle repository info error
+  React.useEffect(() => {
+    if (infoError && (infoError as any)?.response?.status === 423 && viewingInfoRepository) {
+      setLockError({
+        repositoryId: viewingInfoRepository.id,
+        repositoryName: viewingInfoRepository.name
+      })
+    }
+  }, [infoError, viewingInfoRepository])
 
   // Get default configuration to show source directories
   // REMOVED: Config dependency no longer needed
@@ -794,7 +796,7 @@ export default function Repositories() {
         repositoryName={checkingRepository?.name || ''}
         onConfirm={handleConfirmCheck}
         onCancel={() => setCheckingRepository(null)}
-        isLoading={checkRepositoryMutation.isLoading}
+        isLoading={checkRepositoryMutation.isPending}
       />
 
       <CompactWarningDialog
@@ -802,7 +804,7 @@ export default function Repositories() {
         repositoryName={compactingRepository?.name || ''}
         onConfirm={handleConfirmCompact}
         onCancel={() => setCompactingRepository(null)}
-        isLoading={compactRepositoryMutation.isLoading}
+        isLoading={compactRepositoryMutation.isPending}
       />
 
       {/* Create Repository Dialog */}
@@ -1378,13 +1380,13 @@ export default function Repositories() {
               type="submit"
               variant="contained"
               disabled={
-                (repositoryModalMode === 'create' ? createRepositoryMutation.isLoading : importRepositoryMutation.isLoading) ||
+                (repositoryModalMode === 'create' ? createRepositoryMutation.isPending : importRepositoryMutation.isPending) ||
                 (repositoryForm.mode === 'full' && repositoryForm.source_directories.length === 0)
               }
             >
               {repositoryModalMode === 'create'
-                ? (createRepositoryMutation.isLoading ? 'Creating...' : 'Create')
-                : (importRepositoryMutation.isLoading ? 'Importing...' : 'Import')}
+                ? (createRepositoryMutation.isPending ? 'Creating...' : 'Create')
+                : (importRepositoryMutation.isPending ? 'Importing...' : 'Import')}
             </Button>
           </DialogActions>
         </form>
@@ -1765,8 +1767,8 @@ export default function Repositories() {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setEditingRepository(null)}>Cancel</Button>
-            <Button type="submit" variant="contained" disabled={updateRepositoryMutation.isLoading}>
-              {updateRepositoryMutation.isLoading ? 'Updating...' : 'Update'}
+            <Button type="submit" variant="contained" disabled={updateRepositoryMutation.isPending}>
+              {updateRepositoryMutation.isPending ? 'Updating...' : 'Update'}
             </Button>
           </DialogActions>
         </form>
@@ -2136,7 +2138,7 @@ export default function Repositories() {
           <Button
             onClick={handlePruneDryRun}
             variant="outlined"
-            disabled={pruneRepositoryMutation.isLoading}
+            disabled={pruneRepositoryMutation.isPending}
             startIcon={<Info />}
           >
             Dry Run (Preview)
@@ -2145,10 +2147,10 @@ export default function Repositories() {
             onClick={handleConfirmPrune}
             variant="contained"
             color="error"
-            disabled={pruneRepositoryMutation.isLoading}
-            startIcon={pruneRepositoryMutation.isLoading ? <Delete className="animate-spin" /> : <Delete />}
+            disabled={pruneRepositoryMutation.isPending}
+            startIcon={pruneRepositoryMutation.isPending ? <Delete className="animate-spin" /> : <Delete />}
           >
-            {pruneRepositoryMutation.isLoading ? 'Pruning...' : 'Prune Archives'}
+            {pruneRepositoryMutation.isPending ? 'Pruning...' : 'Prune Archives'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2330,7 +2332,7 @@ export default function Repositories() {
           repositoryId={lockError.repositoryId}
           repositoryName={lockError.repositoryName}
           onLockBroken={() => {
-            queryClient.invalidateQueries(['repository-info', lockError.repositoryId])
+            queryClient.invalidateQueries({ queryKey: ['repository-info', lockError.repositoryId] })
           }}
         />
       )}

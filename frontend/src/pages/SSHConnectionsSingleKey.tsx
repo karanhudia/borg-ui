@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from 'react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { sshKeysAPI } from '../services/api'
 import { formatDate } from '../utils/dateUtils'
 import {
@@ -84,17 +84,17 @@ export default function SSHConnectionsSingleKey() {
   })
 
   // Queries
-  const { data: systemKeyData, isLoading: keyLoading } = useQuery(
-    'system-ssh-key',
-    sshKeysAPI.getSystemKey,
-    { refetchInterval: 30000 }
-  )
+  const { data: systemKeyData, isLoading: keyLoading } = useQuery({
+    queryKey: ['system-ssh-key'],
+    queryFn: sshKeysAPI.getSystemKey,
+    refetchInterval: 30000
+  })
 
-  const { data: connectionsData, isLoading: connectionsLoading } = useQuery(
-    'ssh-connections',
-    sshKeysAPI.getSSHConnections,
-    { refetchInterval: 30000 }
-  )
+  const { data: connectionsData, isLoading: connectionsLoading } = useQuery({
+    queryKey: ['ssh-connections'],
+    queryFn: sshKeysAPI.getSSHConnections,
+    refetchInterval: 30000
+  })
 
   const systemKey = systemKeyData?.data?.ssh_key
   const keyExists = systemKeyData?.data?.exists
@@ -108,85 +108,75 @@ export default function SSHConnectionsSingleKey() {
   }
 
   // Mutations
-  const generateKeyMutation = useMutation(
-    (data: { name: string; key_type: string; description?: string }) =>
+  const generateKeyMutation = useMutation({
+    mutationFn: (data: { name: string; key_type: string; description?: string }) =>
       sshKeysAPI.generateSSHKey(data),
-    {
-      onSuccess: () => {
-        toast.success('System SSH key generated successfully!')
-        queryClient.invalidateQueries('system-ssh-key')
-        setGenerateDialogOpen(false)
-      },
-      onError: (error: any) => {
-        toast.error(error.response?.data?.detail || 'Failed to generate SSH key')
-      },
-    }
-  )
+    onSuccess: () => {
+      toast.success('System SSH key generated successfully!')
+      queryClient.invalidateQueries({ queryKey: ['system-ssh-key'] })
+      setGenerateDialogOpen(false)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to generate SSH key')
+    },
+  })
 
-  const deployKeyMutation = useMutation(
-    (data: { keyId: number; connectionData: any }) =>
+  const deployKeyMutation = useMutation({
+    mutationFn: (data: { keyId: number; connectionData: any }) =>
       sshKeysAPI.deploySSHKey(data.keyId, data.connectionData),
-    {
-      onSuccess: () => {
-        toast.success('SSH key deployed successfully!')
-        queryClient.invalidateQueries('ssh-connections')
-        setDeployDialogOpen(false)
-        setConnectionForm({ host: '', username: '', port: 22, password: '' })
-      },
-      onError: (error: any) => {
-        toast.error(error.response?.data?.detail || 'Failed to deploy SSH key')
-      },
-    }
-  )
+    onSuccess: () => {
+      toast.success('SSH key deployed successfully!')
+      queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
+      setDeployDialogOpen(false)
+      setConnectionForm({ host: '', username: '', port: 22, password: '' })
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to deploy SSH key')
+    },
+  })
 
-  const testConnectionMutation = useMutation(
-    (data: { keyId: number; connectionData: any }) =>
+  const testConnectionMutation = useMutation({
+    mutationFn: (data: { keyId: number; connectionData: any }) =>
       sshKeysAPI.testSSHConnection(data.keyId, data.connectionData),
-    {
-      onSuccess: (response) => {
-        if (response.data.success) {
-          toast.success('Connection test successful!')
-        } else {
-          toast.error('Connection test failed')
-        }
-        queryClient.invalidateQueries('ssh-connections')
-      },
-      onError: (error: any) => {
-        toast.error(error.response?.data?.detail || 'Connection test failed')
-      },
-    }
-  )
+    onSuccess: (response) => {
+      if (response.data.success) {
+        toast.success('Connection test successful!')
+      } else {
+        toast.error('Connection test failed')
+      }
+      queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Connection test failed')
+    },
+  })
 
-  const updateConnectionMutation = useMutation(
-    (data: { connectionId: number; connectionData: any }) =>
+  const updateConnectionMutation = useMutation({
+    mutationFn: (data: { connectionId: number; connectionData: any }) =>
       sshKeysAPI.updateSSHConnection(data.connectionId, data.connectionData),
-    {
-      onSuccess: () => {
-        toast.success('Connection updated successfully!')
-        queryClient.invalidateQueries('ssh-connections')
-        setEditConnectionDialogOpen(false)
-        setSelectedConnection(null)
-      },
-      onError: (error: any) => {
-        toast.error(error.response?.data?.detail || 'Failed to update connection')
-      },
-    }
-  )
+    onSuccess: () => {
+      toast.success('Connection updated successfully!')
+      queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
+      setEditConnectionDialogOpen(false)
+      setSelectedConnection(null)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to update connection')
+    },
+  })
 
-  const deleteConnectionMutation = useMutation(
-    (connectionId: number) => sshKeysAPI.deleteSSHConnection(connectionId),
-    {
-      onSuccess: () => {
-        toast.success('Connection deleted successfully!')
-        queryClient.invalidateQueries('ssh-connections')
-        setDeleteConnectionDialogOpen(false)
-        setSelectedConnection(null)
-      },
-      onError: (error: any) => {
-        toast.error(error.response?.data?.detail || 'Failed to delete connection')
-      },
-    }
-  )
+  const deleteConnectionMutation = useMutation({
+    mutationFn: (connectionId: number) => sshKeysAPI.deleteSSHConnection(connectionId),
+    onSuccess: () => {
+      toast.success('Connection deleted successfully!')
+      queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
+      setDeleteConnectionDialogOpen(false)
+      setSelectedConnection(null)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to delete connection')
+    },
+  })
 
   // Handlers
   const handleGenerateKey = () => {
@@ -576,7 +566,7 @@ export default function SSHConnectionsSingleKey() {
               <Tooltip title="Refresh connections">
                 <IconButton
                   size="small"
-                  onClick={() => queryClient.invalidateQueries('ssh-connections')}
+                  onClick={() => queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })}
                 >
                   <RefreshCw size={18} />
                 </IconButton>
@@ -664,7 +654,7 @@ export default function SSHConnectionsSingleKey() {
                     label: 'Test connection',
                     onClick: handleTestConnection,
                     tooltip: 'Test connection',
-                    disabled: () => testConnectionMutation.isLoading,
+                    disabled: () => testConnectionMutation.isPending,
                   },
                   {
                     icon: <Trash2 size={16} />,
@@ -717,9 +707,9 @@ export default function SSHConnectionsSingleKey() {
           <Button
             variant="contained"
             onClick={handleGenerateKey}
-            disabled={generateKeyMutation.isLoading}
+            disabled={generateKeyMutation.isPending}
           >
-            {generateKeyMutation.isLoading ? 'Generating...' : 'Generate Key'}
+            {generateKeyMutation.isPending ? 'Generating...' : 'Generate Key'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -800,13 +790,13 @@ export default function SSHConnectionsSingleKey() {
             variant="contained"
             onClick={handleDeployKey}
             disabled={
-              deployKeyMutation.isLoading ||
+              deployKeyMutation.isPending ||
               !connectionForm.host ||
               !connectionForm.username ||
               !connectionForm.password
             }
           >
-            {deployKeyMutation.isLoading ? 'Deploying...' : 'Deploy Key'}
+            {deployKeyMutation.isPending ? 'Deploying...' : 'Deploy Key'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -887,12 +877,12 @@ export default function SSHConnectionsSingleKey() {
             variant="contained"
             onClick={handleTestManualConnection}
             disabled={
-              testConnectionMutation.isLoading ||
+              testConnectionMutation.isPending ||
               !testConnectionForm.host ||
               !testConnectionForm.username
             }
           >
-            {testConnectionMutation.isLoading ? 'Testing...' : 'Test & Add Connection'}
+            {testConnectionMutation.isPending ? 'Testing...' : 'Test & Add Connection'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -967,12 +957,12 @@ export default function SSHConnectionsSingleKey() {
             variant="contained"
             onClick={handleUpdateConnection}
             disabled={
-              updateConnectionMutation.isLoading ||
+              updateConnectionMutation.isPending ||
               !editConnectionForm.host ||
               !editConnectionForm.username
             }
           >
-            {updateConnectionMutation.isLoading ? 'Updating...' : 'Update Connection'}
+            {updateConnectionMutation.isPending ? 'Updating...' : 'Update Connection'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1019,9 +1009,9 @@ export default function SSHConnectionsSingleKey() {
             variant="contained"
             color="error"
             onClick={confirmDeleteConnection}
-            disabled={deleteConnectionMutation.isLoading}
+            disabled={deleteConnectionMutation.isPending}
           >
-            {deleteConnectionMutation.isLoading ? 'Deleting...' : 'Delete'}
+            {deleteConnectionMutation.isPending ? 'Deleting...' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>
