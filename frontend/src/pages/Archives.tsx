@@ -565,7 +565,7 @@ const Archives: React.FC = () => {
                                 },
                               }}
                             >
-                              <Stack direction="row" spacing={1.5} alignItems="center" sx={{ color: theme.palette.mode === 'dark' ? 'text.primary' : '#4A90E2' }}>
+                              <Stack direction="row" spacing={1.5} alignItems="center" sx={{ color: 'text.primary' }}>
                                 <Folder size={20} />
                                 <Typography variant="body2" fontWeight={500}>
                                   {folder.name}
@@ -591,7 +591,7 @@ const Archives: React.FC = () => {
                                 },
                               }}
                             >
-                              <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flex: 1, minWidth: 0, color: theme.palette.mode === 'dark' ? 'text.primary' : 'text.secondary' }}>
+                              <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flex: 1, minWidth: 0, color: 'text.primary' }}>
                                 <FolderOpen size={20} />
                                 <Typography
                                   variant="body2"

@@ -450,11 +450,11 @@ const Schedule: React.FC = () => {
       width: '5%',
       render: (job) => (
         <Tooltip title={job.enabled ? 'Enabled' : 'Disabled'} arrow>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', color: 'text.disabled' }}>
             {job.enabled ? (
               <CheckCircle size={18} color="#2e7d32" />
             ) : (
-              <XCircle size={18} color="rgba(0,0,0,0.3)" />
+              <XCircle size={18} />
             )}
           </Box>
         </Tooltip>
