@@ -359,7 +359,7 @@ export default function FileExplorerDialog({
                           {item.is_borg_repo ? (
                             <Archive size={18} color="#ff6b6b" />
                           ) : item.is_directory ? (
-                            <Folder size={18} color='text.primary' />
+                            <Folder size={18} color="text.primary" />
                           ) : (
                             <File size={18} color="#999" />
                           )}
