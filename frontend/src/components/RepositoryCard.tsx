@@ -56,7 +56,7 @@ export default function RepositoryCard({
   // Use maintenance jobs hook - always poll to handle page refreshes
   const { hasRunningJobs, checkJob, compactJob } = useMaintenanceJobs(
     repository.id,
-    true  // Always enabled to handle page refreshes while jobs are running
+    true // Always enabled to handle page refreshes while jobs are running
   )
 
   // Determine if maintenance is running
@@ -111,7 +111,9 @@ export default function RepositoryCard({
       }}
     >
       <CardContent>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+        <Box
+          sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}
+        >
           <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
               <Typography variant="h6" fontWeight={600}>
@@ -126,7 +128,11 @@ export default function RepositoryCard({
                 />
               )}
             </Box>
-            <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}
+            >
               {repository.path}
             </Typography>
           </Box>
@@ -160,8 +166,15 @@ export default function RepositoryCard({
             <Typography variant="caption" color="text.secondary" display="block">
               Last Backup
             </Typography>
-            <Tooltip title={repository.last_backup ? formatDateTimeFull(repository.last_backup) : 'Never'} arrow>
-              <Typography variant="body2" fontWeight={500} sx={{ cursor: repository.last_backup ? 'help' : 'default' }}>
+            <Tooltip
+              title={repository.last_backup ? formatDateTimeFull(repository.last_backup) : 'Never'}
+              arrow
+            >
+              <Typography
+                variant="body2"
+                fontWeight={500}
+                sx={{ cursor: repository.last_backup ? 'help' : 'default' }}
+              >
                 {repository.last_backup ? formatDateShort(repository.last_backup) : 'Never'}
               </Typography>
             </Tooltip>
@@ -170,8 +183,15 @@ export default function RepositoryCard({
             <Typography variant="caption" color="text.secondary" display="block">
               Last Check
             </Typography>
-            <Tooltip title={repository.last_check ? formatDateTimeFull(repository.last_check) : 'Never'} arrow>
-              <Typography variant="body2" fontWeight={500} sx={{ cursor: repository.last_check ? 'help' : 'default' }}>
+            <Tooltip
+              title={repository.last_check ? formatDateTimeFull(repository.last_check) : 'Never'}
+              arrow
+            >
+              <Typography
+                variant="body2"
+                fontWeight={500}
+                sx={{ cursor: repository.last_check ? 'help' : 'default' }}
+              >
                 {repository.last_check ? formatDateShort(repository.last_check) : 'Never'}
               </Typography>
             </Tooltip>
@@ -180,8 +200,17 @@ export default function RepositoryCard({
             <Typography variant="caption" color="text.secondary" display="block">
               Last Compact
             </Typography>
-            <Tooltip title={repository.last_compact ? formatDateTimeFull(repository.last_compact) : 'Never'} arrow>
-              <Typography variant="body2" fontWeight={500} sx={{ cursor: repository.last_compact ? 'help' : 'default' }}>
+            <Tooltip
+              title={
+                repository.last_compact ? formatDateTimeFull(repository.last_compact) : 'Never'
+              }
+              arrow
+            >
+              <Typography
+                variant="body2"
+                fontWeight={500}
+                sx={{ cursor: repository.last_compact ? 'help' : 'default' }}
+              >
                 {repository.last_compact ? formatDateShort(repository.last_compact) : 'Never'}
               </Typography>
             </Tooltip>
@@ -209,7 +238,8 @@ export default function RepositoryCard({
                 Source Paths
               </Typography>
               <Typography variant="body2" fontWeight={500}>
-                {repository.source_directories.length} {repository.source_directories.length === 1 ? 'path' : 'paths'}
+                {repository.source_directories.length}{' '}
+                {repository.source_directories.length === 1 ? 'path' : 'paths'}
               </Typography>
             </Box>
           )}
@@ -282,7 +312,11 @@ export default function RepositoryCard({
                   </Typography>
                 )}
                 {elapsedTime && (
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: 'block', mt: 0.5 }}
+                  >
                     {elapsedTime}
                   </Typography>
                 )}

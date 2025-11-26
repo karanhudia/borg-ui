@@ -113,9 +113,7 @@ export default function DataTable<T>({
             textAlign: 'center',
           }}
         >
-          <Box sx={{ mb: 2, color: 'text.secondary', opacity: 0.6 }}>
-            {emptyState.icon}
-          </Box>
+          <Box sx={{ mb: 2, color: 'text.secondary', opacity: 0.6 }}>{emptyState.icon}</Box>
           <Typography variant="h6" fontWeight={600} gutterBottom>
             {emptyState.title}
           </Typography>
@@ -182,9 +180,10 @@ export default function DataTable<T>({
                     bgcolor: 'action.hover',
                   },
                 }),
-                ...(enablePointer && onRowClick && {
-                  cursor: 'pointer',
-                }),
+                ...(enablePointer &&
+                  onRowClick && {
+                    cursor: 'pointer',
+                  }),
                 '&:last-child td': {
                   borderBottom: 0,
                 },
@@ -211,9 +210,10 @@ export default function DataTable<T>({
                       if (!shouldShow) return null
 
                       const isDisabled = action.disabled ? action.disabled(row) : false
-                      const tooltipText = typeof action.tooltip === 'function'
-                        ? action.tooltip(row)
-                        : action.tooltip || action.label
+                      const tooltipText =
+                        typeof action.tooltip === 'function'
+                          ? action.tooltip(row)
+                          : action.tooltip || action.label
 
                       return (
                         <Tooltip key={idx} title={tooltipText} arrow>

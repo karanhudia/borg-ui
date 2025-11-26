@@ -39,7 +39,12 @@ import {
 } from 'lucide-react'
 import { backupAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
-import { formatDate, formatTimeRange, formatBytes as formatBytesUtil, formatDurationSeconds } from '../utils/dateUtils'
+import {
+  formatDate,
+  formatTimeRange,
+  formatBytes as formatBytesUtil,
+  formatDurationSeconds,
+} from '../utils/dateUtils'
 import LockErrorDialog from '../components/LockErrorDialog'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
 
@@ -55,7 +60,7 @@ interface BackupJob {
   total_size?: string
   processed_size?: string
   error_message?: string
-  has_logs?: boolean  // Indicates if logs are available for this job
+  has_logs?: boolean // Indicates if logs are available for this job
   progress_details?: {
     original_size: number
     compressed_size: number
@@ -71,7 +76,10 @@ interface BackupJob {
 
 const Backup: React.FC = () => {
   const [selectedRepository, setSelectedRepository] = useState<string>('')
-  const [lockError, setLockError] = useState<{ repositoryId: number, repositoryName: string } | null>(null)
+  const [lockError, setLockError] = useState<{
+    repositoryId: number
+    repositoryName: string
+  } | null>(null)
   const queryClient = useQueryClient()
 
   // Get backup status and history (manual backups only)
@@ -102,7 +110,7 @@ const Backup: React.FC = () => {
     },
     onError: (error: any) => {
       toast.error(`Failed to start backup: ${error.response?.data?.detail || error.message}`)
-    }
+    },
   })
 
   // Cancel backup mutation
@@ -114,7 +122,7 @@ const Backup: React.FC = () => {
     },
     onError: (error: any) => {
       toast.error(`Failed to cancel backup: ${error.response?.data?.detail || error.message}`)
-    }
+    },
   })
 
   // Handle start backup
@@ -179,30 +187,33 @@ const Backup: React.FC = () => {
     return size
   }
 
-
   // Generate borg create command preview
   const getBorgBackupCommand = () => {
     if (!selectedRepoData) return 'Select a repository to see the command'
 
     const archiveName = `{hostname}-{now}`
     const compression = selectedRepoData.compression || 'lz4'
-    const sourceDirs = selectedRepoData.source_directories && selectedRepoData.source_directories.length > 0
-      ? selectedRepoData.source_directories.join(' ')
-      : '/data'
+    const sourceDirs =
+      selectedRepoData.source_directories && selectedRepoData.source_directories.length > 0
+        ? selectedRepoData.source_directories.join(' ')
+        : '/data'
 
     // Build exclude patterns
     let excludeArgs = ''
     if (selectedRepoData.exclude_patterns && selectedRepoData.exclude_patterns.length > 0) {
-      excludeArgs = selectedRepoData.exclude_patterns
-        .map((pattern: string) => `--exclude '${pattern}'`)
-        .join(' ') + ' '
+      excludeArgs =
+        selectedRepoData.exclude_patterns
+          .map((pattern: string) => `--exclude '${pattern}'`)
+          .join(' ') + ' '
     }
 
     // Use repository path as-is (already contains full SSH URL for SSH repos)
     const repositoryPath = selectedRepoData.path
 
     // Add --remote-path flag if specified (path to borg binary on remote)
-    const remotePathFlag = selectedRepoData.remote_path ? `--remote-path ${selectedRepoData.remote_path} ` : ''
+    const remotePathFlag = selectedRepoData.remote_path
+      ? `--remote-path ${selectedRepoData.remote_path} `
+      : ''
 
     return `borg create ${remotePathFlag}--progress --stats --compression ${compression} ${excludeArgs}${repositoryPath}::${archiveName} ${sourceDirs}`
   }
@@ -213,7 +224,8 @@ const Backup: React.FC = () => {
     return repo?.name || path
   }
 
-  const runningJobs = backupStatus?.data?.jobs?.filter((job: BackupJob) => job.status === 'running') || []
+  const runningJobs =
+    backupStatus?.data?.jobs?.filter((job: BackupJob) => job.status === 'running') || []
   const recentJobs = backupStatus?.data?.jobs?.slice(0, 10) || []
 
   // Define columns for Recent Jobs table
@@ -251,7 +263,7 @@ const Backup: React.FC = () => {
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
-                  display: 'block'
+                  display: 'block',
                 }}
               >
                 {job.repository}
@@ -314,7 +326,11 @@ const Backup: React.FC = () => {
         const repo = repositoriesData?.data?.repositories?.find((r: any) => r.path === repoPath)
         if (!repo) return
 
-        if (window.confirm('Are you CERTAIN no backup is currently running on this repository? Breaking the lock while a backup is running can corrupt your repository!')) {
+        if (
+          window.confirm(
+            'Are you CERTAIN no backup is currently running on this repository? Breaking the lock while a backup is running can corrupt your repository!'
+          )
+        ) {
           try {
             await repositoriesAPI.breakLock(repo.id)
             toast.success('Lock removed successfully! You can now start a new backup.')
@@ -347,7 +363,9 @@ const Backup: React.FC = () => {
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <Box
+        sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}
+      >
         <Box>
           <Typography variant="h4" fontWeight={600} gutterBottom>
             Backup Operations
@@ -356,8 +374,7 @@ const Backup: React.FC = () => {
             Manage and monitor your backup jobs
           </Typography>
         </Box>
-        <Stack direction="row" spacing={2} alignItems="center">
-        </Stack>
+        <Stack direction="row" spacing={2} alignItems="center"></Stack>
       </Box>
 
       {/* Manual Backup Control */}
@@ -388,22 +405,41 @@ const Backup: React.FC = () => {
                 <MenuItem value="" disabled>
                   {loadingRepositories ? 'Loading repositories...' : 'Select a repository...'}
                 </MenuItem>
-                {repositoriesData?.data?.repositories?.filter((repo: any) => repo.mode !== 'observe').map((repo: any) => (
-                  <MenuItem key={repo.id} value={repo.path} disabled={repo.has_running_maintenance}>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Database size={16} />
-                      <Box>
-                        <Typography variant="body2" fontWeight={500}>
-                          {repo.name}
-                          {repo.has_running_maintenance && <Typography component="span" variant="caption" color="warning.main" sx={{ ml: 1 }}>(Maintenance Running)</Typography>}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
-                          {repo.path}
-                        </Typography>
-                      </Box>
-                    </Stack>
-                  </MenuItem>
-                ))}
+                {repositoriesData?.data?.repositories
+                  ?.filter((repo: any) => repo.mode !== 'observe')
+                  .map((repo: any) => (
+                    <MenuItem
+                      key={repo.id}
+                      value={repo.path}
+                      disabled={repo.has_running_maintenance}
+                    >
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Database size={16} />
+                        <Box>
+                          <Typography variant="body2" fontWeight={500}>
+                            {repo.name}
+                            {repo.has_running_maintenance && (
+                              <Typography
+                                component="span"
+                                variant="caption"
+                                color="warning.main"
+                                sx={{ ml: 1 }}
+                              >
+                                (Maintenance Running)
+                              </Typography>
+                            )}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ fontFamily: 'monospace' }}
+                          >
+                            {repo.path}
+                          </Typography>
+                        </Box>
+                      </Stack>
+                    </MenuItem>
+                  ))}
               </Select>
             </FormControl>
 
@@ -411,35 +447,44 @@ const Backup: React.FC = () => {
               variant="contained"
               color="success"
               size="large"
-              startIcon={startBackupMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <Play size={18} />}
+              startIcon={
+                startBackupMutation.isPending ? (
+                  <CircularProgress size={16} color="inherit" />
+                ) : (
+                  <Play size={18} />
+                )
+              }
               onClick={handleStartBackup}
               disabled={startBackupMutation.isPending || !selectedRepository}
               sx={{
                 minWidth: { xs: '100%', sm: 180 },
                 height: { xs: 48, sm: 56 },
-                fontWeight: 600
+                fontWeight: 600,
               }}
             >
               {startBackupMutation.isPending ? 'Starting...' : 'Start Backup'}
             </Button>
           </Stack>
 
-          {repositoriesData?.data?.repositories?.some((repo: any) => repo.mode === 'observe') && !loadingRepositories && (
-            <Alert severity="info" sx={{ mt: 2 }}>
-              <Typography variant="body2">
-                Some repositories are hidden because they are configured for observability only.
-                To create backups, switch them to full mode in Repository settings.
-              </Typography>
-            </Alert>
-          )}
+          {repositoriesData?.data?.repositories?.some((repo: any) => repo.mode === 'observe') &&
+            !loadingRepositories && (
+              <Alert severity="info" sx={{ mt: 2 }}>
+                <Typography variant="body2">
+                  Some repositories are hidden because they are configured for observability only.
+                  To create backups, switch them to full mode in Repository settings.
+                </Typography>
+              </Alert>
+            )}
 
-          {!selectedRepository && !loadingRepositories && repositoriesData?.data?.repositories?.length > 0 && (
-            <Alert severity="info" sx={{ mt: 2 }}>
-              <Typography variant="body2">
-                Choose a repository above to view backup details and start a backup operation
-              </Typography>
-            </Alert>
-          )}
+          {!selectedRepository &&
+            !loadingRepositories &&
+            repositoriesData?.data?.repositories?.length > 0 && (
+              <Alert severity="info" sx={{ mt: 2 }}>
+                <Typography variant="body2">
+                  Choose a repository above to view backup details and start a backup operation
+                </Typography>
+              </Alert>
+            )}
 
           {repositoriesData?.data?.repositories?.length === 0 && !loadingRepositories && (
             <Alert severity="warning" sx={{ mt: 2 }}>
@@ -474,17 +519,19 @@ const Backup: React.FC = () => {
               <Typography variant="subtitle2" gutterBottom>
                 Command Preview
               </Typography>
-              <Box sx={{
-                bgcolor: 'grey.900',
-                color: 'grey.100',
-                p: 1.5,
-                borderRadius: 1,
-                fontFamily: 'monospace',
-                fontSize: '0.875rem',
-                overflow: 'auto',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-all'
-              }}>
+              <Box
+                sx={{
+                  bgcolor: 'grey.900',
+                  color: 'grey.100',
+                  p: 1.5,
+                  borderRadius: 1,
+                  fontFamily: 'monospace',
+                  fontSize: '0.875rem',
+                  overflow: 'auto',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all',
+                }}
+              >
                 {getBorgBackupCommand()}
               </Box>
             </Alert>
@@ -492,13 +539,19 @@ const Backup: React.FC = () => {
             <Stack spacing={3}>
               {/* Source Directories */}
               <Box>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5, color: 'text.secondary' }}>
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
+                  sx={{ mb: 1.5, color: 'text.secondary' }}
+                >
                   <Folder size={18} />
                   <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
                     Source Directories
                   </Typography>
                 </Stack>
-                {selectedRepoData.source_directories && selectedRepoData.source_directories.length > 0 ? (
+                {selectedRepoData.source_directories &&
+                selectedRepoData.source_directories.length > 0 ? (
                   <Stack spacing={1} sx={{ pl: 3.5 }}>
                     {selectedRepoData.source_directories.map((dir: string, index: number) => (
                       <Chip
@@ -518,36 +571,47 @@ const Backup: React.FC = () => {
               </Box>
 
               {/* Exclude Patterns */}
-              {selectedRepoData.exclude_patterns && selectedRepoData.exclude_patterns.length > 0 && (
-                <>
-                  <Divider />
-                  <Box>
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5, color: 'text.secondary' }}>
-                      <AlertCircle size={18} />
-                      <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
-                        Exclude Patterns
-                      </Typography>
-                    </Stack>
-                    <Stack spacing={1} sx={{ pl: 3.5 }}>
-                      {selectedRepoData.exclude_patterns.map((pattern: string, index: number) => (
-                        <Chip
-                          key={index}
-                          label={pattern}
-                          size="small"
-                          color="warning"
-                          sx={{ justifyContent: 'flex-start', maxWidth: 'fit-content' }}
-                        />
-                      ))}
-                    </Stack>
-                  </Box>
-                </>
-              )}
+              {selectedRepoData.exclude_patterns &&
+                selectedRepoData.exclude_patterns.length > 0 && (
+                  <>
+                    <Divider />
+                    <Box>
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        alignItems="center"
+                        sx={{ mb: 1.5, color: 'text.secondary' }}
+                      >
+                        <AlertCircle size={18} />
+                        <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
+                          Exclude Patterns
+                        </Typography>
+                      </Stack>
+                      <Stack spacing={1} sx={{ pl: 3.5 }}>
+                        {selectedRepoData.exclude_patterns.map((pattern: string, index: number) => (
+                          <Chip
+                            key={index}
+                            label={pattern}
+                            size="small"
+                            color="warning"
+                            sx={{ justifyContent: 'flex-start', maxWidth: 'fit-content' }}
+                          />
+                        ))}
+                      </Stack>
+                    </Box>
+                  </>
+                )}
 
               <Divider />
 
               {/* Repository Info */}
               <Box>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5, color: 'text.secondary' }}>
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
+                  sx={{ mb: 1.5, color: 'text.secondary' }}
+                >
                   <Database size={18} />
                   <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
                     Backup Destination
@@ -557,21 +621,42 @@ const Backup: React.FC = () => {
                   <Table size="small">
                     <TableBody>
                       <TableRow>
-                        <TableCell sx={{ fontWeight: 500, color: 'text.secondary', width: '30%', border: 'none', py: 0.5 }}>
+                        <TableCell
+                          sx={{
+                            fontWeight: 500,
+                            color: 'text.secondary',
+                            width: '30%',
+                            border: 'none',
+                            py: 0.5,
+                          }}
+                        >
                           Repository Name
                         </TableCell>
-                        <TableCell sx={{ border: 'none', py: 0.5 }}>{selectedRepoData.name}</TableCell>
+                        <TableCell sx={{ border: 'none', py: 0.5 }}>
+                          {selectedRepoData.name}
+                        </TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}>
+                        <TableCell
+                          sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}
+                        >
                           Path
                         </TableCell>
-                        <TableCell sx={{ border: 'none', py: 0.5, fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                        <TableCell
+                          sx={{
+                            border: 'none',
+                            py: 0.5,
+                            fontFamily: 'monospace',
+                            fontSize: '0.875rem',
+                          }}
+                        >
                           {selectedRepoData.path}
                         </TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}>
+                        <TableCell
+                          sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}
+                        >
                           Encryption
                         </TableCell>
                         <TableCell sx={{ border: 'none', py: 0.5 }}>
@@ -579,7 +664,9 @@ const Backup: React.FC = () => {
                         </TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}>
+                        <TableCell
+                          sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}
+                        >
                           Compression
                         </TableCell>
                         <TableCell sx={{ border: 'none', py: 0.5 }}>
@@ -609,11 +696,14 @@ const Backup: React.FC = () => {
             <Stack spacing={3}>
               {runningJobs.map((job: BackupJob) => (
                 <Paper key={job.id} variant="outlined" sx={{ p: 3 }}>
-                  <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
+                  <Stack
+                    direction="row"
+                    justifyContent="space-between"
+                    alignItems="flex-start"
+                    sx={{ mb: 2 }}
+                  >
                     <Stack direction="row" spacing={2} alignItems="center">
-                      <Box sx={{ color: 'info.main' }}>
-                        {getStatusIcon(job.status)}
-                      </Box>
+                      <Box sx={{ color: 'info.main' }}>{getStatusIcon(job.status)}</Box>
                       <Box>
                         <Typography variant="body1" fontWeight={500}>
                           Backup Job {job.id}
@@ -637,7 +727,12 @@ const Backup: React.FC = () => {
 
                   {/* Backup Stage Indicator */}
                   <Box sx={{ mb: 2 }}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      alignItems="center"
+                      sx={{ mb: 1.5 }}
+                    >
                       <Stack direction="row" spacing={1} alignItems="center">
                         <Box
                           sx={{
@@ -672,25 +767,37 @@ const Backup: React.FC = () => {
                       <Typography variant="caption" fontWeight={500}>
                         Current File:
                       </Typography>
-                      <Typography variant="caption" sx={{ fontFamily: 'monospace', display: 'block', mt: 0.5, wordBreak: 'break-all' }}>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontFamily: 'monospace',
+                          display: 'block',
+                          mt: 0.5,
+                          wordBreak: 'break-all',
+                        }}
+                      >
                         {job.progress_details.current_file}
                       </Typography>
                     </Alert>
                   )}
 
                   {/* Job Details with Detailed Stats - Grid Layout to prevent overflow */}
-                  <Box sx={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                    gap: 2,
-                    width: '100%'
-                  }}>
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                      gap: 2,
+                      width: '100%',
+                    }}
+                  >
                     <Box>
                       <Typography variant="body2" color="text.secondary">
                         Files Processed:
                       </Typography>
                       <Typography variant="body2" fontWeight={500}>
-                        {job.progress_details?.nfiles?.toLocaleString() || job.processed_files?.toLocaleString() || '0'}
+                        {job.progress_details?.nfiles?.toLocaleString() ||
+                          job.processed_files?.toLocaleString() ||
+                          '0'}
                         {job.total_files && ` / ${job.total_files.toLocaleString()}`}
                       </Typography>
                     </Box>
@@ -699,7 +806,9 @@ const Backup: React.FC = () => {
                         Original Size:
                       </Typography>
                       <Typography variant="body2" fontWeight={500}>
-                        {job.progress_details?.original_size ? formatBytesUtil(job.progress_details.original_size) : formatFileSize(job.processed_size)}
+                        {job.progress_details?.original_size
+                          ? formatBytesUtil(job.progress_details.original_size)
+                          : formatFileSize(job.processed_size)}
                       </Typography>
                     </Box>
                     <Box>
@@ -707,7 +816,8 @@ const Backup: React.FC = () => {
                         Compressed:
                       </Typography>
                       <Typography variant="body2" fontWeight={500}>
-                        {job.progress_details?.compressed_size !== undefined && job.progress_details?.compressed_size !== null
+                        {job.progress_details?.compressed_size !== undefined &&
+                        job.progress_details?.compressed_size !== null
                           ? formatBytesUtil(job.progress_details.compressed_size)
                           : 'N/A'}
                       </Typography>
@@ -717,21 +827,23 @@ const Backup: React.FC = () => {
                         Deduplicated:
                       </Typography>
                       <Typography variant="body2" fontWeight={500} color="success.main">
-                        {job.progress_details?.deduplicated_size !== undefined && job.progress_details?.deduplicated_size !== null
+                        {job.progress_details?.deduplicated_size !== undefined &&
+                        job.progress_details?.deduplicated_size !== null
                           ? formatBytesUtil(job.progress_details.deduplicated_size)
                           : 'N/A'}
                       </Typography>
                     </Box>
-                    {job.progress_details?.total_expected_size && job.progress_details.total_expected_size > 0 && (
-                      <Box>
-                        <Typography variant="body2" color="text.secondary">
-                          Total Source Size:
-                        </Typography>
-                        <Typography variant="body2" fontWeight={500} color="info.main">
-                          {formatBytesUtil(job.progress_details.total_expected_size)}
-                        </Typography>
-                      </Box>
-                    )}
+                    {job.progress_details?.total_expected_size &&
+                      job.progress_details.total_expected_size > 0 && (
+                        <Box>
+                          <Typography variant="body2" color="text.secondary">
+                            Total Source Size:
+                          </Typography>
+                          <Typography variant="body2" fontWeight={500} color="info.main">
+                            {formatBytesUtil(job.progress_details.total_expected_size)}
+                          </Typography>
+                        </Box>
+                      )}
                     <Box>
                       <Typography variant="body2" color="text.secondary">
                         Speed:
@@ -742,13 +854,15 @@ const Backup: React.FC = () => {
                           : 'N/A'}
                       </Typography>
                     </Box>
-                    {((job.progress_details?.estimated_time_remaining ?? 0) > 0) && (
+                    {(job.progress_details?.estimated_time_remaining ?? 0) > 0 && (
                       <Box>
                         <Typography variant="body2" color="text.secondary">
                           ETA:
                         </Typography>
                         <Typography variant="body2" fontWeight={500} color="success.main">
-                          {formatDurationSeconds(job.progress_details?.estimated_time_remaining ?? 0)}
+                          {formatDurationSeconds(
+                            job.progress_details?.estimated_time_remaining ?? 0
+                          )}
                         </Typography>
                       </Box>
                     )}
@@ -763,7 +877,12 @@ const Backup: React.FC = () => {
       {/* Recent Jobs */}
       <Card>
         <CardContent>
-          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1, color: 'text.secondary' }}>
+          <Stack
+            direction="row"
+            spacing={1.5}
+            alignItems="center"
+            sx={{ mb: 1, color: 'text.secondary' }}
+          >
             <Clock size={20} />
             <Typography variant="h6" fontWeight={600}>
               Recent Jobs
@@ -783,7 +902,11 @@ const Backup: React.FC = () => {
             enablePointer={false}
             loading={loadingStatus}
             emptyState={{
-              icon: <Box sx={{ color: 'text.disabled' }}><Clock size={48} /></Box>,
+              icon: (
+                <Box sx={{ color: 'text.disabled' }}>
+                  <Clock size={48} />
+                </Box>
+              ),
               title: 'No backup jobs found',
             }}
           />
@@ -798,7 +921,9 @@ const Backup: React.FC = () => {
           repositoryId={lockError.repositoryId}
           repositoryName={lockError.repositoryName}
           onLockBroken={() => {
-            queryClient.invalidateQueries({ queryKey: ['repository-archives', lockError.repositoryId] })
+            queryClient.invalidateQueries({
+              queryKey: ['repository-archives', lockError.repositoryId],
+            })
             queryClient.invalidateQueries({ queryKey: ['repository-info', lockError.repositoryId] })
           }}
         />

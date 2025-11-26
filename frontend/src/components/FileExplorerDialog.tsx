@@ -22,14 +22,7 @@ import {
   Checkbox,
   useTheme,
 } from '@mui/material'
-import {
-  Folder,
-  File,
-  ChevronRight,
-  Home,
-  Search,
-  Archive,
-} from 'lucide-react'
+import { Folder, File, ChevronRight, Home, Search, Archive } from 'lucide-react'
 import api from '../services/api'
 
 interface FileSystemItem {
@@ -125,10 +118,8 @@ export default function FileExplorerDialog({
     if (selectMode === 'files' && item.is_directory) return
 
     if (multiSelect) {
-      setSelectedPaths(prev =>
-        prev.includes(item.path)
-          ? prev.filter(p => p !== item.path)
-          : [...prev, item.path]
+      setSelectedPaths((prev) =>
+        prev.includes(item.path) ? prev.filter((p) => p !== item.path) : [...prev, item.path]
       )
     } else {
       setSelectedPaths([item.path])
@@ -151,12 +142,10 @@ export default function FileExplorerDialog({
 
   const getBreadcrumbs = () => {
     const parts = currentPath.split('/').filter(Boolean)
-    const breadcrumbs: { label: string; path: string }[] = [
-      { label: 'Root', path: '/' },
-    ]
+    const breadcrumbs: { label: string; path: string }[] = [{ label: 'Root', path: '/' }]
 
     let accumulatedPath = ''
-    parts.forEach(part => {
+    parts.forEach((part) => {
       accumulatedPath += `/${part}`
       breadcrumbs.push({ label: part, path: accumulatedPath })
     })
@@ -176,15 +165,23 @@ export default function FileExplorerDialog({
     return `${size.toFixed(1)} ${units[unitIndex]}`
   }
 
-  const filteredItems = items.filter(item =>
+  const filteredItems = items.filter((item) =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { height: '75vh' } }}>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="md"
+      fullWidth
+      PaperProps={{ sx: { height: '75vh' } }}
+    >
       <DialogTitle sx={{ pb: 1, pt: 2 }}>
         <Box display="flex" alignItems="center" justifyContent="space-between">
-          <Typography variant="h6" fontWeight={600}>{title}</Typography>
+          <Typography variant="h6" fontWeight={600}>
+            {title}
+          </Typography>
           {connectionType === 'ssh' && sshConfig && (
             <Chip
               label={`${sshConfig.username}@${sshConfig.host}`}
@@ -198,7 +195,15 @@ export default function FileExplorerDialog({
 
       <DialogContent sx={{ p: 0 }}>
         {/* Breadcrumb Navigation */}
-        <Box sx={{ px: 2, py: 1, bgcolor: 'background.default', borderBottom: 1, borderColor: 'divider' }}>
+        <Box
+          sx={{
+            px: 2,
+            py: 1,
+            bgcolor: 'background.default',
+            borderBottom: 1,
+            borderColor: 'divider',
+          }}
+        >
           <Breadcrumbs
             separator={<ChevronRight size={12} />}
             maxItems={6}
@@ -219,7 +224,7 @@ export default function FileExplorerDialog({
                   fontWeight: index === getBreadcrumbs().length - 1 ? 600 : 400,
                   '&:hover': {
                     textDecoration: 'underline',
-                    color: 'primary.main'
+                    color: 'primary.main',
                   },
                 }}
               >
@@ -237,7 +242,7 @@ export default function FileExplorerDialog({
             size="small"
             placeholder="Search..."
             value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
+            onChange={(e) => setSearchTerm(e.target.value)}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -251,7 +256,7 @@ export default function FileExplorerDialog({
               },
               '& .MuiOutlinedInput-input': {
                 py: 0.75,
-              }
+              },
             }}
           />
         </Box>
@@ -267,7 +272,13 @@ export default function FileExplorerDialog({
 
         {/* Loading State */}
         {loading ? (
-          <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" py={4}>
+          <Box
+            display="flex"
+            flexDirection="column"
+            alignItems="center"
+            justifyContent="center"
+            py={4}
+          >
             <CircularProgress size={32} />
             <Typography variant="caption" color="text.secondary" mt={1.5}>
               Loading...
@@ -285,7 +296,14 @@ export default function FileExplorerDialog({
               }}
             >
               {filteredItems.length === 0 ? (
-                <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" py={4} sx={{ color: 'text.secondary' }}>
+                <Box
+                  display="flex"
+                  flexDirection="column"
+                  alignItems="center"
+                  justifyContent="center"
+                  py={4}
+                  sx={{ color: 'text.secondary' }}
+                >
                   <Folder size={36} />
                   <Typography variant="body2" color="text.secondary" mt={1.5}>
                     No items found
@@ -295,7 +313,7 @@ export default function FileExplorerDialog({
                   </Typography>
                 </Box>
               ) : (
-                filteredItems.map(item => {
+                filteredItems.map((item) => {
                   const isSelectable =
                     (selectMode === 'directories' && item.is_directory) ||
                     (selectMode === 'files' && !item.is_directory) ||
@@ -335,8 +353,8 @@ export default function FileExplorerDialog({
                             bgcolor: 'primary.50',
                             '&:hover': {
                               bgcolor: 'primary.100',
-                            }
-                          }
+                            },
+                          },
                         }}
                       >
                         <ListItemIcon sx={{ minWidth: 32 }}>
@@ -351,9 +369,7 @@ export default function FileExplorerDialog({
                         <ListItemText
                           primary={
                             <Box display="flex" alignItems="center" gap={0.75}>
-                              <Typography variant="body2">
-                                {item.name}
-                              </Typography>
+                              <Typography variant="body2">{item.name}</Typography>
                               {item.is_borg_repo && (
                                 <Chip
                                   label="Borg"
@@ -363,7 +379,11 @@ export default function FileExplorerDialog({
                                 />
                               )}
                               {!item.is_directory && item.size && (
-                                <Typography variant="caption" color="text.disabled" sx={{ ml: 'auto' }}>
+                                <Typography
+                                  variant="caption"
+                                  color="text.disabled"
+                                  sx={{ ml: 'auto' }}
+                                >
                                   {formatFileSize(item.size)}
                                 </Typography>
                               )}
@@ -379,7 +399,9 @@ export default function FileExplorerDialog({
 
             {/* Info Box */}
             {multiSelect && selectedPaths.length > 0 && (
-              <Box sx={{ px: 2, py: 1, bgcolor: 'primary.50', borderTop: 1, borderColor: 'divider' }}>
+              <Box
+                sx={{ px: 2, py: 1, bgcolor: 'primary.50', borderTop: 1, borderColor: 'divider' }}
+              >
                 <Typography variant="caption" color="primary.main" fontWeight={600}>
                   {selectedPaths.length} selected
                 </Typography>

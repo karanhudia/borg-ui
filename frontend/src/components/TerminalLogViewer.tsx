@@ -21,7 +21,7 @@ interface TerminalLogViewerProps {
 export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
   jobId,
   status,
-  onFetchLogs
+  onFetchLogs,
 }) => {
   const [logs, setLogs] = useState<LogLine[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -39,7 +39,7 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
         const result = await onFetchLogs(offset)
 
         if (result.lines.length > 0) {
-          setLogs(prev => [...prev, ...result.lines])
+          setLogs((prev) => [...prev, ...result.lines])
         }
       } catch (error) {
         console.error('Failed to fetch logs:', error)
@@ -76,14 +76,14 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
 
   // Copy logs to clipboard
   const handleCopyLogs = () => {
-    const logText = logs.map(log => log.content).join('\n')
+    const logText = logs.map((log) => log.content).join('\n')
     navigator.clipboard.writeText(logText)
     toast.success('Logs copied to clipboard')
   }
 
   // Download logs as file
   const handleDownloadLogs = () => {
-    const logText = logs.map(log => log.content).join('\n')
+    const logText = logs.map((log) => log.content).join('\n')
     const blob = new Blob([logText], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -164,7 +164,7 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
                   color: '#858585',
                   fontSize: '0.8rem',
                   mr: 2,
-                  userSelect: 'none'
+                  userSelect: 'none',
                 }}
               >
                 {log.line_number}

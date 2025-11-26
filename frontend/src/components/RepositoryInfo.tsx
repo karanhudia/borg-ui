@@ -25,14 +25,20 @@ interface RepositoryInfoProps {
   loading?: boolean
 }
 
-export default function RepositoryInfo({ repoInfo, archivesCount = 0, loading = false }: RepositoryInfoProps) {
+export default function RepositoryInfo({
+  repoInfo,
+  archivesCount = 0,
+  loading = false,
+}: RepositoryInfoProps) {
   const stats = repoInfo?.cache?.stats
 
   if (loading) {
     return (
       <Card>
         <CardContent>
-          <Typography variant="body2" color="text.secondary">Loading repository info...</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Loading repository info...
+          </Typography>
         </CardContent>
       </Card>
     )

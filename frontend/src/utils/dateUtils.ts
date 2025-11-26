@@ -14,10 +14,14 @@ export const formatDate = (dateString: string | null | undefined): string => {
     const getOrdinalSuffix = (d: number) => {
       if (d > 3 && d < 21) return 'th'
       switch (d % 10) {
-        case 1: return 'st'
-        case 2: return 'nd'
-        case 3: return 'rd'
-        default: return 'th'
+        case 1:
+          return 'st'
+        case 2:
+          return 'nd'
+        case 3:
+          return 'rd'
+        default:
+          return 'th'
       }
     }
 
@@ -27,7 +31,7 @@ export const formatDate = (dateString: string | null | undefined): string => {
       hour: 'numeric',
       minute: '2-digit',
       second: '2-digit',
-      hour12: true
+      hour12: true,
     })
 
     return `${day}${getOrdinalSuffix(day)} ${month} ${year}, ${time}`
@@ -83,10 +87,12 @@ export const formatDurationSeconds = (seconds: number | null | undefined): strin
     const parts: string[] = []
 
     if (duration.years) parts.push(`${duration.years} ${duration.years === 1 ? 'year' : 'years'}`)
-    if (duration.months) parts.push(`${duration.months} ${duration.months === 1 ? 'month' : 'months'}`)
+    if (duration.months)
+      parts.push(`${duration.months} ${duration.months === 1 ? 'month' : 'months'}`)
     if (duration.days) parts.push(`${duration.days} ${duration.days === 1 ? 'day' : 'days'}`)
     if (duration.hours) parts.push(`${duration.hours} ${duration.hours === 1 ? 'hour' : 'hours'}`)
-    if (duration.minutes) parts.push(`${duration.minutes} ${duration.minutes === 1 ? 'min' : 'min'}`)
+    if (duration.minutes)
+      parts.push(`${duration.minutes} ${duration.minutes === 1 ? 'min' : 'min'}`)
     if (duration.seconds && parts.length < 2) parts.push(`${duration.seconds} sec`)
 
     return parts.slice(0, 2).join(' ') || '0 sec'

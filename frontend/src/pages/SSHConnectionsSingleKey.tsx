@@ -90,13 +90,13 @@ export default function SSHConnectionsSingleKey() {
   const { data: systemKeyData, isLoading: keyLoading } = useQuery({
     queryKey: ['system-ssh-key'],
     queryFn: sshKeysAPI.getSystemKey,
-    refetchInterval: 30000
+    refetchInterval: 30000,
   })
 
   const { data: connectionsData, isLoading: connectionsLoading } = useQuery({
     queryKey: ['ssh-connections'],
     queryFn: sshKeysAPI.getSSHConnections,
-    refetchInterval: 30000
+    refetchInterval: 30000,
   })
 
   const systemKey = systemKeyData?.data?.ssh_key
@@ -269,9 +269,7 @@ export default function SSHConnectionsSingleKey() {
     }
   }
 
-  const getStatusColor = (
-    status: string
-  ): 'success' | 'error' | 'warning' | 'info' => {
+  const getStatusColor = (status: string): 'success' | 'error' | 'warning' | 'info' => {
     switch (status) {
       case 'connected':
         return 'success'
@@ -317,18 +315,14 @@ export default function SSHConnectionsSingleKey() {
           Single-Key System
         </Typography>
         <Typography variant="caption">
-          This system uses one SSH key for all remote connections. Generate the
-          system key once, then deploy it to as many remote servers as needed.
+          This system uses one SSH key for all remote connections. Generate the system key once,
+          then deploy it to as many remote servers as needed.
         </Typography>
       </Alert>
 
       {/* Statistics Cards */}
       {keyExists && (
-        <Stack
-          direction={{ xs: 'column', sm: 'row' }}
-          spacing={2}
-          sx={{ mb: 3 }}
-        >
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3 }}>
           <Card sx={{ flex: 1 }}>
             <CardContent>
               <Stack direction="row" alignItems="center" spacing={2}>
@@ -415,12 +409,7 @@ export default function SSHConnectionsSingleKey() {
               System SSH Key
             </Typography>
             {keyExists && (
-              <Chip
-                label="Active"
-                color="success"
-                size="small"
-                icon={<CheckCircle size={14} />}
-              />
+              <Chip label="Active" color="success" size="small" icon={<CheckCircle size={14} />} />
             )}
           </Stack>
 
@@ -428,8 +417,7 @@ export default function SSHConnectionsSingleKey() {
             // No key exists - show generation UI
             <Box>
               <Alert severity="warning" sx={{ mb: 2 }}>
-                No system SSH key found. Generate one to start connecting to
-                remote servers.
+                No system SSH key found. Generate one to start connecting to remote servers.
               </Alert>
               <Button
                 variant="contained"
@@ -485,11 +473,7 @@ export default function SSHConnectionsSingleKey() {
                       Public Key
                     </Typography>
                     <Tooltip title="Copy to clipboard">
-                      <IconButton
-                        size="small"
-                        onClick={handleCopyPublicKey}
-                        sx={{ ml: 1 }}
-                      >
+                      <IconButton size="small" onClick={handleCopyPublicKey} sx={{ ml: 1 }}>
                         <Copy size={16} />
                       </IconButton>
                     </Tooltip>
@@ -579,8 +563,7 @@ export default function SSHConnectionsSingleKey() {
 
             {connections.length === 0 ? (
               <Alert severity="info">
-                No connections yet. Deploy your SSH key to a remote server to get
-                started.
+                No connections yet. Deploy your SSH key to a remote server to get started.
               </Alert>
             ) : (
               <DataTable<SSHConnection>
@@ -688,17 +671,13 @@ export default function SSHConnectionsSingleKey() {
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Alert severity="info">
-              This will generate a new SSH key pair for your system. You can only
-              have one system key at a time.
+              This will generate a new SSH key pair for your system. You can only have one system
+              key at a time.
             </Alert>
 
             <FormControl fullWidth>
               <InputLabel>Key Type</InputLabel>
-              <Select
-                value={keyType}
-                label="Key Type"
-                onChange={(e) => setKeyType(e.target.value)}
-              >
+              <Select value={keyType} label="Key Type" onChange={(e) => setKeyType(e.target.value)}>
                 <MenuItem value="ed25519">ED25519 (Recommended)</MenuItem>
                 <MenuItem value="rsa">RSA</MenuItem>
                 <MenuItem value="ecdsa">ECDSA</MenuItem>
@@ -732,9 +711,7 @@ export default function SSHConnectionsSingleKey() {
               label="Host"
               fullWidth
               value={connectionForm.host}
-              onChange={(e) =>
-                setConnectionForm({ ...connectionForm, host: e.target.value })
-              }
+              onChange={(e) => setConnectionForm({ ...connectionForm, host: e.target.value })}
               placeholder="192.168.1.100 or example.com"
               InputLabelProps={{ shrink: true }}
             />
@@ -742,9 +719,7 @@ export default function SSHConnectionsSingleKey() {
               label="Username"
               fullWidth
               value={connectionForm.username}
-              onChange={(e) =>
-                setConnectionForm({ ...connectionForm, username: e.target.value })
-              }
+              onChange={(e) => setConnectionForm({ ...connectionForm, username: e.target.value })}
               placeholder="root"
               InputLabelProps={{ shrink: true }}
             />
@@ -766,9 +741,7 @@ export default function SSHConnectionsSingleKey() {
               type="password"
               fullWidth
               value={connectionForm.password}
-              onChange={(e) =>
-                setConnectionForm({ ...connectionForm, password: e.target.value })
-              }
+              onChange={(e) => setConnectionForm({ ...connectionForm, password: e.target.value })}
               placeholder="Server password (for initial deployment)"
               InputLabelProps={{ shrink: true }}
               InputProps={{
@@ -793,9 +766,8 @@ export default function SSHConnectionsSingleKey() {
               InputLabelProps={{ shrink: true }}
             />
             <Alert severity="info" sx={{ fontSize: '0.85rem' }}>
-              The password is used to deploy your public key to the server's
-              authorized_keys file. After deployment, you'll connect using the SSH
-              key.
+              The password is used to deploy your public key to the server's authorized_keys file.
+              After deployment, you'll connect using the SSH key.
             </Alert>
           </Stack>
         </DialogContent>
@@ -837,7 +809,10 @@ export default function SSHConnectionsSingleKey() {
                 2. SSH into your server
               </Typography>
               <Typography variant="caption" component="div">
-                3. Add it to <code style={{ background: '#e3f2fd', padding: '2px 4px', borderRadius: '2px' }}>~/.ssh/authorized_keys</code>
+                3. Add it to{' '}
+                <code style={{ background: '#e3f2fd', padding: '2px 4px', borderRadius: '2px' }}>
+                  ~/.ssh/authorized_keys
+                </code>
               </Typography>
             </Alert>
 
@@ -879,15 +854,12 @@ export default function SSHConnectionsSingleKey() {
             />
 
             <Alert severity="success" sx={{ fontSize: '0.85rem' }}>
-              This will test the connection and add it to your connections list if
-              successful.
+              This will test the connection and add it to your connections list if successful.
             </Alert>
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setTestConnectionDialogOpen(false)}>
-            Cancel
-          </Button>
+          <Button onClick={() => setTestConnectionDialogOpen(false)}>Cancel</Button>
           <Button
             variant="contained"
             onClick={handleTestManualConnection}

@@ -27,8 +27,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const token = localStorage.getItem('access_token')
     if (token) {
-      authAPI.getProfile()
-        .then(response => {
+      authAPI
+        .getProfile()
+        .then((response) => {
           setUser(response.data)
         })
         .catch((error) => {
@@ -74,11 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout,
   }
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  )
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
@@ -87,4 +84,4 @@ export function useAuth() {
     throw new Error('useAuth must be used within an AuthProvider')
   }
   return context
-} 
+}

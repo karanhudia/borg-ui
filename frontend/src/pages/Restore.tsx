@@ -75,7 +75,10 @@ const Restore: React.FC = () => {
   const [selectedRepoData, setSelectedRepoData] = useState<Repository | null>(null)
   const [restoreArchive, setRestoreArchive] = useState<Archive | null>(null)
   const [destination, setDestination] = useState<string>('')
-  const [lockError, setLockError] = useState<{ repositoryId: number, repositoryName: string } | null>(null)
+  const [lockError, setLockError] = useState<{
+    repositoryId: number
+    repositoryName: string
+  } | null>(null)
   const queryClient = useQueryClient()
 
   // Get repositories list
@@ -85,11 +88,15 @@ const Restore: React.FC = () => {
   })
 
   // Get archives for selected repository
-  const { data: archives, isLoading: loadingArchives, error: archivesError } = useQuery({
+  const {
+    data: archives,
+    isLoading: loadingArchives,
+    error: archivesError,
+  } = useQuery({
     queryKey: ['repository-archives', selectedRepoData?.id],
     queryFn: () => repositoriesAPI.listRepositoryArchives(selectedRepoData!.id),
     enabled: !!selectedRepoData?.id,
-    retry: false
+    retry: false,
   })
 
   // Handle archives error
@@ -97,7 +104,7 @@ const Restore: React.FC = () => {
     if (archivesError && (archivesError as any)?.response?.status === 423 && selectedRepoData) {
       setLockError({
         repositoryId: selectedRepoData.id,
-        repositoryName: selectedRepoData.name
+        repositoryName: selectedRepoData.name,
       })
     }
   }, [archivesError, selectedRepoData])
@@ -107,7 +114,7 @@ const Restore: React.FC = () => {
     queryKey: ['repository-info', selectedRepoData?.id],
     queryFn: () => repositoriesAPI.getRepositoryInfo(selectedRepoData!.id),
     enabled: !!selectedRepoData?.id,
-    retry: false
+    retry: false,
   })
 
   // Handle repo info error
@@ -115,25 +122,33 @@ const Restore: React.FC = () => {
     if (repoInfoError && (repoInfoError as any)?.response?.status === 423 && selectedRepoData) {
       setLockError({
         repositoryId: selectedRepoData.id,
-        repositoryName: selectedRepoData.name
+        repositoryName: selectedRepoData.name,
       })
     }
   }, [repoInfoError, selectedRepoData])
 
   // Get archive-specific info
-  const { data: archiveInfo, isLoading: loadingArchiveInfo, error: archiveInfoError } = useQuery({
+  const {
+    data: archiveInfo,
+    isLoading: loadingArchiveInfo,
+    error: archiveInfoError,
+  } = useQuery({
     queryKey: ['archive-info', selectedRepoData?.id, restoreArchive?.name],
     queryFn: () => repositoriesAPI.getArchiveInfo(selectedRepoData!.id, restoreArchive!.name),
     enabled: !!selectedRepoData && !!restoreArchive,
-    retry: false
+    retry: false,
   })
 
   // Handle archive info error
   React.useEffect(() => {
-    if (archiveInfoError && (archiveInfoError as any)?.response?.status === 423 && selectedRepoData) {
+    if (
+      archiveInfoError &&
+      (archiveInfoError as any)?.response?.status === 423 &&
+      selectedRepoData
+    ) {
       setLockError({
         repositoryId: selectedRepoData.id,
-        repositoryName: selectedRepoData.name
+        repositoryName: selectedRepoData.name,
       })
     }
   }, [archiveInfoError, selectedRepoData])
@@ -149,8 +164,15 @@ const Restore: React.FC = () => {
 
   // Restore mutation
   const restoreMutation = useMutation({
-    mutationFn: ({ repository, archive, destination }: { repository: string; archive: string; destination: string }) =>
-      restoreAPI.startRestore(repository, archive, [], destination),
+    mutationFn: ({
+      repository,
+      archive,
+      destination,
+    }: {
+      repository: string
+      archive: string
+      destination: string
+    }) => restoreAPI.startRestore(repository, archive, [], destination),
     onSuccess: () => {
       toast.success('Restore job started!')
 
@@ -162,7 +184,7 @@ const Restore: React.FC = () => {
     },
     onError: (error: any) => {
       toast.error(`Failed to start restore: ${error.response?.data?.detail || error.message}`)
-    }
+    },
   })
 
   // Handle repository selection
@@ -182,7 +204,7 @@ const Restore: React.FC = () => {
       restoreMutation.mutate({
         repository: selectedRepository,
         archive: restoreArchive.name,
-        destination
+        destination,
       })
     }
   }
@@ -229,7 +251,10 @@ const Restore: React.FC = () => {
     }
   }
 
-  const runningJobs = restoreJobsData?.data?.jobs?.filter((job: RestoreJob) => job.status === 'running' || job.status === 'pending') || []
+  const runningJobs =
+    restoreJobsData?.data?.jobs?.filter(
+      (job: RestoreJob) => job.status === 'running' || job.status === 'pending'
+    ) || []
   const recentJobs = restoreJobsData?.data?.jobs?.slice(0, 10) || []
 
   // Archives table columns
@@ -289,7 +314,11 @@ const Restore: React.FC = () => {
       id: 'destination',
       label: 'Destination',
       render: (job) => (
-        <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
+        >
           {job.destination}
         </Typography>
       ),
@@ -369,9 +398,22 @@ const Restore: React.FC = () => {
                     <Box>
                       <Typography variant="body2" fontWeight={500}>
                         {repo.name}
-                        {repo.has_running_maintenance && <Typography component="span" variant="caption" color="warning.main" sx={{ ml: 1 }}>(Maintenance Running)</Typography>}
+                        {repo.has_running_maintenance && (
+                          <Typography
+                            component="span"
+                            variant="caption"
+                            color="warning.main"
+                            sx={{ ml: 1 }}
+                          >
+                            (Maintenance Running)
+                          </Typography>
+                        )}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ fontFamily: 'monospace' }}
+                      >
                         {repo.path}
                       </Typography>
                     </Box>
@@ -398,7 +440,8 @@ const Restore: React.FC = () => {
       {selectedRepository && (
         <>
           <Alert severity="info" sx={{ mb: 3 }}>
-            Select an archive below to restore its contents. The entire archive will be restored to the destination path you specify.
+            Select an archive below to restore its contents. The entire archive will be restored to
+            the destination path you specify.
           </Alert>
 
           <Box sx={{ mb: 3 }}>
@@ -416,7 +459,6 @@ const Restore: React.FC = () => {
               enableHover={true}
             />
           </Box>
-
         </>
       )}
 
@@ -434,11 +476,14 @@ const Restore: React.FC = () => {
             <Stack spacing={3}>
               {runningJobs.map((job: RestoreJob) => (
                 <Paper key={job.id} variant="outlined" sx={{ p: 3 }}>
-                  <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
+                  <Stack
+                    direction="row"
+                    justifyContent="space-between"
+                    alignItems="flex-start"
+                    sx={{ mb: 2 }}
+                  >
                     <Stack direction="row" spacing={2} alignItems="center">
-                      <Box sx={{ color: 'info.main' }}>
-                        {getStatusIcon(job.status)}
-                      </Box>
+                      <Box sx={{ color: 'info.main' }}>{getStatusIcon(job.status)}</Box>
                       <Box>
                         <Typography variant="body1" fontWeight={500}>
                           Restore Job #{job.id}
@@ -454,7 +499,12 @@ const Restore: React.FC = () => {
                   </Stack>
 
                   <Box sx={{ mb: 2 }}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      alignItems="center"
+                      sx={{ mb: 1.5 }}
+                    >
                       <Stack direction="row" spacing={1} alignItems="center">
                         <Box
                           sx={{
@@ -484,13 +534,27 @@ const Restore: React.FC = () => {
                       <Typography variant="caption" fontWeight={500}>
                         Current File:
                       </Typography>
-                      <Typography variant="caption" sx={{ fontFamily: 'monospace', display: 'block', mt: 0.5, wordBreak: 'break-all' }}>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontFamily: 'monospace',
+                          display: 'block',
+                          mt: 0.5,
+                          wordBreak: 'break-all',
+                        }}
+                      >
                         {job.progress_details.current_file}
                       </Typography>
                     </Alert>
                   )}
 
-                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 2 }}>
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                      gap: 2,
+                    }}
+                  >
                     <Box>
                       <Typography variant="body2" color="text.secondary">
                         Files Restored:
@@ -518,7 +582,12 @@ const Restore: React.FC = () => {
       {/* Recent Jobs */}
       <Card>
         <CardContent>
-          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3, color: 'text.secondary' }}>
+          <Stack
+            direction="row"
+            spacing={1.5}
+            alignItems="center"
+            sx={{ mb: 3, color: 'text.secondary' }}
+          >
             <Clock size={20} />
             <Typography variant="h6" fontWeight={600}>
               Recent Restores
@@ -579,7 +648,10 @@ const Restore: React.FC = () => {
                     Files: {archiveStats.nfiles?.toLocaleString() || 'N/A'}
                   </Typography>
                   <Typography variant="body2">
-                    Size: {archiveStats.original_size ? formatBytesUtil(archiveStats.original_size) : 'N/A'}
+                    Size:{' '}
+                    {archiveStats.original_size
+                      ? formatBytesUtil(archiveStats.original_size)
+                      : 'N/A'}
                   </Typography>
                 </Alert>
               )}
@@ -589,7 +661,8 @@ const Restore: React.FC = () => {
                   Important
                 </Typography>
                 <Typography variant="body2">
-                  This will restore the entire archive to the destination path. Existing files may be overwritten.
+                  This will restore the entire archive to the destination path. Existing files may
+                  be overwritten.
                 </Typography>
               </Alert>
 
@@ -615,7 +688,13 @@ const Restore: React.FC = () => {
             color="primary"
             onClick={handleRestore}
             disabled={restoreMutation.isPending || !destination}
-            startIcon={restoreMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <Download size={16} />}
+            startIcon={
+              restoreMutation.isPending ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : (
+                <Download size={16} />
+              )
+            }
           >
             {restoreMutation.isPending ? 'Starting...' : 'Start Restore'}
           </Button>
@@ -630,7 +709,9 @@ const Restore: React.FC = () => {
           repositoryId={lockError.repositoryId}
           repositoryName={lockError.repositoryName}
           onLockBroken={() => {
-            queryClient.invalidateQueries({ queryKey: ['repository-archives', lockError.repositoryId] })
+            queryClient.invalidateQueries({
+              queryKey: ['repository-archives', lockError.repositoryId],
+            })
             queryClient.invalidateQueries({ queryKey: ['repository-info', lockError.repositoryId] })
             queryClient.invalidateQueries({ queryKey: ['archive-info', lockError.repositoryId] })
           }}

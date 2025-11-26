@@ -18,7 +18,7 @@ export default function CodeEditor({
   helperText,
   placeholder: _placeholder = '#!/bin/bash\n',
   height = '180px',
-  language = 'shell'
+  language = 'shell',
 }: CodeEditorProps) {
   return (
     <Box sx={{ mb: 2 }}>

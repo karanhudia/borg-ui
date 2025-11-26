@@ -251,6 +251,16 @@ jobs:
           cd frontend
           npm ci
 
+      - name: TypeScript type check
+        run: |
+          cd frontend
+          npm run typecheck
+
+      - name: Prettier format check
+        run: |
+          cd frontend
+          npm run format:check
+
       - name: Run linter
         run: |
           cd frontend

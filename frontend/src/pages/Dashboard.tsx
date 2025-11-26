@@ -54,12 +54,14 @@ export default function Dashboard() {
   const { data: status, isLoading } = useQuery<{ data: DashboardStatus }>({
     queryKey: ['dashboard-status'],
     queryFn: dashboardAPI.getStatus,
-    refetchInterval: 30000
+    refetchInterval: 30000,
   })
 
   if (isLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+      <Box
+        sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}
+      >
         <CircularProgress size={60} />
       </Box>
     )
@@ -148,7 +150,7 @@ export default function Dashboard() {
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
-                  display: 'block'
+                  display: 'block',
                 }}
               >
                 {job.repository}
@@ -196,7 +198,7 @@ export default function Dashboard() {
       id: 'progress',
       label: 'Progress',
       align: 'left',
-      render: (job) => (
+      render: (job) =>
         job.status === 'running' ? (
           <Stack direction="row" spacing={1} alignItems="center">
             <Box
@@ -222,10 +224,13 @@ export default function Dashboard() {
           </Stack>
         ) : (
           <Typography variant="body2" color="text.secondary">
-            {job.status === 'completed' ? 'Completed' : job.status === 'failed' ? 'Failed' : 'Cancelled'}
+            {job.status === 'completed'
+              ? 'Completed'
+              : job.status === 'failed'
+                ? 'Failed'
+                : 'Cancelled'}
           </Typography>
-        )
-      ),
+        ),
     },
   ]
 
@@ -242,7 +247,15 @@ export default function Dashboard() {
       </Box>
 
       {/* Status Cards */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 3, mb: 4, '& > *': { mb: { xs: 2, sm: 0 } } }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+          gap: 3,
+          mb: 4,
+          '& > *': { mb: { xs: 2, sm: 0 } },
+        }}
+      >
         {/* Borg Status Card */}
         <Card>
           <CardContent>
@@ -316,7 +329,9 @@ export default function Dashboard() {
                     variant="determinate"
                     value={Math.min(metrics.cpu_usage, 100)}
                     sx={{ mt: 1, height: 6, borderRadius: 1 }}
-                    color={metrics.cpu_usage > 80 ? 'error' : metrics.cpu_usage > 60 ? 'warning' : 'info'}
+                    color={
+                      metrics.cpu_usage > 80 ? 'error' : metrics.cpu_usage > 60 ? 'warning' : 'info'
+                    }
                   />
                 </Box>
               </Stack>
@@ -347,13 +362,20 @@ export default function Dashboard() {
                     Memory
                   </Typography>
                   <Typography variant="h6" fontWeight={600} sx={{ mt: 0.5, fontSize: '1rem' }}>
-                    {formatBytes(metrics.memory_total - metrics.memory_available)} GB / {formatBytes(metrics.memory_total)} GB
+                    {formatBytes(metrics.memory_total - metrics.memory_available)} GB /{' '}
+                    {formatBytes(metrics.memory_total)} GB
                   </Typography>
                   <LinearProgress
                     variant="determinate"
                     value={Math.min(metrics.memory_usage, 100)}
                     sx={{ mt: 1, height: 6, borderRadius: 1 }}
-                    color={metrics.memory_usage > 80 ? 'error' : metrics.memory_usage > 60 ? 'warning' : 'success'}
+                    color={
+                      metrics.memory_usage > 80
+                        ? 'error'
+                        : metrics.memory_usage > 60
+                          ? 'warning'
+                          : 'success'
+                    }
                   />
                 </Box>
               </Stack>
@@ -384,13 +406,20 @@ export default function Dashboard() {
                     Disk Space
                   </Typography>
                   <Typography variant="h6" fontWeight={600} sx={{ mt: 0.5, fontSize: '1rem' }}>
-                    {formatBytes(metrics.disk_total - metrics.disk_free)} GB / {formatBytes(metrics.disk_total)} GB
+                    {formatBytes(metrics.disk_total - metrics.disk_free)} GB /{' '}
+                    {formatBytes(metrics.disk_total)} GB
                   </Typography>
                   <LinearProgress
                     variant="determinate"
                     value={Math.min(metrics.disk_usage, 100)}
                     sx={{ mt: 1, height: 6, borderRadius: 1 }}
-                    color={metrics.disk_usage > 80 ? 'error' : metrics.disk_usage > 60 ? 'warning' : 'warning'}
+                    color={
+                      metrics.disk_usage > 80
+                        ? 'error'
+                        : metrics.disk_usage > 60
+                          ? 'warning'
+                          : 'warning'
+                    }
                   />
                 </Box>
               </Stack>
@@ -403,7 +432,12 @@ export default function Dashboard() {
       {status?.data?.recent_jobs && (
         <Card>
           <CardContent>
-            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1, color: 'text.secondary' }}>
+            <Stack
+              direction="row"
+              spacing={1.5}
+              alignItems="center"
+              sx={{ mb: 1, color: 'text.secondary' }}
+            >
               <Clock size={20} />
               <Typography variant="h6" fontWeight={600}>
                 Recent Backup Jobs
@@ -421,9 +455,14 @@ export default function Dashboard() {
               enableHover={true}
               enablePointer={false}
               emptyState={{
-                icon: <Box sx={{ color: 'text.disabled' }}><Clock size={48} /></Box>,
+                icon: (
+                  <Box sx={{ color: 'text.disabled' }}>
+                    <Clock size={48} />
+                  </Box>
+                ),
                 title: 'No Backup Jobs Yet',
-                description: 'Your recent backup jobs will appear here once you start running backups',
+                description:
+                  'Your recent backup jobs will appear here once you start running backups',
               }}
             />
           </CardContent>

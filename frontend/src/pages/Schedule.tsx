@@ -42,7 +42,15 @@ import {
 } from 'lucide-react'
 import { scheduleAPI, repositoriesAPI, backupAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
-import { formatDate, formatRelativeTime, formatTimeRange, formatBytes as formatBytesUtil, formatDurationSeconds, convertCronToUTC, convertCronToLocal } from '../utils/dateUtils'
+import {
+  formatDate,
+  formatRelativeTime,
+  formatTimeRange,
+  formatBytes as formatBytesUtil,
+  formatDurationSeconds,
+  convertCronToUTC,
+  convertCronToLocal,
+} from '../utils/dateUtils'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
 
 interface ScheduledJob {
@@ -270,7 +278,7 @@ const Schedule: React.FC = () => {
     const utcCron = convertCronToUTC(createForm.cron_expression)
     createJobMutation.mutate({
       ...createForm,
-      cron_expression: utcCron
+      cron_expression: utcCron,
     })
   }
 
@@ -287,7 +295,7 @@ const Schedule: React.FC = () => {
         id: editingJob.id,
         data: {
           ...editForm,
-          cron_expression: utcCron
+          cron_expression: utcCron,
         },
       })
     }
@@ -385,7 +393,9 @@ const Schedule: React.FC = () => {
     }
   }
 
-  const getBackupStatusColor = (status: string): 'success' | 'info' | 'error' | 'warning' | 'default' => {
+  const getBackupStatusColor = (
+    status: string
+  ): 'success' | 'info' | 'error' | 'warning' | 'default' => {
     switch (status) {
       case 'completed':
         return 'success'
@@ -400,7 +410,9 @@ const Schedule: React.FC = () => {
     }
   }
 
-  const getMaintenanceStatusLabel = (maintenanceStatus: string | null | undefined): string | null => {
+  const getMaintenanceStatusLabel = (
+    maintenanceStatus: string | null | undefined
+  ): string | null => {
     if (!maintenanceStatus) return null
 
     switch (maintenanceStatus) {
@@ -423,7 +435,9 @@ const Schedule: React.FC = () => {
     }
   }
 
-  const getMaintenanceStatusColor = (maintenanceStatus: string | null | undefined): 'success' | 'info' | 'error' | 'warning' => {
+  const getMaintenanceStatusColor = (
+    maintenanceStatus: string | null | undefined
+  ): 'success' | 'info' | 'error' | 'warning' => {
     if (!maintenanceStatus) return 'info'
 
     if (maintenanceStatus.includes('running')) return 'info'
@@ -435,9 +449,10 @@ const Schedule: React.FC = () => {
   const jobs = jobsData?.data?.jobs || []
   const repositories = repositoriesData?.data?.repositories || []
   const allBackupJobs = backupJobsData?.data?.jobs || []
-  const runningBackupJobs = allBackupJobs.filter((job: BackupJob) =>
-    job.status === 'running' ||
-    (job.maintenance_status && job.maintenance_status.includes('running'))
+  const runningBackupJobs = allBackupJobs.filter(
+    (job: BackupJob) =>
+      job.status === 'running' ||
+      (job.maintenance_status && job.maintenance_status.includes('running'))
   )
   const recentBackupJobs = allBackupJobs.slice(0, 10)
   const upcomingJobs = upcomingData?.data?.upcoming_jobs || []
@@ -451,11 +466,7 @@ const Schedule: React.FC = () => {
       render: (job) => (
         <Tooltip title={job.enabled ? 'Enabled' : 'Disabled'} arrow>
           <Box sx={{ display: 'flex', alignItems: 'center', color: 'text.disabled' }}>
-            {job.enabled ? (
-              <CheckCircle size={18} color="#2e7d32" />
-            ) : (
-              <XCircle size={18} />
-            )}
+            {job.enabled ? <CheckCircle size={18} color="#2e7d32" /> : <XCircle size={18} />}
           </Box>
         </Tooltip>
       ),
@@ -477,12 +488,27 @@ const Schedule: React.FC = () => {
           {(job.run_prune_after || job.run_compact_after) && (
             <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
               {job.run_prune_after && (
-                <Tooltip title={`Prune: Keep ${job.prune_keep_daily}d/${job.prune_keep_weekly}w/${job.prune_keep_monthly}m/${job.prune_keep_yearly}y`} arrow>
-                  <Chip label="Prune" size="small" color="primary" variant="outlined" sx={{ height: 18, fontSize: '0.65rem' }} />
+                <Tooltip
+                  title={`Prune: Keep ${job.prune_keep_daily}d/${job.prune_keep_weekly}w/${job.prune_keep_monthly}m/${job.prune_keep_yearly}y`}
+                  arrow
+                >
+                  <Chip
+                    label="Prune"
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                    sx={{ height: 18, fontSize: '0.65rem' }}
+                  />
                 </Tooltip>
               )}
               {job.run_compact_after && (
-                <Chip label="Compact" size="small" color="secondary" variant="outlined" sx={{ height: 18, fontSize: '0.65rem' }} />
+                <Chip
+                  label="Compact"
+                  size="small"
+                  color="secondary"
+                  variant="outlined"
+                  sx={{ height: 18, fontSize: '0.65rem' }}
+                />
               )}
             </Box>
           )}
@@ -495,9 +521,7 @@ const Schedule: React.FC = () => {
       width: '30%',
       render: (job) => (
         <>
-          <Typography variant="body2">
-            {getRepositoryName(job.repository || '')}
-          </Typography>
+          <Typography variant="body2">{getRepositoryName(job.repository || '')}</Typography>
           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
             {job.repository}
           </Typography>
@@ -530,9 +554,7 @@ const Schedule: React.FC = () => {
         <>
           {job.last_run ? (
             <>
-              <Typography variant="body2">
-                {formatDate(job.last_run)}
-              </Typography>
+              <Typography variant="body2">{formatDate(job.last_run)}</Typography>
               <Typography variant="caption" color="text.secondary" display="block">
                 {formatRelativeTime(job.last_run)}
               </Typography>
@@ -540,12 +562,22 @@ const Schedule: React.FC = () => {
                 <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                   {job.last_prune && (
                     <Tooltip title={`Last pruned: ${formatDate(job.last_prune)}`} arrow>
-                      <Chip label="P" size="small" color="primary" sx={{ height: 16, fontSize: '0.6rem', minWidth: 20 }} />
+                      <Chip
+                        label="P"
+                        size="small"
+                        color="primary"
+                        sx={{ height: 16, fontSize: '0.6rem', minWidth: 20 }}
+                      />
                     </Tooltip>
                   )}
                   {job.last_compact && (
                     <Tooltip title={`Last compacted: ${formatDate(job.last_compact)}`} arrow>
-                      <Chip label="C" size="small" color="secondary" sx={{ height: 16, fontSize: '0.6rem', minWidth: 20 }} />
+                      <Chip
+                        label="C"
+                        size="small"
+                        color="secondary"
+                        sx={{ height: 16, fontSize: '0.6rem', minWidth: 20 }}
+                      />
                     </Tooltip>
                   )}
                 </Box>
@@ -650,15 +682,14 @@ const Schedule: React.FC = () => {
       label: 'Repository',
       render: (job) => (
         <>
-          <Typography variant="body2">
-            {getRepositoryName(job.repository)}
-          </Typography>
+          <Typography variant="body2">{getRepositoryName(job.repository)}</Typography>
           <Typography variant="caption" color="text.secondary" display="block">
             {job.repository}
           </Typography>
           {job.maintenance_status && (
             <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-              {(job.maintenance_status.includes('prune') || job.maintenance_status === 'maintenance_completed') && (
+              {(job.maintenance_status.includes('prune') ||
+                job.maintenance_status === 'maintenance_completed') && (
                 <Chip
                   label={job.maintenance_status.includes('prune_failed') ? 'Prune ✗' : 'Prune ✓'}
                   size="small"
@@ -667,9 +698,12 @@ const Schedule: React.FC = () => {
                   sx={{ height: 18, fontSize: '0.65rem' }}
                 />
               )}
-              {(job.maintenance_status.includes('compact') || job.maintenance_status === 'maintenance_completed') && (
+              {(job.maintenance_status.includes('compact') ||
+                job.maintenance_status === 'maintenance_completed') && (
                 <Chip
-                  label={job.maintenance_status.includes('compact_failed') ? 'Compact ✗' : 'Compact ✓'}
+                  label={
+                    job.maintenance_status.includes('compact_failed') ? 'Compact ✗' : 'Compact ✓'
+                  }
                   size="small"
                   color={job.maintenance_status.includes('compact_failed') ? 'error' : 'success'}
                   variant="outlined"
@@ -710,9 +744,7 @@ const Schedule: React.FC = () => {
       label: 'Started',
       render: (job) => (
         <>
-          <Typography variant="body2">
-            {formatDate(job.started_at)}
-          </Typography>
+          <Typography variant="body2">{formatDate(job.started_at)}</Typography>
           <Typography variant="caption" color="text.secondary">
             {formatRelativeTime(job.started_at)}
           </Typography>
@@ -754,7 +786,7 @@ const Schedule: React.FC = () => {
     {
       icon: <AlertCircle size={16} />,
       label: 'Error',
-      onClick: () => { },
+      onClick: () => {},
       color: 'error',
       show: (job) => !!job.error_message,
       tooltip: (job) => job.error_message || 'Error',
@@ -824,7 +856,12 @@ const Schedule: React.FC = () => {
                   }}
                 >
                   {/* Job Header */}
-                  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                  <Stack
+                    direction="row"
+                    justifyContent="space-between"
+                    alignItems="center"
+                    sx={{ mb: 2 }}
+                  >
                     <Stack direction="row" spacing={2} alignItems="center">
                       <Chip
                         icon={<RefreshCw size={14} className="animate-spin" />}
@@ -845,7 +882,11 @@ const Schedule: React.FC = () => {
                           size="small"
                           color="error"
                           onClick={() => {
-                            if (window.confirm(`Are you sure you want to cancel backup job #${job.id}?`)) {
+                            if (
+                              window.confirm(
+                                `Are you sure you want to cancel backup job #${job.id}?`
+                              )
+                            ) {
                               cancelBackupMutation.mutate(job.id)
                             }
                           }}
@@ -864,7 +905,15 @@ const Schedule: React.FC = () => {
                       <Typography variant="caption" fontWeight={500}>
                         Current File:
                       </Typography>
-                      <Typography variant="caption" sx={{ fontFamily: 'monospace', display: 'block', mt: 0.5, wordBreak: 'break-all' }}>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontFamily: 'monospace',
+                          display: 'block',
+                          mt: 0.5,
+                          wordBreak: 'break-all',
+                        }}
+                      >
                         {job.progress_details.current_file}
                       </Typography>
                     </Alert>
@@ -875,7 +924,11 @@ const Schedule: React.FC = () => {
                     <Alert
                       severity={getMaintenanceStatusColor(job.maintenance_status)}
                       sx={{ mb: 2, py: 0.5 }}
-                      icon={job.maintenance_status.includes('running') ? <RefreshCw size={16} className="animate-spin" /> : undefined}
+                      icon={
+                        job.maintenance_status.includes('running') ? (
+                          <RefreshCw size={16} className="animate-spin" />
+                        ) : undefined
+                      }
                     >
                       <Typography variant="caption" fontWeight={500}>
                         {getMaintenanceStatusLabel(job.maintenance_status)}
@@ -884,12 +937,14 @@ const Schedule: React.FC = () => {
                   )}
 
                   {/* Job Details Grid */}
-                  <Box sx={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                    gap: 2,
-                    width: '100%'
-                  }}>
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                      gap: 2,
+                      width: '100%',
+                    }}
+                  >
                     <Box>
                       <Typography variant="body2" color="text.secondary">
                         Files Processed:
@@ -903,7 +958,9 @@ const Schedule: React.FC = () => {
                         Original Size:
                       </Typography>
                       <Typography variant="body2" fontWeight={500}>
-                        {job.progress_details?.original_size ? formatBytesUtil(job.progress_details.original_size) : 'N/A'}
+                        {job.progress_details?.original_size
+                          ? formatBytesUtil(job.progress_details.original_size)
+                          : 'N/A'}
                       </Typography>
                     </Box>
                     <Box>
@@ -911,7 +968,8 @@ const Schedule: React.FC = () => {
                         Compressed:
                       </Typography>
                       <Typography variant="body2" fontWeight={500}>
-                        {job.progress_details?.compressed_size !== undefined && job.progress_details?.compressed_size !== null
+                        {job.progress_details?.compressed_size !== undefined &&
+                        job.progress_details?.compressed_size !== null
                           ? formatBytesUtil(job.progress_details.compressed_size)
                           : 'N/A'}
                       </Typography>
@@ -921,21 +979,23 @@ const Schedule: React.FC = () => {
                         Deduplicated:
                       </Typography>
                       <Typography variant="body2" fontWeight={500} color="success.main">
-                        {job.progress_details?.deduplicated_size !== undefined && job.progress_details?.deduplicated_size !== null
+                        {job.progress_details?.deduplicated_size !== undefined &&
+                        job.progress_details?.deduplicated_size !== null
                           ? formatBytesUtil(job.progress_details.deduplicated_size)
                           : 'N/A'}
                       </Typography>
                     </Box>
-                    {job.progress_details?.total_expected_size && job.progress_details.total_expected_size > 0 && (
-                      <Box>
-                        <Typography variant="body2" color="text.secondary">
-                          Total Source Size:
-                        </Typography>
-                        <Typography variant="body2" fontWeight={500} color="info.main">
-                          {formatBytesUtil(job.progress_details.total_expected_size)}
-                        </Typography>
-                      </Box>
-                    )}
+                    {job.progress_details?.total_expected_size &&
+                      job.progress_details.total_expected_size > 0 && (
+                        <Box>
+                          <Typography variant="body2" color="text.secondary">
+                            Total Source Size:
+                          </Typography>
+                          <Typography variant="body2" fontWeight={500} color="info.main">
+                            {formatBytesUtil(job.progress_details.total_expected_size)}
+                          </Typography>
+                        </Box>
+                      )}
                     <Box>
                       <Typography variant="body2" color="text.secondary">
                         Speed:
@@ -946,13 +1006,15 @@ const Schedule: React.FC = () => {
                           : 'N/A'}
                       </Typography>
                     </Box>
-                    {((job.progress_details?.estimated_time_remaining ?? 0) > 0) && (
+                    {(job.progress_details?.estimated_time_remaining ?? 0) > 0 && (
                       <Box>
                         <Typography variant="body2" color="text.secondary">
                           ETA:
                         </Typography>
                         <Typography variant="body2" fontWeight={500} color="success.main">
-                          {formatDurationSeconds(job.progress_details?.estimated_time_remaining ?? 0)}
+                          {formatDurationSeconds(
+                            job.progress_details?.estimated_time_remaining ?? 0
+                          )}
                         </Typography>
                       </Box>
                     )}
@@ -1083,10 +1145,10 @@ const Schedule: React.FC = () => {
                 helperText="A descriptive name for this scheduled job"
                 size="medium"
                 InputProps={{
-                  sx: { fontSize: '1.1rem' }
+                  sx: { fontSize: '1.1rem' },
                 }}
                 InputLabelProps={{
-                  sx: { fontSize: '1.1rem' }
+                  sx: { fontSize: '1.1rem' },
                 }}
               />
 
@@ -1105,16 +1167,24 @@ const Schedule: React.FC = () => {
                     },
                   }}
                 >
-                  {repositories.filter((repo: any) => repo.mode !== 'observe').map((repo: any) => (
-                    <MenuItem key={repo.id} value={repo.path} sx={{ fontSize: '1rem' }}>
-                      <Box>
-                        <Typography variant="body2" sx={{ fontSize: '1rem' }}>{repo.name}</Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.85rem' }}>
-                          {repo.path}
-                        </Typography>
-                      </Box>
-                    </MenuItem>
-                  ))}
+                  {repositories
+                    .filter((repo: any) => repo.mode !== 'observe')
+                    .map((repo: any) => (
+                      <MenuItem key={repo.id} value={repo.path} sx={{ fontSize: '1rem' }}>
+                        <Box>
+                          <Typography variant="body2" sx={{ fontSize: '1rem' }}>
+                            {repo.name}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ fontSize: '0.85rem' }}
+                          >
+                            {repo.path}
+                          </Typography>
+                        </Box>
+                      </MenuItem>
+                    ))}
                 </Select>
               </FormControl>
 
@@ -1128,7 +1198,9 @@ const Schedule: React.FC = () => {
                 <TextField
                   label="Schedule"
                   value={createForm.cron_expression}
-                  onChange={(e) => setCreateForm({ ...createForm, cron_expression: e.target.value })}
+                  onChange={(e) =>
+                    setCreateForm({ ...createForm, cron_expression: e.target.value })
+                  }
                   required
                   fullWidth
                   size="medium"
@@ -1150,7 +1222,7 @@ const Schedule: React.FC = () => {
                     ),
                   }}
                   InputLabelProps={{
-                    sx: { fontSize: '1.1rem' }
+                    sx: { fontSize: '1.1rem' },
                   }}
                   helperText={
                     <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -1171,25 +1243,27 @@ const Schedule: React.FC = () => {
                 fullWidth
                 size="medium"
                 InputProps={{
-                  sx: { fontSize: '1.1rem' }
+                  sx: { fontSize: '1.1rem' },
                 }}
                 InputLabelProps={{
-                  sx: { fontSize: '1.1rem' }
+                  sx: { fontSize: '1.1rem' },
                 }}
               />
 
               <TextField
                 label="Archive Name Template"
                 value={createForm.archive_name_template}
-                onChange={(e) => setCreateForm({ ...createForm, archive_name_template: e.target.value })}
+                onChange={(e) =>
+                  setCreateForm({ ...createForm, archive_name_template: e.target.value })
+                }
                 fullWidth
                 size="medium"
                 helperText="Customize archive naming. Available placeholders: {job_name}, {now}, {date}, {time}, {timestamp}"
                 InputProps={{
-                  sx: { fontSize: '1.1rem', fontFamily: 'monospace' }
+                  sx: { fontSize: '1.1rem', fontFamily: 'monospace' },
                 }}
                 InputLabelProps={{
-                  sx: { fontSize: '1.1rem' }
+                  sx: { fontSize: '1.1rem' },
                 }}
               />
 
@@ -1217,19 +1291,28 @@ const Schedule: React.FC = () => {
                     control={
                       <Switch
                         checked={createForm.run_prune_after}
-                        onChange={(e) => setCreateForm({ ...createForm, run_prune_after: e.target.checked })}
+                        onChange={(e) =>
+                          setCreateForm({ ...createForm, run_prune_after: e.target.checked })
+                        }
                       />
                     }
                     label="Run prune after backup"
                   />
 
                   {createForm.run_prune_after && (
-                    <Box sx={{ pl: 4, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+                    <Box
+                      sx={{ pl: 4, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}
+                    >
                       <TextField
                         label="Keep Daily"
                         type="number"
                         value={createForm.prune_keep_daily}
-                        onChange={(e) => setCreateForm({ ...createForm, prune_keep_daily: parseInt(e.target.value) || 0 })}
+                        onChange={(e) =>
+                          setCreateForm({
+                            ...createForm,
+                            prune_keep_daily: parseInt(e.target.value) || 0,
+                          })
+                        }
                         inputProps={{ min: 0 }}
                         size="small"
                         helperText="Daily backups to keep"
@@ -1238,7 +1321,12 @@ const Schedule: React.FC = () => {
                         label="Keep Weekly"
                         type="number"
                         value={createForm.prune_keep_weekly}
-                        onChange={(e) => setCreateForm({ ...createForm, prune_keep_weekly: parseInt(e.target.value) || 0 })}
+                        onChange={(e) =>
+                          setCreateForm({
+                            ...createForm,
+                            prune_keep_weekly: parseInt(e.target.value) || 0,
+                          })
+                        }
                         inputProps={{ min: 0 }}
                         size="small"
                         helperText="Weekly backups to keep"
@@ -1247,7 +1335,12 @@ const Schedule: React.FC = () => {
                         label="Keep Monthly"
                         type="number"
                         value={createForm.prune_keep_monthly}
-                        onChange={(e) => setCreateForm({ ...createForm, prune_keep_monthly: parseInt(e.target.value) || 0 })}
+                        onChange={(e) =>
+                          setCreateForm({
+                            ...createForm,
+                            prune_keep_monthly: parseInt(e.target.value) || 0,
+                          })
+                        }
                         inputProps={{ min: 0 }}
                         size="small"
                         helperText="Monthly backups to keep"
@@ -1256,7 +1349,12 @@ const Schedule: React.FC = () => {
                         label="Keep Yearly"
                         type="number"
                         value={createForm.prune_keep_yearly}
-                        onChange={(e) => setCreateForm({ ...createForm, prune_keep_yearly: parseInt(e.target.value) || 0 })}
+                        onChange={(e) =>
+                          setCreateForm({
+                            ...createForm,
+                            prune_keep_yearly: parseInt(e.target.value) || 0,
+                          })
+                        }
                         inputProps={{ min: 0 }}
                         size="small"
                         helperText="Yearly backups to keep"
@@ -1268,7 +1366,9 @@ const Schedule: React.FC = () => {
                     control={
                       <Switch
                         checked={createForm.run_compact_after}
-                        onChange={(e) => setCreateForm({ ...createForm, run_compact_after: e.target.checked })}
+                        onChange={(e) =>
+                          setCreateForm({ ...createForm, run_compact_after: e.target.checked })
+                        }
                       />
                     }
                     label="Run compact after prune"
@@ -1288,7 +1388,9 @@ const Schedule: React.FC = () => {
               type="submit"
               variant="contained"
               disabled={createJobMutation.isPending}
-              startIcon={createJobMutation.isPending ? <CircularProgress size={16} /> : <Plus size={16} />}
+              startIcon={
+                createJobMutation.isPending ? <CircularProgress size={16} /> : <Plus size={16} />
+              }
             >
               {createJobMutation.isPending ? 'Creating...' : 'Create Job'}
             </Button>
@@ -1297,12 +1399,7 @@ const Schedule: React.FC = () => {
       </Dialog>
 
       {/* Edit Job Modal */}
-      <Dialog
-        open={!!editingJob}
-        onClose={() => setEditingJob(null)}
-        maxWidth="sm"
-        fullWidth
-      >
+      <Dialog open={!!editingJob} onClose={() => setEditingJob(null)} maxWidth="sm" fullWidth>
         <DialogTitle>Edit Scheduled Job</DialogTitle>
         <form onSubmit={handleUpdateJob}>
           <DialogContent>
@@ -1315,10 +1412,10 @@ const Schedule: React.FC = () => {
                 fullWidth
                 size="medium"
                 InputProps={{
-                  sx: { fontSize: '1.1rem' }
+                  sx: { fontSize: '1.1rem' },
                 }}
                 InputLabelProps={{
-                  sx: { fontSize: '1.1rem' }
+                  sx: { fontSize: '1.1rem' },
                 }}
               />
 
@@ -1337,16 +1434,24 @@ const Schedule: React.FC = () => {
                     },
                   }}
                 >
-                  {repositories.filter((repo: any) => repo.mode !== 'observe').map((repo: any) => (
-                    <MenuItem key={repo.id} value={repo.path} sx={{ fontSize: '1rem' }}>
-                      <Box>
-                        <Typography variant="body2" sx={{ fontSize: '1rem' }}>{repo.name}</Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.85rem' }}>
-                          {repo.path}
-                        </Typography>
-                      </Box>
-                    </MenuItem>
-                  ))}
+                  {repositories
+                    .filter((repo: any) => repo.mode !== 'observe')
+                    .map((repo: any) => (
+                      <MenuItem key={repo.id} value={repo.path} sx={{ fontSize: '1rem' }}>
+                        <Box>
+                          <Typography variant="body2" sx={{ fontSize: '1rem' }}>
+                            {repo.name}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ fontSize: '0.85rem' }}
+                          >
+                            {repo.path}
+                          </Typography>
+                        </Box>
+                      </MenuItem>
+                    ))}
                 </Select>
               </FormControl>
 
@@ -1381,7 +1486,7 @@ const Schedule: React.FC = () => {
                     ),
                   }}
                   InputLabelProps={{
-                    sx: { fontSize: '1.1rem' }
+                    sx: { fontSize: '1.1rem' },
                   }}
                   helperText={
                     <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -1401,25 +1506,27 @@ const Schedule: React.FC = () => {
                 fullWidth
                 size="medium"
                 InputProps={{
-                  sx: { fontSize: '1.1rem' }
+                  sx: { fontSize: '1.1rem' },
                 }}
                 InputLabelProps={{
-                  sx: { fontSize: '1.1rem' }
+                  sx: { fontSize: '1.1rem' },
                 }}
               />
 
               <TextField
                 label="Archive Name Template"
                 value={editForm.archive_name_template}
-                onChange={(e) => setEditForm({ ...editForm, archive_name_template: e.target.value })}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, archive_name_template: e.target.value })
+                }
                 fullWidth
                 size="medium"
                 helperText="Customize archive naming. Available placeholders: {job_name}, {now}, {date}, {time}, {timestamp}"
                 InputProps={{
-                  sx: { fontSize: '1.1rem', fontFamily: 'monospace' }
+                  sx: { fontSize: '1.1rem', fontFamily: 'monospace' },
                 }}
                 InputLabelProps={{
-                  sx: { fontSize: '1.1rem' }
+                  sx: { fontSize: '1.1rem' },
                 }}
               />
 
@@ -1447,19 +1554,28 @@ const Schedule: React.FC = () => {
                     control={
                       <Switch
                         checked={editForm.run_prune_after}
-                        onChange={(e) => setEditForm({ ...editForm, run_prune_after: e.target.checked })}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, run_prune_after: e.target.checked })
+                        }
                       />
                     }
                     label="Run prune after backup"
                   />
 
                   {editForm.run_prune_after && (
-                    <Box sx={{ pl: 4, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+                    <Box
+                      sx={{ pl: 4, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}
+                    >
                       <TextField
                         label="Keep Daily"
                         type="number"
                         value={editForm.prune_keep_daily}
-                        onChange={(e) => setEditForm({ ...editForm, prune_keep_daily: parseInt(e.target.value) || 0 })}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            prune_keep_daily: parseInt(e.target.value) || 0,
+                          })
+                        }
                         inputProps={{ min: 0 }}
                         size="small"
                         helperText="Daily backups to keep"
@@ -1468,7 +1584,12 @@ const Schedule: React.FC = () => {
                         label="Keep Weekly"
                         type="number"
                         value={editForm.prune_keep_weekly}
-                        onChange={(e) => setEditForm({ ...editForm, prune_keep_weekly: parseInt(e.target.value) || 0 })}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            prune_keep_weekly: parseInt(e.target.value) || 0,
+                          })
+                        }
                         inputProps={{ min: 0 }}
                         size="small"
                         helperText="Weekly backups to keep"
@@ -1477,7 +1598,12 @@ const Schedule: React.FC = () => {
                         label="Keep Monthly"
                         type="number"
                         value={editForm.prune_keep_monthly}
-                        onChange={(e) => setEditForm({ ...editForm, prune_keep_monthly: parseInt(e.target.value) || 0 })}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            prune_keep_monthly: parseInt(e.target.value) || 0,
+                          })
+                        }
                         inputProps={{ min: 0 }}
                         size="small"
                         helperText="Monthly backups to keep"
@@ -1486,7 +1612,12 @@ const Schedule: React.FC = () => {
                         label="Keep Yearly"
                         type="number"
                         value={editForm.prune_keep_yearly}
-                        onChange={(e) => setEditForm({ ...editForm, prune_keep_yearly: parseInt(e.target.value) || 0 })}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            prune_keep_yearly: parseInt(e.target.value) || 0,
+                          })
+                        }
                         inputProps={{ min: 0 }}
                         size="small"
                         helperText="Yearly backups to keep"
@@ -1498,7 +1629,9 @@ const Schedule: React.FC = () => {
                     control={
                       <Switch
                         checked={editForm.run_compact_after}
-                        onChange={(e) => setEditForm({ ...editForm, run_compact_after: e.target.checked })}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, run_compact_after: e.target.checked })
+                        }
                       />
                     }
                     label="Run compact after prune"
@@ -1622,7 +1755,9 @@ const Schedule: React.FC = () => {
             variant="contained"
             color="error"
             disabled={deleteJobMutation.isPending}
-            startIcon={deleteJobMutation.isPending ? <CircularProgress size={16} /> : <Trash2 size={16} />}
+            startIcon={
+              deleteJobMutation.isPending ? <CircularProgress size={16} /> : <Trash2 size={16} />
+            }
           >
             {deleteJobMutation.isPending ? 'Deleting...' : 'Delete Job'}
           </Button>

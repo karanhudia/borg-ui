@@ -14,7 +14,7 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
-  
+
   const {
     register,
     handleSubmit,
@@ -47,12 +47,8 @@ export default function Login() {
           <div className="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-primary-100">
             <Shield className="h-6 w-6 text-primary-600" />
           </div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Borg Web UI
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Sign in to manage your backups
-          </p>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">Borg Web UI</h2>
+          <p className="mt-2 text-center text-sm text-gray-600">Sign in to manage your backups</p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
           <div className="rounded-md shadow-sm -space-y-px">
@@ -109,4 +105,4 @@ export default function Login() {
       </div>
     </div>
   )
-} 
+}

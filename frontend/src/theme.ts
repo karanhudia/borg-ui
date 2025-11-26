@@ -1,4 +1,4 @@
-import { createTheme } from '@mui/material/styles';
+import { createTheme } from '@mui/material/styles'
 
 // Create a custom theme for Borg UI
 export const theme = createTheme({
@@ -160,7 +160,7 @@ export const theme = createTheme({
       },
     },
   },
-});
+})
 
 // Dark theme variant
 export const darkTheme = createTheme({
@@ -188,18 +188,18 @@ export const darkTheme = createTheme({
       secondary: '#a1a1aa', // Zinc 400
     },
   },
-});
+})
 
-export type ThemeMode = 'light' | 'dark';
+export type ThemeMode = 'light' | 'dark'
 
 export const themes: Record<ThemeMode, typeof theme> = {
   light: theme,
   dark: darkTheme,
-};
+}
 
 export const availableThemes = [
   { id: 'light', label: 'Light', icon: 'Sun' },
   { id: 'dark', label: 'Dark', icon: 'Moon' },
-];
+]
 
-export const getTheme = (mode: ThemeMode) => themes[mode];
+export const getTheme = (mode: ThemeMode) => themes[mode]
