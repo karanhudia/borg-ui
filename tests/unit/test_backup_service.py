@@ -322,3 +322,112 @@ class TestBackupService:
         # Simulate removing an error msgid
         del backup_service.error_msgids[1]
         assert 1 not in backup_service.error_msgids
+
+    @pytest.mark.asyncio
+    async def test_ssh_repository_with_remote_path(self, backup_service, test_db):
+        """Test that BORG_REMOTE_PATH environment variable is set for SSH repositories with remote_path"""
+        # Create SSH repository with remote_path (no SSH key needed for this test)
+        repository = Repository(
+            name="ssh-test-repo",
+            path="/backups/test-repo",
+            repository_type="ssh",
+            host="backup.example.com",
+            port=22,
+            username="backupuser",
+            remote_path="/usr/local/bin/borg",  # Custom borg binary path
+            passphrase="test123",
+            source_directories='["/data"]',
+            compression="lz4"
+        )
+        test_db.add(repository)
+        test_db.commit()
+        test_db.refresh(repository)
+
+        # Create backup job
+        job = BackupJob(
+            repository=repository.path,
+            status="pending"
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        # Mock subprocess to capture environment variables
+        mock_env = {}
+
+        async def mock_create_subprocess(*args, **kwargs):
+            # Capture the environment
+            nonlocal mock_env
+            mock_env = kwargs.get('env', {})
+
+            # Return a mock process
+            mock_process = AsyncMock()
+            mock_process.stdout = AsyncMock()
+            mock_process.stdout.readline = AsyncMock(return_value=b'')
+            mock_process.wait = AsyncMock(return_value=0)
+            mock_process.returncode = 0
+            return mock_process
+
+        with patch('asyncio.create_subprocess_exec', side_effect=mock_create_subprocess):
+            with patch('app.services.backup_service.SessionLocal', return_value=test_db):
+                try:
+                    await backup_service.execute_backup(job.id, repository.path)
+                except Exception:
+                    pass  # We're only interested in capturing the environment
+
+        # Verify BORG_REMOTE_PATH was set
+        assert 'BORG_REMOTE_PATH' in mock_env
+        assert mock_env['BORG_REMOTE_PATH'] == '/usr/local/bin/borg'
+
+    @pytest.mark.asyncio
+    async def test_ssh_repository_without_remote_path(self, backup_service, test_db):
+        """Test that BORG_REMOTE_PATH is not set when remote_path is not specified"""
+        # Create SSH repository WITHOUT remote_path
+        repository = Repository(
+            name="ssh-test-repo-2",
+            path="/backups/test-repo-2",
+            repository_type="ssh",
+            host="backup2.example.com",
+            port=22,
+            username="backupuser",
+            remote_path=None,  # No custom borg path
+            passphrase="test456",
+            source_directories='["/data"]',
+            compression="lz4"
+        )
+        test_db.add(repository)
+        test_db.commit()
+        test_db.refresh(repository)
+
+        # Create backup job
+        job = BackupJob(
+            repository=repository.path,
+            status="pending"
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        # Mock subprocess to capture environment variables
+        mock_env = {}
+
+        async def mock_create_subprocess(*args, **kwargs):
+            nonlocal mock_env
+            mock_env = kwargs.get('env', {})
+
+            mock_process = AsyncMock()
+            mock_process.stdout = AsyncMock()
+            mock_process.stdout.readline = AsyncMock(return_value=b'')
+            mock_process.wait = AsyncMock(return_value=0)
+            mock_process.returncode = 0
+            return mock_process
+
+        with patch('asyncio.create_subprocess_exec', side_effect=mock_create_subprocess):
+            with patch('app.services.backup_service.SessionLocal', return_value=test_db):
+                try:
+                    await backup_service.execute_backup(job.id, repository.path)
+                except Exception:
+                    pass
+
+        # Verify BORG_REMOTE_PATH was NOT set
+        assert 'BORG_REMOTE_PATH' not in mock_env
