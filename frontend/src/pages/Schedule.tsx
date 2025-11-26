@@ -450,11 +450,11 @@ const Schedule: React.FC = () => {
       width: '5%',
       render: (job) => (
         <Tooltip title={job.enabled ? 'Enabled' : 'Disabled'} arrow>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', color: 'text.disabled' }}>
             {job.enabled ? (
               <CheckCircle size={18} color="#2e7d32" />
             ) : (
-              <XCircle size={18} color="rgba(0,0,0,0.3)" />
+              <XCircle size={18} />
             )}
           </Box>
         </Tooltip>
@@ -754,7 +754,7 @@ const Schedule: React.FC = () => {
     {
       icon: <AlertCircle size={16} />,
       label: 'Error',
-      onClick: () => {},
+      onClick: () => { },
       color: 'error',
       show: (job) => !!job.error_message,
       tooltip: (job) => job.error_message || 'Error',
@@ -1025,7 +1025,7 @@ const Schedule: React.FC = () => {
               getRowKey={(job) => job.id}
               loading={isLoading}
               enableHover={true}
-              headerBgColor="grey.50"
+              headerBgColor="background.default"
               emptyState={{
                 icon: <Clock size={48} />,
                 title: 'No scheduled jobs found',
@@ -1053,7 +1053,7 @@ const Schedule: React.FC = () => {
             getRowKey={(job) => job.id}
             loading={loadingBackupJobs}
             enableHover={true}
-            headerBgColor="grey.50"
+            headerBgColor="background.default"
             emptyState={{
               icon: <Clock size={48} />,
               title: 'No backup jobs found',

@@ -412,7 +412,7 @@ const Restore: React.FC = () => {
                 icon: <ArchiveIcon size={48} />,
                 title: 'No archives found in this repository',
               }}
-              headerBgColor="grey.50"
+              headerBgColor="background.default"
               enableHover={true}
             />
           </Box>
@@ -518,8 +518,8 @@ const Restore: React.FC = () => {
       {/* Recent Jobs */}
       <Card>
         <CardContent>
-          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}>
-            <Clock size={20} color="rgba(0,0,0,0.6)" />
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3, color: 'text.secondary' }}>
+            <Clock size={20} />
             <Typography variant="h6" fontWeight={600}>
               Recent Restores
             </Typography>
@@ -533,7 +533,7 @@ const Restore: React.FC = () => {
               icon: <Clock size={48} />,
               title: 'No restore jobs found',
             }}
-            headerBgColor="grey.50"
+            headerBgColor="background.default"
             enableHover={true}
             variant="outlined"
           />

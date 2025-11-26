@@ -235,8 +235,8 @@ const Backup: React.FC = () => {
       minWidth: '250px',
       render: (job) => (
         <Tooltip title={job.repository} placement="top" arrow>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <HardDrive size={16} color="rgba(0,0,0,0.4)" />
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ color: 'text.secondary' }}>
+            <HardDrive size={16} />
             <Box>
               <Typography variant="body2" fontWeight={500}>
                 {getRepositoryName(job.repository)}
@@ -492,8 +492,8 @@ const Backup: React.FC = () => {
             <Stack spacing={3}>
               {/* Source Directories */}
               <Box>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
-                  <Folder size={18} color="rgba(0,0,0,0.6)" />
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5, color: 'text.secondary' }}>
+                  <Folder size={18} />
                   <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
                     Source Directories
                   </Typography>
@@ -522,8 +522,8 @@ const Backup: React.FC = () => {
                 <>
                   <Divider />
                   <Box>
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
-                      <AlertCircle size={18} color="rgba(0,0,0,0.6)" />
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5, color: 'text.secondary' }}>
+                      <AlertCircle size={18} />
                       <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
                         Exclude Patterns
                       </Typography>
@@ -547,8 +547,8 @@ const Backup: React.FC = () => {
 
               {/* Repository Info */}
               <Box>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
-                  <Database size={18} color="rgba(0,0,0,0.6)" />
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5, color: 'text.secondary' }}>
+                  <Database size={18} />
                   <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
                     Backup Destination
                   </Typography>
@@ -656,8 +656,8 @@ const Backup: React.FC = () => {
                           {(job.progress || 0) === 0
                             ? 'Initializing backup...'
                             : (job.progress || 0) >= 100
-                            ? 'Finalizing...'
-                            : 'Processing files...'}
+                              ? 'Finalizing...'
+                              : 'Processing files...'}
                         </Typography>
                       </Stack>
                       <Typography variant="body2" color="text.secondary">
@@ -763,8 +763,8 @@ const Backup: React.FC = () => {
       {/* Recent Jobs */}
       <Card>
         <CardContent>
-          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
-            <Clock size={20} color="rgba(0,0,0,0.6)" />
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1, color: 'text.secondary' }}>
+            <Clock size={20} />
             <Typography variant="h6" fontWeight={600}>
               Recent Jobs
             </Typography>
@@ -783,7 +783,7 @@ const Backup: React.FC = () => {
             enablePointer={false}
             loading={loadingStatus}
             emptyState={{
-              icon: <Clock size={48} color="rgba(0,0,0,0.3)" />,
+              icon: <Box sx={{ color: 'text.disabled' }}><Clock size={48} /></Box>,
               title: 'No backup jobs found',
             }}
           />

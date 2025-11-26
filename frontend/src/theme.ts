@@ -180,12 +180,26 @@ export const darkTheme = createTheme({
       contrastText: '#ffffff',
     },
     background: {
-      default: '#111827', // Gray 900
-      paper: '#1f2937', // Gray 800
+      default: '#1a1a1a', // Soft dark gray
+      paper: '#27272a', // Zinc 800
     },
     text: {
-      primary: '#f9fafb', // Gray 50
-      secondary: '#9ca3af', // Gray 400
+      primary: '#fafafa', // Zinc 50
+      secondary: '#a1a1aa', // Zinc 400
     },
   },
 });
+
+export type ThemeMode = 'light' | 'dark';
+
+export const themes: Record<ThemeMode, typeof theme> = {
+  light: theme,
+  dark: darkTheme,
+};
+
+export const availableThemes = [
+  { id: 'light', label: 'Light', icon: 'Sun' },
+  { id: 'dark', label: 'Dark', icon: 'Moon' },
+];
+
+export const getTheme = (mode: ThemeMode) => themes[mode];
