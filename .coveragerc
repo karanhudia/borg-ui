@@ -5,6 +5,9 @@
 # Source code to measure coverage for
 source = app
 
+# Write relative paths in coverage data (required for GitHub Actions)
+relative_files = true
+
 # Omit these files from coverage
 omit =
     */tests/*
