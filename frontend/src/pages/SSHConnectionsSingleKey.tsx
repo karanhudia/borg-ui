@@ -66,6 +66,7 @@ export default function SSHConnectionsSingleKey() {
   const [deleteConnectionDialogOpen, setDeleteConnectionDialogOpen] = useState(false)
   const [selectedConnection, setSelectedConnection] = useState<SSHConnection | null>(null)
   const [keyType, setKeyType] = useState('ed25519')
+  const [defaultPath, setDefaultPath] = useState('')
   const [connectionForm, setConnectionForm] = useState({
     host: '',
     username: '',
@@ -109,12 +110,13 @@ export default function SSHConnectionsSingleKey() {
 
   // Mutations
   const generateKeyMutation = useMutation({
-    mutationFn: (data: { name: string; key_type: string; description?: string }) =>
+    mutationFn: (data: { name: string; key_type: string; description?: string; default_path?: string }) =>
       sshKeysAPI.generateSSHKey(data),
     onSuccess: () => {
       toast.success('System SSH key generated successfully!')
       queryClient.invalidateQueries({ queryKey: ['system-ssh-key'] })
       setGenerateDialogOpen(false)
+      setDefaultPath('')
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to generate SSH key')
@@ -184,6 +186,7 @@ export default function SSHConnectionsSingleKey() {
       name: 'System SSH Key',
       key_type: keyType,
       description: 'System SSH key for all remote connections',
+      default_path: defaultPath || undefined,
     })
   }
 
@@ -514,6 +517,18 @@ export default function SSHConnectionsSingleKey() {
                   </Box>
                 </Box>
 
+                {/* Default Path */}
+                {systemKey?.default_path && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Default Path
+                    </Typography>
+                    <Typography variant="body2" sx={{ mt: 0.5 }}>
+                      {systemKey.default_path}
+                    </Typography>
+                  </Box>
+                )}
+
                 {/* Action Buttons */}
                 <Stack direction="row" spacing={2} flexWrap="wrap">
                   <Tooltip title="Automatically deploy SSH key using password authentication">
@@ -700,6 +715,16 @@ export default function SSHConnectionsSingleKey() {
                 <MenuItem value="ecdsa">ECDSA</MenuItem>
               </Select>
             </FormControl>
+
+            <TextField
+              label="Default Path (Optional)"
+              fullWidth
+              value={defaultPath}
+              onChange={(e) => setDefaultPath(e.target.value)}
+              placeholder="/home"
+              helperText="Starting directory for SSH file browsing (e.g., /home for Hetzner Storage Box)"
+              InputLabelProps={{ shrink: true }}
+            />
           </Stack>
         </DialogContent>
         <DialogActions>
