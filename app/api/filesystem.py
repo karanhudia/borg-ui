@@ -145,14 +145,22 @@ async def browse_filesystem(
                     detail="SSH key ID, host, and username are required for SSH browsing"
                 )
 
-            # Check if SSH key has a default_path and use it when path is "/" or "/local"
-            ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
-            if ssh_key and ssh_key.default_path and path in ["/", "/local"]:
-                logger.info("Using default_path from SSH key",
+            # Check if SSH connection has a default_path and use it when path is "/" or "/local"
+            from app.database.models import SSHConnection
+            ssh_connection = db.query(SSHConnection).filter(
+                SSHConnection.ssh_key_id == ssh_key_id,
+                SSHConnection.host == host,
+                SSHConnection.username == username,
+                SSHConnection.port == port
+            ).first()
+
+            if ssh_connection and ssh_connection.default_path and path in ["/", "/local"]:
+                logger.info("Using default_path from SSH connection",
                           ssh_key_id=ssh_key_id,
-                          default_path=ssh_key.default_path,
+                          host=host,
+                          default_path=ssh_connection.default_path,
                           original_path=path)
-                path = ssh_key.default_path
+                path = ssh_connection.default_path
 
             return await browse_ssh_filesystem(path, ssh_key_id, host, username, port, db)
         else:

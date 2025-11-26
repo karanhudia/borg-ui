@@ -29,13 +29,11 @@ class SSHKeyCreate(BaseModel):
     key_type: str = "rsa"  # rsa, ed25519, ecdsa
     public_key: str
     private_key: str
-    default_path: Optional[str] = None  # Default starting path for SSH browsing
 
 class SSHKeyUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     is_active: Optional[bool] = None
-    default_path: Optional[str] = None  # Default starting path for SSH browsing
 
 class SSHKeyInfo(BaseModel):
     id: int
@@ -44,7 +42,6 @@ class SSHKeyInfo(BaseModel):
     key_type: str
     public_key: str
     is_active: bool
-    default_path: Optional[str]  # Default starting path for SSH browsing
     created_at: str
     updated_at: Optional[str]
 
@@ -69,17 +66,25 @@ class SSHConnectionCreate(BaseModel):
     username: str
     port: int = 22
     password: str
+    default_path: Optional[str] = None  # Default starting path for SSH browsing
 
 class SSHConnectionTest(BaseModel):
     host: str
     username: str
     port: int = 22
 
+class SSHConnectionUpdate(BaseModel):
+    host: Optional[str] = None
+    username: Optional[str] = None
+    port: Optional[int] = None
+    default_path: Optional[str] = None  # Default starting path for SSH browsing
+
 class SSHConnectionInfo(BaseModel):
     id: int
     host: str
     username: str
     port: int
+    default_path: Optional[str]  # Default starting path for SSH browsing
     status: str
     last_test: Optional[str]
     last_success: Optional[str]
@@ -142,7 +147,6 @@ async def get_ssh_keys(
                     "key_type": key.key_type,
                     "public_key": key.public_key,
                     "fingerprint": key.fingerprint,
-                    "default_path": key.default_path,
                     "is_system_key": key.is_system_key,
                     "is_active": key.is_active,
                     "created_at": serialize_datetime(key.created_at),
@@ -190,7 +194,6 @@ async def create_ssh_key(
             key_type=key_data.key_type,
             public_key=key_data.public_key,
             private_key=encrypted_private_key,
-            default_path=key_data.default_path,
             is_active=True
         )
         
@@ -209,7 +212,6 @@ async def create_ssh_key(
                 "description": ssh_key.description,
                 "key_type": ssh_key.key_type,
                 "public_key": ssh_key.public_key,
-                "default_path": ssh_key.default_path,
                 "is_active": ssh_key.is_active
             }
         }
@@ -464,6 +466,8 @@ async def deploy_ssh_key(
             # Update existing connection
             existing_connection.status = "testing"
             existing_connection.last_test = datetime.utcnow()
+            if connection_data.default_path is not None:
+                existing_connection.default_path = connection_data.default_path
             db.commit()
         else:
             # Create new connection record
@@ -472,6 +476,7 @@ async def deploy_ssh_key(
                 host=connection_data.host,
                 username=connection_data.username,
                 port=connection_data.port,
+                default_path=connection_data.default_path,
                 status="testing",
                 last_test=datetime.utcnow()
             )
@@ -533,6 +538,7 @@ async def get_ssh_connections(
                     "host": conn.host,
                     "username": conn.username,
                     "port": conn.port,
+                    "default_path": conn.default_path,
                     "status": conn.status,
                     "last_test": serialize_datetime(conn.last_test),
                     "last_success": serialize_datetime(conn.last_success),
@@ -619,7 +625,7 @@ async def test_ssh_connection(
 @router.put("/connections/{connection_id}")
 async def update_ssh_connection(
     connection_id: int,
-    connection_data: SSHConnectionTest,
+    connection_data: SSHConnectionUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -630,9 +636,14 @@ async def update_ssh_connection(
             raise HTTPException(status_code=404, detail="SSH connection not found")
 
         # Update connection details
-        connection.host = connection_data.host
-        connection.username = connection_data.username
-        connection.port = connection_data.port
+        if connection_data.host is not None:
+            connection.host = connection_data.host
+        if connection_data.username is not None:
+            connection.username = connection_data.username
+        if connection_data.port is not None:
+            connection.port = connection_data.port
+        if connection_data.default_path is not None:
+            connection.default_path = connection_data.default_path
         connection.updated_at = datetime.utcnow()
 
         db.commit()
@@ -764,9 +775,6 @@ async def update_ssh_key(
 
         if key_data.is_active is not None:
             ssh_key.is_active = key_data.is_active
-
-        if key_data.default_path is not None:
-            ssh_key.default_path = key_data.default_path
 
         ssh_key.updated_at = datetime.utcnow()
         db.commit()

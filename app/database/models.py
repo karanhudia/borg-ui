@@ -80,7 +80,6 @@ class SSHKey(Base):
     is_active = Column(Boolean, default=True)
     is_system_key = Column(Boolean, default=False, index=True)  # Identifies the system SSH key
     fingerprint = Column(String, nullable=True)  # SSH key fingerprint
-    default_path = Column(String, nullable=True)  # Default starting path for SSH browsing (e.g., /home for Hetzner Storage Box)
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
@@ -90,12 +89,13 @@ class SSHKey(Base):
 
 class SSHConnection(Base):
     __tablename__ = "ssh_connections"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     ssh_key_id = Column(Integer, ForeignKey("ssh_keys.id"))
     host = Column(String)
     username = Column(String)
     port = Column(Integer, default=22)
+    default_path = Column(String, nullable=True)  # Default starting path for SSH browsing (e.g., /home for Hetzner Storage Box)
     status = Column(String, default="unknown")  # connected, failed, testing, unknown
     last_test = Column(DateTime, nullable=True)
     last_success = Column(DateTime, nullable=True)
