@@ -198,7 +198,18 @@ const Backup: React.FC = () => {
         .join(' ') + ' '
     }
 
-    return `borg create --progress --stats --compression ${compression} ${excludeArgs}${selectedRepoData.path}::${archiveName} ${sourceDirs}`
+    // Build repository path (handle SSH repositories)
+    let repositoryPath = selectedRepoData.path
+    if (selectedRepoData.repository_type === 'ssh' && selectedRepoData.remote_path) {
+      // Construct SSH URL format
+      if (selectedRepoData.port && selectedRepoData.port !== 22) {
+        repositoryPath = `ssh://${selectedRepoData.username}@${selectedRepoData.host}:${selectedRepoData.port}${selectedRepoData.remote_path}`
+      } else {
+        repositoryPath = `${selectedRepoData.username}@${selectedRepoData.host}:${selectedRepoData.remote_path}`
+      }
+    }
+
+    return `borg create --progress --stats --compression ${compression} ${excludeArgs}${repositoryPath}::${archiveName} ${sourceDirs}`
   }
 
   // Get repository name from path
