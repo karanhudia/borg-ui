@@ -333,6 +333,7 @@ class BackupService:
 
         # Create a new database session for this background task
         db = SessionLocal()
+        temp_key_file = None  # Track SSH key file for cleanup
 
         try:
             # Get job
@@ -447,6 +448,68 @@ class BackupService:
                 logger.error(error_msg, error=str(e))
                 raise ValueError(error_msg)
 
+            # Build the actual repository path for SSH repositories
+            actual_repository_path = repository
+            if repo_record and repo_record.repository_type == "ssh":
+                # For SSH repositories, construct the SSH URL format
+                # Format: ssh://username@host:port/remote_path or username@host:remote_path
+                if repo_record.remote_path and repo_record.host and repo_record.username:
+                    # Use the remote_path from the repository configuration
+                    if repo_record.port and repo_record.port != 22:
+                        actual_repository_path = f"ssh://{repo_record.username}@{repo_record.host}:{repo_record.port}{repo_record.remote_path}"
+                    else:
+                        # Use short format for port 22
+                        actual_repository_path = f"{repo_record.username}@{repo_record.host}:{repo_record.remote_path}"
+
+                    # Setup SSH key if available
+                    if repo_record.ssh_key_id:
+                        from app.database.models import SSHKey
+                        from cryptography.fernet import Fernet
+                        import base64
+                        from app.config import settings
+                        import tempfile
+
+                        ssh_key = db.query(SSHKey).filter(SSHKey.id == repo_record.ssh_key_id).first()
+                        if ssh_key:
+                            # Decrypt private key
+                            encryption_key = settings.secret_key.encode()[:32]
+                            cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
+                            private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+
+                            # Ensure private key ends with newline
+                            if not private_key.endswith('\n'):
+                                private_key += '\n'
+
+                            # Create temporary key file
+                            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.key') as f:
+                                f.write(private_key)
+                                temp_key_file = f.name
+
+                            os.chmod(temp_key_file, 0o600)
+
+                            # Update SSH command to use the key
+                            ssh_opts = [
+                                "-i", temp_key_file,
+                                "-o", "StrictHostKeyChecking=no",
+                                "-o", "UserKnownHostsFile=/dev/null",
+                                "-o", "LogLevel=ERROR"
+                            ]
+                            env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+                            logger.info("Using SSH key for remote repository",
+                                      ssh_key_id=repo_record.ssh_key_id,
+                                      repository=actual_repository_path)
+
+                    logger.info("Using SSH repository path",
+                              original_path=repository,
+                              actual_path=actual_repository_path,
+                              remote_path=repo_record.remote_path)
+                else:
+                    logger.warning("SSH repository missing required fields, using path as-is",
+                                 repository=repository,
+                                 has_remote_path=bool(repo_record.remote_path),
+                                 has_host=bool(repo_record.host),
+                                 has_username=bool(repo_record.username))
+
             # Initialize hook logs
             hook_logs = []
 
@@ -544,12 +607,12 @@ class BackupService:
                                      error=str(e))
 
             # Add repository::archive
-            cmd.append(f"{repository}::{archive_name}")
+            cmd.append(f"{actual_repository_path}::{archive_name}")
 
             # Add all source paths to the command
             cmd.extend(source_paths)
 
-            logger.info("Starting borg backup", job_id=job_id, repository=repository, archive=archive_name, command=" ".join(cmd))
+            logger.info("Starting borg backup", job_id=job_id, repository=actual_repository_path, archive=archive_name, command=" ".join(cmd))
 
             # Execute command - NO LOG FILE FOR MAXIMUM PERFORMANCE
             process = await asyncio.create_subprocess_exec(
@@ -1001,6 +1064,14 @@ class BackupService:
             # Clean up error msgids
             if job_id in self.error_msgids:
                 del self.error_msgids[job_id]
+
+            # Clean up temporary SSH key file if it exists
+            if temp_key_file and os.path.exists(temp_key_file):
+                try:
+                    os.unlink(temp_key_file)
+                    logger.debug("Cleaned up temporary SSH key file", temp_key_file=temp_key_file)
+                except Exception as e:
+                    logger.warning("Failed to delete temporary SSH key file", temp_key_file=temp_key_file, error=str(e))
 
             # Close the database session
             db.close()
