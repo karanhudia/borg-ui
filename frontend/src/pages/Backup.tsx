@@ -198,16 +198,8 @@ const Backup: React.FC = () => {
         .join(' ') + ' '
     }
 
-    // Build repository path (handle SSH repositories)
-    let repositoryPath = selectedRepoData.path
-    if (selectedRepoData.repository_type === 'ssh' && selectedRepoData.host && selectedRepoData.username) {
-      // Construct SSH URL format using the path field as repository location
-      if (selectedRepoData.port && selectedRepoData.port !== 22) {
-        repositoryPath = `ssh://${selectedRepoData.username}@${selectedRepoData.host}:${selectedRepoData.port}${selectedRepoData.path}`
-      } else {
-        repositoryPath = `${selectedRepoData.username}@${selectedRepoData.host}:${selectedRepoData.path}`
-      }
-    }
+    // Use repository path as-is (already contains full SSH URL for SSH repos)
+    const repositoryPath = selectedRepoData.path
 
     // Add --remote-path flag if specified (path to borg binary on remote)
     const remotePathFlag = selectedRepoData.remote_path ? `--remote-path ${selectedRepoData.remote_path} ` : ''
