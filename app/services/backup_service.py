@@ -376,7 +376,9 @@ class BackupService:
             ssh_opts = [
                 "-o", "StrictHostKeyChecking=no",  # Don't check host keys
                 "-o", "UserKnownHostsFile=/dev/null",  # Don't save host keys
-                "-o", "LogLevel=ERROR"  # Reduce SSH verbosity
+                "-o", "LogLevel=ERROR",  # Reduce SSH verbosity
+                "-o", "RequestTTY=no",  # Disable TTY allocation to prevent shell initialization output
+                "-o", "PermitLocalCommand=no"  # Prevent local command execution
             ]
             env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
 
@@ -492,7 +494,9 @@ class BackupService:
                                 "-i", temp_key_file,
                                 "-o", "StrictHostKeyChecking=no",
                                 "-o", "UserKnownHostsFile=/dev/null",
-                                "-o", "LogLevel=ERROR"
+                                "-o", "LogLevel=ERROR",
+                                "-o", "RequestTTY=no",  # Disable TTY allocation to prevent shell initialization output
+                                "-o", "PermitLocalCommand=no"  # Prevent local command execution
                             ]
                             env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
                             logger.info("Using SSH key for remote repository",

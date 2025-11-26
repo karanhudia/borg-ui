@@ -84,7 +84,9 @@ class CheckService:
                 "-o", "LogLevel=ERROR",
                 "-o", "ServerAliveInterval=15",   # Send keepalive every 15s
                 "-o", "ServerAliveCountMax=3",    # Give up after 3 failures (~45s)
-                "-o", "TCPKeepAlive=yes"          # Enable TCP-level keepalives
+                "-o", "TCPKeepAlive=yes",         # Enable TCP-level keepalives
+                "-o", "RequestTTY=no",            # Disable TTY allocation to prevent shell initialization output
+                "-o", "PermitLocalCommand=no"     # Prevent local command execution
             ]
             env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
 

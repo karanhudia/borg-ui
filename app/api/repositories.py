@@ -23,6 +23,31 @@ router = APIRouter(tags=["repositories"])
 # Initialize Borg interface
 borg = BorgInterface()
 
+# Helper function to get standard SSH options
+def get_standard_ssh_opts(include_key_path=None):
+    """Get standardized SSH options for Borg operations
+
+    Args:
+        include_key_path: Optional path to SSH private key file
+
+    Returns:
+        List of SSH options for use with BORG_RSH
+    """
+    opts = []
+
+    if include_key_path:
+        opts.extend(["-i", include_key_path])
+
+    opts.extend([
+        "-o", "StrictHostKeyChecking=no",
+        "-o", "UserKnownHostsFile=/dev/null",
+        "-o", "LogLevel=ERROR",
+        "-o", "RequestTTY=no",  # Disable TTY allocation to prevent shell initialization output (fixes Aurora Linux)
+        "-o", "PermitLocalCommand=no"  # Prevent local command execution
+    ])
+
+    return opts
+
 # Helper function to setup Borg environment with proper lock configuration
 def setup_borg_env(base_env=None, passphrase=None, ssh_opts=None):
     """Setup Borg environment variables with lock and timeout configuration"""
@@ -1137,8 +1162,8 @@ async def verify_existing_repository(path: str, passphrase: str = None, ssh_key_
             os.chmod(temp_key_file, 0o600)
 
             # Set SSH key environment variable
-            borg_rsh = f"ssh -i {temp_key_file} -o StrictHostKeyChecking=no"
-            env["BORG_RSH"] = borg_rsh
+            ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
+            env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
 
         # Add repository path
         cmd.append(path)
@@ -1291,7 +1316,8 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
             logger.info("Set SSH key file permissions to 600")
 
             # Set SSH key environment variable
-            borg_rsh = f"ssh -i {temp_key_file} -o StrictHostKeyChecking=no"
+            ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
+            borg_rsh = f"ssh {' '.join(ssh_opts)}"
             env["BORG_RSH"] = borg_rsh
             logger.info("Set BORG_RSH environment variable", borg_rsh=borg_rsh)
 
@@ -1388,11 +1414,7 @@ async def list_repository_archives(
             cmd.extend(["--json", repository.path])
 
             # Set up environment with proper lock configuration
-            ssh_opts = [
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "LogLevel=ERROR"
-            ]
+            ssh_opts = get_standard_ssh_opts()
             env = setup_borg_env(
                 passphrase=repository.passphrase,
                 ssh_opts=ssh_opts
@@ -1489,11 +1511,7 @@ async def get_repository_info(
             cmd.extend(["--json", repository.path])
 
             # Set up environment with proper lock configuration
-            ssh_opts = [
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "LogLevel=ERROR"
-            ]
+            ssh_opts = get_standard_ssh_opts()
             env = setup_borg_env(
                 passphrase=repository.passphrase,
                 ssh_opts=ssh_opts
@@ -1688,11 +1706,7 @@ async def get_archive_info(
             list_env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
 
             # Add SSH options
-            ssh_opts = [
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "LogLevel=ERROR"
-            ]
+            ssh_opts = get_standard_ssh_opts()
             list_env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
 
             try:
@@ -1923,11 +1937,7 @@ async def break_repository_lock(
         env = os.environ.copy()
 
         # Add SSH options
-        ssh_opts = [
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "LogLevel=ERROR"
-        ]
+        ssh_opts = get_standard_ssh_opts()
         env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
 
         # Add passphrase if available
