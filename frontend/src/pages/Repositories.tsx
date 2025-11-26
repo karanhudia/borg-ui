@@ -76,7 +76,6 @@ interface SSHKey {
   name: string
   key_type: string
   is_active: boolean
-  default_path?: string
 }
 
 interface SSHConnection {
