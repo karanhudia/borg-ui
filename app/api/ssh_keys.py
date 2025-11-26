@@ -29,11 +29,13 @@ class SSHKeyCreate(BaseModel):
     key_type: str = "rsa"  # rsa, ed25519, ecdsa
     public_key: str
     private_key: str
+    default_path: Optional[str] = None  # Default starting path for SSH browsing
 
 class SSHKeyUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     is_active: Optional[bool] = None
+    default_path: Optional[str] = None  # Default starting path for SSH browsing
 
 class SSHKeyInfo(BaseModel):
     id: int
@@ -42,6 +44,7 @@ class SSHKeyInfo(BaseModel):
     key_type: str
     public_key: str
     is_active: bool
+    default_path: Optional[str]  # Default starting path for SSH browsing
     created_at: str
     updated_at: Optional[str]
 
@@ -139,6 +142,7 @@ async def get_ssh_keys(
                     "key_type": key.key_type,
                     "public_key": key.public_key,
                     "fingerprint": key.fingerprint,
+                    "default_path": key.default_path,
                     "is_system_key": key.is_system_key,
                     "is_active": key.is_active,
                     "created_at": serialize_datetime(key.created_at),
@@ -186,6 +190,7 @@ async def create_ssh_key(
             key_type=key_data.key_type,
             public_key=key_data.public_key,
             private_key=encrypted_private_key,
+            default_path=key_data.default_path,
             is_active=True
         )
         
@@ -204,6 +209,7 @@ async def create_ssh_key(
                 "description": ssh_key.description,
                 "key_type": ssh_key.key_type,
                 "public_key": ssh_key.public_key,
+                "default_path": ssh_key.default_path,
                 "is_active": ssh_key.is_active
             }
         }
@@ -755,10 +761,13 @@ async def update_ssh_key(
         
         if key_data.description is not None:
             ssh_key.description = key_data.description
-        
+
         if key_data.is_active is not None:
             ssh_key.is_active = key_data.is_active
-        
+
+        if key_data.default_path is not None:
+            ssh_key.default_path = key_data.default_path
+
         ssh_key.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(ssh_key)
