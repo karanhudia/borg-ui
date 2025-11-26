@@ -452,14 +452,14 @@ class BackupService:
             actual_repository_path = repository
             if repo_record and repo_record.repository_type == "ssh":
                 # For SSH repositories, construct the SSH URL format
-                # Format: ssh://username@host:port/remote_path or username@host:remote_path
-                if repo_record.remote_path and repo_record.host and repo_record.username:
-                    # Use the remote_path from the repository configuration
+                # Format: ssh://username@host:port/path or username@host:path
+                if repo_record.host and repo_record.username:
+                    # Use the path field for the repository location on remote
                     if repo_record.port and repo_record.port != 22:
-                        actual_repository_path = f"ssh://{repo_record.username}@{repo_record.host}:{repo_record.port}{repo_record.remote_path}"
+                        actual_repository_path = f"ssh://{repo_record.username}@{repo_record.host}:{repo_record.port}{repo_record.path}"
                     else:
                         # Use short format for port 22
-                        actual_repository_path = f"{repo_record.username}@{repo_record.host}:{repo_record.remote_path}"
+                        actual_repository_path = f"{repo_record.username}@{repo_record.host}:{repo_record.path}"
 
                     # Setup SSH key if available
                     if repo_record.ssh_key_id:
@@ -499,14 +499,19 @@ class BackupService:
                                       ssh_key_id=repo_record.ssh_key_id,
                                       repository=actual_repository_path)
 
-                    logger.info("Using SSH repository path",
+                    # Set BORG_REMOTE_PATH if specified (path to borg binary on remote)
+                    if repo_record.remote_path:
+                        env['BORG_REMOTE_PATH'] = repo_record.remote_path
+                        logger.info("Using custom remote borg path",
+                                  remote_path=repo_record.remote_path,
+                                  repository=actual_repository_path)
+
+                    logger.info("Using SSH repository",
                               original_path=repository,
-                              actual_path=actual_repository_path,
-                              remote_path=repo_record.remote_path)
+                              actual_path=actual_repository_path)
                 else:
                     logger.warning("SSH repository missing required fields, using path as-is",
                                  repository=repository,
-                                 has_remote_path=bool(repo_record.remote_path),
                                  has_host=bool(repo_record.host),
                                  has_username=bool(repo_record.username))
 

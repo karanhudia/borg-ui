@@ -200,16 +200,19 @@ const Backup: React.FC = () => {
 
     // Build repository path (handle SSH repositories)
     let repositoryPath = selectedRepoData.path
-    if (selectedRepoData.repository_type === 'ssh' && selectedRepoData.remote_path) {
-      // Construct SSH URL format
+    if (selectedRepoData.repository_type === 'ssh' && selectedRepoData.host && selectedRepoData.username) {
+      // Construct SSH URL format using the path field as repository location
       if (selectedRepoData.port && selectedRepoData.port !== 22) {
-        repositoryPath = `ssh://${selectedRepoData.username}@${selectedRepoData.host}:${selectedRepoData.port}${selectedRepoData.remote_path}`
+        repositoryPath = `ssh://${selectedRepoData.username}@${selectedRepoData.host}:${selectedRepoData.port}${selectedRepoData.path}`
       } else {
-        repositoryPath = `${selectedRepoData.username}@${selectedRepoData.host}:${selectedRepoData.remote_path}`
+        repositoryPath = `${selectedRepoData.username}@${selectedRepoData.host}:${selectedRepoData.path}`
       }
     }
 
-    return `borg create --progress --stats --compression ${compression} ${excludeArgs}${repositoryPath}::${archiveName} ${sourceDirs}`
+    // Add --remote-path flag if specified (path to borg binary on remote)
+    const remotePathFlag = selectedRepoData.remote_path ? `--remote-path ${selectedRepoData.remote_path} ` : ''
+
+    return `borg create ${remotePathFlag}--progress --stats --compression ${compression} ${excludeArgs}${repositoryPath}::${archiveName} ${sourceDirs}`
   }
 
   // Get repository name from path
