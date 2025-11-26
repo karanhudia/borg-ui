@@ -642,7 +642,8 @@ const Archives: React.FC = () => {
                                 userSelect: 'none',
                                 backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.1),
                                 '&:hover': {
-                                  backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.2),
+                                  backgroundColor: (theme) =>
+                                    alpha(theme.palette.primary.main, 0.2),
                                 },
                               }}
                             >
