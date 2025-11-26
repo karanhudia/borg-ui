@@ -80,6 +80,7 @@ class SSHKey(Base):
     is_active = Column(Boolean, default=True)
     is_system_key = Column(Boolean, default=False, index=True)  # Identifies the system SSH key
     fingerprint = Column(String, nullable=True)  # SSH key fingerprint
+    default_path = Column(String, nullable=True)  # Default starting path for SSH browsing (e.g., /home for Hetzner Storage Box)
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
