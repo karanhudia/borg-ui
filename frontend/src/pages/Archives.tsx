@@ -18,6 +18,7 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  useTheme,
 } from '@mui/material'
 import {
   Trash2,
@@ -51,6 +52,7 @@ interface Archive {
 }
 
 const Archives: React.FC = () => {
+  const theme = useTheme()
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(null)
   const [selectedRepository, setSelectedRepository] = useState<Repository | null>(null)
   const [viewArchive, setViewArchive] = useState<Archive | null>(null)
@@ -224,7 +226,7 @@ const Archives: React.FC = () => {
             </Typography>
           </Stack>
           <FormControl fullWidth sx={{ minWidth: { xs: '100%', sm: 300 } }}>
-            <InputLabel id="repository-select-label">Repository</InputLabel>
+            <InputLabel id="repository-select-label" sx={{ color: 'text.primary' }}>Repository</InputLabel>
             <Select
               labelId="repository-select-label"
               value={selectedRepositoryId || ''}
@@ -364,8 +366,8 @@ const Archives: React.FC = () => {
 
       {/* No Repository Selected State */}
       {!selectedRepositoryId && !loadingRepositories && (
-        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
-          <Folder size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8, color: 'text.secondary' }}>
+          <Folder size={48} style={{ marginBottom: 16 }} />
           <Typography variant="body1" color="text.secondary">
             {repositories.length === 0
               ? 'No repositories found. Create a repository first.'
@@ -397,8 +399,8 @@ const Archives: React.FC = () => {
             </Box>
           ) : archivesList.length === 0 ? (
             /* Empty State */
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', py: 8 }}>
-              <FolderOpen size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', py: 8, color: 'text.secondary' }}>
+              <FolderOpen size={48} style={{ marginBottom: 16 }} />
               <Typography variant="body1" color="text.secondary">
                 No archives found in this repository
               </Typography>
@@ -563,8 +565,8 @@ const Archives: React.FC = () => {
                                 },
                               }}
                             >
-                              <Stack direction="row" spacing={1.5} alignItems="center">
-                                <Folder size={20} color="#3b82f6" />
+                              <Stack direction="row" spacing={1.5} alignItems="center" sx={{ color: 'text.primary' }}>
+                                <Folder size={20} />
                                 <Typography variant="body2" fontWeight={500}>
                                   {folder.name}
                                 </Typography>
@@ -583,14 +585,14 @@ const Archives: React.FC = () => {
                                 p: 1.5,
                                 borderRadius: 1,
                                 userSelect: 'none',
-                                backgroundColor: 'rgba(0, 0, 0, 0.02)',
+                                backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
                                 '&:hover': {
-                                  backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                                  backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
                                 },
                               }}
                             >
-                              <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flex: 1, minWidth: 0 }}>
-                                <FolderOpen size={20} color="rgba(0,0,0,0.4)" />
+                              <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flex: 1, minWidth: 0, color: 'text.primary' }}>
+                                <FolderOpen size={20} />
                                 <Typography
                                   variant="body2"
                                   sx={{
@@ -631,8 +633,8 @@ const Archives: React.FC = () => {
                   </Box>
                 </Box>
               ) : (
-                <Box sx={{ textAlign: 'center', py: 8 }}>
-                  <AlertCircle size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: '16px' }} />
+                <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
+                  <AlertCircle size={48} style={{ marginBottom: '16px' }} />
                   <Typography variant="h6" color="text.secondary" gutterBottom>
                     This archive is empty
                   </Typography>
@@ -643,8 +645,8 @@ const Archives: React.FC = () => {
               )}
             </Stack>
           ) : (
-            <Box sx={{ textAlign: 'center', py: 8 }}>
-              <AlertCircle size={48} color="rgba(0,0,0,0.3)" style={{ marginBottom: 16 }} />
+            <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
+              <AlertCircle size={48} style={{ marginBottom: 16 }} />
               <Typography variant="body1" color="text.secondary">
                 No archive information available
               </Typography>

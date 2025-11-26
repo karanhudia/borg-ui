@@ -17,6 +17,9 @@ import {
   Chip,
   FormControlLabel,
   Checkbox,
+  MenuItem,
+  Select,
+  FormControl,
 } from '@mui/material'
 import {
   Users,
@@ -26,10 +29,15 @@ import {
   Key,
   AlertCircle,
   Bell,
+  Moon,
+  Sun,
+  Monitor,
 } from 'lucide-react'
 import { settingsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
+import { useTheme } from '../context/ThemeContext'
+import { availableThemes } from '../theme'
 import NotificationsTab from '../components/NotificationsTab'
 import { formatDateShort } from '../utils/dateUtils'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
@@ -46,6 +54,7 @@ interface UserType {
 
 const Settings: React.FC = () => {
   const { user } = useAuth()
+  const { mode, setTheme } = useTheme()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState(0)
   const [showCreateUser, setShowCreateUser] = useState(false)
@@ -302,6 +311,12 @@ const Settings: React.FC = () => {
             sx={{ textTransform: 'none', minHeight: 48 }}
           />
           <Tab
+            icon={<Monitor size={18} />}
+            iconPosition="start"
+            label="Appearance"
+            sx={{ textTransform: 'none', minHeight: 48 }}
+          />
+          <Tab
             icon={<Bell size={18} />}
             iconPosition="start"
             label="Notifications"
@@ -381,7 +396,7 @@ const Settings: React.FC = () => {
                     }
                     helperText={
                       changePasswordForm.confirm_password !== '' &&
-                      changePasswordForm.new_password !== changePasswordForm.confirm_password
+                        changePasswordForm.new_password !== changePasswordForm.confirm_password
                         ? 'Passwords do not match'
                         : ''
                     }
@@ -404,11 +419,60 @@ const Settings: React.FC = () => {
         </Box>
       )}
 
+      {/* Appearance Tab */}
+      {activeTab === 1 && (
+        <Box>
+          <Card sx={{ maxWidth: 600 }}>
+            <Box sx={{ p: 3 }}>
+              <Typography variant="h6" fontWeight={600} gutterBottom>
+                Appearance
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                Customize the look and feel of the application
+              </Typography>
+
+              <Stack spacing={3}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    {mode === 'dark' ? <Moon size={24} /> : <Sun size={24} />}
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight={500}>
+                        Theme
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Choose a theme
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <FormControl sx={{ minWidth: 120 }} size="small">
+                    <Select
+                      value={mode}
+                      onChange={(e) => setTheme(e.target.value as any)}
+                      displayEmpty
+                      inputProps={{ 'aria-label': 'Theme mode' }}
+                    >
+                      {availableThemes.map((themeOption) => (
+                        <MenuItem key={themeOption.id} value={themeOption.id}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {themeOption.icon === 'Sun' ? <Sun size={16} /> : <Moon size={16} />}
+                            {themeOption.label}
+                          </Box>
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Box>
+              </Stack>
+            </Box>
+          </Card>
+        </Box>
+      )}
+
       {/* Notifications Tab */}
-      {activeTab === 1 && <NotificationsTab />}
+      {activeTab === 2 && <NotificationsTab />}
 
       {/* User Management Tab */}
-      {activeTab === (user?.is_admin ? 2 : 1) && user?.is_admin && (
+      {activeTab === (user?.is_admin ? 3 : 2) && user?.is_admin && (
         <Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
             <Typography variant="h6" fontWeight={600}>
