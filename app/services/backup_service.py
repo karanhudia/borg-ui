@@ -450,74 +450,57 @@ class BackupService:
                 logger.error(error_msg, error=str(e))
                 raise ValueError(error_msg)
 
-            # Build the actual repository path for SSH repositories
+            # Use repository path as-is (already contains full SSH URL for SSH repos)
             actual_repository_path = repository
+
+            # Setup SSH-specific configuration if this is an SSH repository
             if repo_record and repo_record.repository_type == "ssh":
-                # For SSH repositories, construct the SSH URL format
-                # Format: ssh://username@host:port/path or username@host:path
-                if repo_record.host and repo_record.username:
-                    # Use the path field for the repository location on remote
-                    if repo_record.port and repo_record.port != 22:
-                        actual_repository_path = f"ssh://{repo_record.username}@{repo_record.host}:{repo_record.port}{repo_record.path}"
-                    else:
-                        # Use short format for port 22
-                        actual_repository_path = f"{repo_record.username}@{repo_record.host}:{repo_record.path}"
+                # Setup SSH key if available
+                if repo_record.ssh_key_id:
+                    from app.database.models import SSHKey
+                    from cryptography.fernet import Fernet
+                    import base64
+                    from app.config import settings
+                    import tempfile
 
-                    # Setup SSH key if available
-                    if repo_record.ssh_key_id:
-                        from app.database.models import SSHKey
-                        from cryptography.fernet import Fernet
-                        import base64
-                        from app.config import settings
-                        import tempfile
+                    ssh_key = db.query(SSHKey).filter(SSHKey.id == repo_record.ssh_key_id).first()
+                    if ssh_key:
+                        # Decrypt private key
+                        encryption_key = settings.secret_key.encode()[:32]
+                        cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
+                        private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
 
-                        ssh_key = db.query(SSHKey).filter(SSHKey.id == repo_record.ssh_key_id).first()
-                        if ssh_key:
-                            # Decrypt private key
-                            encryption_key = settings.secret_key.encode()[:32]
-                            cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-                            private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+                        # Ensure private key ends with newline
+                        if not private_key.endswith('\n'):
+                            private_key += '\n'
 
-                            # Ensure private key ends with newline
-                            if not private_key.endswith('\n'):
-                                private_key += '\n'
+                        # Create temporary key file
+                        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.key') as f:
+                            f.write(private_key)
+                            temp_key_file = f.name
 
-                            # Create temporary key file
-                            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.key') as f:
-                                f.write(private_key)
-                                temp_key_file = f.name
+                        os.chmod(temp_key_file, 0o600)
 
-                            os.chmod(temp_key_file, 0o600)
-
-                            # Update SSH command to use the key
-                            ssh_opts = [
-                                "-i", temp_key_file,
-                                "-o", "StrictHostKeyChecking=no",
-                                "-o", "UserKnownHostsFile=/dev/null",
-                                "-o", "LogLevel=ERROR",
-                                "-o", "RequestTTY=no",  # Disable TTY allocation to prevent shell initialization output
-                                "-o", "PermitLocalCommand=no"  # Prevent local command execution
-                            ]
-                            env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
-                            logger.info("Using SSH key for remote repository",
-                                      ssh_key_id=repo_record.ssh_key_id,
-                                      repository=actual_repository_path)
-
-                    # Set BORG_REMOTE_PATH if specified (path to borg binary on remote)
-                    if repo_record.remote_path:
-                        env['BORG_REMOTE_PATH'] = repo_record.remote_path
-                        logger.info("Using custom remote borg path",
-                                  remote_path=repo_record.remote_path,
+                        # Update SSH command to use the key
+                        ssh_opts = [
+                            "-i", temp_key_file,
+                            "-o", "StrictHostKeyChecking=no",
+                            "-o", "UserKnownHostsFile=/dev/null",
+                            "-o", "LogLevel=ERROR",
+                            "-o", "RequestTTY=no",  # Disable TTY allocation to prevent shell initialization output
+                            "-o", "PermitLocalCommand=no"  # Prevent local command execution
+                        ]
+                        env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+                        logger.info("Using SSH key for remote repository",
+                                  ssh_key_id=repo_record.ssh_key_id,
                                   repository=actual_repository_path)
 
-                    logger.info("Using SSH repository",
-                              original_path=repository,
-                              actual_path=actual_repository_path)
-                else:
-                    logger.warning("SSH repository missing required fields, using path as-is",
-                                 repository=repository,
-                                 has_host=bool(repo_record.host),
-                                 has_username=bool(repo_record.username))
+                # Set BORG_REMOTE_PATH if specified (path to borg binary on remote)
+                if repo_record.remote_path:
+                    env['BORG_REMOTE_PATH'] = repo_record.remote_path
+                    logger.info("Using custom remote borg path",
+                              remote_path=repo_record.remote_path,
+                              repository=actual_repository_path)
 
             # Initialize hook logs
             hook_logs = []
