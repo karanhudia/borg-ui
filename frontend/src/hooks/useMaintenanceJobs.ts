@@ -31,7 +31,7 @@ export function useMaintenanceJobs(repositoryId: number | null, enabled: boolean
       if (!enabled) return false
       // Keep polling if we have running jobs, or if we haven't fetched data yet
       const data = query.state.data
-      return (!data || data?.has_running_jobs) ? 3000 : false
+      return !data || data?.has_running_jobs ? 3000 : false
     },
     refetchIntervalInBackground: true,
     refetchOnWindowFocus: true, // Refetch when returning to tab

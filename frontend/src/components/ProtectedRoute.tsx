@@ -5,7 +5,16 @@ import { toast } from 'react-hot-toast'
 
 interface ProtectedRouteProps {
   children: ReactElement
-  requiredTab: 'dashboard' | 'sshKeys' | 'connections' | 'repositories' | 'backups' | 'archives' | 'restore' | 'schedule' | 'settings'
+  requiredTab:
+    | 'dashboard'
+    | 'sshKeys'
+    | 'connections'
+    | 'repositories'
+    | 'backups'
+    | 'archives'
+    | 'restore'
+    | 'schedule'
+    | 'settings'
 }
 
 export default function ProtectedRoute({ children, requiredTab }: ProtectedRouteProps) {

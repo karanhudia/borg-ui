@@ -19,7 +19,7 @@ export default function RepositorySelector({
   repositories,
   selectedRepositoryId,
   onRepositoryChange,
-  loading = false
+  loading = false,
 }: RepositorySelectorProps) {
   return (
     <FormControl fullWidth size="small">
@@ -40,11 +40,7 @@ export default function RepositorySelector({
           repositories.map((repo) => (
             <MenuItem key={repo.id} value={repo.id}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                {repo.repository_type === 'local' ? (
-                  <HardDrive size={16} />
-                ) : (
-                  <Wifi size={16} />
-                )}
+                {repo.repository_type === 'local' ? <HardDrive size={16} /> : <Wifi size={16} />}
                 <Typography variant="body2" sx={{ flex: 1 }}>
                   {repo.name}
                 </Typography>

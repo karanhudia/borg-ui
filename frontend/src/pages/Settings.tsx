@@ -21,18 +21,7 @@ import {
   Select,
   FormControl,
 } from '@mui/material'
-import {
-  Users,
-  Trash2,
-  Plus,
-  Edit,
-  Key,
-  AlertCircle,
-  Bell,
-  Moon,
-  Sun,
-  Monitor,
-} from 'lucide-react'
+import { Users, Trash2, Plus, Edit, Key, AlertCircle, Bell, Moon, Sun, Monitor } from 'lucide-react'
 import { settingsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
@@ -247,11 +236,7 @@ const Settings: React.FC = () => {
     {
       id: 'created_at',
       label: 'Created',
-      render: (user) => (
-        <Typography variant="body2">
-          {formatDateShort(user.created_at)}
-        </Typography>
-      ),
+      render: (user) => <Typography variant="body2">{formatDateShort(user.created_at)}</Typography>,
     },
     {
       id: 'last_login',
@@ -364,7 +349,10 @@ const Settings: React.FC = () => {
                     type="password"
                     value={changePasswordForm.current_password}
                     onChange={(e) =>
-                      setChangePasswordForm({ ...changePasswordForm, current_password: e.target.value })
+                      setChangePasswordForm({
+                        ...changePasswordForm,
+                        current_password: e.target.value,
+                      })
                     }
                     required
                     fullWidth
@@ -386,7 +374,10 @@ const Settings: React.FC = () => {
                     type="password"
                     value={changePasswordForm.confirm_password}
                     onChange={(e) =>
-                      setChangePasswordForm({ ...changePasswordForm, confirm_password: e.target.value })
+                      setChangePasswordForm({
+                        ...changePasswordForm,
+                        confirm_password: e.target.value,
+                      })
                     }
                     required
                     fullWidth
@@ -396,7 +387,7 @@ const Settings: React.FC = () => {
                     }
                     helperText={
                       changePasswordForm.confirm_password !== '' &&
-                        changePasswordForm.new_password !== changePasswordForm.confirm_password
+                      changePasswordForm.new_password !== changePasswordForm.confirm_password
                         ? 'Passwords do not match'
                         : ''
                     }
@@ -407,9 +398,13 @@ const Settings: React.FC = () => {
                       type="submit"
                       variant="contained"
                       disabled={changePasswordMutation.isPending}
-                      startIcon={changePasswordMutation.isPending ? <CircularProgress size={16} /> : null}
+                      startIcon={
+                        changePasswordMutation.isPending ? <CircularProgress size={16} /> : null
+                      }
                     >
-                      {changePasswordMutation.isPending ? 'Changing Password...' : 'Change Password'}
+                      {changePasswordMutation.isPending
+                        ? 'Changing Password...'
+                        : 'Change Password'}
                     </Button>
                   </Box>
                 </Stack>
@@ -432,7 +427,9 @@ const Settings: React.FC = () => {
               </Typography>
 
               <Stack spacing={3}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box
+                  sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     {mode === 'dark' ? <Moon size={24} /> : <Sun size={24} />}
                     <Box>
@@ -474,15 +471,13 @@ const Settings: React.FC = () => {
       {/* User Management Tab */}
       {activeTab === (user?.is_admin ? 3 : 2) && user?.is_admin && (
         <Box>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Box
+            sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}
+          >
             <Typography variant="h6" fontWeight={600}>
               User Management
             </Typography>
-            <Button
-              variant="contained"
-              startIcon={<Plus size={18} />}
-              onClick={openCreateUser}
-            >
+            <Button variant="contained" startIcon={<Plus size={18} />} onClick={openCreateUser}>
               Add User
             </Button>
           </Box>

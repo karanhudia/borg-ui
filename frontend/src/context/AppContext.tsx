@@ -1,4 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react'
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  ReactNode,
+} from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { repositoriesAPI, sshKeysAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
@@ -43,7 +51,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   })
 
   // Check for SSH keys - only run when authenticated
-  const { data: sshKeys, isLoading: loadingSSH, isFetched: fetchedSSH, refetch: refetchSSH } = useQuery({
+  const {
+    data: sshKeys,
+    isLoading: loadingSSH,
+    isFetched: fetchedSSH,
+    refetch: refetchSSH,
+  } = useQuery({
     queryKey: ['app-ssh-keys'],
     queryFn: async () => {
       try {
@@ -61,7 +74,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   })
 
   // Check for repositories - only run when authenticated
-  const { data: repositories, isLoading: loadingRepos, isFetched: fetchedRepos, refetch: refetchRepos } = useQuery({
+  const {
+    data: repositories,
+    isLoading: loadingRepos,
+    isFetched: fetchedRepos,
+    refetch: refetchRepos,
+  } = useQuery({
     queryKey: ['app-repositories'],
     queryFn: async () => {
       try {
@@ -96,7 +114,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setAppState({
       hasSSHKey: !!(sshKeys && sshKeys.length > 0),
       hasRepositories: !!(repositories && repositories.length > 0),
-      hasArchives: !!(archiveCheck?.hasArchives),
+      hasArchives: !!archiveCheck?.hasArchives,
       isLoading,
       refetch: () => {
         refetchSSH()
@@ -137,34 +155,45 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       schedule: appState.hasRepositories, // Only requires repositories for scheduling
       settings: true,
     }
-  }, [appState.hasSSHKey, appState.hasRepositories, appState.hasArchives, fetchedSSH, fetchedRepos, authLoading, isAuthenticated])
+  }, [
+    appState.hasSSHKey,
+    appState.hasRepositories,
+    appState.hasArchives,
+    fetchedSSH,
+    fetchedRepos,
+    authLoading,
+    isAuthenticated,
+  ])
 
   // Get reason why a tab is disabled
-  const getTabDisabledReason = useCallback((tab: keyof TabEnablement): string | null => {
-    if (tabEnablement[tab]) {
-      return null
-    }
+  const getTabDisabledReason = useCallback(
+    (tab: keyof TabEnablement): string | null => {
+      if (tabEnablement[tab]) {
+        return null
+      }
 
-    switch (tab) {
-      case 'backups':
-      case 'archives':
-      case 'schedule':
-        if (!appState.hasRepositories) {
-          return 'Please create a repository first'
-        }
-        return null
-      case 'restore':
-        if (!appState.hasRepositories) {
-          return 'Please create a repository first'
-        }
-        if (!appState.hasArchives) {
-          return 'No archives available to restore from'
-        }
-        return null
-      default:
-        return null
-    }
-  }, [tabEnablement, appState.hasRepositories, appState.hasArchives])
+      switch (tab) {
+        case 'backups':
+        case 'archives':
+        case 'schedule':
+          if (!appState.hasRepositories) {
+            return 'Please create a repository first'
+          }
+          return null
+        case 'restore':
+          if (!appState.hasRepositories) {
+            return 'Please create a repository first'
+          }
+          if (!appState.hasArchives) {
+            return 'No archives available to restore from'
+          }
+          return null
+        default:
+          return null
+      }
+    },
+    [tabEnablement, appState.hasRepositories, appState.hasArchives]
+  )
 
   const value: AppContextValue = {
     appState,

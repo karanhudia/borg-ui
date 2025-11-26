@@ -58,7 +58,10 @@ const Archives: React.FC = () => {
   const [viewArchive, setViewArchive] = useState<Archive | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
   const [currentPath, setCurrentPath] = useState<string>('/')
-  const [lockError, setLockError] = useState<{ repositoryId: number, repositoryName: string } | null>(null)
+  const [lockError, setLockError] = useState<{
+    repositoryId: number
+    repositoryName: string
+  } | null>(null)
   const queryClient = useQueryClient()
 
   // Get repositories list
@@ -68,11 +71,15 @@ const Archives: React.FC = () => {
   })
 
   // Get archives for selected repository
-  const { data: archives, isLoading: loadingArchives, error: archivesError } = useQuery({
+  const {
+    data: archives,
+    isLoading: loadingArchives,
+    error: archivesError,
+  } = useQuery({
     queryKey: ['repository-archives', selectedRepositoryId],
     queryFn: () => repositoriesAPI.listRepositoryArchives(selectedRepositoryId!),
     enabled: !!selectedRepositoryId,
-    retry: false
+    retry: false,
   })
 
   // Handle archives error
@@ -80,17 +87,21 @@ const Archives: React.FC = () => {
     if (archivesError && (archivesError as any)?.response?.status === 423 && selectedRepositoryId) {
       setLockError({
         repositoryId: selectedRepositoryId,
-        repositoryName: selectedRepository?.name || 'Unknown'
+        repositoryName: selectedRepository?.name || 'Unknown',
       })
     }
   }, [archivesError, selectedRepositoryId, selectedRepository?.name])
 
   // Get repository info for statistics
-  const { data: repoInfo, isLoading: loadingRepoInfo, error: repoInfoError } = useQuery({
+  const {
+    data: repoInfo,
+    isLoading: loadingRepoInfo,
+    error: repoInfoError,
+  } = useQuery({
     queryKey: ['repository-info', selectedRepositoryId],
     queryFn: () => repositoriesAPI.getRepositoryInfo(selectedRepositoryId!),
     enabled: !!selectedRepositoryId,
-    retry: false
+    retry: false,
   })
 
   // Handle repo info error
@@ -98,7 +109,7 @@ const Archives: React.FC = () => {
     if (repoInfoError && (repoInfoError as any)?.response?.status === 423 && selectedRepositoryId) {
       setLockError({
         repositoryId: selectedRepositoryId,
-        repositoryName: selectedRepository?.name || 'Unknown'
+        repositoryName: selectedRepository?.name || 'Unknown',
       })
     }
   }, [repoInfoError, selectedRepositoryId, selectedRepository?.name])
@@ -113,7 +124,7 @@ const Archives: React.FC = () => {
       const path = currentPath === '/' ? '' : currentPath.replace(/^\//, '')
       return await browseAPI.getContents(selectedRepositoryId, viewArchive.name, path)
     },
-    enabled: !!selectedRepositoryId && !!viewArchive
+    enabled: !!selectedRepositoryId && !!viewArchive,
   })
 
   // Delete archive mutation
@@ -127,7 +138,7 @@ const Archives: React.FC = () => {
     },
     onError: (error: any) => {
       toast.error(`Failed to delete archive: ${error.response?.data?.detail || error.message}`)
-    }
+    },
   })
 
   // Handle repository selection
@@ -164,14 +175,14 @@ const Archives: React.FC = () => {
         folders.push({
           name: item.name,
           path: item.path,
-          type: 'd'
+          type: 'd',
         })
       } else {
         files.push({
           name: item.name,
           path: item.path,
           size: item.size,
-          type: 'f'
+          type: 'f',
         })
       }
     })
@@ -190,7 +201,7 @@ const Archives: React.FC = () => {
     const breadcrumbs = [{ label: 'Root', path: '/' }]
 
     let accumulatedPath = ''
-    parts.forEach(part => {
+    parts.forEach((part) => {
       accumulatedPath += `/${part}`
       breadcrumbs.push({ label: part, path: accumulatedPath })
     })
@@ -226,7 +237,9 @@ const Archives: React.FC = () => {
             </Typography>
           </Stack>
           <FormControl fullWidth sx={{ minWidth: { xs: '100%', sm: 300 } }}>
-            <InputLabel id="repository-select-label" sx={{ color: 'text.primary' }}>Repository</InputLabel>
+            <InputLabel id="repository-select-label" sx={{ color: 'text.primary' }}>
+              Repository
+            </InputLabel>
             <Select
               labelId="repository-select-label"
               value={selectedRepositoryId || ''}
@@ -245,9 +258,22 @@ const Archives: React.FC = () => {
                     <Box>
                       <Typography variant="body2" fontWeight={500}>
                         {repo.name}
-                        {repo.has_running_maintenance && <Typography component="span" variant="caption" color="warning.main" sx={{ ml: 1 }}>(Maintenance Running)</Typography>}
+                        {repo.has_running_maintenance && (
+                          <Typography
+                            component="span"
+                            variant="caption"
+                            color="warning.main"
+                            sx={{ ml: 1 }}
+                          >
+                            (Maintenance Running)
+                          </Typography>
+                        )}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ fontFamily: 'monospace' }}
+                      >
                         {repo.path}
                       </Typography>
                     </Box>
@@ -261,7 +287,16 @@ const Archives: React.FC = () => {
 
       {/* Repository Statistics */}
       {selectedRepositoryId && loadingRepoInfo && (
-        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '120px', mb: 4 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '120px',
+            mb: 4,
+          }}
+        >
           <CircularProgress size={48} />
           <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
             Loading repository statistics...
@@ -269,7 +304,14 @@ const Archives: React.FC = () => {
         </Box>
       )}
       {selectedRepositoryId && !loadingRepoInfo && repoInfo?.data?.info?.cache?.stats && (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(5, 1fr)' }, gap: 2, mb: 4 }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(5, 1fr)' },
+            gap: 2,
+            mb: 4,
+          }}
+        >
           {/* Total Archives */}
           <Card sx={{ backgroundColor: '#e3f2fd' }}>
             <CardContent>
@@ -296,7 +338,12 @@ const Archives: React.FC = () => {
                   <Typography variant="body2" color="success.dark" fontWeight={500}>
                     Space Used
                   </Typography>
-                  <Typography variant="h4" fontWeight={700} color="success.dark" sx={{ fontSize: '1.5rem' }}>
+                  <Typography
+                    variant="h4"
+                    fontWeight={700}
+                    color="success.dark"
+                    sx={{ fontSize: '1.5rem' }}
+                  >
                     {formatBytesUtil(repoInfo.data.info.cache.stats.unique_csize)}
                   </Typography>
                 </Box>
@@ -313,9 +360,15 @@ const Archives: React.FC = () => {
                   <Typography variant="body2" sx={{ color: '#0277bd' }} fontWeight={500}>
                     Space Saved
                   </Typography>
-                  <Typography variant="h4" fontWeight={700} sx={{ color: '#0277bd', fontSize: '1.5rem' }}>
+                  <Typography
+                    variant="h4"
+                    fontWeight={700}
+                    sx={{ color: '#0277bd', fontSize: '1.5rem' }}
+                  >
                     {(() => {
-                      const saved = (repoInfo.data.info.cache.stats.total_size || 0) - (repoInfo.data.info.cache.stats.unique_csize || 0)
+                      const saved =
+                        (repoInfo.data.info.cache.stats.total_size || 0) -
+                        (repoInfo.data.info.cache.stats.unique_csize || 0)
                       return saved > 0 ? formatBytesUtil(saved) : '0 B'
                     })()}
                   </Typography>
@@ -366,7 +419,15 @@ const Archives: React.FC = () => {
 
       {/* No Repository Selected State */}
       {!selectedRepositoryId && !loadingRepositories && (
-        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8, color: 'text.secondary' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            py: 8,
+            color: 'text.secondary',
+          }}
+        >
           <Folder size={48} style={{ marginBottom: 16 }} />
           <Typography variant="body1" color="text.secondary">
             {repositories.length === 0
@@ -380,7 +441,9 @@ const Archives: React.FC = () => {
       {selectedRepositoryId && (
         <>
           {/* Header with count */}
-          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box
+            sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+          >
             <Typography variant="h6" fontWeight={600}>
               Archives for {selectedRepository?.name}
             </Typography>
@@ -399,7 +462,16 @@ const Archives: React.FC = () => {
             </Box>
           ) : archivesList.length === 0 ? (
             /* Empty State */
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', py: 8, color: 'text.secondary' }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                textAlign: 'center',
+                py: 8,
+                color: 'text.secondary',
+              }}
+            >
               <FolderOpen size={48} style={{ marginBottom: 16 }} />
               <Typography variant="body1" color="text.secondary">
                 No archives found in this repository
@@ -472,8 +544,8 @@ const Archives: React.FC = () => {
         fullWidth
         PaperProps={{
           sx: {
-            maxHeight: '80vh'
-          }
+            maxHeight: '80vh',
+          },
         }}
       >
         <DialogTitle>
@@ -503,11 +575,21 @@ const Archives: React.FC = () => {
               {archiveContents?.data?.items && archiveContents.data.items.length > 0 ? (
                 <Box>
                   {/* Breadcrumb Navigation */}
-                  <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
+                  <Box
+                    sx={{
+                      mb: 2,
+                      display: 'flex',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: 0.5,
+                    }}
+                  >
                     {getBreadcrumbs().map((crumb, index) => (
                       <React.Fragment key={crumb.path}>
                         {index > 0 && (
-                          <Typography variant="body2" color="text.secondary">/</Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            /
+                          </Typography>
                         )}
                         <Typography
                           variant="body2"
@@ -565,7 +647,12 @@ const Archives: React.FC = () => {
                                 },
                               }}
                             >
-                              <Stack direction="row" spacing={1.5} alignItems="center" sx={{ color: 'text.primary' }}>
+                              <Stack
+                                direction="row"
+                                spacing={1.5}
+                                alignItems="center"
+                                sx={{ color: 'text.primary' }}
+                              >
                                 <Folder size={20} />
                                 <Typography variant="body2" fontWeight={500}>
                                   {folder.name}
@@ -585,13 +672,24 @@ const Archives: React.FC = () => {
                                 p: 1.5,
                                 borderRadius: 1,
                                 userSelect: 'none',
-                                backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
+                                backgroundColor:
+                                  theme.palette.mode === 'dark'
+                                    ? 'rgba(255, 255, 255, 0.05)'
+                                    : 'rgba(0, 0, 0, 0.02)',
                                 '&:hover': {
-                                  backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+                                  backgroundColor:
+                                    theme.palette.mode === 'dark'
+                                      ? 'rgba(255, 255, 255, 0.1)'
+                                      : 'rgba(0, 0, 0, 0.05)',
                                 },
                               }}
                             >
-                              <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flex: 1, minWidth: 0, color: 'text.primary' }}>
+                              <Stack
+                                direction="row"
+                                spacing={1.5}
+                                alignItems="center"
+                                sx={{ flex: 1, minWidth: 0, color: 'text.primary' }}
+                              >
                                 <FolderOpen size={20} />
                                 <Typography
                                   variant="body2"
@@ -605,7 +703,11 @@ const Archives: React.FC = () => {
                                 </Typography>
                               </Stack>
                               <Stack direction="row" spacing={2} alignItems="center">
-                                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 60, textAlign: 'right' }}>
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                  sx={{ minWidth: 60, textAlign: 'right' }}
+                                >
                                   {file.size ? formatBytesUtil(file.size) : '0 B'}
                                 </Typography>
                                 <IconButton
@@ -613,12 +715,23 @@ const Archives: React.FC = () => {
                                   sx={{ color: 'text.secondary' }}
                                   onClick={() => {
                                     if (selectedRepository && viewArchive) {
-                                      archivesAPI.downloadFile(selectedRepository.path, viewArchive.name, file.path)
+                                      archivesAPI.downloadFile(
+                                        selectedRepository.path,
+                                        viewArchive.name,
+                                        file.path
+                                      )
                                     }
                                   }}
                                   title="Download file"
                                 >
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                  >
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                                     <polyline points="7 10 12 15 17 10" />
                                     <line x1="12" y1="15" x2="12" y2="3" />
@@ -639,7 +752,8 @@ const Archives: React.FC = () => {
                     This archive is empty
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    No files were backed up in this archive. This may happen if the source directory was empty or inaccessible during the backup.
+                    No files were backed up in this archive. This may happen if the source directory
+                    was empty or inaccessible during the backup.
                   </Typography>
                 </Box>
               )}
@@ -694,15 +808,19 @@ const Archives: React.FC = () => {
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShowDeleteConfirm(null)}>
-            Cancel
-          </Button>
+          <Button onClick={() => setShowDeleteConfirm(null)}>Cancel</Button>
           <Button
             variant="contained"
             color="error"
             onClick={() => handleDeleteArchive(showDeleteConfirm!)}
             disabled={deleteArchiveMutation.isPending}
-            startIcon={deleteArchiveMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <Trash2 size={16} />}
+            startIcon={
+              deleteArchiveMutation.isPending ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : (
+                <Trash2 size={16} />
+              )
+            }
           >
             {deleteArchiveMutation.isPending ? 'Deleting...' : 'Delete'}
           </Button>
@@ -718,7 +836,9 @@ const Archives: React.FC = () => {
           repositoryName={lockError.repositoryName}
           onLockBroken={() => {
             // Invalidate queries to retry
-            queryClient.invalidateQueries({ queryKey: ['repository-archives', lockError.repositoryId] })
+            queryClient.invalidateQueries({
+              queryKey: ['repository-archives', lockError.repositoryId],
+            })
             queryClient.invalidateQueries({ queryKey: ['repository-info', lockError.repositoryId] })
           }}
         />

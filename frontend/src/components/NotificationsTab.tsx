@@ -221,8 +221,8 @@ const NotificationsTab: React.FC = () => {
 
       <Alert severity="info" sx={{ mb: 3 }}>
         <Typography variant="body2" gutterBottom>
-          Get notified about backup failures, restore completions, and scheduled job issues via 100+ services
-          including Email, Slack, Discord, Telegram, Pushover, and more.
+          Get notified about backup failures, restore completions, and scheduled job issues via 100+
+          services including Email, Slack, Discord, Telegram, Pushover, and more.
         </Typography>
         <Link
           href="#"
@@ -238,44 +238,66 @@ const NotificationsTab: React.FC = () => {
       </Alert>
 
       <Collapse in={showExamples}>
-        <Card sx={{ mb: 3, p: 2, bgcolor: 'background.default', border: 1, borderColor: 'divider' }}>
+        <Card
+          sx={{ mb: 3, p: 2, bgcolor: 'background.default', border: 1, borderColor: 'divider' }}
+        >
           <Typography variant="subtitle2" fontWeight={600} gutterBottom>
             Apprise URL Examples:
           </Typography>
-          <Box sx={{
-            fontFamily: 'monospace',
-            fontSize: '0.75rem',
-            bgcolor: 'grey.900',
-            color: 'grey.100',
-            p: 1.5,
-            borderRadius: 1,
-            border: '1px solid',
-            borderColor: 'grey.700',
-            overflow: 'auto',
-            lineHeight: 1.4
-          }}>
-            <Box component="span" sx={{ color: 'grey.400' }}>Email (Gmail): </Box>
-            <Box component="span">mailto://user:app_password@gmail.com?smtp=smtp.gmail.com&mode=starttls</Box>
+          <Box
+            sx={{
+              fontFamily: 'monospace',
+              fontSize: '0.75rem',
+              bgcolor: 'grey.900',
+              color: 'grey.100',
+              p: 1.5,
+              borderRadius: 1,
+              border: '1px solid',
+              borderColor: 'grey.700',
+              overflow: 'auto',
+              lineHeight: 1.4,
+            }}
+          >
+            <Box component="span" sx={{ color: 'grey.400' }}>
+              Email (Gmail):{' '}
+            </Box>
+            <Box component="span">
+              mailto://user:app_password@gmail.com?smtp=smtp.gmail.com&mode=starttls
+            </Box>
             <br />
-            <Box component="span" sx={{ color: 'grey.400' }}>Slack: </Box>
+            <Box component="span" sx={{ color: 'grey.400' }}>
+              Slack:{' '}
+            </Box>
             <Box component="span">slack://TokenA/TokenB/TokenC/</Box>
             <br />
-            <Box component="span" sx={{ color: 'grey.400' }}>Discord: </Box>
+            <Box component="span" sx={{ color: 'grey.400' }}>
+              Discord:{' '}
+            </Box>
             <Box component="span">discord://webhook_id/webhook_token</Box>
             <br />
-            <Box component="span" sx={{ color: 'grey.400' }}>Telegram: </Box>
+            <Box component="span" sx={{ color: 'grey.400' }}>
+              Telegram:{' '}
+            </Box>
             <Box component="span">tgram://bot_token/chat_id</Box>
             <br />
-            <Box component="span" sx={{ color: 'grey.400' }}>Microsoft Teams: </Box>
+            <Box component="span" sx={{ color: 'grey.400' }}>
+              Microsoft Teams:{' '}
+            </Box>
             <Box component="span">msteams://TokenA/TokenB/TokenC/</Box>
             <br />
-            <Box component="span" sx={{ color: 'grey.400' }}>Pushover: </Box>
+            <Box component="span" sx={{ color: 'grey.400' }}>
+              Pushover:{' '}
+            </Box>
             <Box component="span">pover://user@token</Box>
             <br />
-            <Box component="span" sx={{ color: 'grey.400' }}>ntfy: </Box>
+            <Box component="span" sx={{ color: 'grey.400' }}>
+              ntfy:{' '}
+            </Box>
             <Box component="span">ntfy://topic/</Box>
             <br />
-            <Box component="span" sx={{ color: 'grey.400' }}>Custom Webhook: </Box>
+            <Box component="span" sx={{ color: 'grey.400' }}>
+              Custom Webhook:{' '}
+            </Box>
             <Box component="span">json://hostname/path/to/endpoint</Box>
           </Box>
           <Link
@@ -301,7 +323,8 @@ const NotificationsTab: React.FC = () => {
             No Notification Services Configured
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Add your first notification service to get alerts about backup failures and other important events.
+            Add your first notification service to get alerts about backup failures and other
+            important events.
           </Typography>
           <Button
             variant="contained"
@@ -335,7 +358,11 @@ const NotificationsTab: React.FC = () => {
                         <Typography variant="body2" fontWeight={500}>
                           {notification.name}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ fontFamily: 'monospace' }}
+                        >
                           {notification.service_url.substring(0, 40)}
                           {notification.service_url.length > 40 && '...'}
                         </Typography>
@@ -358,13 +385,28 @@ const NotificationsTab: React.FC = () => {
                           <Chip label="Backup OK" size="small" color="success" variant="outlined" />
                         )}
                         {notification.notify_on_restore_failure && (
-                          <Chip label="Restore Fail" size="small" color="error" variant="outlined" />
+                          <Chip
+                            label="Restore Fail"
+                            size="small"
+                            color="error"
+                            variant="outlined"
+                          />
                         )}
                         {notification.notify_on_restore_success && (
-                          <Chip label="Restore OK" size="small" color="success" variant="outlined" />
+                          <Chip
+                            label="Restore OK"
+                            size="small"
+                            color="success"
+                            variant="outlined"
+                          />
                         )}
                         {notification.notify_on_schedule_failure && (
-                          <Chip label="Schedule Fail" size="small" color="error" variant="outlined" />
+                          <Chip
+                            label="Schedule Fail"
+                            size="small"
+                            color="error"
+                            variant="outlined"
+                          />
                         )}
                       </Stack>
                     </TableCell>
@@ -544,8 +586,8 @@ const NotificationsTab: React.FC = () => {
         <DialogTitle>Delete Notification Service?</DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to delete <strong>{deleteConfirm?.name}</strong>? You will no longer
-            receive notifications from this service.
+            Are you sure you want to delete <strong>{deleteConfirm?.name}</strong>? You will no
+            longer receive notifications from this service.
           </Typography>
         </DialogContent>
         <DialogActions>

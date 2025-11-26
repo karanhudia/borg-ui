@@ -66,8 +66,8 @@ interface Repository {
   archive_count: number
   created_at: string
   updated_at: string | null
-  mode: 'full' | 'observe'  // full: backups + observability, observe: observability-only
-  custom_flags?: string | null  // Custom command-line flags for borg create
+  mode: 'full' | 'observe' // full: backups + observability, observe: observability-only
+  custom_flags?: string | null // Custom command-line flags for borg create
   has_running_maintenance?: boolean
 }
 
@@ -106,7 +106,10 @@ export default function Repositories() {
     keep_yearly: 1,
   })
   const [pruneResults, setPruneResults] = useState<any>(null)
-  const [lockError, setLockError] = useState<{ repositoryId: number, repositoryName: string } | null>(null)
+  const [lockError, setLockError] = useState<{
+    repositoryId: number
+    repositoryName: string
+  } | null>(null)
 
   // Track repositories with running jobs for polling
   const [repositoriesWithJobs, setRepositoriesWithJobs] = useState<Set<number>>(new Set())
@@ -128,12 +131,16 @@ export default function Repositories() {
   })
 
   // Get repository info using borg info command
-  const { data: repositoryInfo, isLoading: loadingInfo, error: infoError } = useQuery<any>({
+  const {
+    data: repositoryInfo,
+    isLoading: loadingInfo,
+    error: infoError,
+  } = useQuery<any>({
     queryKey: ['repository-info', viewingInfoRepository?.id],
     queryFn: () => repositoriesAPI.getRepositoryInfo(viewingInfoRepository!.id),
     enabled: !!viewingInfoRepository,
     placeholderData: (previousData: any) => previousData, // Keep showing data during dialog close animation (was keepPreviousData in v3)
-    retry: false
+    retry: false,
   })
 
   // Handle repository info error
@@ -141,7 +148,7 @@ export default function Repositories() {
     if (infoError && (infoError as any)?.response?.status === 423 && viewingInfoRepository) {
       setLockError({
         repositoryId: viewingInfoRepository.id,
-        repositoryName: viewingInfoRepository.name
+        repositoryName: viewingInfoRepository.name,
       })
     }
   }, [infoError, viewingInfoRepository])
@@ -192,7 +199,9 @@ export default function Repositories() {
       const message = response?.data?.message || 'Repository imported successfully'
       const archiveCount = response?.data?.repository?.archive_count || 0
 
-      toast.success(`${message}${archiveCount > 0 ? ` (${archiveCount} archives found)` : ''}`, { duration: 5000 })
+      toast.success(`${message}${archiveCount > 0 ? ` (${archiveCount} archives found)` : ''}`, {
+        duration: 5000,
+      })
 
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
       queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
@@ -280,7 +289,8 @@ export default function Repositories() {
   })
 
   const pruneRepositoryMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) => repositoriesAPI.pruneRepository(id, data),
+    mutationFn: ({ id, data }: { id: number; data: any }) =>
+      repositoriesAPI.pruneRepository(id, data),
     onSuccess: (response: any) => {
       setPruneResults(response.data)
       if (response.data.dry_run) {
@@ -433,7 +443,7 @@ export default function Repositories() {
     if (pruningRepository) {
       pruneRepositoryMutation.mutate({
         id: pruningRepository.id,
-        data: { ...pruneForm, dry_run: true }
+        data: { ...pruneForm, dry_run: true },
       })
     }
   }
@@ -442,7 +452,7 @@ export default function Repositories() {
     if (pruningRepository) {
       pruneRepositoryMutation.mutate({
         id: pruningRepository.id,
-        data: { ...pruneForm, dry_run: false }
+        data: { ...pruneForm, dry_run: false },
       })
     }
   }
@@ -550,7 +560,11 @@ export default function Repositories() {
     let repoPath = repositoryForm.path || '/path/to/repository'
 
     // Build full path for remote repository
-    if (repositoryForm.repository_type === 'ssh' && repositoryForm.host && repositoryForm.username) {
+    if (
+      repositoryForm.repository_type === 'ssh' &&
+      repositoryForm.host &&
+      repositoryForm.username
+    ) {
       repoPath = `ssh://${repositoryForm.username}@${repositoryForm.host}:${repositoryForm.port}${repoPath.startsWith('/') ? '' : '/'}${repoPath}`
     } else if (repositoryForm.repository_type === 'local') {
       repoPath = repoPath || '/path/to/local/repository'
@@ -573,7 +587,11 @@ export default function Repositories() {
     let repoPath = repositoryForm.path || '/path/to/repository'
 
     // Build full path for remote repository
-    if (repositoryForm.repository_type === 'ssh' && repositoryForm.host && repositoryForm.username) {
+    if (
+      repositoryForm.repository_type === 'ssh' &&
+      repositoryForm.host &&
+      repositoryForm.username
+    ) {
       repoPath = `ssh://${repositoryForm.username}@${repositoryForm.host}:${repositoryForm.port}${repoPath.startsWith('/') ? '' : '/'}${repoPath}`
     } else if (repositoryForm.repository_type === 'local') {
       repoPath = repoPath || '/path/to/local/repository'
@@ -591,7 +609,7 @@ export default function Repositories() {
 
     // Add exclude patterns
     if (repositoryForm.exclude_patterns.length > 0) {
-      repositoryForm.exclude_patterns.forEach(pattern => {
+      repositoryForm.exclude_patterns.forEach((pattern) => {
         command += ` --exclude '${pattern}'`
       })
     }
@@ -606,7 +624,7 @@ export default function Repositories() {
 
     // Add source directories
     if (repositoryForm.source_directories.length > 0) {
-      command += ` ${repositoryForm.source_directories.map(dir => `'${dir}'`).join(' ')}`
+      command += ` ${repositoryForm.source_directories.map((dir) => `'${dir}'`).join(' ')}`
     } else {
       command += ` /path/to/source`
     }
@@ -632,7 +650,7 @@ export default function Repositories() {
 
     // Add exclude patterns
     if (editForm.exclude_patterns.length > 0) {
-      editForm.exclude_patterns.forEach(pattern => {
+      editForm.exclude_patterns.forEach((pattern) => {
         command += ` --exclude '${pattern}'`
       })
     }
@@ -647,7 +665,7 @@ export default function Repositories() {
 
     // Add source directories
     if (editForm.source_directories.length > 0) {
-      command += ` ${editForm.source_directories.map(dir => `'${dir}'`).join(' ')}`
+      command += ` ${editForm.source_directories.map((dir) => `'${dir}'`).join(' ')}`
     } else {
       command += ` /path/to/source`
     }
@@ -689,7 +707,9 @@ export default function Repositories() {
     return parts.join(',')
   }
 
-  const parseCompressionString = (compression: string): {
+  const parseCompressionString = (
+    compression: string
+  ): {
     algorithm: string
     level: string
     autoDetect: boolean
@@ -748,13 +768,16 @@ export default function Repositories() {
     <Box>
       {/* Header */}
       <Box sx={{ mb: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+        <Box
+          sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}
+        >
           <Box sx={{ flex: 1, mr: 2 }}>
             <Typography variant="h4" fontWeight={600} gutterBottom>
               Repository Management
             </Typography>
             <Typography variant="body2" color="text.secondary" paragraph>
-              A repository is where your backed-up data will be stored. The files from your configured sources will be backed up here.
+              A repository is where your backed-up data will be stored. The files from your
+              configured sources will be backed up here.
             </Typography>
           </Box>
           {user?.is_admin && (
@@ -850,7 +873,7 @@ export default function Repositories() {
                   variant="contained"
                   startIcon={<Computer />}
                   onClick={() => {
-                    openRepositoryModal("create")
+                    openRepositoryModal('create')
                     setRepositoryForm({ ...repositoryForm, repository_type: 'local' })
                   }}
                 >
@@ -860,7 +883,7 @@ export default function Repositories() {
                   variant="outlined"
                   startIcon={<Wifi />}
                   onClick={() => {
-                    openRepositoryModal("create")
+                    openRepositoryModal('create')
                     setRepositoryForm({ ...repositoryForm, repository_type: 'ssh' })
                   }}
                 >
@@ -909,14 +932,23 @@ export default function Repositories() {
       />
 
       {/* Create Repository Dialog */}
-      <Dialog open={showRepositoryModal} onClose={() => setShowRepositoryModal(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={showRepositoryModal}
+        onClose={() => setShowRepositoryModal(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <form onSubmit={handleSubmitRepository}>
-          <DialogTitle>{repositoryModalMode === 'create' ? 'Create' : 'Import'} Repository</DialogTitle>
+          <DialogTitle>
+            {repositoryModalMode === 'create' ? 'Create' : 'Import'} Repository
+          </DialogTitle>
           <DialogContent>
             {/* Command Preview */}
             <Alert severity="info" sx={{ mb: 2 }}>
               <Typography variant="subtitle2" gutterBottom>
-                {repositoryModalMode === 'create' ? 'Commands that will run:' : 'Backup Command Preview:'}
+                {repositoryModalMode === 'create'
+                  ? 'Commands that will run:'
+                  : 'Backup Command Preview:'}
               </Typography>
 
               {repositoryModalMode === 'create' && (
@@ -924,16 +956,18 @@ export default function Repositories() {
                   <Typography variant="caption" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
                     1. Initialize Repository:
                   </Typography>
-                  <Box sx={{
-                    bgcolor: 'grey.900',
-                    color: 'grey.100',
-                    p: 1.5,
-                    borderRadius: 1,
-                    fontFamily: 'monospace',
-                    fontSize: '0.875rem',
-                    overflow: 'auto',
-                    mb: 2
-                  }}>
+                  <Box
+                    sx={{
+                      bgcolor: 'grey.900',
+                      color: 'grey.100',
+                      p: 1.5,
+                      borderRadius: 1,
+                      fontFamily: 'monospace',
+                      fontSize: '0.875rem',
+                      overflow: 'auto',
+                      mb: 2,
+                    }}
+                  >
                     {getBorgInitCommand()}
                   </Box>
                 </>
@@ -944,15 +978,17 @@ export default function Repositories() {
                   <Typography variant="caption" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
                     {repositoryModalMode === 'create' ? '2. Create Backup:' : 'Backup Command:'}
                   </Typography>
-                  <Box sx={{
-                    bgcolor: 'grey.900',
-                    color: 'grey.100',
-                    p: 1.5,
-                    borderRadius: 1,
-                    fontFamily: 'monospace',
-                    fontSize: '0.875rem',
-                    overflow: 'auto'
-                  }}>
+                  <Box
+                    sx={{
+                      bgcolor: 'grey.900',
+                      color: 'grey.100',
+                      p: 1.5,
+                      borderRadius: 1,
+                      fontFamily: 'monospace',
+                      fontSize: '0.875rem',
+                      overflow: 'auto',
+                    }}
+                  >
                     {getBorgCreateCommand()}
                   </Box>
                 </>
@@ -960,7 +996,8 @@ export default function Repositories() {
 
               {repositoryModalMode === 'import' && (
                 <Typography variant="body2" sx={{ mt: 1.5 }}>
-                  This command will be used for future backups. The repository will be verified before import.
+                  This command will be used for future backups. The repository will be verified
+                  before import.
                 </Typography>
               )}
             </Alert>
@@ -980,11 +1017,18 @@ export default function Repositories() {
                 <Select
                   value={repositoryForm.mode}
                   label="Repository Mode"
-                  onChange={(e) => setRepositoryForm({ ...repositoryForm, mode: e.target.value as 'full' | 'observe' })}
+                  onChange={(e) =>
+                    setRepositoryForm({
+                      ...repositoryForm,
+                      mode: e.target.value as 'full' | 'observe',
+                    })
+                  }
                 >
                   <MenuItem value="full">
                     <Box>
-                      <Typography variant="body2" fontWeight={600}>Full Repository</Typography>
+                      <Typography variant="body2" fontWeight={600}>
+                        Full Repository
+                      </Typography>
                       <Typography variant="caption" color="text.secondary">
                         Create backups and browse existing archives
                       </Typography>
@@ -992,7 +1036,9 @@ export default function Repositories() {
                   </MenuItem>
                   <MenuItem value="observe">
                     <Box>
-                      <Typography variant="body2" fontWeight={600}>Observability Only</Typography>
+                      <Typography variant="body2" fontWeight={600}>
+                        Observability Only
+                      </Typography>
                       <Typography variant="caption" color="text.secondary">
                         Browse and restore existing archives only (no backups)
                       </Typography>
@@ -1003,7 +1049,8 @@ export default function Repositories() {
 
               {repositoryForm.mode === 'observe' && (
                 <Alert severity="info">
-                  Observability-only repositories can browse and restore existing archives but cannot create new backups or be used in scheduled jobs.
+                  Observability-only repositories can browse and restore existing archives but
+                  cannot create new backups or be used in scheduled jobs.
                 </Alert>
               )}
 
@@ -1012,7 +1059,9 @@ export default function Repositories() {
                 <Select
                   value={repositoryForm.repository_type}
                   label="Repository Type"
-                  onChange={(e) => setRepositoryForm({ ...repositoryForm, repository_type: e.target.value })}
+                  onChange={(e) =>
+                    setRepositoryForm({ ...repositoryForm, repository_type: e.target.value })
+                  }
                 >
                   <MenuItem value="local">Local</MenuItem>
                   <MenuItem value="ssh">SSH</MenuItem>
@@ -1028,7 +1077,9 @@ export default function Repositories() {
 
                   <Autocomplete<SSHConnection>
                     options={connectedConnections}
-                    getOptionLabel={(option: SSHConnection) => `${option.username}@${option.host}:${option.port} (${option.ssh_key_name})`}
+                    getOptionLabel={(option: SSHConnection) =>
+                      `${option.username}@${option.host}:${option.port} (${option.ssh_key_name})`
+                    }
                     onChange={(_, value: SSHConnection | null) => handleConnectionSelect(value)}
                     renderInput={(params) => (
                       <TextField
@@ -1053,7 +1104,9 @@ export default function Repositories() {
                   <TextField
                     label="Username"
                     value={repositoryForm.username}
-                    onChange={(e) => setRepositoryForm({ ...repositoryForm, username: e.target.value })}
+                    onChange={(e) =>
+                      setRepositoryForm({ ...repositoryForm, username: e.target.value })
+                    }
                     placeholder="user"
                     required
                     fullWidth
@@ -1063,7 +1116,9 @@ export default function Repositories() {
                     label="Port"
                     type="number"
                     value={repositoryForm.port}
-                    onChange={(e) => setRepositoryForm({ ...repositoryForm, port: parseInt(e.target.value) })}
+                    onChange={(e) =>
+                      setRepositoryForm({ ...repositoryForm, port: parseInt(e.target.value) })
+                    }
                     required
                     fullWidth
                   />
@@ -1073,7 +1128,12 @@ export default function Repositories() {
                     <Select
                       value={repositoryForm.ssh_key_id ?? ''}
                       label="SSH Key"
-                      onChange={(e) => setRepositoryForm({ ...repositoryForm, ssh_key_id: e.target.value ? Number(e.target.value) : null })}
+                      onChange={(e) =>
+                        setRepositoryForm({
+                          ...repositoryForm,
+                          ssh_key_id: e.target.value ? Number(e.target.value) : null,
+                        })
+                      }
                     >
                       <MenuItem value="">Select SSH Key</MenuItem>
                       {sshKeys
@@ -1092,7 +1152,11 @@ export default function Repositories() {
                 label="Path"
                 value={repositoryForm.path}
                 onChange={(e) => setRepositoryForm({ ...repositoryForm, path: e.target.value })}
-                placeholder={repositoryForm.repository_type === 'local' ? '/path/to/repository' : '/path/to/repository'}
+                placeholder={
+                  repositoryForm.repository_type === 'local'
+                    ? '/path/to/repository'
+                    : '/path/to/repository'
+                }
                 required
                 fullWidth
                 helperText="Any path is allowed. Directory will be created automatically."
@@ -1118,7 +1182,9 @@ export default function Repositories() {
                   <Select
                     value={repositoryForm.encryption}
                     label="Encryption"
-                    onChange={(e) => setRepositoryForm({ ...repositoryForm, encryption: e.target.value })}
+                    onChange={(e) =>
+                      setRepositoryForm({ ...repositoryForm, encryption: e.target.value })
+                    }
                   >
                     <MenuItem value="repokey">Repokey (Recommended)</MenuItem>
                     <MenuItem value="keyfile">Keyfile</MenuItem>
@@ -1129,127 +1195,147 @@ export default function Repositories() {
 
               {/* Compression Settings - Only for full repositories */}
               {repositoryForm.mode === 'full' && (
-              <Box>
-                <Typography variant="subtitle2" gutterBottom sx={{ mb: 1.5 }}>
-                  Compression Settings
-                </Typography>
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom sx={{ mb: 1.5 }}>
+                    Compression Settings
+                  </Typography>
 
-                <Stack spacing={2}>
-                  <FormControl fullWidth>
-                    <InputLabel>Compression Algorithm</InputLabel>
-                    <Select
-                      value={repositoryForm.compressionAlgorithm}
-                      label="Compression Algorithm"
-                      onChange={(e) => {
-                        const newAlgorithm = e.target.value
-                        setRepositoryForm({
-                          ...repositoryForm,
-                          compressionAlgorithm: newAlgorithm,
-                          compression: buildCompressionString(
-                            newAlgorithm,
-                            repositoryForm.compressionLevel,
-                            repositoryForm.compressionAutoDetect,
-                            repositoryForm.compressionObfuscate
-                          ),
-                        })
-                      }}
-                    >
-                      <MenuItem value="none">none - Do not compress</MenuItem>
-                      <MenuItem value="lz4">lz4 - Very high speed, very low compression (default)</MenuItem>
-                      <MenuItem value="zstd">zstd - Modern wide-range algorithm (default level 3)</MenuItem>
-                      <MenuItem value="zlib">zlib - Medium speed, medium compression (default level 6)</MenuItem>
-                      <MenuItem value="lzma">lzma - Low speed, high compression (default level 6)</MenuItem>
-                    </Select>
-                  </FormControl>
-
-                  {repositoryForm.compressionAlgorithm !== 'none' && (
-                    <>
-                      <TextField
-                        label="Compression Level (Optional)"
-                        type="number"
-                        value={repositoryForm.compressionLevel}
+                  <Stack spacing={2}>
+                    <FormControl fullWidth>
+                      <InputLabel>Compression Algorithm</InputLabel>
+                      <Select
+                        value={repositoryForm.compressionAlgorithm}
+                        label="Compression Algorithm"
                         onChange={(e) => {
-                          const newLevel = e.target.value
+                          const newAlgorithm = e.target.value
                           setRepositoryForm({
                             ...repositoryForm,
-                            compressionLevel: newLevel,
+                            compressionAlgorithm: newAlgorithm,
                             compression: buildCompressionString(
-                              repositoryForm.compressionAlgorithm,
-                              newLevel,
+                              newAlgorithm,
+                              repositoryForm.compressionLevel,
                               repositoryForm.compressionAutoDetect,
                               repositoryForm.compressionObfuscate
                             ),
                           })
                         }}
-                        placeholder={
-                          repositoryForm.compressionAlgorithm === 'zstd' ? '1-22 (default: 3)' :
-                            repositoryForm.compressionAlgorithm === 'zlib' ? '0-9 (default: 6)' :
-                              repositoryForm.compressionAlgorithm === 'lzma' ? '0-9 (default: 6, max useful: 6)' :
-                                'Leave empty for default'
-                        }
-                        helperText={
-                          repositoryForm.compressionAlgorithm === 'zstd' ? 'zstd: Level 1-22. Higher = better compression but slower.' :
-                            repositoryForm.compressionAlgorithm === 'zlib' ? 'zlib: Level 0-9. Level 0 means no compression (use "none" instead).' :
-                              repositoryForm.compressionAlgorithm === 'lzma' ? 'lzma: Level 0-9. Levels above 6 are pointless and waste CPU/RAM.' :
-                                'Leave empty to use default level.'
-                        }
-                        fullWidth
-                      />
+                      >
+                        <MenuItem value="none">none - Do not compress</MenuItem>
+                        <MenuItem value="lz4">
+                          lz4 - Very high speed, very low compression (default)
+                        </MenuItem>
+                        <MenuItem value="zstd">
+                          zstd - Modern wide-range algorithm (default level 3)
+                        </MenuItem>
+                        <MenuItem value="zlib">
+                          zlib - Medium speed, medium compression (default level 6)
+                        </MenuItem>
+                        <MenuItem value="lzma">
+                          lzma - Low speed, high compression (default level 6)
+                        </MenuItem>
+                      </Select>
+                    </FormControl>
 
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={repositoryForm.compressionAutoDetect}
-                            onChange={(e) => {
-                              const newAutoDetect = e.target.checked
-                              setRepositoryForm({
-                                ...repositoryForm,
-                                compressionAutoDetect: newAutoDetect,
-                                compression: buildCompressionString(
-                                  repositoryForm.compressionAlgorithm,
-                                  repositoryForm.compressionLevel,
-                                  newAutoDetect,
-                                  repositoryForm.compressionObfuscate
-                                ),
-                              })
-                            }}
-                          />
-                        }
-                        label="Auto-detect compressibility (auto,C[,L])"
-                      />
-                      <Typography variant="caption" color="text.secondary" sx={{ mt: -1, mb: 1, display: 'block' }}>
-                        Uses lz4 to test if data is compressible. For incompressible data (e.g., media files), uses "none". For compressible data, uses your selected algorithm.
-                      </Typography>
+                    {repositoryForm.compressionAlgorithm !== 'none' && (
+                      <>
+                        <TextField
+                          label="Compression Level (Optional)"
+                          type="number"
+                          value={repositoryForm.compressionLevel}
+                          onChange={(e) => {
+                            const newLevel = e.target.value
+                            setRepositoryForm({
+                              ...repositoryForm,
+                              compressionLevel: newLevel,
+                              compression: buildCompressionString(
+                                repositoryForm.compressionAlgorithm,
+                                newLevel,
+                                repositoryForm.compressionAutoDetect,
+                                repositoryForm.compressionObfuscate
+                              ),
+                            })
+                          }}
+                          placeholder={
+                            repositoryForm.compressionAlgorithm === 'zstd'
+                              ? '1-22 (default: 3)'
+                              : repositoryForm.compressionAlgorithm === 'zlib'
+                                ? '0-9 (default: 6)'
+                                : repositoryForm.compressionAlgorithm === 'lzma'
+                                  ? '0-9 (default: 6, max useful: 6)'
+                                  : 'Leave empty for default'
+                          }
+                          helperText={
+                            repositoryForm.compressionAlgorithm === 'zstd'
+                              ? 'zstd: Level 1-22. Higher = better compression but slower.'
+                              : repositoryForm.compressionAlgorithm === 'zlib'
+                                ? 'zlib: Level 0-9. Level 0 means no compression (use "none" instead).'
+                                : repositoryForm.compressionAlgorithm === 'lzma'
+                                  ? 'lzma: Level 0-9. Levels above 6 are pointless and waste CPU/RAM.'
+                                  : 'Leave empty to use default level.'
+                          }
+                          fullWidth
+                        />
 
-                      <TextField
-                        label="Obfuscate Spec (Optional)"
-                        type="number"
-                        value={repositoryForm.compressionObfuscate}
-                        onChange={(e) => {
-                          const newObfuscate = e.target.value
-                          setRepositoryForm({
-                            ...repositoryForm,
-                            compressionObfuscate: newObfuscate,
-                            compression: buildCompressionString(
-                              repositoryForm.compressionAlgorithm,
-                              repositoryForm.compressionLevel,
-                              repositoryForm.compressionAutoDetect,
-                              newObfuscate
-                            ),
-                          })
-                        }}
-                        placeholder="e.g., 110, 250"
-                        helperText="Obfuscate compressed chunk sizes to make fingerprinting attacks harder. Must be used with encryption. Repo will be bigger."
-                        fullWidth
-                      />
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={repositoryForm.compressionAutoDetect}
+                              onChange={(e) => {
+                                const newAutoDetect = e.target.checked
+                                setRepositoryForm({
+                                  ...repositoryForm,
+                                  compressionAutoDetect: newAutoDetect,
+                                  compression: buildCompressionString(
+                                    repositoryForm.compressionAlgorithm,
+                                    repositoryForm.compressionLevel,
+                                    newAutoDetect,
+                                    repositoryForm.compressionObfuscate
+                                  ),
+                                })
+                              }}
+                            />
+                          }
+                          label="Auto-detect compressibility (auto,C[,L])"
+                        />
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ mt: -1, mb: 1, display: 'block' }}
+                        >
+                          Uses lz4 to test if data is compressible. For incompressible data (e.g.,
+                          media files), uses "none". For compressible data, uses your selected
+                          algorithm.
+                        </Typography>
 
-                      <Alert severity="info" sx={{ mt: 1 }}>
-                        Final compression spec: <strong>{repositoryForm.compression}</strong>
-                      </Alert>
-                    </>
-                  )}
-                </Stack>
-              </Box>
+                        <TextField
+                          label="Obfuscate Spec (Optional)"
+                          type="number"
+                          value={repositoryForm.compressionObfuscate}
+                          onChange={(e) => {
+                            const newObfuscate = e.target.value
+                            setRepositoryForm({
+                              ...repositoryForm,
+                              compressionObfuscate: newObfuscate,
+                              compression: buildCompressionString(
+                                repositoryForm.compressionAlgorithm,
+                                repositoryForm.compressionLevel,
+                                repositoryForm.compressionAutoDetect,
+                                newObfuscate
+                              ),
+                            })
+                          }}
+                          placeholder="e.g., 110, 250"
+                          helperText="Obfuscate compressed chunk sizes to make fingerprinting attacks harder. Must be used with encryption. Repo will be bigger."
+                          fullWidth
+                        />
+
+                        <Alert severity="info" sx={{ mt: 1 }}>
+                          Final compression spec: <strong>{repositoryForm.compression}</strong>
+                        </Alert>
+                      </>
+                    )}
+                  </Stack>
+                </Box>
               )}
 
               {repositoryForm.encryption !== 'none' && (
@@ -1257,7 +1343,9 @@ export default function Repositories() {
                   label="Passphrase"
                   type="password"
                   value={repositoryForm.passphrase}
-                  onChange={(e) => setRepositoryForm({ ...repositoryForm, passphrase: e.target.value })}
+                  onChange={(e) =>
+                    setRepositoryForm({ ...repositoryForm, passphrase: e.target.value })
+                  }
                   placeholder="Enter passphrase"
                   fullWidth
                 />
@@ -1267,178 +1355,209 @@ export default function Repositories() {
               {repositoryForm.mode === 'full' && (
                 <Box>
                   <Typography variant="subtitle2" gutterBottom>
-                    Source Directories <Box component="span" sx={{ color: 'error.main' }}>*</Box>
+                    Source Directories{' '}
+                    <Box component="span" sx={{ color: 'error.main' }}>
+                      *
+                    </Box>
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    display="block"
+                    sx={{ mb: 1.5 }}
+                  >
                     Specify which directories to backup to this repository (at least one required)
                   </Typography>
 
                   {repositoryForm.source_directories.length === 0 && (
                     <Alert severity="warning" sx={{ mb: 1.5 }}>
-                      At least one source directory is required. Add the directories you want to backup.
+                      At least one source directory is required. Add the directories you want to
+                      backup.
                     </Alert>
                   )}
 
-                {repositoryForm.source_directories.length > 0 && (
-                  <Stack spacing={0.5} sx={{ mb: 1.5 }}>
-                    {repositoryForm.source_directories.map((dir, index) => (
-                      <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', flex: 1 }}>
-                          {dir}
-                        </Typography>
-                        <IconButton
-                          size="small"
-                          onClick={() => {
+                  {repositoryForm.source_directories.length > 0 && (
+                    <Stack spacing={0.5} sx={{ mb: 1.5 }}>
+                      {repositoryForm.source_directories.map((dir, index) => (
+                        <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body2" sx={{ fontFamily: 'monospace', flex: 1 }}>
+                            {dir}
+                          </Typography>
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setRepositoryForm({
+                                ...repositoryForm,
+                                source_directories: repositoryForm.source_directories.filter(
+                                  (_, i) => i !== index
+                                ),
+                              })
+                            }}
+                          >
+                            <Delete fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      ))}
+                    </Stack>
+                  )}
+
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <TextField
+                      value={newSourceDir}
+                      onChange={(e) => setNewSourceDir(e.target.value)}
+                      placeholder="/home/user/documents"
+                      size="small"
+                      fullWidth
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          if (newSourceDir.trim()) {
                             setRepositoryForm({
                               ...repositoryForm,
-                              source_directories: repositoryForm.source_directories.filter((_, i) => i !== index)
+                              source_directories: [
+                                ...repositoryForm.source_directories,
+                                newSourceDir.trim(),
+                              ],
                             })
-                          }}
-                        >
-                          <Delete fontSize="small" />
-                        </IconButton>
-                      </Box>
-                    ))}
-                  </Stack>
-                )}
-
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  <TextField
-                    value={newSourceDir}
-                    onChange={(e) => setNewSourceDir(e.target.value)}
-                    placeholder="/home/user/documents"
-                    size="small"
-                    fullWidth
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
+                            setNewSourceDir('')
+                          }
+                        }
+                      }}
+                      InputProps={{
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton
+                              onClick={() => setShowSourceDirExplorer(true)}
+                              edge="end"
+                              size="small"
+                              title="Browse directories"
+                            >
+                              <FolderOpen fontSize="small" />
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => {
                         if (newSourceDir.trim()) {
                           setRepositoryForm({
                             ...repositoryForm,
-                            source_directories: [...repositoryForm.source_directories, newSourceDir.trim()]
+                            source_directories: [
+                              ...repositoryForm.source_directories,
+                              newSourceDir.trim(),
+                            ],
                           })
                           setNewSourceDir('')
                         }
-                      }
-                    }}
-                    InputProps={{
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton
-                            onClick={() => setShowSourceDirExplorer(true)}
-                            edge="end"
-                            size="small"
-                            title="Browse directories"
-                          >
-                            <FolderOpen fontSize="small" />
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => {
-                      if (newSourceDir.trim()) {
-                        setRepositoryForm({
-                          ...repositoryForm,
-                          source_directories: [...repositoryForm.source_directories, newSourceDir.trim()]
-                        })
-                        setNewSourceDir('')
-                      }
-                    }}
-                  >
-                    Add
-                  </Button>
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </Box>
                 </Box>
-              </Box>
               )}
 
               {/* Exclude Patterns */}
               {repositoryForm.mode === 'full' && (
-              <Box>
-                <Typography variant="subtitle2" gutterBottom>
-                  Exclude Patterns (Optional)
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-                  Specify patterns to exclude from backup (e.g., *.log, *.tmp, __pycache__, node_modules)
-                </Typography>
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Exclude Patterns (Optional)
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    display="block"
+                    sx={{ mb: 1.5 }}
+                  >
+                    Specify patterns to exclude from backup (e.g., *.log, *.tmp, __pycache__,
+                    node_modules)
+                  </Typography>
 
-                {repositoryForm.exclude_patterns.length > 0 && (
-                  <Stack spacing={0.5} sx={{ mb: 1.5 }}>
-                    {repositoryForm.exclude_patterns.map((pattern, index) => (
-                      <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', flex: 1 }}>
-                          {pattern}
-                        </Typography>
-                        <IconButton
-                          size="small"
-                          onClick={() => {
+                  {repositoryForm.exclude_patterns.length > 0 && (
+                    <Stack spacing={0.5} sx={{ mb: 1.5 }}>
+                      {repositoryForm.exclude_patterns.map((pattern, index) => (
+                        <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body2" sx={{ fontFamily: 'monospace', flex: 1 }}>
+                            {pattern}
+                          </Typography>
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setRepositoryForm({
+                                ...repositoryForm,
+                                exclude_patterns: repositoryForm.exclude_patterns.filter(
+                                  (_, i) => i !== index
+                                ),
+                              })
+                            }}
+                          >
+                            <Delete fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      ))}
+                    </Stack>
+                  )}
+
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <TextField
+                      value={newExcludePattern}
+                      onChange={(e) => setNewExcludePattern(e.target.value)}
+                      placeholder="*.log or /path/to/exclude"
+                      size="small"
+                      fullWidth
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          if (newExcludePattern.trim()) {
                             setRepositoryForm({
                               ...repositoryForm,
-                              exclude_patterns: repositoryForm.exclude_patterns.filter((_, i) => i !== index)
+                              exclude_patterns: [
+                                ...repositoryForm.exclude_patterns,
+                                newExcludePattern.trim(),
+                              ],
                             })
-                          }}
-                        >
-                          <Delete fontSize="small" />
-                        </IconButton>
-                      </Box>
-                    ))}
-                  </Stack>
-                )}
-
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  <TextField
-                    value={newExcludePattern}
-                    onChange={(e) => setNewExcludePattern(e.target.value)}
-                    placeholder="*.log or /path/to/exclude"
-                    size="small"
-                    fullWidth
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
+                            setNewExcludePattern('')
+                          }
+                        }
+                      }}
+                      InputProps={{
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton
+                              onClick={() => setShowExcludeExplorer(true)}
+                              edge="end"
+                              size="small"
+                              title="Browse directories to exclude"
+                            >
+                              <FolderOpen fontSize="small" />
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => {
                         if (newExcludePattern.trim()) {
                           setRepositoryForm({
                             ...repositoryForm,
-                            exclude_patterns: [...repositoryForm.exclude_patterns, newExcludePattern.trim()]
+                            exclude_patterns: [
+                              ...repositoryForm.exclude_patterns,
+                              newExcludePattern.trim(),
+                            ],
                           })
                           setNewExcludePattern('')
                         }
-                      }
-                    }}
-                    InputProps={{
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton
-                            onClick={() => setShowExcludeExplorer(true)}
-                            edge="end"
-                            size="small"
-                            title="Browse directories to exclude"
-                          >
-                            <FolderOpen fontSize="small" />
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => {
-                      if (newExcludePattern.trim()) {
-                        setRepositoryForm({
-                          ...repositoryForm,
-                          exclude_patterns: [...repositoryForm.exclude_patterns, newExcludePattern.trim()]
-                        })
-                        setNewExcludePattern('')
-                      }
-                    }}
-                  >
-                    Add
-                  </Button>
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </Box>
                 </Box>
-              </Box>
               )}
 
               {/* Advanced Options */}
@@ -1450,12 +1569,24 @@ export default function Repositories() {
                 hookTimeout={repositoryForm.hook_timeout}
                 continueOnHookFailure={repositoryForm.continue_on_hook_failure}
                 customFlags={repositoryForm.custom_flags}
-                onRemotePathChange={(value) => setRepositoryForm({ ...repositoryForm, remote_path: value })}
-                onPreBackupScriptChange={(value) => setRepositoryForm({ ...repositoryForm, pre_backup_script: value })}
-                onPostBackupScriptChange={(value) => setRepositoryForm({ ...repositoryForm, post_backup_script: value })}
-                onHookTimeoutChange={(value) => setRepositoryForm({ ...repositoryForm, hook_timeout: value })}
-                onContinueOnHookFailureChange={(value) => setRepositoryForm({ ...repositoryForm, continue_on_hook_failure: value })}
-                onCustomFlagsChange={(value) => setRepositoryForm({ ...repositoryForm, custom_flags: value })}
+                onRemotePathChange={(value) =>
+                  setRepositoryForm({ ...repositoryForm, remote_path: value })
+                }
+                onPreBackupScriptChange={(value) =>
+                  setRepositoryForm({ ...repositoryForm, pre_backup_script: value })
+                }
+                onPostBackupScriptChange={(value) =>
+                  setRepositoryForm({ ...repositoryForm, post_backup_script: value })
+                }
+                onHookTimeoutChange={(value) =>
+                  setRepositoryForm({ ...repositoryForm, hook_timeout: value })
+                }
+                onContinueOnHookFailureChange={(value) =>
+                  setRepositoryForm({ ...repositoryForm, continue_on_hook_failure: value })
+                }
+                onCustomFlagsChange={(value) =>
+                  setRepositoryForm({ ...repositoryForm, custom_flags: value })
+                }
               />
             </Box>
           </DialogContent>
@@ -1465,21 +1596,31 @@ export default function Repositories() {
               type="submit"
               variant="contained"
               disabled={
-                (repositoryModalMode === 'create' ? createRepositoryMutation.isPending : importRepositoryMutation.isPending) ||
+                (repositoryModalMode === 'create'
+                  ? createRepositoryMutation.isPending
+                  : importRepositoryMutation.isPending) ||
                 (repositoryForm.mode === 'full' && repositoryForm.source_directories.length === 0)
               }
             >
               {repositoryModalMode === 'create'
-                ? (createRepositoryMutation.isPending ? 'Creating...' : 'Create')
-                : (importRepositoryMutation.isPending ? 'Importing...' : 'Import')}
+                ? createRepositoryMutation.isPending
+                  ? 'Creating...'
+                  : 'Create'
+                : importRepositoryMutation.isPending
+                  ? 'Importing...'
+                  : 'Import'}
             </Button>
           </DialogActions>
         </form>
       </Dialog>
 
-
       {/* Edit Repository Dialog */}
-      <Dialog open={!!editingRepository} onClose={() => setEditingRepository(null)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={!!editingRepository}
+        onClose={() => setEditingRepository(null)}
+        maxWidth="sm"
+        fullWidth
+      >
         <form onSubmit={handleUpdateRepository}>
           <DialogTitle>Edit Repository</DialogTitle>
           <DialogContent>
@@ -1490,15 +1631,17 @@ export default function Repositories() {
               </Typography>
 
               {editForm.mode === 'full' && (
-                <Box sx={{
-                  bgcolor: 'grey.900',
-                  color: 'grey.100',
-                  p: 1.5,
-                  borderRadius: 1,
-                  fontFamily: 'monospace',
-                  fontSize: '0.875rem',
-                  overflow: 'auto'
-                }}>
+                <Box
+                  sx={{
+                    bgcolor: 'grey.900',
+                    color: 'grey.100',
+                    p: 1.5,
+                    borderRadius: 1,
+                    fontFamily: 'monospace',
+                    fontSize: '0.875rem',
+                    overflow: 'auto',
+                  }}
+                >
                   {getBorgCreateCommandForEdit()}
                 </Box>
               )}
@@ -1533,11 +1676,15 @@ export default function Repositories() {
                 <Select
                   value={editForm.mode}
                   label="Repository Mode"
-                  onChange={(e) => setEditForm({ ...editForm, mode: e.target.value as 'full' | 'observe' })}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, mode: e.target.value as 'full' | 'observe' })
+                  }
                 >
                   <MenuItem value="full">
                     <Box>
-                      <Typography variant="body2" fontWeight={600}>Full Repository</Typography>
+                      <Typography variant="body2" fontWeight={600}>
+                        Full Repository
+                      </Typography>
                       <Typography variant="caption" color="text.secondary">
                         Perform backups and view archives (default)
                       </Typography>
@@ -1545,7 +1692,9 @@ export default function Repositories() {
                   </MenuItem>
                   <MenuItem value="observe">
                     <Box>
-                      <Typography variant="body2" fontWeight={600}>Observability Only</Typography>
+                      <Typography variant="body2" fontWeight={600}>
+                        Observability Only
+                      </Typography>
                       <Typography variant="caption" color="text.secondary">
                         View-only mode for archives created elsewhere
                       </Typography>
@@ -1556,7 +1705,8 @@ export default function Repositories() {
 
               {editForm.mode === 'observe' && (
                 <Alert severity="info">
-                  Observability-only repositories can browse and restore existing archives but cannot create new backups or be used in scheduled jobs.
+                  Observability-only repositories can browse and restore existing archives but
+                  cannot create new backups or be used in scheduled jobs.
                 </Alert>
               )}
 
@@ -1568,293 +1718,340 @@ export default function Repositories() {
                   </Typography>
 
                   <Stack spacing={2}>
-                  <FormControl fullWidth>
-                    <InputLabel>Compression Algorithm</InputLabel>
-                    <Select
-                      value={editForm.compressionAlgorithm}
-                      label="Compression Algorithm"
-                      onChange={(e) => {
-                        const newAlgorithm = e.target.value
-                        setEditForm({
-                          ...editForm,
-                          compressionAlgorithm: newAlgorithm,
-                          compression: buildCompressionString(
-                            newAlgorithm,
-                            editForm.compressionLevel,
-                            editForm.compressionAutoDetect,
-                            editForm.compressionObfuscate
-                          ),
-                        })
-                      }}
-                    >
-                      <MenuItem value="none">none - Do not compress</MenuItem>
-                      <MenuItem value="lz4">lz4 - Very high speed, very low compression (default)</MenuItem>
-                      <MenuItem value="zstd">zstd - Modern wide-range algorithm (default level 3)</MenuItem>
-                      <MenuItem value="zlib">zlib - Medium speed, medium compression (default level 6)</MenuItem>
-                      <MenuItem value="lzma">lzma - Low speed, high compression (default level 6)</MenuItem>
-                    </Select>
-                  </FormControl>
-
-                  {editForm.compressionAlgorithm !== 'none' && (
-                    <>
-                      <TextField
-                        label="Compression Level (Optional)"
-                        type="number"
-                        value={editForm.compressionLevel}
+                    <FormControl fullWidth>
+                      <InputLabel>Compression Algorithm</InputLabel>
+                      <Select
+                        value={editForm.compressionAlgorithm}
+                        label="Compression Algorithm"
                         onChange={(e) => {
-                          const newLevel = e.target.value
+                          const newAlgorithm = e.target.value
                           setEditForm({
                             ...editForm,
-                            compressionLevel: newLevel,
+                            compressionAlgorithm: newAlgorithm,
                             compression: buildCompressionString(
-                              editForm.compressionAlgorithm,
-                              newLevel,
+                              newAlgorithm,
+                              editForm.compressionLevel,
                               editForm.compressionAutoDetect,
                               editForm.compressionObfuscate
                             ),
                           })
                         }}
-                        placeholder={
-                          editForm.compressionAlgorithm === 'zstd' ? '1-22 (default: 3)' :
-                            editForm.compressionAlgorithm === 'zlib' ? '0-9 (default: 6)' :
-                              editForm.compressionAlgorithm === 'lzma' ? '0-9 (default: 6, max useful: 6)' :
-                                'Leave empty for default'
-                        }
-                        helperText={
-                          editForm.compressionAlgorithm === 'zstd' ? 'zstd: Level 1-22. Higher = better compression but slower.' :
-                            editForm.compressionAlgorithm === 'zlib' ? 'zlib: Level 0-9. Level 0 means no compression (use "none" instead).' :
-                              editForm.compressionAlgorithm === 'lzma' ? 'lzma: Level 0-9. Levels above 6 are pointless and waste CPU/RAM.' :
-                                'Leave empty to use default level.'
-                        }
-                        fullWidth
-                      />
+                      >
+                        <MenuItem value="none">none - Do not compress</MenuItem>
+                        <MenuItem value="lz4">
+                          lz4 - Very high speed, very low compression (default)
+                        </MenuItem>
+                        <MenuItem value="zstd">
+                          zstd - Modern wide-range algorithm (default level 3)
+                        </MenuItem>
+                        <MenuItem value="zlib">
+                          zlib - Medium speed, medium compression (default level 6)
+                        </MenuItem>
+                        <MenuItem value="lzma">
+                          lzma - Low speed, high compression (default level 6)
+                        </MenuItem>
+                      </Select>
+                    </FormControl>
 
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={editForm.compressionAutoDetect}
-                            onChange={(e) => {
-                              const newAutoDetect = e.target.checked
-                              setEditForm({
-                                ...editForm,
-                                compressionAutoDetect: newAutoDetect,
-                                compression: buildCompressionString(
-                                  editForm.compressionAlgorithm,
-                                  editForm.compressionLevel,
-                                  newAutoDetect,
-                                  editForm.compressionObfuscate
-                                ),
-                              })
-                            }}
-                          />
-                        }
-                        label="Auto-detect compressibility (auto,C[,L])"
-                      />
-                      <Typography variant="caption" color="text.secondary" sx={{ mt: -1, mb: 1, display: 'block' }}>
-                        Uses lz4 to test if data is compressible. For incompressible data (e.g., media files), uses "none". For compressible data, uses your selected algorithm.
-                      </Typography>
+                    {editForm.compressionAlgorithm !== 'none' && (
+                      <>
+                        <TextField
+                          label="Compression Level (Optional)"
+                          type="number"
+                          value={editForm.compressionLevel}
+                          onChange={(e) => {
+                            const newLevel = e.target.value
+                            setEditForm({
+                              ...editForm,
+                              compressionLevel: newLevel,
+                              compression: buildCompressionString(
+                                editForm.compressionAlgorithm,
+                                newLevel,
+                                editForm.compressionAutoDetect,
+                                editForm.compressionObfuscate
+                              ),
+                            })
+                          }}
+                          placeholder={
+                            editForm.compressionAlgorithm === 'zstd'
+                              ? '1-22 (default: 3)'
+                              : editForm.compressionAlgorithm === 'zlib'
+                                ? '0-9 (default: 6)'
+                                : editForm.compressionAlgorithm === 'lzma'
+                                  ? '0-9 (default: 6, max useful: 6)'
+                                  : 'Leave empty for default'
+                          }
+                          helperText={
+                            editForm.compressionAlgorithm === 'zstd'
+                              ? 'zstd: Level 1-22. Higher = better compression but slower.'
+                              : editForm.compressionAlgorithm === 'zlib'
+                                ? 'zlib: Level 0-9. Level 0 means no compression (use "none" instead).'
+                                : editForm.compressionAlgorithm === 'lzma'
+                                  ? 'lzma: Level 0-9. Levels above 6 are pointless and waste CPU/RAM.'
+                                  : 'Leave empty to use default level.'
+                          }
+                          fullWidth
+                        />
 
-                      <TextField
-                        label="Obfuscate Spec (Optional)"
-                        type="number"
-                        value={editForm.compressionObfuscate}
-                        onChange={(e) => {
-                          const newObfuscate = e.target.value
-                          setEditForm({
-                            ...editForm,
-                            compressionObfuscate: newObfuscate,
-                            compression: buildCompressionString(
-                              editForm.compressionAlgorithm,
-                              editForm.compressionLevel,
-                              editForm.compressionAutoDetect,
-                              newObfuscate
-                            ),
-                          })
-                        }}
-                        placeholder="e.g., 110, 250"
-                        helperText="Obfuscate compressed chunk sizes to make fingerprinting attacks harder. Must be used with encryption. Repo will be bigger."
-                        fullWidth
-                      />
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={editForm.compressionAutoDetect}
+                              onChange={(e) => {
+                                const newAutoDetect = e.target.checked
+                                setEditForm({
+                                  ...editForm,
+                                  compressionAutoDetect: newAutoDetect,
+                                  compression: buildCompressionString(
+                                    editForm.compressionAlgorithm,
+                                    editForm.compressionLevel,
+                                    newAutoDetect,
+                                    editForm.compressionObfuscate
+                                  ),
+                                })
+                              }}
+                            />
+                          }
+                          label="Auto-detect compressibility (auto,C[,L])"
+                        />
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ mt: -1, mb: 1, display: 'block' }}
+                        >
+                          Uses lz4 to test if data is compressible. For incompressible data (e.g.,
+                          media files), uses "none". For compressible data, uses your selected
+                          algorithm.
+                        </Typography>
 
-                      <Alert severity="info" sx={{ mt: 1 }}>
-                        Final compression spec: <strong>{editForm.compression}</strong>
-                      </Alert>
-                    </>
-                  )}
-                </Stack>
-              </Box>
+                        <TextField
+                          label="Obfuscate Spec (Optional)"
+                          type="number"
+                          value={editForm.compressionObfuscate}
+                          onChange={(e) => {
+                            const newObfuscate = e.target.value
+                            setEditForm({
+                              ...editForm,
+                              compressionObfuscate: newObfuscate,
+                              compression: buildCompressionString(
+                                editForm.compressionAlgorithm,
+                                editForm.compressionLevel,
+                                editForm.compressionAutoDetect,
+                                newObfuscate
+                              ),
+                            })
+                          }}
+                          placeholder="e.g., 110, 250"
+                          helperText="Obfuscate compressed chunk sizes to make fingerprinting attacks harder. Must be used with encryption. Repo will be bigger."
+                          fullWidth
+                        />
+
+                        <Alert severity="info" sx={{ mt: 1 }}>
+                          Final compression spec: <strong>{editForm.compression}</strong>
+                        </Alert>
+                      </>
+                    )}
+                  </Stack>
+                </Box>
               )}
 
               {/* Source Directories - Only show for full repositories */}
               {editForm.mode === 'full' && (
-              <Box>
-                <Typography variant="subtitle2" gutterBottom>
-                  Source Directories (Optional)
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-                  Specify which directories to backup to this repository
-                </Typography>
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Source Directories (Optional)
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    display="block"
+                    sx={{ mb: 1.5 }}
+                  >
+                    Specify which directories to backup to this repository
+                  </Typography>
 
-                {editForm.source_directories.length > 0 && (
-                  <Stack spacing={0.5} sx={{ mb: 1.5 }}>
-                    {editForm.source_directories.map((dir, index) => (
-                      <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', flex: 1 }}>
-                          {dir}
-                        </Typography>
-                        <IconButton
-                          size="small"
-                          onClick={() => {
+                  {editForm.source_directories.length > 0 && (
+                    <Stack spacing={0.5} sx={{ mb: 1.5 }}>
+                      {editForm.source_directories.map((dir, index) => (
+                        <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body2" sx={{ fontFamily: 'monospace', flex: 1 }}>
+                            {dir}
+                          </Typography>
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setEditForm({
+                                ...editForm,
+                                source_directories: editForm.source_directories.filter(
+                                  (_, i) => i !== index
+                                ),
+                              })
+                            }}
+                          >
+                            <Delete fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      ))}
+                    </Stack>
+                  )}
+
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <TextField
+                      value={editNewSourceDir}
+                      onChange={(e) => setEditNewSourceDir(e.target.value)}
+                      placeholder="/home/user/documents"
+                      size="small"
+                      fullWidth
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          if (editNewSourceDir.trim()) {
                             setEditForm({
                               ...editForm,
-                              source_directories: editForm.source_directories.filter((_, i) => i !== index)
+                              source_directories: [
+                                ...editForm.source_directories,
+                                editNewSourceDir.trim(),
+                              ],
                             })
-                          }}
-                        >
-                          <Delete fontSize="small" />
-                        </IconButton>
-                      </Box>
-                    ))}
-                  </Stack>
-                )}
-
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  <TextField
-                    value={editNewSourceDir}
-                    onChange={(e) => setEditNewSourceDir(e.target.value)}
-                    placeholder="/home/user/documents"
-                    size="small"
-                    fullWidth
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
+                            setEditNewSourceDir('')
+                          }
+                        }
+                      }}
+                      InputProps={{
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton
+                              onClick={() => setShowEditSourceDirExplorer(true)}
+                              edge="end"
+                              size="small"
+                              title="Browse directories"
+                            >
+                              <FolderOpen fontSize="small" />
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => {
                         if (editNewSourceDir.trim()) {
                           setEditForm({
                             ...editForm,
-                            source_directories: [...editForm.source_directories, editNewSourceDir.trim()]
+                            source_directories: [
+                              ...editForm.source_directories,
+                              editNewSourceDir.trim(),
+                            ],
                           })
                           setEditNewSourceDir('')
                         }
-                      }
-                    }}
-                    InputProps={{
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton
-                            onClick={() => setShowEditSourceDirExplorer(true)}
-                            edge="end"
-                            size="small"
-                            title="Browse directories"
-                          >
-                            <FolderOpen fontSize="small" />
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => {
-                      if (editNewSourceDir.trim()) {
-                        setEditForm({
-                          ...editForm,
-                          source_directories: [...editForm.source_directories, editNewSourceDir.trim()]
-                        })
-                        setEditNewSourceDir('')
-                      }
-                    }}
-                  >
-                    Add
-                  </Button>
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </Box>
                 </Box>
-              </Box>
               )}
 
               {/* Exclude Patterns - Only show for full repositories */}
               {editForm.mode === 'full' && (
-              <Box>
-                <Typography variant="subtitle2" gutterBottom>
-                  Exclude Patterns (Optional)
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-                  Specify patterns to exclude from backup (e.g., *.log, *.tmp, __pycache__, node_modules)
-                </Typography>
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Exclude Patterns (Optional)
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    display="block"
+                    sx={{ mb: 1.5 }}
+                  >
+                    Specify patterns to exclude from backup (e.g., *.log, *.tmp, __pycache__,
+                    node_modules)
+                  </Typography>
 
-                {editForm.exclude_patterns.length > 0 && (
-                  <Stack spacing={0.5} sx={{ mb: 1.5 }}>
-                    {editForm.exclude_patterns.map((pattern, index) => (
-                      <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', flex: 1 }}>
-                          {pattern}
-                        </Typography>
-                        <IconButton
-                          size="small"
-                          onClick={() => {
+                  {editForm.exclude_patterns.length > 0 && (
+                    <Stack spacing={0.5} sx={{ mb: 1.5 }}>
+                      {editForm.exclude_patterns.map((pattern, index) => (
+                        <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body2" sx={{ fontFamily: 'monospace', flex: 1 }}>
+                            {pattern}
+                          </Typography>
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setEditForm({
+                                ...editForm,
+                                exclude_patterns: editForm.exclude_patterns.filter(
+                                  (_, i) => i !== index
+                                ),
+                              })
+                            }}
+                          >
+                            <Delete fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      ))}
+                    </Stack>
+                  )}
+
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <TextField
+                      value={editNewExcludePattern}
+                      onChange={(e) => setEditNewExcludePattern(e.target.value)}
+                      placeholder="*.log or /path/to/exclude"
+                      size="small"
+                      fullWidth
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          if (editNewExcludePattern.trim()) {
                             setEditForm({
                               ...editForm,
-                              exclude_patterns: editForm.exclude_patterns.filter((_, i) => i !== index)
+                              exclude_patterns: [
+                                ...editForm.exclude_patterns,
+                                editNewExcludePattern.trim(),
+                              ],
                             })
-                          }}
-                        >
-                          <Delete fontSize="small" />
-                        </IconButton>
-                      </Box>
-                    ))}
-                  </Stack>
-                )}
-
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  <TextField
-                    value={editNewExcludePattern}
-                    onChange={(e) => setEditNewExcludePattern(e.target.value)}
-                    placeholder="*.log or /path/to/exclude"
-                    size="small"
-                    fullWidth
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
+                            setEditNewExcludePattern('')
+                          }
+                        }
+                      }}
+                      InputProps={{
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton
+                              onClick={() => setShowEditExcludeExplorer(true)}
+                              edge="end"
+                              size="small"
+                              title="Browse directories to exclude"
+                            >
+                              <FolderOpen fontSize="small" />
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => {
                         if (editNewExcludePattern.trim()) {
                           setEditForm({
                             ...editForm,
-                            exclude_patterns: [...editForm.exclude_patterns, editNewExcludePattern.trim()]
+                            exclude_patterns: [
+                              ...editForm.exclude_patterns,
+                              editNewExcludePattern.trim(),
+                            ],
                           })
                           setEditNewExcludePattern('')
                         }
-                      }
-                    }}
-                    InputProps={{
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton
-                            onClick={() => setShowEditExcludeExplorer(true)}
-                            edge="end"
-                            size="small"
-                            title="Browse directories to exclude"
-                          >
-                            <FolderOpen fontSize="small" />
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => {
-                      if (editNewExcludePattern.trim()) {
-                        setEditForm({
-                          ...editForm,
-                          exclude_patterns: [...editForm.exclude_patterns, editNewExcludePattern.trim()]
-                        })
-                        setEditNewExcludePattern('')
-                      }
-                    }}
-                  >
-                    Add
-                  </Button>
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </Box>
                 </Box>
-              </Box>
               )}
 
               {/* Advanced Options */}
@@ -1867,13 +2064,18 @@ export default function Repositories() {
                 continueOnHookFailure={editForm.continue_on_hook_failure}
                 customFlags={editForm.custom_flags}
                 onRemotePathChange={(value) => setEditForm({ ...editForm, remote_path: value })}
-                onPreBackupScriptChange={(value) => setEditForm({ ...editForm, pre_backup_script: value })}
-                onPostBackupScriptChange={(value) => setEditForm({ ...editForm, post_backup_script: value })}
+                onPreBackupScriptChange={(value) =>
+                  setEditForm({ ...editForm, pre_backup_script: value })
+                }
+                onPostBackupScriptChange={(value) =>
+                  setEditForm({ ...editForm, post_backup_script: value })
+                }
                 onHookTimeoutChange={(value) => setEditForm({ ...editForm, hook_timeout: value })}
-                onContinueOnHookFailureChange={(value) => setEditForm({ ...editForm, continue_on_hook_failure: value })}
+                onContinueOnHookFailureChange={(value) =>
+                  setEditForm({ ...editForm, continue_on_hook_failure: value })
+                }
                 onCustomFlagsChange={(value) => setEditForm({ ...editForm, custom_flags: value })}
               />
-
             </Box>
           </DialogContent>
           <DialogActions>
@@ -1947,17 +2149,26 @@ export default function Repositories() {
               {/* Location */}
               <Card variant="outlined">
                 <CardContent sx={{ py: 2 }}>
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    display="block"
+                    sx={{ mb: 0.5 }}
+                  >
                     Repository Location
                   </Typography>
-                  <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}
+                  >
                     {repositoryInfo.data.info?.repository?.location || 'N/A'}
                   </Typography>
                 </CardContent>
               </Card>
 
               {/* Storage Statistics */}
-              {repositoryInfo.data.info?.cache?.stats && repositoryInfo.data.info.cache.stats.unique_size > 0 ? (
+              {repositoryInfo.data.info?.cache?.stats &&
+              repositoryInfo.data.info.cache.stats.unique_size > 0 ? (
                 <>
                   <Typography variant="h6" fontWeight={600} sx={{ mt: 1 }}>
                     Storage Statistics
@@ -2040,14 +2251,16 @@ export default function Repositories() {
                     No backups yet
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    This repository has been initialized but contains no archives. Storage statistics will appear here after you create your first backup.
+                    This repository has been initialized but contains no archives. Storage
+                    statistics will appear here after you create your first backup.
                   </Typography>
                 </Alert>
               )}
             </Box>
           ) : (
             <Alert severity="error">
-              Failed to load repository information. Make sure the repository is accessible and properly initialized.
+              Failed to load repository information. Make sure the repository is accessible and
+              properly initialized.
             </Alert>
           )}
         </DialogContent>
@@ -2059,12 +2272,7 @@ export default function Repositories() {
       </Dialog>
 
       {/* Prune Repository Dialog */}
-      <Dialog
-        open={!!pruningRepository}
-        onClose={handleClosePruneDialog}
-        maxWidth="md"
-        fullWidth
-      >
+      <Dialog open={!!pruningRepository} onClose={handleClosePruneDialog} maxWidth="md" fullWidth>
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <Delete color="secondary" />
@@ -2079,8 +2287,8 @@ export default function Repositories() {
               What does pruning do?
             </Typography>
             <Typography variant="body2" gutterBottom>
-              Pruning automatically deletes old archives based on retention rules. This helps manage repository size by keeping
-              only the backups you need.
+              Pruning automatically deletes old archives based on retention rules. This helps manage
+              repository size by keeping only the backups you need.
             </Typography>
             <Typography variant="body2" fontWeight={600} color="primary.main">
               💡 Tip: Always run "Dry Run" first to preview what will be deleted!
@@ -2099,7 +2307,9 @@ export default function Repositories() {
               label="Keep Daily"
               type="number"
               value={pruneForm.keep_daily}
-              onChange={(e) => setPruneForm({ ...pruneForm, keep_daily: parseInt(e.target.value) || 0 })}
+              onChange={(e) =>
+                setPruneForm({ ...pruneForm, keep_daily: parseInt(e.target.value) || 0 })
+              }
               helperText="Last N daily backups"
               fullWidth
             />
@@ -2107,7 +2317,9 @@ export default function Repositories() {
               label="Keep Weekly"
               type="number"
               value={pruneForm.keep_weekly}
-              onChange={(e) => setPruneForm({ ...pruneForm, keep_weekly: parseInt(e.target.value) || 0 })}
+              onChange={(e) =>
+                setPruneForm({ ...pruneForm, keep_weekly: parseInt(e.target.value) || 0 })
+              }
               helperText="Last N weekly backups"
               fullWidth
             />
@@ -2115,7 +2327,9 @@ export default function Repositories() {
               label="Keep Monthly"
               type="number"
               value={pruneForm.keep_monthly}
-              onChange={(e) => setPruneForm({ ...pruneForm, keep_monthly: parseInt(e.target.value) || 0 })}
+              onChange={(e) =>
+                setPruneForm({ ...pruneForm, keep_monthly: parseInt(e.target.value) || 0 })
+              }
               helperText="Last N monthly backups"
               fullWidth
             />
@@ -2123,7 +2337,9 @@ export default function Repositories() {
               label="Keep Yearly"
               type="number"
               value={pruneForm.keep_yearly}
-              onChange={(e) => setPruneForm({ ...pruneForm, keep_yearly: parseInt(e.target.value) || 0 })}
+              onChange={(e) =>
+                setPruneForm({ ...pruneForm, keep_yearly: parseInt(e.target.value) || 0 })
+              }
               helperText="Last N yearly backups"
               fullWidth
             />
@@ -2134,7 +2350,8 @@ export default function Repositories() {
               <strong>Repository:</strong> {pruningRepository?.name}
             </Typography>
             <Typography variant="caption" color="text.secondary" display="block">
-              Example: With these settings, you'll keep the last 7 daily, 4 weekly, 6 monthly, and 1 yearly backup. Older archives will be deleted.
+              Example: With these settings, you'll keep the last 7 daily, 4 weekly, 6 monthly, and 1
+              yearly backup. Older archives will be deleted.
             </Typography>
           </Box>
 
@@ -2162,7 +2379,7 @@ export default function Repositories() {
                         overflow: 'auto',
                         maxHeight: 200,
                         whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-word'
+                        wordBreak: 'break-word',
                       }}
                     >
                       {pruneResults.prune_result.stderr}
@@ -2174,7 +2391,12 @@ export default function Repositories() {
                   <CardContent>
                     {pruneResults.prune_result?.stdout && (
                       <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          display="block"
+                          gutterBottom
+                        >
                           Output:
                         </Typography>
                         <Box
@@ -2188,7 +2410,7 @@ export default function Repositories() {
                             maxHeight: 300,
                             whiteSpace: 'pre-wrap',
                             wordBreak: 'break-word',
-                            fontFamily: 'monospace'
+                            fontFamily: 'monospace',
                           }}
                         >
                           {pruneResults.prune_result.stdout || 'No output'}
@@ -2197,7 +2419,12 @@ export default function Repositories() {
                     )}
                     {pruneResults.prune_result?.stderr && (
                       <Box sx={{ mt: 2 }}>
-                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          display="block"
+                          gutterBottom
+                        >
                           Messages:
                         </Typography>
                         <Box
@@ -2211,7 +2438,7 @@ export default function Repositories() {
                             maxHeight: 200,
                             whiteSpace: 'pre-wrap',
                             wordBreak: 'break-word',
-                            fontFamily: 'monospace'
+                            fontFamily: 'monospace',
                           }}
                         >
                           {pruneResults.prune_result.stderr}
@@ -2225,8 +2452,9 @@ export default function Repositories() {
               {pruneResults.dry_run && pruneResults.prune_result?.success !== false && (
                 <Alert severity="success" sx={{ mb: 2 }}>
                   <Typography variant="body2">
-                    ✓ Dry run completed successfully. Review the output above to see which archives would be deleted.
-                    If everything looks correct, click "Prune Archives" to execute.
+                    ✓ Dry run completed successfully. Review the output above to see which archives
+                    would be deleted. If everything looks correct, click "Prune Archives" to
+                    execute.
                   </Typography>
                 </Alert>
               )}
@@ -2243,9 +2471,7 @@ export default function Repositories() {
           </Alert>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleClosePruneDialog}>
-            Cancel
-          </Button>
+          <Button onClick={handleClosePruneDialog}>Cancel</Button>
           <Button
             onClick={handlePruneDryRun}
             variant="outlined"
@@ -2259,7 +2485,9 @@ export default function Repositories() {
             variant="contained"
             color="error"
             disabled={pruneRepositoryMutation.isPending}
-            startIcon={pruneRepositoryMutation.isPending ? <Delete className="animate-spin" /> : <Delete />}
+            startIcon={
+              pruneRepositoryMutation.isPending ? <Delete className="animate-spin" /> : <Delete />
+            }
           >
             {pruneRepositoryMutation.isPending ? 'Pruning...' : 'Prune Archives'}
           </Button>
@@ -2282,11 +2510,11 @@ export default function Repositories() {
         sshConfig={
           repositoryForm.repository_type !== 'local' && repositoryForm.ssh_key_id
             ? {
-              ssh_key_id: repositoryForm.ssh_key_id,
-              host: repositoryForm.host,
-              username: repositoryForm.username,
-              port: repositoryForm.port,
-            }
+                ssh_key_id: repositoryForm.ssh_key_id,
+                host: repositoryForm.host,
+                username: repositoryForm.username,
+                port: repositoryForm.port,
+              }
             : undefined
         }
         selectMode="directories"
@@ -2324,11 +2552,11 @@ export default function Repositories() {
         sshConfig={
           repositoryForm.repository_type !== 'local' && repositoryForm.ssh_key_id
             ? {
-              ssh_key_id: repositoryForm.ssh_key_id,
-              host: repositoryForm.host,
-              username: repositoryForm.username,
-              port: repositoryForm.port,
-            }
+                ssh_key_id: repositoryForm.ssh_key_id,
+                host: repositoryForm.host,
+                username: repositoryForm.username,
+                port: repositoryForm.port,
+              }
             : undefined
         }
         selectMode="both"
@@ -2383,11 +2611,11 @@ export default function Repositories() {
         sshConfig={
           repositoryForm.repository_type !== 'local' && repositoryForm.ssh_key_id
             ? {
-              ssh_key_id: repositoryForm.ssh_key_id,
-              host: repositoryForm.host,
-              username: repositoryForm.username,
-              port: repositoryForm.port,
-            }
+                ssh_key_id: repositoryForm.ssh_key_id,
+                host: repositoryForm.host,
+                username: repositoryForm.username,
+                port: repositoryForm.port,
+              }
             : undefined
         }
         selectMode="directories"
@@ -2425,11 +2653,11 @@ export default function Repositories() {
         sshConfig={
           repositoryForm.repository_type !== 'local' && repositoryForm.ssh_key_id
             ? {
-              ssh_key_id: repositoryForm.ssh_key_id,
-              host: repositoryForm.host,
-              username: repositoryForm.username,
-              port: repositoryForm.port,
-            }
+                ssh_key_id: repositoryForm.ssh_key_id,
+                host: repositoryForm.host,
+                username: repositoryForm.username,
+                port: repositoryForm.port,
+              }
             : undefined
         }
         selectMode="both"

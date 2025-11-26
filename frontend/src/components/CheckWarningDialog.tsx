@@ -81,7 +81,7 @@ export default function CheckWarningDialog({
             fullWidth
             helperText="Maximum time for the check operation. Default: 3600 seconds (1 hour). Set to 0 for unlimited."
             InputProps={{
-              inputProps: { min: 0 }
+              inputProps: { min: 0 },
             }}
           />
         </Box>

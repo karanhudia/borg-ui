@@ -93,7 +93,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     logout()
   }
 
-  const handleNavClick = (e: React.MouseEvent<HTMLDivElement>, item: typeof navigationWithKeys[0]) => {
+  const handleNavClick = (
+    e: React.MouseEvent<HTMLDivElement>,
+    item: (typeof navigationWithKeys)[0]
+  ) => {
     const isEnabled = tabEnablement[item.key]
     if (!isEnabled) {
       e.preventDefault()
@@ -183,9 +186,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <ListItem key={item.name} disablePadding>
                 {!isEnabled && disabledReason ? (
                   <Tooltip title={disabledReason} arrow placement="right">
-                    <Box sx={{ width: '100%' }}>
-                      {listItemButton}
-                    </Box>
+                    <Box sx={{ width: '100%' }}>{listItemButton}</Box>
                   </Tooltip>
                 ) : (
                   listItemButton
@@ -208,11 +209,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </Tooltip>
         {systemInfo ? (
           <Box sx={{ ml: 3 }}>
-            <Typography variant="caption" display="block" color="text.secondary" sx={{ lineHeight: 1.5 }}>
+            <Typography
+              variant="caption"
+              display="block"
+              color="text.secondary"
+              sx={{ lineHeight: 1.5 }}
+            >
               App: {systemInfo.app_version}
             </Typography>
             {systemInfo.borg_version && (
-              <Typography variant="caption" display="block" color="text.secondary" sx={{ lineHeight: 1.5 }}>
+              <Typography
+                variant="caption"
+                display="block"
+                color="text.secondary"
+                sx={{ lineHeight: 1.5 }}
+              >
                 {systemInfo.borg_version}
               </Typography>
             )}
@@ -288,10 +299,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </AppBar>
 
       {/* Drawer */}
-      <Box
-        component="nav"
-        sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
-      >
+      <Box component="nav" sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}>
         {/* Mobile drawer */}
         <Drawer
           variant="temporary"

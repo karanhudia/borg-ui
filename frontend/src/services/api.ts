@@ -112,13 +112,18 @@ export const archivesAPI = {
   listContents: (repository: string, archive: string, path?: string) =>
     api.get(`/archives/${repository}/${archive}/contents`, { params: { path } }),
   deleteArchive: (repository: string, archive: string) =>
-    api.delete(`/archives/${encodeURIComponent(archive)}?repository=${encodeURIComponent(repository)}`),
+    api.delete(
+      `/archives/${encodeURIComponent(archive)}?repository=${encodeURIComponent(repository)}`
+    ),
   downloadFile: (repository: string, archive: string, filePath: string) => {
     const token = localStorage.getItem('access_token')
     const encodedFilePath = encodeURIComponent(filePath)
     const encodedRepository = encodeURIComponent(repository)
     const encodedArchive = encodeURIComponent(archive)
-    window.open(`${API_BASE_URL}/archives/download?repository=${encodedRepository}&archive=${encodedArchive}&file_path=${encodedFilePath}&token=${token}`, '_blank')
+    window.open(
+      `${API_BASE_URL}/archives/download?repository=${encodedRepository}&archive=${encodedArchive}&file_path=${encodedFilePath}&token=${token}`,
+      '_blank'
+    )
   },
 }
 
@@ -141,20 +146,20 @@ export const settingsAPI = {
   // System settings
   getSystemSettings: () => api.get('/settings/system'),
   updateSystemSettings: (settings: any) => api.put('/settings/system', settings),
-  
+
   // User management
   getUsers: () => api.get('/settings/users'),
   createUser: (userData: any) => api.post('/settings/users', userData),
   updateUser: (userId: number, userData: any) => api.put(`/settings/users/${userId}`, userData),
   deleteUser: (userId: number) => api.delete(`/settings/users/${userId}`),
-  resetUserPassword: (userId: number, newPassword: string) => 
+  resetUserPassword: (userId: number, newPassword: string) =>
     api.post(`/settings/users/${userId}/reset-password`, { new_password: newPassword }),
-  
+
   // Profile management
   getProfile: () => api.get('/settings/profile'),
   updateProfile: (profileData: any) => api.put('/settings/profile', profileData),
   changePassword: (passwordData: any) => api.post('/settings/change-password', passwordData),
-  
+
   // System maintenance
   cleanupSystem: () => api.post('/settings/system/cleanup'),
 }
@@ -186,17 +191,24 @@ export const repositoriesAPI = {
   getRepositoryInfo: (id: number) => api.get(`/repositories/${id}/info`),
   // Check/Compact job management
   getCheckJobStatus: (jobId: number) => api.get(`/repositories/check-jobs/${jobId}`),
-  getRepositoryCheckJobs: (id: number, limit?: number) => api.get(`/repositories/${id}/check-jobs`, { params: { limit } }),
+  getRepositoryCheckJobs: (id: number, limit?: number) =>
+    api.get(`/repositories/${id}/check-jobs`, { params: { limit } }),
   getCompactJobStatus: (jobId: number) => api.get(`/repositories/compact-jobs/${jobId}`),
-  getRepositoryCompactJobs: (id: number, limit?: number) => api.get(`/repositories/${id}/compact-jobs`, { params: { limit } }),
+  getRepositoryCompactJobs: (id: number, limit?: number) =>
+    api.get(`/repositories/${id}/compact-jobs`, { params: { limit } }),
   getRunningJobs: (id: number) => api.get(`/repositories/${id}/running-jobs`),
-  getArchiveInfo: (repoId: number, archiveName: string, includeFiles: boolean = true, fileLimit: number = 1000) =>
+  getArchiveInfo: (
+    repoId: number,
+    archiveName: string,
+    includeFiles: boolean = true,
+    fileLimit: number = 1000
+  ) =>
     api.get(`/repositories/${repoId}/archives/${archiveName}/info`, {
-      params: { include_files: includeFiles, file_limit: fileLimit }
+      params: { include_files: includeFiles, file_limit: fileLimit },
     }),
   getArchiveFiles: (repoId: number, archiveName: string, limit?: number) =>
     api.get(`/repositories/${repoId}/archives/${archiveName}/files`, {
-      params: limit ? { limit } : undefined
+      params: limit ? { limit } : undefined,
     }),
 }
 
@@ -218,8 +230,10 @@ export const sshKeysAPI = {
   deploySSHKey: (id: number, data: any) => api.post(`/ssh-keys/${id}/deploy`, data),
   testSSHConnection: (id: number, data: any) => api.post(`/ssh-keys/${id}/test-connection`, data),
   getSSHConnections: () => api.get('/ssh-keys/connections'),
-  updateSSHConnection: (connectionId: number, data: any) => api.put(`/ssh-keys/connections/${connectionId}`, data),
-  deleteSSHConnection: (connectionId: number) => api.delete(`/ssh-keys/connections/${connectionId}`),
+  updateSSHConnection: (connectionId: number, data: any) =>
+    api.put(`/ssh-keys/connections/${connectionId}`, data),
+  deleteSSHConnection: (connectionId: number) =>
+    api.delete(`/ssh-keys/connections/${connectionId}`),
 }
 
 // Schedule API
@@ -245,4 +259,4 @@ export const notificationsAPI = {
   test: (serviceUrl: string) => api.post('/notifications/test', { service_url: serviceUrl }),
 }
 
-export default api 
+export default api

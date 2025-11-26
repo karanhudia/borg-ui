@@ -70,7 +70,8 @@ export default function CompactWarningDialog({
         </Box>
 
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          Tip: Run compaction after pruning old archives to free up space. Other repositories will remain accessible.
+          Tip: Run compaction after pruning old archives to free up space. Other repositories will
+          remain accessible.
         </Typography>
       </DialogContent>
       <DialogActions>

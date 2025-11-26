@@ -1,11 +1,4 @@
-import {
-  Box,
-  TextField,
-  Divider,
-  Typography,
-  Checkbox,
-  FormControlLabel,
-} from '@mui/material'
+import { Box, TextField, Divider, Typography, Checkbox, FormControlLabel } from '@mui/material'
 import CodeEditor from './CodeEditor'
 
 interface AdvancedRepositoryOptionsProps {
