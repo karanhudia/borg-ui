@@ -242,21 +242,47 @@ const NotificationsTab: React.FC = () => {
           <Typography variant="subtitle2" fontWeight={600} gutterBottom>
             Apprise URL Examples:
           </Typography>
-          <Stack spacing={0.5} sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
-            <Typography>• <strong>Email (Gmail):</strong> mailto://user:app_password@gmail.com?smtp=smtp.gmail.com&mode=starttls</Typography>
-            <Typography>• <strong>Slack:</strong> slack://TokenA/TokenB/TokenC/</Typography>
-            <Typography>• <strong>Discord:</strong> discord://webhook_id/webhook_token</Typography>
-            <Typography>• <strong>Telegram:</strong> telegram://bot_token/chat_id</Typography>
-            <Typography>• <strong>Microsoft Teams:</strong> msteams://TokenA/TokenB/TokenC/</Typography>
-            <Typography>• <strong>Pushover:</strong> pover://user@token</Typography>
-            <Typography>• <strong>ntfy:</strong> ntfy://topic/</Typography>
-            <Typography>• <strong>Custom Webhook:</strong> json://hostname/path/to/endpoint</Typography>
-          </Stack>
+          <Box sx={{
+            fontFamily: 'monospace',
+            fontSize: '0.75rem',
+            bgcolor: 'grey.900',
+            color: 'grey.100',
+            p: 1.5,
+            borderRadius: 1,
+            border: '1px solid',
+            borderColor: 'grey.700',
+            overflow: 'auto',
+            lineHeight: 1.4
+          }}>
+            <Box component="span" sx={{ color: 'grey.400' }}>Email (Gmail): </Box>
+            <Box component="span">mailto://user:app_password@gmail.com?smtp=smtp.gmail.com&mode=starttls</Box>
+            <br />
+            <Box component="span" sx={{ color: 'grey.400' }}>Slack: </Box>
+            <Box component="span">slack://TokenA/TokenB/TokenC/</Box>
+            <br />
+            <Box component="span" sx={{ color: 'grey.400' }}>Discord: </Box>
+            <Box component="span">discord://webhook_id/webhook_token</Box>
+            <br />
+            <Box component="span" sx={{ color: 'grey.400' }}>Telegram: </Box>
+            <Box component="span">tgram://bot_token/chat_id</Box>
+            <br />
+            <Box component="span" sx={{ color: 'grey.400' }}>Microsoft Teams: </Box>
+            <Box component="span">msteams://TokenA/TokenB/TokenC/</Box>
+            <br />
+            <Box component="span" sx={{ color: 'grey.400' }}>Pushover: </Box>
+            <Box component="span">pover://user@token</Box>
+            <br />
+            <Box component="span" sx={{ color: 'grey.400' }}>ntfy: </Box>
+            <Box component="span">ntfy://topic/</Box>
+            <br />
+            <Box component="span" sx={{ color: 'grey.400' }}>Custom Webhook: </Box>
+            <Box component="span">json://hostname/path/to/endpoint</Box>
+          </Box>
           <Link
             href="https://github.com/caronc/apprise/wiki"
             target="_blank"
             rel="noopener noreferrer"
-            sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 2 }}
+            sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1.5 }}
           >
             <ExternalLink size={14} />
             Full Apprise Documentation
