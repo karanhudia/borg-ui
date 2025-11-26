@@ -131,7 +131,7 @@ export default function SSHConnectionsSingleKey() {
       toast.success('SSH key deployed successfully!')
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
       setDeployDialogOpen(false)
-      setConnectionForm({ host: '', username: '', port: 22, password: '' })
+      setConnectionForm({ host: '', username: '', port: 22, password: '', default_path: '' })
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to deploy SSH key')
