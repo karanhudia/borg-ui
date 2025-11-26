@@ -18,7 +18,7 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  useTheme,
+  alpha,
 } from '@mui/material'
 import {
   Trash2,
@@ -52,7 +52,6 @@ interface Archive {
 }
 
 const Archives: React.FC = () => {
-  const theme = useTheme()
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(null)
   const [selectedRepository, setSelectedRepository] = useState<Repository | null>(null)
   const [viewArchive, setViewArchive] = useState<Archive | null>(null)
@@ -641,9 +640,9 @@ const Archives: React.FC = () => {
                                 borderRadius: 1,
                                 cursor: 'pointer',
                                 userSelect: 'none',
-                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.1),
                                 '&:hover': {
-                                  backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                                  backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.2),
                                 },
                               }}
                             >
@@ -672,15 +671,9 @@ const Archives: React.FC = () => {
                                 p: 1.5,
                                 borderRadius: 1,
                                 userSelect: 'none',
-                                backgroundColor:
-                                  theme.palette.mode === 'dark'
-                                    ? 'rgba(255, 255, 255, 0.05)'
-                                    : 'rgba(0, 0, 0, 0.02)',
+                                backgroundColor: 'action.hover',
                                 '&:hover': {
-                                  backgroundColor:
-                                    theme.palette.mode === 'dark'
-                                      ? 'rgba(255, 255, 255, 0.1)'
-                                      : 'rgba(0, 0, 0, 0.05)',
+                                  backgroundColor: 'action.selected',
                                 },
                               }}
                             >

@@ -1042,7 +1042,7 @@ const Schedule: React.FC = () => {
                   key={job.id}
                   sx={{
                     p: 2,
-                    backgroundColor: 'grey.50',
+                    backgroundColor: 'action.hover',
                     borderRadius: 1,
                     display: 'flex',
                     justifyContent: 'space-between',

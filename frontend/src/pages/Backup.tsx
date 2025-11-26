@@ -22,6 +22,7 @@ import {
   Alert,
   Divider,
   Tooltip,
+  alpha,
 } from '@mui/material'
 import {
   Play,
@@ -501,7 +502,7 @@ const Backup: React.FC = () => {
 
       {/* Backup Context Card */}
       {selectedRepoData && (
-        <Card sx={{ mb: 3, bgcolor: 'rgba(25, 118, 210, 0.04)' }}>
+        <Card sx={{ mb: 3, bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04) }}>
           <CardContent>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
               <Info size={20} color="#1976d2" />
