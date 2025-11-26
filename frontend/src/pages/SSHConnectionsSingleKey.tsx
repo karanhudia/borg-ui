@@ -48,6 +48,7 @@ interface SSHConnection {
   host: string
   username: string
   port: number
+  default_path?: string
   status: string
   last_test?: string
   last_success?: string
@@ -71,6 +72,7 @@ export default function SSHConnectionsSingleKey() {
     username: '',
     port: 22,
     password: '',
+    default_path: '',
   })
   const [testConnectionForm, setTestConnectionForm] = useState({
     host: '',
@@ -81,6 +83,7 @@ export default function SSHConnectionsSingleKey() {
     host: '',
     username: '',
     port: 22,
+    default_path: '',
   })
 
   // Queries
@@ -128,7 +131,7 @@ export default function SSHConnectionsSingleKey() {
       toast.success('SSH key deployed successfully!')
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
       setDeployDialogOpen(false)
-      setConnectionForm({ host: '', username: '', port: 22, password: '' })
+      setConnectionForm({ host: '', username: '', port: 22, password: '', default_path: '' })
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to deploy SSH key')
@@ -230,6 +233,7 @@ export default function SSHConnectionsSingleKey() {
       host: connection.host,
       username: connection.username,
       port: connection.port,
+      default_path: connection.default_path || '',
     })
     setEditConnectionDialogOpen(true)
   }
@@ -777,6 +781,17 @@ export default function SSHConnectionsSingleKey() {
                 ),
               }}
             />
+            <TextField
+              label="Default Path (Optional)"
+              fullWidth
+              value={connectionForm.default_path}
+              onChange={(e) =>
+                setConnectionForm({ ...connectionForm, default_path: e.target.value })
+              }
+              placeholder="/home"
+              helperText="Starting directory for SSH file browsing (e.g., /home for Hetzner Storage Box)"
+              InputLabelProps={{ shrink: true }}
+            />
             <Alert severity="info" sx={{ fontSize: '0.85rem' }}>
               The password is used to deploy your public key to the server's
               authorized_keys file. After deployment, you'll connect using the SSH
@@ -937,6 +952,20 @@ export default function SSHConnectionsSingleKey() {
                   port: parseInt(e.target.value),
                 })
               }
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="Default Path (Optional)"
+              fullWidth
+              value={editConnectionForm.default_path}
+              onChange={(e) =>
+                setEditConnectionForm({
+                  ...editConnectionForm,
+                  default_path: e.target.value,
+                })
+              }
+              placeholder="/home"
+              helperText="Starting directory for SSH file browsing (e.g., /home for Hetzner Storage Box)"
               InputLabelProps={{ shrink: true }}
             />
             <Alert severity="info" sx={{ fontSize: '0.85rem' }}>

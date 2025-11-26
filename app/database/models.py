@@ -89,12 +89,13 @@ class SSHKey(Base):
 
 class SSHConnection(Base):
     __tablename__ = "ssh_connections"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     ssh_key_id = Column(Integer, ForeignKey("ssh_keys.id"))
     host = Column(String)
     username = Column(String)
     port = Column(Integer, default=22)
+    default_path = Column(String, nullable=True)  # Default starting path for SSH browsing (e.g., /home for Hetzner Storage Box)
     status = Column(String, default="unknown")  # connected, failed, testing, unknown
     last_test = Column(DateTime, nullable=True)
     last_success = Column(DateTime, nullable=True)

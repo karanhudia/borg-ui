@@ -198,7 +198,13 @@ const Backup: React.FC = () => {
         .join(' ') + ' '
     }
 
-    return `borg create --progress --stats --compression ${compression} ${excludeArgs}${selectedRepoData.path}::${archiveName} ${sourceDirs}`
+    // Use repository path as-is (already contains full SSH URL for SSH repos)
+    const repositoryPath = selectedRepoData.path
+
+    // Add --remote-path flag if specified (path to borg binary on remote)
+    const remotePathFlag = selectedRepoData.remote_path ? `--remote-path ${selectedRepoData.remote_path} ` : ''
+
+    return `borg create ${remotePathFlag}--progress --stats --compression ${compression} ${excludeArgs}${repositoryPath}::${archiveName} ${sourceDirs}`
   }
 
   // Get repository name from path
