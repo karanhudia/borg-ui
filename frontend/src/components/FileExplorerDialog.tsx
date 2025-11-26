@@ -20,7 +20,6 @@ import {
   TextField,
   InputAdornment,
   Checkbox,
-  useTheme,
 } from '@mui/material'
 import { Folder, File, ChevronRight, Home, Search, Archive } from 'lucide-react'
 import api from '../services/api'
@@ -63,7 +62,6 @@ export default function FileExplorerDialog({
   sshConfig,
   selectMode = 'directories',
 }: FileExplorerDialogProps) {
-  const theme = useTheme()
   const [currentPath, setCurrentPath] = useState(initialPath)
   const [items, setItems] = useState<FileSystemItem[]>([])
   const [loading, setLoading] = useState(false)
@@ -361,7 +359,7 @@ export default function FileExplorerDialog({
                           {item.is_borg_repo ? (
                             <Archive size={18} color="#ff6b6b" />
                           ) : item.is_directory ? (
-                            <Folder size={18} color={theme.palette.text.primary} />
+                            <Folder size={18} color='text.primary' />
                           ) : (
                             <File size={18} color="#999" />
                           )}

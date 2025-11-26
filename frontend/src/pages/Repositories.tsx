@@ -2373,7 +2373,7 @@ export default function Repositories() {
                       sx={{
                         mt: 1,
                         p: 1.5,
-                        bgcolor: 'rgba(0,0,0,0.05)',
+                        bgcolor: 'action.hover',
                         borderRadius: 1,
                         fontSize: '0.75rem',
                         overflow: 'auto',
