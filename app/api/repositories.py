@@ -608,6 +608,7 @@ async def import_repository(
             exclude_patterns_json = json.dumps(repo_data.exclude_patterns)
 
         # Create repository record
+        # Note: archive_count will be updated after creation via borg list
         repository = Repository(
             name=repo_data.name,
             path=repo_path,
@@ -622,7 +623,7 @@ async def import_repository(
             username=repo_data.username,
             ssh_key_id=repo_data.ssh_key_id,
             remote_path=repo_data.remote_path,
-            archive_count=len(repo_info.get("archives", [])) if "archives" in repo_info else 0,
+            archive_count=0,  # Will be updated below
             pre_backup_script=repo_data.pre_backup_script,
             post_backup_script=repo_data.post_backup_script,
             hook_timeout=repo_data.hook_timeout,
@@ -634,6 +635,9 @@ async def import_repository(
         db.add(repository)
         db.commit()
         db.refresh(repository)
+
+        # Update archive count by listing archives (borg info doesn't return archives)
+        await update_repository_archive_count(repository, db)
 
         logger.info("Repository imported successfully",
                    name=repo_data.name,
