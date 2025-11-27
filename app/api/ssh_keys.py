@@ -987,9 +987,11 @@ async def deploy_ssh_key_with_copy_id(
         )
 
         # Use sshpass with ssh-copy-id
+        # Note: Some servers (like Hetzner Storage Box) require the -s flag
         cmd = [
             "sshpass", "-p", password,
             "ssh-copy-id",
+            "-s",  # Use SFTP mode (required by some servers like Hetzner Storage Box)
             "-i", key_file_path,
             "-o", "StrictHostKeyChecking=no",
             "-o", "ConnectTimeout=10",
