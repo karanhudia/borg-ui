@@ -151,7 +151,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       repositories: true, // Always accessible - local repositories don't need SSH keys
       backups: appState.hasRepositories, // Only requires repositories (can be local)
       archives: appState.hasRepositories, // Only requires repositories
-      restore: appState.hasRepositories && appState.hasArchives, // Requires archives to restore from
+      restore: appState.hasRepositories, // Enable if repository exists (will show empty state if no archives)
       schedule: appState.hasRepositories, // Only requires repositories for scheduling
       settings: true,
     }
@@ -176,16 +176,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         case 'backups':
         case 'archives':
         case 'schedule':
-          if (!appState.hasRepositories) {
-            return 'Please create a repository first'
-          }
-          return null
         case 'restore':
           if (!appState.hasRepositories) {
             return 'Please create a repository first'
-          }
-          if (!appState.hasArchives) {
-            return 'No archives available to restore from'
           }
           return null
         default:
