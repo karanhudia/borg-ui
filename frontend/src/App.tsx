@@ -87,7 +87,8 @@ function App() {
         />
         <Route path="/ssh-keys" element={<Navigate to="/ssh-connections" replace />} />
         <Route path="/connections" element={<Navigate to="/ssh-connections" replace />} />
-        <Route path="/settings" element={<Settings />} />
+        <Route path="/settings" element={<Navigate to="/settings/account" replace />} />
+        <Route path="/settings/:tab" element={<Settings />} />
       </Routes>
     </Layout>
   )

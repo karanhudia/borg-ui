@@ -6,7 +6,7 @@ import structlog
 import os
 from dotenv import load_dotenv
 
-from app.api import auth, dashboard, backup, archives, restore, schedule, settings as settings_api, events, repositories, ssh_keys, system, filesystem, browse, notifications, scripts
+from app.api import auth, dashboard, backup, archives, restore, schedule, settings as settings_api, events, repositories, ssh_keys, system, filesystem, browse, notifications, scripts, packages
 from app.database.database import engine
 from app.database.models import Base
 from app.core.security import create_first_user
@@ -85,6 +85,7 @@ app.include_router(ssh_keys.router, prefix="/api/ssh-keys", tags=["SSH Keys"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
 app.include_router(filesystem.router, prefix="/api/filesystem", tags=["Filesystem"])
 app.include_router(scripts.router, prefix="/api/scripts", tags=["Scripts"])
+app.include_router(packages.router, prefix="/api/packages", tags=["Packages"])
 app.include_router(notifications.router)
 
 @app.on_event("startup")
@@ -129,6 +130,11 @@ async def startup_event():
         logger.info("Orphaned job cleanup completed")
     except Exception as e:
         logger.error("Failed to cleanup orphaned jobs", error=str(e))
+
+    # Note: Package auto-installation now handled by entrypoint.sh startup script
+    # This runs asynchronously via /app/app/scripts/startup_packages.py
+    # Package installation jobs will start in the background after API is ready
+    logger.info("Package auto-installation will be handled by startup script")
 
     # Start scheduled backup checker (background task)
     from app.api.schedule import check_scheduled_jobs
@@ -178,6 +184,11 @@ async def catch_all(full_path: str):
             return HTMLResponse(content=f.read())
     except FileNotFoundError:
         return HTMLResponse(content="<h1>Borg Web UI</h1><p>Frontend not built yet. Please run the build process.</p>")
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for container orchestration and startup scripts"""
+    return {"status": "healthy", "service": "borg-web-ui"}
 
 @app.get("/api")
 async def api_info():

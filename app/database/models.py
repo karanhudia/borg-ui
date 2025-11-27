@@ -273,3 +273,39 @@ class NotificationSettings(Base):
 
     def __repr__(self):
         return f"<NotificationSettings(id={self.id}, name='{self.name}', enabled={self.enabled})>"
+
+class InstalledPackage(Base):
+    __tablename__ = "installed_packages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False)  # Package name (e.g., "wakeonlan")
+    install_command = Column(String, nullable=False)  # Command to install (e.g., "apt-get install -y wakeonlan")
+    description = Column(String, nullable=True)  # Optional description
+    status = Column(String, default="pending", nullable=False)  # pending, installed, failed
+    install_log = Column(Text, nullable=True)  # Installation output/logs
+    installed_at = Column(DateTime, nullable=True)  # When successfully installed
+    last_check = Column(DateTime, nullable=True)  # Last time we verified it exists
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    def __repr__(self):
+        return f"<InstalledPackage(id={self.id}, name='{self.name}', status='{self.status}')>"
+
+class PackageInstallJob(Base):
+    __tablename__ = "package_install_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    package_id = Column(Integer, ForeignKey("installed_packages.id"), nullable=False)
+    status = Column(String, default="pending", nullable=False)  # pending, installing, completed, failed
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    exit_code = Column(Integer, nullable=True)
+    stdout = Column(Text, nullable=True)
+    stderr = Column(Text, nullable=True)
+    error_message = Column(Text, nullable=True)
+    process_pid = Column(Integer, nullable=True)  # Container PID for orphan detection
+    process_start_time = Column(BigInteger, nullable=True)  # Process start time in jiffies for PID uniqueness
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+
+    def __repr__(self):
+        return f"<PackageInstallJob(id={self.id}, package_id={self.package_id}, status='{self.status}')>"
