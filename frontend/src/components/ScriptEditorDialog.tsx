@@ -14,7 +14,7 @@ import {
 } from '@mui/material'
 import { Play, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 import CodeEditor from './CodeEditor'
-import axios from 'axios'
+import api from '../services/api'
 
 interface ScriptEditorDialogProps {
   open: boolean
@@ -51,7 +51,7 @@ export default function ScriptEditorDialog({
     setTestResult(null)
 
     try {
-      const response = await axios.post('/api/scripts/test', {
+      const response = await api.post('/scripts/test', {
         script: value,
       })
       setTestResult(response.data)
