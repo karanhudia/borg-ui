@@ -35,6 +35,29 @@ else
     echo "[$(date)] UID/GID already correct, skipping update"
 fi
 
+# Setup SSH key symlink for root user (when PUID=0)
+# When borg user runs as root (UID 0), SSH looks for keys in /root/.ssh
+# but we deploy them to /home/borg/.ssh. Create symlink to handle this.
+if [ "$PUID" = "0" ]; then
+    echo "[$(date)] PUID is 0 (root), creating symlink /root/.ssh -> /home/borg/.ssh"
+    # Remove existing /root/.ssh if it's a directory or symlink
+    if [ -L /root/.ssh ]; then
+        rm /root/.ssh
+        echo "[$(date)] Removed existing /root/.ssh symlink"
+    elif [ -d /root/.ssh ] && [ ! -L /root/.ssh ]; then
+        # If it's a real directory, back it up before removing
+        if [ "$(ls -A /root/.ssh 2>/dev/null)" ]; then
+            echo "[$(date)] Backing up existing /root/.ssh to /root/.ssh.backup"
+            mv /root/.ssh /root/.ssh.backup
+        else
+            rm -rf /root/.ssh
+        fi
+    fi
+    # Create symlink
+    ln -sf /home/borg/.ssh /root/.ssh
+    echo "[$(date)] Created symlink /root/.ssh -> /home/borg/.ssh"
+fi
+
 # Setup Docker socket access if mounted
 if [ -S /var/run/docker.sock ]; then
     DOCKER_SOCK_GID=$(stat -c '%g' /var/run/docker.sock)
