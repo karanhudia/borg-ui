@@ -7,7 +7,6 @@ import {
   Button,
   Box,
   Typography,
-  Alert,
   CircularProgress,
   Chip,
   Paper,
@@ -199,14 +198,6 @@ export default function ScriptEditorDialog({
               )}
             </Box>
           )}
-
-          <Alert severity="info" sx={{ mt: 1 }}>
-            <Typography variant="body2">
-              <strong>Test Environment:</strong> The script runs in a sandboxed environment with
-              limited permissions. Network access and file system operations are restricted for
-              security.
-            </Typography>
-          </Alert>
         </Box>
       </DialogContent>
 
