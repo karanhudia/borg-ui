@@ -60,7 +60,7 @@ services:
       # WARNING: This gives the container access to your host's Docker daemon
       # Security: Mount as read-only (:ro) when possible, but some operations need :rw
       # See docs/docker-hooks.md for usage examples and security considerations
-      # - /var/run/docker.sock:/var/run/docker.sock:rw
+      - /var/run/docker.sock:/var/run/docker.sock:rw
 
     environment:
       # Optional overrides (all have smart defaults)
