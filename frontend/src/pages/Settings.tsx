@@ -329,7 +329,8 @@ const Settings: React.FC = () => {
         <Tabs
           value={activeTab}
           onChange={(_, value) => {
-            const tabPath = Object.values(TAB_CONFIG).find(t => t.index === value)?.path || 'account'
+            const tabPath =
+              Object.values(TAB_CONFIG).find((t) => t.index === value)?.path || 'account'
             navigate(`/settings/${tabPath}`)
           }}
         >

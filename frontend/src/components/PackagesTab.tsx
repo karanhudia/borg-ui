@@ -473,9 +473,7 @@ export default function PackagesTab() {
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2}>
-            {jobStatus?.error_message && (
-              <Alert severity="error">{jobStatus.error_message}</Alert>
-            )}
+            {jobStatus?.error_message && <Alert severity="error">{jobStatus.error_message}</Alert>}
 
             {jobStatus?.status === 'installing' && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
