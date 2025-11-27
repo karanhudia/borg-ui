@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate, useParams } from 'react-router-dom'
 import {
   Box,
   Card,
@@ -21,13 +22,26 @@ import {
   Select,
   FormControl,
 } from '@mui/material'
-import { Users, Trash2, Plus, Edit, Key, AlertCircle, Bell, Moon, Sun, Monitor } from 'lucide-react'
+import {
+  Users,
+  Trash2,
+  Plus,
+  Edit,
+  Key,
+  AlertCircle,
+  Bell,
+  Moon,
+  Sun,
+  Monitor,
+  Package,
+} from 'lucide-react'
 import { settingsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../context/ThemeContext'
 import { availableThemes } from '../theme'
 import NotificationsTab from '../components/NotificationsTab'
+import PackagesTab from '../components/PackagesTab'
 import { formatDateShort } from '../utils/dateUtils'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
 
@@ -41,11 +55,35 @@ interface UserType {
   last_login: string | null
 }
 
+// Tab configuration - matches tab order in UI
+const TAB_CONFIG = {
+  account: { index: 0, path: 'account' },
+  appearance: { index: 1, path: 'appearance' },
+  notifications: { index: 2, path: 'notifications' },
+  packages: { index: 3, path: 'packages' },
+  users: { index: 4, path: 'users' },
+} as const
+
 const Settings: React.FC = () => {
   const { user } = useAuth()
   const { mode, setTheme } = useTheme()
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState(0)
+  const navigate = useNavigate()
+  const { tab } = useParams<{ tab?: string }>()
+
+  // Determine active tab from URL or default to 'account'
+  const getTabIndexFromPath = (tabPath?: string): number => {
+    if (!tabPath) return TAB_CONFIG.account.index
+    const tabEntry = Object.values(TAB_CONFIG).find((t) => t.path === tabPath)
+    return tabEntry?.index ?? TAB_CONFIG.account.index
+  }
+
+  const [activeTab, setActiveTab] = useState(getTabIndexFromPath(tab))
+
+  // Update active tab when URL changes
+  useEffect(() => {
+    setActiveTab(getTabIndexFromPath(tab))
+  }, [tab])
   const [showCreateUser, setShowCreateUser] = useState(false)
   const [editingUser, setEditingUser] = useState<UserType | null>(null)
   const [showPasswordModal, setShowPasswordModal] = useState(false)
@@ -288,7 +326,13 @@ const Settings: React.FC = () => {
 
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs value={activeTab} onChange={(_, value) => setActiveTab(value)}>
+        <Tabs
+          value={activeTab}
+          onChange={(_, value) => {
+            const tabPath = Object.values(TAB_CONFIG).find(t => t.index === value)?.path || 'account'
+            navigate(`/settings/${tabPath}`)
+          }}
+        >
           <Tab
             icon={<Key size={18} />}
             iconPosition="start"
@@ -307,6 +351,14 @@ const Settings: React.FC = () => {
             label="Notifications"
             sx={{ textTransform: 'none', minHeight: 48 }}
           />
+          {user?.is_admin && (
+            <Tab
+              icon={<Package size={18} />}
+              iconPosition="start"
+              label="System Packages"
+              sx={{ textTransform: 'none', minHeight: 48 }}
+            />
+          )}
           {user?.is_admin && (
             <Tab
               icon={<Users size={18} />}
@@ -468,8 +520,11 @@ const Settings: React.FC = () => {
       {/* Notifications Tab */}
       {activeTab === 2 && <NotificationsTab />}
 
+      {/* System Packages Tab */}
+      {activeTab === 3 && user?.is_admin && <PackagesTab />}
+
       {/* User Management Tab */}
-      {activeTab === (user?.is_admin ? 3 : 2) && user?.is_admin && (
+      {activeTab === (user?.is_admin ? 4 : 2) && user?.is_admin && (
         <Box>
           <Box
             sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}

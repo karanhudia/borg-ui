@@ -57,6 +57,7 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     lsb-release \
     gosu \
+    sudo \
     # Borg dependencies (but not borgbackup package itself)
     libacl1-dev \
     libssl-dev \
@@ -122,8 +123,8 @@ RUN groupadd -g 1001 borg && \
     useradd -m -u 1001 -g 1001 -s /bin/bash borg && \
     # Add user to necessary groups
     usermod -a -G sudo borg && \
-    # Set up sudo access for borg user (needed for cron jobs and borg operations)
-    echo "borg ALL=(ALL) NOPASSWD: /usr/bin/borg, /usr/bin/crontab" >> /etc/sudoers
+    # Set up sudo access for borg user (needed for cron jobs, borg operations, and package installation)
+    echo "borg ALL=(ALL) NOPASSWD: /usr/bin/borg, /usr/bin/crontab, /usr/bin/apt-get" >> /etc/sudoers
 
 # Set proper ownership and permissions
 RUN chown -R borg:borg /app /data /backups /var/log/borg /etc/borg && \

@@ -28,7 +28,7 @@ export default function Login() {
 
       if (mustChangePassword) {
         toast.success('Login successful! Please change your password.')
-        navigate('/settings')
+        navigate('/settings/account')
       } else {
         toast.success('Login successful!')
         navigate('/dashboard')

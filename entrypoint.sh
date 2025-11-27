@@ -35,6 +35,29 @@ else
     echo "[$(date)] UID/GID already correct, skipping update"
 fi
 
+# Setup Docker socket access if mounted
+if [ -S /var/run/docker.sock ]; then
+    DOCKER_SOCK_GID=$(stat -c '%g' /var/run/docker.sock)
+    echo "[$(date)] Docker socket detected (GID: ${DOCKER_SOCK_GID})"
+
+    # Create or update docker group with the host's docker GID
+    if getent group docker > /dev/null 2>&1; then
+        # Docker group exists, update its GID
+        groupmod -o -g "${DOCKER_SOCK_GID}" docker
+        echo "[$(date)] Updated docker group to GID ${DOCKER_SOCK_GID}"
+    else
+        # Docker group doesn't exist, create it
+        groupadd -g "${DOCKER_SOCK_GID}" docker
+        echo "[$(date)] Created docker group with GID ${DOCKER_SOCK_GID}"
+    fi
+
+    # Add borg user to docker group
+    usermod -a -G docker borg
+    echo "[$(date)] Added borg user to docker group - docker commands will work in scripts"
+else
+    echo "[$(date)] Docker socket not mounted, skipping docker group setup"
+fi
+
 # Deploy SSH keys from database to filesystem
 echo "[$(date)] Deploying SSH keys..."
 python3 /app/app/scripts/deploy_ssh_key.py || echo "[$(date)] Warning: SSH key deployment failed"
@@ -43,6 +66,14 @@ python3 /app/app/scripts/deploy_ssh_key.py || echo "[$(date)] Warning: SSH key d
 echo "[$(date)] Starting Borg Web UI as user borg (${PUID}:${PGID})..."
 cd /app
 PORT=${PORT:-8081}
+
+# Start package installation in background (non-blocking)
+# This runs after a delay to ensure API is ready
+(
+    sleep 5  # Give the API time to fully start
+    echo "[$(date)] Starting package installation jobs..."
+    python3 /app/app/scripts/startup_packages.py || echo "[$(date)] Warning: Package startup failed"
+) &
 
 # Note: Access logs disabled (/dev/null) because FastAPI middleware already logs all requests
 # with structured logging. This prevents duplicate log entries.
