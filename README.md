@@ -19,11 +19,15 @@ A modern web interface for [Borg Backup](https://borgbackup.readthedocs.io/). Ze
 
 ## Screenshots
 
-<img width="800" alt="dashboard" src="https://github.com/user-attachments/assets/9478189e-4b47-46ae-b672-ad77df6d7040" />
+<img width="800" alt="dashboard" src="https://github.com/user-attachments/assets/8c876ee3-e3e2-43af-b36a-cef74b03560c" />
 
 <img width="800" alt="backup-live-progress" src="https://github.com/user-attachments/assets/550e396e-ec36-4737-9821-899c99265f64" />
 
-<img width="800" alt="repository-details" src="https://github.com/user-attachments/assets/4d85cc2f-cfe6-489f-bdb9-67c1ca2e4035" />
+<img width="800" alt="repository-details" src="https://github.com/user-attachments/assets/6bae3403-268a-4720-bdfa-087dc2c1df41" />
+
+<img width="800" alt="notifications-settings" src="https://github.com/user-attachments/assets/598f59a7-8f60-4203-ab5d-0ae0ee28ab61" />
+
+<img width="800" alt="packages-install" src="https://github.com/user-attachments/assets/68e25c1b-b6e0-4008-b6cb-e4996a2eee7e" />
 
 ---
 
