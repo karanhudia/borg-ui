@@ -95,11 +95,9 @@ If you don't want to mount docker.sock, consider:
 #!/bin/bash
 set -e
 
-# Install Docker CLI if not present (one-time operation)
-if ! command -v docker &> /dev/null; then
-    echo "Installing Docker CLI..."
-    curl -fsSL https://get.docker.com | sh
-fi
+# Note: Docker CLI (docker.io package) can be installed from the UI
+# Go to Settings → Packages and install "docker.io"
+# This is a one-time setup that persists across container restarts
 
 # Stop container
 echo "Stopping postgres-db container..."
@@ -127,11 +125,7 @@ echo "Container started successfully"
 #!/bin/bash
 set -e
 
-# Install Docker CLI if needed
-if ! command -v docker &> /dev/null; then
-    echo "Installing Docker CLI..."
-    curl -fsSL https://get.docker.com | sh
-fi
+# Note: Install docker.io package from Settings → Packages if not already installed
 
 # Define containers to stop
 CONTAINERS=("postgres-db" "redis-cache" "mysql-db")
@@ -274,13 +268,14 @@ bash: docker: command not found
 ```
 
 **Solution:**
-The Docker CLI isn't installed in the container. Your pre-backup script should install it:
+The Docker CLI isn't installed in the container. Install it from the UI:
 
-```bash
-if ! command -v docker &> /dev/null; then
-    curl -fsSL https://get.docker.com | sh
-fi
-```
+1. Go to **Settings** → **Packages** tab
+2. Find and install **docker.io** package
+3. Wait for installation to complete
+4. The docker command will be available in your scripts
+
+This is a one-time setup that persists across container restarts.
 
 ### Permission Denied
 
@@ -454,11 +449,7 @@ set -e
 CONTAINER_NAME="postgres-db"
 STOP_TIMEOUT=30
 
-# Install Docker CLI if needed
-if ! command -v docker &> /dev/null; then
-    echo "[$(date)] Installing Docker CLI..."
-    curl -fsSL https://get.docker.com | sh
-fi
+# Note: Install docker.io package from Settings → Packages if not already installed
 
 echo "[$(date)] Starting pre-backup hook for ${CONTAINER_NAME}"
 
