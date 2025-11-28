@@ -2530,7 +2530,7 @@ export default function Repositories() {
           })
         }}
         title="Select Source Directories (Local Machine)"
-        initialPath="/local"
+        initialPath="/"
         multiSelect={true}
         connectionType="local"
         selectMode="directories"
@@ -2573,7 +2573,7 @@ export default function Repositories() {
           })
         }}
         title="Select Source Directories (Local Machine)"
-        initialPath="/local"
+        initialPath="/"
         multiSelect={true}
         connectionType="local"
         selectMode="directories"
@@ -2631,7 +2631,7 @@ export default function Repositories() {
           })
         }}
         title="Select Source Directories (Local Machine)"
-        initialPath="/local"
+        initialPath="/"
         multiSelect={true}
         connectionType="local"
         selectMode="directories"
