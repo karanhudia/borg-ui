@@ -181,7 +181,17 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="md"
+      fullWidth
+      PaperProps={{
+        sx: {
+          bgcolor: 'background.paper',
+        },
+      }}
+    >
       <DialogTitle>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Box>
