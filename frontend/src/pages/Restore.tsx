@@ -687,8 +687,10 @@ const Restore: React.FC = () => {
                       overflow: 'auto',
                       mt: 1,
                       p: 1,
-                      bgcolor: 'background.paper',
+                      bgcolor: 'background.default',
                       borderRadius: 1,
+                      border: 1,
+                      borderColor: 'divider',
                     }}
                   >
                     {selectedPaths.map((path, index) => (
