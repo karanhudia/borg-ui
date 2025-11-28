@@ -35,6 +35,7 @@ import { formatDate, formatBytes as formatBytesUtil, formatTimeRange } from '../
 import RepositoryInfo from '../components/RepositoryInfo'
 import PathSelectorField from '../components/PathSelectorField'
 import LockErrorDialog from '../components/LockErrorDialog'
+import ArchiveBrowserDialog from '../components/ArchiveBrowserDialog'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
 
 interface Repository {
@@ -75,6 +76,8 @@ const Restore: React.FC = () => {
   const [selectedRepoData, setSelectedRepoData] = useState<Repository | null>(null)
   const [restoreArchive, setRestoreArchive] = useState<Archive | null>(null)
   const [destination, setDestination] = useState<string>('')
+  const [selectedPaths, setSelectedPaths] = useState<string[]>([])
+  const [showBrowser, setShowBrowser] = useState<boolean>(false)
   const [lockError, setLockError] = useState<{
     repositoryId: number
     repositoryName: string
@@ -168,16 +171,19 @@ const Restore: React.FC = () => {
       repository,
       archive,
       destination,
+      paths,
     }: {
       repository: string
       archive: string
       destination: string
-    }) => restoreAPI.startRestore(repository, archive, [], destination),
+      paths: string[]
+    }) => restoreAPI.startRestore(repository, archive, paths, destination),
     onSuccess: () => {
       toast.success('Restore job started!')
 
       setRestoreArchive(null)
       setDestination('')
+      setSelectedPaths([])
 
       // Refetch in background (don't await - let polling handle it)
       queryClient.refetchQueries({ queryKey: ['restore-jobs'] })
@@ -205,8 +211,22 @@ const Restore: React.FC = () => {
         repository: selectedRepository,
         archive: restoreArchive.name,
         destination,
+        paths: selectedPaths,
       })
     }
+  }
+
+  // Handle archive browser path selection
+  const handlePathsSelected = (paths: string[]) => {
+    setSelectedPaths(paths)
+    setShowBrowser(false)
+  }
+
+  // Open archive browser when restore archive is set
+  const handleRestoreArchiveClick = (archive: Archive) => {
+    setRestoreArchive(archive)
+    setSelectedPaths([]) // Reset paths
+    setShowBrowser(true)
   }
 
   // Get repositories from API response
@@ -284,7 +304,7 @@ const Restore: React.FC = () => {
     {
       icon: <Download size={16} />,
       label: 'Restore',
-      onClick: (archive) => setRestoreArchive(archive),
+      onClick: (archive) => handleRestoreArchiveClick(archive),
       color: 'primary',
       tooltip: 'Restore this archive',
     },
@@ -656,15 +676,64 @@ const Restore: React.FC = () => {
                 </Alert>
               )}
 
-              <Alert severity="warning">
-                <Typography variant="body2" fontWeight={500} gutterBottom>
-                  Important
-                </Typography>
-                <Typography variant="body2">
-                  This will restore the entire archive to the destination path. Existing files may
-                  be overwritten.
-                </Typography>
-              </Alert>
+              {selectedPaths.length > 0 ? (
+                <Alert severity="success">
+                  <Typography variant="body2" fontWeight={500} gutterBottom>
+                    Selected Items ({selectedPaths.length})
+                  </Typography>
+                  <Box
+                    sx={{
+                      maxHeight: 150,
+                      overflow: 'auto',
+                      mt: 1,
+                      p: 1,
+                      bgcolor: 'background.paper',
+                      borderRadius: 1,
+                    }}
+                  >
+                    {selectedPaths.map((path, index) => (
+                      <Typography
+                        key={index}
+                        variant="caption"
+                        sx={{
+                          display: 'block',
+                          fontFamily: 'monospace',
+                          fontSize: '0.7rem',
+                          mb: 0.5,
+                        }}
+                      >
+                        {path}
+                      </Typography>
+                    ))}
+                  </Box>
+                  <Button
+                    size="small"
+                    variant="text"
+                    onClick={() => setShowBrowser(true)}
+                    sx={{ mt: 1 }}
+                  >
+                    Change Selection
+                  </Button>
+                </Alert>
+              ) : (
+                <Alert severity="warning">
+                  <Typography variant="body2" fontWeight={500} gutterBottom>
+                    Important
+                  </Typography>
+                  <Typography variant="body2">
+                    This will restore the entire archive to the destination path. Existing files may
+                    be overwritten.
+                  </Typography>
+                  <Button
+                    size="small"
+                    variant="text"
+                    onClick={() => setShowBrowser(true)}
+                    sx={{ mt: 1 }}
+                  >
+                    Select Specific Files/Folders
+                  </Button>
+                </Alert>
+              )}
 
               <PathSelectorField
                 label="Destination Path"
@@ -700,6 +769,18 @@ const Restore: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Archive Browser Dialog */}
+      {restoreArchive && selectedRepoData && (
+        <ArchiveBrowserDialog
+          open={showBrowser}
+          onClose={() => setShowBrowser(false)}
+          repositoryId={selectedRepoData.id}
+          archiveName={restoreArchive.name}
+          onSelect={handlePathsSelected}
+          initialSelectedPaths={selectedPaths}
+        />
+      )}
 
       {/* Lock Error Dialog */}
       {lockError && (
