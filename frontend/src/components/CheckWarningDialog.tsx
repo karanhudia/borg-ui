@@ -77,7 +77,10 @@ export default function CheckWarningDialog({
             label="Max Duration (seconds)"
             type="number"
             value={maxDuration}
-            onChange={(e) => setMaxDuration(parseInt(e.target.value) || 3600)}
+            onChange={(e) => {
+              const value = parseInt(e.target.value)
+              setMaxDuration(isNaN(value) ? 3600 : value)
+            }}
             fullWidth
             helperText="Maximum time for the check operation. Default: 3600 seconds (1 hour). Set to 0 for unlimited."
             InputProps={{
