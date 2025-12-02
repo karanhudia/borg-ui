@@ -611,8 +611,12 @@ const NotificationsTab: React.FC = () => {
                   }
                   label="Scheduler Errors"
                 />
-                <Typography variant="caption" sx={{ display: 'block', pl: 4.5, mt: -0.5, mb: 1, color: 'text.secondary' }}>
-                  Notifies when the scheduler fails to start a backup (e.g., system errors). Regular backup failures are handled above.
+                <Typography
+                  variant="caption"
+                  sx={{ display: 'block', pl: 4.5, mt: -0.5, mb: 1, color: 'text.secondary' }}
+                >
+                  Notifies when the scheduler fails to start a backup (e.g., system errors). Regular
+                  backup failures are handled above.
                 </Typography>
               </Box>
             </Box>
