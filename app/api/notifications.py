@@ -25,6 +25,7 @@ class NotificationSettingsCreate(BaseModel):
     service_url: str = Field(..., description="Apprise service URL (e.g., slack://token/)")
     enabled: bool = Field(default=True)
     title_prefix: Optional[str] = Field(default=None, max_length=100, description="Optional prefix for notification titles (e.g., '[Production]')")
+    notify_on_backup_start: bool = Field(default=False)
     notify_on_backup_success: bool = Field(default=False)
     notify_on_backup_failure: bool = Field(default=True)
     notify_on_restore_success: bool = Field(default=False)
@@ -37,6 +38,7 @@ class NotificationSettingsUpdate(BaseModel):
     service_url: Optional[str] = None
     enabled: Optional[bool] = None
     title_prefix: Optional[str] = None
+    notify_on_backup_start: Optional[bool] = None
     notify_on_backup_success: Optional[bool] = None
     notify_on_backup_failure: Optional[bool] = None
     notify_on_restore_success: Optional[bool] = None
@@ -50,6 +52,7 @@ class NotificationSettingsResponse(BaseModel):
     service_url: str
     enabled: bool
     title_prefix: Optional[str]
+    notify_on_backup_start: bool
     notify_on_backup_success: bool
     notify_on_backup_failure: bool
     notify_on_restore_success: bool

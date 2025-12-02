@@ -606,6 +606,14 @@ class BackupService:
 
             logger.info("Starting borg backup", job_id=job_id, repository=actual_repository_path, archive=archive_name, command=" ".join(cmd))
 
+            # Send backup start notification
+            try:
+                await notification_service.send_backup_start(
+                    db, repository, archive_name, source_paths, total_expected_size
+                )
+            except Exception as e:
+                logger.warning("Failed to send backup start notification", error=str(e))
+
             # Execute command - NO LOG FILE FOR MAXIMUM PERFORMANCE
             process = await asyncio.create_subprocess_exec(
                 *cmd,
