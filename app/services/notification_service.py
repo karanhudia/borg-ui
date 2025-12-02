@@ -279,13 +279,11 @@ class NotificationService:
 
         # Send to all enabled services with this event trigger
         for setting in settings:
-            await NotificationService._send_to_service(
-                setting=setting,
-                html_body=html_body,
-                markdown_body=markdown_body,
-                title_suffix="Backup Started",
-                db=db
-            )
+            title = "🚀 Backup Started"
+            if setting.title_prefix:
+                title = f"{setting.title_prefix} {title}"
+
+            await NotificationService._send_to_service(db, setting, title, html_body, markdown_body)
 
     @staticmethod
     async def send_backup_success(
