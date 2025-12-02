@@ -36,6 +36,9 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
+  Archive,
+  RotateCcw,
+  Settings,
 } from 'lucide-react'
 import { notificationsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
@@ -511,9 +514,12 @@ const NotificationsTab: React.FC = () => {
 
             {/* Backup Events Category */}
             <Box sx={{ mb: 2 }}>
-              <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary', mb: 0.5 }}>
-                📦 Backup Events
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                <Archive size={16} style={{ color: '#666' }} />
+                <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                  Backup Events
+                </Typography>
+              </Box>
               <Box sx={{ pl: 2 }}>
                 <FormControlLabel
                   control={
@@ -553,9 +559,12 @@ const NotificationsTab: React.FC = () => {
 
             {/* Restore Events Category */}
             <Box sx={{ mb: 2 }}>
-              <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary', mb: 0.5 }}>
-                🔄 Restore Events
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                <RotateCcw size={16} style={{ color: '#666' }} />
+                <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                  Restore Events
+                </Typography>
+              </Box>
               <Box sx={{ pl: 2 }}>
                 <FormControlLabel
                   control={
@@ -584,9 +593,12 @@ const NotificationsTab: React.FC = () => {
 
             {/* System Events Category */}
             <Box sx={{ mb: 2 }}>
-              <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary', mb: 0.5 }}>
-                ⚙️ System Events
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                <Settings size={16} style={{ color: '#666' }} />
+                <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                  System Events
+                </Typography>
+              </Box>
               <Box sx={{ pl: 2 }}>
                 <FormControlLabel
                   control={
