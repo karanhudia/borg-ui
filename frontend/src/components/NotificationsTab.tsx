@@ -47,6 +47,7 @@ interface NotificationSetting {
   service_url: string
   enabled: boolean
   title_prefix: string | null
+  notify_on_backup_start: boolean
   notify_on_backup_success: boolean
   notify_on_backup_failure: boolean
   notify_on_restore_success: boolean
@@ -70,6 +71,7 @@ const NotificationsTab: React.FC = () => {
     service_url: '',
     enabled: true,
     title_prefix: '',
+    notify_on_backup_start: false,
     notify_on_backup_success: false,
     notify_on_backup_failure: true,
     notify_on_restore_success: false,
@@ -151,6 +153,7 @@ const NotificationsTab: React.FC = () => {
       service_url: '',
       enabled: true,
       title_prefix: '',
+      notify_on_backup_start: false,
       notify_on_backup_success: false,
       notify_on_backup_failure: true,
       notify_on_restore_success: false,
@@ -166,6 +169,7 @@ const NotificationsTab: React.FC = () => {
       service_url: notification.service_url,
       enabled: notification.enabled,
       title_prefix: notification.title_prefix || '',
+      notify_on_backup_start: notification.notify_on_backup_start,
       notify_on_backup_success: notification.notify_on_backup_success,
       notify_on_backup_failure: notification.notify_on_backup_failure,
       notify_on_restore_success: notification.notify_on_restore_success,
@@ -378,6 +382,9 @@ const NotificationsTab: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       <Stack direction="row" spacing={0.5} flexWrap="wrap" gap={0.5}>
+                        {notification.notify_on_backup_start && (
+                          <Chip label="Backup Start" size="small" color="info" variant="outlined" />
+                        )}
                         {notification.notify_on_backup_failure && (
                           <Chip label="Backup Fail" size="small" color="error" variant="outlined" />
                         )}
@@ -501,6 +508,18 @@ const NotificationsTab: React.FC = () => {
             <Typography variant="subtitle2" sx={{ mt: 2 }}>
               Notify on:
             </Typography>
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={formData.notify_on_backup_start}
+                  onChange={(e) =>
+                    setFormData({ ...formData, notify_on_backup_start: e.target.checked })
+                  }
+                />
+              }
+              label="Backup Started"
+            />
 
             <FormControlLabel
               control={

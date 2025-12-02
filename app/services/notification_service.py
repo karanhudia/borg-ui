@@ -219,6 +219,77 @@ class NotificationService:
     """Service for sending notifications via Apprise."""
 
     @staticmethod
+    async def send_backup_start(
+        db: Session,
+        repository_name: str,
+        archive_name: str,
+        source_directories: Optional[list] = None,
+        expected_size: Optional[int] = None
+    ) -> None:
+        """
+        Send notification when backup starts.
+
+        Args:
+            db: Database session
+            repository_name: Name of repository
+            archive_name: Name of archive being created
+            source_directories: List of source directories being backed up (optional)
+            expected_size: Expected total size in bytes (optional)
+        """
+        settings = db.query(NotificationSettings).filter(
+            NotificationSettings.enabled == True,
+            NotificationSettings.notify_on_backup_start == True
+        ).all()
+
+        if not settings:
+            return
+
+        # Build content blocks
+        content_blocks = [
+            {'label': 'Archive', 'value': archive_name},
+            {'label': 'Repository', 'value': repository_name},
+        ]
+
+        # Add source directories if provided
+        if source_directories:
+            sources_text = "\n".join(f"• {src}" for src in source_directories)
+            content_blocks.append({'label': 'Sources', 'value': sources_text})
+
+        # Add expected size if provided
+        if expected_size:
+            content_blocks.append({'label': 'Expected Size', 'value': _format_bytes(expected_size)})
+
+        # Create timestamp
+        start_time = datetime.now()
+        timestamp_str = start_time.strftime('%Y-%m-%d %H:%M:%S')
+
+        # Create HTML body for email
+        html_body = _create_html_email(
+            title="🚀 Backup Started",
+            content_blocks=content_blocks,
+            timestamp_label="Started at",
+            timestamp=timestamp_str
+        )
+
+        # Create markdown body for chat services
+        markdown_body = _create_markdown_message(
+            title="🚀 Backup Started",
+            content_blocks=content_blocks,
+            timestamp_label="Started at",
+            timestamp=timestamp_str
+        )
+
+        # Send to all enabled services with this event trigger
+        for setting in settings:
+            await NotificationService._send_to_service(
+                setting=setting,
+                html_body=html_body,
+                markdown_body=markdown_body,
+                title_suffix="Backup Started",
+                db=db
+            )
+
+    @staticmethod
     async def send_backup_success(
         db: Session,
         repository_name: str,

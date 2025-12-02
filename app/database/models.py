@@ -260,6 +260,7 @@ class NotificationSettings(Base):
     title_prefix = Column(String(100), nullable=True)  # Optional custom prefix for notification titles (e.g., "[Production]")
 
     # Event triggers
+    notify_on_backup_start = Column(Boolean, default=False, nullable=False)
     notify_on_backup_success = Column(Boolean, default=False, nullable=False)
     notify_on_backup_failure = Column(Boolean, default=True, nullable=False)
     notify_on_restore_success = Column(Boolean, default=False, nullable=False)
