@@ -267,16 +267,14 @@ class NotificationService:
         html_body = _create_html_email(
             title="🚀 Backup Started",
             content_blocks=content_blocks,
-            timestamp_label="Started at",
-            timestamp=timestamp_str
+            footer=f"Started at {timestamp_str}"
         )
 
         # Create markdown body for chat services
         markdown_body = _create_markdown_message(
             title="🚀 Backup Started",
             content_blocks=content_blocks,
-            timestamp_label="Started at",
-            timestamp=timestamp_str
+            footer=f"Started at {timestamp_str}"
         )
 
         # Send to all enabled services with this event trigger
