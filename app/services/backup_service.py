@@ -632,6 +632,10 @@ class BackupService:
             file_start_times = {}  # Track when each file started processing
             last_shown_file = None
 
+            # Speed tracking: Moving average over 30-second window
+            speed_tracking = []  # List of (timestamp, original_size) tuples
+            SPEED_WINDOW_SECONDS = 30  # Calculate speed over last 30 seconds
+
             async def check_cancellation():
                 """Periodic heartbeat to check for cancellation independent of log output"""
                 nonlocal cancelled
@@ -652,7 +656,7 @@ class BackupService:
 
             async def stream_logs():
                 """Stream log output from process and parse JSON progress"""
-                nonlocal cancelled, last_commit_time, last_shown_file
+                nonlocal cancelled, last_commit_time, last_shown_file, speed_tracking
                 try:
                     async for line in process.stdout:
                         if cancelled:
@@ -680,25 +684,41 @@ class BackupService:
                                     job.deduplicated_size = json_msg.get('deduplicated_size', 0)
                                     job.nfiles = json_msg.get('nfiles', 0)
 
-                                    # Calculate backup speed (MB/s)
-                                    if job.started_at and job.original_size > 0:
-                                        elapsed_seconds = (datetime.utcnow() - job.started_at).total_seconds()
-                                        if elapsed_seconds > 0:
-                                            # Speed in MB/s
-                                            job.backup_speed = (job.original_size / (1024 * 1024)) / elapsed_seconds
+                                    # Calculate backup speed using moving average (30-second window)
+                                    if job.original_size > 0:
+                                        current_time = asyncio.get_event_loop().time()
 
-                                            # Calculate progress percentage if we have expected size
-                                            if job.total_expected_size and job.total_expected_size > 0:
-                                                job.progress_percent = min(100.0, (job.original_size / job.total_expected_size) * 100.0)
+                                        # Add current data point
+                                        speed_tracking.append((current_time, job.original_size))
 
-                                                # Calculate estimated time remaining (in seconds)
-                                                remaining_bytes = job.total_expected_size - job.original_size
-                                                if remaining_bytes > 0 and job.backup_speed > 0:
-                                                    # Speed is in MB/s, convert remaining bytes to MB
-                                                    remaining_mb = remaining_bytes / (1024 * 1024)
-                                                    job.estimated_time_remaining = int(remaining_mb / job.backup_speed)
-                                                else:
-                                                    job.estimated_time_remaining = 0
+                                        # Remove data points older than window
+                                        speed_tracking[:] = [(t, s) for t, s in speed_tracking
+                                                           if current_time - t <= SPEED_WINDOW_SECONDS]
+
+                                        # Calculate speed from moving average (need at least 2 data points)
+                                        if len(speed_tracking) >= 2:
+                                            time_diff = speed_tracking[-1][0] - speed_tracking[0][0]
+                                            size_diff = speed_tracking[-1][1] - speed_tracking[0][1]
+
+                                            if time_diff > 0 and size_diff > 0:
+                                                # Speed in MB/s
+                                                job.backup_speed = (size_diff / (1024 * 1024)) / time_diff
+                                            elif time_diff > 0:
+                                                # No size change yet (early in backup or deduplication)
+                                                job.backup_speed = 0.0
+
+                                        # Calculate progress percentage if we have expected size
+                                        if job.total_expected_size and job.total_expected_size > 0:
+                                            job.progress_percent = min(100.0, (job.original_size / job.total_expected_size) * 100.0)
+
+                                            # Calculate estimated time remaining (in seconds)
+                                            remaining_bytes = job.total_expected_size - job.original_size
+                                            if remaining_bytes > 0 and job.backup_speed > 0:
+                                                # Speed is in MB/s, convert remaining bytes to MB
+                                                remaining_mb = remaining_bytes / (1024 * 1024)
+                                                job.estimated_time_remaining = int(remaining_mb / job.backup_speed)
+                                            else:
+                                                job.estimated_time_remaining = 0
 
                                     # SMART CURRENT_FILE TRACKING: Only show files taking >3 seconds
                                     current_path = json_msg.get('path', '')
