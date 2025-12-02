@@ -409,9 +409,9 @@ const NotificationsTab: React.FC = () => {
                         )}
                         {notification.notify_on_schedule_failure && (
                           <Chip
-                            label="Schedule Fail"
+                            label="Scheduler Error"
                             size="small"
-                            color="error"
+                            color="warning"
                             variant="outlined"
                           />
                         )}
@@ -505,81 +505,105 @@ const NotificationsTab: React.FC = () => {
               label="Enable notifications"
             />
 
-            <Typography variant="subtitle2" sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
               Notify on:
             </Typography>
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formData.notify_on_backup_start}
-                  onChange={(e) =>
-                    setFormData({ ...formData, notify_on_backup_start: e.target.checked })
+            {/* Backup Events Category */}
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary', mb: 0.5 }}>
+                📦 Backup Events
+              </Typography>
+              <Box sx={{ pl: 2 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.notify_on_backup_start}
+                      onChange={(e) =>
+                        setFormData({ ...formData, notify_on_backup_start: e.target.checked })
+                      }
+                    />
                   }
+                  label="Started"
                 />
-              }
-              label="Backup Started"
-            />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.notify_on_backup_success}
+                      onChange={(e) =>
+                        setFormData({ ...formData, notify_on_backup_success: e.target.checked })
+                      }
+                    />
+                  }
+                  label="Success"
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.notify_on_backup_failure}
+                      onChange={(e) =>
+                        setFormData({ ...formData, notify_on_backup_failure: e.target.checked })
+                      }
+                    />
+                  }
+                  label="Failure"
+                />
+              </Box>
+            </Box>
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formData.notify_on_backup_failure}
-                  onChange={(e) =>
-                    setFormData({ ...formData, notify_on_backup_failure: e.target.checked })
+            {/* Restore Events Category */}
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary', mb: 0.5 }}>
+                🔄 Restore Events
+              </Typography>
+              <Box sx={{ pl: 2 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.notify_on_restore_success}
+                      onChange={(e) =>
+                        setFormData({ ...formData, notify_on_restore_success: e.target.checked })
+                      }
+                    />
                   }
+                  label="Success"
                 />
-              }
-              label="Backup Failures (Critical)"
-            />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.notify_on_restore_failure}
+                      onChange={(e) =>
+                        setFormData({ ...formData, notify_on_restore_failure: e.target.checked })
+                      }
+                    />
+                  }
+                  label="Failure"
+                />
+              </Box>
+            </Box>
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formData.notify_on_backup_success}
-                  onChange={(e) =>
-                    setFormData({ ...formData, notify_on_backup_success: e.target.checked })
+            {/* System Events Category */}
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary', mb: 0.5 }}>
+                ⚙️ System Events
+              </Typography>
+              <Box sx={{ pl: 2 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.notify_on_schedule_failure}
+                      onChange={(e) =>
+                        setFormData({ ...formData, notify_on_schedule_failure: e.target.checked })
+                      }
+                    />
                   }
+                  label="Scheduler Errors"
                 />
-              }
-              label="Backup Success"
-            />
-
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formData.notify_on_restore_failure}
-                  onChange={(e) =>
-                    setFormData({ ...formData, notify_on_restore_failure: e.target.checked })
-                  }
-                />
-              }
-              label="Restore Failures"
-            />
-
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formData.notify_on_restore_success}
-                  onChange={(e) =>
-                    setFormData({ ...formData, notify_on_restore_success: e.target.checked })
-                  }
-                />
-              }
-              label="Restore Success"
-            />
-
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formData.notify_on_schedule_failure}
-                  onChange={(e) =>
-                    setFormData({ ...formData, notify_on_schedule_failure: e.target.checked })
-                  }
-                />
-              }
-              label="Scheduled Backup Failures"
-            />
+                <Typography variant="caption" sx={{ display: 'block', pl: 4.5, mt: -0.5, mb: 1, color: 'text.secondary' }}>
+                  Notifies when the scheduler fails to start a backup (e.g., system errors). Regular backup failures are handled above.
+                </Typography>
+              </Box>
+            </Box>
           </Stack>
         </DialogContent>
         <DialogActions>
