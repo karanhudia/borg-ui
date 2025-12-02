@@ -515,7 +515,7 @@ const NotificationsTab: React.FC = () => {
             {/* Backup Events Category */}
             <Box sx={{ mb: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                <Archive size={16} style={{ color: '#666' }} />
+                <Archive size={16} />
                 <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
                   Backup Events
                 </Typography>
@@ -560,7 +560,7 @@ const NotificationsTab: React.FC = () => {
             {/* Restore Events Category */}
             <Box sx={{ mb: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                <RotateCcw size={16} style={{ color: '#666' }} />
+                <RotateCcw size={16} />
                 <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
                   Restore Events
                 </Typography>
@@ -594,7 +594,7 @@ const NotificationsTab: React.FC = () => {
             {/* System Events Category */}
             <Box sx={{ mb: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                <Settings size={16} style={{ color: '#666' }} />
+                <Settings size={16} />
                 <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
                   System Events
                 </Typography>
