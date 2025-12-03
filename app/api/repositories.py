@@ -1432,7 +1432,8 @@ async def list_repository_archives(
                 env=env
             )
 
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+            # Use 200 second timeout (longer than BORG_LOCK_WAIT of 180s) to allow for slow SSH connections
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=200)
 
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
@@ -1460,14 +1461,24 @@ async def list_repository_archives(
 
         except HTTPException:
             raise
-        except Exception as e:
+        except asyncio.TimeoutError:
+            error_msg = f"Operation timed out after 200 seconds. This can happen with slow SSH connections or large repositories."
             if attempt < max_retries - 1:
-                logger.warning(f"Error on attempt {attempt + 1}/{max_retries}, retrying", repo_id=repo_id, error=str(e))
+                logger.warning(f"Timeout on attempt {attempt + 1}/{max_retries}, retrying", repo_id=repo_id)
                 await asyncio.sleep(retry_delay)
                 retry_delay *= 2
                 continue
-            logger.error("Failed to list archives after retries", error=str(e))
-            raise HTTPException(status_code=500, detail=f"Failed to list archives: {str(e)}")
+            logger.error("Failed to list archives after retries: timeout", repo_id=repo_id)
+            raise HTTPException(status_code=504, detail=error_msg)
+        except Exception as e:
+            error_msg = str(e) if str(e) else f"Unknown error: {type(e).__name__}"
+            if attempt < max_retries - 1:
+                logger.warning(f"Error on attempt {attempt + 1}/{max_retries}, retrying", repo_id=repo_id, error=error_msg)
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 2
+                continue
+            logger.error("Failed to list archives after retries", error=error_msg, repo_id=repo_id)
+            raise HTTPException(status_code=500, detail=f"Failed to list archives: {error_msg}")
 
     # Parse JSON output
     try:
@@ -1529,7 +1540,8 @@ async def get_repository_info(
                 env=env
             )
 
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+            # Use 200 second timeout (longer than BORG_LOCK_WAIT of 180s) to allow for slow SSH connections
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=200)
 
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
@@ -1557,14 +1569,24 @@ async def get_repository_info(
 
         except HTTPException:
             raise
-        except Exception as e:
+        except asyncio.TimeoutError:
+            error_msg = f"Operation timed out after 200 seconds. This can happen with slow SSH connections or large repositories."
             if attempt < max_retries - 1:
-                logger.warning(f"Error on attempt {attempt + 1}/{max_retries}, retrying", repo_id=repo_id, error=str(e))
+                logger.warning(f"Timeout on attempt {attempt + 1}/{max_retries}, retrying", repo_id=repo_id)
                 await asyncio.sleep(retry_delay)
                 retry_delay *= 2
                 continue
-            logger.error("Failed to get repository info after retries", error=str(e))
-            raise HTTPException(status_code=500, detail=f"Failed to get repository info: {str(e)}")
+            logger.error("Failed to get repository info after retries: timeout", repo_id=repo_id)
+            raise HTTPException(status_code=504, detail=error_msg)
+        except Exception as e:
+            error_msg = str(e) if str(e) else f"Unknown error: {type(e).__name__}"
+            if attempt < max_retries - 1:
+                logger.warning(f"Error on attempt {attempt + 1}/{max_retries}, retrying", repo_id=repo_id, error=error_msg)
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 2
+                continue
+            logger.error("Failed to get repository info after retries", error=error_msg, repo_id=repo_id)
+            raise HTTPException(status_code=500, detail=f"Failed to get repository info: {error_msg}")
 
     # Parse JSON output
     try:
