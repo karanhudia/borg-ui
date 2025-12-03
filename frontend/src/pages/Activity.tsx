@@ -4,13 +4,6 @@ import {
   Box,
   Card,
   Typography,
-  CircularProgress,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Chip,
   IconButton,
   Dialog,
@@ -22,12 +15,12 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Alert,
 } from '@mui/material'
-import { History, RefreshCw, Eye, CheckCircle, XCircle, Clock, PlayCircle } from 'lucide-react'
+import { History, RefreshCw, Eye, CheckCircle, XCircle, Clock, PlayCircle, Info } from 'lucide-react'
 import { activityAPI } from '../services/api'
 import { formatDate } from '../utils/dateUtils'
 import { TerminalLogViewer } from '../components/TerminalLogViewer'
+import DataTable, { Column, ActionButton } from '../components/DataTable'
 
 interface ActivityItem {
   id: number
@@ -48,11 +41,7 @@ const Activity: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all')
 
   // Fetch activity data
-  const {
-    data: activities,
-    isLoading,
-    refetch,
-  } = useQuery({
+  const { data: activities, isLoading, refetch } = useQuery({
     queryKey: ['activity', typeFilter, statusFilter],
     queryFn: async () => {
       const params: any = { limit: 50 }
@@ -77,7 +66,9 @@ const Activity: React.FC = () => {
     }
   }
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (
+    status: string,
+  ): 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning' => {
     switch (status) {
       case 'completed':
         return 'success'
@@ -107,7 +98,9 @@ const Activity: React.FC = () => {
     }
   }
 
-  const getTypeColor = (type: string) => {
+  const getTypeColor = (
+    type: string,
+  ): 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning' => {
     switch (type) {
       case 'backup':
         return 'primary'
@@ -143,15 +136,67 @@ const Activity: React.FC = () => {
     setSelectedJob(null)
   }
 
-  if (isLoading) {
-    return (
-      <Box
-        sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}
-      >
-        <CircularProgress />
-      </Box>
-    )
-  }
+  // Define columns for DataTable
+  const columns: Column<ActivityItem>[] = [
+    {
+      id: 'type',
+      label: 'Type',
+      render: (activity) => (
+        <Chip label={getTypeLabel(activity.type)} color={getTypeColor(activity.type)} size="small" />
+      ),
+    },
+    {
+      id: 'status',
+      label: 'Status',
+      render: (activity) => (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {getStatusIcon(activity.status)}
+          <Chip
+            label={activity.status}
+            color={getStatusColor(activity.status)}
+            size="small"
+            variant="outlined"
+          />
+        </Box>
+      ),
+    },
+    {
+      id: 'repository',
+      label: 'Repository/Target',
+      render: (activity) => (
+        <Typography variant="body2">
+          {activity.repository || activity.package_name || activity.archive_name || '-'}
+        </Typography>
+      ),
+    },
+    {
+      id: 'started_at',
+      label: 'Started',
+      render: (activity) => (
+        <Typography variant="body2">
+          {activity.started_at ? formatDate(activity.started_at) : '-'}
+        </Typography>
+      ),
+    },
+    {
+      id: 'duration',
+      label: 'Duration',
+      render: (activity) => (
+        <Typography variant="body2">{getDuration(activity.started_at, activity.completed_at)}</Typography>
+      ),
+    },
+  ]
+
+  // Define actions for DataTable
+  const actions: ActionButton<ActivityItem>[] = [
+    {
+      icon: <Eye size={18} />,
+      label: 'View Logs',
+      onClick: handleViewLogs,
+      color: 'primary',
+      tooltip: 'View Logs',
+    },
+  ]
 
   return (
     <Box>
@@ -188,11 +233,7 @@ const Activity: React.FC = () => {
 
           <FormControl size="small" sx={{ minWidth: 150 }}>
             <InputLabel>Status</InputLabel>
-            <Select
-              value={statusFilter}
-              label="Status"
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
+            <Select value={statusFilter} label="Status" onChange={(e) => setStatusFilter(e.target.value)}>
               <MenuItem value="all">All Status</MenuItem>
               <MenuItem value="completed">Completed</MenuItem>
               <MenuItem value="failed">Failed</MenuItem>
@@ -203,84 +244,19 @@ const Activity: React.FC = () => {
         </Box>
       </Card>
 
-      {/* Activity List */}
-      <Card>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Type</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Repository/Target</TableCell>
-                <TableCell>Started</TableCell>
-                <TableCell>Duration</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {activities && activities.length > 0 ? (
-                activities.map((activity: ActivityItem) => (
-                  <TableRow key={`${activity.type}-${activity.id}`} hover>
-                    <TableCell>
-                      <Chip
-                        label={getTypeLabel(activity.type)}
-                        color={getTypeColor(activity.type) as any}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        {getStatusIcon(activity.status)}
-                        <Chip
-                          label={activity.status}
-                          color={getStatusColor(activity.status) as any}
-                          size="small"
-                          variant="outlined"
-                        />
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">
-                        {activity.repository ||
-                          activity.package_name ||
-                          activity.archive_name ||
-                          '-'}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">
-                        {activity.started_at ? formatDate(activity.started_at) : '-'}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">
-                        {getDuration(activity.started_at, activity.completed_at)}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleViewLogs(activity)}
-                        title="View Logs"
-                      >
-                        <Eye size={18} />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={6} align="center">
-                    <Alert severity="info" sx={{ mt: 2 }}>
-                      No activity found
-                    </Alert>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Card>
+      {/* Activity List using DataTable */}
+      <DataTable
+        data={activities || []}
+        columns={columns}
+        actions={actions}
+        getRowKey={(activity) => `${activity.type}-${activity.id}`}
+        loading={isLoading}
+        emptyState={{
+          icon: <Info size={48} />,
+          title: 'No activity found',
+          description: 'There are no operations matching your filters',
+        }}
+      />
 
       {/* Logs Dialog */}
       <Dialog open={Boolean(selectedJob)} onClose={handleCloseLogs} maxWidth="lg" fullWidth>
@@ -292,7 +268,7 @@ const Activity: React.FC = () => {
               </Typography>
               <Chip
                 label={selectedJob.status}
-                color={getStatusColor(selectedJob.status) as any}
+                color={getStatusColor(selectedJob.status)}
                 size="small"
               />
             </Box>
