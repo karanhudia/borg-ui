@@ -128,6 +128,10 @@ class CompactService:
             last_commit_time = asyncio.get_event_loop().time()
             COMMIT_INTERVAL = 3.0  # Commit every 3 seconds
 
+            # Progress message throttling to prevent spam
+            last_progress_update = {}  # Track last update time per message
+            PROGRESS_THROTTLE_INTERVAL = 2.0  # Only update progress message every 2 seconds for same message
+
             # In-memory log buffer
             log_buffer = []
             MAX_BUFFER_SIZE = 1000
@@ -179,10 +183,19 @@ class CompactService:
                                     current = json_msg.get('current', 0)
                                     total = json_msg.get('total', 1)
 
+                                    current_time = asyncio.get_event_loop().time()
+
                                     # Build progress message with operation counts when available
                                     # Skip appending counts when message is empty (phase transitions)
                                     if message:
-                                        job.progress_message = f"{message} ({current}/{total})"
+                                        progress_msg = f"{message} ({current}/{total})"
+
+                                        # Throttle progress message updates to prevent spam
+                                        # Only update if this is a new message or enough time has passed
+                                        last_update_time = last_progress_update.get(progress_msg, 0)
+                                        if current_time - last_update_time >= PROGRESS_THROTTLE_INTERVAL:
+                                            job.progress_message = progress_msg
+                                            last_progress_update[progress_msg] = current_time
                                     # Don't update progress_message when message is empty (keeps last good message)
 
                                     if not finished:
@@ -192,7 +205,6 @@ class CompactService:
                                             job.progress = int(percentage)
 
                                         # Batched commit
-                                        current_time = asyncio.get_event_loop().time()
                                         if current_time - last_commit_time >= COMMIT_INTERVAL:
                                             db.commit()
                                             last_commit_time = current_time

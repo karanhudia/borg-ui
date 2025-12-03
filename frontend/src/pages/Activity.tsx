@@ -66,7 +66,6 @@ const Activity: React.FC = () => {
       const response = await activityAPI.list(params)
       return response.data
     },
-    refetchInterval: 5000, // Auto-refresh every 5 seconds
   })
 
   const getStatusIcon = (status: string) => {
@@ -306,6 +305,8 @@ const Activity: React.FC = () => {
             <TerminalLogViewer
               jobId={`${selectedJob.type}-${selectedJob.id}`}
               status={selectedJob.status}
+              jobType={selectedJob.type}
+              showHeader={false}
               onFetchLogs={async (offset) => {
                 const response = await activityAPI.getLogs(
                   selectedJob.type,

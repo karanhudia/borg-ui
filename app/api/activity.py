@@ -10,11 +10,16 @@ from sqlalchemy import text
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
+import os
+import structlog
 
 from app.database.database import get_db
-from app.database.models import BackupJob, RestoreJob, CheckJob, CompactJob, PackageInstallJob
+from app.database.models import BackupJob, RestoreJob, CheckJob, CompactJob, PackageInstallJob, Repository, InstalledPackage
 from app.api.auth import get_current_user, User
 from app.utils.datetime_utils import serialize_datetime
+from app.services.backup_service import backup_service
+
+logger = structlog.get_logger()
 
 router = APIRouter(prefix="/api/activity", tags=["activity"])
 
@@ -63,6 +68,10 @@ async def list_recent_activity(
         for job in backup_jobs:
             if status and job.status != status:
                 continue
+            # Get repository name from path
+            repo = db.query(Repository).filter(Repository.path == job.repository).first()
+            repo_name = repo.name if repo else job.repository
+
             activities.append({
                 'id': job.id,
                 'type': 'backup',
@@ -70,7 +79,7 @@ async def list_recent_activity(
                 'started_at': job.started_at,
                 'completed_at': job.completed_at,
                 'error_message': job.error_message,
-                'repository': job.repository,
+                'repository': repo_name,
                 'log_file_path': job.log_file_path,
                 'archive_name': None,
                 'package_name': None
@@ -82,6 +91,10 @@ async def list_recent_activity(
         for job in restore_jobs:
             if status and job.status != status:
                 continue
+            # Get repository name from path
+            repo = db.query(Repository).filter(Repository.path == job.repository).first()
+            repo_name = repo.name if repo else job.repository
+
             activities.append({
                 'id': job.id,
                 'type': 'restore',
@@ -89,7 +102,7 @@ async def list_recent_activity(
                 'started_at': job.started_at,
                 'completed_at': job.completed_at,
                 'error_message': job.error_message,
-                'repository': job.repository,
+                'repository': repo_name,
                 'log_file_path': getattr(job, 'log_file_path', None),
                 'archive_name': job.archive,
                 'package_name': None
@@ -101,6 +114,10 @@ async def list_recent_activity(
         for job in check_jobs:
             if status and job.status != status:
                 continue
+            # Get repository name from repository_id
+            repo = db.query(Repository).filter(Repository.id == job.repository_id).first()
+            repo_name = repo.name if repo else f"Repository #{job.repository_id}"
+
             activities.append({
                 'id': job.id,
                 'type': 'check',
@@ -108,8 +125,8 @@ async def list_recent_activity(
                 'started_at': job.started_at,
                 'completed_at': job.completed_at,
                 'error_message': job.error_message,
-                'repository': job.repository_path,
-                'log_file_path': job.log_file_path,
+                'repository': repo_name,
+                'log_file_path': getattr(job, 'log_file_path', None),
                 'archive_name': None,
                 'package_name': None
             })
@@ -120,6 +137,10 @@ async def list_recent_activity(
         for job in compact_jobs:
             if status and job.status != status:
                 continue
+            # Get repository name from repository_id
+            repo = db.query(Repository).filter(Repository.id == job.repository_id).first()
+            repo_name = repo.name if repo else f"Repository #{job.repository_id}"
+
             activities.append({
                 'id': job.id,
                 'type': 'compact',
@@ -127,8 +148,8 @@ async def list_recent_activity(
                 'started_at': job.started_at,
                 'completed_at': job.completed_at,
                 'error_message': job.error_message,
-                'repository': job.repository_path,
-                'log_file_path': job.log_file_path,
+                'repository': repo_name,
+                'log_file_path': getattr(job, 'log_file_path', None),
                 'archive_name': None,
                 'package_name': None
             })
@@ -139,6 +160,10 @@ async def list_recent_activity(
         for job in package_jobs:
             if status and job.status != status:
                 continue
+            # Get package name from package_id
+            package = db.query(InstalledPackage).filter(InstalledPackage.id == job.package_id).first()
+            package_name = package.name if package else f"Package #{job.package_id}"
+
             activities.append({
                 'id': job.id,
                 'type': 'package',
@@ -147,9 +172,9 @@ async def list_recent_activity(
                 'completed_at': job.completed_at,
                 'error_message': job.error_message,
                 'repository': None,
-                'log_file_path': job.log_file_path,
+                'log_file_path': getattr(job, 'log_file_path', None),
                 'archive_name': None,
-                'package_name': job.package_name
+                'package_name': package_name
             })
 
     # Sort by started_at (most recent first)
@@ -166,6 +191,7 @@ async def get_job_logs(
     job_type: str,
     job_id: int,
     offset: int = 0,
+    limit: int = 500,  # Default to 500 lines per request
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -173,6 +199,7 @@ async def get_job_logs(
     Get logs for a specific job.
 
     Supports streaming logs from file (for running jobs) or returning stored logs.
+    Returns max 500 lines per request to prevent performance issues.
     """
 
     # Map job type to model
@@ -193,20 +220,101 @@ async def get_job_logs(
     if not job:
         raise HTTPException(status_code=404, detail=f"{job_type.capitalize()} job not found")
 
-    # If job is completed/failed and has stored logs, return them
-    if job.status in ['completed', 'failed'] and job.logs:
-        lines = job.logs.split('\n')
-        total_lines = len(lines)
+    # For completed/failed jobs, prefer log_file_path (full borg output) over logs (hooks only)
+    if job.status in ['completed', 'failed']:
+        # First try reading from log file (contains all borg output)
+        if job.log_file_path and os.path.exists(job.log_file_path):
+            try:
+                with open(job.log_file_path, 'r') as f:
+                    # EFFICIENT: Count total lines first without loading into memory
+                    f.seek(0)
+                    total_lines = sum(1 for _ in f)
 
-        # Apply offset and return chunk
-        chunk_size = 100
-        end_offset = min(offset + chunk_size, total_lines)
-        chunk = lines[offset:end_offset]
+                    # Reset to beginning and skip to offset
+                    f.seek(0)
+                    for _ in range(offset):
+                        next(f, None)
+
+                    # Read only the requested chunk
+                    chunk = []
+                    for i, line in enumerate(f):
+                        if i >= limit:
+                            break
+                        chunk.append(line.rstrip())
+
+                    end_offset = offset + len(chunk)
+
+                    return {
+                        'lines': [{'line_number': offset + i + 1, 'content': line} for i, line in enumerate(chunk)],
+                        'total_lines': total_lines,
+                        'has_more': end_offset < total_lines
+                    }
+            except Exception as e:
+                # If file read fails, fall through to stored logs
+                logger.warning("Failed to read log file, falling back to stored logs",
+                             job_type=job_type, job_id=job_id, error=str(e))
+
+        # Fallback to stored logs in database (hooks or error messages)
+        if job.logs:
+            lines = job.logs.split('\n')
+            total_lines = len(lines)
+
+            # Apply offset and limit
+            end_offset = min(offset + limit, total_lines)
+            chunk = lines[offset:end_offset]
+
+            return {
+                'lines': [{'line_number': offset + i + 1, 'content': line} for i, line in enumerate(chunk)],
+                'total_lines': total_lines,
+                'has_more': end_offset < total_lines
+            }
+
+    # For running jobs without log files (backup, check, compact), show progress message
+    if job.status == 'running':
+        if job_type == 'backup':
+            # For running backups, try to get log buffer (last 500 lines)
+            log_buffer = backup_service.get_log_buffer(job_id, tail_lines=500)
+
+            if log_buffer:
+                # Return last 500 lines from in-memory buffer
+                return {
+                    'lines': [{'line_number': i + 1, 'content': line} for i, line in enumerate(log_buffer)],
+                    'total_lines': len(log_buffer),
+                    'has_more': False  # Always show tail for running jobs
+                }
+            else:
+                # No buffer yet (job just started)
+                lines = [
+                    "Backup is currently running...",
+                    "",
+                    "Waiting for logs...",
+                    "",
+                    "Note: Showing last 500 lines from in-memory buffer. Full logs not saved to disk."
+                ]
+        elif job_type in ['check', 'compact']:
+            # Check/compact show progress message
+            progress_msg = getattr(job, 'progress_message', None)
+            if progress_msg:
+                lines = [
+                    f"Job is currently running...",
+                    f"",
+                    f"Current progress: {progress_msg}",
+                    f"",
+                    f"Full logs will be available after the job completes."
+                ]
+            else:
+                lines = [
+                    f"Job is currently running...",
+                    f"",
+                    f"Full logs will be available after the job completes."
+                ]
+        else:
+            lines = ["Job is currently running..."]
 
         return {
-            'lines': [{'line_number': offset + i + 1, 'content': line} for i, line in enumerate(chunk)],
-            'total_lines': total_lines,
-            'has_more': end_offset < total_lines
+            'lines': [{'line_number': i + 1, 'content': line} for i, line in enumerate(lines)],
+            'total_lines': len(lines),
+            'has_more': False
         }
 
     # If job is running and has log file, stream from file
@@ -216,8 +324,19 @@ async def get_job_logs(
                 lines = f.readlines()
                 total_lines = len(lines)
 
-                chunk_size = 100
-                end_offset = min(offset + chunk_size, total_lines)
+                # For running jobs, if offset is 0, get last 500 lines + new ones
+                # This prevents loading huge log files into memory
+                if offset == 0 and total_lines > limit:
+                    start_offset = total_lines - limit
+                    chunk = lines[start_offset:]
+                    return {
+                        'lines': [{'line_number': start_offset + i + 1, 'content': line.rstrip()} for i, line in enumerate(chunk)],
+                        'total_lines': total_lines,
+                        'has_more': False  # For running jobs, we only show tail
+                    }
+
+                # Normal pagination
+                end_offset = min(offset + limit, total_lines)
                 chunk = lines[offset:end_offset]
 
                 return {

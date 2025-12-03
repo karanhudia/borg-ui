@@ -21,6 +21,7 @@ class BackupService:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.running_processes = {}  # Track running backup processes by job_id
         self.error_msgids = {}  # Track error message IDs by job_id
+        self.log_buffers = {}  # Track in-memory log buffers by job_id (for running jobs)
 
     async def _run_hook(self, script: str, hook_name: str, timeout: int, job_id: int) -> dict:
         """
@@ -150,6 +151,24 @@ class BackupService:
 
         except Exception as e:
             logger.error("Log rotation failed", error=str(e))
+
+    def get_log_buffer(self, job_id: int, tail_lines: int = 500) -> list:
+        """
+        Get the last N lines from the in-memory log buffer for a running job.
+
+        Args:
+            job_id: The backup job ID
+            tail_lines: Number of lines to return from the end of buffer (default 500)
+
+        Returns:
+            List of log lines (most recent tail_lines lines)
+        """
+        buffer = self.log_buffers.get(job_id, [])
+        if not buffer:
+            return []
+
+        # Return last N lines (tail)
+        return buffer[-tail_lines:] if len(buffer) > tail_lines else buffer
 
     async def _update_archive_stats(self, db: Session, job_id: int, repository_path: str, archive_name: str, env: dict):
         """Update backup job with final archive statistics"""
@@ -636,6 +655,9 @@ class BackupService:
             log_buffer = []
             MAX_BUFFER_SIZE = 1000  # Keep last 1000 lines (~100KB RAM)
 
+            # Store buffer reference for external access (Activity page)
+            self.log_buffers[job_id] = log_buffer
+
             # Smart current_file tracking: Only show files taking >3 seconds
             file_start_times = {}  # Track when each file started processing
             last_shown_file = None
@@ -1080,6 +1102,11 @@ class BackupService:
             if job_id in self.running_processes:
                 del self.running_processes[job_id]
                 logger.debug("Removed backup process from tracking", job_id=job_id)
+
+            # Clean up log buffer (no longer needed after job completes)
+            if job_id in self.log_buffers:
+                del self.log_buffers[job_id]
+                logger.debug("Cleaned up log buffer", job_id=job_id)
 
             # Clean up error msgids
             if job_id in self.error_msgids:
