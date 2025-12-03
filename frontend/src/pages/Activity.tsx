@@ -16,7 +16,16 @@ import {
   Select,
   MenuItem,
 } from '@mui/material'
-import { History, RefreshCw, Eye, CheckCircle, XCircle, Clock, PlayCircle, Info } from 'lucide-react'
+import {
+  History,
+  RefreshCw,
+  Eye,
+  CheckCircle,
+  XCircle,
+  Clock,
+  PlayCircle,
+  Info,
+} from 'lucide-react'
 import { activityAPI } from '../services/api'
 import { formatDate } from '../utils/dateUtils'
 import { TerminalLogViewer } from '../components/TerminalLogViewer'
@@ -41,7 +50,11 @@ const Activity: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all')
 
   // Fetch activity data
-  const { data: activities, isLoading, refetch } = useQuery({
+  const {
+    data: activities,
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ['activity', typeFilter, statusFilter],
     queryFn: async () => {
       const params: any = { limit: 50 }
@@ -67,7 +80,7 @@ const Activity: React.FC = () => {
   }
 
   const getStatusColor = (
-    status: string,
+    status: string
   ): 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning' => {
     switch (status) {
       case 'completed':
@@ -99,7 +112,7 @@ const Activity: React.FC = () => {
   }
 
   const getTypeColor = (
-    type: string,
+    type: string
   ): 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning' => {
     switch (type) {
       case 'backup':
@@ -142,7 +155,11 @@ const Activity: React.FC = () => {
       id: 'type',
       label: 'Type',
       render: (activity) => (
-        <Chip label={getTypeLabel(activity.type)} color={getTypeColor(activity.type)} size="small" />
+        <Chip
+          label={getTypeLabel(activity.type)}
+          color={getTypeColor(activity.type)}
+          size="small"
+        />
       ),
     },
     {
@@ -182,7 +199,9 @@ const Activity: React.FC = () => {
       id: 'duration',
       label: 'Duration',
       render: (activity) => (
-        <Typography variant="body2">{getDuration(activity.started_at, activity.completed_at)}</Typography>
+        <Typography variant="body2">
+          {getDuration(activity.started_at, activity.completed_at)}
+        </Typography>
       ),
     },
   ]
@@ -233,7 +252,11 @@ const Activity: React.FC = () => {
 
           <FormControl size="small" sx={{ minWidth: 150 }}>
             <InputLabel>Status</InputLabel>
-            <Select value={statusFilter} label="Status" onChange={(e) => setStatusFilter(e.target.value)}>
+            <Select
+              value={statusFilter}
+              label="Status"
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
               <MenuItem value="all">All Status</MenuItem>
               <MenuItem value="completed">Completed</MenuItem>
               <MenuItem value="failed">Failed</MenuItem>
