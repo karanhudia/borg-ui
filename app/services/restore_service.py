@@ -2,6 +2,9 @@ import asyncio
 import structlog
 import json
 import os
+import shutil
+import tempfile
+from pathlib import Path
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -60,192 +63,302 @@ class RestoreService:
                        job_id=job_id,
                        repository=repository_path,
                        archive=archive_name,
-                       destination=destination)
+                       destination=destination,
+                       paths=paths)
 
-            # Build borg extract command with progress tracking
-            cmd = ["borg", "extract", "--progress"]
+            # Create temporary directory for extraction
+            # This allows us to handle path manipulation correctly
+            temp_dir = tempfile.mkdtemp(prefix=f"borg_restore_{job_id}_")
+            logger.info("Created temporary extraction directory", temp_dir=temp_dir)
 
-            if repository and repository.remote_path:
-                cmd.extend(["--remote-path", repository.remote_path])
+            try:
+                # Build borg extract command with progress tracking
+                cmd = ["borg", "extract", "--progress"]
 
-            cmd.append(f"{repository_path}::{archive_name}")
+                if repository and repository.remote_path:
+                    cmd.extend(["--remote-path", repository.remote_path])
 
-            if paths:
-                cmd.extend(paths)
+                cmd.append(f"{repository_path}::{archive_name}")
 
-            # Set up environment
-            env = os.environ.copy()
-            if repository and repository.passphrase:
-                env["BORG_PASSPHRASE"] = repository.passphrase
+                # Add paths if specified
+                if paths:
+                    cmd.extend(paths)
 
-            # Configure lock behavior to prevent timeout issues with SSH repositories
-            # Wait up to 180 seconds (3 minutes) for locks instead of default 1 second
-            env["BORG_LOCK_WAIT"] = "180"
-            # Mark this container's hostname as unique to avoid lock conflicts
-            env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
+                # Set up environment
+                env = os.environ.copy()
+                if repository and repository.passphrase:
+                    env["BORG_PASSPHRASE"] = repository.passphrase
 
-            # Add SSH options
-            ssh_opts = [
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "LogLevel=ERROR"
-            ]
-            env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+                # Configure lock behavior to prevent timeout issues with SSH repositories
+                # Wait up to 180 seconds (3 minutes) for locks instead of default 1 second
+                env["BORG_LOCK_WAIT"] = "180"
+                # Mark this container's hostname as unique to avoid lock conflicts
+                env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
 
-            logger.info("Executing restore command", command=" ".join(cmd))
+                # Add SSH options
+                ssh_opts = [
+                    "-o", "StrictHostKeyChecking=no",
+                    "-o", "UserKnownHostsFile=/dev/null",
+                    "-o", "LogLevel=ERROR"
+                ]
+                env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
 
-            # Execute command with progress tracking
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=destination,
-                env=env
-            )
+                logger.info("Executing restore command", command=" ".join(cmd), cwd=temp_dir)
 
-            # Track this process so it can be cancelled
-            self.running_processes[job_id] = process
+                # Execute command with progress tracking
+                # Extract to temporary directory first
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    cwd=temp_dir,
+                    env=env
+                )
 
-            # Track progress
-            current_file = ""
-            stdout_lines = []
-            stderr_lines = []
-            last_update_time = datetime.now(timezone.utc)
-            seen_files = set()  # Track unique files
-            nfiles = 0
+                # Track this process so it can be cancelled
+                self.running_processes[job_id] = process
 
-            # Read stderr for progress (borg writes progress to stderr)
-            # Borg uses \r for progress updates, we need to read raw bytes and split on \r
-            async def read_stderr():
-                nonlocal current_file, last_update_time, nfiles
-                buffer = b''
+                # Track progress
+                current_file = ""
+                stdout_lines = []
+                stderr_lines = []
+                last_update_time = datetime.now(timezone.utc)
+                seen_files = set()  # Track unique files
+                nfiles = 0
 
-                while True:
-                    chunk = await process.stderr.read(8192)  # Read in chunks
-                    if not chunk:
-                        break
+                # Read stderr for progress (borg writes progress to stderr)
+                # Borg uses \r for progress updates, we need to read raw bytes and split on \r
+                async def read_stderr():
+                    nonlocal current_file, last_update_time, nfiles
+                    buffer = b''
 
-                    buffer += chunk
-
-                    # Split on both \r and \n to handle progress updates
-                    while b'\r' in buffer or b'\n' in buffer:
-                        # Find the next separator
-                        r_pos = buffer.find(b'\r')
-                        n_pos = buffer.find(b'\n')
-
-                        # Use whichever comes first
-                        if r_pos == -1:
-                            pos = n_pos
-                            sep_len = 1
-                        elif n_pos == -1:
-                            pos = r_pos
-                            sep_len = 1
-                        else:
-                            pos = min(r_pos, n_pos)
-                            sep_len = 1
-
-                        if pos == -1:
+                    while True:
+                        chunk = await process.stderr.read(8192)  # Read in chunks
+                        if not chunk:
                             break
 
-                        line_bytes = buffer[:pos]
-                        buffer = buffer[pos + sep_len:]
+                        buffer += chunk
 
-                        if not line_bytes:
-                            continue
+                        # Split on both \r and \n to handle progress updates
+                        while b'\r' in buffer or b'\n' in buffer:
+                            # Find the next separator
+                            r_pos = buffer.find(b'\r')
+                            n_pos = buffer.find(b'\n')
 
-                        line_text = line_bytes.decode('utf-8', errors='replace').strip()
-                        if line_text:
-                            stderr_lines.append(line_text)
+                            # Use whichever comes first
+                            if r_pos == -1:
+                                pos = n_pos
+                                sep_len = 1
+                            elif n_pos == -1:
+                                pos = r_pos
+                                sep_len = 1
+                            else:
+                                pos = min(r_pos, n_pos)
+                                sep_len = 1
 
-                            # Parse progress from stderr
-                            # Format: "XX.X% Extracting: filepath" with progress updates
-                            try:
-                                if "% Extracting:" in line_text:
-                                    # Extract percentage and file path
-                                    parts = line_text.split("% Extracting:", 1)
-                                    if len(parts) == 2:
-                                        try:
-                                            percent = float(parts[0].strip())
-                                            current_file = parts[1].strip()
+                            if pos == -1:
+                                break
 
-                                            # Count unique files
-                                            if current_file and current_file not in seen_files:
-                                                seen_files.add(current_file)
-                                                nfiles = len(seen_files)
+                            line_bytes = buffer[:pos]
+                            buffer = buffer[pos + sep_len:]
 
-                                            # Update job with percentage, file, and count
-                                            job.progress_percent = percent
-                                            job.current_file = current_file
-                                            job.nfiles = nfiles
+                            if not line_bytes:
+                                continue
 
-                                            # Commit every 2 seconds to reduce database load
-                                            now = datetime.now(timezone.utc)
-                                            if (now - last_update_time).total_seconds() >= 2.0:
-                                                try:
-                                                    db_session.commit()
-                                                    last_update_time = now
-                                                    logger.info("Progress update", job_id=job_id, percent=percent, nfiles=nfiles, file=current_file[:50] if current_file else '')
-                                                except:
-                                                    db_session.rollback()
-                                        except ValueError:
-                                            pass
-                            except Exception as e:
-                                logger.debug("Failed to parse progress line", line=line_text[:100], error=str(e))
+                            line_text = line_bytes.decode('utf-8', errors='replace').strip()
+                            if line_text:
+                                stderr_lines.append(line_text)
 
-            # Read stdout for any output
-            async def read_stdout():
-                async for line in process.stdout:
-                    stdout_lines.append(line.decode().strip())
+                                # Parse progress from stderr
+                                # Format: "XX.X% Extracting: filepath" with progress updates
+                                try:
+                                    if "% Extracting:" in line_text:
+                                        # Extract percentage and file path
+                                        parts = line_text.split("% Extracting:", 1)
+                                        if len(parts) == 2:
+                                            try:
+                                                percent = float(parts[0].strip())
+                                                current_file = parts[1].strip()
 
-            # Wait for both streams and process completion
-            await asyncio.gather(read_stderr(), read_stdout())
-            await process.wait()
+                                                # Count unique files
+                                                if current_file and current_file not in seen_files:
+                                                    seen_files.add(current_file)
+                                                    nfiles = len(seen_files)
 
-            # Final update
-            if current_file:
-                job.current_file = current_file
+                                                # Update job with percentage, file, and count
+                                                job.progress_percent = percent
+                                                job.current_file = current_file
+                                                job.nfiles = nfiles
 
-            # Update job with results
-            if process.returncode == 0:
-                job.status = "completed"
-                job.progress = 100
-                job.progress_percent = 100.0
-                job.completed_at = datetime.now(timezone.utc)
-                job.logs = "\n".join(stderr_lines) if stderr_lines else "Restore completed successfully"
+                                                # Commit every 2 seconds to reduce database load
+                                                now = datetime.now(timezone.utc)
+                                                if (now - last_update_time).total_seconds() >= 2.0:
+                                                    try:
+                                                        db_session.commit()
+                                                        last_update_time = now
+                                                        logger.info("Progress update", job_id=job_id, percent=percent, nfiles=nfiles, file=current_file[:50] if current_file else '')
+                                                    except:
+                                                        db_session.rollback()
+                                            except ValueError:
+                                                pass
+                                except Exception as e:
+                                    logger.debug("Failed to parse progress line", line=line_text[:100], error=str(e))
 
-                logger.info("Restore completed successfully",
-                           job_id=job_id,
-                           repository=repository_path,
-                           archive=archive_name)
+                # Read stdout for any output
+                async def read_stdout():
+                    async for line in process.stdout:
+                        stdout_lines.append(line.decode().strip())
 
-                # Send success notification
-                try:
-                    await notification_service.send_restore_success(
-                        db_session, repository_path, archive_name, target_path
-                    )
-                except Exception as e:
-                    logger.warning("Failed to send restore success notification", error=str(e))
-            else:
-                job.status = "failed"
-                stderr_output = "\n".join(stderr_lines)
-                job.error_message = stderr_output or f"Process exited with code {process.returncode}"
-                job.completed_at = datetime.now(timezone.utc)
-                job.logs = f"STDOUT:\n{chr(10).join(stdout_lines)}\n\nSTDERR:\n{stderr_output}"
+                # Wait for both streams and process completion
+                await asyncio.gather(read_stderr(), read_stdout())
+                await process.wait()
 
-                logger.error("Restore failed",
-                            job_id=job_id,
-                            return_code=process.returncode,
+                # Final update
+                if current_file:
+                    job.current_file = current_file
+
+                # Update job with results
+                if process.returncode == 0:
+                    # Extraction succeeded, now move files to destination
+                    logger.info("Extraction completed, moving files to destination",
+                               temp_dir=temp_dir,
+                               destination=destination)
+
+                    # Find the extracted content in temp directory
+                    # Borg extracts with full path, so we need to find where the actual content is
+                    temp_path = Path(temp_dir)
+                    extracted_items = list(temp_path.rglob('*'))
+
+                    # Helper function to copy with ownership preservation
+                    def copy_with_ownership(src, dst):
+                        """Copy function that preserves ownership and permissions"""
+                        shutil.copy2(src, dst)  # Copy file with metadata
+                        try:
+                            # Preserve ownership
+                            stat_info = os.stat(src)
+                            os.chown(dst, stat_info.st_uid, stat_info.st_gid)
+                        except (OSError, PermissionError) as e:
+                            # Log but don't fail if we can't set ownership
+                            # This can happen if running as non-root
+                            logger.debug("Could not preserve ownership",
+                                       file=dst,
+                                       error=str(e))
+                        return dst
+
+                    if paths and len(paths) > 0:
+                        # User selected specific paths to restore
+                        # Move only those paths' contents to destination
+                        for selected_path in paths:
+                            # Find the extracted path in temp directory
+                            selected_path_clean = selected_path.lstrip('/')
+                            source_path = temp_path / selected_path_clean
+
+                            if source_path.exists():
+                                # Move the content of this path to destination
+                                dest_path = Path(destination)
+                                dest_path.mkdir(parents=True, exist_ok=True)
+
+                                if source_path.is_dir():
+                                    # Copy directory contents with ownership preservation
+                                    for item in source_path.iterdir():
+                                        item_dest = dest_path / item.name
+
+                                        if item.is_dir():
+                                            # Copy directory tree with ownership
+                                            shutil.copytree(str(item), str(item_dest),
+                                                          copy_function=copy_with_ownership,
+                                                          dirs_exist_ok=True)
+                                            # Preserve directory ownership
+                                            try:
+                                                stat_info = os.stat(str(item))
+                                                os.chown(str(item_dest), stat_info.st_uid, stat_info.st_gid)
+                                            except (OSError, PermissionError):
+                                                pass
+                                        else:
+                                            # Copy file with ownership
+                                            copy_with_ownership(str(item), str(item_dest))
+
+                                        logger.debug("Copied item", source=str(item), dest=str(item_dest))
+                                else:
+                                    # Copy file with ownership
+                                    item_dest = dest_path / source_path.name
+                                    copy_with_ownership(str(source_path), str(item_dest))
+                                    logger.debug("Copied file", source=str(source_path), dest=str(item_dest))
+                    else:
+                        # Full archive restore - move everything
+                        dest_path = Path(destination)
+                        for item in temp_path.iterdir():
+                            item_dest = dest_path / item.name
+
+                            if item.is_dir():
+                                # Copy directory tree with ownership
+                                shutil.copytree(str(item), str(item_dest),
+                                              copy_function=copy_with_ownership,
+                                              dirs_exist_ok=True)
+                                # Preserve directory ownership
+                                try:
+                                    stat_info = os.stat(str(item))
+                                    os.chown(str(item_dest), stat_info.st_uid, stat_info.st_gid)
+                                except (OSError, PermissionError):
+                                    pass
+                            else:
+                                # Copy file with ownership
+                                copy_with_ownership(str(item), str(item_dest))
+
+                            logger.debug("Copied item", source=str(item), dest=str(item_dest))
+
+                    logger.info("Files moved to destination successfully")
+
+                    job.status = "completed"
+                    job.progress = 100
+                    job.progress_percent = 100.0
+                    job.completed_at = datetime.now(timezone.utc)
+                    job.logs = "\n".join(stderr_lines) if stderr_lines else "Restore completed successfully"
+
+                    logger.info("Restore completed successfully",
+                               job_id=job_id,
+                               repository=repository_path,
+                               archive=archive_name)
+
+                    # Send success notification
+                    try:
+                        await notification_service.send_restore_success(
+                            db_session, repository_path, archive_name, destination
+                        )
+                    except Exception as e:
+                        logger.warning("Failed to send restore success notification", error=str(e))
+                else:
+                    job.status = "failed"
+                    stderr_output = "\n".join(stderr_lines)
+                    job.error_message = stderr_output or f"Process exited with code {process.returncode}"
+                    job.completed_at = datetime.now(timezone.utc)
+                    job.logs = f"STDOUT:\n{chr(10).join(stdout_lines)}\n\nSTDERR:\n{stderr_output}"
+
+                    logger.error("Restore failed",
+                                job_id=job_id,
+                                return_code=process.returncode,
                             error=stderr_output)
 
-                # Send failure notification
-                try:
-                    await notification_service.send_restore_failure(
-                        db_session, repository_path, archive_name, job.error_message
-                    )
-                except Exception as e:
-                    logger.warning("Failed to send restore failure notification", error=str(e))
+                    # Send failure notification
+                    try:
+                        await notification_service.send_restore_failure(
+                            db_session, repository_path, archive_name, job.error_message
+                        )
+                    except Exception as e:
+                        logger.warning("Failed to send restore failure notification", error=str(e))
 
-            db_session.commit()
+                db_session.commit()
+
+            finally:
+                # Clean up temporary directory
+                if os.path.exists(temp_dir):
+                    try:
+                        shutil.rmtree(temp_dir)
+                        logger.info("Cleaned up temporary directory", temp_dir=temp_dir)
+                    except Exception as cleanup_error:
+                        logger.warning("Failed to clean up temporary directory",
+                                     temp_dir=temp_dir,
+                                     error=str(cleanup_error))
 
         except Exception as e:
             logger.error("Restore execution failed",
