@@ -24,15 +24,7 @@ import {
   MenuItem,
   Alert,
 } from '@mui/material'
-import {
-  History,
-  RefreshCw,
-  Eye,
-  CheckCircle,
-  XCircle,
-  Clock,
-  PlayCircle,
-} from 'lucide-react'
+import { History, RefreshCw, Eye, CheckCircle, XCircle, Clock, PlayCircle } from 'lucide-react'
 import { activityAPI } from '../services/api'
 import { formatDate } from '../utils/dateUtils'
 import { TerminalLogViewer } from '../components/TerminalLogViewer'
@@ -56,7 +48,11 @@ const Activity: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all')
 
   // Fetch activity data
-  const { data: activities, isLoading, refetch } = useQuery({
+  const {
+    data: activities,
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ['activity', typeFilter, statusFilter],
     queryFn: async () => {
       const params: any = { limit: 50 }
@@ -149,7 +145,9 @@ const Activity: React.FC = () => {
 
   if (isLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+      <Box
+        sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}
+      >
         <CircularProgress />
       </Box>
     )
@@ -308,11 +306,7 @@ const Activity: React.FC = () => {
               jobType={selectedJob.type}
               showHeader={false}
               onFetchLogs={async (offset) => {
-                const response = await activityAPI.getLogs(
-                  selectedJob.type,
-                  selectedJob.id,
-                  offset
-                )
+                const response = await activityAPI.getLogs(selectedJob.type, selectedJob.id, offset)
                 return response.data
               }}
             />
