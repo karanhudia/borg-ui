@@ -1233,6 +1233,8 @@ export default function Repositories() {
                         <MenuItem value="lzma">
                           lzma - Low speed, high compression (default level 6)
                         </MenuItem>
+                        <MenuItem value="auto">auto - Automatic compression selection</MenuItem>
+                        <MenuItem value="obfuscate">obfuscate - Obfuscate compressed data</MenuItem>
                       </Select>
                     </FormControl>
 
@@ -1750,6 +1752,8 @@ export default function Repositories() {
                         <MenuItem value="lzma">
                           lzma - Low speed, high compression (default level 6)
                         </MenuItem>
+                        <MenuItem value="auto">auto - Automatic compression selection</MenuItem>
+                        <MenuItem value="obfuscate">obfuscate - Obfuscate compressed data</MenuItem>
                       </Select>
                     </FormControl>
 
