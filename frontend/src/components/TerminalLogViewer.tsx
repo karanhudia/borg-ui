@@ -12,7 +12,7 @@ interface LogLine {
 interface TerminalLogViewerProps {
   jobId: string
   status: string
-  jobType?: string  // 'backup', 'restore', 'check', 'compact', etc.
+  jobType?: string // 'backup', 'restore', 'check', 'compact', etc.
   showHeader?: boolean
   onFetchLogs: (offset: number) => Promise<{
     lines: LogLine[]
