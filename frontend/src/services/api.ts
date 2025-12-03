@@ -263,4 +263,10 @@ export const notificationsAPI = {
   test: (serviceUrl: string) => api.post('/notifications/test', { service_url: serviceUrl }),
 }
 
+export const activityAPI = {
+  list: (params?: any) => api.get('/activity/recent', { params }),
+  getLogs: (jobType: string, jobId: number, offset: number = 0) =>
+    api.get(`/activity/${jobType}/${jobId}/logs`, { params: { offset } }),
+}
+
 export default api

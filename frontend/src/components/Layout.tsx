@@ -34,6 +34,7 @@ import {
   User,
   Lock,
   Info,
+  History,
 } from 'lucide-react'
 import api from '../services/api'
 
@@ -48,6 +49,7 @@ const navigationWithKeys = [
   { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },
   { name: 'Restore', href: '/restore', icon: Download, key: 'restore' as const },
   { name: 'Schedule', href: '/schedule', icon: Clock, key: 'schedule' as const },
+  { name: 'Activity', href: '/activity', icon: History, key: 'dashboard' as const },
 ]
 
 interface SystemInfo {
