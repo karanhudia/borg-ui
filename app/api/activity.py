@@ -223,9 +223,10 @@ async def get_job_logs(
     # For completed/failed jobs, prefer log_file_path (full borg output) over logs (hooks only)
     if job.status in ['completed', 'failed']:
         # First try reading from log file (contains all borg output)
-        if job.log_file_path and os.path.exists(job.log_file_path):
+        log_file_path = getattr(job, 'log_file_path', None)
+        if log_file_path and os.path.exists(log_file_path):
             try:
-                with open(job.log_file_path, 'r') as f:
+                with open(log_file_path, 'r') as f:
                     # EFFICIENT: Count total lines first without loading into memory
                     f.seek(0)
                     total_lines = sum(1 for _ in f)
@@ -318,9 +319,10 @@ async def get_job_logs(
         }
 
     # If job is running and has log file, stream from file
-    if job.log_file_path and os.path.exists(job.log_file_path):
+    log_file_path = getattr(job, 'log_file_path', None)
+    if log_file_path and os.path.exists(log_file_path):
         try:
-            with open(job.log_file_path, 'r') as f:
+            with open(log_file_path, 'r') as f:
                 lines = f.readlines()
                 total_lines = len(lines)
 
