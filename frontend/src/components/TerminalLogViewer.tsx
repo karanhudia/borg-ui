@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Box, Button, Typography, Paper } from '@mui/material'
+import { Box, Button, Typography, Paper, Chip } from '@mui/material'
 import { ContentCopy, Download } from '@mui/icons-material'
+import { PlayCircle, CheckCircle } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 
 interface LogLine {
@@ -11,6 +12,8 @@ interface LogLine {
 interface TerminalLogViewerProps {
   jobId: string
   status: string
+  jobType?: string  // 'backup', 'restore', 'check', 'compact', etc.
+  showHeader?: boolean
   onFetchLogs: (offset: number) => Promise<{
     lines: LogLine[]
     total_lines: number
@@ -21,12 +24,15 @@ interface TerminalLogViewerProps {
 export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
   jobId,
   status,
+  jobType = 'backup',
+  showHeader = true,
   onFetchLogs,
 }) => {
   const [logs, setLogs] = useState<LogLine[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const logContainerRef = useRef<HTMLDivElement>(null)
   const [autoScroll, setAutoScroll] = useState(true)
+  const [totalLines, setTotalLines] = useState(0)
 
   // Fetch logs on mount and poll while running
   useEffect(() => {
@@ -35,12 +41,21 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
 
       setIsLoading(true)
       try {
-        const offset = logs.length
+        // For running jobs, always fetch from offset 0 (backend returns tail)
+        // For completed jobs, fetch next chunk based on current logs length
+        const offset = status === 'running' ? 0 : logs.length
         const result = await onFetchLogs(offset)
 
         if (result.lines.length > 0) {
-          setLogs((prev) => [...prev, ...result.lines])
+          if (status === 'running') {
+            // For running jobs, replace logs entirely (backend sends tail)
+            setLogs(result.lines)
+          } else {
+            // For completed jobs, append new lines
+            setLogs((prev) => [...prev, ...result.lines])
+          }
         }
+        setTotalLines(result.total_lines)
       } catch (error) {
         console.error('Failed to fetch logs:', error)
       } finally {
@@ -56,7 +71,7 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
       const interval = setInterval(fetchLogs, 2000)
       return () => clearInterval(interval)
     }
-  }, [status, logs.length])
+  }, [status])
 
   // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
@@ -97,28 +112,69 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6" fontWeight={600}>
-          Backup Logs
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            size="small"
-            startIcon={<ContentCopy sx={{ fontSize: 16 }} />}
-            onClick={handleCopyLogs}
-            disabled={logs.length === 0}
-          >
-            Copy Logs
-          </Button>
-          <Button
-            size="small"
-            startIcon={<Download sx={{ fontSize: 16 }} />}
-            onClick={handleDownloadLogs}
-            disabled={logs.length === 0}
-          >
-            Download
-          </Button>
+      {showHeader && (
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box>
+            <Typography variant="h6" fontWeight={600}>
+              Backup Logs
+            </Typography>
+            {status === 'running' && totalLines > 500 && (
+              <Typography variant="caption" color="text.secondary">
+                Showing last 500 of {totalLines} lines (live tail)
+              </Typography>
+            )}
+            {status !== 'running' && totalLines > 0 && (
+              <Typography variant="caption" color="text.secondary">
+                {logs.length} of {totalLines} lines
+              </Typography>
+            )}
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              size="small"
+              startIcon={<ContentCopy sx={{ fontSize: 16 }} />}
+              onClick={handleCopyLogs}
+              disabled={logs.length === 0}
+            >
+              Copy Logs
+            </Button>
+            <Button
+              size="small"
+              startIcon={<Download sx={{ fontSize: 16 }} />}
+              onClick={handleDownloadLogs}
+              disabled={logs.length === 0}
+            >
+              Download
+            </Button>
+          </Box>
         </Box>
+      )}
+
+      {/* Status indicator above terminal */}
+      <Box sx={{ mb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        {status === 'running' ? (
+          <Chip
+            icon={<PlayCircle size={16} />}
+            label="Live Streaming (Last 500 lines)"
+            color="info"
+            size="small"
+            sx={{ fontWeight: 500 }}
+          />
+        ) : (
+          <Chip
+            icon={<CheckCircle size={16} />}
+            label="Completed Logs"
+            color="success"
+            size="small"
+            variant="outlined"
+            sx={{ fontWeight: 500 }}
+          />
+        )}
+        {totalLines > 0 && (
+          <Typography variant="caption" color="text.secondary">
+            {logs.length} lines displayed
+          </Typography>
+        )}
       </Box>
 
       {/* Terminal */}
@@ -194,7 +250,7 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
               }}
             />
             <Typography sx={{ color: '#4ade80', fontSize: '0.875rem' }}>
-              Backup in progress...
+              {jobType.charAt(0).toUpperCase() + jobType.slice(1)} in progress...
             </Typography>
           </Box>
         )}
