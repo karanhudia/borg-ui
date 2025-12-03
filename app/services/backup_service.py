@@ -1053,6 +1053,8 @@ class BackupService:
                 try:
                     combined_logs = hook_logs + log_buffer if hook_logs else log_buffer
                     log_file.write_text('\n'.join(combined_logs))
+                    # Store log file path so Activity page can read and display logs
+                    job.log_file_path = str(log_file)
                     job.logs = f"Logs saved to: {log_file.name}"
                     logger.warning("Backup failed/cancelled, logs saved for debugging",
                                  job_id=job_id,
