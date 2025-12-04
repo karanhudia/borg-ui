@@ -564,6 +564,15 @@ class BackupService:
                         job.logs = "\n".join(hook_logs)
                         job.completed_at = datetime.utcnow()
                         db.commit()
+
+                        # Send failure notification for pre-hook failure
+                        try:
+                            await notification_service.send_backup_failure(
+                                db, repository, error_msg, job_id
+                            )
+                        except Exception as e:
+                            logger.warning("Failed to send backup failure notification", error=str(e))
+
                         return
                     else:
                         logger.warning("Pre-backup hook failed but continuing anyway",
@@ -903,20 +912,8 @@ class BackupService:
                 # Update repository statistics after successful backup
                 await self._update_repository_stats(db, repository, env)
 
-                # Send success notification
-                try:
-                    stats = {
-                        "original_size": job.original_size,
-                        "compressed_size": job.compressed_size,
-                        "deduplicated_size": job.deduplicated_size
-                    }
-                    await notification_service.send_backup_success(
-                        db, repository, archive_name, stats, job.completed_at
-                    )
-                except Exception as e:
-                    logger.warning("Failed to send backup success notification", error=str(e))
-
                 # Run post-backup hook if configured
+                post_hook_failed = False
                 if repo_record and repo_record.post_backup_script:
                     logger.info("Running post-backup hook", job_id=job_id, repository=repository)
                     hook_timeout = repo_record.hook_timeout or 300
@@ -946,12 +943,38 @@ class BackupService:
                     hook_logs.extend(post_hook_log_entry)
 
                     if not post_hook_result["success"]:
+                        post_hook_failed = True
                         logger.warning("Post-backup hook failed",
                                      job_id=job_id,
                                      stderr=post_hook_result['stderr'])
-                        # Don't fail the backup job if post-hook fails, just log warning
+                        # Mark as failed if post-hook fails
+                        job.status = "failed"
+                        job.error_message = f"Backup succeeded but post-backup hook failed: {post_hook_result['stderr']}"
                     else:
                         logger.info("Post-backup hook completed successfully", job_id=job_id)
+
+                # Send notification after post-hook completes
+                if post_hook_failed:
+                    # Send failure notification if post-hook failed
+                    try:
+                        await notification_service.send_backup_failure(
+                            db, repository, job.error_message, job_id
+                        )
+                    except Exception as e:
+                        logger.warning("Failed to send backup failure notification", error=str(e))
+                else:
+                    # Send success notification if everything succeeded
+                    try:
+                        stats = {
+                            "original_size": job.original_size,
+                            "compressed_size": job.compressed_size,
+                            "deduplicated_size": job.deduplicated_size
+                        }
+                        await notification_service.send_backup_success(
+                            db, repository, archive_name, stats, job.completed_at
+                        )
+                    except Exception as e:
+                        logger.warning("Failed to send backup success notification", error=str(e))
             elif 100 <= process.returncode <= 127:
                 # Warning (modern exit code system)
                 job.status = "completed"
@@ -964,6 +987,7 @@ class BackupService:
                 await self._update_repository_stats(db, repository, env)
 
                 # Run post-backup hook even with warnings
+                post_hook_failed = False
                 if repo_record and repo_record.post_backup_script:
                     logger.info("Running post-backup hook", job_id=job_id, repository=repository)
                     hook_timeout = repo_record.hook_timeout or 300
@@ -993,11 +1017,38 @@ class BackupService:
                     hook_logs.extend(post_hook_log_entry)
 
                     if not post_hook_result["success"]:
+                        post_hook_failed = True
                         logger.warning("Post-backup hook failed",
                                      job_id=job_id,
                                      stderr=post_hook_result['stderr'])
+                        # Mark as failed if post-hook fails
+                        job.status = "failed"
+                        job.error_message = f"Backup succeeded with warning but post-backup hook failed: {post_hook_result['stderr']}"
                     else:
                         logger.info("Post-backup hook completed successfully", job_id=job_id)
+
+                # Send notification after post-hook completes (for warning case)
+                if post_hook_failed:
+                    # Send failure notification if post-hook failed
+                    try:
+                        await notification_service.send_backup_failure(
+                            db, repository, job.error_message, job_id
+                        )
+                    except Exception as e:
+                        logger.warning("Failed to send backup failure notification", error=str(e))
+                else:
+                    # Send success notification (backup completed with warnings but post-hook succeeded)
+                    try:
+                        stats = {
+                            "original_size": job.original_size,
+                            "compressed_size": job.compressed_size,
+                            "deduplicated_size": job.deduplicated_size
+                        }
+                        await notification_service.send_backup_success(
+                            db, repository, archive_name, stats, job.completed_at
+                        )
+                    except Exception as e:
+                        logger.warning("Failed to send backup success notification", error=str(e))
             else:
                 job.status = "failed"
                 # Build comprehensive error message with msgid details
