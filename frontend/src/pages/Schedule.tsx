@@ -67,9 +67,11 @@ interface ScheduledJob {
   archive_name_template: string | null
   run_prune_after: boolean
   run_compact_after: boolean
+  prune_keep_hourly: number
   prune_keep_daily: number
   prune_keep_weekly: number
   prune_keep_monthly: number
+  prune_keep_quarterly: number
   prune_keep_yearly: number
   last_prune: string | null
   last_compact: string | null
@@ -230,9 +232,11 @@ const Schedule: React.FC = () => {
     archive_name_template: '{job_name}-{now}',
     run_prune_after: false,
     run_compact_after: false,
+    prune_keep_hourly: 0,
     prune_keep_daily: 7,
     prune_keep_weekly: 4,
     prune_keep_monthly: 6,
+    prune_keep_quarterly: 0,
     prune_keep_yearly: 1,
   })
 
@@ -245,9 +249,11 @@ const Schedule: React.FC = () => {
     archive_name_template: '',
     run_prune_after: false,
     run_compact_after: false,
+    prune_keep_hourly: 0,
     prune_keep_daily: 7,
     prune_keep_weekly: 4,
     prune_keep_monthly: 6,
+    prune_keep_quarterly: 0,
     prune_keep_yearly: 1,
   })
 
@@ -261,9 +267,11 @@ const Schedule: React.FC = () => {
       archive_name_template: '{job_name}-{now}',
       run_prune_after: false,
       run_compact_after: false,
+      prune_keep_hourly: 0,
       prune_keep_daily: 7,
       prune_keep_weekly: 4,
       prune_keep_monthly: 6,
+      prune_keep_quarterly: 0,
       prune_keep_yearly: 1,
     })
   }
@@ -335,9 +343,11 @@ const Schedule: React.FC = () => {
       archive_name_template: job.archive_name_template || '{job_name}-{now}',
       run_prune_after: job.run_prune_after || false,
       run_compact_after: job.run_compact_after || false,
+      prune_keep_hourly: job.prune_keep_hourly || 0,
       prune_keep_daily: job.prune_keep_daily || 7,
       prune_keep_weekly: job.prune_keep_weekly || 4,
       prune_keep_monthly: job.prune_keep_monthly || 6,
+      prune_keep_quarterly: job.prune_keep_quarterly || 0,
       prune_keep_yearly: job.prune_keep_yearly || 1,
     })
   }
@@ -489,7 +499,7 @@ const Schedule: React.FC = () => {
             <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
               {job.run_prune_after && (
                 <Tooltip
-                  title={`Prune: Keep ${job.prune_keep_daily}d/${job.prune_keep_weekly}w/${job.prune_keep_monthly}m/${job.prune_keep_yearly}y`}
+                  title={`Prune: Keep ${job.prune_keep_hourly > 0 ? `${job.prune_keep_hourly}h/` : ''}${job.prune_keep_daily}d/${job.prune_keep_weekly}w/${job.prune_keep_monthly}m/${job.prune_keep_quarterly > 0 ? `${job.prune_keep_quarterly}q/` : ''}${job.prune_keep_yearly}y`}
                   arrow
                 >
                   <Chip
@@ -1304,6 +1314,20 @@ const Schedule: React.FC = () => {
                       sx={{ pl: 4, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}
                     >
                       <TextField
+                        label="Keep Hourly"
+                        type="number"
+                        value={createForm.prune_keep_hourly}
+                        onChange={(e) =>
+                          setCreateForm({
+                            ...createForm,
+                            prune_keep_hourly: parseInt(e.target.value) || 0,
+                          })
+                        }
+                        inputProps={{ min: 0 }}
+                        size="small"
+                        helperText="Hourly backups to keep (0 = disabled)"
+                      />
+                      <TextField
                         label="Keep Daily"
                         type="number"
                         value={createForm.prune_keep_daily}
@@ -1344,6 +1368,20 @@ const Schedule: React.FC = () => {
                         inputProps={{ min: 0 }}
                         size="small"
                         helperText="Monthly backups to keep"
+                      />
+                      <TextField
+                        label="Keep Quarterly"
+                        type="number"
+                        value={createForm.prune_keep_quarterly}
+                        onChange={(e) =>
+                          setCreateForm({
+                            ...createForm,
+                            prune_keep_quarterly: parseInt(e.target.value) || 0,
+                          })
+                        }
+                        inputProps={{ min: 0 }}
+                        size="small"
+                        helperText="Quarterly backups to keep (0 = disabled)"
                       />
                       <TextField
                         label="Keep Yearly"
@@ -1567,6 +1605,20 @@ const Schedule: React.FC = () => {
                       sx={{ pl: 4, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}
                     >
                       <TextField
+                        label="Keep Hourly"
+                        type="number"
+                        value={editForm.prune_keep_hourly}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            prune_keep_hourly: parseInt(e.target.value) || 0,
+                          })
+                        }
+                        inputProps={{ min: 0 }}
+                        size="small"
+                        helperText="Hourly backups to keep (0 = disabled)"
+                      />
+                      <TextField
                         label="Keep Daily"
                         type="number"
                         value={editForm.prune_keep_daily}
@@ -1607,6 +1659,20 @@ const Schedule: React.FC = () => {
                         inputProps={{ min: 0 }}
                         size="small"
                         helperText="Monthly backups to keep"
+                      />
+                      <TextField
+                        label="Keep Quarterly"
+                        type="number"
+                        value={editForm.prune_keep_quarterly}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            prune_keep_quarterly: parseInt(e.target.value) || 0,
+                          })
+                        }
+                        inputProps={{ min: 0 }}
+                        size="small"
+                        helperText="Quarterly backups to keep (0 = disabled)"
                       />
                       <TextField
                         label="Keep Yearly"

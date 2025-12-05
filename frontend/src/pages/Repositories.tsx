@@ -100,9 +100,11 @@ export default function Repositories() {
   const [compactingRepository, setCompactingRepository] = useState<Repository | null>(null)
   const [pruningRepository, setPruningRepository] = useState<Repository | null>(null)
   const [pruneForm, setPruneForm] = useState({
+    keep_hourly: 0,
     keep_daily: 7,
     keep_weekly: 4,
     keep_monthly: 6,
+    keep_quarterly: 0,
     keep_yearly: 1,
   })
   const [pruneResults, setPruneResults] = useState<any>(null)
@@ -426,9 +428,11 @@ export default function Repositories() {
   const handlePruneRepository = (repository: Repository) => {
     setPruningRepository(repository)
     setPruneForm({
+      keep_hourly: 0,
       keep_daily: 7,
       keep_weekly: 4,
       keep_monthly: 6,
+      keep_quarterly: 0,
       keep_yearly: 1,
     })
     setPruneResults(null)
@@ -2308,6 +2312,16 @@ export default function Repositories() {
 
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2, mb: 3 }}>
             <TextField
+              label="Keep Hourly"
+              type="number"
+              value={pruneForm.keep_hourly}
+              onChange={(e) =>
+                setPruneForm({ ...pruneForm, keep_hourly: parseInt(e.target.value) || 0 })
+              }
+              helperText="Last N hourly backups (0 = disabled)"
+              fullWidth
+            />
+            <TextField
               label="Keep Daily"
               type="number"
               value={pruneForm.keep_daily}
@@ -2335,6 +2349,16 @@ export default function Repositories() {
                 setPruneForm({ ...pruneForm, keep_monthly: parseInt(e.target.value) || 0 })
               }
               helperText="Last N monthly backups"
+              fullWidth
+            />
+            <TextField
+              label="Keep Quarterly"
+              type="number"
+              value={pruneForm.keep_quarterly}
+              onChange={(e) =>
+                setPruneForm({ ...pruneForm, keep_quarterly: parseInt(e.target.value) || 0 })
+              }
+              helperText="Last N quarterly backups (0 = disabled)"
               fullWidth
             />
             <TextField
