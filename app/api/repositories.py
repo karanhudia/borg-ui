@@ -673,6 +673,15 @@ async def import_repository(
         db.commit()
         db.refresh(repository)
 
+        # Update archive count by listing archives (non-blocking - don't fail import)
+        try:
+            await update_repository_stats(repository, db)
+        except Exception as e:
+            # Log but don't fail the import - stats can be updated later
+            logger.warning("Failed to update repository stats after import",
+                         repository=repository.name,
+                         error=str(e))
+
         logger.info("Repository imported successfully",
                    name=repo_data.name,
                    path=repo_path,
