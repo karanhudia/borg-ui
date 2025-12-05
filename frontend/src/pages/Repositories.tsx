@@ -794,14 +794,6 @@ export default function Repositories() {
               >
                 Create Repository
               </Button>
-              <Button
-                variant="outlined"
-                startIcon={<FileUpload />}
-                onClick={() => openRepositoryModal('import')}
-                sx={{ flexShrink: 0 }}
-              >
-                Import Existing
-              </Button>
             </Stack>
           )}
         </Box>

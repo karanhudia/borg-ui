@@ -100,9 +100,17 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
 
                     # Get total size from cache stats (if available)
                     cache = archives_data.get("cache", {}).get("stats", {})
+                    logger.debug("Cache stats from borg list",
+                               repository=repository.name,
+                               has_cache=bool(cache),
+                               cache_keys=list(cache.keys()) if cache else [])
+
                     if cache:
                         # Get total size (unique csize is the actual size on disk)
                         unique_csize = cache.get("unique_csize", 0)
+                        logger.debug("Unique csize value",
+                                   repository=repository.name,
+                                   unique_csize=unique_csize)
                         if unique_csize > 0:
                             # Convert bytes to human readable format
                             total_size = format_bytes(unique_csize)
