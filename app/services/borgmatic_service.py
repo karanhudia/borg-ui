@@ -109,17 +109,19 @@ class BorgmaticExportService:
         self,
         repository_ids: Optional[List[int]] = None,
         include_schedules: bool = True,
-        include_borg_ui_metadata: bool = True,
-        multi_file: bool = False
+        include_borg_ui_metadata: bool = True
     ) -> str:
         """
         Export configurations to YAML string.
+
+        DEPRECATED: Use export_all_repositories() instead for proper multi-repo support.
+        This method exports a single merged config which is incorrect for repositories
+        with different settings.
 
         Args:
             repository_ids: Repository IDs to export
             include_schedules: Include schedules
             include_borg_ui_metadata: Include metadata
-            multi_file: If True, return dict with filename: yaml_content
 
         Returns:
             YAML string in borgmatic-compatible format
@@ -133,9 +135,16 @@ class BorgmaticExportService:
         if not configs:
             return ""
 
-        # Merge all configurations into a single borgmatic-compatible format
-        merged_config = self._merge_configs_to_borgmatic(configs, include_borg_ui_metadata)
+        # For single repository, return as-is
+        if len(configs) == 1:
+            config = configs[0].copy()
+            if not include_borg_ui_metadata:
+                config.pop('borg_ui_metadata', None)
+            return yaml.dump(config, default_flow_style=False, sort_keys=False)
 
+        # For multiple repositories, this is deprecated - should use separate files
+        # But for backwards compatibility, merge them
+        merged_config = self._merge_configs_to_borgmatic(configs, include_borg_ui_metadata)
         return yaml.dump(merged_config, default_flow_style=False, sort_keys=False)
 
     def _build_location_section(self, repository: Repository) -> Dict[str, Any]:
