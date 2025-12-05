@@ -37,27 +37,61 @@ async def export_borgmatic_config(
     """
     Export Borg UI configurations to borgmatic YAML format.
 
-    Returns a YAML file download.
+    Returns a ZIP file containing separate config files for each repository.
     """
     export_service = BorgmaticExportService(db)
 
     try:
-        yaml_content = export_service.export_to_yaml(
+        # Get configurations for all repositories
+        configs = export_service.export_all_repositories(
             repository_ids=request.repository_ids,
             include_schedules=request.include_schedules,
             include_borg_ui_metadata=request.include_borg_ui_metadata
         )
 
-        if not yaml_content:
+        if not configs:
             raise HTTPException(status_code=404, detail="No repositories found to export")
 
-        # Return as downloadable YAML file
-        filename = "borg-ui-export.yaml"
+        # If only one repository, return single YAML file
+        if len(configs) == 1:
+            import yaml
+            yaml_content = yaml.dump(configs[0], default_flow_style=False, sort_keys=False)
+
+            filename = "borgmatic-config.yaml"
+            return Response(
+                content=yaml_content,
+                media_type="application/x-yaml",
+                headers={
+                    "Content-Disposition": f"attachment; filename={filename}"
+                }
+            )
+
+        # Multiple repositories: create ZIP with separate config files
+        import io
+        import zipfile
+        import yaml
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for i, config in enumerate(configs):
+                # Get repository name from metadata or generate one
+                repo_name = config.get('borg_ui_metadata', {}).get('repository', {}).get('name', f'repo-{i+1}')
+                # Sanitize filename
+                safe_name = "".join(c for c in repo_name if c.isalnum() or c in ('-', '_')).lower()
+
+                # Remove metadata from individual files
+                config_copy = config.copy()
+                config_copy.pop('borg_ui_metadata', None)
+
+                yaml_content = yaml.dump(config_copy, default_flow_style=False, sort_keys=False)
+                zip_file.writestr(f"{safe_name}.yaml", yaml_content)
+
+        zip_buffer.seek(0)
         return Response(
-            content=yaml_content,
-            media_type="application/x-yaml",
+            content=zip_buffer.getvalue(),
+            media_type="application/zip",
             headers={
-                "Content-Disposition": f"attachment; filename={filename}"
+                "Content-Disposition": "attachment; filename=borgmatic-configs.zip"
             }
         )
     except Exception as e:
