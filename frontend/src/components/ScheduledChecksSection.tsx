@@ -291,7 +291,9 @@ const ScheduledChecksSection: React.FC = () => {
 
       {/* Add/Edit Dialog */}
       <Dialog open={showDialog} onClose={() => setShowDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{selectedRepositoryId ? 'Edit Check Schedule' : 'Add Check Schedule'}</DialogTitle>
+        <DialogTitle>
+          {selectedRepositoryId ? 'Edit Check Schedule' : 'Add Check Schedule'}
+        </DialogTitle>
         <DialogContent>
           <Stack spacing={3} sx={{ mt: 1 }}>
             <FormControl fullWidth required size="medium">
@@ -323,7 +325,11 @@ const ScheduledChecksSection: React.FC = () => {
                         <Typography variant="body2" sx={{ fontSize: '1rem' }}>
                           {repo.name}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.85rem' }}>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ fontSize: '0.85rem' }}
+                        >
                           {repo.path}
                         </Typography>
                       </Box>
@@ -355,7 +361,9 @@ const ScheduledChecksSection: React.FC = () => {
                 <InputLabel>Check Interval</InputLabel>
                 <Select
                   value={formData.interval_days}
-                  onChange={(e) => setFormData({ ...formData, interval_days: Number(e.target.value) })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, interval_days: Number(e.target.value) })
+                  }
                   label="Check Interval"
                 >
                   <MenuItem value={7}>Every 7 days (weekly)</MenuItem>
@@ -382,7 +390,10 @@ const ScheduledChecksSection: React.FC = () => {
                       : `${customIntervalValue} day${customIntervalValue !== 1 ? 's' : ''}`
                   }
                   sx={{ flex: 2 }}
-                  inputProps={{ min: customIntervalUnit === 'hours' ? 1 : 0.1, step: customIntervalUnit === 'hours' ? 1 : 0.1 }}
+                  inputProps={{
+                    min: customIntervalUnit === 'hours' ? 1 : 0.1,
+                    step: customIntervalUnit === 'hours' ? 1 : 0.1,
+                  }}
                 />
                 <FormControl sx={{ flex: 1 }}>
                   <InputLabel>Unit</InputLabel>

@@ -419,20 +419,10 @@ const NotificationsTab: React.FC = () => {
                           />
                         )}
                         {notification.notify_on_check_failure && (
-                          <Chip
-                            label="Check Fail"
-                            size="small"
-                            color="error"
-                            variant="outlined"
-                          />
+                          <Chip label="Check Fail" size="small" color="error" variant="outlined" />
                         )}
                         {notification.notify_on_check_success && (
-                          <Chip
-                            label="Check OK"
-                            size="small"
-                            color="success"
-                            variant="outlined"
-                          />
+                          <Chip label="Check OK" size="small" color="success" variant="outlined" />
                         )}
                         {notification.notify_on_schedule_failure && (
                           <Chip
