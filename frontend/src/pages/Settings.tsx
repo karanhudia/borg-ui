@@ -34,6 +34,8 @@ import {
   Sun,
   Monitor,
   Package,
+  Download,
+  Upload,
 } from 'lucide-react'
 import { settingsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
@@ -42,6 +44,7 @@ import { useTheme } from '../context/ThemeContext'
 import { availableThemes } from '../theme'
 import NotificationsTab from '../components/NotificationsTab'
 import PackagesTab from '../components/PackagesTab'
+import ExportImportTab from '../components/ExportImportTab'
 import { formatDateShort } from '../utils/dateUtils'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
 
@@ -61,7 +64,8 @@ const TAB_CONFIG = {
   appearance: { index: 1, path: 'appearance' },
   notifications: { index: 2, path: 'notifications' },
   packages: { index: 3, path: 'packages' },
-  users: { index: 4, path: 'users' },
+  export: { index: 4, path: 'export' },
+  users: { index: 5, path: 'users' },
 } as const
 
 const Settings: React.FC = () => {
@@ -360,6 +364,12 @@ const Settings: React.FC = () => {
               sx={{ textTransform: 'none', minHeight: 48 }}
             />
           )}
+          <Tab
+            icon={<Download size={18} />}
+            iconPosition="start"
+            label="Export/Import"
+            sx={{ textTransform: 'none', minHeight: 48 }}
+          />
           {user?.is_admin && (
             <Tab
               icon={<Users size={18} />}
@@ -524,8 +534,11 @@ const Settings: React.FC = () => {
       {/* System Packages Tab */}
       {activeTab === 3 && user?.is_admin && <PackagesTab />}
 
+      {/* Export/Import Tab */}
+      {activeTab === (user?.is_admin ? 4 : 3) && <ExportImportTab />}
+
       {/* User Management Tab */}
-      {activeTab === (user?.is_admin ? 4 : 2) && user?.is_admin && (
+      {activeTab === (user?.is_admin ? 5 : 4) && user?.is_admin && (
         <Box>
           <Box
             sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}

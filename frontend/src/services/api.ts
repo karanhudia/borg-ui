@@ -275,4 +275,35 @@ export const activityAPI = {
     api.get(`/activity/${jobType}/${jobId}/logs`, { params: { offset } }),
 }
 
+export const configExportImportAPI = {
+  // Export configuration to borgmatic YAML
+  exportBorgmatic: (repositoryIds?: number[], includeSchedules = true, includeBorgUiMetadata = true) =>
+    api.post(
+      '/config/export/borgmatic',
+      {
+        repository_ids: repositoryIds,
+        include_schedules: includeSchedules,
+        include_borg_ui_metadata: includeBorgUiMetadata,
+      },
+      {
+        responseType: 'blob', // Important for file download
+      }
+    ),
+
+  // Import borgmatic YAML configuration
+  importBorgmatic: (file: File, mergeStrategy = 'skip_duplicates', dryRun = false) => {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    return api.post(`/config/import/borgmatic?merge_strategy=${mergeStrategy}&dry_run=${dryRun}`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+  },
+
+  // Get list of repositories available for export
+  listExportableRepositories: () => api.get('/config/export/repositories'),
+}
+
 export default api

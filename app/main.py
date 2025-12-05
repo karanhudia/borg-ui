@@ -7,6 +7,7 @@ import os
 from dotenv import load_dotenv
 
 from app.api import auth, dashboard, backup, archives, restore, schedule, settings as settings_api, events, repositories, ssh_keys, system, filesystem, browse, notifications, scripts, packages, activity
+from app.routers import config
 from app.database.database import engine
 from app.database.models import Base
 from app.core.security import create_first_user
@@ -88,6 +89,7 @@ app.include_router(scripts.router, prefix="/api/scripts", tags=["Scripts"])
 app.include_router(packages.router, prefix="/api/packages", tags=["Packages"])
 app.include_router(notifications.router)
 app.include_router(activity.router)
+app.include_router(config.router, prefix="/api")
 
 @app.on_event("startup")
 async def startup_event():
