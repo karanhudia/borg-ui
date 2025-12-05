@@ -35,7 +35,6 @@ import {
   Monitor,
   Package,
   Download,
-  Upload,
 } from 'lucide-react'
 import { settingsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
