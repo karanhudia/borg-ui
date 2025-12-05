@@ -143,6 +143,11 @@ async def startup_event():
     asyncio.create_task(check_scheduled_jobs())
     logger.info("Scheduled backup checker started")
 
+    # Start check scheduler (background task)
+    from app.services.check_scheduler import check_scheduler
+    asyncio.create_task(check_scheduler.start())
+    logger.info("Check scheduler started")
+
     logger.info("Borg Web UI started successfully")
 
 @app.on_event("shutdown")

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.database.models import CheckJob, Repository
 from app.database.database import SessionLocal
 from app.config import settings
+from app.services.notification_service import NotificationService
 
 logger = structlog.get_logger()
 
@@ -294,6 +295,32 @@ class CheckService:
                     logger.error("Failed to save log buffer", job_id=job_id, error=str(e))
 
             db.commit()
+
+            # Send notifications for completed or failed checks (skip cancelled)
+            if job.status in ['completed', 'failed']:
+                try:
+                    # Calculate duration
+                    duration_seconds = None
+                    if job.started_at and job.completed_at:
+                        duration_seconds = int((job.completed_at - job.started_at).total_seconds())
+
+                    # Determine check type (manual vs scheduled)
+                    check_type = "scheduled" if job.scheduled_check else "manual"
+
+                    await NotificationService.send_check_completion(
+                        db=db,
+                        repository_name=repository.name,
+                        repository_path=repository.path,
+                        status=job.status,
+                        duration_seconds=duration_seconds,
+                        error_message=job.error_message if job.status == "failed" else None,
+                        check_type=check_type
+                    )
+                    logger.info("Check notification sent", job_id=job_id, status=job.status)
+                except Exception as e:
+                    # Don't fail the check job if notification fails
+                    logger.error("Failed to send check notification", job_id=job_id, error=str(e))
+
             logger.info("Check job completed", job_id=job_id, status=job.status)
 
         except Exception as e:
@@ -302,6 +329,27 @@ class CheckService:
             job.error_message = str(e)
             job.completed_at = datetime.utcnow()
             db.commit()
+
+            # Send failure notification
+            try:
+                duration_seconds = None
+                if job.started_at and job.completed_at:
+                    duration_seconds = int((job.completed_at - job.started_at).total_seconds())
+
+                check_type = "scheduled" if job.scheduled_check else "manual"
+
+                await NotificationService.send_check_completion(
+                    db=db,
+                    repository_name=repository.name if repository else "Unknown",
+                    repository_path=repository.path if repository else "Unknown",
+                    status="failed",
+                    duration_seconds=duration_seconds,
+                    error_message=str(e),
+                    check_type=check_type
+                )
+                logger.info("Check failure notification sent", job_id=job_id)
+            except Exception as notif_error:
+                logger.error("Failed to send check failure notification", job_id=job_id, error=str(notif_error))
         finally:
             # Remove from running processes
             if job_id in self.running_processes:

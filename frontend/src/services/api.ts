@@ -214,6 +214,12 @@ export const repositoriesAPI = {
     api.get(`/repositories/${repoId}/archives/${archiveName}/files`, {
       params: limit ? { limit } : undefined,
     }),
+  // Check schedule management
+  getCheckSchedule: (id: number) => api.get(`/repositories/${id}/check-schedule`),
+  updateCheckSchedule: (id: number, data: any) =>
+    api.put(`/repositories/${id}/check-schedule`, data),
+  list: () => api.get('/repositories/'),
+  startCheck: (id: number, data: any) => api.post(`/repositories/${id}/check`, data),
 }
 
 // SSH Keys API

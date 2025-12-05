@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Box,
   Card,
@@ -25,6 +26,8 @@ import {
   InputAdornment,
   Alert,
   Paper,
+  Tabs,
+  Tab,
 } from '@mui/material'
 import {
   Plus,
@@ -52,6 +55,7 @@ import {
   convertCronToLocal,
 } from '../utils/dateUtils'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
+import ScheduledChecksSection from '../components/ScheduledChecksSection'
 
 interface ScheduledJob {
   id: number
@@ -101,10 +105,41 @@ interface BackupJob {
 
 const Schedule: React.FC = () => {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  // Determine current tab from URL
+  const getCurrentTab = () => {
+    if (location.pathname === '/schedule/checks') return 1
+    if (location.pathname === '/schedule/backups') return 0
+    return 0 // default to backups
+  }
+
+  const [currentTab, setCurrentTab] = useState(getCurrentTab())
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingJob, setEditingJob] = useState<ScheduledJob | null>(null)
   const [showCronBuilder, setShowCronBuilder] = useState(false)
   const [deleteConfirmJob, setDeleteConfirmJob] = useState<ScheduledJob | null>(null)
+
+  // Redirect /schedule to /schedule/backups
+  useEffect(() => {
+    if (location.pathname === '/schedule') {
+      navigate('/schedule/backups', { replace: true })
+    }
+  }, [location.pathname, navigate])
+
+  // Update URL when tab changes
+  useEffect(() => {
+    const path = currentTab === 1 ? '/schedule/checks' : '/schedule/backups'
+    if (location.pathname !== path && location.pathname !== '/schedule') {
+      navigate(path, { replace: true })
+    }
+  }, [currentTab, navigate, location.pathname])
+
+  // Sync tab with URL changes
+  useEffect(() => {
+    setCurrentTab(getCurrentTab())
+  }, [location.pathname])
 
   // Get scheduled jobs
   const { data: jobsData, isLoading } = useQuery({
@@ -806,31 +841,46 @@ const Schedule: React.FC = () => {
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
           <Typography variant="h4" fontWeight={600} gutterBottom>
-            Scheduled Backups
+            Schedule
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Automate your backups with cron-based scheduling
+            Manage automated backups and repository checks
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<Plus size={18} />}
-          onClick={openCreateModal}
-          disabled={repositories.length === 0}
-        >
-          Create Schedule
-        </Button>
       </Box>
 
-      {/* No repositories warning */}
-      {repositories.length === 0 && (
-        <Alert severity="info" sx={{ mb: 3 }}>
-          You need to create at least one repository before scheduling backups.
-        </Alert>
-      )}
+      {/* Tabs */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs value={currentTab} onChange={(_, newValue) => setCurrentTab(newValue)}>
+          <Tab label="Backup Jobs" />
+          <Tab label="Repository Checks" />
+        </Tabs>
+      </Box>
+
+      {/* Tab Content: Backup Jobs */}
+      {currentTab === 0 && (
+        <Box>
+          {/* Action Button */}
+          <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end' }}>
+            <Button
+              variant="contained"
+              startIcon={<Plus size={18} />}
+              onClick={openCreateModal}
+              disabled={repositories.length === 0}
+            >
+              Create Backup Schedule
+            </Button>
+          </Box>
+
+          {/* No repositories warning */}
+          {repositories.length === 0 && (
+            <Alert severity="info" sx={{ mb: 3 }}>
+              You need to create at least one repository before scheduling backups.
+            </Alert>
+          )}
 
       {/* Running Scheduled Jobs */}
       {runningBackupJobs.length > 0 && (
@@ -1133,6 +1183,15 @@ const Schedule: React.FC = () => {
           />
         </CardContent>
       </Card>
+        </Box>
+      )}
+
+      {/* Tab Content: Repository Checks */}
+      {currentTab === 1 && (
+        <Box>
+          <ScheduledChecksSection />
+        </Box>
+      )}
 
       {/* Create Job Modal */}
       <Dialog

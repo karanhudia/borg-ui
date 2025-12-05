@@ -774,6 +774,102 @@ class NotificationService:
         for setting in settings:
             await NotificationService._send_to_service(db, setting, title, body)
 
+    @staticmethod
+    async def send_check_completion(
+        db: Session,
+        repository_name: str,
+        repository_path: str,
+        status: str,  # "completed" or "failed"
+        duration_seconds: Optional[int] = None,
+        error_message: Optional[str] = None,
+        check_type: str = "manual"  # "manual" or "scheduled"
+    ) -> None:
+        """
+        Send notification for check completion (success or failure).
+
+        Args:
+            db: Database session
+            repository_name: Name of repository
+            repository_path: Path to repository
+            status: "completed" or "failed"
+            duration_seconds: How long check took
+            error_message: Error message if failed
+            check_type: "manual" or "scheduled"
+        """
+        # Determine which settings to use
+        if status == "completed":
+            settings = db.query(NotificationSettings).filter(
+                NotificationSettings.enabled == True,
+                NotificationSettings.notify_on_check_success == True
+            ).all()
+        else:  # failed
+            settings = db.query(NotificationSettings).filter(
+                NotificationSettings.enabled == True,
+                NotificationSettings.notify_on_check_failure == True
+            ).all()
+
+        if not settings:
+            return
+
+        # Build content blocks
+        content_blocks = [
+            {'label': 'Repository', 'value': repository_name},
+            {'label': 'Path', 'value': repository_path},
+            {'label': 'Type', 'value': check_type.capitalize()},
+        ]
+
+        # Add duration if provided
+        if duration_seconds is not None:
+            if duration_seconds < 60:
+                duration_str = f"{duration_seconds}s"
+            elif duration_seconds < 3600:
+                duration_str = f"{duration_seconds // 60}m {duration_seconds % 60}s"
+            else:
+                hours = duration_seconds // 3600
+                mins = (duration_seconds % 3600) // 60
+                duration_str = f"{hours}h {mins}m"
+            content_blocks.append({'label': 'Duration', 'value': duration_str})
+
+        # Add error message if failed
+        if status == "failed" and error_message:
+            # Truncate long error messages
+            error_display = error_message if len(error_message) <= 200 else error_message[:200] + "..."
+            content_blocks.append({'label': 'Error', 'value': error_display})
+
+        # Create timestamp
+        completion_time = datetime.now()
+        timestamp_str = completion_time.strftime('%Y-%m-%d %H:%M:%S')
+
+        # Choose title and emoji based on status
+        if status == "completed":
+            emoji = "✅"
+            title_text = "Check Completed"
+        else:
+            emoji = "❌"
+            title_text = "Check Failed"
+
+        # Create HTML body for email
+        html_body = _create_html_email(
+            title=f"{emoji} Repository {title_text}",
+            content_blocks=content_blocks,
+            footer=f"Completed at {timestamp_str}"
+        )
+
+        # Create markdown body for chat services
+        markdown_body = _create_markdown_message(
+            title=f"{emoji} Repository {title_text}",
+            content_blocks=content_blocks,
+            footer=f"Completed at {timestamp_str}"
+        )
+
+        # Send to all enabled services with this event trigger
+        for setting in settings:
+            title = f"{emoji} Repository {title_text}"
+            if setting.title_prefix:
+                title = f"{setting.title_prefix} {title}"
+
+            await NotificationService._send_to_service(db, setting, title, html_body, markdown_body)
+
 
 # Global instance
 notification_service = NotificationService()

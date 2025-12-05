@@ -1,0 +1,366 @@
+import React, { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  FormControlLabel,
+  Checkbox,
+  Chip,
+  Stack,
+  Alert,
+} from '@mui/material'
+import { Plus, Edit, Trash2, Play, Shield } from 'lucide-react'
+import { repositoriesAPI } from '../services/api'
+import { toast } from 'react-hot-toast'
+import { formatDate, formatRelativeTime } from '../utils/dateUtils'
+import DataTable, { Column, ActionButton } from '../components/DataTable'
+import RepositorySelector from '../components/RepositorySelector'
+
+interface ScheduledCheck {
+  repository_id: number
+  repository_name: string
+  repository_path: string
+  check_interval_days: number | null
+  last_scheduled_check: string | null
+  next_scheduled_check: string | null
+  check_max_duration: number
+  notify_on_check_success: boolean
+  notify_on_check_failure: boolean
+  enabled: boolean
+}
+
+const ScheduledChecksSection: React.FC = () => {
+  const queryClient = useQueryClient()
+  const [showDialog, setShowDialog] = useState(false)
+  const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(null)
+  const [formData, setFormData] = useState({
+    interval_days: 7,
+    max_duration: 3600,
+  })
+  const [useCustomInterval, setUseCustomInterval] = useState(false)
+
+  // Fetch repositories
+  const { data: repositoriesData, isLoading: loadingRepositories } = useQuery({
+    queryKey: ['repositories'],
+    queryFn: async () => {
+      const response = await repositoriesAPI.list()
+      return response.data
+    },
+  })
+
+  const repositories = repositoriesData?.repositories || []
+
+  // Fetch scheduled checks for all repositories
+  const { data: scheduledChecks, isLoading } = useQuery({
+    queryKey: ['scheduled-checks'],
+    queryFn: async () => {
+      const checks: ScheduledCheck[] = []
+      for (const repo of repositories) {
+        try {
+          const response = await repositoriesAPI.getCheckSchedule(repo.id)
+          if (response.data.enabled) {
+            checks.push(response.data)
+          }
+        } catch (err) {
+          // Skip repos without check schedules
+        }
+      }
+      return checks
+    },
+    enabled: repositories.length > 0,
+  })
+
+  // Update check schedule mutation
+  const updateMutation = useMutation({
+    mutationFn: async ({ repoId, data }: { repoId: number; data: any }) => {
+      return await repositoriesAPI.updateCheckSchedule(repoId, data)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scheduled-checks'] })
+      queryClient.invalidateQueries({ queryKey: ['repositories'] })
+      toast.success('Check schedule updated')
+      setShowDialog(false)
+      setSelectedRepositoryId(null)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to update check schedule')
+    },
+  })
+
+  // Run check now mutation
+  const runCheckMutation = useMutation({
+    mutationFn: async (repoId: number) => {
+      return await repositoriesAPI.startCheck(repoId, {})
+    },
+    onSuccess: () => {
+      toast.success('Check started')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to start check')
+    },
+  })
+
+  const openAddDialog = () => {
+    setSelectedRepositoryId(null)
+    setFormData({
+      interval_days: 7,
+      max_duration: 3600,
+    })
+    setUseCustomInterval(false)
+    setShowDialog(true)
+  }
+
+  const openEditDialog = (check: ScheduledCheck) => {
+    setSelectedRepositoryId(check.repository_id)
+    const intervalDays = check.check_interval_days || 7
+    // Check if interval is custom (not in preset list)
+    const isCustom = ![7, 14, 30, 90].includes(intervalDays)
+    setFormData({
+      interval_days: intervalDays,
+      max_duration: check.check_max_duration,
+    })
+    setUseCustomInterval(isCustom)
+    setShowDialog(true)
+  }
+
+  const handleSubmit = () => {
+    if (!selectedRepositoryId) {
+      toast.error('Please select a repository')
+      return
+    }
+
+    updateMutation.mutate({
+      repoId: selectedRepositoryId,
+      data: formData,
+    })
+  }
+
+  const handleDelete = (check: ScheduledCheck) => {
+    if (confirm(`Disable scheduled check for ${check.repository_name}?`)) {
+      updateMutation.mutate({
+        repoId: check.repository_id,
+        data: { interval_days: 0 },
+      })
+    }
+  }
+
+  const columns: Column<ScheduledCheck>[] = [
+    {
+      id: 'repository',
+      label: 'Repository',
+      render: (check) => (
+        <Box>
+          <Typography variant="body2" fontWeight={500}>
+            {check.repository_name}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {check.repository_path}
+          </Typography>
+        </Box>
+      ),
+    },
+    {
+      id: 'interval',
+      label: 'Interval',
+      render: (check) => (
+        <Chip
+          label={`Every ${check.check_interval_days} days`}
+          size="small"
+          color="info"
+          variant="outlined"
+        />
+      ),
+    },
+    {
+      id: 'last_check',
+      label: 'Last Check',
+      render: (check) =>
+        check.last_scheduled_check ? formatDate(check.last_scheduled_check) : 'Never',
+    },
+    {
+      id: 'next_check',
+      label: 'Next Check',
+      render: (check) =>
+        check.next_scheduled_check ? (
+          <Box>
+            <Typography variant="body2">{formatDate(check.next_scheduled_check)}</Typography>
+            <Typography variant="caption" color="primary.main">
+              {formatRelativeTime(check.next_scheduled_check)}
+            </Typography>
+          </Box>
+        ) : (
+          'Not scheduled'
+        ),
+    },
+  ]
+
+  const actions: ActionButton<ScheduledCheck>[] = [
+    {
+      icon: <Play size={16} />,
+      label: 'Run Now',
+      onClick: (check) => runCheckMutation.mutate(check.repository_id),
+      color: 'primary',
+      tooltip: 'Run check now',
+    },
+    {
+      icon: <Edit size={16} />,
+      label: 'Edit',
+      onClick: (check) => openEditDialog(check),
+      color: 'default',
+      tooltip: 'Edit schedule',
+    },
+    {
+      icon: <Trash2 size={16} />,
+      label: 'Delete',
+      onClick: (check) => handleDelete(check),
+      color: 'error',
+      tooltip: 'Disable schedule',
+    },
+  ]
+
+  return (
+    <Box>
+      {/* Header */}
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box>
+          <Typography variant="h5" fontWeight={600} gutterBottom>
+            Scheduled Checks
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Automatically verify repository integrity on a schedule
+          </Typography>
+        </Box>
+        <Button
+          variant="outlined"
+          startIcon={<Plus size={18} />}
+          onClick={openAddDialog}
+          disabled={repositories.length === 0}
+        >
+          Add Check Schedule
+        </Button>
+      </Box>
+
+      {/* No repositories warning */}
+      {repositories.length === 0 && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          You need to create at least one repository before scheduling checks.
+        </Alert>
+      )}
+
+      {/* Scheduled Checks Table */}
+      <Card>
+        <CardContent>
+          <DataTable
+            data={scheduledChecks || []}
+            columns={columns}
+            actions={actions}
+            getRowKey={(check) => check.repository_id.toString()}
+            loading={isLoading}
+            enableHover={true}
+            emptyState={{
+              icon: <Shield size={48} />,
+              title: 'No scheduled checks',
+              description: 'Configure automatic repository checks to ensure data integrity',
+            }}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Add/Edit Dialog */}
+      <Dialog open={showDialog} onClose={() => setShowDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{selectedRepositoryId ? 'Edit Check Schedule' : 'Add Check Schedule'}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={3} sx={{ mt: 1 }}>
+            <RepositorySelector
+              repositories={repositories}
+              selectedRepositoryId={selectedRepositoryId}
+              onRepositoryChange={(repoId) => setSelectedRepositoryId(repoId)}
+              loading={loadingRepositories}
+            />
+
+            <Box>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={useCustomInterval}
+                    onChange={(e) => {
+                      setUseCustomInterval(e.target.checked)
+                      if (!e.target.checked) {
+                        setFormData({ ...formData, interval_days: 7 })
+                      }
+                    }}
+                  />
+                }
+                label="Use custom interval"
+              />
+            </Box>
+
+            {!useCustomInterval ? (
+              <FormControl fullWidth>
+                <InputLabel>Check Interval</InputLabel>
+                <Select
+                  value={formData.interval_days}
+                  onChange={(e) => setFormData({ ...formData, interval_days: Number(e.target.value) })}
+                  label="Check Interval"
+                >
+                  <MenuItem value={7}>Every 7 days (weekly)</MenuItem>
+                  <MenuItem value={14}>Every 14 days</MenuItem>
+                  <MenuItem value={30}>Every 30 days (monthly)</MenuItem>
+                  <MenuItem value={90}>Every 90 days (quarterly)</MenuItem>
+                </Select>
+              </FormControl>
+            ) : (
+              <TextField
+                label="Check Interval (days)"
+                type="number"
+                value={formData.interval_days}
+                onChange={(e) => setFormData({ ...formData, interval_days: Number(e.target.value) })}
+                helperText="Enter number of days between checks (e.g., 1 = daily, 7 = weekly, 30 = monthly)"
+                fullWidth
+                inputProps={{ min: 1 }}
+              />
+            )}
+
+            <TextField
+              label="Max Duration (seconds)"
+              type="number"
+              value={formData.max_duration}
+              onChange={(e) => setFormData({ ...formData, max_duration: Number(e.target.value) })}
+              helperText="Time limit for check operation (3600 = 1 hour)"
+              fullWidth
+              inputProps={{ min: 60 }}
+            />
+
+            <Alert severity="info" sx={{ mt: 1 }}>
+              Notification settings for check jobs can be configured in Settings → Notifications
+            </Alert>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowDialog(false)}>Cancel</Button>
+          <Button
+            onClick={handleSubmit}
+            variant="contained"
+            disabled={!selectedRepositoryId || updateMutation.isPending}
+          >
+            {selectedRepositoryId ? 'Update' : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  )
+}
+
+export default ScheduledChecksSection

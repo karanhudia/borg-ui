@@ -55,6 +55,8 @@ interface NotificationSetting {
   notify_on_backup_failure: boolean
   notify_on_restore_success: boolean
   notify_on_restore_failure: boolean
+  notify_on_check_success: boolean
+  notify_on_check_failure: boolean
   notify_on_schedule_failure: boolean
   created_at: string
   updated_at: string
@@ -79,6 +81,8 @@ const NotificationsTab: React.FC = () => {
     notify_on_backup_failure: true,
     notify_on_restore_success: false,
     notify_on_restore_failure: true,
+    notify_on_check_success: false,
+    notify_on_check_failure: true,
     notify_on_schedule_failure: true,
   })
 
@@ -161,6 +165,8 @@ const NotificationsTab: React.FC = () => {
       notify_on_backup_failure: true,
       notify_on_restore_success: false,
       notify_on_restore_failure: true,
+      notify_on_check_success: false,
+      notify_on_check_failure: true,
       notify_on_schedule_failure: true,
     })
   }
@@ -177,6 +183,8 @@ const NotificationsTab: React.FC = () => {
       notify_on_backup_failure: notification.notify_on_backup_failure,
       notify_on_restore_success: notification.notify_on_restore_success,
       notify_on_restore_failure: notification.notify_on_restore_failure,
+      notify_on_check_success: notification.notify_on_check_success,
+      notify_on_check_failure: notification.notify_on_check_failure,
       notify_on_schedule_failure: notification.notify_on_schedule_failure,
     })
     setShowDialog(true)
@@ -410,6 +418,22 @@ const NotificationsTab: React.FC = () => {
                             variant="outlined"
                           />
                         )}
+                        {notification.notify_on_check_failure && (
+                          <Chip
+                            label="Check Fail"
+                            size="small"
+                            color="error"
+                            variant="outlined"
+                          />
+                        )}
+                        {notification.notify_on_check_success && (
+                          <Chip
+                            label="Check OK"
+                            size="small"
+                            color="success"
+                            variant="outlined"
+                          />
+                        )}
                         {notification.notify_on_schedule_failure && (
                           <Chip
                             label="Scheduler Error"
@@ -583,6 +607,40 @@ const NotificationsTab: React.FC = () => {
                       checked={formData.notify_on_restore_failure}
                       onChange={(e) =>
                         setFormData({ ...formData, notify_on_restore_failure: e.target.checked })
+                      }
+                    />
+                  }
+                  label="Failure"
+                />
+              </Box>
+            </Box>
+
+            {/* Check Jobs Category */}
+            <Box sx={{ mb: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                <Settings size={16} />
+                <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                  Check Jobs
+                </Typography>
+              </Box>
+              <Box sx={{ pl: 2 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.notify_on_check_success}
+                      onChange={(e) =>
+                        setFormData({ ...formData, notify_on_check_success: e.target.checked })
+                      }
+                    />
+                  }
+                  label="Success"
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.notify_on_check_failure}
+                      onChange={(e) =>
+                        setFormData({ ...formData, notify_on_check_failure: e.target.checked })
                       }
                     />
                   }
