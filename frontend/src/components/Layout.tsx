@@ -141,7 +141,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <Divider />
         <List sx={{ pt: 0 }}>
           {navigationWithKeys.map((item) => {
-            const isActive = location.pathname === item.href
+            const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/')
             const isEnabled = tabEnablement[item.key]
             const disabledReason = getTabDisabledReason(item.key)
             const Icon = item.icon
