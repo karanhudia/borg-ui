@@ -664,3 +664,133 @@ class TestRepositoriesJobStatus:
         assert response.status_code == 200
         data = response.json()
         assert "has_running_jobs" in data or "jobs" in data or isinstance(data, list)
+
+@pytest.mark.unit
+class TestRepositoryCheckSchedule:
+    """Test repository check schedule endpoints"""
+
+    def test_get_check_schedule(self, test_client: TestClient, admin_headers, test_db):
+        """Test getting check schedule for a repository"""
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+            check_interval_days=7,
+            check_max_duration=3600,
+            notify_on_check_success=False,
+            notify_on_check_failure=True
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.get(f"/api/repositories/{repo.id}/check-schedule", headers=admin_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["repository_id"] == repo.id
+        assert data["check_interval_days"] == 7
+        assert data["check_max_duration"] == 3600
+        assert data["notify_on_check_success"] == False
+        assert data["notify_on_check_failure"] == True
+        assert data["enabled"] == True
+
+    def test_get_check_schedule_disabled(self, test_client: TestClient, admin_headers, test_db):
+        """Test getting check schedule for repository with no schedule"""
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+            check_interval_days=None
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.get(f"/api/repositories/{repo.id}/check-schedule", headers=admin_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["repository_id"] == repo.id
+        assert data["check_interval_days"] is None
+        assert data["enabled"] == False
+
+    def test_update_check_schedule(self, test_client: TestClient, admin_headers, test_db):
+        """Test updating check schedule for a repository"""
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local"
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        # Update check schedule
+        payload = {
+            "interval_days": 14,
+            "max_duration": 7200,
+            "notify_on_success": True,
+            "notify_on_failure": False
+        }
+        response = test_client.put(
+            f"/api/repositories/{repo.id}/check-schedule",
+            headers=admin_headers,
+            json=payload
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] == True
+        assert data["repository"]["check_interval_days"] == 14
+        assert data["repository"]["check_max_duration"] == 7200
+        assert data["repository"]["notify_on_check_success"] == True
+        assert data["repository"]["notify_on_check_failure"] == False
+        assert data["repository"]["next_scheduled_check"] is not None
+
+    def test_update_check_schedule_disable(self, test_client: TestClient, admin_headers, test_db):
+        """Test disabling check schedule for a repository"""
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+            check_interval_days=7
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        # Disable check schedule
+        payload = {"interval_days": 0}
+        response = test_client.put(
+            f"/api/repositories/{repo.id}/check-schedule",
+            headers=admin_headers,
+            json=payload
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] == True
+        assert data["repository"]["check_interval_days"] is None
+        assert data["repository"]["next_scheduled_check"] is None
+
+    def test_get_check_schedule_not_found(self, test_client: TestClient, admin_headers):
+        """Test getting check schedule for non-existent repository"""
+        response = test_client.get("/api/repositories/99999/check-schedule", headers=admin_headers)
+
+        assert response.status_code == 404
+
+    def test_update_check_schedule_not_found(self, test_client: TestClient, admin_headers):
+        """Test updating check schedule for non-existent repository"""
+        payload = {"interval_days": 7}
+        response = test_client.put(
+            "/api/repositories/99999/check-schedule",
+            headers=admin_headers,
+            json=payload
+        )
+
+        assert response.status_code == 404

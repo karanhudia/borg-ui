@@ -65,6 +65,14 @@ class Repository(Base):
     # Custom flags for borg create command (advanced users)
     custom_flags = Column(Text, nullable=True)  # Custom command-line flags for borg create (e.g., "--stats --progress")
 
+    # Scheduled checks
+    check_interval_days = Column(Integer, nullable=True)  # NULL = disabled, 7 = weekly, 30 = monthly
+    last_scheduled_check = Column(DateTime, nullable=True)  # Last scheduled check execution time
+    next_scheduled_check = Column(DateTime, nullable=True)  # Next scheduled check time
+    check_max_duration = Column(Integer, default=3600)  # Max check duration in seconds (for partial checks)
+    notify_on_check_success = Column(Boolean, default=False, nullable=False)  # Per-repository override
+    notify_on_check_failure = Column(Boolean, default=True, nullable=False)  # Per-repository override
+
     # Relationships
     ssh_key = relationship("SSHKey", back_populates="repositories")
 
@@ -214,6 +222,7 @@ class CheckJob(Base):
     max_duration = Column(Integer, nullable=True)  # Maximum duration in seconds (for partial checks)
     process_pid = Column(Integer, nullable=True)  # Container PID for orphan detection
     process_start_time = Column(BigInteger, nullable=True)  # Process start time in jiffies for PID uniqueness
+    scheduled_check = Column(Boolean, default=False, nullable=False)  # True if triggered by scheduler, False if manual
     created_at = Column(DateTime, default=utc_now)
 
 class CompactJob(Base):
@@ -268,6 +277,8 @@ class NotificationSettings(Base):
     notify_on_restore_success = Column(Boolean, default=False, nullable=False)
     notify_on_restore_failure = Column(Boolean, default=True, nullable=False)
     notify_on_schedule_failure = Column(Boolean, default=True, nullable=False)
+    notify_on_check_success = Column(Boolean, default=False, nullable=False)
+    notify_on_check_failure = Column(Boolean, default=True, nullable=False)
 
     # Timestamps
     created_at = Column(DateTime, default=utc_now, nullable=False)

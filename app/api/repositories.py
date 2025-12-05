@@ -2199,3 +2199,101 @@ async def get_running_jobs(
     except Exception as e:
         logger.error("Failed to get running jobs", error=str(e), repository_id=repo_id)
         raise HTTPException(status_code=500, detail=f"Failed to get running jobs: {str(e)}")
+
+@router.put("/{repo_id}/check-schedule")
+async def update_check_schedule(
+    repo_id: int,
+    request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update scheduled check configuration for repository"""
+    try:
+        from datetime import datetime, timedelta
+
+        repo = db.query(Repository).filter(Repository.id == repo_id).first()
+        if not repo:
+            raise HTTPException(status_code=404, detail="Repository not found")
+
+        # Update check schedule settings
+        interval_days = request.get("interval_days")
+        if interval_days is not None:
+            repo.check_interval_days = interval_days if interval_days > 0 else None
+
+        max_duration = request.get("max_duration")
+        if max_duration is not None:
+            repo.check_max_duration = max_duration
+
+        notify_on_success = request.get("notify_on_success")
+        if notify_on_success is not None:
+            repo.notify_on_check_success = notify_on_success
+
+        notify_on_failure = request.get("notify_on_failure")
+        if notify_on_failure is not None:
+            repo.notify_on_check_failure = notify_on_failure
+
+        # Calculate next check time
+        if repo.check_interval_days and repo.check_interval_days > 0:
+            # If there's a last scheduled check, use that as base, otherwise use now
+            last_check = repo.last_scheduled_check or datetime.utcnow()
+            repo.next_scheduled_check = last_check + timedelta(days=repo.check_interval_days)
+        else:
+            # Disabled - clear next scheduled check
+            repo.next_scheduled_check = None
+
+        db.commit()
+        db.refresh(repo)
+
+        logger.info("Check schedule updated",
+                   repo_id=repo_id,
+                   interval_days=repo.check_interval_days,
+                   next_check=repo.next_scheduled_check)
+
+        return {
+            "success": True,
+            "repository": {
+                "id": repo.id,
+                "name": repo.name,
+                "check_interval_days": repo.check_interval_days,
+                "last_scheduled_check": serialize_datetime(repo.last_scheduled_check),
+                "next_scheduled_check": serialize_datetime(repo.next_scheduled_check),
+                "check_max_duration": repo.check_max_duration,
+                "notify_on_check_success": repo.notify_on_check_success,
+                "notify_on_check_failure": repo.notify_on_check_failure
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to update check schedule", error=str(e), repo_id=repo_id)
+        raise HTTPException(status_code=500, detail=f"Failed to update check schedule: {str(e)}")
+
+@router.get("/{repo_id}/check-schedule")
+async def get_check_schedule(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get scheduled check configuration for repository"""
+    try:
+        repo = db.query(Repository).filter(Repository.id == repo_id).first()
+        if not repo:
+            raise HTTPException(status_code=404, detail="Repository not found")
+
+        return {
+            "repository_id": repo.id,
+            "repository_name": repo.name,
+            "repository_path": repo.path,
+            "check_interval_days": repo.check_interval_days,
+            "last_scheduled_check": serialize_datetime(repo.last_scheduled_check),
+            "next_scheduled_check": serialize_datetime(repo.next_scheduled_check),
+            "check_max_duration": repo.check_max_duration,
+            "notify_on_check_success": repo.notify_on_check_success,
+            "notify_on_check_failure": repo.notify_on_check_failure,
+            "enabled": repo.check_interval_days is not None and repo.check_interval_days > 0
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get check schedule", error=str(e), repo_id=repo_id)
+        raise HTTPException(status_code=500, detail=f"Failed to get check schedule: {str(e)}")
