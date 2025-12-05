@@ -37,6 +37,7 @@ import {
   DataUsage,
   Compress,
   Inventory,
+  FileUpload,
 } from '@mui/icons-material'
 import { repositoriesAPI, sshKeysAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
@@ -792,6 +793,14 @@ export default function Repositories() {
                 sx={{ flexShrink: 0 }}
               >
                 Create Repository
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<FileUpload />}
+                onClick={() => openRepositoryModal('import')}
+                sx={{ flexShrink: 0 }}
+              >
+                Import Existing
               </Button>
             </Stack>
           )}
