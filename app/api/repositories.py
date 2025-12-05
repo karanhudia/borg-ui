@@ -75,46 +75,84 @@ def setup_borg_env(base_env=None, passphrase=None, ssh_opts=None):
     return env
 
 # Helper function to update repository archive count
-async def update_repository_archive_count(repository: Repository, db: Session) -> bool:
+async def update_repository_stats(repository: Repository, db: Session) -> bool:
     """
-    Update the archive count for a repository by querying Borg.
+    Update the archive count and repository size stats by querying Borg.
     Returns True if successful, False otherwise.
     """
     try:
+        # Get archive list and count
         list_result = await borg.list_archives(
             repository.path,
             remote_path=repository.remote_path,
             passphrase=repository.passphrase
         )
 
+        archive_count = 0
         if list_result.get("success"):
             try:
                 archives_data = json.loads(list_result.get("stdout", "{}"))
                 if isinstance(archives_data, dict):
                     archive_count = len(archives_data.get("archives", []))
-                    old_count = repository.archive_count
-                    repository.archive_count = archive_count
-                    db.commit()
-                    logger.info("Updated archive count",
-                              repository=repository.name,
-                              old_count=old_count,
-                              new_count=archive_count)
-                    return True
             except json.JSONDecodeError as e:
                 logger.error("Failed to parse archive list JSON",
                            repository=repository.name,
                            error=str(e),
                            stdout=list_result.get("stdout", "")[:200])
-        else:
-            logger.error("Failed to list archives for count update",
-                       repository=repository.name,
-                       stderr=list_result.get("stderr", "")[:200])
-        return False
+
+        # Get repository info for size stats
+        info_result = await borg.get_repository_info(
+            repository.path,
+            remote_path=repository.remote_path,
+            passphrase=repository.passphrase
+        )
+
+        total_size = None
+        if info_result.get("success"):
+            try:
+                info_data = json.loads(info_result.get("stdout", "{}"))
+                cache = info_data.get("cache", {}).get("stats", {})
+                if cache:
+                    # Get total size (unique csize is the actual size on disk)
+                    unique_csize = cache.get("unique_csize", 0)
+                    if unique_csize > 0:
+                        # Convert bytes to human readable format
+                        total_size = format_bytes(unique_csize)
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.warning("Failed to parse repository info for size stats",
+                             repository=repository.name,
+                             error=str(e))
+
+        # Update repository
+        old_count = repository.archive_count
+        old_size = repository.total_size
+        repository.archive_count = archive_count
+        if total_size:
+            repository.total_size = total_size
+
+        db.commit()
+        logger.info("Updated repository stats",
+                  repository=repository.name,
+                  archive_count_old=old_count,
+                  archive_count_new=archive_count,
+                  size_old=old_size,
+                  size_new=total_size)
+        return True
+
     except Exception as e:
-        logger.error("Exception while updating archive count",
+        logger.error("Exception while updating repository stats",
                    repository=repository.name,
                    error=str(e))
         return False
+
+# Helper function to format bytes to human readable format
+def format_bytes(bytes_size: int) -> str:
+    """Format bytes to human readable string (e.g., '1.23 GB')"""
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB', 'PB']:
+        if bytes_size < 1024.0:
+            return f"{bytes_size:.2f} {unit}"
+        bytes_size /= 1024.0
+    return f"{bytes_size:.2f} EB"
 
 # Helper function to format datetime with timezone
 def format_datetime(dt):
@@ -637,7 +675,7 @@ async def import_repository(
         db.refresh(repository)
 
         # Update archive count by listing archives (borg info doesn't return archives)
-        await update_repository_archive_count(repository, db)
+        await update_repository_stats(repository, db)
 
         logger.info("Repository imported successfully",
                    name=repo_data.name,
@@ -994,7 +1032,7 @@ async def prune_repository(
 
         # Update archive count after successful prune (not dry run)
         if not dry_run and prune_result.get("success"):
-            await update_repository_archive_count(repository, db)
+            await update_repository_stats(repository, db)
 
         return {
             "success": True,
