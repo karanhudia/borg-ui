@@ -55,7 +55,13 @@ async def export_borgmatic_config(
         # If only one repository, return single YAML file
         if len(configs) == 1:
             import yaml
-            yaml_content = yaml.dump(configs[0], default_flow_style=False, sort_keys=False)
+            config = configs[0].copy()
+
+            # Remove metadata if not requested
+            if not request.include_borg_ui_metadata:
+                config.pop('borg_ui_metadata', None)
+
+            yaml_content = yaml.dump(config, default_flow_style=False, sort_keys=False)
 
             filename = "borgmatic-config.yaml"
             return Response(
