@@ -81,7 +81,7 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
     Returns True if successful, False otherwise.
     """
     try:
-        # Get archive list and count
+        # Get archive list and count - this also includes cache stats
         list_result = await borg.list_archives(
             repository.path,
             remote_path=repository.remote_path,
@@ -89,38 +89,29 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
         )
 
         archive_count = 0
+        total_size = None
+
         if list_result.get("success"):
             try:
                 archives_data = json.loads(list_result.get("stdout", "{}"))
                 if isinstance(archives_data, dict):
+                    # Get archive count
                     archive_count = len(archives_data.get("archives", []))
+
+                    # Get total size from cache stats (if available)
+                    cache = archives_data.get("cache", {}).get("stats", {})
+                    if cache:
+                        # Get total size (unique csize is the actual size on disk)
+                        unique_csize = cache.get("unique_csize", 0)
+                        if unique_csize > 0:
+                            # Convert bytes to human readable format
+                            total_size = format_bytes(unique_csize)
+
             except json.JSONDecodeError as e:
                 logger.error("Failed to parse archive list JSON",
                            repository=repository.name,
                            error=str(e),
                            stdout=list_result.get("stdout", "")[:200])
-
-        # Get repository info for size stats
-        info_result = await borg.get_repository_info(
-            repository.path,
-            remote_path=repository.remote_path
-        )
-
-        total_size = None
-        if info_result.get("success"):
-            try:
-                info_data = json.loads(info_result.get("stdout", "{}"))
-                cache = info_data.get("cache", {}).get("stats", {})
-                if cache:
-                    # Get total size (unique csize is the actual size on disk)
-                    unique_csize = cache.get("unique_csize", 0)
-                    if unique_csize > 0:
-                        # Convert bytes to human readable format
-                        total_size = format_bytes(unique_csize)
-            except (json.JSONDecodeError, KeyError) as e:
-                logger.warning("Failed to parse repository info for size stats",
-                             repository=repository.name,
-                             error=str(e))
 
         # Update repository
         old_count = repository.archive_count
