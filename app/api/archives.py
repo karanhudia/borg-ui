@@ -12,7 +12,7 @@ from app.database.database import get_db
 from app.database.models import User, Repository
 from app.core.security import get_current_user
 from app.core.borg import borg
-from app.api.repositories import update_repository_archive_count
+from app.api.repositories import update_repository_stats
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -245,7 +245,7 @@ async def delete_archive(
             )
 
         # Update archive count after successful deletion
-        await update_repository_archive_count(repo, db)
+        await update_repository_stats(repo, db)
 
         return {"message": "Archive deleted successfully"}
     except HTTPException:
