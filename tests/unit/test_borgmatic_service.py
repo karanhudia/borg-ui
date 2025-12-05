@@ -84,9 +84,11 @@ class TestBorgmaticExportService:
 
         assert yaml_content
         data = yaml.safe_load(yaml_content)
-        assert 'borg_ui_export' in data
-        assert 'configurations' in data
-        assert len(data['configurations']) > 0
+        # New format: flat borgmatic structure
+        assert 'location' in data
+        assert 'repositories' in data['location']
+        assert len(data['location']['repositories']) > 0
+        assert 'storage' in data
 
     def test_export_ssh_repository(self, db_session):
         """Test exporting SSH repository."""
@@ -230,23 +232,22 @@ storage:
         assert repo.path == '/backup/ssh-repo.borg'
 
     def test_import_borg_ui_export(self, db_session):
-        """Test importing Borg UI export format (round-trip)."""
+        """Test importing Borg UI export format (round-trip) - new format."""
         yaml_content = """
-borg_ui_export:
-  version: "1.0"
-  export_date: "2025-12-05T10:00:00Z"
-  total_repositories: 1
+location:
+  source_directories:
+    - /home/user
+  repositories:
+    - /backup/repo.borg
 
-configurations:
-  - location:
-      source_directories:
-        - /home/user
-      repositories:
-        - /backup/repo.borg
-    storage:
-      compression: lz4
-    borg_ui_metadata:
-      repository:
+storage:
+  compression: lz4
+
+borg_ui_metadata:
+  export_version: "1.0"
+  export_date: "2025-12-05T10:00:00Z"
+  repositories:
+    - repository:
         name: test-repo
         encryption: repokey
         mode: full
@@ -276,14 +277,18 @@ configurations:
 
     def test_import_rename_strategy(self, db_session, sample_repository):
         """Test rename merge strategy."""
+        # Use a different path to avoid path uniqueness constraint
         yaml_content = f"""
 location:
   repositories:
-    - {sample_repository.path}
+    - /backup/another-repo.borg
 
 borg_ui_metadata:
-  repository:
-    name: {sample_repository.name}
+  repositories:
+    - repository:
+        name: {sample_repository.name}
+        encryption: repokey
+        mode: full
 """
 
         import_service = BorgmaticImportService(db_session)

@@ -122,7 +122,7 @@ class BorgmaticExportService:
             multi_file: If True, return dict with filename: yaml_content
 
         Returns:
-            YAML string or dict of YAML strings (if multi_file=True)
+            YAML string in borgmatic-compatible format
         """
         configs = self.export_all_repositories(
             repository_ids,
@@ -133,18 +133,10 @@ class BorgmaticExportService:
         if not configs:
             return ""
 
-        # Add export metadata header
-        export_data = {
-            'borg_ui_export': {
-                'version': '1.0',
-                'app_version': '1.26.0',  # TODO: Get from actual version file
-                'export_date': datetime.now(timezone.utc).isoformat(),
-                'total_repositories': len(configs)
-            },
-            'configurations': configs
-        }
+        # Merge all configurations into a single borgmatic-compatible format
+        merged_config = self._merge_configs_to_borgmatic(configs, include_borg_ui_metadata)
 
-        return yaml.dump(export_data, default_flow_style=False, sort_keys=False)
+        return yaml.dump(merged_config, default_flow_style=False, sort_keys=False)
 
     def _build_location_section(self, repository: Repository) -> Dict[str, Any]:
         """Build borgmatic location section."""
@@ -296,6 +288,120 @@ class BorgmaticExportService:
             ScheduledJob.repository == repository.path
         ).first()
 
+    def _merge_configs_to_borgmatic(
+        self,
+        configs: List[Dict[str, Any]],
+        include_borg_ui_metadata: bool
+    ) -> Dict[str, Any]:
+        """
+        Merge multiple repository configs into single borgmatic-compatible format.
+
+        Args:
+            configs: List of individual repository configurations
+            include_borg_ui_metadata: Whether to include Borg UI metadata
+
+        Returns:
+            Merged borgmatic configuration
+        """
+        if not configs:
+            return {}
+
+        # If only one config and no metadata, return it as-is
+        if len(configs) == 1 and not include_borg_ui_metadata:
+            config = configs[0].copy()
+            config.pop('borg_ui_metadata', None)
+            return config
+
+        # For multiple repositories or when including metadata, create proper structure
+        merged = {
+            'location': {},
+            'storage': {},
+        }
+
+        # Collect all repositories
+        all_repositories = []
+        all_source_directories = set()
+        all_exclude_patterns = set()
+
+        # Merge location sections
+        for config in configs:
+            location = config.get('location', {})
+
+            # Add repository paths
+            repos = location.get('repositories', [])
+            all_repositories.extend(repos)
+
+            # Merge source directories
+            source_dirs = location.get('source_directories', [])
+            all_source_directories.update(source_dirs)
+
+            # Merge exclude patterns
+            exclude_patterns = location.get('exclude_patterns', [])
+            all_exclude_patterns.update(exclude_patterns)
+
+        # Build merged location section
+        if all_source_directories:
+            merged['location']['source_directories'] = sorted(list(all_source_directories))
+        merged['location']['repositories'] = all_repositories
+        if all_exclude_patterns:
+            merged['location']['exclude_patterns'] = sorted(list(all_exclude_patterns))
+
+        # Use storage settings from first repository
+        if configs:
+            storage = configs[0].get('storage', {})
+            # Remove passphrase note for merged config
+            storage_copy = storage.copy()
+            storage_copy.pop('_passphrase_note', None)
+            merged['storage'] = storage_copy
+
+        # Use retention settings from first repository that has them
+        for config in configs:
+            if 'retention' in config:
+                merged['retention'] = config['retention']
+                break
+
+        # Use consistency settings from first repository that has them
+        for config in configs:
+            if 'consistency' in config:
+                merged['consistency'] = config['consistency']
+                break
+
+        # Merge hooks from all repositories
+        all_before_backup = []
+        all_after_backup = []
+
+        for config in configs:
+            hooks = config.get('hooks', {})
+            all_before_backup.extend(hooks.get('before_backup', []))
+            all_after_backup.extend(hooks.get('after_backup', []))
+
+        if all_before_backup or all_after_backup:
+            merged['hooks'] = {}
+            if all_before_backup:
+                merged['hooks']['before_backup'] = all_before_backup
+            if all_after_backup:
+                merged['hooks']['after_backup'] = all_after_backup
+
+        # Add Borg UI metadata if requested
+        if include_borg_ui_metadata:
+            # Store metadata for each repository separately
+            all_metadata = []
+            for config in configs:
+                if 'borg_ui_metadata' in config:
+                    all_metadata.append(config['borg_ui_metadata'])
+
+            if all_metadata:
+                merged['borg_ui_metadata'] = {
+                    'export_version': '1.0',
+                    'export_date': datetime.now(timezone.utc).isoformat(),
+                    'repositories': all_metadata
+                }
+
+        # Add note about security
+        merged['_security_note'] = 'SSH keys and repository passphrases must be configured manually'
+
+        return merged
+
 
 class BorgmaticImportService:
     """Handles importing borgmatic configurations into Borg UI."""
@@ -331,11 +437,17 @@ class BorgmaticImportService:
                 'error': f'Invalid YAML: {str(e)}'
             }
 
-        # Check if this is a Borg UI export
-        is_borg_ui_export = 'borg_ui_export' in data
+        # Check if this is a Borg UI export (old format with borg_ui_export wrapper)
+        is_old_borg_ui_export = 'borg_ui_export' in data and 'configurations' in data
 
-        if is_borg_ui_export:
+        # Check if this is a new Borg UI export (has borg_ui_metadata in root)
+        has_borg_ui_metadata = 'borg_ui_metadata' in data
+
+        if is_old_borg_ui_export:
             return self._import_borg_ui_export(data, merge_strategy, dry_run)
+        elif has_borg_ui_metadata:
+            # New format: flat borgmatic with borg_ui_metadata
+            return self._import_borgmatic_with_metadata(data, merge_strategy, dry_run)
         else:
             return self._import_borgmatic_config(data, merge_strategy, dry_run)
 
@@ -374,6 +486,80 @@ class BorgmaticImportService:
 
         return summary
 
+    def _import_borgmatic_with_metadata(
+        self,
+        data: Dict[str, Any],
+        merge_strategy: str,
+        dry_run: bool
+    ) -> Dict[str, Any]:
+        """Import new Borg UI export format with borg_ui_metadata."""
+        summary = {
+            'success': True,
+            'repositories_created': 0,
+            'repositories_updated': 0,
+            'schedules_created': 0,
+            'schedules_updated': 0,
+            'warnings': [],
+            'errors': []
+        }
+
+        # Get metadata for all repositories
+        metadata = data.get('borg_ui_metadata', {})
+        repositories_metadata = metadata.get('repositories', [])
+
+        # Get repository paths from location section
+        location = data.get('location', {})
+        repo_paths = location.get('repositories', [])
+
+        # Import each repository
+        for i, repo_path in enumerate(repo_paths):
+            try:
+                # Get corresponding metadata if available
+                repo_metadata = repositories_metadata[i] if i < len(repositories_metadata) else {}
+
+                # Build a config for this single repository
+                single_config = {
+                    'location': {
+                        'repositories': [repo_path]
+                    },
+                    'storage': data.get('storage', {}),
+                    'borg_ui_metadata': repo_metadata
+                }
+
+                # Add source directories if present (shared across all repos)
+                if location.get('source_directories'):
+                    single_config['location']['source_directories'] = location['source_directories']
+
+                # Add exclude patterns if present (shared across all repos)
+                if location.get('exclude_patterns'):
+                    single_config['location']['exclude_patterns'] = location['exclude_patterns']
+
+                # Add retention if present
+                if 'retention' in data:
+                    single_config['retention'] = data['retention']
+
+                # Add consistency if present
+                if 'consistency' in data:
+                    single_config['consistency'] = data['consistency']
+
+                # Add hooks if present (shared across all repos)
+                if 'hooks' in data:
+                    single_config['hooks'] = data['hooks']
+
+                result = self._import_single_repository(single_config, merge_strategy, dry_run)
+                summary['repositories_created'] += result.get('repository_created', 0)
+                summary['repositories_updated'] += result.get('repository_updated', 0)
+                summary['schedules_created'] += result.get('schedule_created', 0)
+                summary['schedules_updated'] += result.get('schedule_updated', 0)
+                summary['warnings'].extend(result.get('warnings', []))
+            except Exception as e:
+                summary['errors'].append(f"Failed to import repository {repo_path}: {str(e)}")
+
+        if not dry_run and summary['repositories_created'] + summary['repositories_updated'] > 0:
+            self.db.commit()
+
+        return summary
+
     def _import_borgmatic_config(
         self,
         data: Dict[str, Any],
@@ -381,8 +567,70 @@ class BorgmaticImportService:
         dry_run: bool
     ) -> Dict[str, Any]:
         """Import standard borgmatic configuration."""
-        # Standard borgmatic format - single repository config
-        return self._import_single_repository(data, merge_strategy, dry_run)
+        summary = {
+            'success': True,
+            'repositories_created': 0,
+            'repositories_updated': 0,
+            'schedules_created': 0,
+            'schedules_updated': 0,
+            'warnings': [],
+            'errors': []
+        }
+
+        # Standard borgmatic format can have multiple repositories
+        location = data.get('location', {})
+        repo_paths = location.get('repositories', [])
+
+        if not repo_paths:
+            return {
+                'success': False,
+                'error': 'No repositories found in configuration'
+            }
+
+        # Import each repository
+        for repo_path in repo_paths:
+            try:
+                # Build a config for this single repository
+                single_config = {
+                    'location': {
+                        'repositories': [repo_path]
+                    },
+                    'storage': data.get('storage', {})
+                }
+
+                # Add source directories if present (shared across all repos)
+                if location.get('source_directories'):
+                    single_config['location']['source_directories'] = location['source_directories']
+
+                # Add exclude patterns if present (shared across all repos)
+                if location.get('exclude_patterns'):
+                    single_config['location']['exclude_patterns'] = location['exclude_patterns']
+
+                # Add retention if present
+                if 'retention' in data:
+                    single_config['retention'] = data['retention']
+
+                # Add consistency if present
+                if 'consistency' in data:
+                    single_config['consistency'] = data['consistency']
+
+                # Add hooks if present (shared across all repos)
+                if 'hooks' in data:
+                    single_config['hooks'] = data['hooks']
+
+                result = self._import_single_repository(single_config, merge_strategy, dry_run)
+                summary['repositories_created'] += result.get('repository_created', 0)
+                summary['repositories_updated'] += result.get('repository_updated', 0)
+                summary['schedules_created'] += result.get('schedule_created', 0)
+                summary['schedules_updated'] += result.get('schedule_updated', 0)
+                summary['warnings'].extend(result.get('warnings', []))
+            except Exception as e:
+                summary['errors'].append(f"Failed to import repository {repo_path}: {str(e)}")
+
+        if not dry_run and summary['repositories_created'] + summary['repositories_updated'] > 0:
+            self.db.commit()
+
+        return summary
 
     def _import_single_repository(
         self,
@@ -576,8 +824,8 @@ class BorgmaticImportService:
             user_host, path = repo_path.split(':', 1)
             username, host = user_host.split('@', 1)
 
-            # Extract name from path (last directory)
-            name = path.rstrip('/').split('/')[-1].replace('.borg', '')
+            # Prefer name from metadata, fallback to extracting from path
+            name = metadata.get('name') or path.rstrip('/').split('/')[-1].replace('.borg', '')
 
             ssh_info = {
                 'host': host,
@@ -589,7 +837,8 @@ class BorgmaticImportService:
             return name, path, 'ssh', ssh_info
         else:
             # Local repository
-            name = repo_path.rstrip('/').split('/')[-1].replace('.borg', '')
+            # Prefer name from metadata, fallback to extracting from path
+            name = metadata.get('name') or repo_path.rstrip('/').split('/')[-1].replace('.borg', '')
             return name, repo_path, 'local', None
 
     def _generate_unique_name(
