@@ -155,21 +155,34 @@ class BorgInterface:
                     cache_dir = os.path.expanduser(f"~/.cache/borg/{repo_id}")
 
                     if os.path.exists(cache_dir):
-                        # Remove lock files in cache directory
-                        lock_files = glob.glob(f"{cache_dir}/lock.*")
-                        if lock_files:
-                            logger.info("Breaking cache locks", cache_dir=cache_dir, count=len(lock_files))
-                            for lock_file in lock_files:
+                        # Remove all types of lock files/directories in cache directory
+                        # Borg 1.4+ uses: lock.exclusive, lock.roster, and lock.* patterns
+                        lock_patterns = [
+                            f"{cache_dir}/lock.*",           # Legacy lock files
+                            f"{cache_dir}/lock.exclusive",   # Borg 1.4+ exclusive lock
+                            f"{cache_dir}/lock.roster"       # Borg 1.4+ roster lock
+                        ]
+
+                        all_locks = []
+                        for pattern in lock_patterns:
+                            all_locks.extend(glob.glob(pattern))
+
+                        # Remove duplicates
+                        all_locks = list(set(all_locks))
+
+                        if all_locks:
+                            logger.info("Breaking cache locks", cache_dir=cache_dir, count=len(all_locks), locks=all_locks)
+                            for lock_path in all_locks:
                                 try:
-                                    if os.path.isfile(lock_file):
-                                        os.unlink(lock_file)
-                                        logger.info("Removed cache lock file", file=lock_file)
-                                    elif os.path.isdir(lock_file):
+                                    if os.path.isfile(lock_path):
+                                        os.unlink(lock_path)
+                                        logger.info("Removed cache lock file", file=lock_path)
+                                    elif os.path.isdir(lock_path):
                                         import shutil
-                                        shutil.rmtree(lock_file)
-                                        logger.info("Removed cache lock directory", dir=lock_file)
+                                        shutil.rmtree(lock_path)
+                                        logger.info("Removed cache lock directory", dir=lock_path)
                                 except Exception as e:
-                                    logger.warning("Failed to remove cache lock", file=lock_file, error=str(e))
+                                    logger.warning("Failed to remove cache lock", path=lock_path, error=str(e))
                         else:
                             logger.info("No cache locks found", cache_dir=cache_dir)
                     else:
