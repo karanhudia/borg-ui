@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from app.database.database import get_db
 from app.services.borgmatic_service import BorgmaticExportService, BorgmaticImportService
-from app.dependencies import get_current_user
+from app.core.security import get_current_user
 
 router = APIRouter(prefix="/config", tags=["config"])
 
