@@ -970,18 +970,22 @@ async def prune_repository(
             raise HTTPException(status_code=404, detail="Repository not found")
 
         # Extract retention policy from request
+        keep_hourly = request.get("keep_hourly", 0)
         keep_daily = request.get("keep_daily", 7)
         keep_weekly = request.get("keep_weekly", 4)
         keep_monthly = request.get("keep_monthly", 6)
+        keep_quarterly = request.get("keep_quarterly", 0)
         keep_yearly = request.get("keep_yearly", 1)
         dry_run = request.get("dry_run", False)
 
         # Run prune
         prune_result = await borg.prune_archives(
             repository.path,
+            keep_hourly=keep_hourly,
             keep_daily=keep_daily,
             keep_weekly=keep_weekly,
             keep_monthly=keep_monthly,
+            keep_quarterly=keep_quarterly,
             keep_yearly=keep_yearly,
             dry_run=dry_run,
             remote_path=repository.remote_path,

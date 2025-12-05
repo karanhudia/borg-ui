@@ -302,21 +302,47 @@ class BorgInterface:
 
         return await self._execute_command(cmd, env=env)
 
-    async def prune_archives(self, repository: str, keep_daily: int = 7, keep_weekly: int = 4,
-                           keep_monthly: int = 6, keep_yearly: int = 1, dry_run: bool = False,
+    async def prune_archives(self, repository: str, keep_hourly: int = 0, keep_daily: int = 7,
+                           keep_weekly: int = 4, keep_monthly: int = 6, keep_quarterly: int = 0,
+                           keep_yearly: int = 1, dry_run: bool = False,
                            remote_path: str = None, passphrase: str = None) -> Dict:
-        """Prune old archives"""
+        """Prune old archives
+
+        Args:
+            repository: Repository path
+            keep_hourly: Keep N hourly backups (0 = disabled)
+            keep_daily: Keep N daily backups
+            keep_weekly: Keep N weekly backups
+            keep_monthly: Keep N monthly backups
+            keep_quarterly: Keep N quarterly backups (0 = disabled, uses --keep-3monthly)
+            keep_yearly: Keep N yearly backups
+            dry_run: Run in dry-run mode
+            remote_path: Path to remote borg binary
+            passphrase: Repository passphrase
+        """
         cmd = [self.borg_cmd, "prune"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
-        cmd.extend([
-            repository,
-            "--keep-daily", str(keep_daily),
-            "--keep-weekly", str(keep_weekly),
-            "--keep-monthly", str(keep_monthly),
-            "--keep-yearly", str(keep_yearly),
-            "--list"
-        ])
+
+        cmd.append(repository)
+
+        # Only add keep options if they are > 0
+        if keep_hourly > 0:
+            cmd.extend(["--keep-hourly", str(keep_hourly)])
+        if keep_daily > 0:
+            cmd.extend(["--keep-daily", str(keep_daily)])
+        if keep_weekly > 0:
+            cmd.extend(["--keep-weekly", str(keep_weekly)])
+        if keep_monthly > 0:
+            cmd.extend(["--keep-monthly", str(keep_monthly)])
+        if keep_quarterly > 0:
+            # Borg uses --keep-3monthly for quarterly (every 3 months)
+            cmd.extend(["--keep-3monthly", str(keep_quarterly)])
+        if keep_yearly > 0:
+            cmd.extend(["--keep-yearly", str(keep_yearly)])
+
+        cmd.append("--list")
+
         # Don't add --stats when doing dry run (not supported)
         if not dry_run:
             cmd.append("--stats")

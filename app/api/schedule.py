@@ -649,9 +649,11 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
 
                 prune_result = await borg.prune_archives(
                     repository=repo.path,
+                    keep_hourly=scheduled_job.prune_keep_hourly,
                     keep_daily=scheduled_job.prune_keep_daily,
                     keep_weekly=scheduled_job.prune_keep_weekly,
                     keep_monthly=scheduled_job.prune_keep_monthly,
+                    keep_quarterly=scheduled_job.prune_keep_quarterly,
                     keep_yearly=scheduled_job.prune_keep_yearly,
                     dry_run=False,
                     remote_path=repo.remote_path,
