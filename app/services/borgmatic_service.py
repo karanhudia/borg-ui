@@ -186,14 +186,8 @@ class BorgmaticExportService:
         if repository.passphrase:
             storage['encryption_passphrase'] = repository.passphrase
 
-        # SSH command (if SSH repository with key)
         # Note: SSH keys in Borg UI are stored encrypted in DB, not as files
-        # Users will need to set up SSH keys manually or use ssh-agent
-        if repository.repository_type == 'ssh' and repository.ssh_key_id:
-            ssh_key = self.db.query(SSHKey).filter(SSHKey.id == repository.ssh_key_id).first()
-            if ssh_key:
-                # Generic SSH command - user needs to configure their own key
-                storage['ssh_command'] = f'ssh -i /path/to/your/ssh_key'
+        # Users need to configure SSH authentication separately (ssh-agent, ssh config, etc.)
 
         return storage
 

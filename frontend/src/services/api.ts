@@ -277,7 +277,11 @@ export const activityAPI = {
 
 export const configExportImportAPI = {
   // Export configuration to borgmatic YAML
-  exportBorgmatic: (repositoryIds?: number[], includeSchedules = true, includeBorgUiMetadata = true) =>
+  exportBorgmatic: (
+    repositoryIds?: number[],
+    includeSchedules = true,
+    includeBorgUiMetadata = true
+  ) =>
     api.post(
       '/config/export/borgmatic',
       {
@@ -295,11 +299,15 @@ export const configExportImportAPI = {
     const formData = new FormData()
     formData.append('file', file)
 
-    return api.post(`/config/import/borgmatic?merge_strategy=${mergeStrategy}&dry_run=${dryRun}`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    })
+    return api.post(
+      `/config/import/borgmatic?merge_strategy=${mergeStrategy}&dry_run=${dryRun}`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    )
   },
 
   // Get list of repositories available for export
