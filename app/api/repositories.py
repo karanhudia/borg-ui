@@ -81,7 +81,7 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
     Returns True if successful, False otherwise.
     """
     try:
-        # Get archive list and count - this also includes cache stats
+        # Get archive list and count
         list_result = await borg.list_archives(
             repository.path,
             remote_path=repository.remote_path,
@@ -97,29 +97,44 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
                 if isinstance(archives_data, dict):
                     # Get archive count
                     archive_count = len(archives_data.get("archives", []))
-
-                    # Get total size from cache stats (if available)
-                    cache = archives_data.get("cache", {}).get("stats", {})
-                    logger.debug("Cache stats from borg list",
-                               repository=repository.name,
-                               has_cache=bool(cache),
-                               cache_keys=list(cache.keys()) if cache else [])
-
-                    if cache:
-                        # Get total size (unique csize is the actual size on disk)
-                        unique_csize = cache.get("unique_csize", 0)
-                        logger.debug("Unique csize value",
-                                   repository=repository.name,
-                                   unique_csize=unique_csize)
-                        if unique_csize > 0:
-                            # Convert bytes to human readable format
-                            total_size = format_bytes(unique_csize)
-
             except json.JSONDecodeError as e:
                 logger.error("Failed to parse archive list JSON",
                            repository=repository.name,
                            error=str(e),
                            stdout=list_result.get("stdout", "")[:200])
+
+        # Get repository size from borg info (includes cache stats)
+        # Use direct command execution with proper passphrase handling
+        cmd = ["borg", "info"]
+        if repository.remote_path:
+            cmd.extend(["--remote-path", repository.remote_path])
+        cmd.extend([repository.path, "--json"])
+
+        env = setup_borg_env(
+            passphrase=repository.passphrase,
+            ssh_opts=get_standard_ssh_opts()
+        )
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env
+            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
+
+            if process.returncode == 0:
+                info_data = json.loads(stdout.decode())
+                cache = info_data.get("cache", {}).get("stats", {})
+                if cache:
+                    unique_csize = cache.get("unique_csize", 0)
+                    if unique_csize > 0:
+                        total_size = format_bytes(unique_csize)
+        except Exception as e:
+            logger.warning("Failed to get repository size from borg info",
+                         repository=repository.name,
+                         error=str(e))
 
         # Update repository
         old_count = repository.archive_count
