@@ -116,14 +116,6 @@ const ExportImportTab: React.FC = () => {
     exportMutation.mutate()
   }
 
-  const handleImportPreview = () => {
-    if (!importFile) {
-      toast.error('Please select a file to import')
-      return
-    }
-    importMutation.mutate({ file: importFile, dryRun: true })
-  }
-
   const handleImport = () => {
     if (!importFile) {
       toast.error('Please select a file to import')
