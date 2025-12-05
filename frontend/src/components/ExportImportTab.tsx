@@ -94,7 +94,7 @@ const ExportImportTab: React.FC = () => {
       if (!result.success) {
         toast.error(result.error || 'Import failed')
       } else if (result.errors?.length > 0) {
-        toast.warning('Import completed with errors')
+        toast.error('Import completed with errors')
       } else {
         toast.success('Configuration imported successfully')
       }
@@ -211,9 +211,9 @@ const ExportImportTab: React.FC = () => {
                       {repositories.map((repo) => (
                         <ListItem
                           key={repo.id}
-                          button
+                          component="div"
                           onClick={() => toggleRepository(repo.id)}
-                          selected={selectedRepos.includes(repo.id)}
+                          sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
                         >
                           <ListItemIcon>
                             <Checkbox edge="start" checked={selectedRepos.includes(repo.id)} tabIndex={-1} disableRipple />
