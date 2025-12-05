@@ -61,7 +61,11 @@ const ExportImportTab: React.FC = () => {
   const exportMutation = useMutation({
     mutationFn: async () => {
       const repoIds = exportingAll ? undefined : selectedRepos
-      const response = await configExportImportAPI.exportBorgmatic(repoIds, includeSchedules, includeBorgUiMetadata)
+      const response = await configExportImportAPI.exportBorgmatic(
+        repoIds,
+        includeSchedules,
+        includeBorgUiMetadata
+      )
       return response
     },
     onSuccess: (response) => {
@@ -160,8 +164,9 @@ const ExportImportTab: React.FC = () => {
     <Box sx={{ py: 3 }}>
       {/* Info Alert */}
       <Alert severity="info" icon={<Info size={20} />} sx={{ mb: 3 }}>
-        Export your Borg UI configuration to borgmatic-compatible YAML format for backup or migration to other servers.
-        Import borgmatic configurations or Borg UI exports to quickly set up repositories and schedules.
+        Export your Borg UI configuration to borgmatic-compatible YAML format for backup or
+        migration to other servers. Import borgmatic configurations or Borg UI exports to quickly
+        set up repositories and schedules.
       </Alert>
 
       {/* Export Section */}
@@ -173,20 +178,31 @@ const ExportImportTab: React.FC = () => {
           </Box>
 
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Export your repositories, backup schedules, and settings to a borgmatic-compatible YAML file.
+            Export your repositories, backup schedules, and settings to a borgmatic-compatible YAML
+            file.
           </Typography>
 
           <Stack spacing={3}>
             <FormControlLabel
               control={
-                <Checkbox checked={exportingAll} onChange={(e) => setExportingAll(e.target.checked)} />
+                <Checkbox
+                  checked={exportingAll}
+                  onChange={(e) => setExportingAll(e.target.checked)}
+                />
               }
               label="Export all repositories"
             />
 
             {!exportingAll && (
               <Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    mb: 1,
+                  }}
+                >
                   <Typography variant="subtitle2">Select Repositories</Typography>
                   <Box>
                     <Button size="small" onClick={selectAllRepos} disabled={loadingRepos}>
@@ -197,7 +213,15 @@ const ExportImportTab: React.FC = () => {
                     </Button>
                   </Box>
                 </Box>
-                <Box sx={{ maxHeight: 200, overflow: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                <Box
+                  sx={{
+                    maxHeight: 200,
+                    overflow: 'auto',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                  }}
+                >
                   {loadingRepos ? (
                     <Typography variant="body2" sx={{ p: 2 }}>
                       Loading repositories...
@@ -216,7 +240,12 @@ const ExportImportTab: React.FC = () => {
                           sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
                         >
                           <ListItemIcon>
-                            <Checkbox edge="start" checked={selectedRepos.includes(repo.id)} tabIndex={-1} disableRipple />
+                            <Checkbox
+                              edge="start"
+                              checked={selectedRepos.includes(repo.id)}
+                              tabIndex={-1}
+                              disableRipple
+                            />
                           </ListItemIcon>
                           <ListItemText
                             primary={repo.name}
@@ -273,8 +302,8 @@ const ExportImportTab: React.FC = () => {
           </Box>
 
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Import borgmatic YAML configurations or Borg UI exports. Supports both standard borgmatic format and Borg UI
-            exports.
+            Import borgmatic YAML configurations or Borg UI exports. Supports both standard
+            borgmatic format and Borg UI exports.
           </Typography>
 
           <Stack spacing={3}>
@@ -305,15 +334,17 @@ const ExportImportTab: React.FC = () => {
                 onChange={(e) => setMergeStrategy(e.target.value)}
                 label="Conflict Resolution Strategy"
               >
-                <MenuItem value="skip_duplicates">Skip Duplicates - Keep existing configurations</MenuItem>
+                <MenuItem value="skip_duplicates">
+                  Skip Duplicates - Keep existing configurations
+                </MenuItem>
                 <MenuItem value="replace">Replace - Overwrite existing configurations</MenuItem>
                 <MenuItem value="rename">Rename - Auto-rename imported configurations</MenuItem>
               </Select>
             </FormControl>
 
             <Alert severity="warning" icon={<AlertCircle size={20} />}>
-              <strong>Important:</strong> SSH keys and repository passphrases cannot be imported for security reasons. You
-              will need to configure them manually after import.
+              <strong>Important:</strong> SSH keys and repository passphrases cannot be imported for
+              security reasons. You will need to configure them manually after import.
             </Alert>
 
             <Box sx={{ display: 'flex', gap: 2 }}>
@@ -355,10 +386,12 @@ const ExportImportTab: React.FC = () => {
                   {importResult.success && (
                     <Stack spacing={1}>
                       <Typography variant="body2">
-                        <strong>Repositories Created:</strong> {importResult.repositories_created || 0}
+                        <strong>Repositories Created:</strong>{' '}
+                        {importResult.repositories_created || 0}
                       </Typography>
                       <Typography variant="body2">
-                        <strong>Repositories Updated:</strong> {importResult.repositories_updated || 0}
+                        <strong>Repositories Updated:</strong>{' '}
+                        {importResult.repositories_updated || 0}
                       </Typography>
                       <Typography variant="body2">
                         <strong>Schedules Created:</strong> {importResult.schedules_created || 0}
@@ -382,9 +415,7 @@ const ExportImportTab: React.FC = () => {
                     </Stack>
                   )}
 
-                  {!importResult.success && (
-                    <Alert severity="error">{importResult.error}</Alert>
-                  )}
+                  {!importResult.success && <Alert severity="error">{importResult.error}</Alert>}
 
                   {importResult.errors && importResult.errors.length > 0 && (
                     <Box sx={{ mt: 2 }}>

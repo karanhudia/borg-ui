@@ -116,6 +116,8 @@ async def import_borgmatic_config(
     Import borgmatic YAML configuration into Borg UI.
 
     Accepts:
+    - Single YAML files (.yaml, .yml)
+    - ZIP files containing multiple YAML configs (.zip)
     - Standard borgmatic configuration files
     - Borg UI exported configurations (for round-trip)
 
@@ -125,23 +127,68 @@ async def import_borgmatic_config(
     - rename: Auto-rename to avoid conflicts
     """
     # Validate file type
-    if not file.filename.endswith(('.yaml', '.yml')):
-        raise HTTPException(status_code=400, detail="File must be a YAML file (.yaml or .yml)")
+    if not file.filename.endswith(('.yaml', '.yml', '.zip')):
+        raise HTTPException(status_code=400, detail="File must be a YAML (.yaml, .yml) or ZIP file")
 
     try:
-        # Read file content
         content = await file.read()
-        yaml_content = content.decode('utf-8')
-
-        # Import configuration
         import_service = BorgmaticImportService(db)
-        result = import_service.import_from_yaml(
-            yaml_content=yaml_content,
-            merge_strategy=merge_strategy,
-            dry_run=dry_run
-        )
 
-        return result
+        # Handle ZIP files with multiple configs
+        if file.filename.endswith('.zip'):
+            import io
+            import zipfile
+            import yaml
+
+            combined_result = {
+                'success': True,
+                'repositories_created': 0,
+                'repositories_updated': 0,
+                'schedules_created': 0,
+                'schedules_updated': 0,
+                'warnings': [],
+                'errors': []
+            }
+
+            with zipfile.ZipFile(io.BytesIO(content)) as zip_file:
+                yaml_files = [f for f in zip_file.namelist() if f.endswith(('.yaml', '.yml'))]
+
+                if not yaml_files:
+                    raise HTTPException(status_code=400, detail="ZIP file contains no YAML files")
+
+                for yaml_file in yaml_files:
+                    try:
+                        yaml_content = zip_file.read(yaml_file).decode('utf-8')
+                        result = import_service.import_from_yaml(
+                            yaml_content=yaml_content,
+                            merge_strategy=merge_strategy,
+                            dry_run=dry_run
+                        )
+
+                        # Aggregate results
+                        combined_result['repositories_created'] += result.get('repositories_created', 0)
+                        combined_result['repositories_updated'] += result.get('repositories_updated', 0)
+                        combined_result['schedules_created'] += result.get('schedules_created', 0)
+                        combined_result['schedules_updated'] += result.get('schedules_updated', 0)
+                        combined_result['warnings'].extend(result.get('warnings', []))
+
+                        if not result.get('success'):
+                            combined_result['errors'].append(f"{yaml_file}: {result.get('error', 'Unknown error')}")
+
+                    except Exception as e:
+                        combined_result['errors'].append(f"{yaml_file}: {str(e)}")
+
+            return combined_result
+
+        # Handle single YAML file
+        else:
+            yaml_content = content.decode('utf-8')
+            result = import_service.import_from_yaml(
+                yaml_content=yaml_content,
+                merge_strategy=merge_strategy,
+                dry_run=dry_run
+            )
+            return result
 
     except UnicodeDecodeError:
         raise HTTPException(status_code=400, detail="File must be UTF-8 encoded")
