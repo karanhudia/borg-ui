@@ -173,14 +173,15 @@ class BorgmaticExportService:
         if repository.compression:
             storage['compression'] = repository.compression
 
+        # Encryption passphrase
+        if repository.passphrase:
+            storage['encryption_passphrase'] = repository.passphrase
+
         # SSH command (if SSH repository)
         if repository.repository_type == 'ssh' and repository.ssh_key_id:
             ssh_key = self.db.query(SSHKey).filter(SSHKey.id == repository.ssh_key_id).first()
-            if ssh_key:
-                storage['ssh_command'] = f'ssh -i /path/to/{ssh_key.name}_key'
-
-        # Note about passphrase (don't export actual passphrase)
-        storage['_passphrase_note'] = 'Set BORG_PASSPHRASE environment variable or use encryption_passcommand'
+            if ssh_key and ssh_key.key_path:
+                storage['ssh_command'] = f'ssh -i {ssh_key.key_path}'
 
         return storage
 
@@ -204,9 +205,10 @@ class BorgmaticExportService:
     def _build_consistency_section(self, repository: Repository) -> Dict[str, Any]:
         """Build borgmatic consistency section."""
         return {
-            'checks': ['repository', 'archives'],
-            'check_last': 3,
-            '_check_interval_note': f'Scheduled every {repository.check_interval_days} days in Borg UI'
+            'checks': [
+                {'name': 'repository', 'frequency': f'{repository.check_interval_days} days'},
+                {'name': 'archives', 'frequency': f'{repository.check_interval_days} days'}
+            ]
         }
 
     def _build_hooks_section(self, repository: Repository) -> Optional[Dict[str, Any]]:
@@ -301,18 +303,18 @@ class BorgmaticExportService:
             include_borg_ui_metadata: Whether to include Borg UI metadata
 
         Returns:
-            Merged borgmatic configuration
+            Merged borgmatic configuration (strict borgmatic format)
         """
         if not configs:
             return {}
 
-        # If only one config and no metadata, return it as-is
+        # If only one config and no metadata, return clean version
         if len(configs) == 1 and not include_borg_ui_metadata:
             config = configs[0].copy()
             config.pop('borg_ui_metadata', None)
             return config
 
-        # For multiple repositories or when including metadata, create proper structure
+        # For multiple repositories, create proper structure
         merged = {
             'location': {},
             'storage': {},
@@ -348,11 +350,7 @@ class BorgmaticExportService:
 
         # Use storage settings from first repository
         if configs:
-            storage = configs[0].get('storage', {})
-            # Remove passphrase note for merged config
-            storage_copy = storage.copy()
-            storage_copy.pop('_passphrase_note', None)
-            merged['storage'] = storage_copy
+            merged['storage'] = configs[0].get('storage', {}).copy()
 
         # Use retention settings from first repository that has them
         for config in configs:
@@ -381,24 +379,6 @@ class BorgmaticExportService:
                 merged['hooks']['before_backup'] = all_before_backup
             if all_after_backup:
                 merged['hooks']['after_backup'] = all_after_backup
-
-        # Add Borg UI metadata if requested
-        if include_borg_ui_metadata:
-            # Store metadata for each repository separately
-            all_metadata = []
-            for config in configs:
-                if 'borg_ui_metadata' in config:
-                    all_metadata.append(config['borg_ui_metadata'])
-
-            if all_metadata:
-                merged['borg_ui_metadata'] = {
-                    'export_version': '1.0',
-                    'export_date': datetime.now(timezone.utc).isoformat(),
-                    'repositories': all_metadata
-                }
-
-        # Add note about security
-        merged['_security_note'] = 'SSH keys and repository passphrases must be configured manually'
 
         return merged
 
@@ -693,6 +673,12 @@ class BorgmaticImportService:
         repository.compression = storage.get('compression', 'lz4')
         repository.mode = metadata.get('repository', {}).get('mode', 'full')
 
+        # Passphrase from storage section
+        if storage.get('encryption_passphrase'):
+            repository.passphrase = storage['encryption_passphrase']
+        else:
+            result['warnings'].append(f"No passphrase found for repository: {repo_name} - please set manually")
+
         # Source directories
         if location.get('source_directories'):
             repository.source_directories = json.dumps(location['source_directories'])
@@ -729,9 +715,6 @@ class BorgmaticImportService:
             repository.check_max_duration = check_metadata.get('max_duration', 3600)
             repository.notify_on_check_success = check_metadata.get('notify_on_success', False)
             repository.notify_on_check_failure = check_metadata.get('notify_on_failure', True)
-
-        # Passphrase warning
-        result['warnings'].append(f"Repository passphrase not imported - please set manually: {repo_name}")
 
         if not dry_run:
             if result['repository_created']:
