@@ -37,7 +37,6 @@ import {
   DataUsage,
   Compress,
   Inventory,
-  FileUpload,
 } from '@mui/icons-material'
 import { repositoriesAPI, sshKeysAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
