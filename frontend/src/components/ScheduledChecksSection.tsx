@@ -26,7 +26,6 @@ import { repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { formatDate, formatRelativeTime } from '../utils/dateUtils'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
-import RepositorySelector from '../components/RepositorySelector'
 
 interface ScheduledCheck {
   repository_id: number
@@ -50,21 +49,20 @@ const ScheduledChecksSection: React.FC = () => {
     max_duration: 3600,
   })
   const [useCustomInterval, setUseCustomInterval] = useState(false)
+  const [customIntervalValue, setCustomIntervalValue] = useState(1)
+  const [customIntervalUnit, setCustomIntervalUnit] = useState<'hours' | 'days'>('days')
 
   // Fetch repositories
   const { data: repositoriesData, isLoading: loadingRepositories } = useQuery({
     queryKey: ['repositories'],
-    queryFn: async () => {
-      const response = await repositoriesAPI.list()
-      return response.data
-    },
+    queryFn: repositoriesAPI.getRepositories,
   })
 
-  const repositories = repositoriesData?.repositories || []
+  const repositories = repositoriesData?.data?.repositories || []
 
   // Fetch scheduled checks for all repositories
   const { data: scheduledChecks, isLoading } = useQuery({
-    queryKey: ['scheduled-checks'],
+    queryKey: ['scheduled-checks', repositories.map((r: any) => r.id)],
     queryFn: async () => {
       const checks: ScheduledCheck[] = []
       for (const repo of repositories) {
@@ -79,7 +77,7 @@ const ScheduledChecksSection: React.FC = () => {
       }
       return checks
     },
-    enabled: repositories.length > 0,
+    enabled: repositories.length > 0 && !loadingRepositories,
   })
 
   // Update check schedule mutation
@@ -132,6 +130,19 @@ const ScheduledChecksSection: React.FC = () => {
       max_duration: check.check_max_duration,
     })
     setUseCustomInterval(isCustom)
+
+    // Set custom interval values
+    if (isCustom) {
+      // If less than 1 day, show in hours
+      if (intervalDays < 1) {
+        setCustomIntervalValue(intervalDays * 24)
+        setCustomIntervalUnit('hours')
+      } else {
+        setCustomIntervalValue(intervalDays)
+        setCustomIntervalUnit('days')
+      }
+    }
+
     setShowDialog(true)
   }
 
@@ -283,12 +294,44 @@ const ScheduledChecksSection: React.FC = () => {
         <DialogTitle>{selectedRepositoryId ? 'Edit Check Schedule' : 'Add Check Schedule'}</DialogTitle>
         <DialogContent>
           <Stack spacing={3} sx={{ mt: 1 }}>
-            <RepositorySelector
-              repositories={repositories}
-              selectedRepositoryId={selectedRepositoryId}
-              onRepositoryChange={(repoId) => setSelectedRepositoryId(repoId)}
-              loading={loadingRepositories}
-            />
+            <FormControl fullWidth required size="medium">
+              <InputLabel sx={{ fontSize: '1.1rem' }}>Repository</InputLabel>
+              <Select
+                value={selectedRepositoryId || ''}
+                onChange={(e) => setSelectedRepositoryId(Number(e.target.value))}
+                label="Repository"
+                disabled={loadingRepositories || repositories.length === 0}
+                sx={{ fontSize: '1.1rem', height: { xs: 48, sm: 56 } }}
+                MenuProps={{
+                  PaperProps: {
+                    style: {
+                      maxHeight: 400,
+                    },
+                  },
+                }}
+              >
+                {repositories.length === 0 ? (
+                  <MenuItem disabled>
+                    <Typography variant="body2" color="text.secondary">
+                      No repositories available
+                    </Typography>
+                  </MenuItem>
+                ) : (
+                  repositories.map((repo: any) => (
+                    <MenuItem key={repo.id} value={repo.id} sx={{ fontSize: '1rem' }}>
+                      <Box>
+                        <Typography variant="body2" sx={{ fontSize: '1rem' }}>
+                          {repo.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.85rem' }}>
+                          {repo.path}
+                        </Typography>
+                      </Box>
+                    </MenuItem>
+                  ))
+                )}
+              </Select>
+            </FormControl>
 
             <Box>
               <FormControlLabel
@@ -322,15 +365,52 @@ const ScheduledChecksSection: React.FC = () => {
                 </Select>
               </FormControl>
             ) : (
-              <TextField
-                label="Check Interval (days)"
-                type="number"
-                value={formData.interval_days}
-                onChange={(e) => setFormData({ ...formData, interval_days: Number(e.target.value) })}
-                helperText="Enter number of days between checks (e.g., 1 = daily, 7 = weekly, 30 = monthly)"
-                fullWidth
-                inputProps={{ min: 1 }}
-              />
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <TextField
+                  label="Interval"
+                  type="number"
+                  value={customIntervalValue}
+                  onChange={(e) => {
+                    const val = Number(e.target.value)
+                    setCustomIntervalValue(val)
+                    const days = customIntervalUnit === 'hours' ? val / 24 : val
+                    setFormData({ ...formData, interval_days: days })
+                  }}
+                  helperText={
+                    customIntervalUnit === 'hours'
+                      ? `${customIntervalValue} hours = ${(customIntervalValue / 24).toFixed(2)} days`
+                      : `${customIntervalValue} day${customIntervalValue !== 1 ? 's' : ''}`
+                  }
+                  sx={{ flex: 2 }}
+                  inputProps={{ min: customIntervalUnit === 'hours' ? 1 : 0.1, step: customIntervalUnit === 'hours' ? 1 : 0.1 }}
+                />
+                <FormControl sx={{ flex: 1 }}>
+                  <InputLabel>Unit</InputLabel>
+                  <Select
+                    value={customIntervalUnit}
+                    onChange={(e) => {
+                      const newUnit = e.target.value as 'hours' | 'days'
+                      setCustomIntervalUnit(newUnit)
+                      // Convert the value
+                      if (newUnit === 'hours') {
+                        // Converting from days to hours
+                        const hours = customIntervalValue * 24
+                        setCustomIntervalValue(hours)
+                        setFormData({ ...formData, interval_days: hours / 24 })
+                      } else {
+                        // Converting from hours to days
+                        const days = customIntervalValue / 24
+                        setCustomIntervalValue(days)
+                        setFormData({ ...formData, interval_days: days })
+                      }
+                    }}
+                    label="Unit"
+                  >
+                    <MenuItem value="hours">Hours</MenuItem>
+                    <MenuItem value="days">Days</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
             )}
 
             <TextField

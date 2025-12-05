@@ -63,7 +63,7 @@ function App() {
           }
         />
         <Route
-          path="/schedule"
+          path="/schedule/*"
           element={
             <ProtectedRoute requiredTab="schedule">
               <Schedule />
