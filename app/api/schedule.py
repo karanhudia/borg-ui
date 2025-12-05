@@ -35,9 +35,11 @@ class ScheduledJobCreate(BaseModel):
     # Prune and compact settings
     run_prune_after: bool = False
     run_compact_after: bool = False
+    prune_keep_hourly: int = 0
     prune_keep_daily: int = 7
     prune_keep_weekly: int = 4
     prune_keep_monthly: int = 6
+    prune_keep_quarterly: int = 0
     prune_keep_yearly: int = 1
 
 class ScheduledJobUpdate(BaseModel):
@@ -50,9 +52,11 @@ class ScheduledJobUpdate(BaseModel):
     # Prune and compact settings
     run_prune_after: Optional[bool] = None
     run_compact_after: Optional[bool] = None
+    prune_keep_hourly: Optional[int] = None
     prune_keep_daily: Optional[int] = None
     prune_keep_weekly: Optional[int] = None
     prune_keep_monthly: Optional[int] = None
+    prune_keep_quarterly: Optional[int] = None
     prune_keep_yearly: Optional[int] = None
 
 class CronExpression(BaseModel):
@@ -88,9 +92,11 @@ async def get_scheduled_jobs(
                     # Prune and compact settings
                     "run_prune_after": job.run_prune_after,
                     "run_compact_after": job.run_compact_after,
+                    "prune_keep_hourly": job.prune_keep_hourly,
                     "prune_keep_daily": job.prune_keep_daily,
                     "prune_keep_weekly": job.prune_keep_weekly,
                     "prune_keep_monthly": job.prune_keep_monthly,
+                    "prune_keep_quarterly": job.prune_keep_quarterly,
                     "prune_keep_yearly": job.prune_keep_yearly,
                     "last_prune": serialize_datetime(job.last_prune),
                     "last_compact": serialize_datetime(job.last_compact),
@@ -147,9 +153,11 @@ async def create_scheduled_job(
             # Prune and compact settings
             run_prune_after=job_data.run_prune_after,
             run_compact_after=job_data.run_compact_after,
+            prune_keep_hourly=job_data.prune_keep_hourly,
             prune_keep_daily=job_data.prune_keep_daily,
             prune_keep_weekly=job_data.prune_keep_weekly,
             prune_keep_monthly=job_data.prune_keep_monthly,
+            prune_keep_quarterly=job_data.prune_keep_quarterly,
             prune_keep_yearly=job_data.prune_keep_yearly
         )
         
@@ -324,9 +332,11 @@ async def get_scheduled_job(
                 # Prune and compact settings
                 "run_prune_after": job.run_prune_after,
                 "run_compact_after": job.run_compact_after,
+                "prune_keep_hourly": job.prune_keep_hourly,
                 "prune_keep_daily": job.prune_keep_daily,
                 "prune_keep_weekly": job.prune_keep_weekly,
                 "prune_keep_monthly": job.prune_keep_monthly,
+                "prune_keep_quarterly": job.prune_keep_quarterly,
                 "prune_keep_yearly": job.prune_keep_yearly,
                 "last_prune": serialize_datetime(job.last_prune),
                 "last_compact": serialize_datetime(job.last_compact),
@@ -401,6 +411,9 @@ async def update_scheduled_job(
         if job_data.run_compact_after is not None:
             job.run_compact_after = job_data.run_compact_after
 
+        if job_data.prune_keep_hourly is not None:
+            job.prune_keep_hourly = job_data.prune_keep_hourly
+
         if job_data.prune_keep_daily is not None:
             job.prune_keep_daily = job_data.prune_keep_daily
 
@@ -409,6 +422,9 @@ async def update_scheduled_job(
 
         if job_data.prune_keep_monthly is not None:
             job.prune_keep_monthly = job_data.prune_keep_monthly
+
+        if job_data.prune_keep_quarterly is not None:
+            job.prune_keep_quarterly = job_data.prune_keep_quarterly
 
         if job_data.prune_keep_yearly is not None:
             job.prune_keep_yearly = job_data.prune_keep_yearly
