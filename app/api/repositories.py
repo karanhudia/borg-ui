@@ -103,8 +103,7 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
         # Get repository info for size stats
         info_result = await borg.get_repository_info(
             repository.path,
-            remote_path=repository.remote_path,
-            passphrase=repository.passphrase
+            remote_path=repository.remote_path
         )
 
         total_size = None
@@ -674,14 +673,10 @@ async def import_repository(
         db.commit()
         db.refresh(repository)
 
-        # Update archive count by listing archives (borg info doesn't return archives)
-        await update_repository_stats(repository, db)
-
         logger.info("Repository imported successfully",
                    name=repo_data.name,
                    path=repo_path,
-                   user=current_user.username,
-                   archive_count=repository.archive_count)
+                   user=current_user.username)
 
         return {
             "success": True,
