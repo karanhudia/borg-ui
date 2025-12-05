@@ -349,14 +349,6 @@ const ExportImportTab: React.FC = () => {
 
             <Box sx={{ display: 'flex', gap: 2 }}>
               <Button
-                variant="outlined"
-                startIcon={<Info size={18} />}
-                onClick={handleImportPreview}
-                disabled={!importFile || importMutation.isPending}
-              >
-                Preview Import
-              </Button>
-              <Button
                 variant="contained"
                 startIcon={<Upload size={18} />}
                 onClick={handleImport}
