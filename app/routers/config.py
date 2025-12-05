@@ -178,6 +178,24 @@ async def import_borgmatic_config(
                     except Exception as e:
                         combined_result['errors'].append(f"{yaml_file}: {str(e)}")
 
+            # Update repository stats for newly created repositories (non-blocking - don't fail import)
+            if not dry_run and combined_result['repositories_created'] > 0:
+                from app.database.models import Repository
+                from app.api.repositories import update_repository_stats
+                import structlog
+                logger = structlog.get_logger()
+
+                # Get the newly created repositories
+                repositories = db.query(Repository).order_by(Repository.id.desc()).limit(combined_result['repositories_created']).all()
+                for repo in repositories:
+                    try:
+                        await update_repository_stats(repo, db)
+                    except Exception as e:
+                        # Log but don't fail the import - stats can be updated later
+                        logger.warning("Failed to update repository stats after import",
+                                     repository=repo.name,
+                                     error=str(e))
+
             return combined_result
 
         # Handle single YAML file
@@ -188,6 +206,24 @@ async def import_borgmatic_config(
                 merge_strategy=merge_strategy,
                 dry_run=dry_run
             )
+
+            # Update repository stats for newly created repositories (non-blocking - don't fail import)
+            if not dry_run and result.get('repositories_created', 0) > 0:
+                from app.database.models import Repository
+                from app.api.repositories import update_repository_stats
+                import structlog
+                logger = structlog.get_logger()
+
+                # Get the newly created repository (last one added to DB)
+                repositories = db.query(Repository).order_by(Repository.id.desc()).limit(result['repositories_created']).all()
+                for repo in repositories:
+                    try:
+                        await update_repository_stats(repo, db)
+                    except Exception as e:
+                        # Log but don't fail the import - stats can be updated later
+                        logger.warning("Failed to update repository stats after import",
+                                     repository=repo.name,
+                                     error=str(e))
 
             return result
 
