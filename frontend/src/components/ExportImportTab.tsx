@@ -69,12 +69,23 @@ const ExportImportTab: React.FC = () => {
       return response
     },
     onSuccess: (response) => {
-      // Create blob and download file
-      const blob = new Blob([response.data], { type: 'application/x-yaml' })
+      // Get content type and filename from headers
+      const contentType = response.headers['content-type'] || 'application/octet-stream'
+      const contentDisposition = response.headers['content-disposition'] || ''
+
+      // Extract filename from Content-Disposition header
+      let filename = 'borg-ui-export.yaml'
+      const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+      if (filenameMatch && filenameMatch[1]) {
+        filename = filenameMatch[1].replace(/['"]/g, '')
+      }
+
+      // Create blob with correct content type and download file
+      const blob = new Blob([response.data], { type: contentType })
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = 'borg-ui-export.yaml'
+      link.download = filename
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
