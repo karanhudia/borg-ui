@@ -38,7 +38,6 @@ const ExportImportTab: React.FC = () => {
   // Export state
   const [selectedRepos, setSelectedRepos] = useState<number[]>([])
   const [includeSchedules, setIncludeSchedules] = useState(true)
-  const [includeBorgUiMetadata, setIncludeBorgUiMetadata] = useState(false)
   const [exportingAll, setExportingAll] = useState(true)
 
   // Import state
@@ -61,11 +60,7 @@ const ExportImportTab: React.FC = () => {
   const exportMutation = useMutation({
     mutationFn: async () => {
       const repoIds = exportingAll ? undefined : selectedRepos
-      const response = await configExportImportAPI.exportBorgmatic(
-        repoIds,
-        includeSchedules,
-        includeBorgUiMetadata
-      )
+      const response = await configExportImportAPI.exportBorgmatic(repoIds, includeSchedules)
       return response
     },
     onSuccess: (response) => {
@@ -270,16 +265,6 @@ const ExportImportTab: React.FC = () => {
                 />
               }
               label="Include backup schedules and retention policies"
-            />
-
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={includeBorgUiMetadata}
-                  onChange={(e) => setIncludeBorgUiMetadata(e.target.checked)}
-                />
-              }
-              label="Include Borg UI metadata (only needed for re-importing back to Borg UI, breaks borgmatic validation)"
             />
 
             <Button

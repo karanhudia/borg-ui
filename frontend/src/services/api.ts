@@ -277,17 +277,12 @@ export const activityAPI = {
 
 export const configExportImportAPI = {
   // Export configuration to borgmatic YAML
-  exportBorgmatic: (
-    repositoryIds?: number[],
-    includeSchedules = true,
-    includeBorgUiMetadata = true
-  ) =>
+  exportBorgmatic: (repositoryIds?: number[], includeSchedules = true) =>
     api.post(
       '/config/export/borgmatic',
       {
         repository_ids: repositoryIds,
         include_schedules: includeSchedules,
-        include_borg_ui_metadata: includeBorgUiMetadata,
       },
       {
         responseType: 'blob', // Important for file download
