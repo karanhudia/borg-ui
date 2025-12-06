@@ -903,9 +903,33 @@ class BorgmaticImportService:
         Returns:
             (name, path, type, ssh_info)
         """
-        # Check if SSH repository (format: user@host:path)
-        if '@' in repo_path and ':' in repo_path:
-            # SSH repository
+        # Check if SSH repository - support both formats:
+        # 1. ssh://user@host:port/path (full SSH URL)
+        # 2. user@host:path (short format)
+        if repo_path.startswith('ssh://'):
+            # Full SSH URL format: ssh://user@host:port/path or ssh://user@host/path
+            from urllib.parse import urlparse
+            parsed = urlparse(repo_path)
+
+            username = parsed.username or ''
+            host = parsed.hostname or ''
+            port = parsed.port or 22
+            path = parsed.path or ''
+
+            # Prefer name from metadata, fallback to extracting from path
+            name = metadata.get('name') or path.rstrip('/').split('/')[-1].replace('.borg', '')
+
+            ssh_info = {
+                'host': host,
+                'username': username,
+                'port': port,
+                'remote_path': metadata.get('ssh', {}).get('remote_path')
+            }
+
+            return name, repo_path, 'ssh', ssh_info
+
+        elif '@' in repo_path and ':' in repo_path:
+            # Short SSH format: user@host:path
             user_host, path = repo_path.split(':', 1)
             username, host = user_host.split('@', 1)
 
@@ -919,7 +943,7 @@ class BorgmaticImportService:
                 'remote_path': metadata.get('ssh', {}).get('remote_path')
             }
 
-            return name, path, 'ssh', ssh_info
+            return name, repo_path, 'ssh', ssh_info
         else:
             # Local repository
             # Prefer name from metadata, fallback to extracting from path

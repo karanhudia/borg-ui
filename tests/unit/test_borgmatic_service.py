@@ -237,7 +237,7 @@ storage:
         assert repo.repository_type == 'ssh'
         assert repo.host == 'backup.example.com'
         assert repo.username == 'user'
-        assert repo.path == '/backup/ssh-repo.borg'
+        assert repo.path == 'user@backup.example.com:/backup/ssh-repo.borg'
 
     def test_import_borg_ui_export(self, db_session):
         """Test importing Borg UI export format (round-trip) - new format."""
