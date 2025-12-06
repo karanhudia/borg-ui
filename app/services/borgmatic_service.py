@@ -195,15 +195,19 @@ class BorgmaticExportService:
         """Build borgmatic retention section from scheduled job."""
         retention = {}
 
-        if scheduled_job.prune_keep_hourly > 0:
+        # Always include retention policies for clarity, even if 0
+        # Borgmatic treats 0 as "don't keep any" which is valid
+        if scheduled_job.prune_keep_hourly is not None:
             retention['keep_hourly'] = scheduled_job.prune_keep_hourly
-        if scheduled_job.prune_keep_daily > 0:
+        if scheduled_job.prune_keep_daily is not None:
             retention['keep_daily'] = scheduled_job.prune_keep_daily
-        if scheduled_job.prune_keep_weekly > 0:
+        if scheduled_job.prune_keep_weekly is not None:
             retention['keep_weekly'] = scheduled_job.prune_keep_weekly
-        if scheduled_job.prune_keep_monthly > 0:
+        if scheduled_job.prune_keep_monthly is not None:
             retention['keep_monthly'] = scheduled_job.prune_keep_monthly
-        if scheduled_job.prune_keep_yearly > 0:
+        if scheduled_job.prune_keep_quarterly is not None:
+            retention['keep_quarterly'] = scheduled_job.prune_keep_quarterly
+        if scheduled_job.prune_keep_yearly is not None:
             retention['keep_yearly'] = scheduled_job.prune_keep_yearly
 
         return retention
@@ -282,13 +286,9 @@ class BorgmaticExportService:
 
     def _build_repository_path(self, repository: Repository) -> str:
         """Build borgmatic-style repository path."""
-        if repository.repository_type == 'local':
-            return repository.path
-        elif repository.repository_type == 'ssh':
-            # Format: user@host:path
-            return f"{repository.username}@{repository.host}:{repository.path}"
-        else:
-            return repository.path
+        # For SSH repositories, path is already stored as full SSH URL (ssh://user@host:port/path)
+        # Borgmatic supports SSH URLs directly, so just return the path as-is
+        return repository.path
 
     def _get_scheduled_job_for_repository(self, repository: Repository) -> Optional[ScheduledJob]:
         """Get scheduled job associated with repository."""
