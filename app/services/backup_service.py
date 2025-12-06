@@ -36,12 +36,24 @@ class BackupService:
         Returns:
             dict with success, stdout, stderr, returncode
         """
+        import tempfile
+        temp_script = None
+
         try:
             logger.info(f"Running {hook_name} hook", job_id=job_id, script_preview=script[:100])
 
-            # Execute script in shell
-            process = await asyncio.create_subprocess_shell(
-                script,
+            # Write script to temporary file to respect shebang (#!/bin/bash, etc.)
+            # This ensures bash-specific syntax like arrays work correctly
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:
+                f.write(script)
+                temp_script = f.name
+
+            # Make script executable
+            os.chmod(temp_script, 0o755)
+
+            # Execute script file
+            process = await asyncio.create_subprocess_exec(
+                temp_script,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=os.environ.copy()
@@ -91,6 +103,13 @@ class BackupService:
                 "stdout": "",
                 "stderr": f"Hook failed with exception: {str(e)}"
             }
+        finally:
+            # Clean up temporary script file
+            if temp_script and os.path.exists(temp_script):
+                try:
+                    os.unlink(temp_script)
+                except Exception as e:
+                    logger.warning(f"Failed to delete temporary hook script", path=temp_script, error=str(e))
 
     def rotate_logs(self, max_age_days: int = 30, max_files: int = 100):
         """
