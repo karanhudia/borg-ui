@@ -691,8 +691,8 @@ export default function Repositories() {
       parts.push('obfuscate', obfuscate)
     }
 
-    // Add auto prefix if enabled
-    if (autoDetect) {
+    // Add auto prefix if enabled (but not if algorithm is already 'auto')
+    if (autoDetect && algorithm !== 'auto') {
       parts.push('auto')
     }
 
@@ -700,8 +700,8 @@ export default function Repositories() {
     if (algorithm !== 'none') {
       parts.push(algorithm)
 
-      // Add level if specified
-      if (level) {
+      // Add level if specified (but not for 'auto' algorithm as it doesn't support levels)
+      if (level && algorithm !== 'auto') {
         parts.push(level)
       }
     } else {
