@@ -603,7 +603,16 @@ class BorgmaticImportService:
 
         if has_toplevel_repos:
             # NEW FORMAT (v1.8.0+): flat structure
-            repo_paths = data.get('repositories', [])
+            repos_raw = data.get('repositories', [])
+            # Handle both simple list format and object format
+            repo_paths = []
+            for repo in repos_raw:
+                if isinstance(repo, dict):
+                    # Object format: {'path': '...', 'label': '...'}
+                    repo_paths.append(repo.get('path', ''))
+                else:
+                    # Simple string format
+                    repo_paths.append(repo)
             source_directories = data.get('source_directories', [])
             exclude_patterns = data.get('exclude_patterns', [])
         else:
