@@ -25,19 +25,17 @@ class BorgmaticExportService:
     def export_repository(
         self,
         repository: Repository,
-        include_schedule: bool = True,
-        include_borg_ui_metadata: bool = True
+        include_schedule: bool = True
     ) -> Dict[str, Any]:
         """
-        Export a single repository to borgmatic format (v1.8.0+ flat format).
+        Export a single repository to borgmatic format.
 
         Args:
             repository: Repository model instance
             include_schedule: Include backup schedule if exists
-            include_borg_ui_metadata: Include Borg UI specific metadata for round-trip
 
         Returns:
-            Dictionary representing borgmatic configuration in new flat format
+            Dictionary representing borgmatic configuration
         """
         config = {}
 
@@ -81,46 +79,30 @@ class BorgmaticExportService:
         if repository.check_interval_days:
             config['checks'] = [{'name': 'repository', 'frequency': f'{repository.check_interval_days} days'}]
 
-        # Commands/hooks (top-level in new format)
-        if repository.pre_backup_script or repository.post_backup_script:
-            hooks = []
-            if repository.pre_backup_script:
-                hooks.append({
-                    'name': 'before_backup',
-                    'command': repository.pre_backup_script
-                })
-            if repository.post_backup_script:
-                hooks.append({
-                    'name': 'after_backup',
-                    'command': repository.post_backup_script
-                })
-            config['hooks'] = hooks
-
-        # Borg UI metadata (for round-trip import/export)
-        if include_borg_ui_metadata:
-            config['borg_ui_metadata'] = self._build_metadata_section(
-                repository,
-                self._get_scheduled_job_for_repository(repository) if include_schedule else None
-            )
+        # Hooks (using deprecated but still supported format for maximum compatibility)
+        if repository.pre_backup_script:
+            config['before_backup'] = [repository.pre_backup_script]
+        if repository.post_backup_script:
+            config['after_backup'] = [repository.post_backup_script]
 
         return config
 
     def export_all_repositories(
         self,
         repository_ids: Optional[List[int]] = None,
-        include_schedules: bool = True,
-        include_borg_ui_metadata: bool = True
-    ) -> List[Dict[str, Any]]:
+        include_schedules: bool = True
+    ) -> List[tuple]:
         """
         Export multiple repositories to borgmatic format.
 
         Args:
             repository_ids: List of repository IDs to export (None = all)
             include_schedules: Include backup schedules
-            include_borg_ui_metadata: Include Borg UI metadata
 
         Returns:
-            List of borgmatic configurations
+            List of tuples (repository_name, config) where:
+            - repository_name: Name of the repository
+            - config: Dictionary representing borgmatic configuration
         """
         query = self.db.query(Repository)
         if repository_ids:
@@ -130,20 +112,15 @@ class BorgmaticExportService:
         configs = []
 
         for repo in repositories:
-            config = self.export_repository(
-                repo,
-                include_schedule=include_schedules,
-                include_borg_ui_metadata=include_borg_ui_metadata
-            )
-            configs.append(config)
+            config = self.export_repository(repo, include_schedule=include_schedules)
+            configs.append((repo.name, config))
 
         return configs
 
     def export_to_yaml(
         self,
         repository_ids: Optional[List[int]] = None,
-        include_schedules: bool = True,
-        include_borg_ui_metadata: bool = True
+        include_schedules: bool = True
     ) -> str:
         """
         Export configurations to YAML string.
@@ -155,30 +132,25 @@ class BorgmaticExportService:
         Args:
             repository_ids: Repository IDs to export
             include_schedules: Include schedules
-            include_borg_ui_metadata: Include metadata
 
         Returns:
             YAML string in borgmatic-compatible format
         """
-        configs = self.export_all_repositories(
-            repository_ids,
-            include_schedules,
-            include_borg_ui_metadata
-        )
+        configs = self.export_all_repositories(repository_ids, include_schedules)
 
         if not configs:
             return ""
 
+        # Extract just the config dicts from tuples (name, config)
+        config_dicts = [config for _, config in configs]
+
         # For single repository, return as-is
-        if len(configs) == 1:
-            config = configs[0].copy()
-            if not include_borg_ui_metadata:
-                config.pop('borg_ui_metadata', None)
-            return yaml.dump(config, default_flow_style=False, sort_keys=False)
+        if len(config_dicts) == 1:
+            return yaml.dump(config_dicts[0], default_flow_style=False, sort_keys=False)
 
         # For multiple repositories, this is deprecated - should use separate files
         # But for backwards compatibility, merge them
-        merged_config = self._merge_configs_to_borgmatic(configs, include_borg_ui_metadata)
+        merged_config = self._merge_configs_to_borgmatic(config_dicts)
         return yaml.dump(merged_config, default_flow_style=False, sort_keys=False)
 
     def _build_location_section(self, repository: Repository) -> Dict[str, Any]:
@@ -231,6 +203,7 @@ class BorgmaticExportService:
 
         # Always include retention policies for clarity, even if 0
         # Borgmatic treats 0 as "don't keep any" which is valid
+        # Note: keep_quarterly is NOT a valid borgmatic field, so we exclude it
         if scheduled_job.prune_keep_hourly is not None:
             retention['keep_hourly'] = scheduled_job.prune_keep_hourly
         if scheduled_job.prune_keep_daily is not None:
@@ -239,8 +212,6 @@ class BorgmaticExportService:
             retention['keep_weekly'] = scheduled_job.prune_keep_weekly
         if scheduled_job.prune_keep_monthly is not None:
             retention['keep_monthly'] = scheduled_job.prune_keep_monthly
-        if scheduled_job.prune_keep_quarterly is not None:
-            retention['keep_quarterly'] = scheduled_job.prune_keep_quarterly
         if scheduled_job.prune_keep_yearly is not None:
             retention['keep_yearly'] = scheduled_job.prune_keep_yearly
 
@@ -267,57 +238,6 @@ class BorgmaticExportService:
 
         return hooks if hooks else None
 
-    def _build_metadata_section(
-        self,
-        repository: Repository,
-        scheduled_job: Optional[ScheduledJob]
-    ) -> Dict[str, Any]:
-        """Build Borg UI metadata section for round-trip import."""
-        metadata = {
-            'repository': {
-                'id': repository.id,
-                'name': repository.name,
-                'encryption': repository.encryption,
-                'repository_type': repository.repository_type,
-                'mode': repository.mode,
-                'hook_timeout': repository.hook_timeout,
-                'continue_on_hook_failure': repository.continue_on_hook_failure,
-            }
-        }
-
-        if repository.custom_flags:
-            metadata['repository']['custom_flags'] = repository.custom_flags
-
-        if repository.check_interval_days:
-            metadata['checks'] = {
-                'enabled': True,
-                'interval_days': repository.check_interval_days,
-                'max_duration': repository.check_max_duration,
-                'notify_on_success': repository.notify_on_check_success,
-                'notify_on_failure': repository.notify_on_check_failure,
-            }
-
-        if scheduled_job:
-            metadata['schedule'] = {
-                'id': scheduled_job.id,
-                'name': scheduled_job.name,
-                'cron_expression': scheduled_job.cron_expression,
-                'enabled': scheduled_job.enabled,
-                'archive_name_template': scheduled_job.archive_name_template,
-                'run_prune_after': scheduled_job.run_prune_after,
-                'run_compact_after': scheduled_job.run_compact_after,
-            }
-
-        if repository.repository_type == 'ssh':
-            metadata['ssh'] = {
-                'host': repository.host,
-                'port': repository.port,
-                'username': repository.username,
-                'remote_path': repository.remote_path,
-            }
-
-        return metadata
-
     def _build_repository_path(self, repository: Repository) -> str:
         """Build borgmatic-style repository path."""
         # For SSH repositories, path is already stored as full SSH URL (ssh://user@host:port/path)
@@ -332,15 +252,13 @@ class BorgmaticExportService:
 
     def _merge_configs_to_borgmatic(
         self,
-        configs: List[Dict[str, Any]],
-        include_borg_ui_metadata: bool
+        configs: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
         Merge multiple repository configs into single borgmatic-compatible format.
 
         Args:
             configs: List of individual repository configurations
-            include_borg_ui_metadata: Whether to include Borg UI metadata
 
         Returns:
             Merged borgmatic configuration (strict borgmatic format)
@@ -348,11 +266,9 @@ class BorgmaticExportService:
         if not configs:
             return {}
 
-        # If only one config and no metadata, return clean version
-        if len(configs) == 1 and not include_borg_ui_metadata:
-            config = configs[0].copy()
-            config.pop('borg_ui_metadata', None)
-            return config
+        # If only one config, return as-is
+        if len(configs) == 1:
+            return configs[0]
 
         # For multiple repositories, create proper structure
         merged = {
@@ -460,14 +376,8 @@ class BorgmaticImportService:
         # Check if this is a Borg UI export (old format with borg_ui_export wrapper)
         is_old_borg_ui_export = 'borg_ui_export' in data and 'configurations' in data
 
-        # Check if this is a new Borg UI export (has borg_ui_metadata in root)
-        has_borg_ui_metadata = 'borg_ui_metadata' in data
-
         if is_old_borg_ui_export:
             return self._import_borg_ui_export(data, merge_strategy, dry_run)
-        elif has_borg_ui_metadata:
-            # New format: flat borgmatic with borg_ui_metadata
-            return self._import_borgmatic_with_metadata(data, merge_strategy, dry_run)
         else:
             return self._import_borgmatic_config(data, merge_strategy, dry_run)
 
@@ -500,80 +410,6 @@ class BorgmaticImportService:
                 summary['warnings'].extend(result.get('warnings', []))
             except Exception as e:
                 summary['errors'].append(f"Failed to import repository: {str(e)}")
-
-        if not dry_run and summary['repositories_created'] + summary['repositories_updated'] > 0:
-            self.db.commit()
-
-        return summary
-
-    def _import_borgmatic_with_metadata(
-        self,
-        data: Dict[str, Any],
-        merge_strategy: str,
-        dry_run: bool
-    ) -> Dict[str, Any]:
-        """Import new Borg UI export format with borg_ui_metadata."""
-        summary = {
-            'success': True,
-            'repositories_created': 0,
-            'repositories_updated': 0,
-            'schedules_created': 0,
-            'schedules_updated': 0,
-            'warnings': [],
-            'errors': []
-        }
-
-        # Get metadata for all repositories
-        metadata = data.get('borg_ui_metadata', {})
-        repositories_metadata = metadata.get('repositories', [])
-
-        # Get repository paths from location section
-        location = data.get('location', {})
-        repo_paths = location.get('repositories', [])
-
-        # Import each repository
-        for i, repo_path in enumerate(repo_paths):
-            try:
-                # Get corresponding metadata if available
-                repo_metadata = repositories_metadata[i] if i < len(repositories_metadata) else {}
-
-                # Build a config for this single repository
-                single_config = {
-                    'location': {
-                        'repositories': [repo_path]
-                    },
-                    'storage': data.get('storage', {}),
-                    'borg_ui_metadata': repo_metadata
-                }
-
-                # Add source directories if present (shared across all repos)
-                if location.get('source_directories'):
-                    single_config['location']['source_directories'] = location['source_directories']
-
-                # Add exclude patterns if present (shared across all repos)
-                if location.get('exclude_patterns'):
-                    single_config['location']['exclude_patterns'] = location['exclude_patterns']
-
-                # Add retention if present
-                if 'retention' in data:
-                    single_config['retention'] = data['retention']
-
-                # Add consistency if present
-                if 'consistency' in data:
-                    single_config['consistency'] = data['consistency']
-
-                # Add hooks if present (shared across all repos)
-                if 'hooks' in data:
-                    single_config['hooks'] = data['hooks']
-
-                result = self._import_single_repository(single_config, merge_strategy, dry_run)
-                summary['repositories_created'] += result.get('repository_created', 0)
-                summary['repositories_updated'] += result.get('repository_updated', 0)
-                summary['schedules_created'] += result.get('schedule_created', 0)
-                summary['schedules_updated'] += result.get('schedule_updated', 0)
-                summary['warnings'].extend(result.get('warnings', []))
-            except Exception as e:
-                summary['errors'].append(f"Failed to import repository {repo_path}: {str(e)}")
 
         if not dry_run and summary['repositories_created'] + summary['repositories_updated'] > 0:
             self.db.commit()
@@ -681,24 +517,35 @@ class BorgmaticImportService:
                         single_config['consistency'] = data['consistency']
 
                 # Add hooks
+                hooks = {}
                 if has_toplevel_repos:
-                    # New format: hooks list with name/command
-                    if 'hooks' in data:
-                        hooks = {}
+                    # New format supports both:
+                    # 1. Deprecated but supported: before_backup/after_backup at root level (as lists)
+                    # 2. Modern: commands list with name/command dicts
+
+                    # Handle deprecated before_backup/after_backup (most common)
+                    if 'before_backup' in data:
+                        hooks['before_backup'] = data['before_backup'] if isinstance(data['before_backup'], list) else [data['before_backup']]
+                    if 'after_backup' in data:
+                        hooks['after_backup'] = data['after_backup'] if isinstance(data['after_backup'], list) else [data['after_backup']]
+
+                    # Also handle modern hooks list format
+                    if 'hooks' in data and isinstance(data['hooks'], list):
                         for hook in data['hooks']:
                             if isinstance(hook, dict):
                                 name = hook.get('name', '')
                                 command = hook.get('command', '')
                                 if 'before_backup' in name.lower():
-                                    hooks['before_backup'] = command
+                                    hooks['before_backup'] = command if isinstance(command, list) else [command]
                                 elif 'after_backup' in name.lower():
-                                    hooks['after_backup'] = command
-                        if hooks:
-                            single_config['hooks'] = hooks
+                                    hooks['after_backup'] = command if isinstance(command, list) else [command]
                 else:
                     # Old format: hooks section
                     if 'hooks' in data:
                         single_config['hooks'] = data['hooks']
+
+                if hooks:
+                    single_config['hooks'] = hooks
 
                 result = self._import_single_repository(single_config, merge_strategy, dry_run)
                 summary['repositories_created'] += result.get('repository_created', 0)
@@ -734,7 +581,6 @@ class BorgmaticImportService:
         storage = config.get('storage', {})
         retention = config.get('retention', {})
         hooks = config.get('hooks', {})
-        metadata = config.get('borg_ui_metadata', {})
 
         # Parse repository path
         repo_paths = location.get('repositories', [])
@@ -744,7 +590,7 @@ class BorgmaticImportService:
         repo_path_str = repo_paths[0]
         repo_name, repo_path, repo_type, ssh_info = self._parse_repository_path(
             repo_path_str,
-            metadata.get('repository', {})
+            {}  # No metadata
         )
 
         # Check for existing repository
@@ -771,9 +617,9 @@ class BorgmaticImportService:
         repository.name = repo_name
         repository.path = repo_path
         repository.repository_type = repo_type
-        repository.encryption = metadata.get('repository', {}).get('encryption', 'repokey')
+        repository.encryption = 'repokey'  # Default encryption
         repository.compression = storage.get('compression', 'lz4')
-        repository.mode = metadata.get('repository', {}).get('mode', 'full')
+        repository.mode = 'full'  # Default mode
 
         # Passphrase from storage section
         if storage.get('encryption_passphrase'):
@@ -795,12 +641,8 @@ class BorgmaticImportService:
         if hooks.get('after_backup'):
             repository.post_backup_script = '\n'.join(hooks['after_backup'])
 
-        repository.hook_timeout = metadata.get('repository', {}).get('hook_timeout', 300)
-        repository.continue_on_hook_failure = metadata.get('repository', {}).get('continue_on_hook_failure', False)
-
-        # Custom flags
-        if metadata.get('repository', {}).get('custom_flags'):
-            repository.custom_flags = metadata['repository']['custom_flags']
+        repository.hook_timeout = 300  # Default timeout
+        repository.continue_on_hook_failure = False  # Default: fail on hook failure
 
         # SSH settings
         if repo_type == 'ssh' and ssh_info:
@@ -810,13 +652,7 @@ class BorgmaticImportService:
             repository.remote_path = ssh_info.get('remote_path')
             result['warnings'].append(f"SSH repository created but SSH key must be configured manually: {repo_name}")
 
-        # Check settings
-        check_metadata = metadata.get('checks', {})
-        if check_metadata.get('enabled'):
-            repository.check_interval_days = check_metadata.get('interval_days', 7)
-            repository.check_max_duration = check_metadata.get('max_duration', 3600)
-            repository.notify_on_check_success = check_metadata.get('notify_on_success', False)
-            repository.notify_on_check_failure = check_metadata.get('notify_on_failure', True)
+        # Check settings - defaults only (no metadata)
 
         if not dry_run:
             if result['repository_created']:
@@ -828,7 +664,7 @@ class BorgmaticImportService:
             schedule_result = self._import_schedule(
                 repository,
                 retention,
-                metadata.get('schedule', {}),
+                {},  # No schedule metadata
                 merge_strategy,
                 dry_run
             )

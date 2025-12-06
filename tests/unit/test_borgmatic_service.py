@@ -15,7 +15,7 @@ class TestBorgmaticExportService:
         """Test exporting a local repository."""
         export_service = BorgmaticExportService(db_session)
 
-        config = export_service.export_repository(sample_repository, include_schedule=False, include_borg_ui_metadata=False)
+        config = export_service.export_repository(sample_repository, include_schedule=False)
 
         # New flat format (v1.8.0+)
         assert 'repositories' in config
@@ -29,7 +29,7 @@ class TestBorgmaticExportService:
         db_session.commit()
 
         export_service = BorgmaticExportService(db_session)
-        config = export_service.export_repository(sample_repository, include_schedule=False, include_borg_ui_metadata=False)
+        config = export_service.export_repository(sample_repository, include_schedule=False)
 
         # New flat format
         assert config['source_directories'] == ['/home/user', '/etc']
@@ -41,7 +41,7 @@ class TestBorgmaticExportService:
         db_session.commit()
 
         export_service = BorgmaticExportService(db_session)
-        config = export_service.export_repository(sample_repository, include_schedule=False, include_borg_ui_metadata=False)
+        config = export_service.export_repository(sample_repository, include_schedule=False)
 
         # New flat format
         assert config['exclude_patterns'] == ['*.pyc', '*.tmp']
@@ -53,42 +53,27 @@ class TestBorgmaticExportService:
         db_session.commit()
 
         export_service = BorgmaticExportService(db_session)
-        config = export_service.export_repository(sample_repository, include_schedule=False, include_borg_ui_metadata=False)
+        config = export_service.export_repository(sample_repository, include_schedule=False)
 
-        # New flat format with hooks as list
-        assert 'hooks' in config
-        assert isinstance(config['hooks'], list)
-        assert len(config['hooks']) == 2
-        assert config['hooks'][0]['name'] == 'before_backup'
-        assert config['hooks'][0]['command'] == 'echo "Starting backup"'
-        assert config['hooks'][1]['name'] == 'after_backup'
-        assert config['hooks'][1]['command'] == 'echo "Backup completed"'
-
-    def test_export_with_borg_ui_metadata(self, db_session, sample_repository):
-        """Test exporting repository with Borg UI metadata for round-trip."""
-        export_service = BorgmaticExportService(db_session)
-        config = export_service.export_repository(sample_repository, include_schedule=False, include_borg_ui_metadata=True)
-
-        assert 'borg_ui_metadata' in config
-        assert config['borg_ui_metadata']['repository']['name'] == sample_repository.name
-        assert config['borg_ui_metadata']['repository']['encryption'] == sample_repository.encryption
+        # Using deprecated but still supported borgmatic hook format for maximum compatibility
+        assert 'before_backup' in config
+        assert config['before_backup'] == ['echo "Starting backup"']
+        assert 'after_backup' in config
+        assert config['after_backup'] == ['echo "Backup completed"']
 
     def test_export_with_schedule(self, db_session, sample_repository, sample_scheduled_job):
         """Test exporting repository with backup schedule."""
         export_service = BorgmaticExportService(db_session)
-        config = export_service.export_repository(sample_repository, include_schedule=True, include_borg_ui_metadata=True)
+        config = export_service.export_repository(sample_repository, include_schedule=True)
 
         # New flat format - retention keys at top level
         assert 'keep_daily' in config
         assert config['keep_daily'] == sample_scheduled_job.prune_keep_daily
-        assert 'borg_ui_metadata' in config
-        assert 'schedule' in config['borg_ui_metadata']
-        assert config['borg_ui_metadata']['schedule']['cron_expression'] == sample_scheduled_job.cron_expression
 
     def test_export_to_yaml(self, db_session, sample_repository):
         """Test exporting to YAML string."""
         export_service = BorgmaticExportService(db_session)
-        yaml_content = export_service.export_to_yaml(include_schedules=False, include_borg_ui_metadata=False)
+        yaml_content = export_service.export_to_yaml(include_schedules=False)
 
         assert yaml_content
         data = yaml.safe_load(yaml_content)
@@ -115,7 +100,7 @@ class TestBorgmaticExportService:
         db_session.commit()
 
         export_service = BorgmaticExportService(db_session)
-        config = export_service.export_repository(repo, include_schedule=False, include_borg_ui_metadata=False)
+        config = export_service.export_repository(repo, include_schedule=False)
 
         # New flat format - path is returned as-is (already full SSH URL)
         assert config['repositories'] == [ssh_url]
@@ -251,15 +236,6 @@ location:
 storage:
   compression: lz4
 
-borg_ui_metadata:
-  export_version: "1.0"
-  export_date: "2025-12-05T10:00:00Z"
-  repositories:
-    - repository:
-        name: test-repo
-        encryption: repokey
-        mode: full
-        custom_flags: "--stats"
 """
 
         import_service = BorgmaticImportService(db_session)
@@ -268,9 +244,9 @@ borg_ui_metadata:
         assert result['success']
         assert result['repositories_created'] == 1
 
-        repo = db_session.query(Repository).filter(Repository.name == 'test-repo').first()
+        repo = db_session.query(Repository).filter(Repository.name == 'repo').first()
         assert repo is not None
-        assert repo.custom_flags == '--stats'
+        assert repo.compression == 'lz4'
         assert repo.mode == 'full'
 
     def test_import_invalid_yaml(self, db_session):
@@ -290,13 +266,6 @@ borg_ui_metadata:
 location:
   repositories:
     - /backup/another-repo.borg
-
-borg_ui_metadata:
-  repositories:
-    - repository:
-        name: {sample_repository.name}
-        encryption: repokey
-        mode: full
 """
 
         import_service = BorgmaticImportService(db_session)
@@ -306,8 +275,8 @@ borg_ui_metadata:
         assert result['repositories_created'] == 1
 
         # Verify renamed repository exists
-        repos = db_session.query(Repository).filter(Repository.name.like(f'{sample_repository.name}%')).all()
-        assert len(repos) == 2  # Original + renamed
+        repos = db_session.query(Repository).filter(Repository.name.like('another-repo%')).all()
+        assert len(repos) == 1  # Renamed repository
 
 
 # Fixtures

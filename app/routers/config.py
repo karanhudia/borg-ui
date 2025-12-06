@@ -19,7 +19,6 @@ class ExportRequest(BaseModel):
     """Request model for exporting configurations."""
     repository_ids: Optional[List[int]] = None  # None = export all
     include_schedules: bool = True
-    include_borg_ui_metadata: bool = True
 
 
 class ImportRequest(BaseModel):
@@ -42,14 +41,9 @@ async def export_borgmatic_config(
     export_service = BorgmaticExportService(db)
 
     try:
-        # For multiple repos, always get metadata first to extract repo names for filenames
-        # We'll remove it later if not requested
-        need_metadata_for_filenames = request.repository_ids is None or len(request.repository_ids or []) != 1
-
         configs = export_service.export_all_repositories(
             repository_ids=request.repository_ids,
-            include_schedules=request.include_schedules,
-            include_borg_ui_metadata=True  # Always include temporarily to get repo names
+            include_schedules=request.include_schedules
         )
 
         if not configs:
@@ -58,15 +52,13 @@ async def export_borgmatic_config(
         # If only one repository, return single YAML file
         if len(configs) == 1:
             import yaml
-            config = configs[0].copy()
-
-            # Remove metadata if not requested
-            if not request.include_borg_ui_metadata:
-                config.pop('borg_ui_metadata', None)
-
+            repo_name, config = configs[0]
             yaml_content = yaml.dump(config, default_flow_style=False, sort_keys=False)
 
-            filename = "borgmatic-config.yaml"
+            # Sanitize filename
+            safe_name = "".join(c for c in repo_name if c.isalnum() or c in ('-', '_')).lower()
+            filename = f"{safe_name}.yaml" if safe_name else "borgmatic-config.yaml"
+
             return Response(
                 content=yaml_content,
                 media_type="application/x-yaml",
@@ -82,18 +74,13 @@ async def export_borgmatic_config(
 
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-            for i, config in enumerate(configs):
-                # Get repository name from metadata or generate one
-                repo_name = config.get('borg_ui_metadata', {}).get('repository', {}).get('name', f'repo-{i+1}')
+            for i, (repo_name, config) in enumerate(configs):
                 # Sanitize filename
                 safe_name = "".join(c for c in repo_name if c.isalnum() or c in ('-', '_')).lower()
+                if not safe_name:
+                    safe_name = f'repo-{i+1}'
 
-                # Remove metadata from individual files if not requested
-                config_copy = config.copy()
-                if not request.include_borg_ui_metadata:
-                    config_copy.pop('borg_ui_metadata', None)
-
-                yaml_content = yaml.dump(config_copy, default_flow_style=False, sort_keys=False)
+                yaml_content = yaml.dump(config, default_flow_style=False, sort_keys=False)
                 zip_file.writestr(f"{safe_name}.yaml", yaml_content)
 
         zip_buffer.seek(0)
