@@ -42,6 +42,10 @@ class BackupService:
         try:
             logger.info(f"Running {hook_name} hook", job_id=job_id, script_preview=script[:100])
 
+            # Ensure script has a shebang line for proper execution
+            if not script.strip().startswith('#!'):
+                script = '#!/bin/bash\n' + script
+
             # Write script to temporary file to respect shebang (#!/bin/bash, etc.)
             # This ensures bash-specific syntax like arrays work correctly
             with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:
