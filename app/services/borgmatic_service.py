@@ -29,7 +29,7 @@ class BorgmaticExportService:
         include_borg_ui_metadata: bool = True
     ) -> Dict[str, Any]:
         """
-        Export a single repository to borgmatic format.
+        Export a single repository to borgmatic format (v1.8.0+ flat format).
 
         Args:
             repository: Repository model instance
@@ -37,29 +37,63 @@ class BorgmaticExportService:
             include_borg_ui_metadata: Include Borg UI specific metadata for round-trip
 
         Returns:
-            Dictionary representing borgmatic configuration
+            Dictionary representing borgmatic configuration in new flat format
         """
         config = {}
 
-        # Location section
-        config['location'] = self._build_location_section(repository)
+        # Source directories (top-level in new format)
+        if repository.source_directories:
+            try:
+                source_dirs = json.loads(repository.source_directories)
+                config['source_directories'] = source_dirs
+            except (json.JSONDecodeError, TypeError):
+                pass
 
-        # Storage section
-        config['storage'] = self._build_storage_section(repository)
+        # Repositories (top-level in new format)
+        repo_path = self._build_repository_path(repository)
+        if repo_path:
+            config['repositories'] = [repo_path]
 
-        # Retention section (from scheduled job if exists)
+        # Exclude patterns (top-level in new format)
+        if repository.exclude_patterns:
+            try:
+                exclude_patterns = json.loads(repository.exclude_patterns)
+                config['exclude_patterns'] = exclude_patterns
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        # Compression (top-level in new format)
+        if repository.compression:
+            config['compression'] = repository.compression
+
+        # Encryption passphrase (top-level in new format)
+        if repository.passphrase:
+            config['encryption_passphrase'] = repository.passphrase
+
+        # Retention (top-level in new format - from scheduled job if exists)
         if include_schedule:
             scheduled_job = self._get_scheduled_job_for_repository(repository)
             if scheduled_job:
-                config['retention'] = self._build_retention_section(scheduled_job)
+                retention = self._build_retention_section(scheduled_job)
+                config.update(retention)  # Merge retention keys at top level
 
-        # Consistency section (from repository check settings)
+        # Checks (top-level in new format - from repository check settings)
         if repository.check_interval_days:
-            config['consistency'] = self._build_consistency_section(repository)
+            config['checks'] = [{'name': 'repository', 'frequency': f'{repository.check_interval_days} days'}]
 
-        # Hooks section
-        hooks = self._build_hooks_section(repository)
-        if hooks:
+        # Commands/hooks (top-level in new format)
+        if repository.pre_backup_script or repository.post_backup_script:
+            hooks = []
+            if repository.pre_backup_script:
+                hooks.append({
+                    'name': 'before_backup',
+                    'command': repository.pre_backup_script
+                })
+            if repository.post_backup_script:
+                hooks.append({
+                    'name': 'after_backup',
+                    'command': repository.post_backup_script
+                })
             config['hooks'] = hooks
 
         # Borg UI metadata (for round-trip import/export)
@@ -552,7 +586,7 @@ class BorgmaticImportService:
         merge_strategy: str,
         dry_run: bool
     ) -> Dict[str, Any]:
-        """Import standard borgmatic configuration."""
+        """Import standard borgmatic configuration (supports both old nested and new flat formats)."""
         summary = {
             'success': True,
             'repositories_created': 0,
@@ -563,9 +597,21 @@ class BorgmaticImportService:
             'errors': []
         }
 
-        # Standard borgmatic format can have multiple repositories
-        location = data.get('location', {})
-        repo_paths = location.get('repositories', [])
+        # Detect format: old nested (location:, storage:, etc.) or new flat (source_directories at top-level)
+        has_location_section = 'location' in data
+        has_toplevel_repos = 'repositories' in data and not has_location_section
+
+        if has_toplevel_repos:
+            # NEW FORMAT (v1.8.0+): flat structure
+            repo_paths = data.get('repositories', [])
+            source_directories = data.get('source_directories', [])
+            exclude_patterns = data.get('exclude_patterns', [])
+        else:
+            # OLD FORMAT (< v1.8.0): nested sections
+            location = data.get('location', {})
+            repo_paths = location.get('repositories', [])
+            source_directories = location.get('source_directories', [])
+            exclude_patterns = location.get('exclude_patterns', [])
 
         if not repo_paths:
             return {
@@ -576,33 +622,74 @@ class BorgmaticImportService:
         # Import each repository
         for repo_path in repo_paths:
             try:
-                # Build a config for this single repository
+                # Build a config for this single repository in old nested format
+                # (for compatibility with _import_single_repository)
                 single_config = {
                     'location': {
-                        'repositories': [repo_path]
-                    },
-                    'storage': data.get('storage', {})
+                        'repositories': [repo_path],
+                        'source_directories': source_directories,
+                        'exclude_patterns': exclude_patterns
+                    }
                 }
 
-                # Add source directories if present (shared across all repos)
-                if location.get('source_directories'):
-                    single_config['location']['source_directories'] = location['source_directories']
+                # Add storage/compression/passphrase
+                if has_toplevel_repos:
+                    # New format: top-level keys
+                    storage = {}
+                    if 'compression' in data:
+                        storage['compression'] = data['compression']
+                    if 'encryption_passphrase' in data:
+                        storage['encryption_passphrase'] = data['encryption_passphrase']
+                    if storage:
+                        single_config['storage'] = storage
+                else:
+                    # Old format: storage section
+                    if 'storage' in data:
+                        single_config['storage'] = data['storage']
 
-                # Add exclude patterns if present (shared across all repos)
-                if location.get('exclude_patterns'):
-                    single_config['location']['exclude_patterns'] = location['exclude_patterns']
+                # Add retention
+                if has_toplevel_repos:
+                    # New format: top-level keep_* keys
+                    retention = {}
+                    for key in ['keep_hourly', 'keep_daily', 'keep_weekly', 'keep_monthly', 'keep_quarterly', 'keep_yearly']:
+                        if key in data:
+                            retention[key] = data[key]
+                    if retention:
+                        single_config['retention'] = retention
+                else:
+                    # Old format: retention section
+                    if 'retention' in data:
+                        single_config['retention'] = data['retention']
 
-                # Add retention if present
-                if 'retention' in data:
-                    single_config['retention'] = data['retention']
+                # Add consistency/checks
+                if has_toplevel_repos:
+                    # New format: checks list
+                    if 'checks' in data:
+                        single_config['consistency'] = {'checks': [c.get('name', c) if isinstance(c, dict) else c for c in data['checks']]}
+                else:
+                    # Old format: consistency section
+                    if 'consistency' in data:
+                        single_config['consistency'] = data['consistency']
 
-                # Add consistency if present
-                if 'consistency' in data:
-                    single_config['consistency'] = data['consistency']
-
-                # Add hooks if present (shared across all repos)
-                if 'hooks' in data:
-                    single_config['hooks'] = data['hooks']
+                # Add hooks
+                if has_toplevel_repos:
+                    # New format: hooks list with name/command
+                    if 'hooks' in data:
+                        hooks = {}
+                        for hook in data['hooks']:
+                            if isinstance(hook, dict):
+                                name = hook.get('name', '')
+                                command = hook.get('command', '')
+                                if 'before_backup' in name.lower():
+                                    hooks['before_backup'] = command
+                                elif 'after_backup' in name.lower():
+                                    hooks['after_backup'] = command
+                        if hooks:
+                            single_config['hooks'] = hooks
+                else:
+                    # Old format: hooks section
+                    if 'hooks' in data:
+                        single_config['hooks'] = data['hooks']
 
                 result = self._import_single_repository(single_config, merge_strategy, dry_run)
                 summary['repositories_created'] += result.get('repository_created', 0)
