@@ -42,11 +42,14 @@ async def export_borgmatic_config(
     export_service = BorgmaticExportService(db)
 
     try:
-        # Get configurations for all repositories
+        # For multiple repos, always get metadata first to extract repo names for filenames
+        # We'll remove it later if not requested
+        need_metadata_for_filenames = request.repository_ids is None or len(request.repository_ids or []) != 1
+
         configs = export_service.export_all_repositories(
             repository_ids=request.repository_ids,
             include_schedules=request.include_schedules,
-            include_borg_ui_metadata=request.include_borg_ui_metadata
+            include_borg_ui_metadata=True  # Always include temporarily to get repo names
         )
 
         if not configs:
@@ -85,9 +88,10 @@ async def export_borgmatic_config(
                 # Sanitize filename
                 safe_name = "".join(c for c in repo_name if c.isalnum() or c in ('-', '_')).lower()
 
-                # Remove metadata from individual files
+                # Remove metadata from individual files if not requested
                 config_copy = config.copy()
-                config_copy.pop('borg_ui_metadata', None)
+                if not request.include_borg_ui_metadata:
+                    config_copy.pop('borg_ui_metadata', None)
 
                 yaml_content = yaml.dump(config_copy, default_flow_style=False, sort_keys=False)
                 zip_file.writestr(f"{safe_name}.yaml", yaml_content)
