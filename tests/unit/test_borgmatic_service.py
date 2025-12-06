@@ -17,10 +17,10 @@ class TestBorgmaticExportService:
 
         config = export_service.export_repository(sample_repository, include_schedule=False, include_borg_ui_metadata=False)
 
-        assert 'location' in config
-        assert 'storage' in config
-        assert config['location']['repositories'] == [sample_repository.path]
-        assert config['storage']['compression'] == sample_repository.compression
+        # New flat format (v1.8.0+)
+        assert 'repositories' in config
+        assert config['repositories'] == [sample_repository.path]
+        assert config['compression'] == sample_repository.compression
 
     def test_export_with_source_directories(self, db_session, sample_repository):
         """Test exporting repository with source directories."""
@@ -31,7 +31,8 @@ class TestBorgmaticExportService:
         export_service = BorgmaticExportService(db_session)
         config = export_service.export_repository(sample_repository, include_schedule=False, include_borg_ui_metadata=False)
 
-        assert config['location']['source_directories'] == ['/home/user', '/etc']
+        # New flat format
+        assert config['source_directories'] == ['/home/user', '/etc']
 
     def test_export_with_exclude_patterns(self, db_session, sample_repository):
         """Test exporting repository with exclude patterns."""
@@ -42,7 +43,8 @@ class TestBorgmaticExportService:
         export_service = BorgmaticExportService(db_session)
         config = export_service.export_repository(sample_repository, include_schedule=False, include_borg_ui_metadata=False)
 
-        assert config['location']['exclude_patterns'] == ['*.pyc', '*.tmp']
+        # New flat format
+        assert config['exclude_patterns'] == ['*.pyc', '*.tmp']
 
     def test_export_with_hooks(self, db_session, sample_repository):
         """Test exporting repository with pre/post backup hooks."""
@@ -53,9 +55,14 @@ class TestBorgmaticExportService:
         export_service = BorgmaticExportService(db_session)
         config = export_service.export_repository(sample_repository, include_schedule=False, include_borg_ui_metadata=False)
 
+        # New flat format with hooks as list
         assert 'hooks' in config
-        assert config['hooks']['before_backup'] == ['echo "Starting backup"']
-        assert config['hooks']['after_backup'] == ['echo "Backup completed"']
+        assert isinstance(config['hooks'], list)
+        assert len(config['hooks']) == 2
+        assert config['hooks'][0]['name'] == 'before_backup'
+        assert config['hooks'][0]['command'] == 'echo "Starting backup"'
+        assert config['hooks'][1]['name'] == 'after_backup'
+        assert config['hooks'][1]['command'] == 'echo "Backup completed"'
 
     def test_export_with_borg_ui_metadata(self, db_session, sample_repository):
         """Test exporting repository with Borg UI metadata for round-trip."""
@@ -71,8 +78,9 @@ class TestBorgmaticExportService:
         export_service = BorgmaticExportService(db_session)
         config = export_service.export_repository(sample_repository, include_schedule=True, include_borg_ui_metadata=True)
 
-        assert 'retention' in config
-        assert config['retention']['keep_daily'] == sample_scheduled_job.prune_keep_daily
+        # New flat format - retention keys at top level
+        assert 'keep_daily' in config
+        assert config['keep_daily'] == sample_scheduled_job.prune_keep_daily
         assert 'borg_ui_metadata' in config
         assert 'schedule' in config['borg_ui_metadata']
         assert config['borg_ui_metadata']['schedule']['cron_expression'] == sample_scheduled_job.cron_expression
@@ -84,18 +92,18 @@ class TestBorgmaticExportService:
 
         assert yaml_content
         data = yaml.safe_load(yaml_content)
-        # New format: flat borgmatic structure
-        assert 'location' in data
-        assert 'repositories' in data['location']
-        assert len(data['location']['repositories']) > 0
-        assert 'storage' in data
+        # New flat format (v1.8.0+)
+        assert 'repositories' in data
+        assert len(data['repositories']) > 0
+        assert 'compression' in data
 
     def test_export_ssh_repository(self, db_session):
         """Test exporting SSH repository."""
-        # Create SSH repository
+        # Create SSH repository with full SSH URL as path
+        ssh_url = 'ssh://backupuser@backup.example.com:22/backup/repo.borg'
         repo = Repository(
             name='ssh-repo',
-            path='/backup/repo.borg',
+            path=ssh_url,
             repository_type='ssh',
             host='backup.example.com',
             port=22,
@@ -109,8 +117,8 @@ class TestBorgmaticExportService:
         export_service = BorgmaticExportService(db_session)
         config = export_service.export_repository(repo, include_schedule=False, include_borg_ui_metadata=False)
 
-        expected_path = 'backupuser@backup.example.com:/backup/repo.borg'
-        assert config['location']['repositories'] == [expected_path]
+        # New flat format - path is returned as-is (already full SSH URL)
+        assert config['repositories'] == [ssh_url]
 
 
 class TestBorgmaticImportService:
