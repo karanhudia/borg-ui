@@ -38,7 +38,7 @@ const ExportImportTab: React.FC = () => {
   // Export state
   const [selectedRepos, setSelectedRepos] = useState<number[]>([])
   const [includeSchedules, setIncludeSchedules] = useState(true)
-  const [includeBorgUiMetadata, setIncludeBorgUiMetadata] = useState(true)
+  const [includeBorgUiMetadata, setIncludeBorgUiMetadata] = useState(false)
   const [exportingAll, setExportingAll] = useState(true)
 
   // Import state
@@ -279,7 +279,7 @@ const ExportImportTab: React.FC = () => {
                   onChange={(e) => setIncludeBorgUiMetadata(e.target.checked)}
                 />
               }
-              label="Include Borg UI metadata (required for round-trip import)"
+              label="Include Borg UI metadata (only needed for re-importing back to Borg UI, breaks borgmatic validation)"
             />
 
             <Button
