@@ -1377,12 +1377,13 @@ const Schedule: React.FC = () => {
                         label="Keep Hourly"
                         type="number"
                         value={createForm.prune_keep_hourly}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const value = parseInt(e.target.value, 10);
                           setCreateForm({
                             ...createForm,
-                            prune_keep_hourly: parseInt(e.target.value) || 0,
-                          })
-                        }
+                            prune_keep_hourly: isNaN(value) ? 0 : Math.max(0, value),
+                          });
+                        }}
                         inputProps={{ min: 0 }}
                         size="small"
                         helperText="Hourly backups to keep (0 = disabled)"
@@ -1433,12 +1434,13 @@ const Schedule: React.FC = () => {
                         label="Keep Quarterly"
                         type="number"
                         value={createForm.prune_keep_quarterly}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const value = parseInt(e.target.value, 10);
                           setCreateForm({
                             ...createForm,
-                            prune_keep_quarterly: parseInt(e.target.value) || 0,
-                          })
-                        }
+                            prune_keep_quarterly: isNaN(value) ? 0 : Math.max(0, value),
+                          });
+                        }}
                         inputProps={{ min: 0 }}
                         size="small"
                         helperText="Quarterly backups to keep (0 = disabled)"
@@ -1668,12 +1670,13 @@ const Schedule: React.FC = () => {
                         label="Keep Hourly"
                         type="number"
                         value={editForm.prune_keep_hourly}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const value = parseInt(e.target.value, 10);
                           setEditForm({
                             ...editForm,
-                            prune_keep_hourly: parseInt(e.target.value) || 0,
-                          })
-                        }
+                            prune_keep_hourly: isNaN(value) ? 0 : Math.max(0, value),
+                          });
+                        }}
                         inputProps={{ min: 0 }}
                         size="small"
                         helperText="Hourly backups to keep (0 = disabled)"
@@ -1724,12 +1727,13 @@ const Schedule: React.FC = () => {
                         label="Keep Quarterly"
                         type="number"
                         value={editForm.prune_keep_quarterly}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const value = parseInt(e.target.value, 10);
                           setEditForm({
                             ...editForm,
-                            prune_keep_quarterly: parseInt(e.target.value) || 0,
-                          })
-                        }
+                            prune_keep_quarterly: isNaN(value) ? 0 : Math.max(0, value),
+                          });
+                        }}
                         inputProps={{ min: 0 }}
                         size="small"
                         helperText="Quarterly backups to keep (0 = disabled)"
