@@ -1378,11 +1378,11 @@ const Schedule: React.FC = () => {
                         type="number"
                         value={createForm.prune_keep_hourly}
                         onChange={(e) => {
-                          const value = parseInt(e.target.value, 10);
+                          const value = parseInt(e.target.value, 10)
                           setCreateForm({
                             ...createForm,
                             prune_keep_hourly: isNaN(value) ? 0 : Math.max(0, value),
-                          });
+                          })
                         }}
                         inputProps={{ min: 0 }}
                         size="small"
@@ -1435,11 +1435,11 @@ const Schedule: React.FC = () => {
                         type="number"
                         value={createForm.prune_keep_quarterly}
                         onChange={(e) => {
-                          const value = parseInt(e.target.value, 10);
+                          const value = parseInt(e.target.value, 10)
                           setCreateForm({
                             ...createForm,
                             prune_keep_quarterly: isNaN(value) ? 0 : Math.max(0, value),
-                          });
+                          })
                         }}
                         inputProps={{ min: 0 }}
                         size="small"
@@ -1671,11 +1671,11 @@ const Schedule: React.FC = () => {
                         type="number"
                         value={editForm.prune_keep_hourly}
                         onChange={(e) => {
-                          const value = parseInt(e.target.value, 10);
+                          const value = parseInt(e.target.value, 10)
                           setEditForm({
                             ...editForm,
                             prune_keep_hourly: isNaN(value) ? 0 : Math.max(0, value),
-                          });
+                          })
                         }}
                         inputProps={{ min: 0 }}
                         size="small"
@@ -1728,11 +1728,11 @@ const Schedule: React.FC = () => {
                         type="number"
                         value={editForm.prune_keep_quarterly}
                         onChange={(e) => {
-                          const value = parseInt(e.target.value, 10);
+                          const value = parseInt(e.target.value, 10)
                           setEditForm({
                             ...editForm,
                             prune_keep_quarterly: isNaN(value) ? 0 : Math.max(0, value),
-                          });
+                          })
                         }}
                         inputProps={{ min: 0 }}
                         size="small"
