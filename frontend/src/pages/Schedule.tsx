@@ -378,12 +378,12 @@ const Schedule: React.FC = () => {
       archive_name_template: job.archive_name_template || '{job_name}-{now}',
       run_prune_after: job.run_prune_after || false,
       run_compact_after: job.run_compact_after || false,
-      prune_keep_hourly: job.prune_keep_hourly || 0,
-      prune_keep_daily: job.prune_keep_daily || 7,
-      prune_keep_weekly: job.prune_keep_weekly || 4,
-      prune_keep_monthly: job.prune_keep_monthly || 6,
-      prune_keep_quarterly: job.prune_keep_quarterly || 0,
-      prune_keep_yearly: job.prune_keep_yearly || 1,
+      prune_keep_hourly: job.prune_keep_hourly ?? 0,
+      prune_keep_daily: job.prune_keep_daily ?? 7,
+      prune_keep_weekly: job.prune_keep_weekly ?? 4,
+      prune_keep_monthly: job.prune_keep_monthly ?? 6,
+      prune_keep_quarterly: job.prune_keep_quarterly ?? 0,
+      prune_keep_yearly: job.prune_keep_yearly ?? 1,
     })
   }
 
