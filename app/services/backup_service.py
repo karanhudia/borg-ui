@@ -55,8 +55,10 @@ class BackupService:
             # Make script executable
             os.chmod(temp_script, 0o755)
 
-            # Execute script file
+            # Execute script with bash explicitly (same as test endpoint)
+            # This ensures consistent behavior between test runs and production
             process = await asyncio.create_subprocess_exec(
+                '/bin/bash',
                 temp_script,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
