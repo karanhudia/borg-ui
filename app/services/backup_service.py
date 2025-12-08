@@ -10,6 +10,7 @@ from app.database.database import SessionLocal
 from app.config import settings
 from app.core.borg_errors import format_error_message, get_error_details
 from app.services.notification_service import notification_service
+from app.services.script_executor import execute_script
 
 logger = structlog.get_logger()
 
@@ -25,7 +26,10 @@ class BackupService:
 
     async def _run_hook(self, script: str, hook_name: str, timeout: int, job_id: int) -> dict:
         """
-        Run a pre or post backup hook script
+        Run a pre or post backup hook script using the shared script executor.
+
+        This method delegates to the shared execute_script() function,
+        ensuring identical behavior with the test endpoint.
 
         Args:
             script: Shell script to execute
@@ -36,86 +40,24 @@ class BackupService:
         Returns:
             dict with success, stdout, stderr, returncode
         """
-        import tempfile
-        temp_script = None
+        logger.info(f"Running {hook_name} hook", job_id=job_id, script_preview=script[:100])
 
-        try:
-            logger.info(f"Running {hook_name} hook", job_id=job_id, script_preview=script[:100])
+        # Use the shared script executor (same as test endpoint)
+        # This guarantees identical execution environment and behavior
+        result = await execute_script(
+            script=script,
+            timeout=float(timeout),
+            env=os.environ.copy(),
+            context=f"{hook_name} (job {job_id})"
+        )
 
-            # Ensure script has a shebang line for proper execution
-            if not script.strip().startswith('#!'):
-                script = '#!/bin/bash\n' + script
-
-            # Write script to temporary file to respect shebang (#!/bin/bash, etc.)
-            # This ensures bash-specific syntax like arrays work correctly
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:
-                f.write(script)
-                temp_script = f.name
-
-            # Make script executable
-            os.chmod(temp_script, 0o755)
-
-            # Execute script with bash explicitly (same as test endpoint)
-            # This ensures consistent behavior between test runs and production
-            process = await asyncio.create_subprocess_exec(
-                '/bin/bash',
-                temp_script,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=os.environ.copy()
-            )
-
-            # Wait with timeout
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=timeout
-            )
-
-            stdout_str = stdout.decode() if stdout else ""
-            stderr_str = stderr.decode() if stderr else ""
-
-            success = process.returncode == 0
-
-            if success:
-                logger.info(f"{hook_name} hook completed successfully",
-                           job_id=job_id,
-                           returncode=process.returncode)
-            else:
-                logger.warning(f"{hook_name} hook failed",
-                              job_id=job_id,
-                              returncode=process.returncode,
-                              stderr=stderr_str[:500])
-
-            return {
-                "success": success,
-                "returncode": process.returncode,
-                "stdout": stdout_str,
-                "stderr": stderr_str
-            }
-
-        except asyncio.TimeoutError:
-            logger.error(f"{hook_name} hook timed out", job_id=job_id, timeout=timeout)
-            return {
-                "success": False,
-                "returncode": -1,
-                "stdout": "",
-                "stderr": f"Hook timed out after {timeout} seconds"
-            }
-        except Exception as e:
-            logger.error(f"{hook_name} hook exception", job_id=job_id, error=str(e))
-            return {
-                "success": False,
-                "returncode": -1,
-                "stdout": "",
-                "stderr": f"Hook failed with exception: {str(e)}"
-            }
-        finally:
-            # Clean up temporary script file
-            if temp_script and os.path.exists(temp_script):
-                try:
-                    os.unlink(temp_script)
-                except Exception as e:
-                    logger.warning(f"Failed to delete temporary hook script", path=temp_script, error=str(e))
+        # Map result format to what the backup service expects
+        return {
+            "success": result["success"],
+            "returncode": result["exit_code"],
+            "stdout": result["stdout"],
+            "stderr": result["stderr"]
+        }
 
     def rotate_logs(self, max_age_days: int = 30, max_files: int = 100):
         """
