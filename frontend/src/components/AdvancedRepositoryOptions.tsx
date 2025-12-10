@@ -189,10 +189,10 @@ export default function AdvancedRepositoryOptions({
       {mode === 'full' && repositoryId && (
         <>
           <Divider sx={{ mt: 3, mb: 2 }} />
-          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.5 }}>
             Backup Scripts
           </Typography>
-          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
             Assign reusable scripts with advanced conditions (run on failure, run always, chaining, etc.)
           </Typography>
           <RepositoryScriptsTab repositoryId={repositoryId} />
