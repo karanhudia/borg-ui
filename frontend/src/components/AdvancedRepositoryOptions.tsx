@@ -8,11 +8,8 @@ import {
   FormControlLabel,
   Button,
   Chip,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
 } from '@mui/material'
-import { FileCode, ChevronDown } from 'lucide-react'
+import { FileCode } from 'lucide-react'
 import ScriptEditorDialog from './ScriptEditorDialog'
 import RepositoryScriptsTab from './RepositoryScriptsTab'
 

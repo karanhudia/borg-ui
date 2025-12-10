@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth.tsx'
 import { useTabEnablement } from '../context/AppContext'
@@ -36,22 +36,56 @@ import {
   Info,
   History,
   FileCode,
+  Settings as SettingsIcon,
+  ChevronDown,
+  ChevronRight,
+  Bell,
+  Package,
+  Palette,
+  Users,
+  Download as DownloadIcon,
 } from 'lucide-react'
 import api from '../services/api'
 
 const drawerWidth = 240
 
+// Navigation item type with optional sub-items
+interface NavigationItem {
+  name: string
+  href?: string
+  icon: React.ComponentType<any>
+  key: 'dashboard' | 'connections' | 'repositories' | 'backups' | 'archives' | 'restore' | 'schedule'
+  subItems?: Array<{
+    name: string
+    href: string
+    icon: React.ComponentType<any>
+  }>
+}
+
 // Map navigation items to tab enablement keys
-const navigationWithKeys = [
+const navigationWithKeys: NavigationItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: Home, key: 'dashboard' as const },
   { name: 'SSH Connections', href: '/ssh-connections', icon: Wifi, key: 'connections' as const },
   { name: 'Repositories', href: '/repositories', icon: Database, key: 'repositories' as const },
-  { name: 'Scripts', href: '/scripts', icon: FileCode, key: 'dashboard' as const },
   { name: 'Backup', href: '/backup', icon: FileText, key: 'backups' as const },
   { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },
   { name: 'Restore', href: '/restore', icon: Download, key: 'restore' as const },
   { name: 'Schedule', href: '/schedule', icon: Clock, key: 'schedule' as const },
   { name: 'Activity', href: '/activity', icon: History, key: 'dashboard' as const },
+  {
+    name: 'Settings',
+    icon: SettingsIcon,
+    key: 'dashboard' as const,
+    subItems: [
+      { name: 'Account', href: '/settings/account', icon: User },
+      { name: 'Appearance', href: '/settings/appearance', icon: Palette },
+      { name: 'Notifications', href: '/settings/notifications', icon: Bell },
+      { name: 'Packages', href: '/settings/packages', icon: Package },
+      { name: 'Scripts', href: '/settings/scripts', icon: FileCode },
+      { name: 'Export/Import', href: '/settings/export', icon: DownloadIcon },
+      { name: 'Users', href: '/settings/users', icon: Users },
+    ],
+  },
 ]
 
 interface SystemInfo {
@@ -63,9 +97,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
+  const [settingsExpanded, setSettingsExpanded] = useState(false)
   const location = useLocation()
   const { user, logout } = useAuth()
   const { tabEnablement, getTabDisabledReason } = useTabEnablement()
+
+  // Auto-expand settings if we're on a settings page
+  useEffect(() => {
+    if (location.pathname.startsWith('/settings')) {
+      setSettingsExpanded(true)
+    }
+  }, [location.pathname])
 
   useEffect(() => {
     // Fetch system info
@@ -143,16 +185,96 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <Divider />
         <List sx={{ pt: 0 }}>
           {navigationWithKeys.map((item) => {
-            const isActive =
-              location.pathname === item.href || location.pathname.startsWith(item.href + '/')
             const isEnabled = tabEnablement[item.key]
             const disabledReason = getTabDisabledReason(item.key)
             const Icon = item.icon
 
+            // Handle items with sub-items (Settings)
+            if (item.subItems) {
+              const isAnySubItemActive = item.subItems.some((subItem) =>
+                location.pathname.startsWith(subItem.href)
+              )
+
+              return (
+                <React.Fragment key={item.name}>
+                  <ListItem disablePadding>
+                    <ListItemButton
+                      onClick={() => setSettingsExpanded(!settingsExpanded)}
+                      sx={{
+                        '&:hover': {
+                          backgroundColor: 'action.hover',
+                        },
+                      }}
+                    >
+                      <ListItemIcon sx={{ color: isAnySubItemActive ? 'primary.main' : 'text.secondary' }}>
+                        <Icon size={20} />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={item.name}
+                        primaryTypographyProps={{
+                          fontSize: '0.875rem',
+                          fontWeight: isAnySubItemActive ? 600 : 400,
+                          color: isAnySubItemActive ? 'primary.main' : 'inherit',
+                        }}
+                      />
+                      {settingsExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    </ListItemButton>
+                  </ListItem>
+
+                  {/* Sub-items */}
+                  {settingsExpanded &&
+                    item.subItems.map((subItem) => {
+                      const isActive = location.pathname.startsWith(subItem.href)
+                      const SubIcon = subItem.icon
+
+                      return (
+                        <ListItem key={subItem.name} disablePadding>
+                          <ListItemButton
+                            component={Link}
+                            to={subItem.href}
+                            selected={isActive}
+                            sx={{
+                              pl: 4,
+                              '&.Mui-selected': {
+                                backgroundColor: 'primary.main',
+                                color: 'white',
+                                '&:hover': {
+                                  backgroundColor: 'primary.dark',
+                                },
+                                '& .MuiListItemIcon-root': {
+                                  color: 'white',
+                                },
+                              },
+                            }}
+                          >
+                            <ListItemIcon sx={{ color: isActive ? 'white' : 'text.secondary', minWidth: 36 }}>
+                              <SubIcon size={18} />
+                            </ListItemIcon>
+                            <ListItemText
+                              primary={subItem.name}
+                              primaryTypographyProps={{
+                                fontSize: '0.8125rem',
+                                fontWeight: isActive ? 600 : 400,
+                                color: isActive ? 'white' : 'inherit',
+                              }}
+                            />
+                          </ListItemButton>
+                        </ListItem>
+                      )
+                    })}
+                </React.Fragment>
+              )
+            }
+
+            // Regular items without sub-items
+            const isActive = Boolean(
+              item.href && (location.pathname === item.href || location.pathname.startsWith(item.href + '/'))
+            )
+
             const listItemButton = (
               <ListItemButton
-                component={isEnabled ? Link : 'div'}
-                to={isEnabled ? item.href : undefined}
+                component={isEnabled && item.href ? Link : 'div'}
+                to={isEnabled && item.href ? item.href : undefined}
                 selected={isActive}
                 disabled={!isEnabled}
                 onClick={(e: React.MouseEvent<HTMLDivElement>) => handleNavClick(e, item)}
@@ -287,12 +409,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </Typography>
             </Box>
             <Divider />
-            <MenuItem component={Link} to="/settings" onClick={handleMenuClose}>
-              <ListItemIcon>
-                <User size={18} />
-              </ListItemIcon>
-              <ListItemText>Settings</ListItemText>
-            </MenuItem>
             <MenuItem onClick={handleLogout}>
               <ListItemIcon>
                 <LogOut size={18} />

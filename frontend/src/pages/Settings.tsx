@@ -35,6 +35,7 @@ import {
   Monitor,
   Package,
   Download,
+  FileCode,
 } from 'lucide-react'
 import { settingsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
@@ -44,6 +45,7 @@ import { availableThemes } from '../theme'
 import NotificationsTab from '../components/NotificationsTab'
 import PackagesTab from '../components/PackagesTab'
 import ExportImportTab from '../components/ExportImportTab'
+import Scripts from './Scripts'
 import { formatDateShort } from '../utils/dateUtils'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
 
@@ -57,16 +59,6 @@ interface UserType {
   last_login: string | null
 }
 
-// Tab configuration - matches tab order in UI
-const TAB_CONFIG = {
-  account: { index: 0, path: 'account' },
-  appearance: { index: 1, path: 'appearance' },
-  notifications: { index: 2, path: 'notifications' },
-  packages: { index: 3, path: 'packages' },
-  export: { index: 4, path: 'export' },
-  users: { index: 5, path: 'users' },
-} as const
-
 const Settings: React.FC = () => {
   const { user } = useAuth()
   const { mode, setTheme } = useTheme()
@@ -74,11 +66,21 @@ const Settings: React.FC = () => {
   const navigate = useNavigate()
   const { tab } = useParams<{ tab?: string }>()
 
+  // Get tab order based on user role
+  const getTabOrder = () => {
+    const baseTabs = ['account', 'appearance', 'notifications']
+    if (user?.is_admin) {
+      return [...baseTabs, 'packages', 'scripts', 'export', 'users']
+    }
+    return [...baseTabs, 'scripts', 'export']
+  }
+
   // Determine active tab from URL or default to 'account'
   const getTabIndexFromPath = (tabPath?: string): number => {
-    if (!tabPath) return TAB_CONFIG.account.index
-    const tabEntry = Object.values(TAB_CONFIG).find((t) => t.path === tabPath)
-    return tabEntry?.index ?? TAB_CONFIG.account.index
+    if (!tabPath) return 0
+    const tabOrder = getTabOrder()
+    const index = tabOrder.indexOf(tabPath)
+    return index >= 0 ? index : 0
   }
 
   const [activeTab, setActiveTab] = useState(getTabIndexFromPath(tab))
@@ -332,8 +334,8 @@ const Settings: React.FC = () => {
         <Tabs
           value={activeTab}
           onChange={(_, value) => {
-            const tabPath =
-              Object.values(TAB_CONFIG).find((t) => t.index === value)?.path || 'account'
+            const tabOrder = getTabOrder()
+            const tabPath = tabOrder[value] || 'account'
             navigate(`/settings/${tabPath}`)
           }}
         >
@@ -363,6 +365,12 @@ const Settings: React.FC = () => {
               sx={{ textTransform: 'none', minHeight: 48 }}
             />
           )}
+          <Tab
+            icon={<FileCode size={18} />}
+            iconPosition="start"
+            label="Scripts"
+            sx={{ textTransform: 'none', minHeight: 48 }}
+          />
           <Tab
             icon={<Download size={18} />}
             iconPosition="start"
@@ -530,14 +538,17 @@ const Settings: React.FC = () => {
       {/* Notifications Tab */}
       {activeTab === 2 && <NotificationsTab />}
 
-      {/* System Packages Tab */}
+      {/* System Packages Tab - Admin Only */}
       {activeTab === 3 && user?.is_admin && <PackagesTab />}
 
-      {/* Export/Import Tab */}
-      {activeTab === (user?.is_admin ? 4 : 3) && <ExportImportTab />}
+      {/* Scripts Tab */}
+      {activeTab === (user?.is_admin ? 4 : 3) && <Scripts />}
 
-      {/* User Management Tab */}
-      {activeTab === (user?.is_admin ? 5 : 4) && user?.is_admin && (
+      {/* Export/Import Tab */}
+      {activeTab === (user?.is_admin ? 5 : 4) && <ExportImportTab />}
+
+      {/* User Management Tab - Admin Only */}
+      {activeTab === 6 && user?.is_admin && (
         <Box>
           <Box
             sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}
