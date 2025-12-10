@@ -8,11 +8,16 @@ import {
   FormControlLabel,
   Button,
   Chip,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material'
-import { FileCode } from 'lucide-react'
+import { FileCode, ChevronDown } from 'lucide-react'
 import ScriptEditorDialog from './ScriptEditorDialog'
+import RepositoryScriptsTab from './RepositoryScriptsTab'
 
 interface AdvancedRepositoryOptionsProps {
+  repositoryId?: number | null
   mode: 'full' | 'observe'
   remotePath: string
   preBackupScript: string
@@ -29,6 +34,7 @@ interface AdvancedRepositoryOptionsProps {
 }
 
 export default function AdvancedRepositoryOptions({
+  repositoryId,
   mode,
   remotePath,
   preBackupScript,
@@ -180,6 +186,28 @@ export default function AdvancedRepositoryOptions({
         onChange={onPostBackupScriptChange}
         placeholder="#!/bin/bash&#10;echo 'Post-backup hook completed'&#10;ssh nas@192.168.1.100 'sudo poweroff'"
       />
+
+      {/* Script Library - Only show for full repositories with ID */}
+      {mode === 'full' && repositoryId && (
+        <>
+          <Divider sx={{ mt: 3, mb: 2 }} />
+          <Accordion defaultExpanded>
+            <AccordionSummary expandIcon={<ChevronDown size={20} />}>
+              <Box>
+                <Typography variant="subtitle2" fontWeight={600}>
+                  Script Library (Recommended)
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Reusable scripts with advanced conditions (run on failure, run always, etc.)
+                </Typography>
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <RepositoryScriptsTab repositoryId={repositoryId} />
+            </AccordionDetails>
+          </Accordion>
+        </>
+      )}
     </>
   )
 }
