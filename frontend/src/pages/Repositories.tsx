@@ -1568,6 +1568,7 @@ export default function Repositories() {
 
               {/* Advanced Options */}
               <AdvancedRepositoryOptions
+                repositoryId={null}
                 mode={repositoryForm.mode}
                 remotePath={repositoryForm.remote_path}
                 preBackupScript={repositoryForm.pre_backup_script}
@@ -2064,6 +2065,7 @@ export default function Repositories() {
 
               {/* Advanced Options */}
               <AdvancedRepositoryOptions
+                repositoryId={editingRepository?.id}
                 mode={editForm.mode}
                 remotePath={editForm.remote_path}
                 preBackupScript={editForm.pre_backup_script}
