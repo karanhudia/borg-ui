@@ -691,50 +691,7 @@ export default function Repositories() {
     return parts.join(',')
   }
 
-  const parseCompressionString = (
-    compression: string
-  ): {
-    algorithm: string
-    level: string
-    autoDetect: boolean
-    obfuscate: string
-  } => {
-    const parts = compression.split(',')
-    let algorithm = 'lz4'
-    let level = ''
-    let autoDetect = false
-    let obfuscate = ''
-
-    let i = 0
-
-    // Check for obfuscate
-    if (parts[i] === 'obfuscate') {
-      i++
-      if (i < parts.length) {
-        obfuscate = parts[i]
-        i++
-      }
-    }
-
-    // Check for auto
-    if (parts[i] === 'auto') {
-      autoDetect = true
-      i++
-    }
-
-    // Get algorithm
-    if (i < parts.length) {
-      algorithm = parts[i]
-      i++
-    }
-
-    // Get level
-    if (i < parts.length) {
-      level = parts[i]
-    }
-
-    return { algorithm, level, autoDetect, obfuscate }
-  }
+  // Removed: parseCompressionString - no longer needed with sub-route forms
 
   const getCompressionLabel = (compression: string) => {
     // Just return the compression string as-is for display
