@@ -35,6 +35,7 @@ import {
   Lock,
   Info,
   History,
+  FileCode,
 } from 'lucide-react'
 import api from '../services/api'
 
@@ -45,6 +46,7 @@ const navigationWithKeys = [
   { name: 'Dashboard', href: '/dashboard', icon: Home, key: 'dashboard' as const },
   { name: 'SSH Connections', href: '/ssh-connections', icon: Wifi, key: 'connections' as const },
   { name: 'Repositories', href: '/repositories', icon: Database, key: 'repositories' as const },
+  { name: 'Scripts', href: '/scripts', icon: FileCode, key: 'dashboard' as const },
   { name: 'Backup', href: '/backup', icon: FileText, key: 'backups' as const },
   { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },
   { name: 'Restore', href: '/restore', icon: Download, key: 'restore' as const },
