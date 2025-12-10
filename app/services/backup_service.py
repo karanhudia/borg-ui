@@ -5,12 +5,13 @@ from datetime import datetime
 from pathlib import Path
 import structlog
 from sqlalchemy.orm import Session
-from app.database.models import BackupJob, Repository
+from app.database.models import BackupJob, Repository, RepositoryScript
 from app.database.database import SessionLocal
 from app.config import settings
 from app.core.borg_errors import format_error_message, get_error_details
 from app.services.notification_service import notification_service
 from app.services.script_executor import execute_script
+from app.services.script_library_executor import ScriptLibraryExecutor
 
 logger = structlog.get_logger()
 
@@ -58,6 +59,94 @@ class BackupService:
             "stdout": result["stdout"],
             "stderr": result["stderr"]
         }
+
+    async def _execute_hooks(
+        self,
+        db: Session,
+        repo_record: Repository,
+        hook_type: str,  # 'pre-backup' or 'post-backup'
+        backup_result: str = None,  # 'success', 'failure', 'warning' (for post-backup)
+        job_id: int = None
+    ) -> dict:
+        """
+        Execute hooks using script library OR inline scripts (backward compatible)
+
+        Priority:
+        1. Check if repository has script library scripts configured
+        2. If yes, use ScriptLibraryExecutor
+        3. If no, fall back to inline scripts (old behavior)
+
+        Returns:
+            dict with success, execution_logs, scripts_executed, scripts_failed
+        """
+        # Check if repository uses script library
+        has_library_scripts = db.query(RepositoryScript).filter(
+            RepositoryScript.repository_id == repo_record.id,
+            RepositoryScript.hook_type == hook_type,
+            RepositoryScript.enabled == True
+        ).count() > 0
+
+        if has_library_scripts:
+            # Use script library
+            logger.info("Using script library for hooks",
+                       repository_id=repo_record.id,
+                       hook_type=hook_type)
+
+            executor = ScriptLibraryExecutor(db)
+            result = await executor.execute_hooks(
+                repository_id=repo_record.id,
+                hook_type=hook_type,
+                backup_result=backup_result,
+                backup_job_id=job_id
+            )
+
+            return {
+                "success": result["success"],
+                "execution_logs": result["execution_logs"],
+                "scripts_executed": result["scripts_executed"],
+                "scripts_failed": result["scripts_failed"],
+                "using_library": True
+            }
+
+        else:
+            # Fall back to inline scripts (backward compatibility)
+            inline_script = None
+            if hook_type == "pre-backup":
+                inline_script = repo_record.pre_backup_script
+            elif hook_type == "post-backup":
+                inline_script = repo_record.post_backup_script
+
+            if not inline_script:
+                # No scripts configured
+                return {
+                    "success": True,
+                    "execution_logs": [],
+                    "scripts_executed": 0,
+                    "scripts_failed": 0,
+                    "using_library": False
+                }
+
+            logger.info("Using inline script (legacy)",
+                       repository_id=repo_record.id,
+                       hook_type=hook_type)
+
+            # Execute inline script
+            executor = ScriptLibraryExecutor(db)
+            result = await executor.execute_inline_script(
+                script_content=inline_script,
+                script_type=hook_type,
+                timeout=repo_record.hook_timeout or 300,
+                repository_id=repo_record.id,
+                backup_job_id=job_id
+            )
+
+            return {
+                "success": result["success"],
+                "execution_logs": result["logs"],
+                "scripts_executed": 1,
+                "scripts_failed": 0 if result["success"] else 1,
+                "using_library": False
+            }
 
     def rotate_logs(self, max_age_days: int = 30, max_files: int = 100):
         """
@@ -491,37 +580,27 @@ class BackupService:
             # Initialize hook logs
             hook_logs = []
 
-            # Run pre-backup hook if configured
-            if repo_record and repo_record.pre_backup_script:
-                logger.info("Running pre-backup hook", job_id=job_id, repository=repository)
-                hook_timeout = repo_record.hook_timeout or 300
-                pre_hook_result = await self._run_hook(
-                    repo_record.pre_backup_script,
-                    "pre-backup",
-                    hook_timeout,
-                    job_id
+            # Run pre-backup hooks (script library or inline)
+            if repo_record:
+                logger.info("Executing pre-backup hooks", job_id=job_id, repository=repository)
+                hook_result = await self._execute_hooks(
+                    db=db,
+                    repo_record=repo_record,
+                    hook_type="pre-backup",
+                    job_id=job_id
                 )
 
-                # Log hook output
-                hook_log_entry = [
-                    "=" * 80,
-                    "PRE-BACKUP HOOK",
-                    "=" * 80,
-                    f"Exit Code: {pre_hook_result['returncode']}",
-                    f"Status: {'SUCCESS' if pre_hook_result['success'] else 'FAILED'}",
-                    "",
-                    "STDOUT:",
-                    pre_hook_result['stdout'] if pre_hook_result['stdout'] else "(empty)",
-                    "",
-                    "STDERR:",
-                    pre_hook_result['stderr'] if pre_hook_result['stderr'] else "(empty)",
-                    "=" * 80,
-                    ""
-                ]
-                hook_logs.extend(hook_log_entry)
+                # Add hook logs
+                if hook_result["execution_logs"]:
+                    hook_logs.extend(hook_result["execution_logs"])
 
-                if not pre_hook_result["success"]:
-                    error_msg = f"Pre-backup hook failed: {pre_hook_result['stderr']}"
+                logger.info("Pre-backup hooks completed",
+                           scripts_executed=hook_result["scripts_executed"],
+                           scripts_failed=hook_result["scripts_failed"],
+                           using_library=hook_result["using_library"])
+
+                if not hook_result["success"]:
+                    error_msg = f"Pre-backup hooks failed: {hook_result['scripts_failed']}/{hook_result['scripts_executed']} scripts failed"
                     logger.error(error_msg, job_id=job_id)
 
                     # Check if we should continue or abort
@@ -542,11 +621,9 @@ class BackupService:
 
                         return
                     else:
-                        logger.warning("Pre-backup hook failed but continuing anyway",
+                        logger.warning("Pre-backup hooks failed but continuing anyway",
                                      job_id=job_id,
                                      continue_on_failure=True)
-                else:
-                    logger.info("Pre-backup hook completed successfully", job_id=job_id)
 
             # Calculate total expected size of source directories
             logger.info("Calculating total size of source directories", source_paths=source_paths)
@@ -879,46 +956,35 @@ class BackupService:
                 # Update repository statistics after successful backup
                 await self._update_repository_stats(db, repository, env)
 
-                # Run post-backup hook if configured
+                # Run post-backup hooks (script library or inline)
                 post_hook_failed = False
-                if repo_record and repo_record.post_backup_script:
-                    logger.info("Running post-backup hook", job_id=job_id, repository=repository)
-                    hook_timeout = repo_record.hook_timeout or 300
-                    post_hook_result = await self._run_hook(
-                        repo_record.post_backup_script,
-                        "post-backup",
-                        hook_timeout,
-                        job_id
+                if repo_record:
+                    logger.info("Executing post-backup hooks", job_id=job_id, repository=repository)
+                    hook_result = await self._execute_hooks(
+                        db=db,
+                        repo_record=repo_record,
+                        hook_type="post-backup",
+                        backup_result="success",
+                        job_id=job_id
                     )
 
-                    # Log post-hook output
-                    post_hook_log_entry = [
-                        "=" * 80,
-                        "POST-BACKUP HOOK",
-                        "=" * 80,
-                        f"Exit Code: {post_hook_result['returncode']}",
-                        f"Status: {'SUCCESS' if post_hook_result['success'] else 'FAILED'}",
-                        "",
-                        "STDOUT:",
-                        post_hook_result['stdout'] if post_hook_result['stdout'] else "(empty)",
-                        "",
-                        "STDERR:",
-                        post_hook_result['stderr'] if post_hook_result['stderr'] else "(empty)",
-                        "=" * 80,
-                        ""
-                    ]
-                    hook_logs.extend(post_hook_log_entry)
+                    # Add hook logs
+                    if hook_result["execution_logs"]:
+                        hook_logs.extend(hook_result["execution_logs"])
 
-                    if not post_hook_result["success"]:
+                    logger.info("Post-backup hooks completed",
+                               scripts_executed=hook_result["scripts_executed"],
+                               scripts_failed=hook_result["scripts_failed"],
+                               using_library=hook_result["using_library"])
+
+                    if not hook_result["success"]:
                         post_hook_failed = True
-                        logger.warning("Post-backup hook failed",
+                        logger.warning("Post-backup hooks failed",
                                      job_id=job_id,
-                                     stderr=post_hook_result['stderr'])
-                        # Mark as failed if post-hook fails
+                                     scripts_failed=hook_result["scripts_failed"])
+                        # Mark as failed if post-hooks fail
                         job.status = "failed"
-                        job.error_message = f"Backup succeeded but post-backup hook failed: {post_hook_result['stderr']}"
-                    else:
-                        logger.info("Post-backup hook completed successfully", job_id=job_id)
+                        job.error_message = f"Backup succeeded but post-backup hooks failed: {hook_result['scripts_failed']}/{hook_result['scripts_executed']} scripts failed"
 
                 # Send notification after post-hook completes
                 if post_hook_failed:
@@ -953,46 +1019,35 @@ class BackupService:
                 # Update repository statistics even with warnings
                 await self._update_repository_stats(db, repository, env)
 
-                # Run post-backup hook even with warnings
+                # Run post-backup hooks even with warnings (script library or inline)
                 post_hook_failed = False
-                if repo_record and repo_record.post_backup_script:
-                    logger.info("Running post-backup hook", job_id=job_id, repository=repository)
-                    hook_timeout = repo_record.hook_timeout or 300
-                    post_hook_result = await self._run_hook(
-                        repo_record.post_backup_script,
-                        "post-backup",
-                        hook_timeout,
-                        job_id
+                if repo_record:
+                    logger.info("Executing post-backup hooks (warning case)", job_id=job_id, repository=repository)
+                    hook_result = await self._execute_hooks(
+                        db=db,
+                        repo_record=repo_record,
+                        hook_type="post-backup",
+                        backup_result="warning",
+                        job_id=job_id
                     )
 
-                    # Log post-hook output
-                    post_hook_log_entry = [
-                        "=" * 80,
-                        "POST-BACKUP HOOK",
-                        "=" * 80,
-                        f"Exit Code: {post_hook_result['returncode']}",
-                        f"Status: {'SUCCESS' if post_hook_result['success'] else 'FAILED'}",
-                        "",
-                        "STDOUT:",
-                        post_hook_result['stdout'] if post_hook_result['stdout'] else "(empty)",
-                        "",
-                        "STDERR:",
-                        post_hook_result['stderr'] if post_hook_result['stderr'] else "(empty)",
-                        "=" * 80,
-                        ""
-                    ]
-                    hook_logs.extend(post_hook_log_entry)
+                    # Add hook logs
+                    if hook_result["execution_logs"]:
+                        hook_logs.extend(hook_result["execution_logs"])
 
-                    if not post_hook_result["success"]:
+                    logger.info("Post-backup hooks completed (warning case)",
+                               scripts_executed=hook_result["scripts_executed"],
+                               scripts_failed=hook_result["scripts_failed"],
+                               using_library=hook_result["using_library"])
+
+                    if not hook_result["success"]:
                         post_hook_failed = True
-                        logger.warning("Post-backup hook failed",
+                        logger.warning("Post-backup hooks failed",
                                      job_id=job_id,
-                                     stderr=post_hook_result['stderr'])
-                        # Mark as failed if post-hook fails
+                                     scripts_failed=hook_result["scripts_failed"])
+                        # Mark as failed if post-hooks fail
                         job.status = "failed"
-                        job.error_message = f"Backup succeeded with warning but post-backup hook failed: {post_hook_result['stderr']}"
-                    else:
-                        logger.info("Post-backup hook completed successfully", job_id=job_id)
+                        job.error_message = f"Backup succeeded with warning but post-backup hooks failed: {hook_result['scripts_failed']}/{hook_result['scripts_executed']} scripts failed"
 
                 # Send notification after post-hook completes (for warning case)
                 if post_hook_failed:
@@ -1059,6 +1114,36 @@ class BackupService:
                                  job_id=job_id,
                                  repository=repository,
                                  msgid=primary_error['msgid'])
+
+                # Run post-backup hooks on FAILURE (solves #85!)
+                # Scripts with run_on='failure' or run_on='always' will execute
+                if repo_record:
+                    logger.info("Executing post-backup hooks (failure case)", job_id=job_id, repository=repository)
+                    hook_result = await self._execute_hooks(
+                        db=db,
+                        repo_record=repo_record,
+                        hook_type="post-backup",
+                        backup_result="failure",
+                        job_id=job_id
+                    )
+
+                    # Add hook logs
+                    if hook_result["execution_logs"]:
+                        hook_logs.extend(hook_result["execution_logs"])
+
+                    logger.info("Post-backup hooks completed (failure case)",
+                               scripts_executed=hook_result["scripts_executed"],
+                               scripts_failed=hook_result["scripts_failed"],
+                               using_library=hook_result["using_library"])
+
+                    if not hook_result["success"]:
+                        logger.warning("Post-backup hooks also failed",
+                                     job_id=job_id,
+                                     scripts_failed=hook_result["scripts_failed"])
+                        # Append hook failure to error message
+                        job.error_message += f"\n\nPost-backup hooks also failed: {hook_result['scripts_failed']}/{hook_result['scripts_executed']} scripts failed"
+                    else:
+                        logger.info("Post-backup hooks executed successfully despite backup failure", job_id=job_id)
 
             if job.completed_at is None:
                 job.completed_at = datetime.utcnow()
