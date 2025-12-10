@@ -1060,50 +1060,6 @@ class BackupService:
                                  repository=repository,
                                  msgid=primary_error['msgid'])
 
-                # Run post-backup hook on failure if configured (fixes #85)
-                if repo_record and repo_record.post_backup_script and repo_record.run_post_backup_on_failure:
-                    logger.info("Running post-backup hook on failure", job_id=job_id, repository=repository)
-                    hook_timeout = repo_record.hook_timeout or 300
-                    try:
-                        post_hook_result = await self._run_hook(
-                            repo_record.post_backup_script,
-                            "post-backup",
-                            hook_timeout,
-                            job_id
-                        )
-
-                        # Log post-hook output
-                        post_hook_log_entry = [
-                            "=" * 80,
-                            "POST-BACKUP HOOK (ON FAILURE)",
-                            "=" * 80,
-                            f"Exit Code: {post_hook_result['returncode']}",
-                            f"Status: {'SUCCESS' if post_hook_result['success'] else 'FAILED'}",
-                            "",
-                            "STDOUT:",
-                            post_hook_result['stdout'] if post_hook_result['stdout'] else "(empty)",
-                            "",
-                            "STDERR:",
-                            post_hook_result['stderr'] if post_hook_result['stderr'] else "(empty)",
-                            "=" * 80,
-                            ""
-                        ]
-                        hook_logs.extend(post_hook_log_entry)
-
-                        if not post_hook_result["success"]:
-                            logger.warning("Post-backup hook failed after backup failure",
-                                         job_id=job_id,
-                                         stderr=post_hook_result['stderr'])
-                            # Append hook failure to error message
-                            job.error_message += f"\n\nPost-backup hook also failed: {post_hook_result['stderr']}"
-                        else:
-                            logger.info("Post-backup hook completed successfully after backup failure", job_id=job_id)
-                    except Exception as hook_error:
-                        logger.error("Exception while running post-backup hook on failure",
-                                   job_id=job_id,
-                                   error=str(hook_error))
-                        hook_logs.append(f"Post-backup hook execution error: {str(hook_error)}")
-
             if job.completed_at is None:
                 job.completed_at = datetime.utcnow()
 

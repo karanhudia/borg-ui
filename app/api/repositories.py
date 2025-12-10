@@ -193,7 +193,6 @@ class RepositoryCreate(BaseModel):
     post_backup_script: Optional[str] = None  # Script to run after backup
     hook_timeout: Optional[int] = 300  # Hook timeout in seconds
     continue_on_hook_failure: Optional[bool] = False  # Continue backup if pre-hook fails
-    run_post_backup_on_failure: Optional[bool] = False  # Run post-backup hook even if backup fails
     mode: str = "full"  # full: backups + observability, observe: observability-only
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create (e.g., "--stats --list")
 
@@ -214,7 +213,6 @@ class RepositoryImport(BaseModel):
     post_backup_script: Optional[str] = None  # Script to run after backup
     hook_timeout: Optional[int] = 300  # Hook timeout in seconds
     continue_on_hook_failure: Optional[bool] = False  # Continue backup if pre-hook fails
-    run_post_backup_on_failure: Optional[bool] = False  # Run post-backup hook even if backup fails
     mode: str = "full"  # full: backups + observability, observe: observability-only
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create (e.g., "--stats --list")
 
@@ -229,7 +227,6 @@ class RepositoryUpdate(BaseModel):
     post_backup_script: Optional[str] = None
     hook_timeout: Optional[int] = None
     continue_on_hook_failure: Optional[bool] = None
-    run_post_backup_on_failure: Optional[bool] = None
     mode: Optional[str] = None  # full: backups + observability, observe: observability-only
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create
 
@@ -295,7 +292,6 @@ async def get_repositories(
                 "post_backup_script": repo.post_backup_script,
                 "hook_timeout": repo.hook_timeout,
                 "continue_on_hook_failure": repo.continue_on_hook_failure,
-                "run_post_backup_on_failure": repo.run_post_backup_on_failure,
                 "mode": repo.mode or "full",  # Default to "full" for backward compatibility
                 "custom_flags": repo.custom_flags,
                 "has_running_maintenance": has_check or has_compact
@@ -493,7 +489,6 @@ async def create_repository(
             post_backup_script=repo_data.post_backup_script,
             hook_timeout=repo_data.hook_timeout,
             continue_on_hook_failure=repo_data.continue_on_hook_failure,
-            run_post_backup_on_failure=repo_data.run_post_backup_on_failure,
             mode=repo_data.mode,
             custom_flags=repo_data.custom_flags
         )
@@ -684,7 +679,6 @@ async def import_repository(
             post_backup_script=repo_data.post_backup_script,
             hook_timeout=repo_data.hook_timeout,
             continue_on_hook_failure=repo_data.continue_on_hook_failure,
-            run_post_backup_on_failure=repo_data.run_post_backup_on_failure,
             mode=repo_data.mode,
             custom_flags=repo_data.custom_flags
         )
@@ -822,9 +816,6 @@ async def update_repository(
 
         if repo_data.continue_on_hook_failure is not None:
             repository.continue_on_hook_failure = repo_data.continue_on_hook_failure
-
-        if repo_data.run_post_backup_on_failure is not None:
-            repository.run_post_backup_on_failure = repo_data.run_post_backup_on_failure
 
         if repo_data.mode is not None:
             # Validate source directories when switching to full mode
