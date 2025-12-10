@@ -74,13 +74,15 @@ export default function RepositoryForm({ mode, repositoryId }: RepositoryFormPro
   const [fileExplorerField, setFileExplorerField] = useState<'path' | 'source'>('path')
 
   // Fetch SSH connections
-  const { data: sshConnections = [] } = useQuery({
+  const { data: sshConnectionsData } = useQuery({
     queryKey: ['ssh-connections'],
     queryFn: async () => {
       const response = await sshKeysAPI.getSSHConnections()
       return response.data
     },
   })
+
+  const sshConnections = Array.isArray(sshConnectionsData) ? sshConnectionsData : []
 
   // Fetch repository data for edit mode
   const { data: repository } = useQuery({
