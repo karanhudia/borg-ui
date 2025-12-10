@@ -10,6 +10,9 @@ import {
   CircularProgress,
   Chip,
   Paper,
+  TextField,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material'
 import { Play, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 import CodeEditor from './CodeEditor'
@@ -22,6 +25,11 @@ interface ScriptEditorDialogProps {
   value: string
   onChange: (value: string) => void
   placeholder?: string
+  timeout?: number
+  onTimeoutChange?: (timeout: number) => void
+  continueOnFailure?: boolean
+  onContinueOnFailureChange?: (value: boolean) => void
+  showContinueOnFailure?: boolean
 }
 
 export default function ScriptEditorDialog({
@@ -31,6 +39,11 @@ export default function ScriptEditorDialog({
   value,
   onChange,
   placeholder,
+  timeout = 300,
+  onTimeoutChange,
+  continueOnFailure = false,
+  onContinueOnFailureChange,
+  showContinueOnFailure = false,
 }: ScriptEditorDialogProps) {
   const [testRunning, setTestRunning] = useState(false)
   const [testResult, setTestResult] = useState<{
@@ -96,6 +109,30 @@ export default function ScriptEditorDialog({
             placeholder={placeholder}
             height="400px"
           />
+
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+            <TextField
+              label="Timeout (seconds)"
+              type="number"
+              value={timeout}
+              onChange={(e) => onTimeoutChange?.(parseInt(e.target.value) || 300)}
+              inputProps={{ min: 30, max: 3600 }}
+              helperText="Maximum time to wait for script execution"
+              sx={{ flex: 1 }}
+            />
+            {showContinueOnFailure && (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={continueOnFailure}
+                    onChange={(e) => onContinueOnFailureChange?.(e.target.checked)}
+                  />
+                }
+                label="Continue backup if script fails"
+                sx={{ mt: 1 }}
+              />
+            )}
+          </Box>
 
           {testResult && (
             <Box sx={{ mt: 2 }}>
