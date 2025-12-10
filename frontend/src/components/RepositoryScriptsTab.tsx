@@ -50,16 +50,15 @@ interface RepositoryScript {
 
 interface RepositoryScriptsTabProps {
   repositoryId: number
+  hookType: 'pre-backup' | 'post-backup'
   onUpdate?: () => void
 }
 
-export default function RepositoryScriptsTab({ repositoryId, onUpdate }: RepositoryScriptsTabProps) {
-  const [preBackupScripts, setPreBackupScripts] = useState<RepositoryScript[]>([])
-  const [postBackupScripts, setPostBackupScripts] = useState<RepositoryScript[]>([])
+export default function RepositoryScriptsTab({ repositoryId, hookType, onUpdate }: RepositoryScriptsTabProps) {
+  const [scripts, setScripts] = useState<RepositoryScript[]>([])
   const [availableScripts, setAvailableScripts] = useState<Script[]>([])
   const [loading, setLoading] = useState(true)
   const [addDialogOpen, setAddDialogOpen] = useState(false)
-  const [selectedHookType, setSelectedHookType] = useState<'pre-backup' | 'post-backup'>('pre-backup')
   const [selectedScriptId, setSelectedScriptId] = useState<number | ''>('')
 
   useEffect(() => {
@@ -70,8 +69,8 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
   const fetchAssignedScripts = async () => {
     try {
       const response = await api.get(`/repositories/${repositoryId}/scripts`)
-      setPreBackupScripts(response.data.pre_backup || [])
-      setPostBackupScripts(response.data.post_backup || [])
+      const scriptsData = hookType === 'pre-backup' ? response.data.pre_backup : response.data.post_backup
+      setScripts(scriptsData || [])
     } catch (error) {
       console.error('Failed to fetch assigned scripts:', error)
       toast.error('Failed to load assigned scripts')
@@ -93,14 +92,11 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
     if (!selectedScriptId) return
 
     try {
-      const nextOrder =
-        selectedHookType === 'pre-backup'
-          ? Math.max(0, ...preBackupScripts.map((s) => s.execution_order)) + 1
-          : Math.max(0, ...postBackupScripts.map((s) => s.execution_order)) + 1
+      const nextOrder = Math.max(0, ...scripts.map((s) => s.execution_order)) + 1
 
       await api.post(`/repositories/${repositoryId}/scripts`, {
         script_id: selectedScriptId,
-        hook_type: selectedHookType,
+        hook_type: hookType,
         execution_order: nextOrder,
         enabled: true,
       })
@@ -132,10 +128,8 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
 
   const handleMoveScript = async (
     script: RepositoryScript,
-    direction: 'up' | 'down',
-    hookType: 'pre-backup' | 'post-backup'
+    direction: 'up' | 'down'
   ) => {
-    const scripts = hookType === 'pre-backup' ? preBackupScripts : postBackupScripts
     const currentIndex = scripts.findIndex((s) => s.id === script.id)
 
     if (
@@ -174,7 +168,7 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
     }
   }
 
-  const renderScriptList = (scripts: RepositoryScript[], hookType: 'pre-backup' | 'post-backup') => {
+  const renderScriptList = () => {
     if (scripts.length === 0) {
       return (
         <Typography variant="body2" color="text.secondary" sx={{ py: 1, px: 2, fontStyle: 'italic' }}>
@@ -235,7 +229,7 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
                   <span>
                     <IconButton
                       size="small"
-                      onClick={() => handleMoveScript(script, 'up', hookType)}
+                      onClick={() => handleMoveScript(script, 'up')}
                       disabled={index === 0}
                       sx={{ p: 0.5 }}
                     >
@@ -247,7 +241,7 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
                   <span>
                     <IconButton
                       size="small"
-                      onClick={() => handleMoveScript(script, 'down', hookType)}
+                      onClick={() => handleMoveScript(script, 'down')}
                       disabled={index === scripts.length - 1}
                       sx={{ p: 0.5 }}
                     >
@@ -279,46 +273,22 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
 
   return (
     <Box>
-      {/* Pre-Backup Scripts */}
-      <Box sx={{ mb: 1.5 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-            Pre-Backup Scripts
-          </Typography>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<Plus size={16} />}
-            onClick={() => {
-              setSelectedHookType('pre-backup')
-              setAddDialogOpen(true)
-            }}
-          >
-            Add
-          </Button>
-        </Box>
-        {renderScriptList(preBackupScripts, 'pre-backup')}
-      </Box>
-
-      {/* Post-Backup Scripts */}
+      {/* Library Scripts Section */}
       <Box>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-            Post-Backup Scripts
+          <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', textTransform: 'uppercase' }}>
+            From Library
           </Typography>
           <Button
             variant="outlined"
             size="small"
             startIcon={<Plus size={16} />}
-            onClick={() => {
-              setSelectedHookType('post-backup')
-              setAddDialogOpen(true)
-            }}
+            onClick={() => setAddDialogOpen(true)}
           >
             Add
           </Button>
         </Box>
-        {renderScriptList(postBackupScripts, 'post-backup')}
+        {renderScriptList()}
       </Box>
 
       {/* Add Script Dialog */}

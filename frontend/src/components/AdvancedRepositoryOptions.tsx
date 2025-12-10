@@ -79,21 +79,27 @@ export default function AdvancedRepositoryOptions({
         />
       )}
 
-      {/* Scripts Section - Unified interface for both inline and library scripts */}
+      {/* Scripts Section - Grouped by timing (pre-backup / post-backup) */}
       {mode === 'full' && (
         <>
           <Divider sx={{ mt: 3, mb: 1.5 }} />
           <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.5 }}>
             Scripts {!repositoryId && '(Optional)'}
           </Typography>
-          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
             {repositoryId
               ? 'Configure inline scripts or assign reusable scripts from your Script Library.'
               : 'Configure inline scripts. After creation, you can also assign reusable scripts from Script Library.'}
           </Typography>
 
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-            <Box>
+          {/* Pre-Backup Scripts */}
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>
+              Pre-Backup Scripts
+            </Typography>
+
+            {/* Inline Pre-Backup Script */}
+            <Box sx={{ mb: repositoryId ? 1.5 : 0 }}>
               <Button
                 variant="outlined"
                 startIcon={<FileCode size={18} />}
@@ -102,7 +108,7 @@ export default function AdvancedRepositoryOptions({
                 sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                  <Typography>Pre-Backup Script</Typography>
+                  <Typography>Inline Script</Typography>
                   {preBackupScript && (
                     <Chip label="Configured" size="small" color="success" sx={{ ml: 'auto' }} />
                   )}
@@ -117,7 +123,18 @@ export default function AdvancedRepositoryOptions({
               </Typography>
             </Box>
 
-            <Box>
+            {/* Library Pre-Backup Scripts */}
+            {repositoryId && <RepositoryScriptsTab repositoryId={repositoryId} hookType="pre-backup" />}
+          </Box>
+
+          {/* Post-Backup Scripts */}
+          <Box>
+            <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>
+              Post-Backup Scripts
+            </Typography>
+
+            {/* Inline Post-Backup Script */}
+            <Box sx={{ mb: repositoryId ? 1.5 : 0 }}>
               <Button
                 variant="outlined"
                 startIcon={<FileCode size={18} />}
@@ -126,7 +143,7 @@ export default function AdvancedRepositoryOptions({
                 sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                  <Typography>Post-Backup Script</Typography>
+                  <Typography>Inline Script</Typography>
                   {postBackupScript && (
                     <Chip label="Configured" size="small" color="success" sx={{ ml: 'auto' }} />
                   )}
@@ -140,15 +157,10 @@ export default function AdvancedRepositoryOptions({
                 Shell script to run after successful backup
               </Typography>
             </Box>
-          </Box>
 
-          {/* Script Library - Show for repositories being edited (with ID) */}
-          {repositoryId && (
-            <>
-              <Divider sx={{ my: 2 }} />
-              <RepositoryScriptsTab repositoryId={repositoryId} />
-            </>
-          )}
+            {/* Library Post-Backup Scripts */}
+            {repositoryId && <RepositoryScriptsTab repositoryId={repositoryId} hookType="post-backup" />}
+          </Box>
         </>
       )}
 
