@@ -2,8 +2,6 @@ import { useState, useEffect } from 'react'
 import {
   Box,
   Button,
-  Card,
-  CardContent,
   Chip,
   Dialog,
   DialogActions,
@@ -16,11 +14,7 @@ import {
   Select,
   TextField,
   Typography,
-  Alert,
   Switch,
-  FormControlLabel,
-  Divider,
-  List,
   Tooltip,
 } from '@mui/material'
 import {
@@ -222,110 +216,113 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
   const renderScriptList = (scripts: RepositoryScript[], hookType: 'pre-backup' | 'post-backup') => {
     if (scripts.length === 0) {
       return (
-        <Alert severity="info" sx={{ my: 2 }}>
-          No {hookType} scripts assigned. Click "Add Script" to assign scripts from the library.
-        </Alert>
+        <Typography variant="body2" color="text.secondary" sx={{ py: 1.5, px: 2, fontStyle: 'italic' }}>
+          No scripts assigned
+        </Typography>
       )
     }
 
     return (
-      <List sx={{ width: '100%' }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
         {scripts.map((script, index) => {
           const effectiveTimeout = script.custom_timeout || script.default_timeout
           const effectiveRunOn = script.custom_run_on || script.default_run_on
 
           return (
-            <Card key={script.id} sx={{ mb: 2, opacity: script.enabled ? 1 : 0.6 }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
-                  {/* Script Info */}
-                  <Box sx={{ flex: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                      <FileCode size={18} />
-                      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                        {script.script_name}
-                      </Typography>
-                      <Chip label={`#${script.execution_order}`} size="small" variant="outlined" />
-                      <Chip
-                        label={effectiveRunOn}
-                        size="small"
-                        color={getRunOnColor(effectiveRunOn) as any}
-                      />
-                      {(script.custom_timeout || script.custom_run_on) && (
-                        <Chip label="customized" size="small" color="secondary" variant="outlined" />
-                      )}
-                    </Box>
+            <Box
+              key={script.id}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.5,
+                p: 1.5,
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 1,
+                opacity: script.enabled ? 1 : 0.5,
+                bgcolor: 'background.paper',
+                '&:hover': {
+                  bgcolor: 'action.hover',
+                },
+              }}
+            >
+              {/* Script Icon & Name */}
+              <FileCode size={16} style={{ flexShrink: 0, opacity: 0.6 }} />
+              <Typography variant="body2" sx={{ fontWeight: 500, minWidth: 0, flex: 1 }}>
+                {script.script_name}
+              </Typography>
 
-                    {script.script_description && (
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                        {script.script_description}
-                      </Typography>
-                    )}
+              {/* Badges */}
+              <Chip label={`#${script.execution_order}`} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
+              <Chip
+                label={effectiveRunOn}
+                size="small"
+                color={getRunOnColor(effectiveRunOn) as any}
+                sx={{ height: 20, fontSize: '0.7rem' }}
+              />
 
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <Clock size={14} />
-                        <Typography variant="caption">{effectiveTimeout}s timeout</Typography>
-                      </Box>
+              {/* Timeout */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Clock size={12} style={{ opacity: 0.6 }} />
+                <Typography variant="caption" color="text.secondary">
+                  {effectiveTimeout}s
+                </Typography>
+              </Box>
 
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={script.enabled}
-                            onChange={() => handleToggleEnabled(script)}
-                            size="small"
-                          />
-                        }
-                        label={<Typography variant="caption">Enabled</Typography>}
-                      />
-                    </Box>
-                  </Box>
+              {/* Enabled Switch */}
+              <Switch
+                checked={script.enabled}
+                onChange={() => handleToggleEnabled(script)}
+                size="small"
+                sx={{ ml: 'auto' }}
+              />
 
-                  {/* Actions */}
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                    <Tooltip title="Move Up">
-                      <span>
-                        <IconButton
-                          size="small"
-                          onClick={() => handleMoveScript(script, 'up', hookType)}
-                          disabled={index === 0}
-                        >
-                          <ChevronUp size={18} />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
-                    <Tooltip title="Move Down">
-                      <span>
-                        <IconButton
-                          size="small"
-                          onClick={() => handleMoveScript(script, 'down', hookType)}
-                          disabled={index === scripts.length - 1}
-                        >
-                          <ChevronDown size={18} />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
-                    <Tooltip title="Customize Settings">
-                      <IconButton size="small" onClick={() => handleEditScript(script)}>
-                        <AlertTriangle size={18} />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Remove Script">
-                      <IconButton
-                        size="small"
-                        onClick={() => handleRemoveScript(script.id)}
-                        color="error"
-                      >
-                        <Trash2 size={18} />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
+              {/* Actions */}
+              <Box sx={{ display: 'flex', gap: 0.25 }}>
+                <Tooltip title="Move Up">
+                  <span>
+                    <IconButton
+                      size="small"
+                      onClick={() => handleMoveScript(script, 'up', hookType)}
+                      disabled={index === 0}
+                      sx={{ p: 0.5 }}
+                    >
+                      <ChevronUp size={16} />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip title="Move Down">
+                  <span>
+                    <IconButton
+                      size="small"
+                      onClick={() => handleMoveScript(script, 'down', hookType)}
+                      disabled={index === scripts.length - 1}
+                      sx={{ p: 0.5 }}
+                    >
+                      <ChevronDown size={16} />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip title="Customize">
+                  <IconButton size="small" onClick={() => handleEditScript(script)} sx={{ p: 0.5 }}>
+                    <AlertTriangle size={16} />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Remove">
+                  <IconButton
+                    size="small"
+                    onClick={() => handleRemoveScript(script.id)}
+                    color="error"
+                    sx={{ p: 0.5 }}
+                  >
+                    <Trash2 size={16} />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            </Box>
           )
         })}
-      </List>
+      </Box>
     )
   }
 
@@ -335,56 +332,43 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
 
   return (
     <Box>
-      <Alert severity="info" sx={{ mb: 3 }}>
-        <Typography variant="body2" sx={{ mb: 1 }}>
-          <strong>Script Library Integration:</strong> Assign reusable scripts from your script
-          library to this repository.
-        </Typography>
-        <Typography variant="body2">
-          Scripts can be assigned as pre-backup or post-backup hooks, with conditions like "run on
-          failure" or "run always" to solve issues like stuck containers after failed backups.
-        </Typography>
-      </Alert>
-
       {/* Pre-Backup Scripts */}
-      <Box sx={{ mb: 4 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+      <Box sx={{ mb: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
             Pre-Backup Scripts
           </Typography>
           <Button
             variant="outlined"
             size="small"
-            startIcon={<Plus size={18} />}
+            startIcon={<Plus size={16} />}
             onClick={() => {
               setSelectedHookType('pre-backup')
               setAddDialogOpen(true)
             }}
           >
-            Add Script
+            Add
           </Button>
         </Box>
         {renderScriptList(preBackupScripts, 'pre-backup')}
       </Box>
 
-      <Divider sx={{ my: 3 }} />
-
       {/* Post-Backup Scripts */}
       <Box>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
             Post-Backup Scripts
           </Typography>
           <Button
             variant="outlined"
             size="small"
-            startIcon={<Plus size={18} />}
+            startIcon={<Plus size={16} />}
             onClick={() => {
               setSelectedHookType('post-backup')
               setAddDialogOpen(true)
             }}
           >
-            Add Script
+            Add
           </Button>
         </Box>
         {renderScriptList(postBackupScripts, 'post-backup')}
@@ -416,11 +400,6 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
                 ))}
               </Select>
             </FormControl>
-
-            <Alert severity="info">
-              The script will be added as a {selectedHookType} hook and will execute in order with
-              other scripts.
-            </Alert>
           </Box>
         </DialogContent>
         <DialogActions>
