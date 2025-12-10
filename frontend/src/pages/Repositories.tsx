@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
 import {
@@ -91,7 +90,6 @@ interface SSHConnection {
 
 export default function Repositories() {
   const { user } = useAuth()
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const appState = useAppState()
   const [showRepositoryModal, setShowRepositoryModal] = useState(false)
@@ -509,8 +507,30 @@ export default function Repositories() {
     setNewExcludePattern('')
   }
 
-  // Removed: Edit modal replaced with sub-route navigation
-  // const openEditModal = (repository: Repository) => { ... }
+  const openEditModal = (repository: Repository) => {
+    setEditingRepository(repository)
+    const parsed = parseCompressionString(repository.compression)
+    setEditForm({
+      name: repository.name,
+      path: repository.path,
+      compression: repository.compression,
+      compressionAlgorithm: parsed.algorithm,
+      compressionLevel: parsed.level,
+      compressionAutoDetect: parsed.autoDetect,
+      compressionObfuscate: parsed.obfuscate,
+      source_directories: repository.source_directories || [],
+      exclude_patterns: repository.exclude_patterns || [],
+      remote_path: (repository as any).remote_path || '',
+      pre_backup_script: (repository as any).pre_backup_script || '',
+      post_backup_script: (repository as any).post_backup_script || '',
+      hook_timeout: (repository as any).hook_timeout || 300,
+      continue_on_hook_failure: (repository as any).continue_on_hook_failure || false,
+      mode: repository.mode || 'full',
+      custom_flags: repository.custom_flags || '',
+    })
+    setEditNewSourceDir('')
+    setEditNewExcludePattern('')
+  }
 
   // Parse source directories from configuration (simple regex-based extraction)
   // REMOVED: Config dependency no longer needed
@@ -691,7 +711,50 @@ export default function Repositories() {
     return parts.join(',')
   }
 
-  // Removed: parseCompressionString - no longer needed with sub-route forms
+  const parseCompressionString = (
+    compression: string
+  ): {
+    algorithm: string
+    level: string
+    autoDetect: boolean
+    obfuscate: string
+  } => {
+    const parts = compression.split(',')
+    let algorithm = 'lz4'
+    let level = ''
+    let autoDetect = false
+    let obfuscate = ''
+
+    let i = 0
+
+    // Check for obfuscate
+    if (parts[i] === 'obfuscate') {
+      i++
+      if (i < parts.length) {
+        obfuscate = parts[i]
+        i++
+      }
+    }
+
+    // Check for auto
+    if (parts[i] === 'auto') {
+      autoDetect = true
+      i++
+    }
+
+    // Get algorithm
+    if (i < parts.length) {
+      algorithm = parts[i]
+      i++
+    }
+
+    // Get level
+    if (i < parts.length) {
+      level = parts[i]
+    }
+
+    return { algorithm, level, autoDetect, obfuscate }
+  }
 
   const getCompressionLabel = (compression: string) => {
     // Just return the compression string as-is for display
@@ -726,7 +789,7 @@ export default function Repositories() {
               <Button
                 variant="contained"
                 startIcon={<Add />}
-                onClick={() => navigate('/repositories/new')}
+                onClick={() => openRepositoryModal('create')}
                 sx={{ flexShrink: 0 }}
               >
                 Create Repository
@@ -734,7 +797,7 @@ export default function Repositories() {
               <Button
                 variant="outlined"
                 startIcon={<FileUpload />}
-                onClick={() => navigate('/repositories/import')}
+                onClick={() => openRepositoryModal('import')}
                 sx={{ flexShrink: 0 }}
               >
                 Import Existing
@@ -845,7 +908,7 @@ export default function Repositories() {
               onCheck={() => handleCheckRepository(repository)}
               onCompact={() => handleCompactRepository(repository)}
               onPrune={() => handlePruneRepository(repository)}
-              onEdit={() => navigate(`/repositories/${repository.id}/edit`)}
+              onEdit={() => openEditModal(repository)}
               onDelete={() => handleDeleteRepository(repository)}
               getCompressionLabel={getCompressionLabel}
               isAdmin={user?.is_admin || false}
