@@ -84,14 +84,15 @@ export default function AdvancedRepositoryOptions({
         />
       )}
 
-      {/* Backup Hooks - Only show for full repositories */}
-      {mode === 'full' && (
+      {/* Backup Hooks - Only show for full repositories without ID (create/import) */}
+      {/* When editing (repositoryId exists), use Script Library instead */}
+      {mode === 'full' && !repositoryId && (
         <>
           <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 2, mb: 1 }}>
-            Backup Hooks (Optional)
+            Backup Hooks (Optional) - Legacy
           </Typography>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-            Run custom scripts before and after backups (e.g., wake up NAS, send notifications)
+            Simple inline scripts. After creation, use Script Library for advanced features (run on failure, etc.)
           </Typography>
 
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -191,21 +192,13 @@ export default function AdvancedRepositoryOptions({
       {mode === 'full' && repositoryId && (
         <>
           <Divider sx={{ mt: 3, mb: 2 }} />
-          <Accordion defaultExpanded>
-            <AccordionSummary expandIcon={<ChevronDown size={20} />}>
-              <Box>
-                <Typography variant="subtitle2" fontWeight={600}>
-                  Script Library (Recommended)
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Reusable scripts with advanced conditions (run on failure, run always, etc.)
-                </Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <RepositoryScriptsTab repositoryId={repositoryId} />
-            </AccordionDetails>
-          </Accordion>
+          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+            Backup Scripts
+          </Typography>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+            Assign reusable scripts with advanced conditions (run on failure, run always, chaining, etc.)
+          </Typography>
+          <RepositoryScriptsTab repositoryId={repositoryId} />
         </>
       )}
     </>
