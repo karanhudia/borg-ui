@@ -4,8 +4,6 @@ import {
   TextField,
   Divider,
   Typography,
-  Checkbox,
-  FormControlLabel,
   Button,
   Chip,
 } from '@mui/material'
@@ -81,17 +79,17 @@ export default function AdvancedRepositoryOptions({
         />
       )}
 
-      {/* Backup Hooks - Only show for full repositories without ID (create/import) */}
-      {/* Show inline scripts for create/import, OR if existing repository has them configured */}
-      {mode === 'full' && (!repositoryId || preBackupScript || postBackupScript) && (
+      {/* Scripts Section - Unified interface for both inline and library scripts */}
+      {mode === 'full' && (
         <>
-          <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 2, mb: 1 }}>
-            Inline Scripts {!repositoryId && '(Optional)'}
+          <Divider sx={{ mt: 3, mb: 1.5 }} />
+          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.5 }}>
+            Scripts {!repositoryId && '(Optional)'}
           </Typography>
-          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
             {repositoryId
-              ? 'Simple inline scripts. For advanced features (run on failure, chaining, reusability), use Script Library below.'
-              : 'Simple inline scripts. For advanced features (run on failure, chaining, reusability), use Script Library after creation.'}
+              ? 'Configure inline scripts or assign reusable scripts from your Script Library.'
+              : 'Configure inline scripts. After creation, you can also assign reusable scripts from Script Library.'}
           </Typography>
 
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -144,27 +142,13 @@ export default function AdvancedRepositoryOptions({
             </Box>
           </Box>
 
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-            <TextField
-              label="Hook Timeout (seconds)"
-              type="number"
-              value={hookTimeout}
-              onChange={(e) => onHookTimeoutChange(parseInt(e.target.value) || 300)}
-              fullWidth
-              helperText="Maximum time to wait for hooks"
-            />
-
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={continueOnHookFailure}
-                  onChange={(e) => onContinueOnHookFailureChange(e.target.checked)}
-                />
-              }
-              label="Continue if pre-hook fails"
-              sx={{ mt: 1 }}
-            />
-          </Box>
+          {/* Script Library - Show for repositories being edited (with ID) */}
+          {repositoryId && (
+            <>
+              <Divider sx={{ my: 2 }} />
+              <RepositoryScriptsTab repositoryId={repositoryId} />
+            </>
+          )}
         </>
       )}
 
@@ -176,6 +160,11 @@ export default function AdvancedRepositoryOptions({
         value={preBackupScript}
         onChange={onPreBackupScriptChange}
         placeholder="#!/bin/bash&#10;echo 'Pre-backup hook started'&#10;wakeonlan AA:BB:CC:DD:EE:FF&#10;sleep 60"
+        timeout={hookTimeout}
+        onTimeoutChange={onHookTimeoutChange}
+        continueOnFailure={continueOnHookFailure}
+        onContinueOnFailureChange={onContinueOnHookFailureChange}
+        showContinueOnFailure={true}
       />
 
       <ScriptEditorDialog
@@ -185,21 +174,10 @@ export default function AdvancedRepositoryOptions({
         value={postBackupScript}
         onChange={onPostBackupScriptChange}
         placeholder="#!/bin/bash&#10;echo 'Post-backup hook completed'&#10;ssh nas@192.168.1.100 'sudo poweroff'"
+        timeout={hookTimeout}
+        onTimeoutChange={onHookTimeoutChange}
+        showContinueOnFailure={false}
       />
-
-      {/* Script Library - Show for repositories being edited (with ID) */}
-      {mode === 'full' && repositoryId && (
-        <>
-          {(preBackupScript || postBackupScript) && <Divider sx={{ mt: 3, mb: 1.5 }} />}
-          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.5, mt: (preBackupScript || postBackupScript) ? 0 : 2 }}>
-            Script Library
-          </Typography>
-          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-            Reusable scripts with advanced conditions (run on failure, run always, chaining, etc.)
-          </Typography>
-          <RepositoryScriptsTab repositoryId={repositoryId} />
-        </>
-      )}
     </>
   )
 }
