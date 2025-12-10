@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
 import {
@@ -90,6 +91,7 @@ interface SSHConnection {
 
 export default function Repositories() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const appState = useAppState()
   const [showRepositoryModal, setShowRepositoryModal] = useState(false)
@@ -789,7 +791,7 @@ export default function Repositories() {
               <Button
                 variant="contained"
                 startIcon={<Add />}
-                onClick={() => openRepositoryModal('create')}
+                onClick={() => navigate('/repositories/new')}
                 sx={{ flexShrink: 0 }}
               >
                 Create Repository
@@ -797,7 +799,7 @@ export default function Repositories() {
               <Button
                 variant="outlined"
                 startIcon={<FileUpload />}
-                onClick={() => openRepositoryModal('import')}
+                onClick={() => navigate('/repositories/import')}
                 sx={{ flexShrink: 0 }}
               >
                 Import Existing
@@ -908,7 +910,7 @@ export default function Repositories() {
               onCheck={() => handleCheckRepository(repository)}
               onCompact={() => handleCompactRepository(repository)}
               onPrune={() => handlePruneRepository(repository)}
-              onEdit={() => openEditModal(repository)}
+              onEdit={() => navigate(`/repositories/${repository.id}/edit`)}
               onDelete={() => handleDeleteRepository(repository)}
               getCompressionLabel={getCompressionLabel}
               isAdmin={user?.is_admin || false}

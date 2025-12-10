@@ -9,6 +9,9 @@ import Archives from './pages/Archives'
 import Restore from './pages/Restore'
 import Schedule from './pages/Schedule'
 import Repositories from './pages/Repositories'
+import CreateRepository from './pages/CreateRepository'
+import ImportRepository from './pages/ImportRepository'
+import EditRepository from './pages/EditRepository'
 import SSHConnectionsSingleKey from './pages/SSHConnectionsSingleKey'
 import Settings from './pages/Settings'
 import Activity from './pages/Activity'
@@ -76,6 +79,30 @@ function App() {
           element={
             <ProtectedRoute requiredTab="repositories">
               <Repositories />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/repositories/new"
+          element={
+            <ProtectedRoute requiredTab="repositories">
+              <CreateRepository />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/repositories/import"
+          element={
+            <ProtectedRoute requiredTab="repositories">
+              <ImportRepository />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/repositories/:id/edit"
+          element={
+            <ProtectedRoute requiredTab="repositories">
+              <EditRepository />
             </ProtectedRoute>
           }
         />
