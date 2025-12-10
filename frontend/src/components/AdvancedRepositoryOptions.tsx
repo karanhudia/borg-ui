@@ -86,12 +86,12 @@ export default function AdvancedRepositoryOptions({
       {mode === 'full' && (!repositoryId || preBackupScript || postBackupScript) && (
         <>
           <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 2, mb: 1 }}>
-            {repositoryId ? 'Legacy Inline Scripts' : 'Backup Hooks (Optional) - Legacy'}
+            Inline Scripts {!repositoryId && '(Optional)'}
           </Typography>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
             {repositoryId
-              ? 'You have existing inline scripts. Consider migrating to Script Library below for advanced features (run on failure, chaining, etc.).'
-              : 'Simple inline scripts. After creation, use Script Library for advanced features (run on failure, etc.).'}
+              ? 'Simple inline scripts. For advanced features (run on failure, chaining, reusability), use Script Library below.'
+              : 'Simple inline scripts. For advanced features (run on failure, chaining, reusability), use Script Library after creation.'}
           </Typography>
 
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -192,10 +192,10 @@ export default function AdvancedRepositoryOptions({
         <>
           {(preBackupScript || postBackupScript) && <Divider sx={{ mt: 3, mb: 1.5 }} />}
           <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.5, mt: (preBackupScript || postBackupScript) ? 0 : 2 }}>
-            Backup Scripts (Recommended)
+            Script Library
           </Typography>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-            Assign reusable scripts with advanced conditions (run on failure, run always, chaining, etc.)
+            Reusable scripts with advanced conditions (run on failure, run always, chaining, etc.)
           </Typography>
           <RepositoryScriptsTab repositoryId={repositoryId} />
         </>
