@@ -216,14 +216,14 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
   const renderScriptList = (scripts: RepositoryScript[], hookType: 'pre-backup' | 'post-backup') => {
     if (scripts.length === 0) {
       return (
-        <Typography variant="body2" color="text.secondary" sx={{ py: 1.5, px: 2, fontStyle: 'italic' }}>
+        <Typography variant="body2" color="text.secondary" sx={{ py: 1, px: 2, fontStyle: 'italic' }}>
           No scripts assigned
         </Typography>
       )
     }
 
     return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
         {scripts.map((script, index) => {
           const effectiveTimeout = script.custom_timeout || script.default_timeout
           const effectiveRunOn = script.custom_run_on || script.default_run_on
@@ -235,7 +235,7 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
                 display: 'flex',
                 alignItems: 'center',
                 gap: 1.5,
-                p: 1.5,
+                p: 1,
                 border: 1,
                 borderColor: 'divider',
                 borderRadius: 1,
@@ -333,8 +333,8 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
   return (
     <Box>
       {/* Pre-Backup Scripts */}
-      <Box sx={{ mb: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+      <Box sx={{ mb: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
             Pre-Backup Scripts
           </Typography>
@@ -355,7 +355,7 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
 
       {/* Post-Backup Scripts */}
       <Box>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
             Post-Backup Scripts
           </Typography>
