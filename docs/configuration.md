@@ -18,9 +18,11 @@ These are automatically set up on first run - no configuration needed:
 | Setting | Auto-Configuration |
 |---------|-------------------|
 | **SECRET_KEY** | Randomly generated (32 bytes), persisted to `/data/.secret_key` |
-| **DATABASE_URL** | SQLite at `/data/borg_web_ui.db` |
-| **LOG_FILE** | `/data/logs/borg-ui.log` |
-| **SSH_KEYS_DIR** | `/data/ssh_keys` |
+| **DATABASE_URL** | SQLite at `/data/borg.db` (includes encrypted SSH keys) |
+| **JOB_LOGS** | Stored in `/data/logs/` (backup_job_*.log, check_job_*.log, compact_job_*.log) |
+| **SSH_KEYS_DIR** | `/data/ssh_keys` (used for temporary files during SSH operations) |
+
+**Note:** Application logs (FastAPI, uvicorn) are sent to Docker logs (stdout/stderr). View with `docker logs borg-web-ui`.
 
 ---
 
@@ -56,6 +58,8 @@ id -g  # Group ID
 - Unraid: `99:100`
 - macOS: `501:20`
 
+**Note:** When `PUID=0` (running as root), SSH keys are symlinked from `/root/.ssh` to `/home/borg/.ssh` automatically.
+
 ### Logging
 
 ```yaml
@@ -90,11 +94,10 @@ volumes:
 ```
 
 **What's stored in `/data`:**
-- SQLite database
-- SSH keys
-- Application logs
+- SQLite database (includes encrypted SSH keys)
+- Job logs (backup, check, compact operations) in `/data/logs/`
 - Auto-generated SECRET_KEY
-- User settings
+- Temporary SSH key files during deployment/testing in `/data/ssh_keys/`
 
 ### Filesystem Access
 

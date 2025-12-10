@@ -347,19 +347,25 @@ environment:
   - LOG_LEVEL=INFO  # or DEBUG for troubleshooting
 ```
 
-Logs are stored at `/data/logs/borg-ui.log`
+**Application logs** are sent to Docker logs (stdout/stderr). **Job logs** are stored in `/data/logs/`.
 
 ### Review Logs Regularly
 
 ```bash
-# View recent logs
-docker exec borg-web-ui tail -f /data/logs/borg-ui.log
+# View application logs (authentication, errors, API requests)
+docker logs borg-web-ui
+
+# Tail application logs in real-time
+docker logs -f borg-web-ui
 
 # Search for failed logins
-docker exec borg-web-ui grep "authentication failed" /data/logs/borg-ui.log
+docker logs borg-web-ui 2>&1 | grep "authentication failed"
 
 # Check for errors
-docker exec borg-web-ui grep "ERROR" /data/logs/borg-ui.log
+docker logs borg-web-ui 2>&1 | grep "ERROR"
+
+# View job logs (backup, check, compact operations)
+docker exec borg-web-ui ls -lh /data/logs/
 ```
 
 ### Monitor Failed Login Attempts
