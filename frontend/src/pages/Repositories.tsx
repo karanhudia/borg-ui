@@ -509,30 +509,8 @@ export default function Repositories() {
     setNewExcludePattern('')
   }
 
-  const openEditModal = (repository: Repository) => {
-    setEditingRepository(repository)
-    const parsed = parseCompressionString(repository.compression)
-    setEditForm({
-      name: repository.name,
-      path: repository.path,
-      compression: repository.compression,
-      compressionAlgorithm: parsed.algorithm,
-      compressionLevel: parsed.level,
-      compressionAutoDetect: parsed.autoDetect,
-      compressionObfuscate: parsed.obfuscate,
-      source_directories: repository.source_directories || [],
-      exclude_patterns: repository.exclude_patterns || [],
-      remote_path: (repository as any).remote_path || '',
-      pre_backup_script: (repository as any).pre_backup_script || '',
-      post_backup_script: (repository as any).post_backup_script || '',
-      hook_timeout: (repository as any).hook_timeout || 300,
-      continue_on_hook_failure: (repository as any).continue_on_hook_failure || false,
-      mode: repository.mode || 'full',
-      custom_flags: repository.custom_flags || '',
-    })
-    setEditNewSourceDir('')
-    setEditNewExcludePattern('')
-  }
+  // Removed: Edit modal replaced with sub-route navigation
+  // const openEditModal = (repository: Repository) => { ... }
 
   // Parse source directories from configuration (simple regex-based extraction)
   // REMOVED: Config dependency no longer needed
