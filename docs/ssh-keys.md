@@ -45,16 +45,23 @@ SSH keys allow Borg Web UI to access remote backup repositories securely without
    - **ED25519** (modern, faster, smaller)
 5. Click **Generate**
 
-The key pair is automatically created and stored in `/data/ssh_keys/`.
+**How SSH keys are stored:**
+- Private keys are encrypted and stored in the SQLite database (`/data/borg.db`)
+- At container startup, the system SSH key is deployed to `/home/borg/.ssh/`
+- When running as root (`PUID=0`), a symlink `/root/.ssh` → `/home/borg/.ssh` is created automatically
+- During backup operations, keys are decrypted from the database and used via temporary files
+- `/data/ssh_keys/` is used only for temporary files during deployment and testing operations
 
 ### Via Command Line (Alternative)
 
+**Note:** The web interface is strongly recommended as it encrypts keys in the database. Manual key generation creates unencrypted filesystem keys.
+
 ```bash
-# Generate key inside container
-docker exec borg-web-ui ssh-keygen -t ed25519 -f /data/ssh_keys/backup-key -N ""
+# Generate key inside container (will be stored in filesystem, not database)
+docker exec borg-web-ui ssh-keygen -t ed25519 -f /home/borg/.ssh/id_ed25519 -N ""
 
 # View public key
-docker exec borg-web-ui cat /data/ssh_keys/backup-key.pub
+docker exec borg-web-ui cat /home/borg/.ssh/id_ed25519.pub
 ```
 
 ---
@@ -121,9 +128,11 @@ Many hosting providers and NAS systems have web interfaces to add SSH keys:
 ### Via Command Line
 
 ```bash
-# Test from inside container
-docker exec borg-web-ui ssh -i /data/ssh_keys/your-key user@remote-server -p 22 "echo Connection successful"
+# Test from inside container using the deployed system key
+docker exec borg-web-ui ssh -i /home/borg/.ssh/id_ed25519 user@remote-server -p 22 "echo Connection successful"
 ```
+
+**Note:** Replace `id_ed25519` with your key type (e.g., `id_rsa`).
 
 ---
 
@@ -159,19 +168,19 @@ ssh://user@hostname:2222/path/to/repo
 
 ### SSH Config File
 
-For advanced configuration, create `/data/ssh_keys/config`:
+For advanced configuration, create `/home/borg/.ssh/config`:
 
 ```bash
-docker exec borg-web-ui tee /data/ssh_keys/config << 'EOF'
+docker exec borg-web-ui tee /home/borg/.ssh/config << 'EOF'
 Host backup-server
     HostName server.example.com
     Port 2222
     User backup-user
-    IdentityFile /data/ssh_keys/backup-key
+    IdentityFile /home/borg/.ssh/id_ed25519
 
 Host *.your-storagebox.de
     Port 23
-    IdentityFile /data/ssh_keys/storagebox-key
+    IdentityFile /home/borg/.ssh/id_ed25519
 EOF
 ```
 
@@ -252,10 +261,10 @@ sudo ufw allow from 192.168.1.0/24 to any port 22
 ssh user@remote-server "echo success"
 
 # Check SSH key permissions
-docker exec borg-web-ui ls -la /data/ssh_keys/
+docker exec borg-web-ui ls -la /home/borg/.ssh/
 
 # Test with verbose output
-docker exec borg-web-ui ssh -vvv -i /data/ssh_keys/your-key user@remote-server
+docker exec borg-web-ui ssh -vvv -i /home/borg/.ssh/id_ed25519 user@remote-server
 ```
 
 ### Host Key Verification Failed
@@ -264,7 +273,7 @@ First-time connections require accepting the host key:
 
 ```bash
 # Accept host key manually
-docker exec -it borg-web-ui ssh-keyscan remote-server >> /data/ssh_keys/known_hosts
+docker exec -it borg-web-ui ssh-keyscan remote-server >> /home/borg/.ssh/known_hosts
 ```
 
 Or disable host key checking (less secure):
@@ -298,10 +307,14 @@ Verify the key exists:
 
 ```bash
 # List SSH keys
-docker exec borg-web-ui ls -la /data/ssh_keys/
+docker exec borg-web-ui ls -la /home/borg/.ssh/
 
-# Check key format
-docker exec borg-web-ui ssh-keygen -l -f /data/ssh_keys/your-key
+# Check key format (for system key)
+docker exec borg-web-ui ssh-keygen -l -f /home/borg/.ssh/id_ed25519
+
+# If running as root (PUID=0), verify symlink
+docker exec borg-web-ui ls -la /root/.ssh
+# Should show: /root/.ssh -> /home/borg/.ssh
 ```
 
 ---
@@ -365,22 +378,26 @@ docker exec borg-web-ui ssh-keygen -l -f /data/ssh_keys/your-key
 
 For different repositories on different servers:
 
-1. Generate multiple keys with descriptive names
-2. Configure SSH config to use specific keys:
+1. Generate multiple keys with descriptive names via the web UI
+2. Associate each SSH key with the appropriate repository in the web UI
+
+**Alternative:** Manual SSH config (advanced users):
 
 ```bash
-docker exec borg-web-ui tee -a /data/ssh_keys/config << 'EOF'
+docker exec borg-web-ui tee -a /home/borg/.ssh/config << 'EOF'
 Host server1
     HostName server1.example.com
     User backup
-    IdentityFile /data/ssh_keys/server1-key
+    IdentityFile /home/borg/.ssh/id_ed25519
 
 Host server2
     HostName server2.example.com
     User backup
-    IdentityFile /data/ssh_keys/server2-key
+    IdentityFile /home/borg/.ssh/id_rsa
 EOF
 ```
+
+**Note:** The web UI automatically manages SSH keys per repository, so manual SSH config is rarely needed.
 
 3. Use short names in repository URLs:
    ```

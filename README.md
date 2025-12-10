@@ -135,8 +135,8 @@ docker run -d \
 ### Auto-Configured on First Run
 
 - **SECRET_KEY** - Randomly generated and persisted
-- **Database** - SQLite at `/data/borg_web_ui.db`
-- **SSH Keys** - Stored in `/data/ssh_keys`
+- **Database** - SQLite at `/data/borg.db` (includes encrypted SSH keys)
+- **SSH Keys** - Stored encrypted in database, deployed to `/home/borg/.ssh` at runtime
 
 ### Optional Environment Variables
 
