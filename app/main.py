@@ -6,7 +6,7 @@ import structlog
 import os
 from dotenv import load_dotenv
 
-from app.api import auth, dashboard, backup, archives, restore, schedule, settings as settings_api, events, repositories, ssh_keys, system, filesystem, browse, notifications, scripts, packages, activity
+from app.api import auth, dashboard, backup, archives, restore, schedule, settings as settings_api, events, repositories, ssh_keys, system, filesystem, browse, notifications, scripts, packages, activity, scripts_library
 from app.routers import config
 from app.database.database import engine
 from app.database.models import Base
@@ -85,7 +85,8 @@ app.include_router(repositories.router, prefix="/api/repositories", tags=["Repos
 app.include_router(ssh_keys.router, prefix="/api/ssh-keys", tags=["SSH Keys"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
 app.include_router(filesystem.router, prefix="/api/filesystem", tags=["Filesystem"])
-app.include_router(scripts.router, prefix="/api/scripts", tags=["Scripts"])
+app.include_router(scripts.router, prefix="/api/scripts", tags=["Scripts"])  # Old script test endpoint
+app.include_router(scripts_library.router, prefix="/api", tags=["Script Library"])  # New script management
 app.include_router(packages.router, prefix="/api/packages", tags=["Packages"])
 app.include_router(notifications.router)
 app.include_router(activity.router)

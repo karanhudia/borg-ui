@@ -58,6 +58,7 @@ class Repository(Base):
     post_backup_script = Column(Text, nullable=True)  # Shell script to run after backup
     hook_timeout = Column(Integer, default=300)  # Hook timeout in seconds (default 5 minutes)
     continue_on_hook_failure = Column(Boolean, default=False)  # Whether to continue backup if pre-hook fails
+    run_post_backup_on_failure = Column(Boolean, default=False)  # Whether to run post-backup hook even if backup fails
 
     # Repository mode (for observability-only repos)
     mode = Column(String, default="full")  # full: backups + observability, observe: observability-only
@@ -323,3 +324,101 @@ class PackageInstallJob(Base):
 
     def __repr__(self):
         return f"<PackageInstallJob(id={self.id}, package_id={self.package_id}, status='{self.status}')>"
+
+class Script(Base):
+    """Script library - reusable scripts for backup hooks and maintenance"""
+    __tablename__ = "scripts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), unique=True, nullable=False, index=True)  # "Docker Container Stop"
+    description = Column(Text, nullable=True)  # User-friendly description
+    file_path = Column(String(500), nullable=False)  # Relative to /data/scripts/, e.g., "library/docker-stop.sh"
+    category = Column(String(50), default='custom', nullable=False)  # 'template', 'custom', 'system'
+
+    # Execution settings
+    timeout = Column(Integer, default=300, nullable=False)  # Default timeout in seconds
+    shell = Column(String(50), default='/bin/bash', nullable=False)  # Shell to use
+
+    # Run conditions
+    run_on = Column(String(50), default='success', nullable=False)  # 'success', 'failure', 'always', 'warning'
+
+    # Metadata
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # Template info
+    is_template = Column(Boolean, default=False, nullable=False)  # Is this a built-in template?
+    template_version = Column(String(20), nullable=True)  # For template updates
+
+    # Usage tracking
+    usage_count = Column(Integer, default=0, nullable=False)  # How many repos use this?
+    last_used_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    repository_scripts = relationship("RepositoryScript", back_populates="script", cascade="all, delete-orphan")
+    executions = relationship("ScriptExecution", back_populates="script", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<Script(id={self.id}, name='{self.name}', category='{self.category}')>"
+
+class RepositoryScript(Base):
+    """Link table between repositories and scripts (many-to-many)"""
+    __tablename__ = "repository_scripts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id", ondelete="CASCADE"), nullable=False, index=True)
+    script_id = Column(Integer, ForeignKey("scripts.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Hook configuration
+    hook_type = Column(String(50), nullable=False)  # 'pre-backup', 'post-backup'
+    execution_order = Column(Integer, default=1, nullable=False)  # Order in chain (1, 2, 3...)
+    enabled = Column(Boolean, default=True, nullable=False)
+
+    # Per-repository overrides
+    custom_timeout = Column(Integer, nullable=True)  # Override script's default timeout
+    custom_run_on = Column(String(50), nullable=True)  # Override script's run_on condition
+
+    # Configuration
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+
+    # Relationships
+    repository = relationship("Repository")
+    script = relationship("Script", back_populates="repository_scripts")
+
+    def __repr__(self):
+        return f"<RepositoryScript(repo_id={self.repository_id}, script_id={self.script_id}, hook={self.hook_type})>"
+
+class ScriptExecution(Base):
+    """Execution history for scripts (for activity feed)"""
+    __tablename__ = "script_executions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    script_id = Column(Integer, ForeignKey("scripts.id"), nullable=False, index=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=True, index=True)  # NULL for standalone runs
+    backup_job_id = Column(Integer, ForeignKey("backup_jobs.id"), nullable=True, index=True)  # NULL for standalone runs
+
+    # Execution details
+    hook_type = Column(String(50), nullable=True)  # 'pre-backup', 'post-backup', 'standalone', 'maintenance'
+    status = Column(String(50), nullable=False)  # 'pending', 'running', 'completed', 'failed'
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    execution_time = Column(Float, nullable=True)  # Seconds
+
+    # Results
+    exit_code = Column(Integer, nullable=True)
+    stdout = Column(Text, nullable=True)
+    stderr = Column(Text, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+    # Context
+    triggered_by = Column(String(50), nullable=True)  # 'scheduled', 'manual', 'backup', 'api'
+    triggered_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # Relationships
+    script = relationship("Script", back_populates="executions")
+    repository = relationship("Repository")
+    backup_job = relationship("BackupJob")
+
+    def __repr__(self):
+        return f"<ScriptExecution(id={self.id}, script_id={self.script_id}, status='{self.status}')>"
