@@ -223,7 +223,7 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
     }
 
     return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
         {scripts.map((script, index) => {
           const effectiveTimeout = script.custom_timeout || script.default_timeout
           const effectiveRunOn = script.custom_run_on || script.default_run_on
@@ -333,8 +333,8 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
   return (
     <Box>
       {/* Pre-Backup Scripts */}
-      <Box sx={{ mb: 2 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+      <Box sx={{ mb: 1.5 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
             Pre-Backup Scripts
           </Typography>
@@ -355,7 +355,7 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
 
       {/* Post-Backup Scripts */}
       <Box>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
             Post-Backup Scripts
           </Typography>
