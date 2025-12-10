@@ -82,14 +82,16 @@ export default function AdvancedRepositoryOptions({
       )}
 
       {/* Backup Hooks - Only show for full repositories without ID (create/import) */}
-      {/* When editing (repositoryId exists), use Script Library instead */}
-      {mode === 'full' && !repositoryId && (
+      {/* Show inline scripts for create/import, OR if existing repository has them configured */}
+      {mode === 'full' && (!repositoryId || preBackupScript || postBackupScript) && (
         <>
           <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 2, mb: 1 }}>
-            Backup Hooks (Optional) - Legacy
+            {repositoryId ? 'Legacy Inline Scripts' : 'Backup Hooks (Optional) - Legacy'}
           </Typography>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-            Simple inline scripts. After creation, use Script Library for advanced features (run on failure, etc.)
+            {repositoryId
+              ? 'You have existing inline scripts. Consider migrating to Script Library below for advanced features (run on failure, chaining, etc.).'
+              : 'Simple inline scripts. After creation, use Script Library for advanced features (run on failure, etc.).'}
           </Typography>
 
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -185,12 +187,12 @@ export default function AdvancedRepositoryOptions({
         placeholder="#!/bin/bash&#10;echo 'Post-backup hook completed'&#10;ssh nas@192.168.1.100 'sudo poweroff'"
       />
 
-      {/* Script Library - Only show for full repositories with ID */}
+      {/* Script Library - Show for repositories being edited (with ID) */}
       {mode === 'full' && repositoryId && (
         <>
-          <Divider sx={{ mt: 3, mb: 1.5 }} />
-          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.5 }}>
-            Backup Scripts
+          {(preBackupScript || postBackupScript) && <Divider sx={{ mt: 3, mb: 1.5 }} />}
+          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.5, mt: (preBackupScript || postBackupScript) ? 0 : 2 }}>
+            Backup Scripts (Recommended)
           </Typography>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
             Assign reusable scripts with advanced conditions (run on failure, run always, chaining, etc.)
