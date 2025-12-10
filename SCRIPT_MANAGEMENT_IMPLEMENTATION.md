@@ -2,41 +2,25 @@
 
 **Date:** December 10, 2025
 **Issues:** #85, #88
-**Implementation:** Phases 1-4 (in progress)
+**Implementation:** Comprehensive script library (Phases 2-4)
 
 ---
 
-## ✅ COMPLETED: Phase 1 - Quick Fix for Issue #85
+## 📝 Design Decision: Skip Phase 1
 
-**Problem:** Post-backup scripts don't run when backups fail, leaving containers stopped and services in maintenance mode.
+**Originally planned Phase 1:** Add `run_post_backup_on_failure` boolean flag to repositories.
 
-**Solution:** Added `run_post_backup_on_failure` flag to repositories.
+**Why removed:** Redundant with script library's more powerful `run_on` field.
 
-### Files Modified:
-1. **Database:**
-   - `app/database/models.py`: Added `run_post_backup_on_failure` column to Repository model
-   - `app/database/migrations/026_add_run_post_backup_on_failure.py`: Migration to add column
+**Script library solves #85 better:**
+- `run_on: 'failure'` - Run only after failed backups ← **Solves #85**
+- `run_on: 'always'` - Run regardless of result ← **Also solves #85**
+- `run_on: 'success'` - Run only after successful backups
+- `run_on: 'warning'` - Run only on warnings
 
-2. **API:**
-   - `app/api/repositories.py`: Updated RepositoryCreate, RepositoryImport, RepositoryUpdate schemas
-   - Added field to repository serialization
+**Benefits:** More granular control, single system, better architecture.
 
-3. **Backend Logic:**
-   - `app/services/backup_service.py` (lines 1063-1105):
-     - Runs post-backup hooks on failure when flag is enabled
-     - Logs hook execution with clear "(ON FAILURE)" marker
-     - Appends hook failures to error message
-
-### Usage:
-```python
-# In repository settings:
-{
-    "run_post_backup_on_failure": true,  # New field
-    "post_backup_script": "#!/bin/bash\ndocker start container1 container2"
-}
-```
-
-**Status:** ✅ Backend complete, ready for frontend implementation
+**Status:** ✅ Phase 1 code removed (commit 3c73d96)
 
 ---
 
@@ -377,19 +361,20 @@ ADD COLUMN maintenance_window_id INTEGER REFERENCES maintenance_windows(id);
 ## 🔄 Next Steps
 
 1. **Immediate (Current Session):**
-   - Test Phase 1 implementation
-   - Commit Phase 1 + 2 foundation
-   - Document API endpoints
+   - ✅ Phase 2 foundation committed (commit 204c424)
+   - ✅ Phase 1 removed as redundant (commit 3c73d96)
+   - ✅ Documentation updated
 
-2. **Short Term (Next Session):**
-   - Implement backup service integration
-   - Create migration script for existing scripts
-   - Basic frontend for script management
+2. **Short Term (Next Sessions):**
+   - Build script management UI (scripts page, editor)
+   - Implement backup service integration (use script library for hook execution)
+   - Create migration script for existing inline scripts
+   - Implement script chaining with run conditions
 
 3. **Medium Term:**
-   - Complete Phase 3 (chaining, conditions)
-   - Build comprehensive UI
-   - Write tests
+   - Complete Phase 3 (activity feed integration, execution tracking)
+   - Build repository script assignment UI
+   - Write comprehensive tests
 
 4. **Long Term:**
    - Phase 4 (templates, maintenance windows)
@@ -400,8 +385,8 @@ ADD COLUMN maintenance_window_id INTEGER REFERENCES maintenance_windows(id);
 
 ## 📝 Notes
 
-- Phase 1 solves the immediate pain point (#85)
-- Phase 2 provides foundation for future features
-- Phases 3-4 add enterprise-grade capabilities
+- Phase 1 was removed - script library's `run_on` field is more powerful
+- Phase 2 provides foundation for all future features
+- Script library solves both #85 and #88 comprehensively
 - Estimated total effort: 5-6 weeks for full implementation
 - Current status: ~30% complete (foundation laid)
