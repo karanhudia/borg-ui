@@ -2,8 +2,6 @@ import { useState, useEffect } from 'react'
 import {
   Box,
   Button,
-  Card,
-  CardContent,
   Chip,
   Container,
   Dialog,
@@ -35,7 +33,6 @@ import {
   Play,
   FileCode,
   Clock,
-  AlertCircle,
   CheckCircle,
   XCircle,
 } from 'lucide-react'
@@ -188,15 +185,6 @@ export default function Scripts() {
 
   const handleTest = async (script: Script) => {
     try {
-      // Load script details if needed
-      let content = ''
-      if (editingScript && editingScript.id === script.id) {
-        content = editingScript.content
-      } else {
-        const response = await api.get(`/scripts/${script.id}`)
-        content = response.data.content
-      }
-
       setTestingScript(true)
       setTestResult(null)
       setTestDialogOpen(true)
