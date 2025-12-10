@@ -9,14 +9,9 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Alert,
   IconButton,
   Chip,
-  Stack,
-  Autocomplete,
   InputAdornment,
-  Checkbox,
-  FormControlLabel,
   Typography,
   Paper,
   Container,
@@ -44,24 +39,6 @@ interface RepositoryFormData {
   continue_on_hook_failure: boolean
   custom_flags: string
   mode: 'full' | 'observe'
-}
-
-interface Repository {
-  id: number
-  name: string
-  path: string
-  encryption: string
-  compression: string
-  source_directories: string[]
-  exclude_patterns: string[]
-  mode: 'full' | 'observe'
-  ssh_connection_id: number | null
-  remote_path?: string
-  pre_backup_script?: string
-  post_backup_script?: string
-  hook_timeout?: number
-  continue_on_hook_failure?: boolean
-  custom_flags?: string
 }
 
 interface RepositoryFormProps {
@@ -100,7 +77,7 @@ export default function RepositoryForm({ mode, repositoryId }: RepositoryFormPro
   const { data: sshConnections = [] } = useQuery({
     queryKey: ['ssh-connections'],
     queryFn: async () => {
-      const response = await sshKeysAPI.getConnections()
+      const response = await sshKeysAPI.getSSHConnections()
       return response.data
     },
   })
@@ -232,11 +209,14 @@ export default function RepositoryForm({ mode, repositoryId }: RepositoryFormPro
     })
   }
 
-  const handleFileExplorerSelect = (path: string) => {
-    if (fileExplorerField === 'path') {
-      setFormData({ ...formData, path })
-    } else {
-      setNewSourceDir(path)
+  const handleFileExplorerSelect = (selectedPaths: string[]) => {
+    const path = selectedPaths[0] // Take first selected path
+    if (path) {
+      if (fileExplorerField === 'path') {
+        setFormData({ ...formData, path })
+      } else {
+        setNewSourceDir(path)
+      }
     }
     setFileExplorerOpen(false)
   }
