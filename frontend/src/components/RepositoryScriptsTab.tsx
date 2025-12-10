@@ -12,9 +12,7 @@ import {
   InputLabel,
   MenuItem,
   Select,
-  TextField,
   Typography,
-  Switch,
   Tooltip,
 } from '@mui/material'
 import {
@@ -24,7 +22,6 @@ import {
   ChevronDown,
   FileCode,
   Clock,
-  AlertTriangle,
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import api from '../services/api'
@@ -64,7 +61,6 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [selectedHookType, setSelectedHookType] = useState<'pre-backup' | 'post-backup'>('pre-backup')
   const [selectedScriptId, setSelectedScriptId] = useState<number | ''>('')
-  const [editingScript, setEditingScript] = useState<RepositoryScript | null>(null)
 
   useEffect(() => {
     fetchAssignedScripts()
@@ -134,19 +130,6 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
     }
   }
 
-  const handleToggleEnabled = async (script: RepositoryScript) => {
-    try {
-      await api.put(`/repositories/${repositoryId}/scripts/${script.id}`, {
-        enabled: !script.enabled,
-      })
-      fetchAssignedScripts()
-      if (onUpdate) onUpdate()
-    } catch (error: any) {
-      console.error('Failed to toggle script:', error)
-      toast.error('Failed to update script')
-    }
-  }
-
   const handleMoveScript = async (
     script: RepositoryScript,
     direction: 'up' | 'down',
@@ -173,28 +156,6 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
     } catch (error: any) {
       console.error('Failed to reorder script:', error)
       toast.error('Failed to reorder script')
-    }
-  }
-
-  const handleEditScript = (script: RepositoryScript) => {
-    setEditingScript(script)
-  }
-
-  const handleSaveEdit = async () => {
-    if (!editingScript) return
-
-    try {
-      await api.put(`/repositories/${repositoryId}/scripts/${editingScript.id}`, {
-        custom_timeout: editingScript.custom_timeout,
-        custom_run_on: editingScript.custom_run_on,
-      })
-      toast.success('Script settings updated')
-      fetchAssignedScripts()
-      setEditingScript(null)
-      if (onUpdate) onUpdate()
-    } catch (error: any) {
-      console.error('Failed to update script settings:', error)
-      toast.error('Failed to update settings')
     }
   }
 
@@ -239,7 +200,6 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
                 border: 1,
                 borderColor: 'divider',
                 borderRadius: 1,
-                opacity: script.enabled ? 1 : 0.5,
                 bgcolor: 'background.paper',
                 '&:hover': {
                   bgcolor: 'action.hover',
@@ -269,16 +229,8 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
                 </Typography>
               </Box>
 
-              {/* Enabled Switch */}
-              <Switch
-                checked={script.enabled}
-                onChange={() => handleToggleEnabled(script)}
-                size="small"
-                sx={{ ml: 'auto' }}
-              />
-
               {/* Actions */}
-              <Box sx={{ display: 'flex', gap: 0.25 }}>
+              <Box sx={{ display: 'flex', gap: 0.25, ml: 'auto' }}>
                 <Tooltip title="Move Up">
                   <span>
                     <IconButton
@@ -302,11 +254,6 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
                       <ChevronDown size={16} />
                     </IconButton>
                   </span>
-                </Tooltip>
-                <Tooltip title="Customize">
-                  <IconButton size="small" onClick={() => handleEditScript(script)} sx={{ p: 0.5 }}>
-                    <AlertTriangle size={16} />
-                  </IconButton>
                 </Tooltip>
                 <Tooltip title="Remove">
                   <IconButton
@@ -410,68 +357,6 @@ export default function RepositoryScriptsTab({ repositoryId, onUpdate }: Reposit
         </DialogActions>
       </Dialog>
 
-      {/* Edit Script Settings Dialog */}
-      <Dialog
-        open={!!editingScript}
-        onClose={() => setEditingScript(null)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Customize Script Settings</DialogTitle>
-        <DialogContent>
-          {editingScript && (
-            <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <Typography variant="body2">
-                Customize settings for <strong>{editingScript.script_name}</strong> on this
-                repository only.
-              </Typography>
-
-              <TextField
-                label="Custom Timeout (seconds)"
-                type="number"
-                value={editingScript.custom_timeout || ''}
-                onChange={(e) =>
-                  setEditingScript({
-                    ...editingScript,
-                    custom_timeout: e.target.value ? parseInt(e.target.value) : null,
-                  })
-                }
-                placeholder={`Default: ${editingScript.default_timeout}s`}
-                helperText="Leave empty to use script's default timeout"
-                inputProps={{ min: 30, max: 3600 }}
-              />
-
-              <FormControl fullWidth>
-                <InputLabel>Custom Run On</InputLabel>
-                <Select
-                  value={editingScript.custom_run_on || ''}
-                  label="Custom Run On"
-                  onChange={(e) =>
-                    setEditingScript({
-                      ...editingScript,
-                      custom_run_on: e.target.value || null,
-                    })
-                  }
-                >
-                  <MenuItem value="">
-                    <em>Use Default ({editingScript.default_run_on})</em>
-                  </MenuItem>
-                  <MenuItem value="success">Success</MenuItem>
-                  <MenuItem value="failure">Failure</MenuItem>
-                  <MenuItem value="warning">Warning</MenuItem>
-                  <MenuItem value="always">Always</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditingScript(null)}>Cancel</Button>
-          <Button onClick={handleSaveEdit} variant="contained">
-            Save Changes
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   )
 }
