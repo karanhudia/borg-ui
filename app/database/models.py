@@ -56,7 +56,9 @@ class Repository(Base):
     # Backup hooks
     pre_backup_script = Column(Text, nullable=True)  # Shell script to run before backup
     post_backup_script = Column(Text, nullable=True)  # Shell script to run after backup
-    hook_timeout = Column(Integer, default=300)  # Hook timeout in seconds (default 5 minutes)
+    hook_timeout = Column(Integer, default=300)  # Hook timeout in seconds (legacy, kept for compatibility)
+    pre_hook_timeout = Column(Integer, default=300)  # Pre-backup hook timeout in seconds
+    post_hook_timeout = Column(Integer, default=300)  # Post-backup hook timeout in seconds
     continue_on_hook_failure = Column(Boolean, default=False)  # Whether to continue backup if pre-hook fails
 
     # Repository mode (for observability-only repos)

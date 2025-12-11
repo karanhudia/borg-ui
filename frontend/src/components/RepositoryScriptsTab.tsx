@@ -292,9 +292,9 @@ export default function RepositoryScriptsTab({ repositoryId, hookType, onUpdate 
       </Box>
 
       {/* Add Script Dialog */}
-      <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Assign Script to Repository</DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ minHeight: '300px' }}>
           <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <FormControl fullWidth>
               <InputLabel>Select Script</InputLabel>

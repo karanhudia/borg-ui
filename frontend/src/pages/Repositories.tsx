@@ -332,6 +332,8 @@ export default function Repositories() {
     pre_backup_script: '',
     post_backup_script: '',
     hook_timeout: 300,
+    pre_hook_timeout: 300,
+    post_hook_timeout: 300,
     continue_on_hook_failure: false,
     mode: 'full' as 'full' | 'observe',
     custom_flags: '',
@@ -360,6 +362,8 @@ export default function Repositories() {
     pre_backup_script: '',
     post_backup_script: '',
     hook_timeout: 300,
+    pre_hook_timeout: 300,
+    post_hook_timeout: 300,
     continue_on_hook_failure: false,
     mode: 'full' as 'full' | 'observe',
     custom_flags: '',
@@ -499,6 +503,8 @@ export default function Repositories() {
       pre_backup_script: '',
       post_backup_script: '',
       hook_timeout: 300,
+      pre_hook_timeout: 300,
+      post_hook_timeout: 300,
       continue_on_hook_failure: false,
       mode: 'full',
       custom_flags: '',
@@ -524,6 +530,8 @@ export default function Repositories() {
       pre_backup_script: (repository as any).pre_backup_script || '',
       post_backup_script: (repository as any).post_backup_script || '',
       hook_timeout: (repository as any).hook_timeout || 300,
+      pre_hook_timeout: (repository as any).pre_hook_timeout || 300,
+      post_hook_timeout: (repository as any).post_hook_timeout || 300,
       continue_on_hook_failure: (repository as any).continue_on_hook_failure || false,
       mode: repository.mode || 'full',
       custom_flags: repository.custom_flags || '',
@@ -1573,7 +1581,8 @@ export default function Repositories() {
                 remotePath={repositoryForm.remote_path}
                 preBackupScript={repositoryForm.pre_backup_script}
                 postBackupScript={repositoryForm.post_backup_script}
-                hookTimeout={repositoryForm.hook_timeout}
+                preHookTimeout={repositoryForm.pre_hook_timeout}
+                postHookTimeout={repositoryForm.post_hook_timeout}
                 continueOnHookFailure={repositoryForm.continue_on_hook_failure}
                 customFlags={repositoryForm.custom_flags}
                 onRemotePathChange={(value) =>
@@ -1585,8 +1594,11 @@ export default function Repositories() {
                 onPostBackupScriptChange={(value) =>
                   setRepositoryForm({ ...repositoryForm, post_backup_script: value })
                 }
-                onHookTimeoutChange={(value) =>
-                  setRepositoryForm({ ...repositoryForm, hook_timeout: value })
+                onPreHookTimeoutChange={(value: number) =>
+                  setRepositoryForm({ ...repositoryForm, pre_hook_timeout: value })
+                }
+                onPostHookTimeoutChange={(value: number) =>
+                  setRepositoryForm({ ...repositoryForm, post_hook_timeout: value })
                 }
                 onContinueOnHookFailureChange={(value) =>
                   setRepositoryForm({ ...repositoryForm, continue_on_hook_failure: value })
@@ -2070,7 +2082,8 @@ export default function Repositories() {
                 remotePath={editForm.remote_path}
                 preBackupScript={editForm.pre_backup_script}
                 postBackupScript={editForm.post_backup_script}
-                hookTimeout={editForm.hook_timeout}
+                preHookTimeout={editForm.pre_hook_timeout}
+                postHookTimeout={editForm.post_hook_timeout}
                 continueOnHookFailure={editForm.continue_on_hook_failure}
                 customFlags={editForm.custom_flags}
                 onRemotePathChange={(value) => setEditForm({ ...editForm, remote_path: value })}
@@ -2080,7 +2093,8 @@ export default function Repositories() {
                 onPostBackupScriptChange={(value) =>
                   setEditForm({ ...editForm, post_backup_script: value })
                 }
-                onHookTimeoutChange={(value) => setEditForm({ ...editForm, hook_timeout: value })}
+                onPreHookTimeoutChange={(value: number) => setEditForm({ ...editForm, pre_hook_timeout: value })}
+                onPostHookTimeoutChange={(value: number) => setEditForm({ ...editForm, post_hook_timeout: value })}
                 onContinueOnHookFailureChange={(value) =>
                   setEditForm({ ...editForm, continue_on_hook_failure: value })
                 }
