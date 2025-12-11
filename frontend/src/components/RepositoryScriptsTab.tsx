@@ -18,8 +18,6 @@ import {
 } from '@mui/material'
 import {
   Trash2,
-  ChevronUp,
-  ChevronDown,
   FileCode,
   Clock,
 } from 'lucide-react'
@@ -143,36 +141,6 @@ export default function RepositoryScriptsTab({
     }
   }
 
-  const handleMoveScript = async (
-    script: RepositoryScript,
-    direction: 'up' | 'down'
-  ) => {
-    const currentIndex = scripts.findIndex((s) => s.id === script.id)
-
-    if (
-      (direction === 'up' && currentIndex === 0) ||
-      (direction === 'down' && currentIndex === scripts.length - 1)
-    ) {
-      return
-    }
-
-    const newOrder = direction === 'up' ? script.execution_order - 1.5 : script.execution_order + 1.5
-
-    try {
-      console.log('Moving script:', { scriptId: script.id, currentOrder: script.execution_order, newOrder, direction })
-      const response = await api.put(`/repositories/${repositoryId}/scripts/${script.id}`, {
-        execution_order: newOrder,
-      })
-      console.log('Update response:', response)
-      toast.success(`Moved ${direction}`)
-      await fetchAssignedScripts()
-      if (onUpdate) onUpdate()
-    } catch (error: any) {
-      console.error('Failed to reorder script:', error)
-      toast.error(error.response?.data?.detail || 'Failed to reorder script')
-    }
-  }
-
   // Expose function to parent to open dialog - MUST be before any conditional returns (Rules of Hooks)
   React.useLayoutEffect(() => {
     const key = `openScriptDialog_${repositoryId}_${hookType}`
@@ -204,7 +172,7 @@ export default function RepositoryScriptsTab({
 
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-        {scripts.map((script, index) => {
+        {scripts.map((script) => {
           const effectiveTimeout = script.custom_timeout || script.default_timeout
           const effectiveRunOn = script.custom_run_on || script.default_run_on
 
@@ -232,7 +200,6 @@ export default function RepositoryScriptsTab({
               </Typography>
 
               {/* Badges */}
-              <Chip label={`#${script.execution_order}`} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
               <Chip
                 label={effectiveRunOn}
                 size="small"
@@ -250,30 +217,6 @@ export default function RepositoryScriptsTab({
 
               {/* Actions */}
               <Box sx={{ display: 'flex', gap: 0.25, ml: 'auto' }}>
-                <Tooltip title="Move Up">
-                  <span>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleMoveScript(script, 'up')}
-                      disabled={index === 0}
-                      sx={{ p: 0.5 }}
-                    >
-                      <ChevronUp size={16} />
-                    </IconButton>
-                  </span>
-                </Tooltip>
-                <Tooltip title="Move Down">
-                  <span>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleMoveScript(script, 'down')}
-                      disabled={index === scripts.length - 1}
-                      sx={{ p: 0.5 }}
-                    >
-                      <ChevronDown size={16} />
-                    </IconButton>
-                  </span>
-                </Tooltip>
                 <Tooltip title="Remove">
                   <IconButton
                     size="small"
