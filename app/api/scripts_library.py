@@ -549,7 +549,7 @@ async def assign_script_to_repository(
 async def update_repository_script_assignment(
     repository_id: int,
     repo_script_id: int,
-    execution_order: Optional[int] = None,
+    execution_order: Optional[float] = None,
     enabled: Optional[bool] = None,
     custom_timeout: Optional[int] = None,
     custom_run_on: Optional[str] = None,
