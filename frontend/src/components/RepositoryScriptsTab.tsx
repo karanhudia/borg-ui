@@ -287,9 +287,13 @@ export default function RepositoryScriptsTab({
     return <Typography>Loading scripts...</Typography>
   }
 
-  // Expose function to parent to open dialog
-  React.useEffect(() => {
-    ;(window as any)[`openScriptDialog_${repositoryId}_${hookType}`] = () => setAddDialogOpen(true)
+  // Expose function to parent to open dialog - use useLayoutEffect to avoid setState during render warning
+  React.useLayoutEffect(() => {
+    const key = `openScriptDialog_${repositoryId}_${hookType}`
+    ;(window as any)[key] = () => setAddDialogOpen(true)
+    return () => {
+      delete (window as any)[key]
+    }
   }, [repositoryId, hookType])
 
   return (
