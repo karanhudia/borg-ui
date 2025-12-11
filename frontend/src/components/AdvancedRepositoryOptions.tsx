@@ -1,15 +1,11 @@
 import { useState } from 'react'
 import {
-  Box,
   TextField,
   Divider,
   Typography,
-  Button,
-  Chip,
 } from '@mui/material'
-import { FileCode } from 'lucide-react'
 import ScriptEditorDialog from './ScriptEditorDialog'
-import RepositoryScriptsTab from './RepositoryScriptsTab'
+import RepositoryScriptsSection from './RepositoryScriptsSection'
 
 interface AdvancedRepositoryOptionsProps {
   repositoryId?: number | null
@@ -98,113 +94,19 @@ export default function AdvancedRepositoryOptions({
               : 'Configure inline scripts. After creation, you can also assign reusable scripts from Script Library.'}
           </Typography>
 
-          {/* Pre-Backup Scripts */}
-          <Box sx={{ mb: 1.5 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}>
-              <Typography variant="body2" fontWeight={600}>
-                Pre-Backup Scripts
-              </Typography>
-              {repositoryId && (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<FileCode size={14} />}
-                  onClick={() => {
-                    const openFn = (window as any)[`openScriptDialog_${repositoryId}_pre-backup`]
-                    if (openFn) openFn()
-                  }}
-                  sx={{ py: 0.25, px: 1, minHeight: 'auto', fontSize: '0.8rem' }}
-                >
-                  Add
-                </Button>
-              )}
-            </Box>
-
-            {/* Inline Pre-Backup Script - hidden when library scripts exist */}
-            {!hasPreLibraryScripts && (
-              <Box sx={{ mb: repositoryId ? 1 : 0 }}>
-                <Button
-                  variant="outlined"
-                  startIcon={<FileCode size={18} />}
-                  onClick={() => setPreScriptDialogOpen(true)}
-                  fullWidth
-                  sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                    <Typography>Inline Script</Typography>
-                    {preBackupScript && (
-                      <Chip label="Configured" size="small" color="success" sx={{ ml: 'auto' }} />
-                    )}
-                  </Box>
-                </Button>
-              </Box>
-            )}
-
-            {/* Library Pre-Backup Scripts */}
-            {repositoryId && (
-              <RepositoryScriptsTab
-                repositoryId={repositoryId}
-                hookType="pre-backup"
-                onScriptsChange={setHasPreLibraryScripts}
-                hasInlineScript={!!preBackupScript}
-                onClearInlineScript={() => onPreBackupScriptChange('')}
-              />
-            )}
-          </Box>
-
-          {/* Post-Backup Scripts */}
-          <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}>
-              <Typography variant="body2" fontWeight={600}>
-                Post-Backup Scripts
-              </Typography>
-              {repositoryId && (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<FileCode size={14} />}
-                  onClick={() => {
-                    const openFn = (window as any)[`openScriptDialog_${repositoryId}_post-backup`]
-                    if (openFn) openFn()
-                  }}
-                  sx={{ py: 0.25, px: 1, minHeight: 'auto', fontSize: '0.8rem' }}
-                >
-                  Add
-                </Button>
-              )}
-            </Box>
-
-            {/* Inline Post-Backup Script - hidden when library scripts exist */}
-            {!hasPostLibraryScripts && (
-              <Box sx={{ mb: repositoryId ? 1 : 0 }}>
-                <Button
-                  variant="outlined"
-                  startIcon={<FileCode size={18} />}
-                  onClick={() => setPostScriptDialogOpen(true)}
-                  fullWidth
-                  sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                    <Typography>Inline Script</Typography>
-                    {postBackupScript && (
-                      <Chip label="Configured" size="small" color="success" sx={{ ml: 'auto' }} />
-                    )}
-                  </Box>
-                </Button>
-              </Box>
-            )}
-
-            {/* Library Post-Backup Scripts */}
-            {repositoryId && (
-              <RepositoryScriptsTab
-                repositoryId={repositoryId}
-                hookType="post-backup"
-                onScriptsChange={setHasPostLibraryScripts}
-                hasInlineScript={!!postBackupScript}
-                onClearInlineScript={() => onPostBackupScriptChange('')}
-              />
-            )}
-          </Box>
+          <RepositoryScriptsSection
+            repositoryId={repositoryId}
+            preBackupScript={preBackupScript}
+            postBackupScript={postBackupScript}
+            onPreBackupScriptChange={onPreBackupScriptChange}
+            onPostBackupScriptChange={onPostBackupScriptChange}
+            onOpenPreScriptDialog={() => setPreScriptDialogOpen(true)}
+            onOpenPostScriptDialog={() => setPostScriptDialogOpen(true)}
+            hasPreLibraryScripts={hasPreLibraryScripts}
+            hasPostLibraryScripts={hasPostLibraryScripts}
+            onPreLibraryScriptsChange={setHasPreLibraryScripts}
+            onPostLibraryScriptsChange={setHasPostLibraryScripts}
+          />
         </>
       )}
 
