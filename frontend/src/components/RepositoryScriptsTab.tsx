@@ -200,6 +200,7 @@ export default function RepositoryScriptsTab({
               </Typography>
 
               {/* Badges */}
+              <Chip label={`#${script.execution_order}`} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
               <Chip
                 label={effectiveRunOn}
                 size="small"
