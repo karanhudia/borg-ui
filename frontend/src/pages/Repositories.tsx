@@ -953,12 +953,7 @@ export default function Repositories() {
       />
 
       {/* Create Repository Dialog */}
-      <Dialog
-        open={showRepositoryModal}
-        onClose={closeRepositoryModal}
-        maxWidth="md"
-        fullWidth
-      >
+      <Dialog open={showRepositoryModal} onClose={closeRepositoryModal} maxWidth="md" fullWidth>
         <form onSubmit={handleSubmitRepository}>
           <DialogTitle>
             {repositoryModalMode === 'create' ? 'Create' : 'Import'} Repository
@@ -1587,7 +1582,8 @@ export default function Repositories() {
               {newlyCreatedRepositoryId && (
                 <Alert severity="success" sx={{ mb: 2 }}>
                   <Typography variant="body2" fontWeight={600} gutterBottom>
-                    Repository {repositoryModalMode === 'create' ? 'created' : 'imported'} successfully!
+                    Repository {repositoryModalMode === 'create' ? 'created' : 'imported'}{' '}
+                    successfully!
                   </Typography>
                   <Typography variant="body2">
                     You can now add library scripts below, or click Done to finish.
@@ -1642,20 +1638,21 @@ export default function Repositories() {
                   type="submit"
                   variant="contained"
                   disabled={
-                (repositoryModalMode === 'create'
-                  ? createRepositoryMutation.isPending
-                  : importRepositoryMutation.isPending) ||
-                (repositoryForm.mode === 'full' && repositoryForm.source_directories.length === 0)
-              }
-            >
-              {repositoryModalMode === 'create'
-                ? createRepositoryMutation.isPending
-                  ? 'Creating...'
-                  : 'Create'
-                : importRepositoryMutation.isPending
-                  ? 'Importing...'
-                  : 'Import'}
-            </Button>
+                    (repositoryModalMode === 'create'
+                      ? createRepositoryMutation.isPending
+                      : importRepositoryMutation.isPending) ||
+                    (repositoryForm.mode === 'full' &&
+                      repositoryForm.source_directories.length === 0)
+                  }
+                >
+                  {repositoryModalMode === 'create'
+                    ? createRepositoryMutation.isPending
+                      ? 'Creating...'
+                      : 'Create'
+                    : importRepositoryMutation.isPending
+                      ? 'Importing...'
+                      : 'Import'}
+                </Button>
               </>
             )}
           </DialogActions>
@@ -2122,8 +2119,12 @@ export default function Repositories() {
                 onPostBackupScriptChange={(value) =>
                   setEditForm({ ...editForm, post_backup_script: value })
                 }
-                onPreHookTimeoutChange={(value: number) => setEditForm({ ...editForm, pre_hook_timeout: value })}
-                onPostHookTimeoutChange={(value: number) => setEditForm({ ...editForm, post_hook_timeout: value })}
+                onPreHookTimeoutChange={(value: number) =>
+                  setEditForm({ ...editForm, pre_hook_timeout: value })
+                }
+                onPostHookTimeoutChange={(value: number) =>
+                  setEditForm({ ...editForm, post_hook_timeout: value })
+                }
                 onContinueOnHookFailureChange={(value) =>
                   setEditForm({ ...editForm, continue_on_hook_failure: value })
                 }

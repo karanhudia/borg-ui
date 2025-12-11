@@ -16,11 +16,7 @@ import {
   Typography,
   Tooltip,
 } from '@mui/material'
-import {
-  Trash2,
-  FileCode,
-  Clock,
-} from 'lucide-react'
+import { Trash2, FileCode, Clock } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import api from '../services/api'
 
@@ -61,7 +57,7 @@ export default function RepositoryScriptsTab({
   onUpdate,
   onScriptsChange,
   hasInlineScript,
-  onClearInlineScript
+  onClearInlineScript,
 }: RepositoryScriptsTabProps) {
   const [scripts, setScripts] = useState<RepositoryScript[]>([])
   const [availableScripts, setAvailableScripts] = useState<Script[]>([])
@@ -77,8 +73,12 @@ export default function RepositoryScriptsTab({
   const fetchAssignedScripts = async () => {
     try {
       const response = await api.get(`/repositories/${repositoryId}/scripts`)
-      const scriptsData = hookType === 'pre-backup' ? response.data.pre_backup : response.data.post_backup
-      console.log('Fetched scripts:', scriptsData?.map((s: any) => ({ id: s.id, name: s.script_name, order: s.execution_order })))
+      const scriptsData =
+        hookType === 'pre-backup' ? response.data.pre_backup : response.data.post_backup
+      console.log(
+        'Fetched scripts:',
+        scriptsData?.map((s: any) => ({ id: s.id, name: s.script_name, order: s.execution_order }))
+      )
       setScripts(scriptsData || [])
       onScriptsChange?.(scriptsData && scriptsData.length > 0)
     } catch (error) {
@@ -200,7 +200,11 @@ export default function RepositoryScriptsTab({
               </Typography>
 
               {/* Badges */}
-              <Chip label={`#${script.execution_order}`} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
+              <Chip
+                label={`#${script.execution_order}`}
+                size="small"
+                sx={{ height: 20, fontSize: '0.7rem' }}
+              />
               <Chip
                 label={effectiveRunOn}
                 size="small"
@@ -292,7 +296,6 @@ export default function RepositoryScriptsTab({
           </Button>
         </DialogActions>
       </Dialog>
-
     </Box>
   )
 }

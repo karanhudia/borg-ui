@@ -54,7 +54,14 @@ interface NavigationItem {
   name: string
   href?: string
   icon: React.ComponentType<any>
-  key: 'dashboard' | 'connections' | 'repositories' | 'backups' | 'archives' | 'restore' | 'schedule'
+  key:
+    | 'dashboard'
+    | 'connections'
+    | 'repositories'
+    | 'backups'
+    | 'archives'
+    | 'restore'
+    | 'schedule'
   subItems?: Array<{
     name: string
     href: string
@@ -206,7 +213,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                         },
                       }}
                     >
-                      <ListItemIcon sx={{ color: isAnySubItemActive ? 'primary.main' : 'text.secondary' }}>
+                      <ListItemIcon
+                        sx={{ color: isAnySubItemActive ? 'primary.main' : 'text.secondary' }}
+                      >
                         <Icon size={20} />
                       </ListItemIcon>
                       <ListItemText
@@ -247,7 +256,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                               },
                             }}
                           >
-                            <ListItemIcon sx={{ color: isActive ? 'white' : 'text.secondary', minWidth: 36 }}>
+                            <ListItemIcon
+                              sx={{ color: isActive ? 'white' : 'text.secondary', minWidth: 36 }}
+                            >
                               <SubIcon size={18} />
                             </ListItemIcon>
                             <ListItemText
@@ -268,7 +279,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
             // Regular items without sub-items
             const isActive = Boolean(
-              item.href && (location.pathname === item.href || location.pathname.startsWith(item.href + '/'))
+              item.href &&
+                (location.pathname === item.href || location.pathname.startsWith(item.href + '/'))
             )
 
             const listItemButton = (
