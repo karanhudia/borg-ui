@@ -50,6 +50,8 @@ export default function AdvancedRepositoryOptions({
 }: AdvancedRepositoryOptionsProps) {
   const [preScriptDialogOpen, setPreScriptDialogOpen] = useState(false)
   const [postScriptDialogOpen, setPostScriptDialogOpen] = useState(false)
+  const [hasPreLibraryScripts, setHasPreLibraryScripts] = useState(false)
+  const [hasPostLibraryScripts, setHasPostLibraryScripts] = useState(false)
 
   return (
     <>
@@ -102,33 +104,41 @@ export default function AdvancedRepositoryOptions({
               Pre-Backup Scripts
             </Typography>
 
-            {/* Inline Pre-Backup Script */}
-            <Box sx={{ mb: repositoryId ? 1 : 0 }}>
-              <Button
-                variant="outlined"
-                startIcon={<FileCode size={18} />}
-                onClick={() => setPreScriptDialogOpen(true)}
-                fullWidth
-                sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
-              >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                  <Typography>Inline Script</Typography>
-                  {preBackupScript && (
-                    <Chip label="Configured" size="small" color="success" sx={{ ml: 'auto' }} />
-                  )}
-                </Box>
-              </Button>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ ml: 1, mt: 0.25, display: 'block' }}
-              >
-                Shell script to run before backup starts
-              </Typography>
-            </Box>
+            {/* Inline Pre-Backup Script - hidden when library scripts exist */}
+            {!hasPreLibraryScripts && (
+              <Box sx={{ mb: repositoryId ? 1 : 0 }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<FileCode size={18} />}
+                  onClick={() => setPreScriptDialogOpen(true)}
+                  fullWidth
+                  sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                    <Typography>Inline Script</Typography>
+                    {preBackupScript && (
+                      <Chip label="Configured" size="small" color="success" sx={{ ml: 'auto' }} />
+                    )}
+                  </Box>
+                </Button>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ ml: 1, mt: 0.25, display: 'block' }}
+                >
+                  Shell script to run before backup starts
+                </Typography>
+              </Box>
+            )}
 
             {/* Library Pre-Backup Scripts */}
-            {repositoryId && <RepositoryScriptsTab repositoryId={repositoryId} hookType="pre-backup" />}
+            {repositoryId && (
+              <RepositoryScriptsTab
+                repositoryId={repositoryId}
+                hookType="pre-backup"
+                onScriptsChange={setHasPreLibraryScripts}
+              />
+            )}
           </Box>
 
           {/* Post-Backup Scripts */}
@@ -137,33 +147,41 @@ export default function AdvancedRepositoryOptions({
               Post-Backup Scripts
             </Typography>
 
-            {/* Inline Post-Backup Script */}
-            <Box sx={{ mb: repositoryId ? 1 : 0 }}>
-              <Button
-                variant="outlined"
-                startIcon={<FileCode size={18} />}
-                onClick={() => setPostScriptDialogOpen(true)}
-                fullWidth
-                sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
-              >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                  <Typography>Inline Script</Typography>
-                  {postBackupScript && (
-                    <Chip label="Configured" size="small" color="success" sx={{ ml: 'auto' }} />
-                  )}
-                </Box>
-              </Button>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ ml: 1, mt: 0.25, display: 'block' }}
-              >
-                Shell script to run after successful backup
-              </Typography>
-            </Box>
+            {/* Inline Post-Backup Script - hidden when library scripts exist */}
+            {!hasPostLibraryScripts && (
+              <Box sx={{ mb: repositoryId ? 1 : 0 }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<FileCode size={18} />}
+                  onClick={() => setPostScriptDialogOpen(true)}
+                  fullWidth
+                  sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                    <Typography>Inline Script</Typography>
+                    {postBackupScript && (
+                      <Chip label="Configured" size="small" color="success" sx={{ ml: 'auto' }} />
+                    )}
+                  </Box>
+                </Button>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ ml: 1, mt: 0.25, display: 'block' }}
+                >
+                  Shell script to run after successful backup
+                </Typography>
+              </Box>
+            )}
 
             {/* Library Post-Backup Scripts */}
-            {repositoryId && <RepositoryScriptsTab repositoryId={repositoryId} hookType="post-backup" />}
+            {repositoryId && (
+              <RepositoryScriptsTab
+                repositoryId={repositoryId}
+                hookType="post-backup"
+                onScriptsChange={setHasPostLibraryScripts}
+              />
+            )}
           </Box>
         </>
       )}
