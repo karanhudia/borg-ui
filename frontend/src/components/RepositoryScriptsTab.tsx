@@ -262,20 +262,17 @@ export default function RepositoryScriptsTab({
                 MenuProps={{
                   PaperProps: {
                     style: {
-                      maxHeight: 500,
-                      minHeight: 300,
+                      maxHeight: 400,
                     },
                   },
                 }}
               >
                 {availableScripts.map((script) => (
-                  <MenuItem key={script.id} value={script.id} sx={{ whiteSpace: 'normal', py: 1.5 }}>
-                    <Box sx={{ width: '100%' }}>
-                      <Typography variant="body2" sx={{ fontWeight: 500, mb: 0.5 }}>
-                        {script.name}
-                      </Typography>
+                  <MenuItem key={script.id} value={script.id}>
+                    <Box>
+                      <Typography variant="body2">{script.name}</Typography>
                       {script.description && (
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'normal' }}>
+                        <Typography variant="caption" color="text.secondary">
                           {script.description}
                         </Typography>
                       )}
