@@ -86,20 +86,20 @@ export default function AdvancedRepositoryOptions({
           <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.5 }}>
             Scripts {!repositoryId && '(Optional)'}
           </Typography>
-          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
             {repositoryId
               ? 'Configure inline scripts or assign reusable scripts from your Script Library.'
               : 'Configure inline scripts. After creation, you can also assign reusable scripts from Script Library.'}
           </Typography>
 
           {/* Pre-Backup Scripts */}
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>
+          <Box sx={{ mb: 1.5 }}>
+            <Typography variant="body2" fontWeight={600} sx={{ mb: 0.75 }}>
               Pre-Backup Scripts
             </Typography>
 
             {/* Inline Pre-Backup Script */}
-            <Box sx={{ mb: repositoryId ? 1.5 : 0 }}>
+            <Box sx={{ mb: repositoryId ? 1 : 0 }}>
               <Button
                 variant="outlined"
                 startIcon={<FileCode size={18} />}
@@ -117,7 +117,7 @@ export default function AdvancedRepositoryOptions({
               <Typography
                 variant="caption"
                 color="text.secondary"
-                sx={{ ml: 1, mt: 0.5, display: 'block' }}
+                sx={{ ml: 1, mt: 0.25, display: 'block' }}
               >
                 Shell script to run before backup starts
               </Typography>
@@ -129,12 +129,12 @@ export default function AdvancedRepositoryOptions({
 
           {/* Post-Backup Scripts */}
           <Box>
-            <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>
+            <Typography variant="body2" fontWeight={600} sx={{ mb: 0.75 }}>
               Post-Backup Scripts
             </Typography>
 
             {/* Inline Post-Backup Script */}
-            <Box sx={{ mb: repositoryId ? 1.5 : 0 }}>
+            <Box sx={{ mb: repositoryId ? 1 : 0 }}>
               <Button
                 variant="outlined"
                 startIcon={<FileCode size={18} />}
@@ -152,7 +152,7 @@ export default function AdvancedRepositoryOptions({
               <Typography
                 variant="caption"
                 color="text.secondary"
-                sx={{ ml: 1, mt: 0.5, display: 'block' }}
+                sx={{ ml: 1, mt: 0.25, display: 'block' }}
               >
                 Shell script to run after successful backup
               </Typography>

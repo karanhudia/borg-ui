@@ -189,8 +189,8 @@ export default function RepositoryScriptsTab({ repositoryId, hookType, onUpdate 
               sx={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 1.5,
-                p: 1,
+                gap: 1,
+                p: 0.75,
                 border: 1,
                 borderColor: 'divider',
                 borderRadius: 1,
@@ -275,7 +275,7 @@ export default function RepositoryScriptsTab({ repositoryId, hookType, onUpdate 
     <Box>
       {/* Library Scripts Section */}
       <Box>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
           <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', textTransform: 'uppercase' }}>
             From Library
           </Typography>
