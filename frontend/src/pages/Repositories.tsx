@@ -94,6 +94,7 @@ export default function Repositories() {
   const appState = useAppState()
   const [showRepositoryModal, setShowRepositoryModal] = useState(false)
   const [repositoryModalMode, setRepositoryModalMode] = useState<'create' | 'import'>('create')
+  const [newlyCreatedRepositoryId, setNewlyCreatedRepositoryId] = useState<number | null>(null)
   const [editingRepository, setEditingRepository] = useState<Repository | null>(null)
   const [viewingInfoRepository, setViewingInfoRepository] = useState<Repository | null>(null)
   const [checkingRepository, setCheckingRepository] = useState<Repository | null>(null)
@@ -188,7 +189,8 @@ export default function Repositories() {
       // Invalidate AppContext query to update tab enablement immediately
       queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
       appState.refetch()
-      setShowRepositoryModal(false)
+      // Keep modal open and set newly created repository ID to allow adding library scripts
+      setNewlyCreatedRepositoryId(response.data.id)
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to create repository')
@@ -208,7 +210,8 @@ export default function Repositories() {
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
       queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
       appState.refetch()
-      setShowRepositoryModal(false)
+      // Keep modal open and set newly created repository ID to allow adding library scripts
+      setNewlyCreatedRepositoryId(response.data.repository.id)
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to import repository')
@@ -481,6 +484,7 @@ export default function Repositories() {
   const openRepositoryModal = (mode: 'create' | 'import') => {
     setRepositoryModalMode(mode)
     setShowRepositoryModal(true)
+    setNewlyCreatedRepositoryId(null) // Reset when opening modal
     setRepositoryForm({
       name: '',
       path: '',
@@ -511,6 +515,11 @@ export default function Repositories() {
     })
     setNewSourceDir('')
     setNewExcludePattern('')
+  }
+
+  const closeRepositoryModal = () => {
+    setShowRepositoryModal(false)
+    setNewlyCreatedRepositoryId(null)
   }
 
   const openEditModal = (repository: Repository) => {
@@ -946,7 +955,7 @@ export default function Repositories() {
       {/* Create Repository Dialog */}
       <Dialog
         open={showRepositoryModal}
-        onClose={() => setShowRepositoryModal(false)}
+        onClose={closeRepositoryModal}
         maxWidth="sm"
         fullWidth
       >
@@ -1574,9 +1583,21 @@ export default function Repositories() {
                 </Box>
               )}
 
+              {/* Success Message - shown after repository is created */}
+              {newlyCreatedRepositoryId && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  <Typography variant="body2" fontWeight={600} gutterBottom>
+                    Repository {repositoryModalMode === 'create' ? 'created' : 'imported'} successfully!
+                  </Typography>
+                  <Typography variant="body2">
+                    You can now add library scripts below, or click Done to finish.
+                  </Typography>
+                </Alert>
+              )}
+
               {/* Advanced Options */}
               <AdvancedRepositoryOptions
-                repositoryId={null}
+                repositoryId={newlyCreatedRepositoryId}
                 mode={repositoryForm.mode}
                 remotePath={repositoryForm.remote_path}
                 preBackupScript={repositoryForm.pre_backup_script}
@@ -1610,11 +1631,17 @@ export default function Repositories() {
             </Box>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setShowRepositoryModal(false)}>Cancel</Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={
+            {newlyCreatedRepositoryId ? (
+              <Button onClick={closeRepositoryModal} variant="contained">
+                Done
+              </Button>
+            ) : (
+              <>
+                <Button onClick={closeRepositoryModal}>Cancel</Button>
+                <Button
+                  type="submit"
+                  variant="contained"
+                  disabled={
                 (repositoryModalMode === 'create'
                   ? createRepositoryMutation.isPending
                   : importRepositoryMutation.isPending) ||
@@ -1629,6 +1656,8 @@ export default function Repositories() {
                   ? 'Importing...'
                   : 'Import'}
             </Button>
+              </>
+            )}
           </DialogActions>
         </form>
       </Dialog>
