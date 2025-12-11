@@ -135,7 +135,7 @@ class BackupJob(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     repository = Column(String)  # Repository path/name
-    status = Column(String, default="pending")  # pending, running, completed, failed
+    status = Column(String, default="pending")  # pending, running, completed, completed_with_warnings, failed
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     progress = Column(Integer, default=0)

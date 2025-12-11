@@ -427,6 +427,8 @@ const Schedule: React.FC = () => {
     switch (status) {
       case 'completed':
         return <CheckCircle size={18} />
+      case 'completed_with_warnings':
+        return <AlertCircle size={18} />
       case 'running':
         return <Clock size={18} />
       case 'failed':
@@ -444,6 +446,8 @@ const Schedule: React.FC = () => {
     switch (status) {
       case 'completed':
         return 'success'
+      case 'completed_with_warnings':
+        return 'warning'
       case 'running':
         return 'info'
       case 'failed':
@@ -452,6 +456,25 @@ const Schedule: React.FC = () => {
         return 'warning'
       default:
         return 'default'
+    }
+  }
+
+  const getBackupStatusLabel = (status: string) => {
+    switch (status) {
+      case 'completed_with_warnings':
+        return 'Warnings'
+      case 'completed':
+        return 'Completed'
+      case 'running':
+        return 'Running'
+      case 'failed':
+        return 'Failed'
+      case 'cancelled':
+        return 'Cancelled'
+      case 'pending':
+        return 'Pending'
+      default:
+        return status.charAt(0).toUpperCase() + status.slice(1)
     }
   }
 
@@ -767,7 +790,7 @@ const Schedule: React.FC = () => {
         <>
           <Chip
             icon={getBackupStatusIcon(job.status)}
-            label={job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+            label={getBackupStatusLabel(job.status)}
             size="small"
             color={getBackupStatusColor(job.status)}
             sx={{ minWidth: 100 }}
