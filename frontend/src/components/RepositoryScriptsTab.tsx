@@ -312,7 +312,7 @@ export default function RepositoryScriptsTab({ repositoryId, hookType, onUpdate,
                 MenuProps={{
                   PaperProps: {
                     style: {
-                      maxHeight: 400,
+                      maxHeight: 600,
                     },
                   },
                 }}
