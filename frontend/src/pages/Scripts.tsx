@@ -424,7 +424,7 @@ export default function Scripts() {
       </Dialog>
 
       {/* Test Result Dialog */}
-      <Dialog open={testDialogOpen} onClose={() => setTestDialogOpen(false)} maxWidth="md" fullWidth>
+      <Dialog open={testDialogOpen} onClose={() => setTestDialogOpen(false)} maxWidth="lg" fullWidth>
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Play size={20} />
