@@ -1013,7 +1013,7 @@ class BackupService:
                         logger.warning("Failed to send backup success notification", error=str(e))
             elif 100 <= process.returncode <= 127:
                 # Warning (modern exit code system)
-                job.status = "completed"
+                job.status = "completed_with_warnings"
                 job.progress = 100
                 job.error_message = f"Backup completed with warning (exit code {process.returncode})"
                 logger.warning("Backup completed with warning", job_id=job_id, exit_code=process.returncode)
@@ -1062,18 +1062,18 @@ class BackupService:
                     except Exception as e:
                         logger.warning("Failed to send backup failure notification", error=str(e))
                 else:
-                    # Send success notification (backup completed with warnings but post-hook succeeded)
+                    # Send warning notification (backup completed with warnings but post-hook succeeded)
                     try:
                         stats = {
                             "original_size": job.original_size,
                             "compressed_size": job.compressed_size,
                             "deduplicated_size": job.deduplicated_size
                         }
-                        await notification_service.send_backup_success(
-                            db, repository, archive_name, stats, job.completed_at
+                        await notification_service.send_backup_warning(
+                            db, repository, archive_name, job.error_message, stats, job.completed_at
                         )
                     except Exception as e:
-                        logger.warning("Failed to send backup success notification", error=str(e))
+                        logger.warning("Failed to send backup warning notification", error=str(e))
             else:
                 job.status = "failed"
                 # Build comprehensive error message with msgid details

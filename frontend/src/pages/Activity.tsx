@@ -26,6 +26,7 @@ import {
   PlayCircle,
   Info,
   Download,
+  AlertTriangle,
 } from 'lucide-react'
 import { activityAPI } from '../services/api'
 import { formatDate } from '../utils/dateUtils'
@@ -71,6 +72,8 @@ const Activity: React.FC = () => {
     switch (status) {
       case 'completed':
         return <CheckCircle size={18} />
+      case 'completed_with_warnings':
+        return <AlertTriangle size={18} />
       case 'failed':
         return <XCircle size={18} />
       case 'running':
@@ -86,12 +89,31 @@ const Activity: React.FC = () => {
     switch (status) {
       case 'completed':
         return 'success'
+      case 'completed_with_warnings':
+        return 'warning'
       case 'failed':
         return 'error'
       case 'running':
         return 'info'
       default:
         return 'default'
+    }
+  }
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'completed_with_warnings':
+        return 'Completed with Warnings'
+      case 'completed':
+        return 'Completed'
+      case 'failed':
+        return 'Failed'
+      case 'running':
+        return 'Running'
+      case 'pending':
+        return 'Pending'
+      default:
+        return status.charAt(0).toUpperCase() + status.slice(1)
     }
   }
 
@@ -174,7 +196,7 @@ const Activity: React.FC = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           {getStatusIcon(activity.status)}
           <Chip
-            label={activity.status}
+            label={getStatusLabel(activity.status)}
             color={getStatusColor(activity.status)}
             size="small"
             variant="outlined"

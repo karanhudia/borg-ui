@@ -450,6 +450,108 @@ class NotificationService:
             await NotificationService._send_to_service(db, setting, title, html_body, markdown_body)
 
     @staticmethod
+    async def send_backup_warning(
+        db: Session,
+        repository_name: str,
+        archive_name: str,
+        warning_message: str,
+        stats: Optional[dict] = None,
+        completion_time: Optional[datetime] = None
+    ) -> None:
+        """
+        Send notification for backup completed with warnings.
+
+        Args:
+            db: Database session
+            repository_name: Name of repository
+            archive_name: Name of created archive
+            warning_message: Warning description
+            stats: Backup statistics (optional)
+            completion_time: When the backup completed (optional, defaults to now)
+        """
+        settings = db.query(NotificationSettings).filter(
+            NotificationSettings.enabled == True,
+            NotificationSettings.notify_on_backup_success == True  # Use success setting for warnings
+        ).all()
+
+        if not settings:
+            return
+
+        # Build content blocks for HTML email and markdown
+        content_blocks = [
+            {'label': 'Archive', 'value': archive_name},
+            {'label': 'Repository', 'value': repository_name},
+        ]
+
+        # Add statistics as a grid for HTML, and as simple blocks for markdown
+        stats_blocks = []
+        if stats:
+            stats_html = '<div class="stats-grid">'
+
+            if "original_size" in stats and stats["original_size"]:
+                stats_html += f'''
+                <div class="stat-card">
+                    <div class="stat-label">Original Size</div>
+                    <div class="stat-value">{_format_bytes(stats['original_size'])}</div>
+                </div>'''
+                stats_blocks.append({'label': 'Original Size', 'value': _format_bytes(stats['original_size'])})
+
+            if "compressed_size" in stats and stats["compressed_size"]:
+                stats_html += f'''
+                <div class="stat-card">
+                    <div class="stat-label">Compressed Size</div>
+                    <div class="stat-value">{_format_bytes(stats['compressed_size'])}</div>
+                </div>'''
+                stats_blocks.append({'label': 'Compressed Size', 'value': _format_bytes(stats['compressed_size'])})
+
+            if "deduplicated_size" in stats and stats["deduplicated_size"]:
+                stats_html += f'''
+                <div class="stat-card">
+                    <div class="stat-label">Deduplicated Size</div>
+                    <div class="stat-value">{_format_bytes(stats['deduplicated_size'])}</div>
+                </div>'''
+                stats_blocks.append({'label': 'Deduplicated Size', 'value': _format_bytes(stats['deduplicated_size'])})
+
+            stats_html += '</div>'
+            content_blocks.append({'html': stats_html})
+
+        # Add warning box for HTML
+        warning_html = f'''
+        <div class="warning-box" style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin: 10px 0; border-radius: 4px;">
+            <strong style="color: #856404;">⚠️ Warning:</strong>
+            <pre style="margin: 8px 0 0 0; color: #856404;">{warning_message}</pre>
+        </div>'''
+        content_blocks.append({'html': warning_html})
+
+        # Create HTML body
+        html_body = _create_html_email(
+            title="⚠️ Backup Completed with Warnings",
+            content_blocks=content_blocks,
+            footer=f"Completed at {(completion_time or datetime.now()).strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+
+        # Create markdown body
+        markdown_blocks = [
+            {'label': 'Archive', 'value': archive_name},
+            {'label': 'Repository', 'value': repository_name},
+        ]
+        markdown_blocks.extend(stats_blocks)
+        markdown_blocks.append({'label': 'Warning', 'value': f"```\n{warning_message}\n```"})
+
+        markdown_body = _create_markdown_message(
+            title="⚠️ Backup Completed with Warnings",
+            content_blocks=markdown_blocks,
+            footer=f"Completed at {(completion_time or datetime.now()).strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+
+        for setting in settings:
+            title = "⚠️ Backup Completed with Warnings"
+            if setting.title_prefix:
+                title = f"{setting.title_prefix} {title}"
+
+            await NotificationService._send_to_service(db, setting, title, html_body, markdown_body)
+
+    @staticmethod
     async def send_restore_success(
         db: Session,
         repository_name: str,
