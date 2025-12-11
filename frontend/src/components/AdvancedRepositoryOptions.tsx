@@ -121,13 +121,6 @@ export default function AdvancedRepositoryOptions({
                     )}
                   </Box>
                 </Button>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ ml: 1, mt: 0.25, display: 'block' }}
-                >
-                  Shell script to run before backup starts
-                </Typography>
               </Box>
             )}
 
@@ -164,13 +157,6 @@ export default function AdvancedRepositoryOptions({
                     )}
                   </Box>
                 </Button>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ ml: 1, mt: 0.25, display: 'block' }}
-                >
-                  Shell script to run after successful backup
-                </Typography>
               </Box>
             )}
 
