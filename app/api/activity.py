@@ -4,14 +4,17 @@ Activity feed API endpoints.
 Provides a unified view of all operations (backups, restores, checks, compacts, package installs).
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
+from pathlib import Path
 import os
 import structlog
+import tempfile
 
 from app.database.database import get_db
 from app.database.models import BackupJob, RestoreJob, CheckJob, CompactJob, PackageInstallJob, Repository, InstalledPackage
@@ -357,4 +360,101 @@ async def get_job_logs(
     }
 
 
-import os
+@router.get("/{job_type}/{job_id}/logs/download")
+async def download_job_logs(
+    job_type: str,
+    job_id: int,
+    token: str = None,
+    db: Session = Depends(get_db)
+):
+    """Download logs for a specific job as a file."""
+    # Handle authentication from query parameter (for download links)
+    from app.core.security import verify_token
+    from app.database.models import User as UserModel
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication token required"
+        )
+
+    try:
+        username = verify_token(token)
+        if not username:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token"
+            )
+
+        # Get user from database
+        current_user = db.query(UserModel).filter(UserModel.username == username).first()
+        if not current_user or not current_user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found or inactive"
+            )
+    except Exception as e:
+        logger.error("Failed to verify token for log download", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication token"
+        )
+
+    # Map job type to model
+    job_models = {
+        'backup': BackupJob,
+        'restore': RestoreJob,
+        'check': CheckJob,
+        'compact': CompactJob,
+        'package': PackageInstallJob
+    }
+
+    if job_type not in job_models:
+        raise HTTPException(status_code=400, detail=f"Invalid job type: {job_type}")
+
+    job_model = job_models[job_type]
+    job = db.query(job_model).filter(job_model.id == job_id).first()
+
+    if not job:
+        raise HTTPException(status_code=404, detail=f"{job_type.capitalize()} job not found")
+
+    # Don't allow downloading logs for running jobs
+    if job.status == 'running':
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot download logs for running job"
+        )
+
+    # Try to get logs from log file first
+    log_file_path = getattr(job, 'log_file_path', None)
+    if log_file_path and os.path.exists(log_file_path):
+        return FileResponse(
+            path=log_file_path,
+            filename=f"{job_type}_job_{job_id}_logs.txt",
+            media_type="text/plain"
+        )
+
+    # Fallback to database logs
+    if hasattr(job, 'logs') and job.logs:
+        # Create temp file with logs
+        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt')
+        try:
+            temp_file.write(job.logs)
+            temp_file.flush()
+            temp_file.close()
+
+            return FileResponse(
+                path=temp_file.name,
+                filename=f"{job_type}_job_{job_id}_logs.txt",
+                media_type="text/plain"
+            )
+        except Exception as e:
+            if os.path.exists(temp_file.name):
+                os.unlink(temp_file.name)
+            raise e
+
+    # No logs available
+    raise HTTPException(
+        status_code=404,
+        detail="No logs available for this job"
+    )

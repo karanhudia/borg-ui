@@ -78,7 +78,6 @@ const navigationWithKeys: NavigationItem[] = [
   { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },
   { name: 'Restore', href: '/restore', icon: Download, key: 'restore' as const },
   { name: 'Schedule', href: '/schedule', icon: Clock, key: 'schedule' as const },
-  { name: 'Activity', href: '/activity', icon: History, key: 'dashboard' as const },
   {
     name: 'Settings',
     icon: SettingsIcon,
@@ -91,6 +90,7 @@ const navigationWithKeys: NavigationItem[] = [
       { name: 'Scripts', href: '/settings/scripts', icon: FileCode },
       { name: 'Export/Import', href: '/settings/export', icon: DownloadIcon },
       { name: 'Users', href: '/settings/users', icon: Users },
+      { name: 'Activity', href: '/settings/activity', icon: History },
     ],
   },
 ]

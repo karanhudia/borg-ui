@@ -30,6 +30,7 @@ import NotificationsTab from '../components/NotificationsTab'
 import PackagesTab from '../components/PackagesTab'
 import ExportImportTab from '../components/ExportImportTab'
 import Scripts from './Scripts'
+import Activity from './Activity'
 import { formatDateShort } from '../utils/dateUtils'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
 
@@ -53,9 +54,9 @@ const Settings: React.FC = () => {
   const getTabOrder = () => {
     const baseTabs = ['account', 'appearance', 'notifications']
     if (user?.is_admin) {
-      return [...baseTabs, 'packages', 'scripts', 'export', 'users']
+      return [...baseTabs, 'packages', 'scripts', 'export', 'users', 'activity']
     }
-    return [...baseTabs, 'scripts', 'export']
+    return [...baseTabs, 'scripts', 'export', 'activity']
   }
 
   // Determine active tab from URL or default to 'account'
@@ -494,6 +495,9 @@ const Settings: React.FC = () => {
           />
         </Box>
       )}
+
+      {/* Activity Tab */}
+      {activeTab === (user?.is_admin ? 7 : 5) && <Activity />}
 
       {/* Create/Edit User Modal */}
       <Dialog

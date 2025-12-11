@@ -25,6 +25,7 @@ import {
   Clock,
   PlayCircle,
   Info,
+  Download,
 } from 'lucide-react'
 import { activityAPI } from '../services/api'
 import { formatDate } from '../utils/dateUtils'
@@ -149,6 +150,10 @@ const Activity: React.FC = () => {
     setSelectedJob(null)
   }
 
+  const handleDownloadLogs = (job: ActivityItem) => {
+    activityAPI.downloadLogs(job.type, job.id)
+  }
+
   // Define columns for DataTable
   const columns: Column<ActivityItem>[] = [
     {
@@ -214,6 +219,13 @@ const Activity: React.FC = () => {
       onClick: handleViewLogs,
       color: 'primary',
       tooltip: 'View Logs',
+    },
+    {
+      icon: <Download size={18} />,
+      label: 'Download Logs',
+      onClick: handleDownloadLogs,
+      color: 'info',
+      tooltip: 'Download Logs',
     },
   ]
 
