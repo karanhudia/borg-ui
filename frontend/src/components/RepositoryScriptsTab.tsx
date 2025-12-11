@@ -260,6 +260,7 @@ export default function RepositoryScriptsTab({
                 value={selectedScriptId}
                 label="Select Script"
                 onChange={(e) => setSelectedScriptId(e.target.value as number)}
+                sx={{ height: { xs: 48, sm: 56 } }}
                 MenuProps={{
                   PaperProps: {
                     style: {
