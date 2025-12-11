@@ -86,7 +86,7 @@ export default function Scripts() {
     content:
       '#!/bin/bash\n\necho "Script started"\n\n# Your script here\n\necho "Script completed"',
     timeout: 300,
-    run_on: 'success',
+    run_on: 'always',
     category: 'custom',
   })
 
@@ -114,7 +114,7 @@ export default function Scripts() {
       content:
         '#!/bin/bash\n\necho "Script started"\n\n# Your script here\n\necho "Script completed"',
       timeout: 300,
-      run_on: 'success',
+      run_on: 'always',
       category: 'custom',
     })
     setDialogOpen(true)
@@ -379,10 +379,14 @@ export default function Scripts() {
               >
                 <MenuItem value="success">Success - Only after successful backups</MenuItem>
                 <MenuItem value="failure">Failure - Only after failed backups</MenuItem>
-                <MenuItem value="warning">Warning - Only on warnings</MenuItem>
+                <MenuItem value="warning">Warning - Only after backups with warnings</MenuItem>
                 <MenuItem value="always">Always - Run regardless of result</MenuItem>
               </Select>
             </FormControl>
+
+            <Alert severity="info">
+              <strong>Note:</strong> The "Run On" condition only applies to Post-Backup hooks. Pre-backup scripts always run before the backup starts.
+            </Alert>
 
             <TextField
               label="Timeout (seconds)"

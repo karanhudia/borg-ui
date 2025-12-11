@@ -130,11 +130,22 @@ class ScriptLibraryExecutor:
             execution_logs.extend(result['logs'])
 
             if not result['success']:
-                scripts_failed += 1
-                logger.warning("Script execution failed",
-                             script_id=script.id,
-                             script_name=script.name,
-                             exit_code=result['exit_code'])
+                # Check if we should continue despite error
+                continue_on_error = rs.continue_on_error if rs.continue_on_error is not None else True
+                
+                if not continue_on_error:
+                    scripts_failed += 1
+                    logger.warning("Script execution failed",
+                                 script_id=script.id,
+                                 script_name=script.name,
+                                 exit_code=result['exit_code'])
+                else:
+                    logger.warning("Script execution failed but continuing (continue_on_error=True)",
+                                 script_id=script.id,
+                                 script_name=script.name,
+                                 exit_code=result['exit_code'])
+                    # Add a log entry for clarity
+                    execution_logs.append(f"WARNING: Script '{script.name}' failed but 'Continue on Failure' is enabled. Backup will proceed.")
 
         overall_success = scripts_failed == 0
 

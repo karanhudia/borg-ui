@@ -29,7 +29,7 @@ class ScriptCreate(BaseModel):
     description: Optional[str] = None
     content: str  # The actual script content
     timeout: int = 300
-    run_on: str = "success"  # 'success', 'failure', 'always', 'warning'
+    run_on: str = "always"  # 'success', 'failure', 'always', 'warning'
     category: str = "custom"  # 'custom', 'template'
 
 class ScriptUpdate(BaseModel):
@@ -64,6 +64,7 @@ class RepositoryScriptAssignment(BaseModel):
     enabled: bool = True
     custom_timeout: Optional[int] = None
     custom_run_on: Optional[str] = None
+    continue_on_error: Optional[bool] = True
 
 # Helper functions
 def ensure_scripts_directory():
@@ -471,6 +472,7 @@ async def get_repository_scripts(
             "enabled": rs.enabled,
             "custom_timeout": rs.custom_timeout,
             "custom_run_on": rs.custom_run_on,
+            "continue_on_error": rs.continue_on_error,
             "default_timeout": rs.script.timeout,
             "default_run_on": rs.script.run_on
         }
@@ -524,6 +526,7 @@ async def assign_script_to_repository(
         enabled=assignment.enabled,
         custom_timeout=assignment.custom_timeout,
         custom_run_on=assignment.custom_run_on,
+        continue_on_error=assignment.continue_on_error if assignment.continue_on_error is not None else True,
         created_at=datetime.utcnow()
     )
 
@@ -553,6 +556,7 @@ async def update_repository_script_assignment(
     enabled: Optional[bool] = None,
     custom_timeout: Optional[int] = None,
     custom_run_on: Optional[str] = None,
+    continue_on_error: Optional[bool] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -579,6 +583,9 @@ async def update_repository_script_assignment(
         if custom_run_on not in valid_run_on:
             raise HTTPException(status_code=400, detail=f"run_on must be one of: {', '.join(valid_run_on)}")
         repo_script.custom_run_on = custom_run_on
+
+    if continue_on_error is not None:
+        repo_script.continue_on_error = continue_on_error
 
     db.commit()
 
