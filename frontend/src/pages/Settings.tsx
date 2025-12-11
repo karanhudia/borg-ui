@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import {
   Box,
   Card,
@@ -13,8 +13,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Tabs,
-  Tab,
   Chip,
   FormControlLabel,
   Checkbox,
@@ -29,13 +27,8 @@ import {
   Edit,
   Key,
   AlertCircle,
-  Bell,
   Moon,
   Sun,
-  Monitor,
-  Package,
-  Download,
-  FileCode,
 } from 'lucide-react'
 import { settingsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
@@ -63,7 +56,6 @@ const Settings: React.FC = () => {
   const { user } = useAuth()
   const { mode, setTheme } = useTheme()
   const queryClient = useQueryClient()
-  const navigate = useNavigate()
   const { tab } = useParams<{ tab?: string }>()
 
   // Get tab order based on user role
@@ -329,64 +321,7 @@ const Settings: React.FC = () => {
         </Typography>
       </Box>
 
-      {/* Tabs */}
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs
-          value={activeTab}
-          onChange={(_, value) => {
-            const tabOrder = getTabOrder()
-            const tabPath = tabOrder[value] || 'account'
-            navigate(`/settings/${tabPath}`)
-          }}
-        >
-          <Tab
-            icon={<Key size={18} />}
-            iconPosition="start"
-            label="Profile"
-            sx={{ textTransform: 'none', minHeight: 48 }}
-          />
-          <Tab
-            icon={<Monitor size={18} />}
-            iconPosition="start"
-            label="Appearance"
-            sx={{ textTransform: 'none', minHeight: 48 }}
-          />
-          <Tab
-            icon={<Bell size={18} />}
-            iconPosition="start"
-            label="Notifications"
-            sx={{ textTransform: 'none', minHeight: 48 }}
-          />
-          {user?.is_admin && (
-            <Tab
-              icon={<Package size={18} />}
-              iconPosition="start"
-              label="System Packages"
-              sx={{ textTransform: 'none', minHeight: 48 }}
-            />
-          )}
-          <Tab
-            icon={<FileCode size={18} />}
-            iconPosition="start"
-            label="Scripts"
-            sx={{ textTransform: 'none', minHeight: 48 }}
-          />
-          <Tab
-            icon={<Download size={18} />}
-            iconPosition="start"
-            label="Export/Import"
-            sx={{ textTransform: 'none', minHeight: 48 }}
-          />
-          {user?.is_admin && (
-            <Tab
-              icon={<Users size={18} />}
-              iconPosition="start"
-              label="User Management"
-              sx={{ textTransform: 'none', minHeight: 48 }}
-            />
-          )}
-        </Tabs>
-      </Box>
+      {/* Content is controlled by sidebar navigation */}
 
       {/* Profile Tab */}
       {activeTab === 0 && (
