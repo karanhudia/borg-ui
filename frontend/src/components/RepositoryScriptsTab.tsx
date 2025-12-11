@@ -173,6 +173,15 @@ export default function RepositoryScriptsTab({
     }
   }
 
+  // Expose function to parent to open dialog - MUST be before any conditional returns (Rules of Hooks)
+  React.useLayoutEffect(() => {
+    const key = `openScriptDialog_${repositoryId}_${hookType}`
+    ;(window as any)[key] = () => setAddDialogOpen(true)
+    return () => {
+      delete (window as any)[key]
+    }
+  }, [repositoryId, hookType])
+
   const getRunOnColor = (runOn: string) => {
     switch (runOn) {
       case 'success':
@@ -286,15 +295,6 @@ export default function RepositoryScriptsTab({
   if (loading) {
     return <Typography>Loading scripts...</Typography>
   }
-
-  // Expose function to parent to open dialog - use useLayoutEffect to avoid setState during render warning
-  React.useLayoutEffect(() => {
-    const key = `openScriptDialog_${repositoryId}_${hookType}`
-    ;(window as any)[key] = () => setAddDialogOpen(true)
-    return () => {
-      delete (window as any)[key]
-    }
-  }, [repositoryId, hookType])
 
   return (
     <Box>
