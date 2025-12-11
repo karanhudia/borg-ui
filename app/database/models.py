@@ -341,7 +341,7 @@ class Script(Base):
     shell = Column(String(50), default='/bin/bash', nullable=False)  # Shell to use
 
     # Run conditions
-    run_on = Column(String(50), default='success', nullable=False)  # 'success', 'failure', 'always', 'warning'
+    run_on = Column(String(50), default='always')  # 'success', 'failure', 'always', 'warning'
 
     # Metadata
     created_at = Column(DateTime, default=utc_now, nullable=False)
@@ -379,6 +379,7 @@ class RepositoryScript(Base):
     # Per-repository overrides
     custom_timeout = Column(Integer, nullable=True)  # Override script's default timeout
     custom_run_on = Column(String(50), nullable=True)  # Override script's run_on condition
+    continue_on_error = Column(Boolean, default=True)  # Override script's continue_on_error
 
     # Configuration
     created_at = Column(DateTime, default=utc_now, nullable=False)

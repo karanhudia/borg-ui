@@ -15,6 +15,9 @@ import {
   Select,
   Typography,
   Tooltip,
+  Checkbox,
+  FormControlLabel,
+  FormHelperText,
 } from '@mui/material'
 import { Trash2, FileCode, Clock } from 'lucide-react'
 import { toast } from 'react-hot-toast'
@@ -38,6 +41,7 @@ interface RepositoryScript {
   enabled: boolean
   custom_timeout: number | null
   custom_run_on: string | null
+  continue_on_error: boolean | null
   default_timeout: number
   default_run_on: string
 }
@@ -98,7 +102,7 @@ export default function RepositoryScriptsTab({
     }
   }
 
-  const handleAddScript = async () => {
+  const handleAddScript = async (assignmentData: AssignmentData) => {
     if (!selectedScriptId) return
 
     try {
@@ -114,6 +118,7 @@ export default function RepositoryScriptsTab({
         hook_type: hookType,
         execution_order: nextOrder,
         enabled: true,
+        continue_on_error: assignmentData.continue_on_error
       })
 
       toast.success('Script assigned successfully')
@@ -175,6 +180,10 @@ export default function RepositoryScriptsTab({
         {scripts.map((script) => {
           const effectiveTimeout = script.custom_timeout || script.default_timeout
           const effectiveRunOn = script.custom_run_on || script.default_run_on
+          // Default to true if not set (migration fallback / new default)
+          const effectiveContinueOnError = script.continue_on_error !== null ? script.continue_on_error : true
+
+          const isPreBackup = hookType === 'pre-backup'
 
           return (
             <Box
@@ -205,12 +214,23 @@ export default function RepositoryScriptsTab({
                 size="small"
                 sx={{ height: 20, fontSize: '0.7rem' }}
               />
-              <Chip
-                label={effectiveRunOn}
-                size="small"
-                color={getRunOnColor(effectiveRunOn) as any}
-                sx={{ height: 20, fontSize: '0.7rem' }}
-              />
+              {!isPreBackup && (
+                <Chip
+                  label={effectiveRunOn}
+                  size="small"
+                  color={getRunOnColor(effectiveRunOn) as any}
+                  sx={{ height: 20, fontSize: '0.7rem' }}
+                />
+              )}
+              {isPreBackup && effectiveContinueOnError && (
+                <Chip
+                  label="Continues on Error"
+                  size="small"
+                  color="warning"
+                  variant="outlined"
+                  sx={{ height: 20, fontSize: '0.7rem' }}
+                />
+              )}
 
               {/* Timeout */}
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -249,53 +269,133 @@ export default function RepositoryScriptsTab({
       {renderScriptList()}
 
       {/* Add Script Dialog */}
-      <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Assign Script to Repository</DialogTitle>
-        <DialogContent>
-          <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {hasInlineScript && scripts.length === 0 && (
-              <Alert severity="warning">
-                Adding a library script will replace your current inline script for this hook.
-              </Alert>
-            )}
-            <FormControl fullWidth>
-              <InputLabel>Select Script</InputLabel>
-              <Select
-                value={selectedScriptId}
-                label="Select Script"
-                onChange={(e) => setSelectedScriptId(e.target.value as number)}
-                sx={{ height: { xs: 48, sm: 56 } }}
-                MenuProps={{
-                  PaperProps: {
-                    style: {
-                      maxHeight: 400,
-                    },
-                  },
-                }}
-              >
-                {availableScripts.map((script) => (
-                  <MenuItem key={script.id} value={script.id}>
-                    <Box>
-                      <Typography variant="body2">{script.name}</Typography>
-                      {script.description && (
-                        <Typography variant="caption" color="text.secondary">
-                          {script.description}
-                        </Typography>
-                      )}
-                    </Box>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleAddScript} variant="contained" disabled={!selectedScriptId}>
-            Assign Script
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <RepositoryScriptDialog
+        open={addDialogOpen}
+        onClose={() => {
+          setAddDialogOpen(false)
+          setSelectedScriptId('')
+        }}
+        availableScripts={availableScripts}
+        selectedScriptId={selectedScriptId}
+        onScriptSelect={setSelectedScriptId}
+        onSubmit={handleAddScript}
+        hookType={hookType}
+        scriptsCount={scripts.length}
+        hasInlineScript={hasInlineScript}
+      />
     </Box>
+  )
+}
+
+interface AssignmentData {
+  script_id: number | ''
+  continue_on_error: boolean
+}
+
+interface RepositoryScriptDialogProps {
+  open: boolean
+  onClose: () => void
+  availableScripts: Script[]
+  selectedScriptId: number | ''
+  onScriptSelect: (id: number) => void
+  onSubmit: (assignData: AssignmentData) => void
+  hookType: 'pre-backup' | 'post-backup'
+  scriptsCount: number
+  hasInlineScript?: boolean
+}
+
+function RepositoryScriptDialog({
+  open,
+  onClose,
+  availableScripts,
+  selectedScriptId,
+  onScriptSelect,
+  onSubmit,
+  hookType,
+  scriptsCount,
+  hasInlineScript,
+}: RepositoryScriptDialogProps) {
+  const [continueOnError, setContinueOnError] = useState(true)
+  const isPreBackup = hookType === 'pre-backup'
+
+  // Reset local state when dialog opens/closes
+  useEffect(() => {
+    if (open) {
+      setContinueOnError(true)
+    }
+  }, [open])
+
+  const handleSubmit = () => {
+    onSubmit({
+      script_id: selectedScriptId,
+      continue_on_error: continueOnError
+    })
+  }
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Assign Script to Repository</DialogTitle>
+      <DialogContent>
+        <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {isPreBackup && hasInlineScript && scriptsCount === 0 && (
+            <Alert severity="warning">
+              Adding a library script will replace your current inline script for this hook.
+            </Alert>
+          )}
+          <FormControl fullWidth>
+            <InputLabel>Select Script</InputLabel>
+            <Select
+              value={selectedScriptId}
+              label="Select Script"
+              onChange={(e) => onScriptSelect(e.target.value as number)}
+              sx={{ height: { xs: 48, sm: 56 } }}
+              MenuProps={{
+                PaperProps: {
+                  style: {
+                    maxHeight: 400,
+                  },
+                },
+              }}
+            >
+              {availableScripts.map((script) => (
+                <MenuItem key={script.id} value={script.id}>
+                  <Box>
+                    <Typography variant="body2">{script.name}</Typography>
+                    {script.description && (
+                      <Typography variant="caption" color="text.secondary">
+                        {script.description}
+                      </Typography>
+                    )}
+                  </Box>
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          {isPreBackup && (
+            <Box sx={{ ml: 1 }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={continueOnError}
+                    onChange={(e) => setContinueOnError(e.target.checked)}
+                  />
+                }
+                label="Continue backup if script fails"
+              />
+              <FormHelperText sx={{ mt: -1, ml: 4 }}>
+                Override default: If checked, the backup will proceed even if this script fails.
+              </FormHelperText>
+            </Box>
+          )}
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={handleSubmit} variant="contained" disabled={!selectedScriptId}>
+          Assign Script
+        </Button>
+      </DialogActions>
+    </Dialog>
   )
 }
