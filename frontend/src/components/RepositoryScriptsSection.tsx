@@ -1,4 +1,4 @@
-import { Box, Button, Typography, Chip } from '@mui/material'
+import { Box, Button, Typography, Chip, Tooltip } from '@mui/material'
 import { FileCode } from 'lucide-react'
 import RepositoryScriptsTab from './RepositoryScriptsTab'
 
@@ -40,21 +40,28 @@ export default function RepositoryScriptsSection({
           <Typography variant="body2" fontWeight={600}>
             Pre-Backup Scripts
           </Typography>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<FileCode size={14} />}
-            onClick={() => {
-              if (repositoryId) {
-                const openFn = (window as any)[`openScriptDialog_${repositoryId}_pre-backup`]
-                if (openFn) openFn()
-              }
-            }}
-            disabled={!repositoryId}
-            sx={{ py: 0.25, px: 1, minHeight: 'auto', fontSize: '0.8rem' }}
+          <Tooltip
+            title={!repositoryId ? "Create the repository first to add library scripts" : "Add script from library"}
+            arrow
           >
-            Add
-          </Button>
+            <span>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<FileCode size={14} />}
+                onClick={() => {
+                  if (repositoryId) {
+                    const openFn = (window as any)[`openScriptDialog_${repositoryId}_pre-backup`]
+                    if (openFn) openFn()
+                  }
+                }}
+                disabled={!repositoryId}
+                sx={{ py: 0.25, px: 1, minHeight: 'auto', fontSize: '0.8rem' }}
+              >
+                Add
+              </Button>
+            </span>
+          </Tooltip>
         </Box>
 
         {/* Inline Pre-Backup Script - hidden when library scripts exist */}
@@ -95,21 +102,28 @@ export default function RepositoryScriptsSection({
           <Typography variant="body2" fontWeight={600}>
             Post-Backup Scripts
           </Typography>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<FileCode size={14} />}
-            onClick={() => {
-              if (repositoryId) {
-                const openFn = (window as any)[`openScriptDialog_${repositoryId}_post-backup`]
-                if (openFn) openFn()
-              }
-            }}
-            disabled={!repositoryId}
-            sx={{ py: 0.25, px: 1, minHeight: 'auto', fontSize: '0.8rem' }}
+          <Tooltip
+            title={!repositoryId ? "Create the repository first to add library scripts" : "Add script from library"}
+            arrow
           >
-            Add
-          </Button>
+            <span>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<FileCode size={14} />}
+                onClick={() => {
+                  if (repositoryId) {
+                    const openFn = (window as any)[`openScriptDialog_${repositoryId}_post-backup`]
+                    if (openFn) openFn()
+                  }
+                }}
+                disabled={!repositoryId}
+                sx={{ py: 0.25, px: 1, minHeight: 'auto', fontSize: '0.8rem' }}
+              >
+                Add
+              </Button>
+            </span>
+          </Tooltip>
         </Box>
 
         {/* Inline Post-Backup Script - hidden when library scripts exist */}
