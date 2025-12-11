@@ -7,7 +7,7 @@ COPY frontend/ .
 RUN npm run build
 
 # Build stage for backend
-FROM python:3.9-slim AS backend-builder
+FROM python:3.10-slim AS backend-builder
 WORKDIR /app
 
 # Install build dependencies for psutil and other packages
@@ -29,7 +29,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Production stage
-FROM python:3.9-slim AS production
+FROM python:3.10-slim AS production
 
 # Build arguments
 ARG APP_VERSION=dev
@@ -95,7 +95,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python dependencies
-COPY --from=backend-builder /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/site-packages
+COPY --from=backend-builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
 COPY --from=backend-builder /usr/local/bin /usr/local/bin
 
 # Copy application code

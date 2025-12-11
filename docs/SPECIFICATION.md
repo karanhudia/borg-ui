@@ -39,7 +39,7 @@ This document outlines the technical specification for a lightweight web-based u
 ### 2.2 Technology Stack
 
 #### Backend
-- **Framework**: FastAPI (Python 3.9+)
+- **Framework**: FastAPI (Python 3.10+)
 - **Process Management**: Subprocess for Borg CLI interaction
 - **Authentication**: JWT-based with bcrypt password hashing
 - **Database**: SQLite for lightweight storage
@@ -54,7 +54,7 @@ This document outlines the technical specification for a lightweight web-based u
 
 #### Containerization
 - **Runtime**: Docker with multi-stage builds
-- **Base Image**: Python 3.9-slim for minimal footprint
+- **Base Image**: Python 3.10-slim for minimal footprint
 - **Web Server**: Gunicorn with Uvicorn workers
 
 ## 3. Core Components Specification
@@ -559,13 +559,13 @@ COPY frontend/ .
 RUN npm run build
 
 # Build stage for backend
-FROM python:3.9-slim AS backend-builder
+FROM python:3.10-slim AS backend-builder
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Production stage
-FROM python:3.9-slim AS production
+FROM python:3.10-slim AS production
 WORKDIR /app
 
 # Install system dependencies
@@ -575,7 +575,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python dependencies
-COPY --from=backend-builder /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/site-packages
+COPY --from=backend-builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
 COPY --from=backend-builder /usr/local/bin /usr/local/bin
 
 # Copy application code

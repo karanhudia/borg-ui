@@ -109,7 +109,7 @@ cd frontend && npm run build
 ### Prerequisites
 
 - Docker and Docker Compose
-- Python 3.9+
+- Python 3.10+
 - Node.js 18+
 
 ### Local Development
