@@ -65,12 +65,13 @@ export default function RepositoryScriptsTab({ repositoryId, hookType, onUpdate,
   useEffect(() => {
     fetchAssignedScripts()
     fetchAvailableScripts()
-  }, [repositoryId])
+  }, [repositoryId, hookType])
 
   const fetchAssignedScripts = async () => {
     try {
       const response = await api.get(`/repositories/${repositoryId}/scripts`)
       const scriptsData = hookType === 'pre-backup' ? response.data.pre_backup : response.data.post_backup
+      console.log('Fetched scripts:', scriptsData?.map((s: any) => ({ id: s.id, name: s.script_name, order: s.execution_order })))
       setScripts(scriptsData || [])
       onScriptsChange?.(scriptsData && scriptsData.length > 0)
     } catch (error) {
