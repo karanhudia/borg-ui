@@ -373,7 +373,7 @@ class RepositoryScript(Base):
 
     # Hook configuration
     hook_type = Column(String(50), nullable=False)  # 'pre-backup', 'post-backup'
-    execution_order = Column(Integer, default=1, nullable=False)  # Order in chain (1, 2, 3...)
+    execution_order = Column(Float, default=1, nullable=False)  # Order in chain (supports decimals for reordering)
     enabled = Column(Boolean, default=True, nullable=False)
 
     # Per-repository overrides
