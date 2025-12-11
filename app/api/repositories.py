@@ -191,7 +191,9 @@ class RepositoryCreate(BaseModel):
     remote_path: Optional[str] = None  # Path to borg on remote server (e.g., /usr/local/bin/borg)
     pre_backup_script: Optional[str] = None  # Script to run before backup
     post_backup_script: Optional[str] = None  # Script to run after backup
-    hook_timeout: Optional[int] = 300  # Hook timeout in seconds
+    hook_timeout: Optional[int] = 300  # Hook timeout in seconds (legacy, use pre/post_hook_timeout)
+    pre_hook_timeout: Optional[int] = 300  # Pre-backup hook timeout in seconds
+    post_hook_timeout: Optional[int] = 300  # Post-backup hook timeout in seconds
     continue_on_hook_failure: Optional[bool] = False  # Continue backup if pre-hook fails
     mode: str = "full"  # full: backups + observability, observe: observability-only
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create (e.g., "--stats --list")
@@ -211,7 +213,9 @@ class RepositoryImport(BaseModel):
     remote_path: Optional[str] = None  # Path to borg on remote server
     pre_backup_script: Optional[str] = None  # Script to run before backup
     post_backup_script: Optional[str] = None  # Script to run after backup
-    hook_timeout: Optional[int] = 300  # Hook timeout in seconds
+    hook_timeout: Optional[int] = 300  # Hook timeout in seconds (legacy, use pre/post_hook_timeout)
+    pre_hook_timeout: Optional[int] = 300  # Pre-backup hook timeout in seconds
+    post_hook_timeout: Optional[int] = 300  # Post-backup hook timeout in seconds
     continue_on_hook_failure: Optional[bool] = False  # Continue backup if pre-hook fails
     mode: str = "full"  # full: backups + observability, observe: observability-only
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create (e.g., "--stats --list")
@@ -225,7 +229,9 @@ class RepositoryUpdate(BaseModel):
     remote_path: Optional[str] = None
     pre_backup_script: Optional[str] = None
     post_backup_script: Optional[str] = None
-    hook_timeout: Optional[int] = None
+    hook_timeout: Optional[int] = None  # Legacy, use pre/post_hook_timeout
+    pre_hook_timeout: Optional[int] = None
+    post_hook_timeout: Optional[int] = None
     continue_on_hook_failure: Optional[bool] = None
     mode: Optional[str] = None  # full: backups + observability, observe: observability-only
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create
@@ -488,6 +494,8 @@ async def create_repository(
             pre_backup_script=repo_data.pre_backup_script,
             post_backup_script=repo_data.post_backup_script,
             hook_timeout=repo_data.hook_timeout,
+            pre_hook_timeout=repo_data.pre_hook_timeout,
+            post_hook_timeout=repo_data.post_hook_timeout,
             continue_on_hook_failure=repo_data.continue_on_hook_failure,
             mode=repo_data.mode,
             custom_flags=repo_data.custom_flags
@@ -678,6 +686,8 @@ async def import_repository(
             pre_backup_script=repo_data.pre_backup_script,
             post_backup_script=repo_data.post_backup_script,
             hook_timeout=repo_data.hook_timeout,
+            pre_hook_timeout=repo_data.pre_hook_timeout,
+            post_hook_timeout=repo_data.post_hook_timeout,
             continue_on_hook_failure=repo_data.continue_on_hook_failure,
             mode=repo_data.mode,
             custom_flags=repo_data.custom_flags
@@ -813,6 +823,12 @@ async def update_repository(
 
         if repo_data.hook_timeout is not None:
             repository.hook_timeout = repo_data.hook_timeout
+
+        if repo_data.pre_hook_timeout is not None:
+            repository.pre_hook_timeout = repo_data.pre_hook_timeout
+
+        if repo_data.post_hook_timeout is not None:
+            repository.post_hook_timeout = repo_data.post_hook_timeout
 
         if repo_data.continue_on_hook_failure is not None:
             repository.continue_on_hook_failure = repo_data.continue_on_hook_failure

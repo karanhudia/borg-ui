@@ -17,13 +17,15 @@ interface AdvancedRepositoryOptionsProps {
   remotePath: string
   preBackupScript: string
   postBackupScript: string
-  hookTimeout: number
+  preHookTimeout: number
+  postHookTimeout: number
   continueOnHookFailure: boolean
   customFlags: string
   onRemotePathChange: (value: string) => void
   onPreBackupScriptChange: (value: string) => void
   onPostBackupScriptChange: (value: string) => void
-  onHookTimeoutChange: (value: number) => void
+  onPreHookTimeoutChange: (value: number) => void
+  onPostHookTimeoutChange: (value: number) => void
   onContinueOnHookFailureChange: (value: boolean) => void
   onCustomFlagsChange: (value: string) => void
 }
@@ -34,13 +36,15 @@ export default function AdvancedRepositoryOptions({
   remotePath,
   preBackupScript,
   postBackupScript,
-  hookTimeout,
+  preHookTimeout,
+  postHookTimeout,
   continueOnHookFailure,
   customFlags,
   onRemotePathChange,
   onPreBackupScriptChange,
   onPostBackupScriptChange,
-  onHookTimeoutChange,
+  onPreHookTimeoutChange,
+  onPostHookTimeoutChange,
   onContinueOnHookFailureChange,
   onCustomFlagsChange,
 }: AdvancedRepositoryOptionsProps) {
@@ -172,8 +176,8 @@ export default function AdvancedRepositoryOptions({
         value={preBackupScript}
         onChange={onPreBackupScriptChange}
         placeholder="#!/bin/bash&#10;echo 'Pre-backup hook started'&#10;wakeonlan AA:BB:CC:DD:EE:FF&#10;sleep 60"
-        timeout={hookTimeout}
-        onTimeoutChange={onHookTimeoutChange}
+        timeout={preHookTimeout}
+        onTimeoutChange={onPreHookTimeoutChange}
         continueOnFailure={continueOnHookFailure}
         onContinueOnFailureChange={onContinueOnHookFailureChange}
         showContinueOnFailure={true}
@@ -186,8 +190,8 @@ export default function AdvancedRepositoryOptions({
         value={postBackupScript}
         onChange={onPostBackupScriptChange}
         placeholder="#!/bin/bash&#10;echo 'Post-backup hook completed'&#10;ssh nas@192.168.1.100 'sudo poweroff'"
-        timeout={hookTimeout}
-        onTimeoutChange={onHookTimeoutChange}
+        timeout={postHookTimeout}
+        onTimeoutChange={onPostHookTimeoutChange}
         showContinueOnFailure={false}
       />
     </>

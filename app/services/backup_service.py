@@ -132,10 +132,13 @@ class BackupService:
 
             # Execute inline script
             executor = ScriptLibraryExecutor(db)
+            # Use appropriate timeout based on hook type
+            timeout = (repo_record.pre_hook_timeout if hook_type == 'pre-backup'
+                      else repo_record.post_hook_timeout) or 300
             result = await executor.execute_inline_script(
                 script_content=inline_script,
                 script_type=hook_type,
-                timeout=repo_record.hook_timeout or 300,
+                timeout=timeout,
                 repository_id=repo_record.id,
                 backup_job_id=job_id
             )
