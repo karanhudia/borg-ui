@@ -52,9 +52,10 @@ interface RepositoryScriptsTabProps {
   repositoryId: number
   hookType: 'pre-backup' | 'post-backup'
   onUpdate?: () => void
+  onScriptsChange?: (hasScripts: boolean) => void
 }
 
-export default function RepositoryScriptsTab({ repositoryId, hookType, onUpdate }: RepositoryScriptsTabProps) {
+export default function RepositoryScriptsTab({ repositoryId, hookType, onUpdate, onScriptsChange }: RepositoryScriptsTabProps) {
   const [scripts, setScripts] = useState<RepositoryScript[]>([])
   const [availableScripts, setAvailableScripts] = useState<Script[]>([])
   const [loading, setLoading] = useState(true)
@@ -71,6 +72,7 @@ export default function RepositoryScriptsTab({ repositoryId, hookType, onUpdate 
       const response = await api.get(`/repositories/${repositoryId}/scripts`)
       const scriptsData = hookType === 'pre-backup' ? response.data.pre_backup : response.data.post_backup
       setScripts(scriptsData || [])
+      onScriptsChange?.(scriptsData && scriptsData.length > 0)
     } catch (error) {
       console.error('Failed to fetch assigned scripts:', error)
       toast.error('Failed to load assigned scripts')
@@ -284,8 +286,9 @@ export default function RepositoryScriptsTab({ repositoryId, hookType, onUpdate 
           <Button
             variant="outlined"
             size="small"
-            startIcon={<Plus size={16} />}
+            startIcon={<Plus size={14} />}
             onClick={() => setAddDialogOpen(true)}
+            sx={{ py: 0.25, px: 1, minHeight: 'auto', fontSize: '0.8rem', m: '5px' }}
           >
             Add
           </Button>
