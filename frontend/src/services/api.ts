@@ -274,7 +274,7 @@ export const activityAPI = {
   getLogs: (jobType: string, jobId: number, offset: number = 0) =>
     api.get(`/activity/${jobType}/${jobId}/logs`, { params: { offset } }),
   downloadLogs: (jobType: string, jobId: number) => {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('access_token')
     window.open(`${API_BASE_URL}/activity/${jobType}/${jobId}/logs/download?token=${token}`, '_blank')
   },
 }
