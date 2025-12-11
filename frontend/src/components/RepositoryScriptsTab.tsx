@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -16,7 +17,6 @@ import {
   Tooltip,
 } from '@mui/material'
 import {
-  Plus,
   Trash2,
   ChevronUp,
   ChevronDown,
@@ -53,9 +53,18 @@ interface RepositoryScriptsTabProps {
   hookType: 'pre-backup' | 'post-backup'
   onUpdate?: () => void
   onScriptsChange?: (hasScripts: boolean) => void
+  hasInlineScript?: boolean
+  onClearInlineScript?: () => void
 }
 
-export default function RepositoryScriptsTab({ repositoryId, hookType, onUpdate, onScriptsChange }: RepositoryScriptsTabProps) {
+export default function RepositoryScriptsTab({
+  repositoryId,
+  hookType,
+  onUpdate,
+  onScriptsChange,
+  hasInlineScript,
+  onClearInlineScript
+}: RepositoryScriptsTabProps) {
   const [scripts, setScripts] = useState<RepositoryScript[]>([])
   const [availableScripts, setAvailableScripts] = useState<Script[]>([])
   const [loading, setLoading] = useState(true)
@@ -96,6 +105,11 @@ export default function RepositoryScriptsTab({ repositoryId, hookType, onUpdate,
 
     try {
       const nextOrder = Math.max(0, ...scripts.map((s) => s.execution_order)) + 1
+
+      // Clear inline script if this is the first library script being added
+      if (scripts.length === 0 && hasInlineScript && onClearInlineScript) {
+        onClearInlineScript()
+      }
 
       await api.post(`/repositories/${repositoryId}/scripts`, {
         script_id: selectedScriptId,
@@ -176,11 +190,7 @@ export default function RepositoryScriptsTab({ repositoryId, hookType, onUpdate,
 
   const renderScriptList = () => {
     if (scripts.length === 0) {
-      return (
-        <Typography variant="body2" color="text.secondary" sx={{ py: 1, px: 2, fontStyle: 'italic' }}>
-          No scripts assigned
-        </Typography>
-      )
+      return null
     }
 
     return (
@@ -277,32 +287,25 @@ export default function RepositoryScriptsTab({ repositoryId, hookType, onUpdate,
     return <Typography>Loading scripts...</Typography>
   }
 
+  // Expose function to parent to open dialog
+  React.useEffect(() => {
+    ;(window as any)[`openScriptDialog_${repositoryId}_${hookType}`] = () => setAddDialogOpen(true)
+  }, [repositoryId, hookType])
+
   return (
     <Box>
-      {/* Library Scripts Section */}
-      <Box>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-          <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', textTransform: 'uppercase' }}>
-            From Library
-          </Typography>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<Plus size={14} />}
-            onClick={() => setAddDialogOpen(true)}
-            sx={{ py: 0.25, px: 1, minHeight: 'auto', fontSize: '0.8rem', m: '5px' }}
-          >
-            Add
-          </Button>
-        </Box>
-        {renderScriptList()}
-      </Box>
+      {renderScriptList()}
 
       {/* Add Script Dialog */}
       <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Assign Script to Repository</DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {hasInlineScript && scripts.length === 0 && (
+              <Alert severity="warning">
+                Adding a library script will replace your current inline script for this hook.
+              </Alert>
+            )}
             <FormControl fullWidth>
               <InputLabel>Select Script</InputLabel>
               <Select
@@ -312,7 +315,7 @@ export default function RepositoryScriptsTab({ repositoryId, hookType, onUpdate,
                 MenuProps={{
                   PaperProps: {
                     style: {
-                      maxHeight: 600,
+                      maxHeight: 'calc(100vh - 200px)',
                     },
                   },
                 }}
