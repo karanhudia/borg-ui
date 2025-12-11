@@ -311,29 +311,21 @@ const Settings: React.FC = () => {
 
   return (
     <Box>
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" fontWeight={600} gutterBottom>
-          Settings
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Manage system configuration and users
-        </Typography>
-      </Box>
-
       {/* Content is controlled by sidebar navigation */}
 
       {/* Profile Tab */}
       {activeTab === 0 && (
         <Box>
+          <Box>
+            <Typography variant="h6" fontWeight={600} gutterBottom>
+              Change Password
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Update your password to keep your account secure
+            </Typography>
+          </Box>
           <Card sx={{ maxWidth: 600 }}>
             <Box sx={{ p: 3 }}>
-              <Typography variant="h6" fontWeight={600} gutterBottom>
-                Change Password
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Update your password to keep your account secure
-              </Typography>
 
               <form
                 onSubmit={(e) => {
@@ -422,15 +414,16 @@ const Settings: React.FC = () => {
       {/* Appearance Tab */}
       {activeTab === 1 && (
         <Box>
+          <Box>
+            <Typography variant="h6" fontWeight={600} gutterBottom>
+              Appearance
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Customize the look and feel of the application
+            </Typography>
+          </Box>
           <Card sx={{ maxWidth: 600 }}>
             <Box sx={{ p: 3 }}>
-              <Typography variant="h6" fontWeight={600} gutterBottom>
-                Appearance
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Customize the look and feel of the application
-              </Typography>
-
               <Stack spacing={3}>
                 <Box
                   sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}

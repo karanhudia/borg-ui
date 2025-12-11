@@ -21,7 +21,7 @@ import {
   ListItemIcon,
   LinearProgress,
 } from '@mui/material'
-import { Download, Upload, FileText, CheckCircle, AlertCircle, Info } from 'lucide-react'
+import { Download, Upload, FileText, CheckCircle, AlertCircle } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { configExportImportAPI } from '../services/api'
 
@@ -159,26 +159,25 @@ const ExportImportTab: React.FC = () => {
   }
 
   return (
-    <Box sx={{ py: 3 }}>
-      {/* Info Alert */}
-      <Alert severity="info" icon={<Info size={20} />} sx={{ mb: 3 }}>
-        Export your Borg UI configuration to borgmatic-compatible YAML format for backup or
-        migration to other servers. Import borgmatic configurations or Borg UI exports to quickly
-        set up repositories and schedules.
-      </Alert>
+    <Box>
 
       {/* Export Section */}
+      <Box sx={{ mb: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+          <Download size={24} style={{ marginRight: 8 }} />
+          <Typography variant="h6" fontWeight={600}>
+            Export Configuration
+          </Typography>
+        </Box>
+
+        <Typography variant="body2" color="text.secondary">
+          Export your repositories, backup schedules, and settings to a borgmatic-compatible YAML
+          file.
+        </Typography>
+      </Box>
+
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <Download size={24} style={{ marginRight: 8 }} />
-            <Typography variant="h6">Export Configuration</Typography>
-          </Box>
-
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Export your repositories, backup schedules, and settings to a borgmatic-compatible YAML
-            file.
-          </Typography>
 
           <Stack spacing={3}>
             <FormControlLabel
@@ -282,17 +281,22 @@ const ExportImportTab: React.FC = () => {
       <Divider sx={{ my: 4 }} />
 
       {/* Import Section */}
+      <Box sx={{ mb: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+          <Upload size={24} style={{ marginRight: 8 }} />
+          <Typography variant="h6" fontWeight={600}>
+            Import Configuration
+          </Typography>
+        </Box>
+
+        <Typography variant="body2" color="text.secondary">
+          Import borgmatic YAML configurations or Borg UI exports. Supports both standard borgmatic
+          format and Borg UI exports.
+        </Typography>
+      </Box>
+
       <Card>
         <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <Upload size={24} style={{ marginRight: 8 }} />
-            <Typography variant="h6">Import Configuration</Typography>
-          </Box>
-
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Import borgmatic YAML configurations or Borg UI exports. Supports both standard
-            borgmatic format and Borg UI exports.
-          </Typography>
 
           <Stack spacing={3}>
             <Box>

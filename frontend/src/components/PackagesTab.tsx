@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
-  Card,
   Typography,
   Button,
   TextField,
@@ -283,22 +282,21 @@ export default function PackagesTab() {
 
   return (
     <Box>
-      <Card sx={{ mb: 3 }}>
-        <Box sx={{ p: 3 }}>
-          <Typography variant="h6" fontWeight={600} gutterBottom>
-            System Packages
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Install system packages that can be used in your backup scripts. Packages are
-            automatically reinstalled when the container is recreated.
-          </Typography>
-          <Alert severity="info" sx={{ mb: 2 }}>
-            Simply enter a package name (e.g., <code>wakeonlan</code>, <code>curl</code>) and it
-            will be installed using <code>sudo apt-get install -y</code>. For advanced cases, you
-            can enable custom install commands.
-          </Alert>
-        </Box>
-      </Card>
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h6" fontWeight={600} gutterBottom>
+          System Packages
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Install system packages that can be used in your backup scripts. Packages are
+          automatically reinstalled when the container is recreated.
+        </Typography>
+      </Box>
+
+      <Alert severity="info" sx={{ mb: 3 }}>
+        Simply enter a package name (e.g., <code>wakeonlan</code>, <code>curl</code>) and it
+        will be installed using <code>sudo apt-get install -y</code>. For advanced cases, you
+        can enable custom install commands.
+      </Alert>
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h6" fontWeight={600}>

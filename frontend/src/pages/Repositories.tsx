@@ -956,7 +956,7 @@ export default function Repositories() {
       <Dialog
         open={showRepositoryModal}
         onClose={closeRepositoryModal}
-        maxWidth="sm"
+        maxWidth="md"
         fullWidth
       >
         <form onSubmit={handleSubmitRepository}>
@@ -1666,7 +1666,7 @@ export default function Repositories() {
       <Dialog
         open={!!editingRepository}
         onClose={() => setEditingRepository(null)}
-        maxWidth="sm"
+        maxWidth="md"
         fullWidth
       >
         <form onSubmit={handleUpdateRepository}>
