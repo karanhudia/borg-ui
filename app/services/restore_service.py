@@ -220,92 +220,103 @@ class RestoreService:
                 # Update job with results
                 if process.returncode == 0:
                     # Extraction succeeded, now move files to destination
-                    logger.info("Extraction completed, moving files to destination",
+                    logger.info("Extraction completed, preparing to move files",
                                temp_dir=temp_dir,
                                destination=destination)
 
-                    # Find the extracted content in temp directory
-                    # Borg extracts with full path, so we need to find where the actual content is
-                    temp_path = Path(temp_dir)
-                    extracted_items = list(temp_path.rglob('*'))
-
-                    # Helper function to copy with ownership preservation
-                    def copy_with_ownership(src, dst):
-                        """Copy function that preserves ownership and permissions"""
-                        shutil.copy2(src, dst)  # Copy file with metadata
+                    # Ensure destination exists
+                    dest_path = Path(destination)
+                    if not dest_path.exists():
                         try:
-                            # Preserve ownership
-                            stat_info = os.stat(src)
-                            os.chown(dst, stat_info.st_uid, stat_info.st_gid)
-                        except (OSError, PermissionError) as e:
-                            # Log but don't fail if we can't set ownership
-                            # This can happen if running as non-root
-                            logger.debug("Could not preserve ownership",
-                                       file=dst,
-                                       error=str(e))
-                        return dst
+                            dest_path.mkdir(parents=True, exist_ok=True)
+                            logger.info("Created destination directory", path=destination)
+                        except Exception as e:
+                            logger.error("Failed to create destination directory", error=str(e))
+                            raise
 
+                    # Determine ownership target
+                    # Default to current process user, but try to match destination directory ownership if possible
+                    target_uid = os.getuid()
+                    target_gid = os.getgid()
+                    
+                    try:
+                        # Try to use permissions of destination (or its parent)
+                        stat_path = dest_path if dest_path.exists() else dest_path.parent
+                        if stat_path.exists():
+                            stat_info = os.stat(str(stat_path))
+                            target_uid = stat_info.st_uid
+                            target_gid = stat_info.st_gid
+                            logger.info("Targeting ownership", uid=target_uid, gid=target_gid, reference=str(stat_path))
+                    except Exception as e:
+                        logger.warning("Could not determine target ownership using defaults", error=str(e))
+
+                    # Helper function to copy/move
+                    def move_and_chown(src, dst):
+                        """Move file/dir and fix ownership"""
+                        # If destination exists and is a dir, copying a dir into it might nest it
+                        # check if we want that? usually yes for restore
+                        
+                        try:
+                            # Use shutil.copytree for directories, copy2 for files
+                            if os.path.isdir(src):
+                                # If dst exists, we merge? shutil.copytree with dirs_exist_ok=True checks this
+                                shutil.copytree(src, dst, dirs_exist_ok=True)
+                            else:
+                                shutil.copy2(src, dst)
+                                
+                            # Fix ownership
+                            # We recursively chown if it's a directory
+                            if os.path.isdir(dst):
+                                os.chown(dst, target_uid, target_gid)
+                                for root, dirs, files in os.walk(dst):
+                                    for d in dirs:
+                                        os.chown(os.path.join(root, d), target_uid, target_gid)
+                                    for f in files:
+                                        os.chown(os.path.join(root, f), target_uid, target_gid)
+                            else:
+                                os.chown(dst, target_uid, target_gid)
+                                
+                        except Exception as e:
+                            # Log but assume success of copy
+                             logger.warning("Error during copy/ownership adjustment", src=src, dst=dst, error=str(e))
+
+                    # Find the extracted content in temp directory
+                    temp_path = Path(temp_dir)
+                    
                     if paths and len(paths) > 0:
                         # User selected specific paths to restore
-                        # Move only those paths' contents to destination
+                        logger.info("Moving specific selected paths", count=len(paths))
                         for selected_path in paths:
                             # Find the extracted path in temp directory
+                            # Borg preserves full structure, so we look for the relative path inside temp
                             selected_path_clean = selected_path.lstrip('/')
                             source_path = temp_path / selected_path_clean
+                            
+                            logger.debug("Processing selected path", 
+                                       selected=selected_path, 
+                                       source=str(source_path))
 
                             if source_path.exists():
-                                # Move the content of this path to destination
-                                dest_path = Path(destination)
-                                dest_path.mkdir(parents=True, exist_ok=True)
-
-                                if source_path.is_dir():
-                                    # Copy directory contents with ownership preservation
-                                    for item in source_path.iterdir():
-                                        item_dest = dest_path / item.name
-
-                                        if item.is_dir():
-                                            # Copy directory tree with ownership
-                                            shutil.copytree(str(item), str(item_dest),
-                                                          copy_function=copy_with_ownership,
-                                                          dirs_exist_ok=True)
-                                            # Preserve directory ownership
-                                            try:
-                                                stat_info = os.stat(str(item))
-                                                os.chown(str(item_dest), stat_info.st_uid, stat_info.st_gid)
-                                            except (OSError, PermissionError):
-                                                pass
-                                        else:
-                                            # Copy file with ownership
-                                            copy_with_ownership(str(item), str(item_dest))
-
-                                        logger.debug("Copied item", source=str(item), dest=str(item_dest))
-                                else:
-                                    # Copy file with ownership
-                                    item_dest = dest_path / source_path.name
-                                    copy_with_ownership(str(source_path), str(item_dest))
-                                    logger.debug("Copied file", source=str(source_path), dest=str(item_dest))
+                                # Restore the item (file or directory) to destination
+                                # We want to preserve the name of the selected item
+                                # e.g. selecting /home/user/docs should put docs FOLDER into destination
+                                # result: /destination/docs/...
+                                
+                                item_dest = dest_path / source_path.name
+                                move_and_chown(str(source_path), str(item_dest))
+                                    
+                                logger.info(f"Restored {selected_path} to {item_dest}")
+                            else:
+                                logger.warning(f"Selected path not found in extracted archive: {selected_path}")
+                                # Try to find if it was extracted somewhere else or partial match?
+                                # This can happen if borg stripped components automatically (unlikely without flag)
                     else:
-                        # Full archive restore - move everything
-                        dest_path = Path(destination)
+                        # Full archive restore
+                        # We copy everything from temp root to destination
+                        logger.info("Moving full archive contents")
                         for item in temp_path.iterdir():
                             item_dest = dest_path / item.name
-
-                            if item.is_dir():
-                                # Copy directory tree with ownership
-                                shutil.copytree(str(item), str(item_dest),
-                                              copy_function=copy_with_ownership,
-                                              dirs_exist_ok=True)
-                                # Preserve directory ownership
-                                try:
-                                    stat_info = os.stat(str(item))
-                                    os.chown(str(item_dest), stat_info.st_uid, stat_info.st_gid)
-                                except (OSError, PermissionError):
-                                    pass
-                            else:
-                                # Copy file with ownership
-                                copy_with_ownership(str(item), str(item_dest))
-
-                            logger.debug("Copied item", source=str(item), dest=str(item_dest))
+                            move_and_chown(str(item), str(item_dest))
 
                     logger.info("Files moved to destination successfully")
 
