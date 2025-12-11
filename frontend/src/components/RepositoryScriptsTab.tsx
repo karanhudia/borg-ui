@@ -146,9 +146,10 @@ export default function RepositoryScriptsTab({ repositoryId, hookType, onUpdate,
 
     try {
       console.log('Moving script:', { scriptId: script.id, currentOrder: script.execution_order, newOrder, direction })
-      await api.put(`/repositories/${repositoryId}/scripts/${script.id}`, {
+      const response = await api.put(`/repositories/${repositoryId}/scripts/${script.id}`, {
         execution_order: newOrder,
       })
+      console.log('Update response:', response)
       toast.success(`Moved ${direction}`)
       await fetchAssignedScripts()
       if (onUpdate) onUpdate()

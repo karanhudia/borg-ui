@@ -297,6 +297,8 @@ async def get_repositories(
                 "pre_backup_script": repo.pre_backup_script,
                 "post_backup_script": repo.post_backup_script,
                 "hook_timeout": repo.hook_timeout,
+                "pre_hook_timeout": repo.pre_hook_timeout,
+                "post_hook_timeout": repo.post_hook_timeout,
                 "continue_on_hook_failure": repo.continue_on_hook_failure,
                 "mode": repo.mode or "full",  # Default to "full" for backward compatibility
                 "custom_flags": repo.custom_flags,
