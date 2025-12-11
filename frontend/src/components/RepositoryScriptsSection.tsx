@@ -40,20 +40,21 @@ export default function RepositoryScriptsSection({
           <Typography variant="body2" fontWeight={600}>
             Pre-Backup Scripts
           </Typography>
-          {repositoryId && (
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<FileCode size={14} />}
-              onClick={() => {
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<FileCode size={14} />}
+            onClick={() => {
+              if (repositoryId) {
                 const openFn = (window as any)[`openScriptDialog_${repositoryId}_pre-backup`]
                 if (openFn) openFn()
-              }}
-              sx={{ py: 0.25, px: 1, minHeight: 'auto', fontSize: '0.8rem' }}
-            >
-              Add
-            </Button>
-          )}
+              }
+            }}
+            disabled={!repositoryId}
+            sx={{ py: 0.25, px: 1, minHeight: 'auto', fontSize: '0.8rem' }}
+          >
+            Add
+          </Button>
         </Box>
 
         {/* Inline Pre-Backup Script - hidden when library scripts exist */}
@@ -94,20 +95,21 @@ export default function RepositoryScriptsSection({
           <Typography variant="body2" fontWeight={600}>
             Post-Backup Scripts
           </Typography>
-          {repositoryId && (
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<FileCode size={14} />}
-              onClick={() => {
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<FileCode size={14} />}
+            onClick={() => {
+              if (repositoryId) {
                 const openFn = (window as any)[`openScriptDialog_${repositoryId}_post-backup`]
                 if (openFn) openFn()
-              }}
-              sx={{ py: 0.25, px: 1, minHeight: 'auto', fontSize: '0.8rem' }}
-            >
-              Add
-            </Button>
-          )}
+              }
+            }}
+            disabled={!repositoryId}
+            sx={{ py: 0.25, px: 1, minHeight: 'auto', fontSize: '0.8rem' }}
+          >
+            Add
+          </Button>
         </Box>
 
         {/* Inline Post-Backup Script - hidden when library scripts exist */}

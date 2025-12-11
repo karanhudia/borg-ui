@@ -89,9 +89,7 @@ export default function AdvancedRepositoryOptions({
             Scripts {!repositoryId && '(Optional)'}
           </Typography>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-            {repositoryId
-              ? 'Configure inline scripts or assign reusable scripts from your Script Library.'
-              : 'Configure inline scripts. After creation, you can also assign reusable scripts from Script Library.'}
+            Configure inline scripts or assign reusable scripts from your Script Library.
           </Typography>
 
           <RepositoryScriptsSection
