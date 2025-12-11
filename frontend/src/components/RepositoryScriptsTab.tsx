@@ -142,14 +142,16 @@ export default function RepositoryScriptsTab({ repositoryId, hookType, onUpdate 
     const newOrder = direction === 'up' ? script.execution_order - 1.5 : script.execution_order + 1.5
 
     try {
+      console.log('Moving script:', { scriptId: script.id, currentOrder: script.execution_order, newOrder, direction })
       await api.put(`/repositories/${repositoryId}/scripts/${script.id}`, {
         execution_order: newOrder,
       })
-      fetchAssignedScripts()
+      toast.success(`Moved ${direction}`)
+      await fetchAssignedScripts()
       if (onUpdate) onUpdate()
     } catch (error: any) {
       console.error('Failed to reorder script:', error)
-      toast.error('Failed to reorder script')
+      toast.error(error.response?.data?.detail || 'Failed to reorder script')
     }
   }
 
@@ -292,9 +294,9 @@ export default function RepositoryScriptsTab({ repositoryId, hookType, onUpdate 
       </Box>
 
       {/* Add Script Dialog */}
-      <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="md" fullWidth>
+      <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Assign Script to Repository</DialogTitle>
-        <DialogContent sx={{ minHeight: '300px' }}>
+        <DialogContent>
           <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <FormControl fullWidth>
               <InputLabel>Select Script</InputLabel>
@@ -302,6 +304,13 @@ export default function RepositoryScriptsTab({ repositoryId, hookType, onUpdate 
                 value={selectedScriptId}
                 label="Select Script"
                 onChange={(e) => setSelectedScriptId(e.target.value as number)}
+                MenuProps={{
+                  PaperProps: {
+                    style: {
+                      maxHeight: 400,
+                    },
+                  },
+                }}
               >
                 {availableScripts.map((script) => (
                   <MenuItem key={script.id} value={script.id}>
