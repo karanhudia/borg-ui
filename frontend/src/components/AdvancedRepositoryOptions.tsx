@@ -100,9 +100,25 @@ export default function AdvancedRepositoryOptions({
 
           {/* Pre-Backup Scripts */}
           <Box sx={{ mb: 1.5 }}>
-            <Typography variant="body2" fontWeight={600} sx={{ mb: 0.75 }}>
-              Pre-Backup Scripts
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}>
+              <Typography variant="body2" fontWeight={600}>
+                Pre-Backup Scripts
+              </Typography>
+              {repositoryId && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<FileCode size={14} />}
+                  onClick={() => {
+                    const openFn = (window as any)[`openScriptDialog_${repositoryId}_pre-backup`]
+                    if (openFn) openFn()
+                  }}
+                  sx={{ py: 0.25, px: 1, minHeight: 'auto', fontSize: '0.8rem' }}
+                >
+                  Add
+                </Button>
+              )}
+            </Box>
 
             {/* Inline Pre-Backup Script - hidden when library scripts exist */}
             {!hasPreLibraryScripts && (
@@ -130,15 +146,33 @@ export default function AdvancedRepositoryOptions({
                 repositoryId={repositoryId}
                 hookType="pre-backup"
                 onScriptsChange={setHasPreLibraryScripts}
+                hasInlineScript={!!preBackupScript}
+                onClearInlineScript={() => onPreBackupScriptChange('')}
               />
             )}
           </Box>
 
           {/* Post-Backup Scripts */}
           <Box>
-            <Typography variant="body2" fontWeight={600} sx={{ mb: 0.75 }}>
-              Post-Backup Scripts
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}>
+              <Typography variant="body2" fontWeight={600}>
+                Post-Backup Scripts
+              </Typography>
+              {repositoryId && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<FileCode size={14} />}
+                  onClick={() => {
+                    const openFn = (window as any)[`openScriptDialog_${repositoryId}_post-backup`]
+                    if (openFn) openFn()
+                  }}
+                  sx={{ py: 0.25, px: 1, minHeight: 'auto', fontSize: '0.8rem' }}
+                >
+                  Add
+                </Button>
+              )}
+            </Box>
 
             {/* Inline Post-Backup Script - hidden when library scripts exist */}
             {!hasPostLibraryScripts && (
@@ -166,6 +200,8 @@ export default function AdvancedRepositoryOptions({
                 repositoryId={repositoryId}
                 hookType="post-backup"
                 onScriptsChange={setHasPostLibraryScripts}
+                hasInlineScript={!!postBackupScript}
+                onClearInlineScript={() => onPostBackupScriptChange('')}
               />
             )}
           </Box>
