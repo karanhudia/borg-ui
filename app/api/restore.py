@@ -182,18 +182,31 @@ async def get_archive_contents(
                         if not item_path:
                             continue
 
-                        # Get relative path from current directory
-                        if path and item_path.startswith(path + "/"):
-                            relative_path = item_path[len(path) + 1:]
-                        elif path and item_path == path:
-                            continue
+                        # Normalize paths to handle potential leading slash mismatches
+                        # Some archives might store paths with leading slashes, others without
+                        norm_path = path.lstrip("/") if path else ""
+                        norm_item_path = item_path.lstrip("/")
+
+                        relative_path = ""
+
+                        if norm_path:
+                            # If browsing a subdirectory, only show items inside it
+                            if norm_item_path == norm_path:
+                                # Skip the directory itself
+                                continue
+                            elif norm_item_path.startswith(norm_path + "/"):
+                                # It's a child item
+                                relative_path = norm_item_path[len(norm_path) + 1:]
+                            else:
+                                # Item is not inside the requested path
+                                # This prevents the "phantom folder" bug where mismatched paths
+                                # were treated as root-level items (e.g. showing "mnt" inside "/mnt/user/...")
+                                continue
                         else:
-                            relative_path = item_path
+                            # Root directory browsing
+                            relative_path = norm_item_path
 
-                        # Strip leading slash for proper path handling
-                        relative_path = relative_path.lstrip("/")
-
-                        # Skip if empty after stripping
+                        # Skip if empty
                         if not relative_path:
                             continue
 
