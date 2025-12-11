@@ -36,12 +36,18 @@ export default function RepositoryScriptsSection({
     <>
       {/* Pre-Backup Scripts */}
       <Box sx={{ mb: 1.5 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}>
+        <Box
+          sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}
+        >
           <Typography variant="body2" fontWeight={600}>
             Pre-Backup Scripts
           </Typography>
           <Tooltip
-            title={!repositoryId ? "Create the repository first to add library scripts" : "Add script from library"}
+            title={
+              !repositoryId
+                ? 'Create the repository first to add library scripts'
+                : 'Add script from library'
+            }
             arrow
           >
             <span>
@@ -98,12 +104,18 @@ export default function RepositoryScriptsSection({
 
       {/* Post-Backup Scripts */}
       <Box>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}>
+        <Box
+          sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}
+        >
           <Typography variant="body2" fontWeight={600}>
             Post-Backup Scripts
           </Typography>
           <Tooltip
-            title={!repositoryId ? "Create the repository first to add library scripts" : "Add script from library"}
+            title={
+              !repositoryId
+                ? 'Create the repository first to add library scripts'
+                : 'Add script from library'
+            }
             arrow
           >
             <span>

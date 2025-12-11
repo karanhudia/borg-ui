@@ -1,9 +1,5 @@
 import { useState } from 'react'
-import {
-  TextField,
-  Divider,
-  Typography,
-} from '@mui/material'
+import { TextField, Divider, Typography } from '@mui/material'
 import ScriptEditorDialog from './ScriptEditorDialog'
 import RepositoryScriptsSection from './RepositoryScriptsSection'
 

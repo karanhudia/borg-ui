@@ -293,9 +293,9 @@ export default function PackagesTab() {
       </Box>
 
       <Alert severity="info" sx={{ mb: 3 }}>
-        Simply enter a package name (e.g., <code>wakeonlan</code>, <code>curl</code>) and it
-        will be installed using <code>sudo apt-get install -y</code>. For advanced cases, you
-        can enable custom install commands.
+        Simply enter a package name (e.g., <code>wakeonlan</code>, <code>curl</code>) and it will be
+        installed using <code>sudo apt-get install -y</code>. For advanced cases, you can enable
+        custom install commands.
       </Alert>
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>

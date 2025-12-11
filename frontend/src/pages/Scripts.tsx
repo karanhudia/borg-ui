@@ -25,16 +25,7 @@ import {
   CircularProgress,
   Tooltip,
 } from '@mui/material'
-import {
-  Plus,
-  Edit,
-  Trash2,
-  Play,
-  FileCode,
-  Clock,
-  CheckCircle,
-  XCircle,
-} from 'lucide-react'
+import { Plus, Edit, Trash2, Play, FileCode, Clock, CheckCircle, XCircle } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import api from '../services/api'
 import CodeEditor from '../components/CodeEditor'
@@ -92,7 +83,8 @@ export default function Scripts() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    content: '#!/bin/bash\n\necho "Script started"\n\n# Your script here\n\necho "Script completed"',
+    content:
+      '#!/bin/bash\n\necho "Script started"\n\n# Your script here\n\necho "Script completed"',
     timeout: 300,
     run_on: 'success',
     category: 'custom',
@@ -221,7 +213,9 @@ export default function Scripts() {
   if (loading) {
     return (
       <Box sx={{ mt: 4, mb: 4 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
+        <Box
+          sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}
+        >
           <CircularProgress />
         </Box>
       </Box>
@@ -300,7 +294,11 @@ export default function Scripts() {
                   />
                 </TableCell>
                 <TableCell>
-                  <Chip label={script.run_on} size="small" color={getRunOnColor(script.run_on) as any} />
+                  <Chip
+                    label={script.run_on}
+                    size="small"
+                    color={getRunOnColor(script.run_on) as any}
+                  />
                 </TableCell>
                 <TableCell>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -423,7 +421,12 @@ export default function Scripts() {
       </Dialog>
 
       {/* Test Result Dialog */}
-      <Dialog open={testDialogOpen} onClose={() => setTestDialogOpen(false)} maxWidth="lg" fullWidth>
+      <Dialog
+        open={testDialogOpen}
+        onClose={() => setTestDialogOpen(false)}
+        maxWidth="lg"
+        fullWidth
+      >
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Play size={20} />
@@ -439,12 +442,16 @@ export default function Scripts() {
           ) : testResult ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {/* Status */}
-              <Alert severity={testResult.success ? 'success' : 'error'} icon={testResult.success ? <CheckCircle /> : <XCircle />}>
+              <Alert
+                severity={testResult.success ? 'success' : 'error'}
+                icon={testResult.success ? <CheckCircle /> : <XCircle />}
+              >
                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
                   {testResult.success ? 'Script executed successfully' : 'Script execution failed'}
                 </Typography>
                 <Typography variant="caption">
-                  Exit code: {testResult.exit_code} | Execution time: {testResult.execution_time.toFixed(2)}s
+                  Exit code: {testResult.exit_code} | Execution time:{' '}
+                  {testResult.execution_time.toFixed(2)}s
                 </Typography>
               </Alert>
 
@@ -473,7 +480,10 @@ export default function Scripts() {
               {/* Stderr */}
               {testResult.stderr && (
                 <Box>
-                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: 'error.main' }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ mb: 1, fontWeight: 600, color: 'error.main' }}
+                  >
                     Standard Error:
                   </Typography>
                   <Paper

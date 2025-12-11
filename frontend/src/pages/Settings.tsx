@@ -20,16 +20,7 @@ import {
   Select,
   FormControl,
 } from '@mui/material'
-import {
-  Users,
-  Trash2,
-  Plus,
-  Edit,
-  Key,
-  AlertCircle,
-  Moon,
-  Sun,
-} from 'lucide-react'
+import { Users, Trash2, Plus, Edit, Key, AlertCircle, Moon, Sun } from 'lucide-react'
 import { settingsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
@@ -326,7 +317,6 @@ const Settings: React.FC = () => {
           </Box>
           <Card sx={{ maxWidth: 600 }}>
             <Box sx={{ p: 3 }}>
-
               <form
                 onSubmit={(e) => {
                   e.preventDefault()
