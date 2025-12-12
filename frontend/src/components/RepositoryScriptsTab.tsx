@@ -118,7 +118,7 @@ export default function RepositoryScriptsTab({
         hook_type: hookType,
         execution_order: nextOrder,
         enabled: true,
-        continue_on_error: assignmentData.continue_on_error
+        continue_on_error: assignmentData.continue_on_error,
       })
 
       toast.success('Script assigned successfully')
@@ -181,7 +181,8 @@ export default function RepositoryScriptsTab({
           const effectiveTimeout = script.custom_timeout || script.default_timeout
           const effectiveRunOn = script.custom_run_on || script.default_run_on
           // Default to true if not set (migration fallback / new default)
-          const effectiveContinueOnError = script.continue_on_error !== null ? script.continue_on_error : true
+          const effectiveContinueOnError =
+            script.continue_on_error !== null ? script.continue_on_error : true
 
           const isPreBackup = hookType === 'pre-backup'
 
@@ -328,7 +329,7 @@ function RepositoryScriptDialog({
   const handleSubmit = () => {
     onSubmit({
       script_id: selectedScriptId,
-      continue_on_error: continueOnError
+      continue_on_error: continueOnError,
     })
   }
 

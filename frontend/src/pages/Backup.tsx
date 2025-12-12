@@ -169,7 +169,6 @@ const Backup: React.FC = () => {
     }
   }
 
-
   // Format file size
   const formatFileSize = (size?: string) => {
     if (!size) return 'Unknown'
@@ -247,7 +246,11 @@ const Backup: React.FC = () => {
       align: 'left',
       render: (job) => (
         <Tooltip
-          title={job.triggered_by === 'schedule' ? `Triggered by: Schedule (ID: ${job.schedule_id})` : 'Triggered by: Manual'}
+          title={
+            job.triggered_by === 'schedule'
+              ? `Triggered by: Schedule (ID: ${job.schedule_id})`
+              : 'Triggered by: Manual'
+          }
           placement="top"
           arrow
         >
@@ -913,9 +916,7 @@ const Backup: React.FC = () => {
         <DialogTitle>
           {selectedJob && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Typography variant="h6">
-                Backup Logs - Job #{selectedJob.id}
-              </Typography>
+              <Typography variant="h6">Backup Logs - Job #{selectedJob.id}</Typography>
               <StatusBadge status={selectedJob.status} />
             </Box>
           )}

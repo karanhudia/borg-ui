@@ -27,13 +27,7 @@ import DataTable, { Column, ActionButton } from '../components/DataTable'
 import StatusBadge from '../components/StatusBadge'
 import RepositoryCell from '../components/RepositoryCell'
 import { TerminalLogViewer } from '../components/TerminalLogViewer'
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-} from '@mui/material'
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material'
 
 interface SystemMetrics {
   cpu_usage: number
@@ -52,7 +46,7 @@ interface BackupJob {
   progress?: number
   started_at?: string
   completed_at?: string
-  triggered_by?: string  // 'manual' or 'schedule'
+  triggered_by?: string // 'manual' or 'schedule'
   schedule_id?: number | null
   has_logs?: boolean
   error_message?: string
@@ -175,7 +169,11 @@ export default function Dashboard() {
       align: 'left',
       render: (job) => (
         <Tooltip
-          title={job.triggered_by === 'schedule' ? `Triggered by: Schedule (ID: ${job.schedule_id})` : 'Triggered by: Manual'}
+          title={
+            job.triggered_by === 'schedule'
+              ? `Triggered by: Schedule (ID: ${job.schedule_id})`
+              : 'Triggered by: Manual'
+          }
           placement="top"
           arrow
         >
@@ -448,9 +446,7 @@ export default function Dashboard() {
         <DialogTitle>
           {selectedJob && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Typography variant="h6">
-                Backup Logs - Job #{selectedJob.id}
-              </Typography>
+              <Typography variant="h6">Backup Logs - Job #{selectedJob.id}</Typography>
               <StatusBadge status={selectedJob.status} />
             </Box>
           )}
