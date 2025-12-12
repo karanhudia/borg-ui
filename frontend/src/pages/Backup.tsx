@@ -23,6 +23,10 @@ import {
   Divider,
   Tooltip,
   alpha,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material'
 import {
   Play,
@@ -49,6 +53,7 @@ import LockErrorDialog from '../components/LockErrorDialog'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
 import StatusBadge from '../components/StatusBadge'
 import RepositoryCell from '../components/RepositoryCell'
+import { TerminalLogViewer } from '../components/TerminalLogViewer'
 
 interface BackupJob {
   id: string
@@ -84,6 +89,7 @@ const Backup: React.FC = () => {
     repositoryId: number
     repositoryName: string
   } | null>(null)
+  const [selectedJob, setSelectedJob] = useState<BackupJob | null>(null)
   const queryClient = useQueryClient()
 
   // Get backup status and history (manual backups only)
@@ -144,10 +150,13 @@ const Backup: React.FC = () => {
   }
 
   // Handle view logs
-  const handleViewLogs = (jobId: string) => {
-    // In a full implementation, this would open a logs dialog similar to Activity.tsx
-    console.log('View logs for job:', jobId)
-    toast('Logs viewer coming soon')
+  const handleViewLogs = (job: BackupJob) => {
+    setSelectedJob(job)
+  }
+
+  // Handle close logs dialog
+  const handleCloseLogs = () => {
+    setSelectedJob(null)
   }
 
   // Handle download logs
@@ -276,7 +285,7 @@ const Backup: React.FC = () => {
       icon: <Eye size={16} />,
       label: 'View Logs',
       color: 'primary',
-      onClick: (job) => handleViewLogs(job.id),
+      onClick: (job) => handleViewLogs(job),
       tooltip: 'View logs',
     },
     {
@@ -898,6 +907,47 @@ const Backup: React.FC = () => {
           }}
         />
       )}
+
+      {/* Logs Dialog */}
+      <Dialog open={Boolean(selectedJob)} onClose={handleCloseLogs} maxWidth="lg" fullWidth>
+        <DialogTitle>
+          {selectedJob && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Typography variant="h6">
+                Backup Logs - Job #{selectedJob.id}
+              </Typography>
+              <StatusBadge status={selectedJob.status} />
+            </Box>
+          )}
+        </DialogTitle>
+        <DialogContent dividers>
+          {selectedJob && (
+            <TerminalLogViewer
+              jobId={String(selectedJob.id)}
+              status={selectedJob.status}
+              jobType="backup"
+              showHeader={false}
+              onFetchLogs={async (offset) => {
+                const response = await fetch(
+                  `/api/activity/backup/${selectedJob.id}/logs?offset=${offset}&limit=500`,
+                  {
+                    headers: {
+                      Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+                    },
+                  }
+                )
+                if (!response.ok) {
+                  throw new Error('Failed to fetch logs')
+                }
+                return response.json()
+              }}
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseLogs}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }
