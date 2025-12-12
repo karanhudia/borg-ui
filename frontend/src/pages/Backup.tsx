@@ -203,7 +203,13 @@ const Backup: React.FC = () => {
       ? `--remote-path ${selectedRepoData.remote_path} `
       : ''
 
-    return `borg create ${remotePathFlag}--progress --stats --compression ${compression} ${excludeArgs}${repositoryPath}::${archiveName} ${sourceDirs}`
+    // Add custom flags if specified
+    const customFlags =
+      selectedRepoData.custom_flags && selectedRepoData.custom_flags.trim()
+        ? ` ${selectedRepoData.custom_flags.trim()}`
+        : ''
+
+    return `borg create ${remotePathFlag}--progress --stats --compression ${compression} ${excludeArgs}${customFlags}${repositoryPath}::${archiveName} ${sourceDirs}`
   }
 
   // Get repository name from path
