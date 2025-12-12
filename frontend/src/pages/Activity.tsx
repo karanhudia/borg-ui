@@ -17,7 +17,6 @@ import {
   MenuItem,
   Tooltip,
 } from '@mui/material'
-import { AlertCircle } from 'lucide-react'
 import {
   History,
   RefreshCw,

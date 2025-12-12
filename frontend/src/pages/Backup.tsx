@@ -28,15 +28,11 @@ import {
   Play,
   Square,
   Clock,
-  CheckCircle,
-  AlertCircle,
-  RefreshCw,
-  Download,
-  HardDrive,
   Folder,
   Database,
   Info,
   Unlock,
+  RefreshCw,
 } from 'lucide-react'
 import { backupAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
@@ -658,7 +654,9 @@ const Backup: React.FC = () => {
                     sx={{ mb: 2 }}
                   >
                     <Stack direction="row" spacing={2} alignItems="center">
-                      <Box sx={{ color: 'info.main' }}>{getStatusIcon(job.status)}</Box>
+                      <Box sx={{ color: 'info.main' }}>
+                        <RefreshCw size={20} className="animate-spin" />
+                      </Box>
                       <Box>
                         <Typography variant="body1" fontWeight={500}>
                           Backup Job {job.id}
