@@ -132,10 +132,10 @@ async def list_recent_activity(
         for job in check_jobs:
             if status and job.status != status:
                 continue
-            # Get repository name from repository_id
+            # Get repository name from repository_id, with fallback to stored path
             repo = db.query(Repository).filter(Repository.id == job.repository_id).first()
             repo_name = repo.name if repo else f"Repository #{job.repository_id}"
-            repo_path = repo.path if repo else None
+            repo_path = repo.path if repo else job.repository_path
 
             activities.append({
                 'id': job.id,
@@ -160,10 +160,10 @@ async def list_recent_activity(
         for job in compact_jobs:
             if status and job.status != status:
                 continue
-            # Get repository name from repository_id
+            # Get repository name from repository_id, with fallback to stored path
             repo = db.query(Repository).filter(Repository.id == job.repository_id).first()
             repo_name = repo.name if repo else f"Repository #{job.repository_id}"
-            repo_path = repo.path if repo else None
+            repo_path = repo.path if repo else job.repository_path
 
             activities.append({
                 'id': job.id,
