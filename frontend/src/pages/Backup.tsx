@@ -932,7 +932,7 @@ const Backup: React.FC = () => {
                   `/api/activity/backup/${selectedJob.id}/logs?offset=${offset}&limit=500`,
                   {
                     headers: {
-                      Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+                      Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
                     },
                   }
                 )
