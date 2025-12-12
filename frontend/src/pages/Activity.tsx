@@ -128,8 +128,41 @@ const Activity: React.FC = () => {
     activityAPI.downloadLogs(job.type, job.id)
   }
 
-  // Define columns for DataTable (reordered: Status -> Job ID -> Type -> Repository -> Started -> Duration)
+  // Define columns for DataTable (ordered: Job ID -> Repository -> Type -> Status -> Started -> Duration)
   const columns: Column<ActivityItem>[] = [
+    {
+      id: 'id',
+      label: 'Job ID',
+      align: 'left',
+      render: (activity) => (
+        <Typography variant="body2" fontWeight={600} color="primary">
+          #{activity.id}
+        </Typography>
+      ),
+    },
+    {
+      id: 'repository',
+      label: 'Repository/Target',
+      align: 'left',
+      minWidth: '250px',
+      render: (activity) => {
+        const repoName = activity.repository || activity.package_name || activity.archive_name
+        if (!repoName) return <Typography variant="body2">-</Typography>
+        return <RepositoryCell repositoryName={repoName} withIcon={false} />
+      },
+    },
+    {
+      id: 'type',
+      label: 'Type',
+      align: 'left',
+      render: (activity) => (
+        <Chip
+          label={getTypeLabel(activity.type)}
+          color={getTypeColor(activity.type)}
+          size="small"
+        />
+      ),
+    },
     {
       id: 'status',
       label: 'Status',
@@ -145,39 +178,6 @@ const Activity: React.FC = () => {
           </span>
         </Tooltip>
       ),
-    },
-    {
-      id: 'id',
-      label: 'Job ID',
-      align: 'left',
-      render: (activity) => (
-        <Typography variant="body2" fontWeight={600} color="primary">
-          #{activity.id}
-        </Typography>
-      ),
-    },
-    {
-      id: 'type',
-      label: 'Type',
-      align: 'left',
-      render: (activity) => (
-        <Chip
-          label={getTypeLabel(activity.type)}
-          color={getTypeColor(activity.type)}
-          size="small"
-        />
-      ),
-    },
-    {
-      id: 'repository',
-      label: 'Repository/Target',
-      align: 'left',
-      minWidth: '250px',
-      render: (activity) => {
-        const repoName = activity.repository || activity.package_name || activity.archive_name
-        if (!repoName) return <Typography variant="body2">-</Typography>
-        return <RepositoryCell repositoryName={repoName} withIcon={false} />
-      },
     },
     {
       id: 'started_at',
