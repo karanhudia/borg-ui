@@ -15,11 +15,8 @@ import {
   MemoryStick,
   Cpu,
   Clock,
-  CheckCircle,
   Eye,
   Download,
-  AlertCircle,
-  HardDrive,
 } from 'lucide-react'
 import { formatDate, formatTimeRange } from '../utils/dateUtils'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
