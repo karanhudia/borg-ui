@@ -30,16 +30,19 @@ router = APIRouter(prefix="/api/activity", tags=["activity"])
 class ActivityItem(BaseModel):
     id: int
     type: str  # 'backup', 'restore', 'check', 'compact', 'package'
-    status: str  # 'pending', 'running', 'completed', 'failed'
+    status: str  # 'pending', 'running', 'completed', 'failed', 'completed_with_warnings'
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
     error_message: Optional[str]
     repository: Optional[str]  # Repository path/name (if applicable)
     log_file_path: Optional[str]  # Path to streaming log file
+    triggered_by: str = 'manual'  # 'manual' or 'schedule'
+    schedule_id: Optional[int] = None  # ScheduledJob ID if triggered_by schedule
 
     # Type-specific metadata
     archive_name: Optional[str] = None  # For backup/restore
     package_name: Optional[str] = None  # For package installs
+    has_logs: bool = False  # Whether logs are available for download
 
     class Config:
         from_attributes = True
@@ -75,6 +78,9 @@ async def list_recent_activity(
             repo = db.query(Repository).filter(Repository.path == job.repository).first()
             repo_name = repo.name if repo else job.repository
 
+            # Determine trigger type
+            triggered_by = 'schedule' if job.scheduled_job_id else 'manual'
+
             activities.append({
                 'id': job.id,
                 'type': 'backup',
@@ -84,8 +90,11 @@ async def list_recent_activity(
                 'error_message': job.error_message,
                 'repository': repo_name,
                 'log_file_path': job.log_file_path,
+                'triggered_by': triggered_by,
+                'schedule_id': job.scheduled_job_id,
                 'archive_name': None,
-                'package_name': None
+                'package_name': None,
+                'has_logs': bool(job.log_file_path or job.logs)
             })
 
     # Fetch restore jobs
@@ -107,8 +116,11 @@ async def list_recent_activity(
                 'error_message': job.error_message,
                 'repository': repo_name,
                 'log_file_path': getattr(job, 'log_file_path', None),
+                'triggered_by': 'manual',  # Restore jobs are always manual
+                'schedule_id': None,
                 'archive_name': job.archive,
-                'package_name': None
+                'package_name': None,
+                'has_logs': bool(getattr(job, 'log_file_path', None))
             })
 
     # Fetch check jobs
@@ -130,8 +142,11 @@ async def list_recent_activity(
                 'error_message': job.error_message,
                 'repository': repo_name,
                 'log_file_path': getattr(job, 'log_file_path', None),
+                'triggered_by': 'manual',  # Check jobs are always manual
+                'schedule_id': None,
                 'archive_name': None,
-                'package_name': None
+                'package_name': None,
+                'has_logs': bool(getattr(job, 'log_file_path', None))
             })
 
     # Fetch compact jobs
@@ -153,8 +168,11 @@ async def list_recent_activity(
                 'error_message': job.error_message,
                 'repository': repo_name,
                 'log_file_path': getattr(job, 'log_file_path', None),
+                'triggered_by': 'manual',  # Compact jobs are always manual
+                'schedule_id': None,
                 'archive_name': None,
-                'package_name': None
+                'package_name': None,
+                'has_logs': bool(getattr(job, 'log_file_path', None))
             })
 
     # Fetch package install jobs
@@ -176,8 +194,11 @@ async def list_recent_activity(
                 'error_message': job.error_message,
                 'repository': None,
                 'log_file_path': getattr(job, 'log_file_path', None),
+                'triggered_by': 'manual',  # Package jobs are always manual
+                'schedule_id': None,
                 'archive_name': None,
-                'package_name': package_name
+                'package_name': package_name,
+                'has_logs': bool(getattr(job, 'log_file_path', None))
             })
 
     # Sort by started_at (most recent first)

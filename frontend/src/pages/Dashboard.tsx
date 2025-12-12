@@ -8,23 +8,23 @@ import {
   CircularProgress,
   Stack,
   LinearProgress,
-  Chip,
   Tooltip,
 } from '@mui/material'
 import {
   Activity,
-  HardDrive,
   MemoryStick,
   Cpu,
   Clock,
   CheckCircle,
   RefreshCw,
+  Eye,
+  Download,
   AlertCircle,
-  AlertTriangle,
-  XCircle,
 } from 'lucide-react'
 import { formatDate, formatTimeRange } from '../utils/dateUtils'
-import DataTable, { Column } from '../components/DataTable'
+import DataTable, { Column, ActionButton } from '../components/DataTable'
+import StatusBadge from '../components/StatusBadge'
+import RepositoryCell from '../components/RepositoryCell'
 
 interface SystemMetrics {
   cpu_usage: number
@@ -43,6 +43,10 @@ interface BackupJob {
   progress?: number
   started_at?: string
   completed_at?: string
+  triggered_by?: string  // 'manual' or 'schedule'
+  schedule_id?: number | null
+  has_logs?: boolean
+  error_message?: string
 }
 
 interface DashboardStatus {
@@ -74,54 +78,73 @@ export default function Dashboard() {
     return (bytes / 1024 / 1024 / 1024).toFixed(1)
   }
 
-  const getStatusColor = (status: string): 'success' | 'error' | 'warning' | 'info' | 'default' => {
-    switch (status.toLowerCase()) {
-      case 'completed':
-      case 'success':
-        return 'success'
-      case 'completed_with_warnings':
-        return 'warning'
-      case 'failed':
-      case 'error':
-        return 'error'
-      case 'running':
-      case 'in_progress':
-        return 'info'
-      case 'cancelled':
-        return 'default'
-      default:
-        return 'warning'
+  // Action handlers for Dashboard jobs (we'll keep these minimal since no API calls in this view)
+  const handleViewLogs = (job: BackupJob) => {
+    // In a full implementation, this would open a logs dialog similar to Activity.tsx
+    console.log('View logs for job:', job.id)
+  }
+
+  const handleDownloadLogs = (job: BackupJob) => {
+    // In a full implementation, this would trigger log download
+    console.log('Download logs for job:', job.id)
+  }
+
+  // Get actions for a job (contextual based on status)
+  const getJobActions = (job: BackupJob): ActionButton<BackupJob>[] => {
+    const actions: ActionButton<BackupJob>[] = []
+
+    // View logs always available
+    actions.push({
+      icon: <Eye size={18} />,
+      label: 'View Logs',
+      onClick: handleViewLogs,
+      color: 'primary',
+      tooltip: 'View Logs',
+    })
+
+    // Download only if logs available
+    if (job.has_logs) {
+      actions.push({
+        icon: <Download size={18} />,
+        label: 'Download Logs',
+        onClick: handleDownloadLogs,
+        color: 'info',
+        tooltip: 'Download Logs',
+      })
     }
-  }
 
-  const getStatusIcon = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'running':
-      case 'in_progress':
-        return <RefreshCw size={18} className="animate-spin" />
-      case 'completed':
-      case 'success':
-        return <CheckCircle size={18} />
-      case 'completed_with_warnings':
-        return <AlertTriangle size={18} />
-      case 'failed':
-      case 'error':
-        return <AlertCircle size={18} />
-      case 'cancelled':
-        return <XCircle size={18} />
-      default:
-        return <Clock size={18} />
+    // Error details if failed
+    if (job.status === 'failed' && job.error_message) {
+      actions.push({
+        icon: <AlertCircle size={18} />,
+        label: 'Error',
+        onClick: handleViewLogs,
+        color: 'error',
+        tooltip: job.error_message,
+      })
     }
+
+    return actions
   }
 
-  const getRepositoryName = (path: string): string => {
-    if (!path) return 'Unknown'
-    const parts = path.split('/')
-    return parts[parts.length - 1] || parts[parts.length - 2] || path
-  }
-
-  // Define columns for Recent Jobs table
+  // Define columns for Recent Jobs table (reordered: Status → Job ID → Repository → Started → Duration)
   const jobColumns: Column<BackupJob>[] = [
+    {
+      id: 'status',
+      label: 'Status',
+      align: 'left',
+      render: (job) => (
+        <Tooltip
+          title={job.triggered_by === 'schedule' ? `Triggered by: Schedule (ID: ${job.schedule_id})` : 'Triggered by: Manual'}
+          placement="top"
+          arrow
+        >
+          <Box>
+            <StatusBadge status={job.status} />
+          </Box>
+        </Tooltip>
+      ),
+    },
     {
       id: 'id',
       label: 'Job ID',
@@ -137,47 +160,7 @@ export default function Dashboard() {
       label: 'Repository',
       align: 'left',
       minWidth: '250px',
-      render: (job) => (
-        <Tooltip title={job.repository} placement="top" arrow>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ color: 'text.secondary' }}>
-            <HardDrive size={16} />
-            <Box>
-              <Typography variant="body2" fontWeight={500}>
-                {getRepositoryName(job.repository)}
-              </Typography>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{
-                  fontFamily: 'monospace',
-                  fontSize: '0.7rem',
-                  maxWidth: 250,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  display: 'block',
-                }}
-              >
-                {job.repository}
-              </Typography>
-            </Box>
-          </Stack>
-        </Tooltip>
-      ),
-    },
-    {
-      id: 'status',
-      label: 'Status',
-      align: 'left',
-      render: (job) => (
-        <Chip
-          icon={getStatusIcon(job.status)}
-          label={job.status.charAt(0).toUpperCase() + job.status.slice(1)}
-          color={getStatusColor(job.status)}
-          size="small"
-          sx={{ fontWeight: 500 }}
-        />
-      ),
+      render: (job) => <RepositoryCell repositoryName={job.repository} repositoryPath={job.repository} />,
     },
     {
       id: 'started_at',
@@ -198,46 +181,6 @@ export default function Dashboard() {
           {formatTimeRange(job.started_at, job.completed_at, job.status)}
         </Typography>
       ),
-    },
-    {
-      id: 'progress',
-      label: 'Progress',
-      align: 'left',
-      render: (job) =>
-        job.status === 'running' ? (
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Box
-              sx={{
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                bgcolor: 'info.main',
-                animation: 'pulse 2s ease-in-out infinite',
-                '@keyframes pulse': {
-                  '0%, 100%': { opacity: 1 },
-                  '50%': { opacity: 0.5 },
-                },
-              }}
-            />
-            <Typography variant="body2" color="info.main">
-              {(job.progress || 0) === 0
-                ? 'Initializing...'
-                : (job.progress || 0) >= 100
-                  ? 'Finalizing...'
-                  : 'Processing...'}
-            </Typography>
-          </Stack>
-        ) : (
-          <Typography variant="body2" color="text.secondary">
-            {job.status === 'completed'
-              ? 'Completed'
-              : job.status === 'completed_with_warnings'
-                ? 'Completed with Warnings'
-                : job.status === 'failed'
-                  ? 'Failed'
-                  : 'Cancelled'}
-          </Typography>
-        ),
     },
   ]
 
@@ -457,6 +400,7 @@ export default function Dashboard() {
             <DataTable<BackupJob>
               data={status.data.recent_jobs}
               columns={jobColumns}
+              getRowActions={getJobActions}
               getRowKey={(job) => String(job.id)}
               headerBgColor="background.default"
               enableHover={true}

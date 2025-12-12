@@ -38,6 +38,7 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  AlertTriangle,
   Calendar,
   RefreshCw,
   Download,
@@ -56,6 +57,7 @@ import {
 } from '../utils/dateUtils'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
 import ScheduledChecksSection from '../components/ScheduledChecksSection'
+import StatusBadge from '../components/StatusBadge'
 
 interface ScheduledJob {
   id: number
@@ -428,7 +430,7 @@ const Schedule: React.FC = () => {
       case 'completed':
         return <CheckCircle size={18} />
       case 'completed_with_warnings':
-        return <AlertCircle size={18} />
+        return <AlertTriangle size={18} />
       case 'running':
         return <Clock size={18} />
       case 'failed':

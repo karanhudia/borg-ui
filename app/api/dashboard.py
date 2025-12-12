@@ -102,8 +102,11 @@ def get_recent_jobs(db: Session, limit: int = 10) -> List[Dict[str, Any]]:
     try:
         jobs = db.query(BackupJob).order_by(BackupJob.started_at.desc()).limit(limit).all()
         job_list = []
-        
+
         for job in jobs:
+            # Determine trigger type
+            triggered_by = 'schedule' if job.scheduled_job_id else 'manual'
+
             job_list.append({
                 "id": job.id,
                 "repository": job.repository,
@@ -111,9 +114,12 @@ def get_recent_jobs(db: Session, limit: int = 10) -> List[Dict[str, Any]]:
                 "started_at": format_datetime(job.started_at),
                 "completed_at": format_datetime(job.completed_at),
                 "progress": job.progress,
-                "error_message": job.error_message
+                "error_message": job.error_message,
+                "triggered_by": triggered_by,
+                "schedule_id": job.scheduled_job_id,
+                "has_logs": bool(job.log_file_path or job.logs)
             })
-        
+
         return job_list
     except Exception as e:
         logger.error("Failed to get recent jobs", error=str(e))
