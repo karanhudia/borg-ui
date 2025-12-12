@@ -35,6 +35,7 @@ import {
   RefreshCw,
   Download,
   AlertCircle,
+  Eye,
 } from 'lucide-react'
 import { backupAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
@@ -142,6 +143,13 @@ const Backup: React.FC = () => {
     cancelBackupMutation.mutate(jobId)
   }
 
+  // Handle view logs
+  const handleViewLogs = (jobId: string) => {
+    // In a full implementation, this would open a logs dialog similar to Activity.tsx
+    console.log('View logs for job:', jobId)
+    toast('Logs viewer coming soon')
+  }
+
   // Handle download logs
   const handleDownloadLogs = (jobId: string) => {
     try {
@@ -200,7 +208,7 @@ const Backup: React.FC = () => {
     backupStatus?.data?.jobs?.filter((job: BackupJob) => job.status === 'running') || []
   const recentJobs = backupStatus?.data?.jobs?.slice(0, 10) || []
 
-  // Define columns for Recent Jobs table
+  // Define columns for Recent Jobs table (ordered: Job ID → Repository → Status → Started → Duration)
   const jobColumns: Column<BackupJob>[] = [
     {
       id: 'id',
@@ -264,6 +272,13 @@ const Backup: React.FC = () => {
 
   // Define action buttons for Recent Jobs table
   const jobActions: ActionButton<BackupJob>[] = [
+    {
+      icon: <Eye size={16} />,
+      label: 'View Logs',
+      color: 'primary',
+      onClick: (job) => handleViewLogs(job.id),
+      tooltip: 'View logs',
+    },
     {
       icon: <Unlock size={16} />,
       label: 'Break Lock',

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { dashboardAPI } from '../services/api'
+import { toast } from 'react-hot-toast'
 import {
   Box,
   Card,
@@ -77,15 +78,36 @@ export default function Dashboard() {
     return (bytes / 1024 / 1024 / 1024).toFixed(1)
   }
 
-  // Action handlers for Dashboard jobs (we'll keep these minimal since no API calls in this view)
-  const handleViewLogs = (job: BackupJob) => {
-    // In a full implementation, this would open a logs dialog similar to Activity.tsx
-    console.log('View logs for job:', job.id)
+  // Action handlers for Dashboard jobs
+  const handleViewLogs = () => {
+    toast('Logs viewer coming soon')
   }
 
   const handleDownloadLogs = (job: BackupJob) => {
-    // In a full implementation, this would trigger log download
-    console.log('Download logs for job:', job.id)
+    try {
+      // Since this is from dashboard, we'll download backup logs by ID
+      const jobId = job.id.toString()
+      fetch(`/api/backup/jobs/${jobId}/logs/download`, {
+        method: 'GET',
+      })
+        .then((response) => response.blob())
+        .then((blob) => {
+          const url = window.URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = `backup-${jobId}-logs.txt`
+          document.body.appendChild(a)
+          a.click()
+          window.URL.revokeObjectURL(url)
+          document.body.removeChild(a)
+          toast.success('Logs downloaded successfully')
+        })
+        .catch(() => {
+          toast('Failed to download logs')
+        })
+    } catch (error) {
+      toast('Failed to download logs')
+    }
   }
 
   // Define actions for Dashboard jobs (with conditional show/disable based on job state)
@@ -107,24 +129,8 @@ export default function Dashboard() {
     },
   ]
 
-  // Define columns for Recent Jobs table (reordered: Status → Job ID → Repository → Started → Duration)
+  // Define columns for Recent Jobs table (ordered: Job ID → Repository → Status → Started → Duration)
   const jobColumns: Column<BackupJob>[] = [
-    {
-      id: 'status',
-      label: 'Status',
-      align: 'left',
-      render: (job) => (
-        <Tooltip
-          title={job.triggered_by === 'schedule' ? `Triggered by: Schedule (ID: ${job.schedule_id})` : 'Triggered by: Manual'}
-          placement="top"
-          arrow
-        >
-          <span>
-            <StatusBadge status={job.status} />
-          </span>
-        </Tooltip>
-      ),
-    },
     {
       id: 'id',
       label: 'Job ID',
@@ -141,6 +147,22 @@ export default function Dashboard() {
       align: 'left',
       minWidth: '250px',
       render: (job) => <RepositoryCell repositoryName={job.repository} repositoryPath={job.repository} />,
+    },
+    {
+      id: 'status',
+      label: 'Status',
+      align: 'left',
+      render: (job) => (
+        <Tooltip
+          title={job.triggered_by === 'schedule' ? `Triggered by: Schedule (ID: ${job.schedule_id})` : 'Triggered by: Manual'}
+          placement="top"
+          arrow
+        >
+          <span>
+            <StatusBadge status={job.status} />
+          </span>
+        </Tooltip>
+      ),
     },
     {
       id: 'started_at',
