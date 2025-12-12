@@ -48,11 +48,13 @@ import {
 } from '../utils/dateUtils'
 import LockErrorDialog from '../components/LockErrorDialog'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
+import StatusBadge from '../components/StatusBadge'
+import RepositoryCell from '../components/RepositoryCell'
 
 interface BackupJob {
   id: string
   repository: string
-  status: 'running' | 'completed' | 'failed' | 'cancelled'
+  status: 'running' | 'completed' | 'completed_with_warnings' | 'failed' | 'cancelled'
   started_at: string
   completed_at?: string
   progress?: number
@@ -62,6 +64,8 @@ interface BackupJob {
   processed_size?: string
   error_message?: string
   has_logs?: boolean // Indicates if logs are available for this job
+  triggered_by?: string // 'manual' or 'schedule'
+  schedule_id?: number | null
   progress_details?: {
     original_size: number
     compressed_size: number
@@ -150,37 +154,6 @@ const Backup: React.FC = () => {
     }
   }
 
-  // Get status color for Chip
-  const getStatusColor = (status: string): 'info' | 'success' | 'error' | 'default' => {
-    switch (status) {
-      case 'running':
-        return 'info'
-      case 'completed':
-        return 'success'
-      case 'failed':
-        return 'error'
-      case 'cancelled':
-        return 'default'
-      default:
-        return 'default'
-    }
-  }
-
-  // Get status icon
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'running':
-        return <RefreshCw size={18} className="animate-spin" />
-      case 'completed':
-        return <CheckCircle size={18} />
-      case 'failed':
-        return <AlertCircle size={18} />
-      case 'cancelled':
-        return <Square size={18} />
-      default:
-        return <Clock size={18} />
-    }
-  }
 
   // Format file size
   const formatFileSize = (size?: string) => {
@@ -247,31 +220,10 @@ const Backup: React.FC = () => {
       align: 'left',
       minWidth: '250px',
       render: (job) => (
-        <Tooltip title={job.repository} placement="top" arrow>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ color: 'text.secondary' }}>
-            <HardDrive size={16} />
-            <Box>
-              <Typography variant="body2" fontWeight={500}>
-                {getRepositoryName(job.repository)}
-              </Typography>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{
-                  fontFamily: 'monospace',
-                  fontSize: '0.7rem',
-                  maxWidth: 250,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  display: 'block',
-                }}
-              >
-                {job.repository}
-              </Typography>
-            </Box>
-          </Stack>
-        </Tooltip>
+        <RepositoryCell
+          repositoryName={getRepositoryName(job.repository)}
+          repositoryPath={job.repository}
+        />
       ),
     },
     {
@@ -279,13 +231,15 @@ const Backup: React.FC = () => {
       label: 'Status',
       align: 'left',
       render: (job) => (
-        <Chip
-          icon={getStatusIcon(job.status)}
-          label={job.status.charAt(0).toUpperCase() + job.status.slice(1)}
-          color={getStatusColor(job.status)}
-          size="small"
-          sx={{ fontWeight: 500 }}
-        />
+        <Tooltip
+          title={job.triggered_by === 'schedule' ? `Triggered by: Schedule (ID: ${job.schedule_id})` : 'Triggered by: Manual'}
+          placement="top"
+          arrow
+        >
+          <span>
+            <StatusBadge status={job.status} />
+          </span>
+        </Tooltip>
       ),
     },
     {

@@ -10,24 +10,16 @@ interface RepositoryCellProps {
 
 /**
  * Standardized repository display component used across Activity, Schedule, and Dashboard views
- * Shows repository name (bold) + truncated path (gray, monospace) with full path in tooltip
- * Matches the design pattern from Dashboard component
+ * Shows friendly repository name (from DB) + full path below in monospace (truncated with tooltip)
  */
 export const RepositoryCell: React.FC<RepositoryCellProps> = ({
   repositoryName,
   repositoryPath,
   withIcon = true,
 }) => {
+  // Use the friendly name if available (from database), otherwise show path
+  const displayName = repositoryName || repositoryPath || 'Unknown'
   const displayPath = repositoryPath || ''
-
-  // Extract repository name from path if not provided
-  const extractNameFromPath = (path: string): string => {
-    if (!path) return 'Unknown'
-    const parts = path.split('/')
-    return parts[parts.length - 1] || parts[parts.length - 2] || path
-  }
-
-  const finalName = repositoryName || extractNameFromPath(repositoryPath || '')
 
   return (
     <Tooltip title={displayPath || 'No path information'} placement="top" arrow>
@@ -35,9 +27,9 @@ export const RepositoryCell: React.FC<RepositoryCellProps> = ({
         {withIcon && <HardDrive size={16} style={{ flexShrink: 0, marginTop: 2 }} />}
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography variant="body2" fontWeight={500} sx={{ wordBreak: 'break-word' }}>
-            {finalName}
+            {displayName}
           </Typography>
-          {displayPath && (
+          {displayPath && displayPath !== displayName && (
             <Typography
               variant="caption"
               color="text.secondary"

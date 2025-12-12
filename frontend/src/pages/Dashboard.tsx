@@ -106,14 +106,6 @@ export default function Dashboard() {
       tooltip: 'Download Logs',
       show: (job) => job.has_logs === true,
     },
-    {
-      icon: <AlertCircle size={18} />,
-      label: 'Error',
-      onClick: handleViewLogs,
-      color: 'error',
-      tooltip: (job) => job.error_message || 'Error',
-      show: (job) => job.status === 'failed' && !!job.error_message,
-    },
   ]
 
   // Define columns for Recent Jobs table (reordered: Status → Job ID → Repository → Started → Duration)
@@ -128,9 +120,9 @@ export default function Dashboard() {
           placement="top"
           arrow
         >
-          <Box>
+          <span>
             <StatusBadge status={job.status} />
-          </Box>
+          </span>
         </Tooltip>
       ),
     },

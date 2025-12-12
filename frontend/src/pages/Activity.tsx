@@ -141,9 +141,9 @@ const Activity: React.FC = () => {
           placement="top"
           arrow
         >
-          <Box>
+          <span>
             <StatusBadge status={activity.status} variant="outlined" />
-          </Box>
+          </span>
         </Tooltip>
       ),
     },
@@ -218,14 +218,6 @@ const Activity: React.FC = () => {
       color: 'info',
       tooltip: 'Download Logs',
       show: (item) => item.has_logs === true,
-    },
-    {
-      icon: <AlertCircle size={18} />,
-      label: 'Error Details',
-      onClick: handleViewLogs,
-      color: 'error',
-      tooltip: (item) => item.error_message || 'Error Details',
-      show: (item) => item.status === 'failed' && !!item.error_message,
     },
   ]
 
