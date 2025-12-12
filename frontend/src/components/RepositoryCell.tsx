@@ -29,7 +29,7 @@ export const RepositoryCell: React.FC<RepositoryCellProps> = ({
           <Typography variant="body2" fontWeight={500} sx={{ wordBreak: 'break-word' }}>
             {displayName}
           </Typography>
-          {displayPath && displayPath !== displayName && (
+          {repositoryPath && (
             <Typography
               variant="caption"
               color="text.secondary"
