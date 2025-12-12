@@ -147,19 +147,29 @@ const Activity: React.FC = () => {
       align: 'left',
       minWidth: '250px',
       render: (activity) => {
-        // For repository jobs (backup, restore, check, compact), use repository_path from backend
-        if (activity.repository_path) {
-          return (
-            <RepositoryCell
-              repositoryName={activity.repository || activity.repository_path}
-              repositoryPath={activity.repository_path}
-              withIcon={false}
-            />
-          )
+        // For repository jobs (backup, restore, check, compact)
+        if (activity.type === 'backup' || activity.type === 'restore' || activity.type === 'check' || activity.type === 'compact') {
+          // Use repository_path if available, otherwise use repository name as fallback
+          if (activity.repository_path) {
+            return (
+              <RepositoryCell
+                repositoryName={activity.repository || activity.repository_path}
+                repositoryPath={activity.repository_path}
+                withIcon={false}
+              />
+            )
+          } else if (activity.repository) {
+            // If repo was deleted but we still have the name, show it
+            return (
+              <Typography variant="body2" color="text.secondary">
+                {activity.repository}
+              </Typography>
+            )
+          }
         }
 
-        // Fallback for non-repository jobs or when path not available
-        const displayName = activity.repository || activity.archive_name || activity.package_name || '-'
+        // Fallback for non-repository jobs (package, etc.) or when nothing available
+        const displayName = activity.archive_name || activity.package_name || '-'
         return <Typography variant="body2">{displayName}</Typography>
       },
     },

@@ -214,6 +214,7 @@ class CheckJob(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=False)
+    repository_path = Column(String, nullable=True)  # Captured at job creation for display even if repo is deleted
     status = Column(String, default="pending")  # pending, running, completed, failed, cancelled
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
@@ -232,6 +233,7 @@ class CompactJob(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=False)
+    repository_path = Column(String, nullable=True)  # Captured at job creation for display even if repo is deleted
     status = Column(String, default="pending")  # pending, running, completed, failed, cancelled
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
