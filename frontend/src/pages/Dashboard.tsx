@@ -20,6 +20,7 @@ import {
   CheckCircle,
   RefreshCw,
   AlertCircle,
+  AlertTriangle,
   XCircle,
 } from 'lucide-react'
 import { formatDate, formatTimeRange } from '../utils/dateUtils'
@@ -78,6 +79,8 @@ export default function Dashboard() {
       case 'completed':
       case 'success':
         return 'success'
+      case 'completed_with_warnings':
+        return 'warning'
       case 'failed':
       case 'error':
         return 'error'
@@ -99,6 +102,8 @@ export default function Dashboard() {
       case 'completed':
       case 'success':
         return <CheckCircle size={18} />
+      case 'completed_with_warnings':
+        return <AlertTriangle size={18} />
       case 'failed':
       case 'error':
         return <AlertCircle size={18} />
@@ -226,9 +231,11 @@ export default function Dashboard() {
           <Typography variant="body2" color="text.secondary">
             {job.status === 'completed'
               ? 'Completed'
-              : job.status === 'failed'
-                ? 'Failed'
-                : 'Cancelled'}
+              : job.status === 'completed_with_warnings'
+                ? 'Completed with Warnings'
+                : job.status === 'failed'
+                  ? 'Failed'
+                  : 'Cancelled'}
           </Typography>
         ),
     },
