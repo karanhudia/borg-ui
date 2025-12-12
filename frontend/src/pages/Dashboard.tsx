@@ -1,5 +1,6 @@
+import React from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { dashboardAPI } from '../services/api'
+import { dashboardAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import {
   Box,
@@ -25,6 +26,14 @@ import { formatDate, formatTimeRange } from '../utils/dateUtils'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
 import StatusBadge from '../components/StatusBadge'
 import RepositoryCell from '../components/RepositoryCell'
+import { TerminalLogViewer } from '../components/TerminalLogViewer'
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+} from '@mui/material'
 
 interface SystemMetrics {
   cpu_usage: number
@@ -55,11 +64,19 @@ interface DashboardStatus {
 }
 
 export default function Dashboard() {
+  const [selectedJob, setSelectedJob] = React.useState<BackupJob | null>(null)
+
   // Poll data every 30 seconds for fresh data
   const { data: status, isLoading } = useQuery<{ data: DashboardStatus }>({
     queryKey: ['dashboard-status'],
     queryFn: dashboardAPI.getStatus,
     refetchInterval: 30000,
+  })
+
+  // Get repositories for name mapping
+  const { data: repositoriesData } = useQuery({
+    queryKey: ['repositories'],
+    queryFn: repositoriesAPI.getRepositories,
   })
 
   if (isLoading) {
@@ -79,35 +96,30 @@ export default function Dashboard() {
   }
 
   // Action handlers for Dashboard jobs
-  const handleViewLogs = () => {
-    toast('Logs viewer coming soon')
+  const handleViewLogs = (job: BackupJob) => {
+    setSelectedJob(job)
+  }
+
+  const handleCloseLogs = () => {
+    setSelectedJob(null)
   }
 
   const handleDownloadLogs = (job: BackupJob) => {
-    try {
-      // Since this is from dashboard, we'll download backup logs by ID
-      const jobId = job.id.toString()
-      fetch(`/api/backup/jobs/${jobId}/logs/download`, {
-        method: 'GET',
-      })
-        .then((response) => response.blob())
-        .then((blob) => {
-          const url = window.URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url
-          a.download = `backup-${jobId}-logs.txt`
-          document.body.appendChild(a)
-          a.click()
-          window.URL.revokeObjectURL(url)
-          document.body.removeChild(a)
-          toast.success('Logs downloaded successfully')
-        })
-        .catch(() => {
-          toast('Failed to download logs')
-        })
-    } catch (error) {
-      toast('Failed to download logs')
+    // Use activity API for downloading logs
+    const token = localStorage.getItem('token')
+    if (!token) {
+      toast.error('Authentication required')
+      return
     }
+
+    const url = `/api/activity/backup/${job.id}/logs/download?token=${token}`
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `backup-${job.id}-logs.txt`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    toast.success('Downloading logs...')
   }
 
   // Define actions for Dashboard jobs (with conditional show/disable based on job state)
@@ -146,7 +158,16 @@ export default function Dashboard() {
       label: 'Repository',
       align: 'left',
       minWidth: '250px',
-      render: (job) => <RepositoryCell repositoryName={job.repository} repositoryPath={job.repository} />,
+      render: (job) => {
+        const repos = repositoriesData?.data?.repositories || []
+        const repo = repos.find((r: any) => r.path === job.repository)
+        return (
+          <RepositoryCell
+            repositoryName={repo?.name || job.repository}
+            repositoryPath={job.repository}
+          />
+        )
+      },
     },
     {
       id: 'status',
@@ -421,6 +442,40 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       )}
+
+      {/* Logs Dialog */}
+      <Dialog open={Boolean(selectedJob)} onClose={handleCloseLogs} maxWidth="lg" fullWidth>
+        <DialogTitle>
+          {selectedJob && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Typography variant="h6">
+                Backup Logs - Job #{selectedJob.id}
+              </Typography>
+              <StatusBadge status={selectedJob.status} />
+            </Box>
+          )}
+        </DialogTitle>
+        <DialogContent dividers>
+          {selectedJob && (
+            <TerminalLogViewer
+              jobId={String(selectedJob.id)}
+              status={selectedJob.status}
+              jobType="backup"
+              showHeader={false}
+              onFetchLogs={async (offset) => {
+                const response = await fetch(`/api/activity/backup/${selectedJob.id}/logs?offset=${offset}&limit=500`)
+                if (!response.ok) {
+                  throw new Error('Failed to fetch logs')
+                }
+                return response.json()
+              }}
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseLogs}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

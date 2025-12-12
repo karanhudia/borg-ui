@@ -43,6 +43,7 @@ class ActivityItem(BaseModel):
     archive_name: Optional[str] = None  # For backup/restore
     package_name: Optional[str] = None  # For package installs
     has_logs: bool = False  # Whether logs are available for download
+    repository_path: Optional[str] = None  # Full repository path (for mapping to friendly name)
 
     class Config:
         from_attributes = True
@@ -89,6 +90,7 @@ async def list_recent_activity(
                 'completed_at': job.completed_at,
                 'error_message': job.error_message,
                 'repository': repo_name,
+                'repository_path': job.repository,  # Always include the path
                 'log_file_path': job.log_file_path,
                 'triggered_by': triggered_by,
                 'schedule_id': job.scheduled_job_id,
@@ -115,6 +117,7 @@ async def list_recent_activity(
                 'completed_at': job.completed_at,
                 'error_message': job.error_message,
                 'repository': repo_name,
+                'repository_path': job.repository,  # Always include the path
                 'log_file_path': getattr(job, 'log_file_path', None),
                 'triggered_by': 'manual',  # Restore jobs are always manual
                 'schedule_id': None,
@@ -131,7 +134,8 @@ async def list_recent_activity(
                 continue
             # Get repository name from repository_id
             repo = db.query(Repository).filter(Repository.id == job.repository_id).first()
-            repo_name = repo.name if repo else f"Repository #{job.repository_id}"
+            repo_name = repo.name if repo else None
+            repo_path = repo.path if repo else None
 
             activities.append({
                 'id': job.id,
@@ -141,6 +145,7 @@ async def list_recent_activity(
                 'completed_at': job.completed_at,
                 'error_message': job.error_message,
                 'repository': repo_name,
+                'repository_path': repo_path,
                 'log_file_path': getattr(job, 'log_file_path', None),
                 'triggered_by': 'manual',  # Check jobs are always manual
                 'schedule_id': None,
@@ -157,7 +162,8 @@ async def list_recent_activity(
                 continue
             # Get repository name from repository_id
             repo = db.query(Repository).filter(Repository.id == job.repository_id).first()
-            repo_name = repo.name if repo else f"Repository #{job.repository_id}"
+            repo_name = repo.name if repo else None
+            repo_path = repo.path if repo else None
 
             activities.append({
                 'id': job.id,
@@ -167,6 +173,7 @@ async def list_recent_activity(
                 'completed_at': job.completed_at,
                 'error_message': job.error_message,
                 'repository': repo_name,
+                'repository_path': repo_path,
                 'log_file_path': getattr(job, 'log_file_path', None),
                 'triggered_by': 'manual',  # Compact jobs are always manual
                 'schedule_id': None,

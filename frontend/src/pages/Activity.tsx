@@ -42,6 +42,7 @@ interface ActivityItem {
   log_file_path: string | null
   archive_name: string | null
   package_name: string | null
+  repository_path: string | null  // Full repository path
   triggered_by?: string  // 'manual' or 'schedule'
   schedule_id?: number | null
   has_logs?: boolean
@@ -146,9 +147,20 @@ const Activity: React.FC = () => {
       align: 'left',
       minWidth: '250px',
       render: (activity) => {
-        const repoName = activity.repository || activity.package_name || activity.archive_name
-        if (!repoName) return <Typography variant="body2">-</Typography>
-        return <RepositoryCell repositoryName={repoName} withIcon={false} />
+        // For repository jobs, use repository_path from backend
+        if (activity.repository_path) {
+          return (
+            <RepositoryCell
+              repositoryName={activity.repository || activity.repository_path}
+              repositoryPath={activity.repository_path}
+              withIcon={false}
+            />
+          )
+        }
+
+        // Fallback for non-repository jobs or when path not available
+        const displayName = activity.repository || activity.archive_name || '-'
+        return <Typography variant="body2">{displayName}</Typography>
       },
     },
     {
@@ -174,7 +186,7 @@ const Activity: React.FC = () => {
           arrow
         >
           <span>
-            <StatusBadge status={activity.status} variant="outlined" />
+            <StatusBadge status={activity.status} />
           </span>
         </Tooltip>
       ),
@@ -184,7 +196,7 @@ const Activity: React.FC = () => {
       label: 'Started',
       align: 'left',
       render: (activity) => (
-        <Typography variant="body2">
+        <Typography variant="body2" color="text.secondary">
           {activity.started_at ? formatDate(activity.started_at) : '-'}
         </Typography>
       ),
@@ -194,7 +206,7 @@ const Activity: React.FC = () => {
       label: 'Duration',
       align: 'left',
       render: (activity) => (
-        <Typography variant="body2">
+        <Typography variant="body2" color="text.secondary">
           {getDuration(activity.started_at, activity.completed_at)}
         </Typography>
       ),
@@ -277,6 +289,8 @@ const Activity: React.FC = () => {
         actions={actions}
         getRowKey={(activity) => `${activity.type}-${activity.id}`}
         loading={isLoading}
+        headerBgColor="background.default"
+        enableHover={true}
         emptyState={{
           icon: <Info size={48} />,
           title: 'No activity found',

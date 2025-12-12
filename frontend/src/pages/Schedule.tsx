@@ -43,9 +43,11 @@ import {
   RefreshCw,
   Download,
   X,
+  Eye,
 } from 'lucide-react'
 import { scheduleAPI, repositoriesAPI, backupAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
+import RepositoryCell from '../components/RepositoryCell'
 import {
   formatDate,
   formatRelativeTime,
@@ -589,12 +591,10 @@ const Schedule: React.FC = () => {
       label: 'Repository',
       width: '30%',
       render: (job) => (
-        <>
-          <Typography variant="body2">{getRepositoryName(job.repository || '')}</Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-            {job.repository}
-          </Typography>
-        </>
+        <RepositoryCell
+          repositoryName={getRepositoryName(job.repository || '')}
+          repositoryPath={job.repository || ''}
+        />
       ),
     },
     {
@@ -737,13 +737,11 @@ const Schedule: React.FC = () => {
     {
       id: 'id',
       label: 'Job ID',
+      align: 'left',
       render: (job) => (
-        <Chip
-          label={`#${job.id}`}
-          size="small"
-          variant="outlined"
-          sx={{ fontFamily: 'monospace' }}
-        />
+        <Typography variant="body2" fontWeight={600} color="primary">
+          #{job.id}
+        </Typography>
       ),
     },
     {
@@ -751,34 +749,34 @@ const Schedule: React.FC = () => {
       label: 'Repository',
       render: (job) => (
         <>
-          <Typography variant="body2">{getRepositoryName(job.repository)}</Typography>
-          <Typography variant="caption" color="text.secondary" display="block">
-            {job.repository}
-          </Typography>
+          <RepositoryCell
+            repositoryName={getRepositoryName(job.repository)}
+            repositoryPath={job.repository}
+          />
           {job.maintenance_status && (
             <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
               {(job.maintenance_status.includes('prune') ||
                 job.maintenance_status === 'maintenance_completed') && (
-                <Chip
-                  label={job.maintenance_status.includes('prune_failed') ? 'Prune ✗' : 'Prune ✓'}
-                  size="small"
-                  color={job.maintenance_status.includes('prune_failed') ? 'error' : 'success'}
-                  variant="outlined"
-                  sx={{ height: 18, fontSize: '0.65rem' }}
-                />
-              )}
+                  <Chip
+                    label={job.maintenance_status.includes('prune_failed') ? 'Prune ✗' : 'Prune ✓'}
+                    size="small"
+                    color={job.maintenance_status.includes('prune_failed') ? 'error' : 'success'}
+                    variant="outlined"
+                    sx={{ height: 18, fontSize: '0.65rem' }}
+                  />
+                )}
               {(job.maintenance_status.includes('compact') ||
                 job.maintenance_status === 'maintenance_completed') && (
-                <Chip
-                  label={
-                    job.maintenance_status.includes('compact_failed') ? 'Compact ✗' : 'Compact ✓'
-                  }
-                  size="small"
-                  color={job.maintenance_status.includes('compact_failed') ? 'error' : 'success'}
-                  variant="outlined"
-                  sx={{ height: 18, fontSize: '0.65rem' }}
-                />
-              )}
+                  <Chip
+                    label={
+                      job.maintenance_status.includes('compact_failed') ? 'Compact ✗' : 'Compact ✓'
+                    }
+                    size="small"
+                    color={job.maintenance_status.includes('compact_failed') ? 'error' : 'success'}
+                    variant="outlined"
+                    sx={{ height: 18, fontSize: '0.65rem' }}
+                  />
+                )}
             </Box>
           )}
         </>
@@ -811,9 +809,10 @@ const Schedule: React.FC = () => {
     {
       id: 'started_at',
       label: 'Started',
+      align: 'left',
       render: (job) => (
         <>
-          <Typography variant="body2">{formatDate(job.started_at)}</Typography>
+          <Typography variant="body2" color="text.secondary">{formatDate(job.started_at)}</Typography>
           <Typography variant="caption" color="text.secondary">
             {formatRelativeTime(job.started_at)}
           </Typography>
@@ -823,8 +822,9 @@ const Schedule: React.FC = () => {
     {
       id: 'duration',
       label: 'Duration',
+      align: 'left',
       render: (job) => (
-        <Typography variant="body2">
+        <Typography variant="body2" color="text.secondary">
           {job.completed_at ? formatTimeRange(job.started_at, job.completed_at) : 'Running...'}
         </Typography>
       ),
@@ -833,6 +833,15 @@ const Schedule: React.FC = () => {
 
   // Backup History Table Action Buttons
   const backupHistoryActions: ActionButton<BackupJob>[] = [
+    {
+      icon: <Eye size={16} />,
+      label: 'View Logs',
+      onClick: () => {
+        toast('Log viewer coming soon for scheduled jobs')
+      },
+      color: 'primary',
+      tooltip: 'View Logs',
+    },
     {
       icon: <X size={16} />,
       label: 'Cancel Backup',
@@ -849,13 +858,14 @@ const Schedule: React.FC = () => {
       icon: <Download size={16} />,
       label: 'Download Logs',
       onClick: (job) => backupAPI.downloadLogs(job.id),
-      color: 'primary',
+      color: 'info',
       show: (job) => !!job.has_logs,
+      tooltip: 'Download Logs',
     },
     {
       icon: <AlertCircle size={16} />,
       label: 'Error',
-      onClick: () => {},
+      onClick: () => { },
       color: 'error',
       show: (job) => !!job.error_message,
       tooltip: (job) => job.error_message || 'Error',
@@ -1054,7 +1064,7 @@ const Schedule: React.FC = () => {
                           </Typography>
                           <Typography variant="body2" fontWeight={500}>
                             {job.progress_details?.compressed_size !== undefined &&
-                            job.progress_details?.compressed_size !== null
+                              job.progress_details?.compressed_size !== null
                               ? formatBytesUtil(job.progress_details.compressed_size)
                               : 'N/A'}
                           </Typography>
@@ -1065,7 +1075,7 @@ const Schedule: React.FC = () => {
                           </Typography>
                           <Typography variant="body2" fontWeight={500} color="success.main">
                             {job.progress_details?.deduplicated_size !== undefined &&
-                            job.progress_details?.deduplicated_size !== null
+                              job.progress_details?.deduplicated_size !== null
                               ? formatBytesUtil(job.progress_details.deduplicated_size)
                               : 'N/A'}
                           </Typography>
@@ -1197,9 +1207,8 @@ const Schedule: React.FC = () => {
                 data={recentBackupJobs}
                 columns={backupHistoryColumns}
                 actions={backupHistoryActions}
-                getRowKey={(job) => job.id}
+                getRowKey={(job) => String(job.id)}
                 loading={loadingBackupJobs}
-                enableHover={true}
                 headerBgColor="background.default"
                 emptyState={{
                   icon: <Clock size={48} />,
