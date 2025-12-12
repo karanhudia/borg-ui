@@ -1,12 +1,5 @@
 import React from 'react'
-import { Box, Chip } from '@mui/material'
-import {
-  CheckCircle,
-  AlertTriangle,
-  XCircle,
-  Clock,
-  RefreshCw,
-} from 'lucide-react'
+import { Chip } from '@mui/material'
 
 interface StatusBadgeProps {
   status: string
@@ -16,33 +9,13 @@ interface StatusBadgeProps {
 
 /**
  * Standardized status badge component used across Activity, Schedule, and Dashboard views
- * Ensures consistent icon, color, and label representation for all job statuses
+ * Shows consistent color and label representation for all job statuses (no icon)
  */
 export const StatusBadge: React.FC<StatusBadgeProps> = ({
   status,
   size = 'small',
   variant = 'filled',
 }) => {
-  const getStatusIcon = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'completed':
-      case 'success':
-        return <CheckCircle size={16} />
-      case 'completed_with_warnings':
-        return <AlertTriangle size={16} />
-      case 'failed':
-      case 'error':
-        return <XCircle size={16} />
-      case 'running':
-      case 'in_progress':
-        return <RefreshCw size={16} className="animate-spin" />
-      case 'pending':
-        return <Clock size={16} />
-      default:
-        return <Clock size={16} />
-    }
-  }
-
   const getStatusColor = (
     status: string
   ): 'success' | 'error' | 'warning' | 'info' | 'default' => {
@@ -86,16 +59,13 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   }
 
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-      {getStatusIcon(status)}
-      <Chip
-        label={getStatusLabel(status)}
-        color={getStatusColor(status)}
-        size={size}
-        variant={variant}
-        sx={{ fontWeight: 500 }}
-      />
-    </Box>
+    <Chip
+      label={getStatusLabel(status)}
+      color={getStatusColor(status)}
+      size={size}
+      variant={variant}
+      sx={{ fontWeight: 500 }}
+    />
   )
 }
 
