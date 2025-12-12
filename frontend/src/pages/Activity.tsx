@@ -16,8 +16,8 @@ import {
   Select,
   MenuItem,
   Tooltip,
-  AlertCircle,
 } from '@mui/material'
+import { AlertCircle } from 'lucide-react'
 import {
   History,
   RefreshCw,
@@ -69,23 +69,6 @@ const Activity: React.FC = () => {
       return response.data
     },
   })
-
-  const getStatusColor = (
-    status: string
-  ): 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning' => {
-    switch (status) {
-      case 'completed':
-        return 'success'
-      case 'completed_with_warnings':
-        return 'warning'
-      case 'failed':
-        return 'error'
-      case 'running':
-        return 'info'
-      default:
-        return 'default'
-    }
-  }
 
   const getTypeLabel = (type: string) => {
     switch (type) {
@@ -219,45 +202,32 @@ const Activity: React.FC = () => {
     },
   ]
 
-  // Define actions for DataTable (contextual based on state)
-  const getActions = (item: ActivityItem): ActionButton<ActivityItem>[] => {
-    const itemActions: ActionButton<ActivityItem>[] = [
-      {
-        icon: <Eye size={18} />,
-        label: 'View Logs',
-        onClick: handleViewLogs,
-        color: 'primary',
-        tooltip: 'View Logs',
-      },
-    ]
-
-    // Only show download if logs are available
-    if (item.has_logs) {
-      itemActions.push({
-        icon: <Download size={18} />,
-        label: 'Download Logs',
-        onClick: handleDownloadLogs,
-        color: 'info',
-        tooltip: 'Download Logs',
-      })
-    }
-
-    // Show error details if job failed
-    if (item.status === 'failed' && item.error_message) {
-      itemActions.push({
-        icon: <AlertCircle size={18} />,
-        label: 'Error Details',
-        onClick: (job) => {
-          // For now, error is shown in logs
-          handleViewLogs(job)
-        },
-        color: 'error',
-        tooltip: item.error_message,
-      })
-    }
-
-    return itemActions
-  }
+  // Define actions for DataTable (with conditional show/disable based on row state)
+  const actions: ActionButton<ActivityItem>[] = [
+    {
+      icon: <Eye size={18} />,
+      label: 'View Logs',
+      onClick: handleViewLogs,
+      color: 'primary',
+      tooltip: 'View Logs',
+    },
+    {
+      icon: <Download size={18} />,
+      label: 'Download Logs',
+      onClick: handleDownloadLogs,
+      color: 'info',
+      tooltip: 'Download Logs',
+      show: (item) => item.has_logs === true,
+    },
+    {
+      icon: <AlertCircle size={18} />,
+      label: 'Error Details',
+      onClick: handleViewLogs,
+      color: 'error',
+      tooltip: (item) => item.error_message || 'Error Details',
+      show: (item) => item.status === 'failed' && !!item.error_message,
+    },
+  ]
 
   return (
     <Box>
@@ -313,7 +283,7 @@ const Activity: React.FC = () => {
       <DataTable
         data={activities || []}
         columns={columns}
-        getRowActions={getActions}
+        actions={actions}
         getRowKey={(activity) => `${activity.type}-${activity.id}`}
         loading={isLoading}
         emptyState={{

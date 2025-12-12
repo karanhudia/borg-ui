@@ -57,7 +57,6 @@ import {
 } from '../utils/dateUtils'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
 import ScheduledChecksSection from '../components/ScheduledChecksSection'
-import StatusBadge from '../components/StatusBadge'
 
 interface ScheduledJob {
   id: number

@@ -18,7 +18,6 @@ export const RepositoryCell: React.FC<RepositoryCellProps> = ({
   repositoryPath,
   withIcon = true,
 }) => {
-  const displayName = repositoryName || repositoryPath || 'Unknown'
   const displayPath = repositoryPath || ''
 
   // Extract repository name from path if not provided
