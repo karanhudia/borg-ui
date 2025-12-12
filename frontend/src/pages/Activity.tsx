@@ -147,7 +147,7 @@ const Activity: React.FC = () => {
       align: 'left',
       minWidth: '250px',
       render: (activity) => {
-        // For repository jobs, use repository_path from backend
+        // For repository jobs (backup, restore, check, compact), use repository_path from backend
         if (activity.repository_path) {
           return (
             <RepositoryCell
@@ -159,7 +159,7 @@ const Activity: React.FC = () => {
         }
 
         // Fallback for non-repository jobs or when path not available
-        const displayName = activity.repository || activity.archive_name || '-'
+        const displayName = activity.repository || activity.archive_name || activity.package_name || '-'
         return <Typography variant="body2">{displayName}</Typography>
       },
     },

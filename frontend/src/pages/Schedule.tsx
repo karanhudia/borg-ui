@@ -38,7 +38,6 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-  AlertTriangle,
   Calendar,
   RefreshCw,
   Download,
@@ -58,6 +57,8 @@ import {
   convertCronToLocal,
 } from '../utils/dateUtils'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
+import StatusBadge from '../components/StatusBadge'
+import { TerminalLogViewer } from '../components/TerminalLogViewer'
 import ScheduledChecksSection from '../components/ScheduledChecksSection'
 
 interface ScheduledJob {
@@ -123,6 +124,7 @@ const Schedule: React.FC = () => {
   const [editingJob, setEditingJob] = useState<ScheduledJob | null>(null)
   const [showCronBuilder, setShowCronBuilder] = useState(false)
   const [deleteConfirmJob, setDeleteConfirmJob] = useState<ScheduledJob | null>(null)
+  const [selectedBackupJob, setSelectedBackupJob] = useState<BackupJob | null>(null)
 
   // Redirect /schedule to /schedule/backups
   useEffect(() => {
@@ -426,60 +428,7 @@ const Schedule: React.FC = () => {
     return repo?.name || path
   }
 
-  const getBackupStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <CheckCircle size={18} />
-      case 'completed_with_warnings':
-        return <AlertTriangle size={18} />
-      case 'running':
-        return <Clock size={18} />
-      case 'failed':
-        return <XCircle size={18} />
-      case 'cancelled':
-        return <AlertCircle size={18} />
-      default:
-        return <Clock size={18} />
-    }
-  }
-
-  const getBackupStatusColor = (
-    status: string
-  ): 'success' | 'info' | 'error' | 'warning' | 'default' => {
-    switch (status) {
-      case 'completed':
-        return 'success'
-      case 'completed_with_warnings':
-        return 'warning'
-      case 'running':
-        return 'info'
-      case 'failed':
-        return 'error'
-      case 'cancelled':
-        return 'warning'
-      default:
-        return 'default'
-    }
-  }
-
-  const getBackupStatusLabel = (status: string) => {
-    switch (status) {
-      case 'completed_with_warnings':
-        return 'Warnings'
-      case 'completed':
-        return 'Completed'
-      case 'running':
-        return 'Running'
-      case 'failed':
-        return 'Failed'
-      case 'cancelled':
-        return 'Cancelled'
-      case 'pending':
-        return 'Pending'
-      default:
-        return status.charAt(0).toUpperCase() + status.slice(1)
-    }
-  }
+  // Note: Using StatusBadge component for status display instead of individual functions
 
   const getMaintenanceStatusLabel = (
     maintenanceStatus: string | null | undefined
@@ -787,13 +736,7 @@ const Schedule: React.FC = () => {
       label: 'Status',
       render: (job) => (
         <>
-          <Chip
-            icon={getBackupStatusIcon(job.status)}
-            label={getBackupStatusLabel(job.status)}
-            size="small"
-            color={getBackupStatusColor(job.status)}
-            sx={{ minWidth: 100 }}
-          />
+          <StatusBadge status={job.status} />
           {job.maintenance_status && job.maintenance_status.includes('running') && (
             <Chip
               icon={<RefreshCw size={12} className="animate-spin" />}
@@ -836,8 +779,8 @@ const Schedule: React.FC = () => {
     {
       icon: <Eye size={16} />,
       label: 'View Logs',
-      onClick: () => {
-        toast('Log viewer coming soon for scheduled jobs')
+      onClick: (job) => {
+        setSelectedBackupJob(job)
       },
       color: 'primary',
       tooltip: 'View Logs',
@@ -1924,6 +1867,47 @@ const Schedule: React.FC = () => {
           >
             {deleteJobMutation.isPending ? 'Deleting...' : 'Delete Job'}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Backup Job Logs Dialog */}
+      <Dialog open={Boolean(selectedBackupJob)} onClose={() => setSelectedBackupJob(null)} maxWidth="lg" fullWidth>
+        <DialogTitle>
+          {selectedBackupJob && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Typography variant="h6">
+                Backup Logs - Job #{selectedBackupJob.id}
+              </Typography>
+              <StatusBadge status={selectedBackupJob.status} />
+            </Box>
+          )}
+        </DialogTitle>
+        <DialogContent dividers>
+          {selectedBackupJob && (
+            <TerminalLogViewer
+              jobId={String(selectedBackupJob.id)}
+              status={selectedBackupJob.status}
+              jobType="backup"
+              showHeader={false}
+              onFetchLogs={async (offset) => {
+                const response = await fetch(
+                  `/api/activity/backup/${selectedBackupJob.id}/logs?offset=${offset}&limit=500`,
+                  {
+                    headers: {
+                      Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+                    },
+                  }
+                )
+                if (!response.ok) {
+                  throw new Error('Failed to fetch logs')
+                }
+                return response.json()
+              }}
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSelectedBackupJob(null)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>

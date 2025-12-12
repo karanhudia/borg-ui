@@ -463,7 +463,14 @@ export default function Dashboard() {
               jobType="backup"
               showHeader={false}
               onFetchLogs={async (offset) => {
-                const response = await fetch(`/api/activity/backup/${selectedJob.id}/logs?offset=${offset}&limit=500`)
+                const response = await fetch(
+                  `/api/activity/backup/${selectedJob.id}/logs?offset=${offset}&limit=500`,
+                  {
+                    headers: {
+                      Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+                    },
+                  }
+                )
                 if (!response.ok) {
                   throw new Error('Failed to fetch logs')
                 }

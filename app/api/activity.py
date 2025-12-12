@@ -134,7 +134,7 @@ async def list_recent_activity(
                 continue
             # Get repository name from repository_id
             repo = db.query(Repository).filter(Repository.id == job.repository_id).first()
-            repo_name = repo.name if repo else None
+            repo_name = repo.name if repo else f"Repository #{job.repository_id}"
             repo_path = repo.path if repo else None
 
             activities.append({
@@ -162,7 +162,7 @@ async def list_recent_activity(
                 continue
             # Get repository name from repository_id
             repo = db.query(Repository).filter(Repository.id == job.repository_id).first()
-            repo_name = repo.name if repo else None
+            repo_name = repo.name if repo else f"Repository #{job.repository_id}"
             repo_path = repo.path if repo else None
 
             activities.append({
