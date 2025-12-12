@@ -10,6 +10,7 @@ import Restore from './pages/Restore'
 import Schedule from './pages/Schedule'
 import Repositories from './pages/Repositories'
 import SSHConnectionsSingleKey from './pages/SSHConnectionsSingleKey'
+import Activity from './pages/Activity'
 import Settings from './pages/Settings'
 
 function App() {
@@ -88,7 +89,7 @@ function App() {
         <Route path="/ssh-keys" element={<Navigate to="/ssh-connections" replace />} />
         <Route path="/connections" element={<Navigate to="/ssh-connections" replace />} />
         <Route path="/scripts" element={<Navigate to="/settings/scripts" replace />} />
-        <Route path="/activity" element={<Navigate to="/settings/activity" replace />} />
+        <Route path="/activity" element={<Activity />} />
         <Route path="/settings" element={<Navigate to="/settings/account" replace />} />
         <Route path="/settings/:tab" element={<Settings />} />
       </Routes>
