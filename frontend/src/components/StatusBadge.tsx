@@ -16,9 +16,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   size = 'small',
   variant = 'filled',
 }) => {
-  const getStatusColor = (
-    status: string
-  ): 'success' | 'error' | 'warning' | 'info' | 'default' => {
+  const getStatusColor = (status: string): 'success' | 'error' | 'warning' | 'info' | 'default' => {
     switch (status.toLowerCase()) {
       case 'completed':
       case 'success':

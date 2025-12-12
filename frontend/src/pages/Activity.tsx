@@ -17,13 +17,7 @@ import {
   MenuItem,
   Tooltip,
 } from '@mui/material'
-import {
-  History,
-  RefreshCw,
-  Eye,
-  Info,
-  Download,
-} from 'lucide-react'
+import { History, RefreshCw, Eye, Info, Download } from 'lucide-react'
 import { activityAPI } from '../services/api'
 import { formatDate } from '../utils/dateUtils'
 import { TerminalLogViewer } from '../components/TerminalLogViewer'
@@ -42,8 +36,8 @@ interface ActivityItem {
   log_file_path: string | null
   archive_name: string | null
   package_name: string | null
-  repository_path: string | null  // Full repository path
-  triggered_by?: string  // 'manual' or 'schedule'
+  repository_path: string | null // Full repository path
+  triggered_by?: string // 'manual' or 'schedule'
   schedule_id?: number | null
   has_logs?: boolean
 }
@@ -148,7 +142,12 @@ const Activity: React.FC = () => {
       minWidth: '250px',
       render: (activity) => {
         // For repository jobs (backup, restore, check, compact)
-        if (activity.type === 'backup' || activity.type === 'restore' || activity.type === 'check' || activity.type === 'compact') {
+        if (
+          activity.type === 'backup' ||
+          activity.type === 'restore' ||
+          activity.type === 'check' ||
+          activity.type === 'compact'
+        ) {
           // Use repository_path if available, otherwise use repository name as fallback
           if (activity.repository_path) {
             return (
@@ -191,7 +190,11 @@ const Activity: React.FC = () => {
       align: 'left',
       render: (activity) => (
         <Tooltip
-          title={activity.triggered_by === 'schedule' ? `Triggered by: Schedule (ID: ${activity.schedule_id})` : 'Triggered by: Manual'}
+          title={
+            activity.triggered_by === 'schedule'
+              ? `Triggered by: Schedule (ID: ${activity.schedule_id})`
+              : 'Triggered by: Manual'
+          }
           placement="top"
           arrow
         >

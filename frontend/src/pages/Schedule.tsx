@@ -706,26 +706,26 @@ const Schedule: React.FC = () => {
             <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
               {(job.maintenance_status.includes('prune') ||
                 job.maintenance_status === 'maintenance_completed') && (
-                  <Chip
-                    label={job.maintenance_status.includes('prune_failed') ? 'Prune ✗' : 'Prune ✓'}
-                    size="small"
-                    color={job.maintenance_status.includes('prune_failed') ? 'error' : 'success'}
-                    variant="outlined"
-                    sx={{ height: 18, fontSize: '0.65rem' }}
-                  />
-                )}
+                <Chip
+                  label={job.maintenance_status.includes('prune_failed') ? 'Prune ✗' : 'Prune ✓'}
+                  size="small"
+                  color={job.maintenance_status.includes('prune_failed') ? 'error' : 'success'}
+                  variant="outlined"
+                  sx={{ height: 18, fontSize: '0.65rem' }}
+                />
+              )}
               {(job.maintenance_status.includes('compact') ||
                 job.maintenance_status === 'maintenance_completed') && (
-                  <Chip
-                    label={
-                      job.maintenance_status.includes('compact_failed') ? 'Compact ✗' : 'Compact ✓'
-                    }
-                    size="small"
-                    color={job.maintenance_status.includes('compact_failed') ? 'error' : 'success'}
-                    variant="outlined"
-                    sx={{ height: 18, fontSize: '0.65rem' }}
-                  />
-                )}
+                <Chip
+                  label={
+                    job.maintenance_status.includes('compact_failed') ? 'Compact ✗' : 'Compact ✓'
+                  }
+                  size="small"
+                  color={job.maintenance_status.includes('compact_failed') ? 'error' : 'success'}
+                  variant="outlined"
+                  sx={{ height: 18, fontSize: '0.65rem' }}
+                />
+              )}
             </Box>
           )}
         </>
@@ -755,7 +755,9 @@ const Schedule: React.FC = () => {
       align: 'left',
       render: (job) => (
         <>
-          <Typography variant="body2" color="text.secondary">{formatDate(job.started_at)}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            {formatDate(job.started_at)}
+          </Typography>
           <Typography variant="caption" color="text.secondary">
             {formatRelativeTime(job.started_at)}
           </Typography>
@@ -808,7 +810,7 @@ const Schedule: React.FC = () => {
     {
       icon: <AlertCircle size={16} />,
       label: 'Error',
-      onClick: () => { },
+      onClick: () => {},
       color: 'error',
       show: (job) => !!job.error_message,
       tooltip: (job) => job.error_message || 'Error',
@@ -1007,7 +1009,7 @@ const Schedule: React.FC = () => {
                           </Typography>
                           <Typography variant="body2" fontWeight={500}>
                             {job.progress_details?.compressed_size !== undefined &&
-                              job.progress_details?.compressed_size !== null
+                            job.progress_details?.compressed_size !== null
                               ? formatBytesUtil(job.progress_details.compressed_size)
                               : 'N/A'}
                           </Typography>
@@ -1018,7 +1020,7 @@ const Schedule: React.FC = () => {
                           </Typography>
                           <Typography variant="body2" fontWeight={500} color="success.main">
                             {job.progress_details?.deduplicated_size !== undefined &&
-                              job.progress_details?.deduplicated_size !== null
+                            job.progress_details?.deduplicated_size !== null
                               ? formatBytesUtil(job.progress_details.deduplicated_size)
                               : 'N/A'}
                           </Typography>
@@ -1871,13 +1873,16 @@ const Schedule: React.FC = () => {
       </Dialog>
 
       {/* Backup Job Logs Dialog */}
-      <Dialog open={Boolean(selectedBackupJob)} onClose={() => setSelectedBackupJob(null)} maxWidth="lg" fullWidth>
+      <Dialog
+        open={Boolean(selectedBackupJob)}
+        onClose={() => setSelectedBackupJob(null)}
+        maxWidth="lg"
+        fullWidth
+      >
         <DialogTitle>
           {selectedBackupJob && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Typography variant="h6">
-                Backup Logs - Job #{selectedBackupJob.id}
-              </Typography>
+              <Typography variant="h6">Backup Logs - Job #{selectedBackupJob.id}</Typography>
               <StatusBadge status={selectedBackupJob.status} />
             </Box>
           )}

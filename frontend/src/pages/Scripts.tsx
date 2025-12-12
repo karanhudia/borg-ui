@@ -385,7 +385,8 @@ export default function Scripts() {
             </FormControl>
 
             <Alert severity="info">
-              <strong>Note:</strong> The "Run On" condition only applies to Post-Backup hooks. Pre-backup scripts always run before the backup starts.
+              <strong>Note:</strong> The "Run On" condition only applies to Post-Backup hooks.
+              Pre-backup scripts always run before the backup starts.
             </Alert>
 
             <TextField
