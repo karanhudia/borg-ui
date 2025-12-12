@@ -15,23 +15,22 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Tooltip,
+  AlertCircle,
 } from '@mui/material'
 import {
   History,
   RefreshCw,
   Eye,
-  CheckCircle,
-  XCircle,
-  Clock,
-  PlayCircle,
   Info,
   Download,
-  AlertTriangle,
 } from 'lucide-react'
 import { activityAPI } from '../services/api'
 import { formatDate } from '../utils/dateUtils'
 import { TerminalLogViewer } from '../components/TerminalLogViewer'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
+import StatusBadge from '../components/StatusBadge'
+import RepositoryCell from '../components/RepositoryCell'
 
 interface ActivityItem {
   id: number
@@ -44,6 +43,9 @@ interface ActivityItem {
   log_file_path: string | null
   archive_name: string | null
   package_name: string | null
+  triggered_by?: string  // 'manual' or 'schedule'
+  schedule_id?: number | null
+  has_logs?: boolean
 }
 
 const Activity: React.FC = () => {
@@ -68,21 +70,6 @@ const Activity: React.FC = () => {
     },
   })
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <CheckCircle size={18} />
-      case 'completed_with_warnings':
-        return <AlertTriangle size={18} />
-      case 'failed':
-        return <XCircle size={18} />
-      case 'running':
-        return <PlayCircle size={18} />
-      default:
-        return <Clock size={18} />
-    }
-  }
-
   const getStatusColor = (
     status: string
   ): 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning' => {
@@ -97,23 +84,6 @@ const Activity: React.FC = () => {
         return 'info'
       default:
         return 'default'
-    }
-  }
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'completed_with_warnings':
-        return 'Completed with Warnings'
-      case 'completed':
-        return 'Completed'
-      case 'failed':
-        return 'Failed'
-      case 'running':
-        return 'Running'
-      case 'pending':
-        return 'Pending'
-      default:
-        return status.charAt(0).toUpperCase() + status.slice(1)
     }
   }
 
@@ -176,11 +146,38 @@ const Activity: React.FC = () => {
     activityAPI.downloadLogs(job.type, job.id)
   }
 
-  // Define columns for DataTable
+  // Define columns for DataTable (reordered: Status -> Job ID -> Type -> Repository -> Started -> Duration)
   const columns: Column<ActivityItem>[] = [
+    {
+      id: 'status',
+      label: 'Status',
+      align: 'left',
+      render: (activity) => (
+        <Tooltip
+          title={activity.triggered_by === 'schedule' ? `Triggered by: Schedule (ID: ${activity.schedule_id})` : 'Triggered by: Manual'}
+          placement="top"
+          arrow
+        >
+          <Box>
+            <StatusBadge status={activity.status} variant="outlined" />
+          </Box>
+        </Tooltip>
+      ),
+    },
+    {
+      id: 'id',
+      label: 'Job ID',
+      align: 'left',
+      render: (activity) => (
+        <Typography variant="body2" fontWeight={600} color="primary">
+          #{activity.id}
+        </Typography>
+      ),
+    },
     {
       id: 'type',
       label: 'Type',
+      align: 'left',
       render: (activity) => (
         <Chip
           label={getTypeLabel(activity.type)}
@@ -190,32 +187,20 @@ const Activity: React.FC = () => {
       ),
     },
     {
-      id: 'status',
-      label: 'Status',
-      render: (activity) => (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {getStatusIcon(activity.status)}
-          <Chip
-            label={getStatusLabel(activity.status)}
-            color={getStatusColor(activity.status)}
-            size="small"
-            variant="outlined"
-          />
-        </Box>
-      ),
-    },
-    {
       id: 'repository',
       label: 'Repository/Target',
-      render: (activity) => (
-        <Typography variant="body2">
-          {activity.repository || activity.package_name || activity.archive_name || '-'}
-        </Typography>
-      ),
+      align: 'left',
+      minWidth: '250px',
+      render: (activity) => {
+        const repoName = activity.repository || activity.package_name || activity.archive_name
+        if (!repoName) return <Typography variant="body2">-</Typography>
+        return <RepositoryCell repositoryName={repoName} withIcon={false} />
+      },
     },
     {
       id: 'started_at',
       label: 'Started',
+      align: 'left',
       render: (activity) => (
         <Typography variant="body2">
           {activity.started_at ? formatDate(activity.started_at) : '-'}
@@ -225,6 +210,7 @@ const Activity: React.FC = () => {
     {
       id: 'duration',
       label: 'Duration',
+      align: 'left',
       render: (activity) => (
         <Typography variant="body2">
           {getDuration(activity.started_at, activity.completed_at)}
@@ -233,23 +219,45 @@ const Activity: React.FC = () => {
     },
   ]
 
-  // Define actions for DataTable
-  const actions: ActionButton<ActivityItem>[] = [
-    {
-      icon: <Eye size={18} />,
-      label: 'View Logs',
-      onClick: handleViewLogs,
-      color: 'primary',
-      tooltip: 'View Logs',
-    },
-    {
-      icon: <Download size={18} />,
-      label: 'Download Logs',
-      onClick: handleDownloadLogs,
-      color: 'info',
-      tooltip: 'Download Logs',
-    },
-  ]
+  // Define actions for DataTable (contextual based on state)
+  const getActions = (item: ActivityItem): ActionButton<ActivityItem>[] => {
+    const itemActions: ActionButton<ActivityItem>[] = [
+      {
+        icon: <Eye size={18} />,
+        label: 'View Logs',
+        onClick: handleViewLogs,
+        color: 'primary',
+        tooltip: 'View Logs',
+      },
+    ]
+
+    // Only show download if logs are available
+    if (item.has_logs) {
+      itemActions.push({
+        icon: <Download size={18} />,
+        label: 'Download Logs',
+        onClick: handleDownloadLogs,
+        color: 'info',
+        tooltip: 'Download Logs',
+      })
+    }
+
+    // Show error details if job failed
+    if (item.status === 'failed' && item.error_message) {
+      itemActions.push({
+        icon: <AlertCircle size={18} />,
+        label: 'Error Details',
+        onClick: (job) => {
+          // For now, error is shown in logs
+          handleViewLogs(job)
+        },
+        color: 'error',
+        tooltip: item.error_message,
+      })
+    }
+
+    return itemActions
+  }
 
   return (
     <Box>
@@ -305,7 +313,7 @@ const Activity: React.FC = () => {
       <DataTable
         data={activities || []}
         columns={columns}
-        actions={actions}
+        getRowActions={getActions}
         getRowKey={(activity) => `${activity.type}-${activity.id}`}
         loading={isLoading}
         emptyState={{
@@ -323,11 +331,7 @@ const Activity: React.FC = () => {
               <Typography variant="h6">
                 {getTypeLabel(selectedJob.type)} Logs - Job #{selectedJob.id}
               </Typography>
-              <Chip
-                label={selectedJob.status}
-                color={getStatusColor(selectedJob.status)}
-                size="small"
-              />
+              <StatusBadge status={selectedJob.status} />
             </Box>
           )}
         </DialogTitle>
