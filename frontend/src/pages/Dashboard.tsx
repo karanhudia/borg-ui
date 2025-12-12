@@ -106,7 +106,7 @@ export default function Dashboard() {
 
   const handleDownloadLogs = (job: BackupJob) => {
     // Use activity API for downloading logs
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('access_token')
     if (!token) {
       toast.error('Authentication required')
       return
@@ -467,7 +467,7 @@ export default function Dashboard() {
                   `/api/activity/backup/${selectedJob.id}/logs?offset=${offset}&limit=500`,
                   {
                     headers: {
-                      Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+                      Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
                     },
                   }
                 )
