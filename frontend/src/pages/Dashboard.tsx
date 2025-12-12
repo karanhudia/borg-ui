@@ -16,10 +16,10 @@ import {
   Cpu,
   Clock,
   CheckCircle,
-  RefreshCw,
   Eye,
   Download,
   AlertCircle,
+  HardDrive,
 } from 'lucide-react'
 import { formatDate, formatTimeRange } from '../utils/dateUtils'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
@@ -89,43 +89,32 @@ export default function Dashboard() {
     console.log('Download logs for job:', job.id)
   }
 
-  // Get actions for a job (contextual based on status)
-  const getJobActions = (job: BackupJob): ActionButton<BackupJob>[] => {
-    const actions: ActionButton<BackupJob>[] = []
-
-    // View logs always available
-    actions.push({
+  // Define actions for Dashboard jobs (with conditional show/disable based on job state)
+  const jobActions: ActionButton<BackupJob>[] = [
+    {
       icon: <Eye size={18} />,
       label: 'View Logs',
       onClick: handleViewLogs,
       color: 'primary',
       tooltip: 'View Logs',
-    })
-
-    // Download only if logs available
-    if (job.has_logs) {
-      actions.push({
-        icon: <Download size={18} />,
-        label: 'Download Logs',
-        onClick: handleDownloadLogs,
-        color: 'info',
-        tooltip: 'Download Logs',
-      })
-    }
-
-    // Error details if failed
-    if (job.status === 'failed' && job.error_message) {
-      actions.push({
-        icon: <AlertCircle size={18} />,
-        label: 'Error',
-        onClick: handleViewLogs,
-        color: 'error',
-        tooltip: job.error_message,
-      })
-    }
-
-    return actions
-  }
+    },
+    {
+      icon: <Download size={18} />,
+      label: 'Download Logs',
+      onClick: handleDownloadLogs,
+      color: 'info',
+      tooltip: 'Download Logs',
+      show: (job) => job.has_logs === true,
+    },
+    {
+      icon: <AlertCircle size={18} />,
+      label: 'Error',
+      onClick: handleViewLogs,
+      color: 'error',
+      tooltip: (job) => job.error_message || 'Error',
+      show: (job) => job.status === 'failed' && !!job.error_message,
+    },
+  ]
 
   // Define columns for Recent Jobs table (reordered: Status → Job ID → Repository → Started → Duration)
   const jobColumns: Column<BackupJob>[] = [
@@ -400,7 +389,7 @@ export default function Dashboard() {
             <DataTable<BackupJob>
               data={status.data.recent_jobs}
               columns={jobColumns}
-              getRowActions={getJobActions}
+              actions={jobActions}
               getRowKey={(job) => String(job.id)}
               headerBgColor="background.default"
               enableHover={true}
