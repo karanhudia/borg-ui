@@ -33,6 +33,8 @@ import {
   Info,
   Unlock,
   RefreshCw,
+  Download,
+  AlertCircle,
 } from 'lucide-react'
 import { backupAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
