@@ -8,18 +8,20 @@ Enables reusable scripts, chaining, and better script management.
 Fixes issues #85 and #88.
 """
 
+from sqlalchemy import text
+
 def upgrade(db):
     """Create script library tables"""
     print("Running migration 027: Add Script Library System")
 
     try:
         # Check if tables already exist
-        cursor = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('scripts', 'repository_scripts', 'script_executions')")
+        cursor = db.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('scripts', 'repository_scripts', 'script_executions')"))
         existing_tables = [row[0] for row in cursor.fetchall()]
 
         if 'scripts' not in existing_tables:
             print("Creating scripts table...")
-            db.execute("""
+            db.execute(text("""
                 CREATE TABLE scripts (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name VARCHAR(255) NOT NULL UNIQUE,
@@ -41,16 +43,16 @@ def upgrade(db):
                     usage_count INTEGER NOT NULL DEFAULT 0,
                     last_used_at TIMESTAMP
                 )
-            """)
-            db.execute("CREATE INDEX ix_scripts_name ON scripts(name)")
-            db.execute("CREATE INDEX ix_scripts_category ON scripts(category)")
+            """))
+            db.execute(text("CREATE INDEX ix_scripts_name ON scripts(name)"))
+            db.execute(text("CREATE INDEX ix_scripts_category ON scripts(category)"))
             print("✓ Created scripts table")
         else:
             print("✓ Table scripts already exists, skipping")
 
         if 'repository_scripts' not in existing_tables:
             print("Creating repository_scripts junction table...")
-            db.execute("""
+            db.execute(text("""
                 CREATE TABLE repository_scripts (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     repository_id INTEGER NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
@@ -67,17 +69,17 @@ def upgrade(db):
 
                     UNIQUE(repository_id, script_id, hook_type)
                 )
-            """)
-            db.execute("CREATE INDEX ix_repository_scripts_repository_id ON repository_scripts(repository_id)")
-            db.execute("CREATE INDEX ix_repository_scripts_script_id ON repository_scripts(script_id)")
-            db.execute("CREATE INDEX ix_repository_scripts_hook_type ON repository_scripts(hook_type)")
+            """))
+            db.execute(text("CREATE INDEX ix_repository_scripts_repository_id ON repository_scripts(repository_id)"))
+            db.execute(text("CREATE INDEX ix_repository_scripts_script_id ON repository_scripts(script_id)"))
+            db.execute(text("CREATE INDEX ix_repository_scripts_hook_type ON repository_scripts(hook_type)"))
             print("✓ Created repository_scripts table")
         else:
             print("✓ Table repository_scripts already exists, skipping")
 
         if 'script_executions' not in existing_tables:
             print("Creating script_executions table...")
-            db.execute("""
+            db.execute(text("""
                 CREATE TABLE script_executions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     script_id INTEGER NOT NULL REFERENCES scripts(id),
@@ -100,11 +102,11 @@ def upgrade(db):
 
                     UNIQUE(script_id, backup_job_id, hook_type)
                 )
-            """)
-            db.execute("CREATE INDEX ix_script_executions_script_id ON script_executions(script_id)")
-            db.execute("CREATE INDEX ix_script_executions_repository_id ON script_executions(repository_id)")
-            db.execute("CREATE INDEX ix_script_executions_backup_job_id ON script_executions(backup_job_id)")
-            db.execute("CREATE INDEX ix_script_executions_status ON script_executions(status)")
+            """))
+            db.execute(text("CREATE INDEX ix_script_executions_script_id ON script_executions(script_id)"))
+            db.execute(text("CREATE INDEX ix_script_executions_repository_id ON script_executions(repository_id)"))
+            db.execute(text("CREATE INDEX ix_script_executions_backup_job_id ON script_executions(backup_job_id)"))
+            db.execute(text("CREATE INDEX ix_script_executions_status ON script_executions(status)"))
             print("✓ Created script_executions table")
         else:
             print("✓ Table script_executions already exists, skipping")
@@ -123,13 +125,13 @@ def downgrade(db):
 
     try:
         # Drop tables in reverse order (respecting foreign keys)
-        db.execute("DROP TABLE IF EXISTS script_executions")
+        db.execute(text("DROP TABLE IF EXISTS script_executions"))
         print("✓ Dropped script_executions table")
 
-        db.execute("DROP TABLE IF EXISTS repository_scripts")
+        db.execute(text("DROP TABLE IF EXISTS repository_scripts"))
         print("✓ Dropped repository_scripts table")
 
-        db.execute("DROP TABLE IF EXISTS scripts")
+        db.execute(text("DROP TABLE IF EXISTS scripts"))
         print("✓ Dropped scripts table")
 
         db.commit()
