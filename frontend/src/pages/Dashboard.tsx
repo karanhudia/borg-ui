@@ -10,22 +10,17 @@ import {
   CircularProgress,
   Stack,
   LinearProgress,
-  Tooltip,
 } from '@mui/material'
 import {
   Activity,
   MemoryStick,
   Cpu,
   Clock,
-  Eye,
-  Download,
   CheckCircle,
   HardDrive,
 } from 'lucide-react'
-import { formatDate, formatTimeRange } from '../utils/dateUtils'
-import DataTable, { Column, ActionButton } from '../components/DataTable'
+import BackupJobsTable from '../components/BackupJobsTable'
 import StatusBadge from '../components/StatusBadge'
-import RepositoryCell from '../components/RepositoryCell'
 import { TerminalLogViewer } from '../components/TerminalLogViewer'
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material'
 
@@ -115,95 +110,6 @@ export default function Dashboard() {
     document.body.removeChild(a)
     toast.success('Downloading logs...')
   }
-
-  // Define actions for Dashboard jobs (with conditional show/disable based on job state)
-  const jobActions: ActionButton<BackupJob>[] = [
-    {
-      icon: <Eye size={18} />,
-      label: 'View Logs',
-      onClick: handleViewLogs,
-      color: 'primary',
-      tooltip: 'View Logs',
-    },
-    {
-      icon: <Download size={18} />,
-      label: 'Download Logs',
-      onClick: handleDownloadLogs,
-      color: 'info',
-      tooltip: 'Download Logs',
-      show: (job) => job.has_logs === true,
-    },
-  ]
-
-  // Define columns for Recent Jobs table (ordered: Job ID → Repository → Status → Started → Duration)
-  const jobColumns: Column<BackupJob>[] = [
-    {
-      id: 'id',
-      label: 'Job ID',
-      align: 'left',
-      render: (job) => (
-        <Typography variant="body2" fontWeight={600} color="primary">
-          #{job.id}
-        </Typography>
-      ),
-    },
-    {
-      id: 'repository',
-      label: 'Repository',
-      align: 'left',
-      minWidth: '250px',
-      render: (job) => {
-        const repos = repositoriesData?.data?.repositories || []
-        const repo = repos.find((r: any) => r.path === job.repository)
-        return (
-          <RepositoryCell
-            repositoryName={repo?.name || job.repository}
-            repositoryPath={job.repository}
-          />
-        )
-      },
-    },
-    {
-      id: 'status',
-      label: 'Status',
-      align: 'left',
-      render: (job) => (
-        <Tooltip
-          title={
-            job.triggered_by === 'schedule'
-              ? `Triggered by: Schedule (ID: ${job.schedule_id})`
-              : 'Triggered by: Manual'
-          }
-          placement="top"
-          arrow
-        >
-          <span>
-            <StatusBadge status={job.status} />
-          </span>
-        </Tooltip>
-      ),
-    },
-    {
-      id: 'started_at',
-      label: 'Started',
-      align: 'left',
-      render: (job) => (
-        <Typography variant="body2" color="text.secondary">
-          {job.started_at ? formatDate(job.started_at) : 'N/A'}
-        </Typography>
-      ),
-    },
-    {
-      id: 'duration',
-      label: 'Duration',
-      align: 'left',
-      render: (job) => (
-        <Typography variant="body2" color="text.secondary">
-          {formatTimeRange(job.started_at, job.completed_at, job.status)}
-        </Typography>
-      ),
-    },
-  ]
 
   return (
     <Box>
@@ -418,14 +324,19 @@ export default function Dashboard() {
               Latest backup operations across all repositories
             </Typography>
 
-            <DataTable<BackupJob>
-              data={status.data.recent_jobs}
-              columns={jobColumns}
-              actions={jobActions}
+            <BackupJobsTable
+              jobs={status.data.recent_jobs}
+              repositories={repositoriesData?.data?.repositories || []}
+              loading={isLoading}
+              actions={{
+                viewLogs: true,
+                downloadLogs: true,
+              }}
+              onViewLogs={handleViewLogs}
+              onDownloadLogs={handleDownloadLogs}
               getRowKey={(job) => String(job.id)}
               headerBgColor="background.default"
               enableHover={true}
-              enablePointer={false}
               emptyState={{
                 icon: (
                   <Box sx={{ color: 'text.disabled' }}>

@@ -21,7 +21,6 @@ import {
   Paper,
   Alert,
   Divider,
-  Tooltip,
   alpha,
   Dialog,
   DialogTitle,
@@ -35,24 +34,19 @@ import {
   Folder,
   Database,
   Info,
-  Unlock,
   RefreshCw,
-  Download,
   AlertCircle,
-  Eye,
 } from 'lucide-react'
 import { backupAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import {
-  formatDate,
   formatTimeRange,
   formatBytes as formatBytesUtil,
   formatDurationSeconds,
 } from '../utils/dateUtils'
 import LockErrorDialog from '../components/LockErrorDialog'
-import DataTable, { Column, ActionButton } from '../components/DataTable'
+import BackupJobsTable from '../components/BackupJobsTable'
 import StatusBadge from '../components/StatusBadge'
-import RepositoryCell from '../components/RepositoryCell'
 import { TerminalLogViewer } from '../components/TerminalLogViewer'
 
 interface BackupJob {
@@ -212,139 +206,30 @@ const Backup: React.FC = () => {
     return `borg create ${remotePathFlag}--progress --stats --compression ${compression} ${excludeArgs}${customFlags}${repositoryPath}::${archiveName} ${sourceDirs}`
   }
 
-  // Get repository name from path
-  const getRepositoryName = (path: string) => {
-    const repo = repositoriesData?.data?.repositories?.find((r: any) => r.path === path)
-    return repo?.name || path
-  }
-
   const runningJobs =
     backupStatus?.data?.jobs?.filter((job: BackupJob) => job.status === 'running') || []
   const recentJobs = backupStatus?.data?.jobs?.slice(0, 10) || []
 
-  // Define columns for Recent Jobs table (ordered: Job ID → Repository → Status → Started → Duration)
-  const jobColumns: Column<BackupJob>[] = [
-    {
-      id: 'id',
-      label: 'Job ID',
-      align: 'left',
-      render: (job) => (
-        <Typography variant="body2" fontWeight={600} color="primary">
-          #{job.id}
-        </Typography>
-      ),
-    },
-    {
-      id: 'repository',
-      label: 'Repository',
-      align: 'left',
-      minWidth: '250px',
-      render: (job) => (
-        <RepositoryCell
-          repositoryName={getRepositoryName(job.repository)}
-          repositoryPath={job.repository}
-        />
-      ),
-    },
-    {
-      id: 'status',
-      label: 'Status',
-      align: 'left',
-      render: (job) => (
-        <Tooltip
-          title={
-            job.triggered_by === 'schedule'
-              ? `Triggered by: Schedule (ID: ${job.schedule_id})`
-              : 'Triggered by: Manual'
-          }
-          placement="top"
-          arrow
-        >
-          <span>
-            <StatusBadge status={job.status} />
-          </span>
-        </Tooltip>
-      ),
-    },
-    {
-      id: 'started_at',
-      label: 'Started',
-      align: 'left',
-      render: (job) => (
-        <Typography variant="body2" color="text.secondary">
-          {formatDate(job.started_at)}
-        </Typography>
-      ),
-    },
-    {
-      id: 'duration',
-      label: 'Duration',
-      align: 'left',
-      render: (job) => (
-        <Typography variant="body2" color="text.secondary">
-          {formatTimeRange(job.started_at, job.completed_at, job.status)}
-        </Typography>
-      ),
-    },
-  ]
+  // Handle break lock action
+  const handleBreakLock = async (job: BackupJob) => {
+    const repoPath = job.error_message?.match(/LOCK_ERROR::(.+)/)?.[1].split('\n')[0]
+    const repo = repositoriesData?.data?.repositories?.find((r: any) => r.path === repoPath)
+    if (!repo) return
 
-  // Define action buttons for Recent Jobs table
-  const jobActions: ActionButton<BackupJob>[] = [
-    {
-      icon: <Eye size={16} />,
-      label: 'View Logs',
-      color: 'primary',
-      onClick: (job) => handleViewLogs(job),
-      tooltip: 'View logs',
-    },
-    {
-      icon: <Unlock size={16} />,
-      label: 'Break Lock',
-      color: 'warning',
-      show: (job) => {
-        if (job.status !== 'failed' || !job.error_message?.includes('LOCK_ERROR::')) return false
-        const repoPath = job.error_message.match(/LOCK_ERROR::(.+)/)?.[1].split('\n')[0]
-        const repo = repositoriesData?.data?.repositories?.find((r: any) => r.path === repoPath)
-        return !!repo
-      },
-      onClick: async (job) => {
-        const repoPath = job.error_message?.match(/LOCK_ERROR::(.+)/)?.[1].split('\n')[0]
-        const repo = repositoriesData?.data?.repositories?.find((r: any) => r.path === repoPath)
-        if (!repo) return
-
-        if (
-          window.confirm(
-            'Are you CERTAIN no backup is currently running on this repository? Breaking the lock while a backup is running can corrupt your repository!'
-          )
-        ) {
-          try {
-            await repositoriesAPI.breakLock(repo.id)
-            toast.success('Lock removed successfully! You can now start a new backup.')
-            queryClient.invalidateQueries({ queryKey: ['backup-status'] })
-          } catch (error: any) {
-            toast.error(error.response?.data?.detail || 'Failed to break lock')
-          }
-        }
-      },
-      tooltip: 'Break stale repository lock',
-    },
-    {
-      icon: <Download size={16} />,
-      label: 'Download Logs',
-      color: 'info',
-      show: (job) => job.has_logs === true && job.status !== 'running',
-      onClick: (job) => handleDownloadLogs(job.id),
-      tooltip: 'Download logs',
-    },
-    {
-      icon: <Square size={14} />,
-      label: 'Cancel',
-      color: 'error',
-      show: (job) => job.status === 'running',
-      onClick: (job) => handleCancelBackup(job.id),
-      tooltip: 'Cancel backup',
-    },
-  ]
+    if (
+      window.confirm(
+        'Are you CERTAIN no backup is currently running on this repository? Breaking the lock while a backup is running can corrupt your repository!'
+      )
+    ) {
+      try {
+        await repositoriesAPI.breakLock(repo.id)
+        toast.success('Lock removed successfully! You can now start a new backup.')
+        queryClient.invalidateQueries({ queryKey: ['backup-status'] })
+      } catch (error: any) {
+        toast.error(error.response?.data?.detail || 'Failed to break lock')
+      }
+    }
+  }
 
   return (
     <Box>
@@ -880,15 +765,23 @@ const Backup: React.FC = () => {
             History of backup operations
           </Typography>
 
-          <DataTable<BackupJob>
-            data={recentJobs}
-            columns={jobColumns}
-            actions={jobActions}
+          <BackupJobsTable
+            jobs={recentJobs}
+            repositories={repositoriesData?.data?.repositories || []}
+            loading={loadingStatus}
+            actions={{
+              viewLogs: true,
+              cancel: true,
+              breakLock: true,
+              downloadLogs: true,
+            }}
+            onViewLogs={handleViewLogs}
+            onCancelJob={handleCancelBackup}
+            onBreakLock={handleBreakLock}
+            onDownloadLogs={handleDownloadLogs}
             getRowKey={(job) => job.id}
             headerBgColor="background.default"
             enableHover={true}
-            enablePointer={false}
-            loading={loadingStatus}
             emptyState={{
               icon: (
                 <Box sx={{ color: 'text.disabled' }}>

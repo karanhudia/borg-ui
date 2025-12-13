@@ -4,7 +4,6 @@ import {
   Box,
   Card,
   Typography,
-  Chip,
   IconButton,
   Dialog,
   DialogTitle,
@@ -15,15 +14,12 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Tooltip,
 } from '@mui/material'
-import { History, RefreshCw, Eye, Info, Download } from 'lucide-react'
+import { History, RefreshCw, Info } from 'lucide-react'
 import { activityAPI } from '../services/api'
-import { formatDate } from '../utils/dateUtils'
+import BackupJobsTable from '../components/BackupJobsTable'
 import { TerminalLogViewer } from '../components/TerminalLogViewer'
-import DataTable, { Column, ActionButton } from '../components/DataTable'
 import StatusBadge from '../components/StatusBadge'
-import RepositoryCell from '../components/RepositoryCell'
 
 interface ActivityItem {
   id: number
@@ -64,7 +60,7 @@ const Activity: React.FC = () => {
     },
   })
 
-  const getTypeLabel = (type: string) => {
+  const getTypeLabel = (type: string): string => {
     switch (type) {
       case 'backup':
         return 'Backup'
@@ -81,36 +77,6 @@ const Activity: React.FC = () => {
     }
   }
 
-  const getTypeColor = (
-    type: string
-  ): 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning' => {
-    switch (type) {
-      case 'backup':
-        return 'primary'
-      case 'restore':
-        return 'secondary'
-      case 'check':
-        return 'info'
-      case 'compact':
-        return 'warning'
-      case 'package':
-        return 'success'
-      default:
-        return 'default'
-    }
-  }
-
-  const getDuration = (started: string | null, completed: string | null) => {
-    if (!started) return '-'
-    const start = new Date(started).getTime()
-    const end = completed ? new Date(completed).getTime() : Date.now()
-    const duration = Math.floor((end - start) / 1000)
-
-    if (duration < 60) return `${duration}s`
-    if (duration < 3600) return `${Math.floor(duration / 60)}m ${duration % 60}s`
-    return `${Math.floor(duration / 3600)}h ${Math.floor((duration % 3600) / 60)}m`
-  }
-
   const handleViewLogs = (job: ActivityItem) => {
     setSelectedJob(job)
   }
@@ -122,128 +88,6 @@ const Activity: React.FC = () => {
   const handleDownloadLogs = (job: ActivityItem) => {
     activityAPI.downloadLogs(job.type, job.id)
   }
-
-  // Define columns for DataTable (ordered: Job ID -> Repository -> Type -> Status -> Started -> Duration)
-  const columns: Column<ActivityItem>[] = [
-    {
-      id: 'id',
-      label: 'Job ID',
-      align: 'left',
-      render: (activity) => (
-        <Typography variant="body2" fontWeight={600} color="primary">
-          #{activity.id}
-        </Typography>
-      ),
-    },
-    {
-      id: 'repository',
-      label: 'Repository/Target',
-      align: 'left',
-      minWidth: '250px',
-      render: (activity) => {
-        // For repository jobs (backup, restore, check, compact)
-        if (
-          activity.type === 'backup' ||
-          activity.type === 'restore' ||
-          activity.type === 'check' ||
-          activity.type === 'compact'
-        ) {
-          // Use repository_path if available, otherwise use repository name as fallback
-          if (activity.repository_path) {
-            return (
-              <RepositoryCell
-                repositoryName={activity.repository || activity.repository_path}
-                repositoryPath={activity.repository_path}
-                withIcon={false}
-              />
-            )
-          } else if (activity.repository) {
-            // If repo was deleted but we still have the name, show it
-            return (
-              <Typography variant="body2" color="text.secondary">
-                {activity.repository}
-              </Typography>
-            )
-          }
-        }
-
-        // Fallback for non-repository jobs (package, etc.) or when nothing available
-        const displayName = activity.archive_name || activity.package_name || '-'
-        return <Typography variant="body2">{displayName}</Typography>
-      },
-    },
-    {
-      id: 'type',
-      label: 'Type',
-      align: 'left',
-      render: (activity) => (
-        <Chip
-          label={getTypeLabel(activity.type)}
-          color={getTypeColor(activity.type)}
-          size="small"
-        />
-      ),
-    },
-    {
-      id: 'status',
-      label: 'Status',
-      align: 'left',
-      render: (activity) => (
-        <Tooltip
-          title={
-            activity.triggered_by === 'schedule'
-              ? `Triggered by: Schedule (ID: ${activity.schedule_id})`
-              : 'Triggered by: Manual'
-          }
-          placement="top"
-          arrow
-        >
-          <span>
-            <StatusBadge status={activity.status} />
-          </span>
-        </Tooltip>
-      ),
-    },
-    {
-      id: 'started_at',
-      label: 'Started',
-      align: 'left',
-      render: (activity) => (
-        <Typography variant="body2" color="text.secondary">
-          {activity.started_at ? formatDate(activity.started_at) : '-'}
-        </Typography>
-      ),
-    },
-    {
-      id: 'duration',
-      label: 'Duration',
-      align: 'left',
-      render: (activity) => (
-        <Typography variant="body2" color="text.secondary">
-          {getDuration(activity.started_at, activity.completed_at)}
-        </Typography>
-      ),
-    },
-  ]
-
-  // Define actions for DataTable (with conditional show/disable based on row state)
-  const actions: ActionButton<ActivityItem>[] = [
-    {
-      icon: <Eye size={18} />,
-      label: 'View Logs',
-      onClick: handleViewLogs,
-      color: 'primary',
-      tooltip: 'View Logs',
-    },
-    {
-      icon: <Download size={18} />,
-      label: 'Download Logs',
-      onClick: handleDownloadLogs,
-      color: 'info',
-      tooltip: 'Download Logs',
-      show: (item) => item.has_logs === true,
-    },
-  ]
 
   return (
     <Box>
@@ -295,13 +139,18 @@ const Activity: React.FC = () => {
         </Box>
       </Card>
 
-      {/* Activity List using DataTable */}
-      <DataTable
-        data={activities || []}
-        columns={columns}
-        actions={actions}
-        getRowKey={(activity) => `${activity.type}-${activity.id}`}
+      {/* Activity List using BackupJobsTable */}
+      <BackupJobsTable
+        jobs={activities || []}
+        showTypeColumn={true}
         loading={isLoading}
+        actions={{
+          viewLogs: true,
+          downloadLogs: true,
+        }}
+        onViewLogs={handleViewLogs}
+        onDownloadLogs={handleDownloadLogs}
+        getRowKey={(activity) => `${activity.type}-${activity.id}`}
         headerBgColor="background.default"
         enableHover={true}
         emptyState={{
