@@ -1,6 +1,7 @@
 import asyncio
 import os
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 import structlog
@@ -896,6 +897,7 @@ class BackupService:
                                     levelname = json_msg.get('levelname', '')
                                     message = json_msg.get('message', '')
                                     msgid = json_msg.get('msgid', '')
+
                                     if levelname in ['ERROR', 'CRITICAL'] and msgid:
                                         # Store error msgid for later use
                                         if job_id not in self.error_msgids:
@@ -909,6 +911,19 @@ class BackupService:
                                                    job_id=job_id,
                                                    msgid=msgid,
                                                    message=message)
+
+                                    # Also capture exit code from warning messages (e.g., "terminating with warning status, rc 105")
+                                    if levelname == 'WARNING' and 'rc ' in message:
+                                        rc_match = re.search(r'rc\s+(\d+)', message)
+                                        if rc_match:
+                                            captured_rc = int(rc_match.group(1))
+                                            # Store as a pseudo-returncode in job for later status determination
+                                            # This will be used if process.returncode is not set correctly
+                                            job.exit_code = captured_rc
+                                            logger.info("Captured exit code from log message",
+                                                       job_id=job_id,
+                                                       exit_code=captured_rc,
+                                                       message=message)
 
                         except (json.JSONDecodeError, ValueError):
                             # Not a JSON line, just regular log output - ignore
@@ -945,13 +960,24 @@ class BackupService:
             if process.returncode is None:
                 await process.wait()
 
+            # Use the actual exit code from the process, or fall back to captured code from logs
+            # This handles cases where borg sends the exit code in log messages but process.returncode is 0
+            actual_returncode = process.returncode
+            if actual_returncode == 0 and job.exit_code is not None and job.exit_code != 0:
+                # Process exited with 0 but logs indicated a different code (e.g., 105 for warnings)
+                logger.info("Using exit code from log messages instead of process return code",
+                           job_id=job_id,
+                           process_returncode=actual_returncode,
+                           captured_exit_code=job.exit_code)
+                actual_returncode = job.exit_code
+
             # Update job status using modern exit codes (if not already cancelled)
             # 0 = success, 1 = warning (legacy), 2 = error (legacy)
             # Modern: 0 = success, 3-99 = errors, 100-127 = warnings
             if job.status == "cancelled":
                 logger.info("Backup job was cancelled", job_id=job_id)
                 job.completed_at = datetime.utcnow()
-            elif process.returncode == 0:
+            elif actual_returncode == 0:
                 job.status = "completed"
                 job.progress = 100
                 # Update archive statistics with final deduplicated size
@@ -1011,12 +1037,12 @@ class BackupService:
                         )
                     except Exception as e:
                         logger.warning("Failed to send backup success notification", error=str(e))
-            elif 100 <= process.returncode <= 127:
+            elif 100 <= actual_returncode <= 127:
                 # Warning (modern exit code system)
                 job.status = "completed_with_warnings"
                 job.progress = 100
-                job.error_message = f"Backup completed with warning (exit code {process.returncode})"
-                logger.warning("Backup completed with warning", job_id=job_id, exit_code=process.returncode)
+                job.error_message = f"Backup completed with warning (exit code {actual_returncode})"
+                logger.warning("Backup completed with warning", job_id=job_id, exit_code=actual_returncode)
                 # Update archive statistics with final deduplicated size
                 await self._update_archive_stats(db, job_id, repository, archive_name, env)
                 # Update repository statistics even with warnings
@@ -1096,7 +1122,7 @@ class BackupService:
                     formatted_error = format_error_message(
                         msgid=primary_error['msgid'],
                         original_message=primary_error['message'],
-                        exit_code=process.returncode
+                        exit_code=actual_returncode
                     )
                     error_parts.append(formatted_error)
 
@@ -1106,7 +1132,7 @@ class BackupService:
                 else:
                     # Fallback to simple exit code message
                     error_parts.append(format_error_message(
-                        exit_code=process.returncode
+                        exit_code=actual_returncode
                     ))
 
                 job.error_message = "\n".join(error_parts)
@@ -1153,7 +1179,7 @@ class BackupService:
 
             # CONDITIONAL LOG SAVING: Only save logs on failure/cancellation for debugging
             # Always save hook logs if present
-            if job.status in ['failed', 'cancelled'] or process.returncode not in [0, None]:
+            if job.status in ['failed', 'cancelled'] or actual_returncode not in [0, None]:
                 # Save log buffer to file for debugging
                 log_file = self.log_dir / f"backup_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
                 try:
