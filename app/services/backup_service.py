@@ -704,6 +704,10 @@ class BackupService:
             # Flag to track cancellation
             cancelled = False
 
+            # Track captured exit code from log messages (e.g., rc 105)
+            # This is used if process.returncode is 0 but borg actually exited with a warning code
+            captured_exit_code = None
+
             # Performance optimization: Batch database commits
             last_commit_time = asyncio.get_event_loop().time()
             COMMIT_INTERVAL = 3.0  # Commit every 3 seconds for performance
@@ -743,7 +747,7 @@ class BackupService:
 
             async def stream_logs():
                 """Stream log output from process and parse JSON progress"""
-                nonlocal cancelled, last_commit_time, last_shown_file, speed_tracking
+                nonlocal cancelled, last_commit_time, last_shown_file, speed_tracking, captured_exit_code
                 try:
                     async for line in process.stdout:
                         if cancelled:
@@ -917,9 +921,9 @@ class BackupService:
                                         rc_match = re.search(r'rc\s+(\d+)', message)
                                         if rc_match:
                                             captured_rc = int(rc_match.group(1))
-                                            # Store as a pseudo-returncode in job for later status determination
-                                            # This will be used if process.returncode is not set correctly
-                                            job.exit_code = captured_rc
+                                            # Store captured exit code for later status determination
+                                            # This will be used if process.returncode is 0 but borg actually exited with a warning
+                                            captured_exit_code = captured_rc
                                             logger.info("Captured exit code from log message",
                                                        job_id=job_id,
                                                        exit_code=captured_rc,
@@ -963,13 +967,13 @@ class BackupService:
             # Use the actual exit code from the process, or fall back to captured code from logs
             # This handles cases where borg sends the exit code in log messages but process.returncode is 0
             actual_returncode = process.returncode
-            if actual_returncode == 0 and job.exit_code is not None and job.exit_code != 0:
+            if actual_returncode == 0 and captured_exit_code is not None and captured_exit_code != 0:
                 # Process exited with 0 but logs indicated a different code (e.g., 105 for warnings)
                 logger.info("Using exit code from log messages instead of process return code",
                            job_id=job_id,
                            process_returncode=actual_returncode,
-                           captured_exit_code=job.exit_code)
-                actual_returncode = job.exit_code
+                           captured_exit_code=captured_exit_code)
+                actual_returncode = captured_exit_code
 
             # Update job status using modern exit codes (if not already cancelled)
             # 0 = success, 1 = warning (legacy), 2 = error (legacy)
