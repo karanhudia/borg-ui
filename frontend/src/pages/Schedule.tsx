@@ -40,9 +40,7 @@ import {
   AlertCircle,
   Calendar,
   RefreshCw,
-  Download,
   X,
-  Eye,
 } from 'lucide-react'
 import { scheduleAPI, repositoriesAPI, backupAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
@@ -50,16 +48,16 @@ import RepositoryCell from '../components/RepositoryCell'
 import {
   formatDate,
   formatRelativeTime,
-  formatTimeRange,
   formatBytes as formatBytesUtil,
   formatDurationSeconds,
   convertCronToUTC,
   convertCronToLocal,
 } from '../utils/dateUtils'
-import DataTable, { Column, ActionButton } from '../components/DataTable'
+import BackupJobsTable from '../components/BackupJobsTable'
 import StatusBadge from '../components/StatusBadge'
 import { TerminalLogViewer } from '../components/TerminalLogViewer'
 import ScheduledChecksSection from '../components/ScheduledChecksSection'
+import DataTable, { Column, ActionButton } from '../components/DataTable'
 
 interface ScheduledJob {
   id: number
@@ -681,141 +679,20 @@ const Schedule: React.FC = () => {
     },
   ]
 
-  // Backup History Table Column Definitions
-  const backupHistoryColumns: Column<BackupJob>[] = [
-    {
-      id: 'id',
-      label: 'Job ID',
-      align: 'left',
-      render: (job) => (
-        <Typography variant="body2" fontWeight={600} color="primary">
-          #{job.id}
-        </Typography>
-      ),
-    },
-    {
-      id: 'repository',
-      label: 'Repository',
-      render: (job) => (
-        <>
-          <RepositoryCell
-            repositoryName={getRepositoryName(job.repository)}
-            repositoryPath={job.repository}
-          />
-          {job.maintenance_status && (
-            <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-              {(job.maintenance_status.includes('prune') ||
-                job.maintenance_status === 'maintenance_completed') && (
-                <Chip
-                  label={job.maintenance_status.includes('prune_failed') ? 'Prune ✗' : 'Prune ✓'}
-                  size="small"
-                  color={job.maintenance_status.includes('prune_failed') ? 'error' : 'success'}
-                  variant="outlined"
-                  sx={{ height: 18, fontSize: '0.65rem' }}
-                />
-              )}
-              {(job.maintenance_status.includes('compact') ||
-                job.maintenance_status === 'maintenance_completed') && (
-                <Chip
-                  label={
-                    job.maintenance_status.includes('compact_failed') ? 'Compact ✗' : 'Compact ✓'
-                  }
-                  size="small"
-                  color={job.maintenance_status.includes('compact_failed') ? 'error' : 'success'}
-                  variant="outlined"
-                  sx={{ height: 18, fontSize: '0.65rem' }}
-                />
-              )}
-            </Box>
-          )}
-        </>
-      ),
-    },
-    {
-      id: 'status',
-      label: 'Status',
-      render: (job) => (
-        <>
-          <StatusBadge status={job.status} />
-          {job.maintenance_status && job.maintenance_status.includes('running') && (
-            <Chip
-              icon={<RefreshCw size={12} className="animate-spin" />}
-              label={job.maintenance_status === 'running_prune' ? 'Pruning' : 'Compacting'}
-              size="small"
-              color="info"
-              sx={{ minWidth: 90, mt: 0.5, display: 'block' }}
-            />
-          )}
-        </>
-      ),
-    },
-    {
-      id: 'started_at',
-      label: 'Started',
-      align: 'left',
-      render: (job) => (
-        <>
-          <Typography variant="body2" color="text.secondary">
-            {formatDate(job.started_at)}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {formatRelativeTime(job.started_at)}
-          </Typography>
-        </>
-      ),
-    },
-    {
-      id: 'duration',
-      label: 'Duration',
-      align: 'left',
-      render: (job) => (
-        <Typography variant="body2" color="text.secondary">
-          {job.completed_at ? formatTimeRange(job.started_at, job.completed_at) : 'Running...'}
-        </Typography>
-      ),
-    },
-  ]
+  // Backup History callbacks
+  const handleViewBackupLogs = (job: BackupJob) => {
+    setSelectedBackupJob(job)
+  }
 
-  // Backup History Table Action Buttons
-  const backupHistoryActions: ActionButton<BackupJob>[] = [
-    {
-      icon: <Eye size={16} />,
-      label: 'View Logs',
-      onClick: (job) => {
-        setSelectedBackupJob(job)
-      },
-      color: 'primary',
-      tooltip: 'View Logs',
-    },
-    {
-      icon: <X size={16} />,
-      label: 'Cancel Backup',
-      onClick: (job) => {
-        if (window.confirm('Are you sure you want to cancel this backup?')) {
-          cancelBackupMutation.mutate(job.id)
-        }
-      },
-      color: 'error',
-      disabled: () => cancelBackupMutation.isPending,
-      show: (job) => job.status === 'running',
-    },
-    {
-      icon: <Download size={16} />,
-      label: 'Download Logs',
-      onClick: (job) => backupAPI.downloadLogs(job.id),
-      color: 'info',
-      show: (job) => !!job.has_logs,
-      tooltip: 'Download Logs',
-    },
-    {
-      icon: <AlertCircle size={16} />,
-      label: 'Error',
-      onClick: () => {},
-      color: 'error',
-      show: (job) => job.status === 'failed' && !!job.error_message,
-      tooltip: (job) => job.error_message || 'Error',
-    },
-  ]
+  const handleCancelBackupJob = (job: BackupJob) => {
+    if (window.confirm('Are you sure you want to cancel this backup?')) {
+      cancelBackupMutation.mutate(job.id)
+    }
+  }
+
+  const handleDownloadBackupLogs = (job: BackupJob) => {
+    backupAPI.downloadLogs(job.id)
+  }
 
   return (
     <Box>
@@ -1148,13 +1025,22 @@ const Schedule: React.FC = () => {
                 Recent backup jobs from scheduled tasks
               </Typography>
 
-              <DataTable
-                data={recentBackupJobs}
-                columns={backupHistoryColumns}
-                actions={backupHistoryActions}
-                getRowKey={(job) => String(job.id)}
+              <BackupJobsTable
+                jobs={recentBackupJobs}
+                repositories={repositoriesData?.data?.repositories || []}
                 loading={loadingBackupJobs}
+                actions={{
+                  viewLogs: true,
+                  cancel: true,
+                  downloadLogs: true,
+                  errorInfo: true,
+                }}
+                onViewLogs={handleViewBackupLogs}
+                onCancelJob={handleCancelBackupJob}
+                onDownloadLogs={handleDownloadBackupLogs}
+                getRowKey={(job) => String(job.id)}
                 headerBgColor="background.default"
+                enableHover={true}
                 emptyState={{
                   icon: <Clock size={48} />,
                   title: 'No backup jobs found',
