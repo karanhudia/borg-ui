@@ -43,6 +43,7 @@ import { repositoriesAPI, sshKeysAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { useAppState } from '../context/AppContext'
 import { formatDateShort, formatBytes } from '../utils/dateUtils'
+import { generateBorgCreateCommand } from '../utils/borgUtils'
 import FileExplorerDialog from '../components/FileExplorerDialog'
 import { FolderOpen } from '@mui/icons-material'
 import LockErrorDialog from '../components/LockErrorDialog'
@@ -618,80 +619,33 @@ export default function Repositories() {
       repoPath = repoPath || '/path/to/local/repository'
     }
 
-    let command = `borg create`
-
-    // Add remote-path if specified
-    if (repositoryForm.remote_path) {
-      command += ` --remote-path ${repositoryForm.remote_path}`
-    }
-
-    // Add compression
-    command += ` --compression ${repositoryForm.compression}`
-
-    // Add exclude patterns
-    if (repositoryForm.exclude_patterns.length > 0) {
-      repositoryForm.exclude_patterns.forEach((pattern) => {
-        command += ` --exclude '${pattern}'`
-      })
-    }
-
-    // Add custom flags if specified
-    if (repositoryForm.custom_flags && repositoryForm.custom_flags.trim()) {
-      command += ` ${repositoryForm.custom_flags.trim()}`
-    }
-
-    // Add archive name and repository path
-    command += ` ${repoPath}::{hostname}-{now}`
-
-    // Add source directories
-    if (repositoryForm.source_directories.length > 0) {
-      command += ` ${repositoryForm.source_directories.map((dir) => `'${dir}'`).join(' ')}`
-    } else {
-      command += ` /path/to/source`
-    }
-
-    return command
+    return generateBorgCreateCommand({
+      repositoryPath: repoPath,
+      compression: repositoryForm.compression,
+      excludePatterns: repositoryForm.exclude_patterns,
+      sourceDirs:
+        repositoryForm.source_directories.length > 0
+          ? repositoryForm.source_directories
+          : ['/path/to/source'],
+      customFlags: repositoryForm.custom_flags,
+      remotePathFlag: repositoryForm.remote_path ? `--remote-path ${repositoryForm.remote_path} ` : '',
+    })
   }
 
   // Generate borg create command preview for edit
   const getBorgCreateCommandForEdit = () => {
     if (!editingRepository) return ''
 
-    let repoPath = editForm.path || '/path/to/repository'
+    const repoPath = editForm.path || '/path/to/repository'
 
-    let command = `borg create`
-
-    // Add remote-path if specified
-    if (editForm.remote_path) {
-      command += ` --remote-path ${editForm.remote_path}`
-    }
-
-    // Add compression
-    command += ` --compression ${editForm.compression}`
-
-    // Add exclude patterns
-    if (editForm.exclude_patterns.length > 0) {
-      editForm.exclude_patterns.forEach((pattern) => {
-        command += ` --exclude '${pattern}'`
-      })
-    }
-
-    // Add custom flags if specified
-    if (editForm.custom_flags && editForm.custom_flags.trim()) {
-      command += ` ${editForm.custom_flags.trim()}`
-    }
-
-    // Add archive name and repository path
-    command += ` ${repoPath}::{hostname}-{now}`
-
-    // Add source directories
-    if (editForm.source_directories.length > 0) {
-      command += ` ${editForm.source_directories.map((dir) => `'${dir}'`).join(' ')}`
-    } else {
-      command += ` /path/to/source`
-    }
-
-    return command
+    return generateBorgCreateCommand({
+      repositoryPath: repoPath,
+      compression: editForm.compression,
+      excludePatterns: editForm.exclude_patterns,
+      sourceDirs: editForm.source_directories.length > 0 ? editForm.source_directories : ['/path/to/source'],
+      customFlags: editForm.custom_flags,
+      remotePathFlag: editForm.remote_path ? `--remote-path ${editForm.remote_path} ` : '',
+    })
   }
 
   // Utility functions

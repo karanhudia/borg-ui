@@ -44,6 +44,7 @@ import {
   formatBytes as formatBytesUtil,
   formatDurationSeconds,
 } from '../utils/dateUtils'
+import { generateBorgCreateCommand } from '../utils/borgUtils'
 import LockErrorDialog from '../components/LockErrorDialog'
 import BackupJobsTable from '../components/BackupJobsTable'
 import StatusBadge from '../components/StatusBadge'
@@ -173,37 +174,14 @@ const Backup: React.FC = () => {
   const getBorgBackupCommand = () => {
     if (!selectedRepoData) return 'Select a repository to see the command'
 
-    const archiveName = `{hostname}-{now}`
-    const compression = selectedRepoData.compression || 'lz4'
-    const sourceDirs =
-      selectedRepoData.source_directories && selectedRepoData.source_directories.length > 0
-        ? selectedRepoData.source_directories.join(' ')
-        : '/data'
-
-    // Build exclude patterns
-    let excludeArgs = ''
-    if (selectedRepoData.exclude_patterns && selectedRepoData.exclude_patterns.length > 0) {
-      excludeArgs =
-        selectedRepoData.exclude_patterns
-          .map((pattern: string) => `--exclude '${pattern}'`)
-          .join(' ') + ' '
-    }
-
-    // Use repository path as-is (already contains full SSH URL for SSH repos)
-    const repositoryPath = selectedRepoData.path
-
-    // Add --remote-path flag if specified (path to borg binary on remote)
-    const remotePathFlag = selectedRepoData.remote_path
-      ? `--remote-path ${selectedRepoData.remote_path} `
-      : ''
-
-    // Add custom flags if specified
-    const customFlags =
-      selectedRepoData.custom_flags && selectedRepoData.custom_flags.trim()
-        ? ` ${selectedRepoData.custom_flags.trim()} `
-        : ''
-
-    return `borg create ${remotePathFlag}--progress --stats --compression ${compression} ${excludeArgs}${customFlags}${repositoryPath}::${archiveName} ${sourceDirs}`
+    return generateBorgCreateCommand({
+      repositoryPath: selectedRepoData.path,
+      compression: selectedRepoData.compression,
+      excludePatterns: selectedRepoData.exclude_patterns,
+      sourceDirs: selectedRepoData.source_directories,
+      customFlags: selectedRepoData.custom_flags,
+      remotePathFlag: selectedRepoData.remote_path ? `--remote-path ${selectedRepoData.remote_path} ` : '',
+    })
   }
 
   const runningJobs =
