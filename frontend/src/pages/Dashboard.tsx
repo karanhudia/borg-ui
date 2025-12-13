@@ -11,14 +11,7 @@ import {
   Stack,
   LinearProgress,
 } from '@mui/material'
-import {
-  Activity,
-  MemoryStick,
-  Cpu,
-  Clock,
-  CheckCircle,
-  HardDrive,
-} from 'lucide-react'
+import { Activity, MemoryStick, Cpu, Clock, CheckCircle, HardDrive } from 'lucide-react'
 import BackupJobsTable from '../components/BackupJobsTable'
 import StatusBadge from '../components/StatusBadge'
 import { TerminalLogViewer } from '../components/TerminalLogViewer'

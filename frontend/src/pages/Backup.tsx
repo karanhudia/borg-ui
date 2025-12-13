@@ -27,16 +27,7 @@ import {
   DialogContent,
   DialogActions,
 } from '@mui/material'
-import {
-  Play,
-  Square,
-  Clock,
-  Folder,
-  Database,
-  Info,
-  RefreshCw,
-  AlertCircle,
-} from 'lucide-react'
+import { Play, Square, Clock, Folder, Database, Info, RefreshCw, AlertCircle } from 'lucide-react'
 import { backupAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import {
@@ -180,7 +171,9 @@ const Backup: React.FC = () => {
       excludePatterns: selectedRepoData.exclude_patterns,
       sourceDirs: selectedRepoData.source_directories,
       customFlags: selectedRepoData.custom_flags,
-      remotePathFlag: selectedRepoData.remote_path ? `--remote-path ${selectedRepoData.remote_path} ` : '',
+      remotePathFlag: selectedRepoData.remote_path
+        ? `--remote-path ${selectedRepoData.remote_path} `
+        : '',
     })
   }
 

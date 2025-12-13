@@ -270,16 +270,22 @@ export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
 
   // Build default emptyState
   const defaultEmptyState: any = {
-    icon: <Box sx={{ color: 'text.disabled' }}><Clock size={48} /></Box>,
+    icon: (
+      <Box sx={{ color: 'text.disabled' }}>
+        <Clock size={48} />
+      </Box>
+    ),
     title: 'No jobs found',
     description: 'No backup jobs to display',
   }
 
-  const finalEmptyState = emptyState ? {
-    icon: emptyState.icon || defaultEmptyState.icon,
-    title: emptyState.title || defaultEmptyState.title,
-    description: emptyState.description || defaultEmptyState.description,
-  } : defaultEmptyState
+  const finalEmptyState = emptyState
+    ? {
+        icon: emptyState.icon || defaultEmptyState.icon,
+        title: emptyState.title || defaultEmptyState.title,
+        description: emptyState.description || defaultEmptyState.description,
+      }
+    : defaultEmptyState
 
   return (
     <DataTable

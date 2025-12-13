@@ -628,7 +628,9 @@ export default function Repositories() {
           ? repositoryForm.source_directories
           : ['/path/to/source'],
       customFlags: repositoryForm.custom_flags,
-      remotePathFlag: repositoryForm.remote_path ? `--remote-path ${repositoryForm.remote_path} ` : '',
+      remotePathFlag: repositoryForm.remote_path
+        ? `--remote-path ${repositoryForm.remote_path} `
+        : '',
     })
   }
 
@@ -642,7 +644,8 @@ export default function Repositories() {
       repositoryPath: repoPath,
       compression: editForm.compression,
       excludePatterns: editForm.exclude_patterns,
-      sourceDirs: editForm.source_directories.length > 0 ? editForm.source_directories : ['/path/to/source'],
+      sourceDirs:
+        editForm.source_directories.length > 0 ? editForm.source_directories : ['/path/to/source'],
       customFlags: editForm.custom_flags,
       remotePathFlag: editForm.remote_path ? `--remote-path ${editForm.remote_path} ` : '',
     })
