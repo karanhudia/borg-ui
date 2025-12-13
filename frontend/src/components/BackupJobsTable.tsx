@@ -56,6 +56,8 @@ const getTypeLabel = (type: string): string => {
       return 'Repository Check'
     case 'compact':
       return 'Compact'
+    case 'prune':
+      return 'Prune'
     case 'package':
       return 'Package Install'
     default:
@@ -74,6 +76,8 @@ const getTypeColor = (
     case 'check':
       return 'info'
     case 'compact':
+      return 'warning'
+    case 'prune':
       return 'warning'
     case 'package':
       return 'success'
