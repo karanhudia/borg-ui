@@ -70,6 +70,8 @@ const Activity: React.FC = () => {
         return 'Repository Check'
       case 'compact':
         return 'Compact'
+      case 'prune':
+        return 'Prune'
       case 'package':
         return 'Package Install'
       default:
@@ -118,6 +120,7 @@ const Activity: React.FC = () => {
               <MenuItem value="restore">Restore</MenuItem>
               <MenuItem value="check">Check</MenuItem>
               <MenuItem value="compact">Compact</MenuItem>
+              <MenuItem value="prune">Prune</MenuItem>
               <MenuItem value="package">Package</MenuItem>
             </Select>
           </FormControl>
