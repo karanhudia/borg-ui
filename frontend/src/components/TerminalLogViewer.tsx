@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Box, Button, Typography, Paper, Chip } from '@mui/material'
 import { ContentCopy, Download } from '@mui/icons-material'
-import { PlayCircle, CheckCircle } from 'lucide-react'
+import { PlayCircle } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 
 interface LogLine {
@@ -150,9 +150,9 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
         </Box>
       )}
 
-      {/* Status indicator above terminal */}
-      <Box sx={{ mb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        {status === 'running' ? (
+      {/* Status indicator above terminal - only show for running jobs */}
+      {status === 'running' && (
+        <Box sx={{ mb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Chip
             icon={<PlayCircle size={16} />}
             label="Live Streaming (Last 500 lines)"
@@ -160,22 +160,13 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
             size="small"
             sx={{ fontWeight: 500 }}
           />
-        ) : (
-          <Chip
-            icon={<CheckCircle size={16} />}
-            label="Completed Logs"
-            color="success"
-            size="small"
-            variant="outlined"
-            sx={{ fontWeight: 500 }}
-          />
-        )}
-        {totalLines > 0 && (
-          <Typography variant="caption" color="text.secondary">
-            {logs.length} lines displayed
-          </Typography>
-        )}
-      </Box>
+          {totalLines > 0 && (
+            <Typography variant="caption" color="text.secondary">
+              {logs.length} lines displayed
+            </Typography>
+          )}
+        </Box>
+      )}
 
       {/* Terminal */}
       <Paper
