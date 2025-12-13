@@ -812,7 +812,7 @@ const Schedule: React.FC = () => {
       label: 'Error',
       onClick: () => {},
       color: 'error',
-      show: (job) => !!job.error_message,
+      show: (job) => job.status === 'failed' && !!job.error_message,
       tooltip: (job) => job.error_message || 'Error',
     },
   ]
