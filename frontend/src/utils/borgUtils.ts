@@ -28,14 +28,11 @@ export const generateBorgCreateCommand = (options: BorgCommandOptions): string =
   } = options
 
   // Build exclude patterns
-  const excludeArgs = excludePatterns
-    .map((pattern: string) => `--exclude '${pattern}'`)
-    .join(' ')
+  const excludeArgs = excludePatterns.map((pattern: string) => `--exclude '${pattern}'`).join(' ')
   const excludeStr = excludeArgs ? `${excludeArgs} ` : ''
 
   // Build custom flags with proper spacing
-  const customFlagsStr =
-    customFlags && customFlags.trim() ? ` ${customFlags.trim()} ` : ''
+  const customFlagsStr = customFlags && customFlags.trim() ? ` ${customFlags.trim()} ` : ''
 
   // Build source directories string
   const sourceDirsStr = sourceDirs.join(' ')
