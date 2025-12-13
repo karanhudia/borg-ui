@@ -17,7 +17,7 @@ import structlog
 import tempfile
 
 from app.database.database import get_db
-from app.database.models import BackupJob, RestoreJob, CheckJob, CompactJob, PackageInstallJob, Repository, InstalledPackage
+from app.database.models import BackupJob, RestoreJob, CheckJob, CompactJob, PruneJob, PackageInstallJob, Repository, InstalledPackage
 from app.api.auth import get_current_user, User
 from app.utils.datetime_utils import serialize_datetime
 from app.services.backup_service import backup_service
@@ -175,11 +175,39 @@ async def list_recent_activity(
                 'repository': repo_name,
                 'repository_path': repo_path,
                 'log_file_path': getattr(job, 'log_file_path', None),
-                'triggered_by': 'manual',  # Compact jobs are always manual
+                'triggered_by': 'schedule',  # Compact jobs are scheduled by default
                 'schedule_id': None,
                 'archive_name': None,
                 'package_name': None,
-                'has_logs': bool(getattr(job, 'log_file_path', None))
+                'has_logs': bool(job.logs)
+            })
+
+    # Fetch prune jobs
+    if not job_type or job_type == 'prune':
+        prune_jobs = db.query(PruneJob).order_by(PruneJob.started_at.desc()).limit(limit).all()
+        for job in prune_jobs:
+            if status and job.status != status:
+                continue
+            # Get repository name from repository_id, with fallback to stored path
+            repo = db.query(Repository).filter(Repository.id == job.repository_id).first()
+            repo_name = repo.name if repo else f"Repository #{job.repository_id}"
+            repo_path = repo.path if repo else job.repository_path
+
+            activities.append({
+                'id': job.id,
+                'type': 'prune',
+                'status': job.status,
+                'started_at': job.started_at,
+                'completed_at': job.completed_at,
+                'error_message': job.error_message,
+                'repository': repo_name,
+                'repository_path': repo_path,
+                'log_file_path': getattr(job, 'log_file_path', None),
+                'triggered_by': 'schedule',  # Prune jobs are scheduled by default
+                'schedule_id': None,
+                'archive_name': None,
+                'package_name': None,
+                'has_logs': bool(job.logs)
             })
 
     # Fetch package install jobs
@@ -239,6 +267,7 @@ async def get_job_logs(
         'restore': RestoreJob,
         'check': CheckJob,
         'compact': CompactJob,
+        'prune': PruneJob,
         'package': PackageInstallJob
     }
 
@@ -434,6 +463,7 @@ async def download_job_logs(
         'restore': RestoreJob,
         'check': CheckJob,
         'compact': CompactJob,
+        'prune': PruneJob,
         'package': PackageInstallJob
     }
 

@@ -9,7 +9,7 @@ import os
 import asyncio
 
 from app.database.database import get_db
-from app.database.models import User, ScheduledJob
+from app.database.models import User, ScheduledJob, CompactJob, PruneJob, Repository, BackupJob
 from app.core.security import get_current_user
 from app.core.borg import BorgInterface
 from app.config import settings
@@ -636,11 +636,11 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
         # Execute the backup with custom archive name if provided
         await backup_service.execute_backup(backup_job_id, repository_path, db, archive_name=archive_name)
 
-        # Check if backup was successful
+        # Check if backup was successful (or completed with warnings)
         backup_job = db.query(BackupJob).filter(BackupJob.id == backup_job_id).first()
-        if not backup_job or backup_job.status != "completed":
+        if not backup_job or backup_job.status not in ["completed", "completed_with_warnings"]:
             logger.info("Backup did not complete successfully, skipping prune/compact",
-                       backup_job_id=backup_job_id)
+                       backup_job_id=backup_job_id, backup_status=backup_job.status if backup_job else "None")
             return
 
         # Get scheduled job to check prune/compact settings
@@ -658,6 +658,17 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
         if scheduled_job.run_prune_after:
             try:
                 logger.info("Running scheduled prune", scheduled_job_id=scheduled_job_id, repository=repository_path)
+
+                # Create a PruneJob record for tracking and activity feed
+                prune_job = PruneJob(
+                    repository_id=repo.id,
+                    repository_path=repo.path,
+                    status="running",
+                    started_at=datetime.now(timezone.utc)
+                )
+                db.add(prune_job)
+                db.commit()
+                db.refresh(prune_job)
 
                 # Update backup job status to show prune is running
                 backup_job.maintenance_status = "running_prune"
@@ -679,16 +690,39 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
                 if prune_result.get("success"):
                     scheduled_job.last_prune = datetime.now(timezone.utc)
                     backup_job.maintenance_status = "prune_completed"
+
+                    # Update PruneJob record
+                    prune_job.status = "completed"
+                    prune_job.completed_at = datetime.now(timezone.utc)
+                    prune_job.logs = "Scheduled prune completed successfully"
+
                     db.commit()
-                    logger.info("Scheduled prune completed", scheduled_job_id=scheduled_job_id)
+                    logger.info("Scheduled prune completed", scheduled_job_id=scheduled_job_id, prune_job_id=prune_job.id)
                 else:
                     backup_job.maintenance_status = "prune_failed"
+
+                    # Update PruneJob record
+                    prune_job.status = "failed"
+                    prune_job.completed_at = datetime.now(timezone.utc)
+                    prune_job.error_message = prune_result.get("stderr", "Unknown error")
+                    prune_job.logs = prune_result.get("stderr", "")
+
                     db.commit()
-                    logger.error("Scheduled prune failed", scheduled_job_id=scheduled_job_id,
+                    logger.error("Scheduled prune failed", scheduled_job_id=scheduled_job_id, prune_job_id=prune_job.id,
                                 error=prune_result.get("stderr"))
 
             except Exception as e:
                 backup_job.maintenance_status = "prune_failed"
+
+                # Update PruneJob record if it was created
+                try:
+                    if 'prune_job' in locals():
+                        prune_job.status = "failed"
+                        prune_job.completed_at = datetime.now(timezone.utc)
+                        prune_job.error_message = str(e)
+                except:
+                    pass
+
                 db.commit()
                 logger.error("Failed to run scheduled prune", scheduled_job_id=scheduled_job_id, error=str(e))
 
@@ -696,6 +730,17 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
         if scheduled_job.run_compact_after and (scheduled_job.run_prune_after or not scheduled_job.run_prune_after):
             try:
                 logger.info("Running scheduled compact", scheduled_job_id=scheduled_job_id, repository=repository_path)
+
+                # Create a CompactJob record for tracking and activity feed
+                compact_job = CompactJob(
+                    repository_id=repo.id,
+                    repository_path=repo.path,
+                    status="running",
+                    started_at=datetime.now(timezone.utc)
+                )
+                db.add(compact_job)
+                db.commit()
+                db.refresh(compact_job)
 
                 # Update backup job status to show compact is running
                 backup_job.maintenance_status = "running_compact"
@@ -710,16 +755,39 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
                 if compact_result.get("success"):
                     scheduled_job.last_compact = datetime.now(timezone.utc)
                     backup_job.maintenance_status = "compact_completed"
+
+                    # Update CompactJob record
+                    compact_job.status = "completed"
+                    compact_job.completed_at = datetime.now(timezone.utc)
+                    compact_job.logs = "Scheduled compact completed successfully"
+
                     db.commit()
-                    logger.info("Scheduled compact completed", scheduled_job_id=scheduled_job_id)
+                    logger.info("Scheduled compact completed", scheduled_job_id=scheduled_job_id, compact_job_id=compact_job.id)
                 else:
                     backup_job.maintenance_status = "compact_failed"
+
+                    # Update CompactJob record
+                    compact_job.status = "failed"
+                    compact_job.completed_at = datetime.now(timezone.utc)
+                    compact_job.error_message = compact_result.get("stderr", "Unknown error")
+                    compact_job.logs = compact_result.get("stderr", "")
+
                     db.commit()
-                    logger.error("Scheduled compact failed", scheduled_job_id=scheduled_job_id,
+                    logger.error("Scheduled compact failed", scheduled_job_id=scheduled_job_id, compact_job_id=compact_job.id,
                                 error=compact_result.get("stderr"))
 
             except Exception as e:
                 backup_job.maintenance_status = "compact_failed"
+
+                # Update CompactJob record if it was created
+                try:
+                    if 'compact_job' in locals():
+                        compact_job.status = "failed"
+                        compact_job.completed_at = datetime.now(timezone.utc)
+                        compact_job.error_message = str(e)
+                except:
+                    pass
+
                 db.commit()
                 logger.error("Failed to run scheduled compact", scheduled_job_id=scheduled_job_id, error=str(e))
 

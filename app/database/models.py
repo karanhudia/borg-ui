@@ -245,6 +245,19 @@ class CompactJob(Base):
     process_start_time = Column(BigInteger, nullable=True)  # Process start time in jiffies for PID uniqueness
     created_at = Column(DateTime, default=utc_now)
 
+class PruneJob(Base):
+    __tablename__ = "prune_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=False)
+    repository_path = Column(String, nullable=True)  # Captured at job creation for display even if repo is deleted
+    status = Column(String, default="pending")  # pending, running, completed, failed, cancelled
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    error_message = Column(Text, nullable=True)
+    logs = Column(Text, nullable=True)  # Full logs (stored after completion)
+    created_at = Column(DateTime, default=utc_now)
+
 class SystemSettings(Base):
     __tablename__ = "system_settings"
 

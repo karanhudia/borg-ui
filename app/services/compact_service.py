@@ -259,15 +259,20 @@ class CompactService:
                 job.completed_at = datetime.utcnow()
                 logger.error("Compact failed", job_id=job_id, exit_code=process.returncode)
 
-            # Save logs if failed or cancelled
-            if job.status in ['failed', 'cancelled']:
+            # Save logs for all completed/failed/cancelled jobs
+            if job.status in ['failed', 'cancelled', 'completed']:
                 log_file = self.log_dir / f"compact_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
                 try:
                     log_file.write_text('\n'.join(log_buffer))
                     job.logs = f"Logs saved to: {log_file.name}"
-                    logger.warning("Compact logs saved for debugging",
-                                 job_id=job_id,
-                                 log_file=str(log_file))
+                    if job.status == 'completed':
+                        logger.info("Compact logs saved",
+                                   job_id=job_id,
+                                   log_file=str(log_file))
+                    else:
+                        logger.warning("Compact logs saved for debugging",
+                                     job_id=job_id,
+                                     log_file=str(log_file))
                 except Exception as e:
                     job.logs = f"Failed to save logs: {str(e)}"
                     logger.error("Failed to save log buffer", job_id=job_id, error=str(e))
