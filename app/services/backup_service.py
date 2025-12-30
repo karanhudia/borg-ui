@@ -357,6 +357,7 @@ class BackupService:
     async def _calculate_source_size(self, source_paths: list[str]) -> int:
         """
         Calculate total size of source directories in bytes using du
+        Supports both local paths and SSH URLs (ssh://user@host:port/path)
         Returns total size in bytes, or 0 if calculation fails
         """
         try:
@@ -364,29 +365,71 @@ class BackupService:
 
             for path in source_paths:
                 try:
-                    # Use du to get directory size in bytes
-                    # -s: summarize (total for directory)
-                    # -B1: block size of 1 byte (for precise byte count)
-                    cmd = ["du", "-s", "-B1", path]
+                    # Check if this is an SSH URL
+                    if path.startswith('ssh://'):
+                        # Parse SSH URL: ssh://user@host:port/path
+                        import re
+                        match = re.match(r'ssh://([^@]+)@([^:]+):(\d+)(/.*)', path)
+                        if match:
+                            username, host, port, remote_path = match.groups()
 
-                    process = await asyncio.create_subprocess_exec(
-                        *cmd,
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE
-                    )
+                            # Use SSH to run du on the remote host
+                            # -s: summarize, -b: bytes (portable across systems)
+                            cmd = [
+                                "ssh",
+                                "-o", "StrictHostKeyChecking=no",
+                                "-o", "UserKnownHostsFile=/dev/null",
+                                "-o", "LogLevel=ERROR",
+                                "-o", "ConnectTimeout=10",
+                                "-p", port,
+                                f"{username}@{host}",
+                                f"du -sb {remote_path} 2>/dev/null | cut -f1"
+                            ]
 
-                    stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+                            process = await asyncio.create_subprocess_exec(
+                                *cmd,
+                                stdout=asyncio.subprocess.PIPE,
+                                stderr=asyncio.subprocess.PIPE
+                            )
 
-                    if process.returncode == 0:
-                        # Parse output: "1234567\t/path/to/dir"
-                        output = stdout.decode().strip()
-                        if output:
-                            size_str = output.split('\t')[0]
-                            path_size = int(size_str)
-                            total_size += path_size
-                            logger.info("Calculated directory size", path=path, size=path_size, size_formatted=self._format_bytes(path_size))
+                            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+
+                            if process.returncode == 0:
+                                output = stdout.decode().strip()
+                                if output and output.isdigit():
+                                    path_size = int(output)
+                                    total_size += path_size
+                                    logger.info("Calculated remote directory size", path=path, size=path_size, size_formatted=self._format_bytes(path_size))
+                                else:
+                                    logger.warning("Failed to parse remote directory size", path=path, output=output)
+                            else:
+                                logger.warning("Failed to calculate remote directory size", path=path, stderr=stderr.decode())
+                        else:
+                            logger.warning("Invalid SSH URL format", path=path)
                     else:
-                        logger.warning("Failed to calculate directory size", path=path, stderr=stderr.decode())
+                        # Local path - use local du
+                        # -s: summarize (total for directory)
+                        # -B1: block size of 1 byte (for precise byte count)
+                        cmd = ["du", "-s", "-B1", path]
+
+                        process = await asyncio.create_subprocess_exec(
+                            *cmd,
+                            stdout=asyncio.subprocess.PIPE,
+                            stderr=asyncio.subprocess.PIPE
+                        )
+
+                        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+
+                        if process.returncode == 0:
+                            # Parse output: "1234567\t/path/to/dir"
+                            output = stdout.decode().strip()
+                            if output:
+                                size_str = output.split('\t')[0]
+                                path_size = int(size_str)
+                                total_size += path_size
+                                logger.info("Calculated directory size", path=path, size=path_size, size_formatted=self._format_bytes(path_size))
+                        else:
+                            logger.warning("Failed to calculate directory size", path=path, stderr=stderr.decode())
 
                 except asyncio.TimeoutError:
                     logger.warning("Timeout while calculating directory size", path=path)
