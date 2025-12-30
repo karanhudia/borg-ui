@@ -34,7 +34,7 @@ import {
 import { archivesAPI, repositoriesAPI, browseAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import LockErrorDialog from '../components/LockErrorDialog'
-import { formatDate, formatBytes as formatBytesUtil } from '../utils/dateUtils'
+import { formatDate, formatDateCompact, formatBytes as formatBytesUtil } from '../utils/dateUtils'
 
 interface Repository {
   id: number
@@ -701,9 +701,15 @@ const Archives: React.FC = () => {
                                 <Typography
                                   variant="body2"
                                   color="text.secondary"
-                                  sx={{ width: 150, textAlign: 'right', fontFamily: 'monospace' }}
+                                  sx={{
+                                    minWidth: 165,
+                                    textAlign: 'right',
+                                    fontFamily: 'monospace',
+                                    fontSize: '0.8rem',
+                                    whiteSpace: 'nowrap',
+                                  }}
                                 >
-                                  {file.mtime ? formatDate(file.mtime) : '-'}
+                                  {file.mtime ? formatDateCompact(file.mtime) : '-'}
                                 </Typography>
                                 <Typography
                                   variant="body2"
