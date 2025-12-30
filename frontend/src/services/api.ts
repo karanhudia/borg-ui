@@ -248,6 +248,8 @@ export const sshKeysAPI = {
     api.put(`/ssh-keys/connections/${connectionId}`, data),
   deleteSSHConnection: (connectionId: number) =>
     api.delete(`/ssh-keys/connections/${connectionId}`),
+  refreshConnectionStorage: (connectionId: number) =>
+    api.post(`/ssh-keys/connections/${connectionId}/refresh-storage`),
 }
 
 // Schedule API
