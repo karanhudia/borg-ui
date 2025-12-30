@@ -110,7 +110,16 @@ export default function RemoteMachineCard({
   }
 
   return (
-    <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Card
+      sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        border: '1px solid',
+        borderColor: 'divider',
+        boxShadow: 2,
+      }}
+    >
       <CardContent sx={{ flex: 1 }}>
         {/* Header */}
         <Stack direction="row" alignItems="flex-start" spacing={2} sx={{ mb: 2 }}>
@@ -219,11 +228,13 @@ export default function RemoteMachineCard({
               variant="body2"
               fontFamily="monospace"
               sx={{
-                bgcolor: 'grey.100',
+                bgcolor: 'background.default',
                 px: 1,
                 py: 0.5,
                 borderRadius: 0.5,
                 fontSize: '0.75rem',
+                border: '1px solid',
+                borderColor: 'divider',
               }}
             >
               {machine.default_path}

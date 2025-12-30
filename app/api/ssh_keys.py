@@ -54,7 +54,7 @@ async def collect_storage_info(connection: SSHConnection, ssh_key: SSHKey) -> Op
             # Use default_path or root for df check
             check_path = connection.default_path or "/"
 
-            # Run df command on remote host - use grep to skip header line
+            # Run df command on remote host
             df_cmd = [
                 "ssh",
                 "-i", temp_key_file,
@@ -64,7 +64,7 @@ async def collect_storage_info(connection: SSHConnection, ssh_key: SSHKey) -> Op
                 "-o", "ConnectTimeout=10",
                 "-p", str(connection.port),
                 f"{connection.username}@{connection.host}",
-                f"df -k {check_path} | grep -v '^Filesystem' | grep -v '1K-blocks' | head -1"
+                f"df -k {check_path}"
             ]
 
             process = await asyncio.create_subprocess_exec(
@@ -85,7 +85,24 @@ async def collect_storage_info(connection: SSHConnection, ssh_key: SSHKey) -> Op
                                  path=check_path)
                     return None
 
-                parts = output.split()
+                # Split into lines and skip header line
+                lines = output.split('\n')
+                data_line = None
+
+                for line in lines:
+                    # Skip header line and empty lines
+                    if not line.strip() or 'Filesystem' in line or '1K-blocks' in line:
+                        continue
+                    data_line = line
+                    break
+
+                if not data_line:
+                    logger.warning("No data line found in df output",
+                                 connection_id=connection.id,
+                                 output=output)
+                    return None
+
+                parts = data_line.split()
 
                 if len(parts) >= 5:
                     # Validate that we can parse the numeric values
@@ -107,12 +124,14 @@ async def collect_storage_info(connection: SSHConnection, ssh_key: SSHKey) -> Op
                         logger.warning("Failed to parse df output",
                                      connection_id=connection.id,
                                      output=output,
+                                     data_line=data_line,
                                      error=str(e))
                         return None
                 else:
                     logger.warning("Invalid df output format",
                                  connection_id=connection.id,
                                  output=output,
+                                 data_line=data_line,
                                  parts_count=len(parts))
                     return None
             else:
@@ -600,6 +619,8 @@ async def deploy_ssh_key(
             existing_connection.last_test = datetime.utcnow()
             if connection_data.default_path is not None:
                 existing_connection.default_path = connection_data.default_path
+            if connection_data.mount_point is not None:
+                existing_connection.mount_point = connection_data.mount_point
             db.commit()
         else:
             # Create new connection record
@@ -609,6 +630,7 @@ async def deploy_ssh_key(
                 username=connection_data.username,
                 port=connection_data.port,
                 default_path=connection_data.default_path,
+                mount_point=connection_data.mount_point,
                 status="testing",
                 last_test=datetime.utcnow()
             )

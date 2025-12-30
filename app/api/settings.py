@@ -83,7 +83,7 @@ async def get_system_settings(
                 "auto_cleanup": settings.auto_cleanup,
                 "cleanup_retention_days": settings.cleanup_retention_days,
                 "borg_version": borg.get_version(),
-                "app_version": "1.0.0"
+                "app_version": "1.36.0"
             }
         }
     except Exception as e:

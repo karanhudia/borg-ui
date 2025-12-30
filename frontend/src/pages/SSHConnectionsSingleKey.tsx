@@ -710,8 +710,8 @@ export default function SSHConnectionsSingleKey() {
               onChange={(e) =>
                 setConnectionForm({ ...connectionForm, mount_point: e.target.value })
               }
-              placeholder="/hetzner or /homeserver"
-              helperText="Logical mount point for easy identification (e.g., /hetzner, /backup-server)"
+              placeholder="hetzner or homeserver"
+              helperText="Friendly name for this remote machine (e.g., hetzner, backup-server)"
               InputLabelProps={{ shrink: true }}
             />
             <Alert severity="info" sx={{ fontSize: '0.85rem' }}>
@@ -899,8 +899,8 @@ export default function SSHConnectionsSingleKey() {
                   mount_point: e.target.value,
                 })
               }
-              placeholder="/hetzner or /homeserver"
-              helperText="Logical mount point for easy identification (e.g., /hetzner, /backup-server)"
+              placeholder="hetzner or homeserver"
+              helperText="Friendly name for this remote machine (e.g., hetzner, backup-server)"
               InputLabelProps={{ shrink: true }}
             />
             <Alert severity="info" sx={{ fontSize: '0.85rem' }}>
