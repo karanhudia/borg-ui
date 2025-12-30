@@ -2,6 +2,7 @@ import asyncio
 import os
 import json
 import re
+import tempfile
 from datetime import datetime
 from pathlib import Path
 import structlog
@@ -25,6 +26,7 @@ class BackupService:
         self.running_processes = {}  # Track running backup processes by job_id
         self.error_msgids = {}  # Track error message IDs by job_id
         self.log_buffers = {}  # Track in-memory log buffers by job_id (for running jobs)
+        self.ssh_mounts = {}  # Track SSH mounts by job_id: {job_id: [(mount_point, ssh_url), ...]}
 
     async def _run_hook(self, script: str, hook_name: str, timeout: int, job_id: int) -> dict:
         """
@@ -443,6 +445,177 @@ class BackupService:
             logger.error("Failed to calculate total source size", error=str(e))
             return 0
 
+    def _parse_ssh_url(self, ssh_url: str) -> dict:
+        """
+        Parse SSH URL to extract connection details
+        Format: ssh://user@host:port/path
+        Returns: dict with keys: username, host, port, path
+        """
+        match = re.match(r'ssh://([^@]+)@([^:]+):(\d+)(/.*)', ssh_url)
+        if match:
+            username, host, port, path = match.groups()
+            return {
+                'username': username,
+                'host': host,
+                'port': port,
+                'path': path
+            }
+        return None
+
+    async def _mount_ssh_path(self, ssh_url: str, job_id: int) -> str:
+        """
+        Mount an SSH path via SSHFS to a temporary directory
+        Returns: local mount point path, or None if mount failed
+        """
+        try:
+            # Parse SSH URL
+            parsed = self._parse_ssh_url(ssh_url)
+            if not parsed:
+                logger.error("Failed to parse SSH URL", ssh_url=ssh_url, job_id=job_id)
+                return None
+
+            # Create temporary mount point
+            mount_dir = tempfile.mkdtemp(prefix=f"borg_ssh_mount_{job_id}_")
+            logger.info("Created temporary mount point", mount_point=mount_dir, ssh_url=ssh_url, job_id=job_id)
+
+            # Build SSHFS command
+            cmd = [
+                "sshfs",
+                f"{parsed['username']}@{parsed['host']}:{parsed['path']}",
+                mount_dir,
+                "-p", parsed['port'],
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "UserKnownHostsFile=/dev/null",
+                "-o", "LogLevel=ERROR",
+                "-o", "ConnectTimeout=10",
+                "-o", "ServerAliveInterval=15",
+                "-o", "ServerAliveCountMax=3",
+                "-o", "reconnect",
+                "-o", "follow_symlinks"
+            ]
+
+            logger.info("Mounting SSH path via SSHFS", command=" ".join(cmd), job_id=job_id)
+
+            # Execute mount command
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+
+            if process.returncode == 0:
+                logger.info("Successfully mounted SSH path", mount_point=mount_dir, ssh_url=ssh_url, job_id=job_id)
+
+                # Track this mount for cleanup
+                if job_id not in self.ssh_mounts:
+                    self.ssh_mounts[job_id] = []
+                self.ssh_mounts[job_id].append((mount_dir, ssh_url))
+
+                return mount_dir
+            else:
+                logger.error("Failed to mount SSH path",
+                           ssh_url=ssh_url,
+                           stderr=stderr.decode(),
+                           returncode=process.returncode,
+                           job_id=job_id)
+                # Cleanup the empty mount point
+                try:
+                    os.rmdir(mount_dir)
+                except:
+                    pass
+                return None
+
+        except asyncio.TimeoutError:
+            logger.error("Timeout while mounting SSH path", ssh_url=ssh_url, job_id=job_id)
+            return None
+        except Exception as e:
+            logger.error("Error mounting SSH path", ssh_url=ssh_url, error=str(e), job_id=job_id)
+            return None
+
+    async def _unmount_ssh_path(self, mount_point: str, job_id: int):
+        """
+        Unmount an SSHFS mount point
+        """
+        try:
+            logger.info("Unmounting SSH path", mount_point=mount_point, job_id=job_id)
+
+            # Use fusermount -u to unmount (works on Linux)
+            # On macOS, use umount
+            import platform
+            if platform.system() == "Darwin":
+                cmd = ["umount", mount_point]
+            else:
+                cmd = ["fusermount", "-u", mount_point]
+
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=10)
+
+            if process.returncode == 0:
+                logger.info("Successfully unmounted SSH path", mount_point=mount_point, job_id=job_id)
+                # Remove the empty mount point directory
+                try:
+                    os.rmdir(mount_point)
+                    logger.debug("Removed mount point directory", mount_point=mount_point, job_id=job_id)
+                except Exception as e:
+                    logger.warning("Failed to remove mount point directory", mount_point=mount_point, error=str(e), job_id=job_id)
+            else:
+                logger.error("Failed to unmount SSH path",
+                           mount_point=mount_point,
+                           stderr=stderr.decode(),
+                           returncode=process.returncode,
+                           job_id=job_id)
+
+        except asyncio.TimeoutError:
+            logger.error("Timeout while unmounting SSH path", mount_point=mount_point, job_id=job_id)
+        except Exception as e:
+            logger.error("Error unmounting SSH path", mount_point=mount_point, error=str(e), job_id=job_id)
+
+    async def _prepare_source_paths(self, source_paths: list[str], job_id: int) -> list[str]:
+        """
+        Prepare source paths for backup by mounting SSH URLs via SSHFS
+        Returns: list of processed paths (SSH URLs replaced with local mount points)
+        """
+        processed_paths = []
+
+        for path in source_paths:
+            if path.startswith('ssh://'):
+                # Mount SSH path
+                mount_point = await self._mount_ssh_path(path, job_id)
+                if mount_point:
+                    processed_paths.append(mount_point)
+                    logger.info("Using mounted path for backup", original=path, mount_point=mount_point, job_id=job_id)
+                else:
+                    logger.error("Failed to mount SSH path, skipping from backup", path=path, job_id=job_id)
+                    # Don't add this path to processed_paths - skip it
+            else:
+                # Local path - use as-is
+                processed_paths.append(path)
+
+        return processed_paths
+
+    async def _cleanup_ssh_mounts(self, job_id: int):
+        """
+        Cleanup all SSH mounts for a job
+        """
+        if job_id not in self.ssh_mounts:
+            return
+
+        mounts = self.ssh_mounts[job_id]
+        logger.info("Cleaning up SSH mounts", job_id=job_id, mount_count=len(mounts))
+
+        for mount_point, ssh_url in mounts:
+            await self._unmount_ssh_path(mount_point, job_id)
+
+        # Remove from tracking
+        del self.ssh_mounts[job_id]
+
     async def execute_backup(self, job_id: int, repository: str, db: Session = None, archive_name: str = None):
         """Execute backup using borg directly for better control
 
@@ -683,6 +856,18 @@ class BackupService:
             else:
                 logger.warning("Could not calculate expected size, progress percentage will not be accurate")
 
+            # Prepare source paths: mount SSH URLs via SSHFS
+            logger.info("Preparing source paths (mounting SSH URLs if needed)", source_paths=source_paths, job_id=job_id)
+            processed_source_paths = await self._prepare_source_paths(source_paths, job_id)
+            if not processed_source_paths:
+                logger.error("No valid source paths after processing (all SSH mounts failed?)", job_id=job_id)
+                job.status = "failed"
+                job.error_message = "Failed to prepare source paths: all SSH mounts failed or no valid paths"
+                job.completed_at = datetime.utcnow()
+                db.commit()
+                return
+            logger.info("Source paths prepared", original_count=len(source_paths), processed_count=len(processed_source_paths), job_id=job_id)
+
             # Build command with source directories and exclude patterns
             cmd = [
                 "borg", "create",
@@ -720,8 +905,8 @@ class BackupService:
             # Add repository::archive
             cmd.append(f"{actual_repository_path}::{archive_name}")
 
-            # Add all source paths to the command
-            cmd.extend(source_paths)
+            # Add all source paths to the command (using processed paths with mounted SSH URLs)
+            cmd.extend(processed_source_paths)
 
             logger.info("Starting borg backup", job_id=job_id, repository=actual_repository_path, archive=archive_name, command=" ".join(cmd))
 
@@ -1292,6 +1477,12 @@ class BackupService:
             # Clean up error msgids
             if job_id in self.error_msgids:
                 del self.error_msgids[job_id]
+
+            # Clean up SSH mounts (unmount all SSHFS mounts for this job)
+            try:
+                await self._cleanup_ssh_mounts(job_id)
+            except Exception as e:
+                logger.error("Failed to cleanup SSH mounts", job_id=job_id, error=str(e))
 
             # Clean up temporary SSH key file if it exists
             if temp_key_file and os.path.exists(temp_key_file):
