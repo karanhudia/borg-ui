@@ -498,6 +498,10 @@ class BackupService:
             mount_dir = tempfile.mkdtemp(prefix=f"borg_ssh_mount_{job_id}_")
             logger.info("Created temporary mount point", mount_point=mount_dir, ssh_url=ssh_url, job_id=job_id)
 
+            # Get current user's UID and GID for mount options
+            current_uid = os.getuid()
+            current_gid = os.getgid()
+
             # Build SSHFS command
             cmd = [
                 "sshfs",
@@ -512,8 +516,9 @@ class BackupService:
                 "-o", "reconnect",
                 "-o", "follow_symlinks",
                 "-o", "allow_other",  # Allow non-root user to access mount
-                "-o", "workaround=rename",  # Compatibility workaround for SFTP servers
-                "-o", "idmap=user"  # Map remote UID to local user
+                "-o", f"uid={current_uid}",  # Set mount owner to current user
+                "-o", f"gid={current_gid}",  # Set mount group to current user's group
+                "-o", "workaround=rename"  # Compatibility workaround for SFTP servers
             ]
 
             logger.info("Mounting SSH path via SSHFS", command=" ".join(cmd), job_id=job_id)
