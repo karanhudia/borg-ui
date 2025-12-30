@@ -2,6 +2,7 @@
 API endpoints for configuration export/import.
 """
 
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -55,9 +56,13 @@ async def export_borgmatic_config(
             repo_name, config = configs[0]
             yaml_content = yaml.dump(config, default_flow_style=False, sort_keys=False)
 
+            # Generate timestamp prefix
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
             # Sanitize filename
             safe_name = "".join(c for c in repo_name if c.isalnum() or c in ('-', '_')).lower()
-            filename = f"{safe_name}.yaml" if safe_name else "borgmatic-config.yaml"
+            base_filename = f"{safe_name}.yaml" if safe_name else "borgmatic-config.yaml"
+            filename = f"{timestamp}_{base_filename}"
 
             return Response(
                 content=yaml_content,
@@ -72,6 +77,9 @@ async def export_borgmatic_config(
         import zipfile
         import yaml
 
+        # Generate timestamp prefix
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
             for i, (repo_name, config) in enumerate(configs):
@@ -84,11 +92,12 @@ async def export_borgmatic_config(
                 zip_file.writestr(f"{safe_name}.yaml", yaml_content)
 
         zip_buffer.seek(0)
+        filename = f"{timestamp}_borgmatic-configs.zip"
         return Response(
             content=zip_buffer.getvalue(),
             media_type="application/zip",
             headers={
-                "Content-Disposition": "attachment; filename=borgmatic-configs.zip"
+                "Content-Disposition": f"attachment; filename={filename}"
             }
         )
     except Exception as e:
