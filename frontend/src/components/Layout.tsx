@@ -30,6 +30,7 @@ import {
   Menu,
   Database,
   Wifi,
+  Computer,
   LogOut,
   User,
   Lock,
@@ -72,7 +73,7 @@ interface NavigationItem {
 // Map navigation items to tab enablement keys
 const navigationWithKeys: NavigationItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: Home, key: 'dashboard' as const },
-  { name: 'SSH Connections', href: '/ssh-connections', icon: Wifi, key: 'connections' as const },
+  { name: 'Remote Machines', href: '/ssh-connections', icon: Computer, key: 'connections' as const },
   { name: 'Repositories', href: '/repositories', icon: Database, key: 'repositories' as const },
   { name: 'Backup', href: '/backup', icon: FileText, key: 'backups' as const },
   { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },
