@@ -1,7 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { sshKeysAPI } from '../services/api'
-import { formatDate } from '../utils/dateUtils'
 import {
   Box,
   Card,
@@ -30,16 +29,24 @@ import {
   Copy,
   RefreshCw,
   Wifi,
-  WifiOff,
   CheckCircle,
   XCircle,
   AlertTriangle,
   Plus,
-  Edit,
-  Trash2,
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
-import DataTable from '../components/DataTable'
+import RemoteMachineCard from '../components/RemoteMachineCard'
+
+interface StorageInfo {
+  total: number
+  total_formatted: string
+  used: number
+  used_formatted: string
+  available: number
+  available_formatted: string
+  percent_used: number
+  last_check?: string | null
+}
 
 interface SSHConnection {
   id: number
@@ -49,10 +56,12 @@ interface SSHConnection {
   username: string
   port: number
   default_path?: string
+  mount_point?: string
   status: string
   last_test?: string
   last_success?: string
   error_message?: string
+  storage?: StorageInfo | null
   created_at: string
 }
 
@@ -73,6 +82,7 @@ export default function SSHConnectionsSingleKey() {
     port: 22,
     password: '',
     default_path: '',
+    mount_point: '',
   })
   const [testConnectionForm, setTestConnectionForm] = useState({
     host: '',
@@ -84,6 +94,7 @@ export default function SSHConnectionsSingleKey() {
     username: '',
     port: 22,
     default_path: '',
+    mount_point: '',
   })
 
   // Queries
@@ -131,7 +142,7 @@ export default function SSHConnectionsSingleKey() {
       toast.success('SSH key deployed successfully!')
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
       setDeployDialogOpen(false)
-      setConnectionForm({ host: '', username: '', port: 22, password: '', default_path: '' })
+      setConnectionForm({ host: '', username: '', port: 22, password: '', default_path: '', mount_point: '' })
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to deploy SSH key')
@@ -181,6 +192,38 @@ export default function SSHConnectionsSingleKey() {
     },
   })
 
+  const refreshStorageMutation = useMutation({
+    mutationFn: (connectionId: number) => sshKeysAPI.refreshConnectionStorage(connectionId),
+    onSuccess: () => {
+      toast.success('Storage information refreshed!')
+      queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to refresh storage')
+    },
+  })
+
+  // Auto-refresh storage for connections without storage info
+  useEffect(() => {
+    if (connections && connections.length > 0) {
+      const connectionsWithoutStorage = connections.filter(conn => !conn.storage)
+
+      if (connectionsWithoutStorage.length > 0) {
+        // Refresh storage for each connection without storage (silently)
+        connectionsWithoutStorage.forEach(conn => {
+          sshKeysAPI.refreshConnectionStorage(conn.id).catch(() => {
+            // Silently fail - will show "No storage info" in card
+          })
+        })
+
+        // Invalidate query after delay to show updated data
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
+        }, 2000)
+      }
+    }
+  }, [connections?.length])
+
   // Handlers
   const handleGenerateKey = () => {
     generateKeyMutation.mutate({
@@ -215,18 +258,6 @@ export default function SSHConnectionsSingleKey() {
     setTestConnectionForm({ host: '', username: '', port: 22 })
   }
 
-  const handleTestConnection = (connection: SSHConnection) => {
-    if (!systemKey) return
-    testConnectionMutation.mutate({
-      keyId: systemKey.id,
-      connectionData: {
-        host: connection.host,
-        username: connection.username,
-        port: connection.port,
-      },
-    })
-  }
-
   const handleEditConnection = (connection: SSHConnection) => {
     setSelectedConnection(connection)
     setEditConnectionForm({
@@ -234,6 +265,7 @@ export default function SSHConnectionsSingleKey() {
       username: connection.username,
       port: connection.port,
       default_path: connection.default_path || '',
+      mount_point: connection.mount_point || '',
     })
     setEditConnectionDialogOpen(true)
   }
@@ -256,32 +288,6 @@ export default function SSHConnectionsSingleKey() {
     deleteConnectionMutation.mutate(selectedConnection.id)
   }
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'connected':
-        return <Wifi size={18} color="#ffffff" strokeWidth={1.5} />
-      case 'failed':
-        return <WifiOff size={18} color="#ffffff" strokeWidth={1.5} />
-      case 'testing':
-        return <CircularProgress size={18} />
-      default:
-        return <AlertTriangle size={18} color="#ffffff" strokeWidth={1.5} />
-    }
-  }
-
-  const getStatusColor = (status: string): 'success' | 'error' | 'warning' | 'info' => {
-    switch (status) {
-      case 'connected':
-        return 'success'
-      case 'failed':
-        return 'error'
-      case 'testing':
-        return 'info'
-      default:
-        return 'warning'
-    }
-  }
-
   if (keyLoading || connectionsLoading) {
     return (
       <Box
@@ -302,10 +308,10 @@ export default function SSHConnectionsSingleKey() {
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" fontWeight={600} gutterBottom>
-          SSH Connections
+          Remote Machines
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Manage your system SSH key and remote server connections
+          Manage remote machines with storage monitoring and logical mount points
         </Typography>
       </Box>
 
@@ -566,95 +572,27 @@ export default function SSHConnectionsSingleKey() {
                 No connections yet. Deploy your SSH key to a remote server to get started.
               </Alert>
             ) : (
-              <DataTable<SSHConnection>
-                data={connections}
-                columns={[
-                  {
-                    id: 'status',
-                    label: 'Status',
-                    render: (connection) => (
-                      <Stack direction="row" alignItems="center" spacing={1}>
-                        {getStatusIcon(connection.status)}
-                        <Chip
-                          label={connection.status}
-                          size="small"
-                          color={getStatusColor(connection.status)}
-                          sx={{ height: 20, fontSize: '0.7rem' }}
-                        />
-                      </Stack>
-                    ),
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: {
+                    xs: '1fr',
+                    sm: 'repeat(2, 1fr)',
+                    md: 'repeat(3, 1fr)',
                   },
-                  {
-                    id: 'host',
-                    label: 'Host',
-                    render: (connection) => (
-                      <Box>
-                        <Typography variant="body2" fontWeight={500}>
-                          {connection.host}
-                        </Typography>
-                        {connection.error_message && (
-                          <Typography
-                            variant="caption"
-                            color="error"
-                            sx={{ display: 'block', mt: 0.5 }}
-                          >
-                            {connection.error_message.substring(0, 50)}...
-                          </Typography>
-                        )}
-                      </Box>
-                    ),
-                  },
-                  {
-                    id: 'username',
-                    label: 'Username',
-                    render: (connection) => (
-                      <Typography variant="body2">{connection.username}</Typography>
-                    ),
-                  },
-                  {
-                    id: 'port',
-                    label: 'Port',
-                    render: (connection) => (
-                      <Typography variant="body2">{connection.port}</Typography>
-                    ),
-                  },
-                  {
-                    id: 'last_test',
-                    label: 'Last Test',
-                    render: (connection) => (
-                      <Typography variant="caption" color="text.secondary">
-                        {formatDate(connection.last_test)}
-                      </Typography>
-                    ),
-                  },
-                ]}
-                actions={[
-                  {
-                    icon: <Edit size={16} />,
-                    label: 'Edit connection',
-                    onClick: handleEditConnection,
-                    color: 'primary',
-                    tooltip: 'Edit connection',
-                  },
-                  {
-                    icon: <RefreshCw size={16} />,
-                    label: 'Test connection',
-                    onClick: handleTestConnection,
-                    tooltip: 'Test connection',
-                    disabled: () => testConnectionMutation.isPending,
-                  },
-                  {
-                    icon: <Trash2 size={16} />,
-                    label: 'Delete connection',
-                    onClick: handleDeleteConnection,
-                    color: 'error',
-                    tooltip: 'Delete connection',
-                  },
-                ]}
-                getRowKey={(connection) => connection.id}
-                variant="outlined"
-                enableHover={true}
-              />
+                  gap: 3,
+                }}
+              >
+                {connections.map((connection) => (
+                  <RemoteMachineCard
+                    key={connection.id}
+                    machine={connection}
+                    onEdit={handleEditConnection}
+                    onDelete={handleDeleteConnection}
+                    onRefreshStorage={(machine) => refreshStorageMutation.mutate(machine.id)}
+                  />
+                ))}
+              </Box>
             )}
           </CardContent>
         </Card>
@@ -763,6 +701,17 @@ export default function SSHConnectionsSingleKey() {
               }
               placeholder="/home"
               helperText="Starting directory for SSH file browsing (e.g., /home for Hetzner Storage Box)"
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="Mount Point (Optional)"
+              fullWidth
+              value={connectionForm.mount_point}
+              onChange={(e) =>
+                setConnectionForm({ ...connectionForm, mount_point: e.target.value })
+              }
+              placeholder="/hetzner or /homeserver"
+              helperText="Logical mount point for easy identification (e.g., /hetzner, /backup-server)"
               InputLabelProps={{ shrink: true }}
             />
             <Alert severity="info" sx={{ fontSize: '0.85rem' }}>
@@ -938,6 +887,20 @@ export default function SSHConnectionsSingleKey() {
               }
               placeholder="/home"
               helperText="Starting directory for SSH file browsing (e.g., /home for Hetzner Storage Box)"
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="Mount Point (Optional)"
+              fullWidth
+              value={editConnectionForm.mount_point}
+              onChange={(e) =>
+                setEditConnectionForm({
+                  ...editConnectionForm,
+                  mount_point: e.target.value,
+                })
+              }
+              placeholder="/hetzner or /homeserver"
+              helperText="Logical mount point for easy identification (e.g., /hetzner, /backup-server)"
               InputLabelProps={{ shrink: true }}
             />
             <Alert severity="info" sx={{ fontSize: '0.85rem' }}>
