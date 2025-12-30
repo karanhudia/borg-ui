@@ -30,9 +30,22 @@ if [ "$PUID" != "$CURRENT_PUID" ] || [ "$PGID" != "$CURRENT_PGID" ]; then
     echo "[$(date)] Updating ownership of /data, /backups, /home/borg..."
     chown -R borg:borg /data /backups /home/borg /var/log/borg /etc/borg 2>/dev/null || true
 
+    # Re-add borg user to fuse group after UID/GID change
+    # This is needed for SSHFS mounting in remote-to-remote backups
+    if getent group fuse > /dev/null 2>&1; then
+        usermod -a -G fuse borg 2>/dev/null || true
+        echo "[$(date)] Re-added borg user to fuse group for SSHFS support"
+    fi
+
     echo "[$(date)] UID/GID update complete"
 else
     echo "[$(date)] UID/GID already correct, skipping update"
+
+    # Ensure borg user is in fuse group (even when UID/GID hasn't changed)
+    if getent group fuse > /dev/null 2>&1; then
+        usermod -a -G fuse borg 2>/dev/null || true
+        echo "[$(date)] Ensured borg user is in fuse group for SSHFS support"
+    fi
 fi
 
 # Setup SSH key symlink for root user (when PUID=0)
