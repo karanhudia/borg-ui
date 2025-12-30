@@ -519,23 +519,59 @@ class BackupService:
             logger.info("Mounting SSH path via SSHFS", command=" ".join(cmd), job_id=job_id)
 
             # Execute mount command
+            # Note: SSHFS daemonizes by default, so process will return immediately
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
 
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
+            # Wait for SSHFS to complete mounting (it daemonizes, so this returns quickly)
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=10)
 
+            # SSHFS daemonizes, so returncode will be 0 if mount command was accepted
+            # But we need to verify the mount actually succeeded
             if process.returncode == 0:
-                logger.info("Successfully mounted SSH path", mount_point=mount_dir, ssh_url=ssh_url, job_id=job_id)
+                # Give SSHFS a moment to establish the mount
+                await asyncio.sleep(2)
 
-                # Track this mount for cleanup
-                if job_id not in self.ssh_mounts:
-                    self.ssh_mounts[job_id] = []
-                self.ssh_mounts[job_id].append((mount_dir, ssh_url))
+                # Verify mount by checking if directory is accessible
+                try:
+                    # Try to list the directory to verify mount succeeded
+                    test_process = await asyncio.create_subprocess_exec(
+                        "ls", "-A", mount_dir,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE
+                    )
+                    test_stdout, test_stderr = await asyncio.wait_for(test_process.communicate(), timeout=5)
 
-                return mount_dir
+                    if test_process.returncode == 0:
+                        logger.info("Successfully mounted and verified SSH path",
+                                   mount_point=mount_dir, ssh_url=ssh_url, job_id=job_id)
+
+                        # Track this mount for cleanup
+                        if job_id not in self.ssh_mounts:
+                            self.ssh_mounts[job_id] = []
+                        self.ssh_mounts[job_id].append((mount_dir, ssh_url))
+
+                        return mount_dir
+                    else:
+                        logger.error("Mount succeeded but directory not accessible",
+                                   ssh_url=ssh_url,
+                                   mount_point=mount_dir,
+                                   test_stderr=test_stderr.decode(),
+                                   job_id=job_id)
+                        # Try to unmount
+                        await self._unmount_ssh_path(mount_dir, job_id)
+                        return None
+
+                except asyncio.TimeoutError:
+                    logger.error("Timeout verifying mount",
+                               ssh_url=ssh_url,
+                               mount_point=mount_dir,
+                               job_id=job_id)
+                    await self._unmount_ssh_path(mount_dir, job_id)
+                    return None
             else:
                 stderr_output = stderr.decode().strip()
                 logger.error("Failed to mount SSH path",
