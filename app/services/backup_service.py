@@ -468,6 +468,26 @@ class BackupService:
         Returns: local mount point path, or None if mount failed
         """
         try:
+            # Check if SSHFS is available
+            try:
+                check_process = await asyncio.create_subprocess_exec(
+                    "which", "sshfs",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                await check_process.communicate()
+                if check_process.returncode != 0:
+                    logger.error(
+                        "SSHFS not found - cannot mount remote paths",
+                        ssh_url=ssh_url,
+                        job_id=job_id,
+                        hint="Install SSHFS package or rebuild Docker image with SSHFS support"
+                    )
+                    return None
+            except Exception as check_error:
+                logger.error("Error checking for SSHFS", error=str(check_error), job_id=job_id)
+                return None
+
             # Parse SSH URL
             parsed = self._parse_ssh_url(ssh_url)
             if not parsed:
@@ -515,11 +535,13 @@ class BackupService:
 
                 return mount_dir
             else:
+                stderr_output = stderr.decode().strip()
                 logger.error("Failed to mount SSH path",
                            ssh_url=ssh_url,
-                           stderr=stderr.decode(),
+                           stderr=stderr_output,
                            returncode=process.returncode,
-                           job_id=job_id)
+                           job_id=job_id,
+                           hint="Check if FUSE is enabled (container needs --cap-add SYS_ADMIN --device /dev/fuse or --privileged)")
                 # Cleanup the empty mount point
                 try:
                     os.rmdir(mount_dir)
@@ -529,6 +551,14 @@ class BackupService:
 
         except asyncio.TimeoutError:
             logger.error("Timeout while mounting SSH path", ssh_url=ssh_url, job_id=job_id)
+            return None
+        except FileNotFoundError as e:
+            logger.error(
+                "SSHFS command not found - install SSHFS or rebuild Docker image",
+                ssh_url=ssh_url,
+                error=str(e),
+                job_id=job_id
+            )
             return None
         except Exception as e:
             logger.error("Error mounting SSH path", ssh_url=ssh_url, error=str(e), job_id=job_id)

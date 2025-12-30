@@ -69,6 +69,8 @@ RUN apt-get update && apt-get install -y \
     # Additional useful packages
     rsync \
     openssh-client \
+    sshfs \
+    fuse \
     python3-pip \
     python3-dev \
     # Cleanup
