@@ -506,13 +506,14 @@ class BackupService:
                 "-p", parsed['port'],
                 "-o", "StrictHostKeyChecking=no",
                 "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "LogLevel=ERROR",
-                "-o", "ConnectTimeout=10",
+                "-o", "ConnectTimeout=30",
                 "-o", "ServerAliveInterval=15",
                 "-o", "ServerAliveCountMax=3",
                 "-o", "reconnect",
                 "-o", "follow_symlinks",
-                "-o", "allow_other"  # Allow non-root user to access mount
+                "-o", "allow_other",  # Allow non-root user to access mount
+                "-o", "workaround=rename",  # Compatibility workaround for SFTP servers
+                "-o", "idmap=user"  # Map remote UID to local user
             ]
 
             logger.info("Mounting SSH path via SSHFS", command=" ".join(cmd), job_id=job_id)
@@ -524,7 +525,7 @@ class BackupService:
                 stderr=asyncio.subprocess.PIPE
             )
 
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
 
             if process.returncode == 0:
                 logger.info("Successfully mounted SSH path", mount_point=mount_dir, ssh_url=ssh_url, job_id=job_id)
