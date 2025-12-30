@@ -29,7 +29,6 @@ import {
   Clock,
   Menu,
   Database,
-  Wifi,
   Computer,
   LogOut,
   User,
