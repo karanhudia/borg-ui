@@ -181,6 +181,7 @@ const Archives: React.FC = () => {
           name: item.name,
           path: item.path,
           size: item.size,
+          mtime: item.mtime,
           type: 'f',
         })
       }
@@ -700,7 +701,14 @@ const Archives: React.FC = () => {
                                 <Typography
                                   variant="body2"
                                   color="text.secondary"
-                                  sx={{ minWidth: 60, textAlign: 'right' }}
+                                  sx={{ width: 150, textAlign: 'right', fontFamily: 'monospace' }}
+                                >
+                                  {file.mtime ? formatDate(file.mtime) : '-'}
+                                </Typography>
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                  sx={{ width: 80, textAlign: 'right' }}
                                 >
                                   {file.size ? formatBytesUtil(file.size) : '0 B'}
                                 </Typography>

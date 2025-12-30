@@ -80,7 +80,8 @@ async def browse_archive_contents(
                                 all_items.append({
                                     "path": item_path,
                                     "type": item_data.get("type", ""),
-                                    "size": item_data.get("size")
+                                    "size": item_data.get("size"),
+                                    "mtime": item_data.get("mtime")  # Modification time
                                 })
                         except json.JSONDecodeError:
                             continue
@@ -102,6 +103,7 @@ async def browse_archive_contents(
             item_path = item["path"]
             item_type = item["type"]
             item_size = item.get("size")
+            item_mtime = item.get("mtime")
 
             # Get relative path from current directory
             if path:
@@ -144,6 +146,7 @@ async def browse_archive_contents(
                         "name": relative_path,
                         "type": "directory" if item_type == "d" else "file",
                         "size": item_size,
+                        "mtime": item_mtime,
                         "path": f"{path}/{relative_path}" if path else relative_path
                     })
 

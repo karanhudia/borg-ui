@@ -21,8 +21,9 @@ import {
   InputAdornment,
   Checkbox,
 } from '@mui/material'
-import { Folder, File, ChevronRight, Home, Search, Archive } from 'lucide-react'
+import { Folder, File, ChevronRight, Home, Search, Archive, HardDrive } from 'lucide-react'
 import api from '../services/api'
+import { sshKeysAPI } from '../services/api'
 
 interface FileSystemItem {
   name: string
@@ -31,7 +32,20 @@ interface FileSystemItem {
   size?: number
   modified?: string
   is_borg_repo: boolean
+  is_mount_point?: boolean
+  ssh_connection?: SSHConnection
   permissions?: string
+}
+
+interface SSHConnection {
+  id: number
+  ssh_key_id: number
+  host: string
+  username: string
+  port: number
+  default_path?: string
+  mount_point?: string
+  status: string
 }
 
 interface FileExplorerDialogProps {
@@ -68,29 +82,69 @@ export default function FileExplorerDialog({
   const [error, setError] = useState<string | null>(null)
   const [selectedPaths, setSelectedPaths] = useState<string[]>([])
   const [searchTerm, setSearchTerm] = useState('')
+  const [sshConnections, setSshConnections] = useState<SSHConnection[]>([])
+
+  // Track current browsing mode (can switch from local to ssh when clicking mount points)
+  const [activeConnectionType, setActiveConnectionType] = useState(connectionType)
+  const [activeSshConfig, setActiveSshConfig] = useState(sshConfig)
 
   useEffect(() => {
     if (open) {
+      setActiveConnectionType(connectionType)
+      setActiveSshConfig(sshConfig)
       loadDirectory(initialPath)
       setSelectedPaths([])
+      // Load SSH connections to show mount points
+      if (connectionType === 'local') {
+        loadSSHConnections()
+      }
     }
-  }, [open, initialPath])
+  }, [open, initialPath, connectionType, sshConfig])
 
-  const loadDirectory = async (path: string) => {
+  const loadSSHConnections = async () => {
+    try {
+      const response = await sshKeysAPI.getSSHConnections()
+      const connections = response.data?.connections || []
+      // Filter only connected connections with mount points
+      setSshConnections(
+        connections.filter(
+          (conn: SSHConnection) =>
+            conn.status === 'connected' && conn.mount_point && conn.mount_point.trim()
+        )
+      )
+    } catch (err) {
+      // Silently fail - mount points are optional
+      console.error('Failed to load SSH connections:', err)
+      setSshConnections([])
+    }
+  }
+
+  const loadDirectory = async (path: string, conn?: 'local' | 'ssh', config?: any) => {
     setLoading(true)
     setError(null)
+
+    // Update state if new connection params provided
+    if (conn !== undefined) {
+      setActiveConnectionType(conn)
+    }
+    if (config !== undefined) {
+      setActiveSshConfig(config)
+    }
+
+    const useConnectionType = conn !== undefined ? conn : activeConnectionType
+    const useSshConfig = config !== undefined ? config : activeSshConfig
 
     try {
       const params: any = {
         path,
-        connection_type: connectionType,
+        connection_type: useConnectionType,
       }
 
-      if (connectionType === 'ssh' && sshConfig) {
-        params.ssh_key_id = sshConfig.ssh_key_id
-        params.host = sshConfig.host
-        params.username = sshConfig.username
-        params.port = sshConfig.port
+      if (useConnectionType === 'ssh' && useSshConfig) {
+        params.ssh_key_id = useSshConfig.ssh_key_id
+        params.host = useSshConfig.host
+        params.username = useSshConfig.username
+        params.port = useSshConfig.port
       }
 
       const response = await api.get('/filesystem/browse', { params })
@@ -105,7 +159,17 @@ export default function FileExplorerDialog({
   }
 
   const handleItemClick = (item: FileSystemItem) => {
-    if (item.is_directory) {
+    if (item.is_mount_point && item.ssh_connection) {
+      // Switch to SSH browsing mode for this mount point
+      const sshCfg = {
+        ssh_key_id: item.ssh_connection.ssh_key_id,
+        host: item.ssh_connection.host,
+        username: item.ssh_connection.username,
+        port: item.ssh_connection.port,
+      }
+      const startPath = item.ssh_connection.default_path || '/'
+      loadDirectory(startPath, 'ssh', sshCfg)
+    } else if (item.is_directory) {
       loadDirectory(item.path)
     }
   }
@@ -125,16 +189,37 @@ export default function FileExplorerDialog({
   }
 
   const handleBreadcrumbClick = (path: string) => {
-    loadDirectory(path)
+    // If clicking root while in SSH mode from mount point, go back to local
+    if (path === '/' && activeConnectionType === 'ssh' && connectionType === 'local') {
+      setActiveConnectionType('local')
+      setActiveSshConfig(undefined)
+      loadDirectory('/', 'local', undefined)
+    } else {
+      loadDirectory(path)
+    }
   }
 
   const handleConfirm = () => {
-    onSelect(selectedPaths)
+    // Convert paths to SSH URL format if browsing via mount point
+    const paths = selectedPaths.map((path) => {
+      if (activeConnectionType === 'ssh' && activeSshConfig && connectionType === 'local') {
+        // We're browsing a mount point - convert to SSH URL
+        return `ssh://${activeSshConfig.username}@${activeSshConfig.host}:${activeSshConfig.port}${path}`
+      }
+      return path
+    })
+    onSelect(paths)
     onClose()
   }
 
   const handleSelectCurrent = () => {
-    onSelect([currentPath])
+    // Convert path to SSH URL format if browsing via mount point
+    let path = currentPath
+    if (activeConnectionType === 'ssh' && activeSshConfig && connectionType === 'local') {
+      // We're browsing a mount point - convert to SSH URL
+      path = `ssh://${activeSshConfig.username}@${activeSshConfig.host}:${activeSshConfig.port}${currentPath}`
+    }
+    onSelect([path])
     onClose()
   }
 
@@ -163,7 +248,21 @@ export default function FileExplorerDialog({
     return `${size.toFixed(1)} ${units[unitIndex]}`
   }
 
-  const filteredItems = items.filter((item) =>
+  // Add mount points as virtual items at root level
+  const getMountPointItems = (): FileSystemItem[] => {
+    if (currentPath !== '/' || activeConnectionType !== 'local') return []
+    return sshConnections.map((conn) => ({
+      name: conn.mount_point || '',
+      path: `ssh://${conn.username}@${conn.host}:${conn.port}${conn.default_path || '/'}`,
+      is_directory: true,
+      is_borg_repo: false,
+      is_mount_point: true,
+      ssh_connection: conn,
+    }))
+  }
+
+  const allItems = [...getMountPointItems(), ...items]
+  const filteredItems = allItems.filter((item) =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
@@ -180,9 +279,9 @@ export default function FileExplorerDialog({
           <Typography variant="h6" fontWeight={600}>
             {title}
           </Typography>
-          {connectionType === 'ssh' && sshConfig && (
+          {activeConnectionType === 'ssh' && activeSshConfig && (
             <Chip
-              label={`${sshConfig.username}@${sshConfig.host}`}
+              label={`${activeSshConfig.username}@${activeSshConfig.host}`}
               size="small"
               color="primary"
               variant="outlined"
@@ -356,10 +455,12 @@ export default function FileExplorerDialog({
                         }}
                       >
                         <ListItemIcon sx={{ minWidth: 32 }}>
-                          {item.is_borg_repo ? (
+                          {item.is_mount_point ? (
+                            <HardDrive size={18} color="#10b981" />
+                          ) : item.is_borg_repo ? (
                             <Archive size={18} color="#ff6b6b" />
                           ) : item.is_directory ? (
-                            <Folder size={18} color="text.primary" />
+                            <Folder size={18} color="#2563eb" />
                           ) : (
                             <File size={18} color="#999" />
                           )}
@@ -368,6 +469,14 @@ export default function FileExplorerDialog({
                           primary={
                             <Box display="flex" alignItems="center" gap={0.75}>
                               <Typography variant="body2">{item.name}</Typography>
+                              {item.is_mount_point && (
+                                <Chip
+                                  label="Remote"
+                                  size="small"
+                                  color="success"
+                                  sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600 }}
+                                />
+                              )}
                               {item.is_borg_repo && (
                                 <Chip
                                   label="Borg"
