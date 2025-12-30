@@ -54,7 +54,7 @@ async def collect_storage_info(connection: SSHConnection, ssh_key: SSHKey) -> Op
             # Use default_path or root for df check
             check_path = connection.default_path or "/"
 
-            # Run df command on remote host
+            # Run df command on remote host - use grep to skip header line
             df_cmd = [
                 "ssh",
                 "-i", temp_key_file,
@@ -64,7 +64,7 @@ async def collect_storage_info(connection: SSHConnection, ssh_key: SSHKey) -> Op
                 "-o", "ConnectTimeout=10",
                 "-p", str(connection.port),
                 f"{connection.username}@{connection.host}",
-                f"df -k {check_path} | tail -1"
+                f"df -k {check_path} | grep -v '^Filesystem' | grep -v '1K-blocks' | head -1"
             ]
 
             process = await asyncio.create_subprocess_exec(
@@ -78,22 +78,43 @@ async def collect_storage_info(connection: SSHConnection, ssh_key: SSHKey) -> Op
                 # Parse df output
                 # Format: Filesystem 1K-blocks Used Available Use% Mounted
                 output = stdout.decode().strip()
+
+                if not output:
+                    logger.warning("Empty df output",
+                                 connection_id=connection.id,
+                                 path=check_path)
+                    return None
+
                 parts = output.split()
 
                 if len(parts) >= 5:
-                    total_kb = int(parts[1])
-                    used_kb = int(parts[2])
-                    available_kb = int(parts[3])
-                    percent_str = parts[4].rstrip('%')
+                    # Validate that we can parse the numeric values
+                    try:
+                        total_kb = int(parts[1])
+                        used_kb = int(parts[2])
+                        available_kb = int(parts[3])
+                        percent_str = parts[4].rstrip('%')
 
-                    return {
-                        "total": total_kb * 1024,  # Convert to bytes
-                        "used": used_kb * 1024,
-                        "available": available_kb * 1024,
-                        "percent_used": float(percent_str),
-                        "filesystem": parts[0],
-                        "mount_point": parts[5] if len(parts) > 5 else check_path
-                    }
+                        return {
+                            "total": total_kb * 1024,  # Convert to bytes
+                            "used": used_kb * 1024,
+                            "available": available_kb * 1024,
+                            "percent_used": float(percent_str),
+                            "filesystem": parts[0],
+                            "mount_point": parts[5] if len(parts) > 5 else check_path
+                        }
+                    except (ValueError, IndexError) as e:
+                        logger.warning("Failed to parse df output",
+                                     connection_id=connection.id,
+                                     output=output,
+                                     error=str(e))
+                        return None
+                else:
+                    logger.warning("Invalid df output format",
+                                 connection_id=connection.id,
+                                 output=output,
+                                 parts_count=len(parts))
+                    return None
             else:
                 logger.warning("Failed to get remote disk usage",
                              connection_id=connection.id,
