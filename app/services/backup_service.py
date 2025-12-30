@@ -511,7 +511,8 @@ class BackupService:
                 "-o", "ServerAliveInterval=15",
                 "-o", "ServerAliveCountMax=3",
                 "-o", "reconnect",
-                "-o", "follow_symlinks"
+                "-o", "follow_symlinks",
+                "-o", "allow_other"  # Allow non-root user to access mount
             ]
 
             logger.info("Mounting SSH path via SSHFS", command=" ".join(cmd), job_id=job_id)
