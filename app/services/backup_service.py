@@ -983,8 +983,23 @@ class BackupService:
             # Add repository::archive
             cmd.append(f"{actual_repository_path}::{archive_name}")
 
-            # Add all source paths to the command (using processed paths with mounted SSH URLs)
-            cmd.extend(processed_source_paths)
+            # Add all source paths to the command
+            # For mounted SSH paths, use -C to change directory so archive doesn't include mount path
+            if job_id in self.ssh_mounts:
+                # We have SSH mounts - need to use -C option
+                for path in processed_source_paths:
+                    # Check if this path is a mount point
+                    is_mount = any(mount_point == path for mount_point, _ in self.ssh_mounts[job_id])
+                    if is_mount:
+                        # Use -C to change into the mounted directory and backup its contents
+                        cmd.extend(["-C", path, "."])
+                        logger.debug("Adding mounted path with -C", path=path, job_id=job_id)
+                    else:
+                        # Regular local path
+                        cmd.append(path)
+            else:
+                # No mounts, add all paths normally
+                cmd.extend(processed_source_paths)
 
             logger.info("Starting borg backup", job_id=job_id, repository=actual_repository_path, archive=archive_name, command=" ".join(cmd))
 
