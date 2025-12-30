@@ -123,8 +123,11 @@ RUN mkdir -p \
 # Runtime UID/GID can be changed via PUID/PGID environment variables
 RUN groupadd -g 1001 borg && \
     useradd -m -u 1001 -g 1001 -s /bin/bash borg && \
-    # Add user to necessary groups (including fuse for SSHFS mounting)
-    usermod -a -G sudo,fuse borg && \
+    # Add user to necessary groups
+    usermod -a -G sudo borg && \
+    # Create fuse group if it doesn't exist (for SSHFS mounting)
+    groupadd -f fuse && \
+    usermod -a -G fuse borg && \
     # Set up sudo access for borg user (needed for cron jobs, borg operations, and package installation)
     echo "borg ALL=(ALL) NOPASSWD: /usr/bin/borg, /usr/bin/crontab, /usr/bin/apt-get" >> /etc/sudoers && \
     # Enable user_allow_other in fuse.conf (required for non-root FUSE mounts)
