@@ -357,6 +357,74 @@ class TestAuthenticationLogin:
 
         assert response.status_code == 401
 
+    def test_login_with_special_characters_in_password(
+        self,
+        test_client: TestClient,
+        test_db
+    ):
+        """
+        Test login with special characters in password (especially '&' which can be problematic in URL encoding).
+        This tests the fix for issue #117 where '&' in password prevents login.
+        """
+        # Create a user with a password containing special characters
+        special_password = "test&pass=123%special"
+        user = User(
+            username="specialuser",
+            password_hash=get_password_hash(special_password),
+            is_active=True,
+            is_admin=False
+        )
+        test_db.add(user)
+        test_db.commit()
+
+        # Login with the special character password
+        response = test_client.post(
+            "/api/auth/login",
+            data={
+                "username": "specialuser",
+                "password": special_password
+            }
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "access_token" in data
+        assert data["token_type"] == "bearer"
+
+    def test_login_with_ampersand_in_password(
+        self,
+        test_client: TestClient,
+        test_db
+    ):
+        """
+        Test login with ampersand specifically in password.
+        This is a regression test for issue #117.
+        """
+        # Create a user with an ampersand in the password
+        password_with_ampersand = "myPass&word123"
+        user = User(
+            username="ampersanduser",
+            password_hash=get_password_hash(password_with_ampersand),
+            is_active=True,
+            is_admin=False
+        )
+        test_db.add(user)
+        test_db.commit()
+
+        # Login should succeed
+        response = test_client.post(
+            "/api/auth/login",
+            data={
+                "username": "ampersanduser",
+                "password": password_with_ampersand
+            }
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "access_token" in data
+        assert data["token_type"] == "bearer"
+
 
 @pytest.mark.unit
 class TestProtectedEndpoints:

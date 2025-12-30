@@ -34,7 +34,7 @@ api.interceptors.response.use(
 
 export const authAPI = {
   login: (username: string, password: string) =>
-    api.post('/auth/login', `username=${username}&password=${password}`, {
+    api.post('/auth/login', `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     }),
 
