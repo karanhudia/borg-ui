@@ -21,10 +21,14 @@ services:
     restart: unless-stopped
 
     # Required for remote-to-remote backups (SSHFS mounting)
-    cap_add:
-      - SYS_ADMIN
-    devices:
-      - /dev/fuse:/dev/fuse
+    privileged: true
+    # Alternatively, use these minimal permissions (comment out privileged above):
+    # cap_add:
+    #   - SYS_ADMIN
+    # devices:
+    #   - /dev/fuse:/dev/fuse
+    # security_opt:
+    #   - apparmor:unconfined
 
     ports:
       - "${PORT:-8081}:${PORT:-8081}"
