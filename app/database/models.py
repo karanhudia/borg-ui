@@ -106,13 +106,22 @@ class SSHConnection(Base):
     username = Column(String)
     port = Column(Integer, default=22)
     default_path = Column(String, nullable=True)  # Default starting path for SSH browsing (e.g., /home for Hetzner Storage Box)
+    mount_point = Column(String, nullable=True)  # Logical mount point (e.g., /hetzner, /homeserver)
     status = Column(String, default="unknown")  # connected, failed, testing, unknown
     last_test = Column(DateTime, nullable=True)
     last_success = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
+
+    # Storage information
+    storage_total = Column(BigInteger, nullable=True)  # Total storage in bytes
+    storage_used = Column(BigInteger, nullable=True)  # Used storage in bytes
+    storage_available = Column(BigInteger, nullable=True)  # Available storage in bytes
+    storage_percent_used = Column(Float, nullable=True)  # Percentage of storage used
+    last_storage_check = Column(DateTime, nullable=True)  # Last time storage was checked
+
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
-    
+
     # Relationships
     ssh_key = relationship("SSHKey", back_populates="connections")
 

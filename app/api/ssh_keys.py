@@ -20,6 +20,103 @@ import hashlib
 logger = structlog.get_logger()
 router = APIRouter(tags=["ssh-keys"])
 
+# Helper functions
+def format_bytes(bytes_size: int) -> str:
+    """Format bytes to human readable string (e.g., '1.23 GB')"""
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB', 'PB']:
+        if bytes_size < 1024.0:
+            return f"{bytes_size:.2f} {unit}"
+        bytes_size /= 1024.0
+    return f"{bytes_size:.2f} EB"
+
+async def collect_storage_info(connection: SSHConnection, ssh_key: SSHKey) -> Optional[Dict[str, Any]]:
+    """
+    Collect storage information for an SSH connection using df command.
+    Returns dict with storage info or None if collection fails.
+    """
+    try:
+        # Decrypt private key
+        encryption_key = settings.secret_key.encode()[:32]
+        cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
+        private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+
+        if not private_key.endswith('\n'):
+            private_key += '\n'
+
+        # Create temporary key file
+        with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+            f.write(private_key)
+            temp_key_file = f.name
+
+        os.chmod(temp_key_file, 0o600)
+
+        try:
+            # Use default_path or root for df check
+            check_path = connection.default_path or "/"
+
+            # Run df command on remote host
+            df_cmd = [
+                "ssh",
+                "-i", temp_key_file,
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "UserKnownHostsFile=/dev/null",
+                "-o", "LogLevel=ERROR",
+                "-o", "ConnectTimeout=10",
+                "-p", str(connection.port),
+                f"{connection.username}@{connection.host}",
+                f"df -k {check_path} | tail -1"
+            ]
+
+            process = await asyncio.create_subprocess_exec(
+                *df_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=15)
+
+            if process.returncode == 0:
+                # Parse df output
+                # Format: Filesystem 1K-blocks Used Available Use% Mounted
+                output = stdout.decode().strip()
+                parts = output.split()
+
+                if len(parts) >= 5:
+                    total_kb = int(parts[1])
+                    used_kb = int(parts[2])
+                    available_kb = int(parts[3])
+                    percent_str = parts[4].rstrip('%')
+
+                    return {
+                        "total": total_kb * 1024,  # Convert to bytes
+                        "used": used_kb * 1024,
+                        "available": available_kb * 1024,
+                        "percent_used": float(percent_str),
+                        "filesystem": parts[0],
+                        "mount_point": parts[5] if len(parts) > 5 else check_path
+                    }
+            else:
+                logger.warning("Failed to get remote disk usage",
+                             connection_id=connection.id,
+                             error=stderr.decode())
+                return None
+
+        finally:
+            # Clean up temporary key file
+            if os.path.exists(temp_key_file):
+                try:
+                    os.unlink(temp_key_file)
+                except:
+                    pass
+
+    except asyncio.TimeoutError:
+        logger.warning("Timeout getting remote disk usage", connection_id=connection.id)
+        return None
+    except Exception as e:
+        logger.error("Failed to collect storage info",
+                   connection_id=connection.id,
+                   error=str(e))
+        return None
+
 # Pydantic models
 from pydantic import BaseModel
 
@@ -67,6 +164,7 @@ class SSHConnectionCreate(BaseModel):
     port: int = 22
     password: str
     default_path: Optional[str] = None  # Default starting path for SSH browsing
+    mount_point: Optional[str] = None  # Logical mount point (e.g., /hetzner)
 
 class SSHConnectionTest(BaseModel):
     host: str
@@ -78,6 +176,17 @@ class SSHConnectionUpdate(BaseModel):
     username: Optional[str] = None
     port: Optional[int] = None
     default_path: Optional[str] = None  # Default starting path for SSH browsing
+    mount_point: Optional[str] = None  # Logical mount point
+
+class SSHConnectionStorage(BaseModel):
+    total: int
+    total_formatted: str
+    used: int
+    used_formatted: str
+    available: int
+    available_formatted: str
+    percent_used: float
+    last_check: Optional[str]
 
 class SSHConnectionInfo(BaseModel):
     id: int
@@ -85,10 +194,12 @@ class SSHConnectionInfo(BaseModel):
     username: str
     port: int
     default_path: Optional[str]  # Default starting path for SSH browsing
+    mount_point: Optional[str]  # Logical mount point
     status: str
     last_test: Optional[str]
     last_success: Optional[str]
     error_message: Optional[str]
+    storage: Optional[SSHConnectionStorage]  # Storage information
     created_at: str
 
 @router.get("/system-key")
@@ -525,28 +636,46 @@ async def get_ssh_connections(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get all SSH connections"""
+    """Get all SSH connections with storage information"""
     try:
         connections = db.query(SSHConnection).all()
+
+        result_connections = []
+        for conn in connections:
+            # Format storage info if available
+            storage = None
+            if conn.storage_total is not None:
+                storage = {
+                    "total": conn.storage_total,
+                    "total_formatted": format_bytes(conn.storage_total),
+                    "used": conn.storage_used,
+                    "used_formatted": format_bytes(conn.storage_used),
+                    "available": conn.storage_available,
+                    "available_formatted": format_bytes(conn.storage_available),
+                    "percent_used": conn.storage_percent_used,
+                    "last_check": serialize_datetime(conn.last_storage_check)
+                }
+
+            result_connections.append({
+                "id": conn.id,
+                "ssh_key_id": conn.ssh_key_id,
+                "ssh_key_name": conn.ssh_key.name,
+                "host": conn.host,
+                "username": conn.username,
+                "port": conn.port,
+                "default_path": conn.default_path,
+                "mount_point": conn.mount_point,
+                "status": conn.status,
+                "last_test": serialize_datetime(conn.last_test),
+                "last_success": serialize_datetime(conn.last_success),
+                "error_message": conn.error_message,
+                "storage": storage,
+                "created_at": serialize_datetime(conn.created_at)
+            })
+
         return {
             "success": True,
-            "connections": [
-                {
-                    "id": conn.id,
-                    "ssh_key_id": conn.ssh_key_id,
-                    "ssh_key_name": conn.ssh_key.name,
-                    "host": conn.host,
-                    "username": conn.username,
-                    "port": conn.port,
-                    "default_path": conn.default_path,
-                    "status": conn.status,
-                    "last_test": serialize_datetime(conn.last_test),
-                    "last_success": serialize_datetime(conn.last_success),
-                    "error_message": conn.error_message,
-                    "created_at": serialize_datetime(conn.created_at)
-                }
-                for conn in connections
-            ]
+            "connections": result_connections
         }
     except Exception as e:
         logger.error("Failed to get SSH connections", error=str(e))
@@ -644,6 +773,8 @@ async def update_ssh_connection(
             connection.port = connection_data.port
         if connection_data.default_path is not None:
             connection.default_path = connection_data.default_path
+        if connection_data.mount_point is not None:
+            connection.mount_point = connection_data.mount_point
         connection.updated_at = datetime.utcnow()
 
         db.commit()
@@ -670,6 +801,76 @@ async def update_ssh_connection(
     except Exception as e:
         logger.error("Failed to update SSH connection", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to update SSH connection: {str(e)}")
+
+@router.post("/connections/{connection_id}/refresh-storage")
+async def refresh_connection_storage(
+    connection_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Refresh storage information for an SSH connection"""
+    try:
+        connection = db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
+        if not connection:
+            raise HTTPException(status_code=404, detail="SSH connection not found")
+
+        ssh_key = connection.ssh_key
+        if not ssh_key:
+            raise HTTPException(status_code=404, detail="SSH key not found for this connection")
+
+        logger.info("Refreshing storage for SSH connection",
+                   connection_id=connection_id,
+                   host=connection.host)
+
+        # Collect storage information
+        storage_info = await collect_storage_info(connection, ssh_key)
+
+        if storage_info:
+            # Update connection with storage info
+            connection.storage_total = storage_info["total"]
+            connection.storage_used = storage_info["used"]
+            connection.storage_available = storage_info["available"]
+            connection.storage_percent_used = storage_info["percent_used"]
+            connection.last_storage_check = datetime.utcnow()
+
+            db.commit()
+            db.refresh(connection)
+
+            logger.info("Storage refreshed successfully",
+                       connection_id=connection_id,
+                       storage_collected=True)
+
+            # Return formatted storage info
+            storage = {
+                "total": connection.storage_total,
+                "total_formatted": format_bytes(connection.storage_total),
+                "used": connection.storage_used,
+                "used_formatted": format_bytes(connection.storage_used),
+                "available": connection.storage_available,
+                "available_formatted": format_bytes(connection.storage_available),
+                "percent_used": connection.storage_percent_used,
+                "last_check": serialize_datetime(connection.last_storage_check)
+            }
+
+            return {
+                "success": True,
+                "message": "Storage information refreshed successfully",
+                "storage": storage
+            }
+        else:
+            logger.warning("Failed to collect storage information",
+                         connection_id=connection_id)
+            return {
+                "success": False,
+                "message": "Failed to collect storage information",
+                "storage": None
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to refresh storage", error=str(e), connection_id=connection_id)
+        raise HTTPException(status_code=500, detail=f"Failed to refresh storage: {str(e)}")
 
 @router.delete("/connections/{connection_id}")
 async def delete_ssh_connection(
