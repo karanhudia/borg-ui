@@ -494,9 +494,24 @@ class BackupService:
                 logger.error("Failed to parse SSH URL", ssh_url=ssh_url, job_id=job_id)
                 return None
 
-            # Create temporary mount point
-            mount_dir = tempfile.mkdtemp(prefix=f"borg_ssh_mount_{job_id}_")
-            logger.info("Created temporary mount point", mount_point=mount_dir, ssh_url=ssh_url, job_id=job_id)
+            # Create temporary mount point with directory structure
+            # Extract the last component of the remote path for a clean archive structure
+            remote_path = parsed['path']
+            path_basename = os.path.basename(remote_path.rstrip('/'))
+
+            # Create a temporary root directory
+            temp_root = tempfile.mkdtemp(prefix=f"borg_backup_root_{job_id}_")
+
+            # Create the mount point inside with the remote directory name
+            mount_dir = os.path.join(temp_root, path_basename)
+            os.makedirs(mount_dir, exist_ok=True)
+
+            logger.info("Created temporary mount point",
+                       temp_root=temp_root,
+                       mount_point=mount_dir,
+                       remote_basename=path_basename,
+                       ssh_url=ssh_url,
+                       job_id=job_id)
 
             # Get current user's UID and GID for mount options
             current_uid = os.getuid()
@@ -535,6 +550,14 @@ class BackupService:
             # Give SSHFS a moment to start mounting (it forks immediately)
             await asyncio.sleep(1)
 
+            # Helper function to cleanup on failure
+            def cleanup_on_failure():
+                try:
+                    import shutil
+                    shutil.rmtree(temp_root, ignore_errors=True)
+                except:
+                    pass
+
             # Check if the mount succeeded by trying to access the directory
             # We do this in a loop to give SSHFS time to establish the mount
             for attempt in range(5):  # Try for up to 5 seconds
@@ -549,17 +572,18 @@ class BackupService:
 
                     if test_process.returncode == 0:
                         logger.info("Successfully mounted and verified SSH path",
+                                   temp_root=temp_root,
                                    mount_point=mount_dir,
                                    ssh_url=ssh_url,
                                    attempt=attempt+1,
                                    job_id=job_id)
 
-                        # Track this mount for cleanup
+                        # Track this mount for cleanup (store both mount_dir and temp_root)
                         if job_id not in self.ssh_mounts:
                             self.ssh_mounts[job_id] = []
-                        self.ssh_mounts[job_id].append((mount_dir, ssh_url))
+                        self.ssh_mounts[job_id].append((mount_dir, temp_root, ssh_url))
 
-                        return mount_dir
+                        return temp_root  # Return temp_root for backup, not mount_dir
                     else:
                         # Mount not ready yet, wait and retry
                         if attempt < 4:
@@ -573,6 +597,7 @@ class BackupService:
                                        test_stderr=stderr_msg,
                                        job_id=job_id)
                             await self._unmount_ssh_path(mount_dir, job_id)
+                            cleanup_on_failure()
                             return None
 
                 except asyncio.TimeoutError:
@@ -585,6 +610,7 @@ class BackupService:
                                    mount_point=mount_dir,
                                    job_id=job_id)
                         await self._unmount_ssh_path(mount_dir, job_id)
+                        cleanup_on_failure()
                         return None
                 except Exception as e:
                     logger.error("Error verifying mount",
@@ -594,11 +620,17 @@ class BackupService:
                                job_id=job_id)
                     if attempt == 4:
                         await self._unmount_ssh_path(mount_dir, job_id)
+                        cleanup_on_failure()
                         return None
                     await asyncio.sleep(1)
 
         except asyncio.TimeoutError:
             logger.error("Timeout while mounting SSH path", ssh_url=ssh_url, job_id=job_id)
+            try:
+                import shutil
+                shutil.rmtree(temp_root, ignore_errors=True)
+            except:
+                pass
             return None
         except FileNotFoundError as e:
             logger.error(
@@ -607,9 +639,19 @@ class BackupService:
                 error=str(e),
                 job_id=job_id
             )
+            try:
+                import shutil
+                shutil.rmtree(temp_root, ignore_errors=True)
+            except:
+                pass
             return None
         except Exception as e:
             logger.error("Error mounting SSH path", ssh_url=ssh_url, error=str(e), job_id=job_id)
+            try:
+                import shutil
+                shutil.rmtree(temp_root, ignore_errors=True)
+            except:
+                pass
             return None
 
     async def _unmount_ssh_path(self, mount_point: str, job_id: int):
@@ -658,17 +700,17 @@ class BackupService:
     async def _prepare_source_paths(self, source_paths: list[str], job_id: int) -> list[str]:
         """
         Prepare source paths for backup by mounting SSH URLs via SSHFS
-        Returns: list of processed paths (SSH URLs replaced with local mount points)
+        Returns: list of processed paths (SSH URLs replaced with temp root directories)
         """
         processed_paths = []
 
         for path in source_paths:
             if path.startswith('ssh://'):
-                # Mount SSH path
-                mount_point = await self._mount_ssh_path(path, job_id)
-                if mount_point:
-                    processed_paths.append(mount_point)
-                    logger.info("Using mounted path for backup", original=path, mount_point=mount_point, job_id=job_id)
+                # Mount SSH path - this returns the temp_root directory
+                temp_root = await self._mount_ssh_path(path, job_id)
+                if temp_root:
+                    processed_paths.append(temp_root)
+                    logger.info("Using mounted path for backup", original=path, backup_root=temp_root, job_id=job_id)
                 else:
                     logger.error("Failed to mount SSH path, skipping from backup", path=path, job_id=job_id)
                     # Don't add this path to processed_paths - skip it
@@ -688,8 +730,20 @@ class BackupService:
         mounts = self.ssh_mounts[job_id]
         logger.info("Cleaning up SSH mounts", job_id=job_id, mount_count=len(mounts))
 
-        for mount_point, ssh_url in mounts:
+        for mount_point, temp_root, ssh_url in mounts:
+            # Unmount the SSHFS mount
             await self._unmount_ssh_path(mount_point, job_id)
+
+            # Remove the temporary root directory
+            try:
+                import shutil
+                shutil.rmtree(temp_root, ignore_errors=True)
+                logger.debug("Removed temporary root directory", temp_root=temp_root, job_id=job_id)
+            except Exception as e:
+                logger.warning("Failed to remove temporary root directory",
+                             temp_root=temp_root,
+                             error=str(e),
+                             job_id=job_id)
 
         # Remove from tracking
         del self.ssh_mounts[job_id]
@@ -983,23 +1037,8 @@ class BackupService:
             # Add repository::archive
             cmd.append(f"{actual_repository_path}::{archive_name}")
 
-            # Add all source paths to the command
-            # For mounted SSH paths, use -C to change directory so archive doesn't include mount path
-            if job_id in self.ssh_mounts:
-                # We have SSH mounts - need to use -C option
-                for path in processed_source_paths:
-                    # Check if this path is a mount point
-                    is_mount = any(mount_point == path for mount_point, _ in self.ssh_mounts[job_id])
-                    if is_mount:
-                        # Use -C to change into the mounted directory and backup its contents
-                        cmd.extend(["-C", path, "."])
-                        logger.debug("Adding mounted path with -C", path=path, job_id=job_id)
-                    else:
-                        # Regular local path
-                        cmd.append(path)
-            else:
-                # No mounts, add all paths normally
-                cmd.extend(processed_source_paths)
+            # Add all source paths to the command (using processed paths with mounted SSH URLs)
+            cmd.extend(processed_source_paths)
 
             logger.info("Starting borg backup", job_id=job_id, repository=actual_repository_path, archive=archive_name, command=" ".join(cmd))
 
