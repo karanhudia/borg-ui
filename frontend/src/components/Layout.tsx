@@ -163,31 +163,47 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <Box>
         <Toolbar sx={{ gap: 1.5 }}>
           <Box
+            component={Link}
+            to="/dashboard"
             sx={{
-              width: 36,
-              height: 36,
-              borderRadius: '50%',
-              backgroundColor: '#00dd00',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              padding: '6px',
+              gap: 1.5,
+              textDecoration: 'none',
+              color: 'inherit',
+              cursor: 'pointer',
+              '&:hover': {
+                opacity: 0.8,
+              },
             }}
           >
             <Box
-              component="img"
-              src="/logo.png"
-              alt="Borg UI Logo"
               sx={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
+                width: 36,
+                height: 36,
+                borderRadius: '50%',
+                backgroundColor: '#00dd00',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '6px',
               }}
-            />
+            >
+              <Box
+                component="img"
+                src="/logo.png"
+                alt="Borg UI Logo"
+                sx={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                }}
+              />
+            </Box>
+            <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 600 }}>
+              Borg UI
+            </Typography>
           </Box>
-          <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 600 }}>
-            Borg UI
-          </Typography>
         </Toolbar>
         <Divider />
         <List sx={{ pt: 0 }}>
