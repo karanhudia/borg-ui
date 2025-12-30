@@ -20,6 +20,12 @@ services:
     container_name: borg-web-ui
     restart: unless-stopped
 
+    # Required for remote-to-remote backups (SSHFS mounting)
+    cap_add:
+      - SYS_ADMIN
+    devices:
+      - /dev/fuse:/dev/fuse
+
     ports:
       - "${PORT:-8081}:${PORT:-8081}"
 
