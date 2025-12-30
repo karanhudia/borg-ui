@@ -320,3 +320,20 @@ export const formatDateTimeFull = (dateString: string | null | undefined): strin
     return dateString
   }
 }
+
+/**
+ * Format a date string to compact format for tables/lists
+ * Example: "2025-11-09T14:56:53Z" -> "9 Nov 2025, 2:56 PM"
+ */
+export const formatDateCompact = (dateString: string | null | undefined): string => {
+  if (!dateString) return 'Never'
+
+  try {
+    const date = new Date(dateString)
+    // Format: "17 Oct 2025, 2:13 PM" (no seconds, abbreviated month)
+    return format(date, 'd MMM yyyy, h:mm a')
+  } catch (error) {
+    console.error('Error formatting compact date:', error)
+    return dateString
+  }
+}
