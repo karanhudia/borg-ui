@@ -24,16 +24,7 @@ import {
   Tooltip,
   InputAdornment,
 } from '@mui/material'
-import {
-  Key,
-  Copy,
-  RefreshCw,
-  Wifi,
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
-  Plus,
-} from 'lucide-react'
+import { Key, Copy, RefreshCw, Wifi, CheckCircle, XCircle, AlertTriangle, Plus } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import RemoteMachineCard from '../components/RemoteMachineCard'
 
@@ -142,7 +133,14 @@ export default function SSHConnectionsSingleKey() {
       toast.success('SSH key deployed successfully!')
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
       setDeployDialogOpen(false)
-      setConnectionForm({ host: '', username: '', port: 22, password: '', default_path: '', mount_point: '' })
+      setConnectionForm({
+        host: '',
+        username: '',
+        port: 22,
+        password: '',
+        default_path: '',
+        mount_point: '',
+      })
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to deploy SSH key')
@@ -206,11 +204,11 @@ export default function SSHConnectionsSingleKey() {
   // Auto-refresh storage for connections without storage info
   useEffect(() => {
     if (connections && connections.length > 0) {
-      const connectionsWithoutStorage = connections.filter(conn => !conn.storage)
+      const connectionsWithoutStorage = connections.filter((conn) => !conn.storage)
 
       if (connectionsWithoutStorage.length > 0) {
         // Refresh storage for each connection without storage (silently)
-        connectionsWithoutStorage.forEach(conn => {
+        connectionsWithoutStorage.forEach((conn) => {
           sshKeysAPI.refreshConnectionStorage(conn.id).catch(() => {
             // Silently fail - will show "No storage info" in card
           })
