@@ -79,6 +79,20 @@ volumes:
 
 **⚠️ Security Note:** Replace `/home/yourusername` with your actual directory path. Only mount directories you want to backup. See the [Configuration Guide](https://karanhudia.github.io/borg-ui/configuration) for more examples and security best practices.
 
+**📝 Remote-to-Remote Backups:** To backup from one remote machine to another (via SSH URLs), FUSE access is required. Add these options to your `docker-compose.yml`:
+
+```yaml
+services:
+  borg-ui:
+    # ... other configuration ...
+    cap_add:
+      - SYS_ADMIN
+    devices:
+      - /dev/fuse:/dev/fuse
+    # OR use privileged mode (less secure)
+    # privileged: true
+```
+
 Start the container:
 
 ```bash
