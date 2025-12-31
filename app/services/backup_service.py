@@ -394,7 +394,7 @@ class BackupService:
                                 stderr=asyncio.subprocess.PIPE
                             )
 
-                            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+                            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=120)
 
                             if process.returncode == 0:
                                 output = stdout.decode().strip()
@@ -420,7 +420,7 @@ class BackupService:
                             stderr=asyncio.subprocess.PIPE
                         )
 
-                        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+                        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=120)
 
                         if process.returncode == 0:
                             # Parse output: "1234567\t/path/to/dir"
@@ -444,6 +444,38 @@ class BackupService:
         except Exception as e:
             logger.error("Failed to calculate total source size", error=str(e))
             return 0
+
+    async def _calculate_and_update_size_background(self, job_id: int, source_paths: list[str]):
+        """
+        Background task to calculate source size and update job record
+        Runs without blocking the backup start
+        """
+        try:
+            logger.info("Background size calculation started", job_id=job_id, source_paths=source_paths)
+            total_expected_size = await self._calculate_source_size(source_paths)
+
+            if total_expected_size > 0:
+                # Update the job record with the calculated size
+                db = SessionLocal()
+                try:
+                    job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
+                    if job and job.status == "running":
+                        job.total_expected_size = total_expected_size
+                        db.commit()
+                        logger.info("Background size calculation completed and job updated",
+                                   job_id=job_id,
+                                   total_expected_size=total_expected_size,
+                                   size_formatted=self._format_bytes(total_expected_size))
+                    else:
+                        logger.info("Background size calculation completed but job no longer running",
+                                   job_id=job_id)
+                finally:
+                    db.close()
+            else:
+                logger.warning("Background size calculation completed but returned 0", job_id=job_id)
+
+        except Exception as e:
+            logger.error("Error in background size calculation", job_id=job_id, error=str(e))
 
     def _parse_ssh_url(self, ssh_url: str) -> dict:
         """
@@ -977,16 +1009,11 @@ class BackupService:
                                      job_id=job_id,
                                      continue_on_failure=True)
 
-            # Calculate total expected size of source directories
-            logger.info("Calculating total size of source directories", source_paths=source_paths)
-            total_expected_size = await self._calculate_source_size(source_paths)
-            if total_expected_size > 0:
-                job.total_expected_size = total_expected_size
-                db.commit()
-                logger.info("Stored expected size", job_id=job_id, total_expected_size=total_expected_size,
-                          size_formatted=self._format_bytes(total_expected_size))
-            else:
-                logger.warning("Could not calculate expected size, progress percentage will not be accurate")
+            # Calculate total expected size of source directories in background
+            # This runs asynchronously without blocking backup start
+            # Progress percentage will update when calculation completes
+            logger.info("Starting background calculation of source directories size", source_paths=source_paths, job_id=job_id)
+            asyncio.create_task(self._calculate_and_update_size_background(job_id, source_paths))
 
             # Prepare source paths: mount SSH URLs via SSHFS
             logger.info("Preparing source paths (mounting SSH URLs if needed)", source_paths=source_paths, job_id=job_id)
