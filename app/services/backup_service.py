@@ -372,6 +372,7 @@ class BackupService:
         Returns total size in bytes, or 0 if calculation fails
         """
         try:
+            logger.info("Starting source size calculation", paths=source_paths, path_count=len(source_paths))
             total_size = 0
 
             for path in source_paths:
@@ -443,15 +444,31 @@ class BackupService:
                             logger.warning("Failed to calculate directory size", path=path, stderr=stderr.decode())
 
                 except asyncio.TimeoutError:
-                    logger.warning("Timeout while calculating directory size", path=path)
+                    logger.warning("Timeout while calculating directory size (120s timeout exceeded)",
+                                 path=path,
+                                 timeout_seconds=120)
                 except Exception as e:
-                    logger.warning("Error calculating directory size", path=path, error=str(e))
+                    logger.warning("Error calculating directory size",
+                                 path=path,
+                                 error=str(e),
+                                 error_type=type(e).__name__)
 
-            logger.info("Total source size calculated", total_size=total_size, total_formatted=self._format_bytes(total_size))
+            if total_size > 0:
+                logger.info("Total source size calculated successfully",
+                          total_size=total_size,
+                          total_formatted=self._format_bytes(total_size),
+                          paths_processed=len(source_paths))
+            else:
+                logger.warning("Source size calculation returned 0 - all paths failed or were empty",
+                             paths=source_paths,
+                             paths_count=len(source_paths))
             return total_size
 
         except Exception as e:
-            logger.error("Failed to calculate total source size", error=str(e))
+            logger.error("Failed to calculate total source size",
+                       error=str(e),
+                       error_type=type(e).__name__,
+                       paths=source_paths)
             return 0
 
     async def _calculate_and_update_size_background(self, job_id: int, source_paths: list[str]):
@@ -460,7 +477,10 @@ class BackupService:
         Runs without blocking the backup start
         """
         try:
-            logger.info("Background size calculation started", job_id=job_id, source_paths=source_paths)
+            logger.info("Background size calculation started",
+                       job_id=job_id,
+                       source_paths=source_paths,
+                       path_count=len(source_paths))
             total_expected_size = await self._calculate_source_size(source_paths)
 
             if total_expected_size > 0:
@@ -481,10 +501,17 @@ class BackupService:
                 finally:
                     db.close()
             else:
-                logger.warning("Background size calculation completed but returned 0", job_id=job_id)
+                logger.warning("Background size calculation completed but returned 0 - check paths accessibility",
+                             job_id=job_id,
+                             source_paths=source_paths,
+                             message="ETA and progress percentage will not be available")
 
         except Exception as e:
-            logger.error("Error in background size calculation", job_id=job_id, error=str(e))
+            logger.error("Error in background size calculation",
+                       job_id=job_id,
+                       error=str(e),
+                       error_type=type(e).__name__,
+                       source_paths=source_paths)
 
     def _parse_ssh_url(self, ssh_url: str) -> dict:
         """
@@ -1617,6 +1644,7 @@ class BackupService:
                     log_file.write_text('\n'.join(combined_logs))
                     # Store log file path so Activity page can read and display logs
                     job.log_file_path = str(log_file)
+                    job.has_logs = True  # Mark that logs are available
                     job.logs = f"Logs saved to: {log_file.name}"
                     logger.info("Logs saved per policy",
                                 job_id=job_id,
@@ -1625,6 +1653,7 @@ class BackupService:
                                 log_file=str(log_file),
                                 log_lines=len(combined_logs))
                 except Exception as e:
+                    job.has_logs = False
                     job.logs = f"Failed to save logs: {str(e)}"
                     logger.error("Failed to save log buffer to file", job_id=job_id, error=str(e))
             else:
