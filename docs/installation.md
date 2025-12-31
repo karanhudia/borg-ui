@@ -299,6 +299,27 @@ docker rm borg-web-ui
 
 ## Advanced Configuration
 
+### Privileged Mode
+
+{: .note }
+> **When is privileged mode needed?** Privileged mode is **only required for remote-to-remote backups** using SSHFS mounting. If you're doing direct SSH backups or local backups only, you can disable it.
+
+The default `docker-compose.yml` includes `privileged: true` to support remote-to-remote backups (backing up from one remote server to another by mounting both via SSH).
+
+**To disable privileged mode:**
+
+```yaml
+services:
+  borg-ui:
+    # privileged: true  # Comment out this line
+```
+
+**What privileged mode enables:**
+- SSHFS/FUSE filesystem mounting for remote-to-remote backups
+- Advanced backup scenarios with remote source and remote destination
+
+**Security consideration:** Privileged containers have elevated permissions. Only use when needed.
+
 ### Docker Container Management (Optional)
 
 If you need to stop/start Docker containers during backups (e.g., for database consistency), you can mount the Docker socket:

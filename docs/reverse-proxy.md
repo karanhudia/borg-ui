@@ -1,0 +1,557 @@
+---
+layout: default
+title: Reverse Proxy Setup
+nav_order: 8
+description: "Running Borg Web UI behind reverse proxies with BASE_PATH support"
+---
+
+# Reverse Proxy Setup
+
+Configure Borg Web UI to run behind reverse proxies, including subfolder deployments.
+
+---
+
+## Overview
+
+Borg Web UI supports running behind reverse proxies in two configurations:
+
+1. **Root domain**: `https://backups.example.com/` (no BASE_PATH needed)
+2. **Subfolder**: `https://example.com/borg/` (requires BASE_PATH configuration)
+
+---
+
+## Subfolder Deployment (BASE_PATH)
+
+{: .new }
+> **New in v1.37.0**: BASE_PATH support for subfolder deployments
+
+### Quick Start
+
+To run Borg Web UI in a subfolder (e.g., `/borg`):
+
+1. **Set BASE_PATH environment variable:**
+
+```yaml
+environment:
+  - BASE_PATH=/borg
+```
+
+2. **Rebuild the container:**
+
+```bash
+docker-compose up -d --build
+```
+
+**Important**: BASE_PATH affects frontend asset paths, so a rebuild is required when changing it.
+
+### Configuration
+
+Add to your `docker-compose.yml`:
+
+```yaml
+services:
+  borg-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - BASE_PATH=/borg  # Build-time argument for frontend assets
+    environment:
+      - BASE_PATH=/borg    # Runtime variable for backend routing
+```
+
+Or in `.env` file:
+
+```bash
+BASE_PATH=/borg
+```
+
+**BASE_PATH Rules:**
+- Must start with `/` (e.g., `/borg` not `borg`)
+- No trailing slash (e.g., `/borg` not `/borg/`)
+- Defaults to `/` if not set
+
+---
+
+## Nginx Configuration
+
+### Subfolder Deployment
+
+```nginx
+server {
+    listen 80;
+    server_name example.com;
+
+    location /borg/ {
+        proxy_pass http://localhost:8081/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket support (for SSE events)
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 86400;
+    }
+}
+```
+
+**Docker configuration:**
+
+```yaml
+environment:
+  - BASE_PATH=/borg
+```
+
+### Root Domain
+
+```nginx
+server {
+    listen 80;
+    server_name backups.example.com;
+
+    location / {
+        proxy_pass http://localhost:8081;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket support (for SSE events)
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 86400;
+    }
+}
+```
+
+**Docker configuration:**
+
+```yaml
+# No BASE_PATH needed (defaults to /)
+```
+
+### With SSL (Let's Encrypt)
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name backups.example.com;
+
+    ssl_certificate /etc/letsencrypt/live/backups.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/backups.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://localhost:8081;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket support
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 86400;
+    }
+}
+
+server {
+    listen 80;
+    server_name backups.example.com;
+    return 301 https://$server_name$request_uri;
+}
+```
+
+---
+
+## Traefik Configuration
+
+### Subfolder Deployment
+
+```yaml
+services:
+  borg-ui:
+    image: ainullcode/borg-ui:latest
+    container_name: borg-web-ui
+    environment:
+      - BASE_PATH=/borg
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.borg-ui.rule=Host(`example.com`) && PathPrefix(`/borg`)"
+      - "traefik.http.routers.borg-ui.entrypoints=websecure"
+      - "traefik.http.routers.borg-ui.tls.certresolver=letsencrypt"
+      - "traefik.http.services.borg-ui.loadbalancer.server.port=8081"
+
+      # Strip /borg prefix before forwarding to container
+      - "traefik.http.middlewares.borg-strip.stripprefix.prefixes=/borg"
+      - "traefik.http.routers.borg-ui.middlewares=borg-strip"
+```
+
+### Root Domain
+
+```yaml
+services:
+  borg-ui:
+    image: ainullcode/borg-ui:latest
+    container_name: borg-web-ui
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.borg-ui.rule=Host(`backups.example.com`)"
+      - "traefik.http.routers.borg-ui.entrypoints=websecure"
+      - "traefik.http.routers.borg-ui.tls.certresolver=letsencrypt"
+      - "traefik.http.services.borg-ui.loadbalancer.server.port=8081"
+```
+
+---
+
+## Caddy Configuration
+
+### Subfolder Deployment
+
+```caddyfile
+example.com {
+    route /borg* {
+        uri strip_prefix /borg
+        reverse_proxy localhost:8081
+    }
+}
+```
+
+**Docker configuration:**
+
+```yaml
+environment:
+  - BASE_PATH=/borg
+```
+
+### Root Domain
+
+```caddyfile
+backups.example.com {
+    reverse_proxy localhost:8081
+}
+```
+
+---
+
+## Apache Configuration
+
+### Subfolder Deployment
+
+```apache
+<VirtualHost *:80>
+    ServerName example.com
+
+    ProxyPreserveHost On
+    ProxyPass /borg/ http://localhost:8081/
+    ProxyPassReverse /borg/ http://localhost:8081/
+
+    # WebSocket support
+    RewriteEngine on
+    RewriteCond %{HTTP:Upgrade} websocket [NC]
+    RewriteCond %{HTTP:Connection} upgrade [NC]
+    RewriteRule /borg/(.*) ws://localhost:8081/$1 [P,L]
+</VirtualHost>
+```
+
+**Docker configuration:**
+
+```yaml
+environment:
+  - BASE_PATH=/borg
+```
+
+### Root Domain
+
+```apache
+<VirtualHost *:443>
+    ServerName backups.example.com
+
+    SSLEngine on
+    SSLCertificateFile /path/to/cert.pem
+    SSLCertificateKeyFile /path/to/key.pem
+
+    ProxyPreserveHost On
+    ProxyPass / http://localhost:8081/
+    ProxyPassReverse / http://localhost:8081/
+
+    # WebSocket support
+    RewriteEngine on
+    RewriteCond %{HTTP:Upgrade} websocket [NC]
+    RewriteCond %{HTTP:Connection} upgrade [NC]
+    RewriteRule /(.*) ws://localhost:8081/$1 [P,L]
+</VirtualHost>
+```
+
+---
+
+## Docker Network Integration
+
+If your reverse proxy runs in Docker, use Docker networks:
+
+```yaml
+services:
+  borg-ui:
+    image: ainullcode/borg-ui:latest
+    container_name: borg-web-ui
+    networks:
+      - proxy_network
+    environment:
+      - BASE_PATH=/borg
+
+networks:
+  proxy_network:
+    external: true
+```
+
+Then configure your proxy to use `http://borg-web-ui:8081` instead of `localhost:8081`.
+
+---
+
+## Common Issues
+
+### Assets Not Loading
+
+**Symptom**: Frontend shows blank page or 404 errors for assets
+
+**Solution**: Rebuild container after changing BASE_PATH
+
+```bash
+docker-compose down
+docker-compose up -d --build
+```
+
+### Authentication Redirects
+
+**Symptom**: Login redirects to wrong URL
+
+**Solution**: Ensure BASE_PATH is set correctly in both build args and environment
+
+```yaml
+build:
+  args:
+    - BASE_PATH=/borg  # For frontend
+environment:
+  - BASE_PATH=/borg    # For backend
+```
+
+### API Calls Failing
+
+**Symptom**: API returns 404 errors
+
+**Solution**: Check that proxy passes the path correctly. For Traefik, use `stripprefix` middleware.
+
+### SSE Connection Errors
+
+**Symptom**: Real-time events not working
+
+**Solution**: Ensure WebSocket/SSE support in proxy configuration:
+
+```nginx
+# Nginx
+proxy_http_version 1.1;
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection "upgrade";
+proxy_read_timeout 86400;
+```
+
+---
+
+## Testing
+
+### Verify Configuration
+
+1. **Check health endpoint:**
+   ```bash
+   curl http://localhost:8081/health
+   # or with BASE_PATH
+   curl http://localhost:8081/borg/health
+   ```
+
+2. **Check API info:**
+   ```bash
+   curl http://localhost:8081/api
+   # or with BASE_PATH
+   curl http://localhost:8081/borg/api
+   ```
+
+3. **Access web interface:**
+   - Root: `http://localhost:8081/`
+   - Subfolder: `http://localhost:8081/borg/`
+
+### Debug Mode
+
+Enable debug logging to troubleshoot:
+
+```yaml
+environment:
+  - LOG_LEVEL=DEBUG
+  - BASE_PATH=/borg
+```
+
+Check logs:
+```bash
+docker logs borg-web-ui
+```
+
+---
+
+## Security Best Practices
+
+### Use HTTPS
+
+Always use HTTPS when exposing to the internet:
+
+```nginx
+# Redirect HTTP to HTTPS
+server {
+    listen 80;
+    server_name backups.example.com;
+    return 301 https://$server_name$request_uri;
+}
+```
+
+### Restrict Access by IP
+
+```nginx
+location /borg/ {
+    allow 192.168.1.0/24;
+    deny all;
+
+    proxy_pass http://localhost:8081/;
+}
+```
+
+### Use Authentication
+
+Add basic auth in Nginx:
+
+```nginx
+location /borg/ {
+    auth_basic "Restricted";
+    auth_basic_user_file /etc/nginx/.htpasswd;
+
+    proxy_pass http://localhost:8081/;
+}
+```
+
+Or use Traefik middleware:
+
+```yaml
+labels:
+  - "traefik.http.middlewares.borg-auth.basicauth.users=user:$$apr1$$..."
+  - "traefik.http.routers.borg-ui.middlewares=borg-auth"
+```
+
+---
+
+## Example Deployments
+
+### Home Server with Subfolder
+
+```yaml
+# docker-compose.yml
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    networks:
+      - web
+
+  borg-ui:
+    image: ainullcode/borg-ui:latest
+    container_name: borg-web-ui
+    build:
+      args:
+        - BASE_PATH=/backups
+    environment:
+      - BASE_PATH=/backups
+    networks:
+      - web
+    volumes:
+      - borg_data:/data
+      - borg_cache:/home/borg/.cache/borg
+      - /home/user:/local:rw
+
+networks:
+  web:
+    driver: bridge
+
+volumes:
+  borg_data:
+  borg_cache:
+```
+
+```nginx
+# nginx.conf
+server {
+    listen 80;
+    server_name home.example.com;
+
+    location /backups/ {
+        proxy_pass http://borg-ui:8081/;
+        proxy_set_header Host $host;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+### Production with Traefik
+
+```yaml
+# docker-compose.yml
+services:
+  traefik:
+    image: traefik:v2.10
+    command:
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.email=admin@example.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "letsencrypt:/letsencrypt"
+
+  borg-ui:
+    image: ainullcode/borg-ui:latest
+    container_name: borg-web-ui
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.borg-ui.rule=Host(`backups.example.com`)"
+      - "traefik.http.routers.borg-ui.entrypoints=websecure"
+      - "traefik.http.routers.borg-ui.tls.certresolver=letsencrypt"
+      - "traefik.http.services.borg-ui.loadbalancer.server.port=8081"
+    volumes:
+      - borg_data:/data
+      - borg_cache:/home/borg/.cache/borg
+      - /var/backups:/local:rw
+
+volumes:
+  letsencrypt:
+  borg_data:
+  borg_cache:
+```
+
+---
+
+## Next Steps
+
+- [Configuration Guide](configuration.md) - Environment variables and volumes
+- [Security Guide](security.md) - Harden your installation
+- [Installation Guide](installation.md) - Initial setup
