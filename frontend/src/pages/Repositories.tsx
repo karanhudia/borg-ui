@@ -28,8 +28,6 @@ import {
   Add,
   Delete,
   Storage,
-  Computer,
-  Wifi,
   Info,
   Lock,
   CalendarMonth,
