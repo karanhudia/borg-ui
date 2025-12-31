@@ -92,6 +92,7 @@ const navigationWithKeys: NavigationItem[] = [
       { name: 'Account', href: '/settings/account', icon: User },
       { name: 'Appearance', href: '/settings/appearance', icon: Palette },
       { name: 'Notifications', href: '/settings/notifications', icon: Bell },
+      { name: 'Logs', href: '/settings/logs', icon: FileText },
       { name: 'Packages', href: '/settings/packages', icon: Package },
       { name: 'Scripts', href: '/settings/scripts', icon: FileCode },
       { name: 'Export/Import', href: '/settings/export', icon: DownloadIcon },
