@@ -18,9 +18,7 @@ import {
   FormControl,
   InputLabel,
   Alert,
-  Divider,
   Stack,
-  Autocomplete,
   InputAdornment,
   Checkbox,
   FormControlLabel,
@@ -72,13 +70,6 @@ interface Repository {
   has_running_maintenance?: boolean
 }
 
-interface SSHKey {
-  id: number
-  name: string
-  key_type: string
-  is_active: boolean
-}
-
 interface SSHConnection {
   id: number
   ssh_key_id: number
@@ -122,11 +113,6 @@ export default function Repositories() {
   const { data: repositoriesData, isLoading } = useQuery({
     queryKey: ['repositories'],
     queryFn: repositoriesAPI.getRepositories,
-  })
-
-  const { data: sshKeysData } = useQuery({
-    queryKey: ['ssh-keys'],
-    queryFn: sshKeysAPI.getSSHKeys,
   })
 
   const { data: connectionsData } = useQuery({
@@ -469,19 +455,6 @@ export default function Repositories() {
     }
   }
 
-  const handleConnectionSelect = (connection: SSHConnection | null) => {
-    if (connection) {
-      setRepositoryForm({
-        ...repositoryForm,
-        connection_id: connection.id,
-        ssh_key_id: connection.ssh_key_id,
-        host: connection.host,
-        username: connection.username,
-        port: connection.port,
-      })
-    }
-  }
-
   const openRepositoryModal = (mode: 'create' | 'import') => {
     setRepositoryModalMode(mode)
     setShowRepositoryModal(true)
@@ -584,6 +557,16 @@ export default function Repositories() {
       const match = newPath.match(/ssh:\/\/([^@]+)@([^:]+):(\d+)(.*)/)
       if (match) {
         const [, username, host, port, remotePath] = match
+
+        // Find matching SSH connection to get ssh_key_id
+        const connections = connectionsData?.data?.connections || []
+        const matchingConnection = connections.find(
+          (c: SSHConnection) =>
+            c.username === username &&
+            c.host === host &&
+            c.port === parseInt(port)
+        )
+
         setRepositoryForm({
           ...repositoryForm,
           path: remotePath || '/',
@@ -591,6 +574,7 @@ export default function Repositories() {
           username,
           host,
           port: parseInt(port),
+          ssh_key_id: matchingConnection?.ssh_key_id || null,
         })
         return
       }
@@ -763,9 +747,6 @@ export default function Repositories() {
   }
 
   const repositories = repositoriesData?.data?.repositories || []
-  const sshKeys = sshKeysData?.data?.ssh_keys || []
-  const connections = connectionsData?.data?.connections || []
-  const connectedConnections = connections.filter((c: SSHConnection) => c.status === 'connected')
   // REMOVED: Config dependency no longer needed
   // const sourceDirectories = getSourceDirectories()
 
@@ -1054,94 +1035,6 @@ export default function Repositories() {
                 </Alert>
               )}
 
-              {/* Repository type is auto-detected - show current type */}
-              <Alert severity="info">
-                <Typography variant="body2">
-                  {repositoryForm.repository_type === 'local'
-                    ? '📁 Local Repository: Stored on this machine or mounted storage'
-                    : '🌐 Remote Repository (SSH): Stored on a remote server via SSH'}
-                </Typography>
-              </Alert>
-
-              {repositoryForm.repository_type !== 'local' && (
-                <>
-                  <Alert severity="info">
-                    Select an existing SSH connection or enter connection details manually
-                  </Alert>
-
-                  <Autocomplete<SSHConnection>
-                    options={connectedConnections}
-                    getOptionLabel={(option: SSHConnection) =>
-                      `${option.username}@${option.host}:${option.port} (${option.ssh_key_name})`
-                    }
-                    onChange={(_, value: SSHConnection | null) => handleConnectionSelect(value)}
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        label="SSH Connection (Optional)"
-                        placeholder="Select a connection to auto-fill"
-                      />
-                    )}
-                  />
-
-                  <Divider>OR enter manually</Divider>
-
-                  <TextField
-                    label="Host"
-                    value={repositoryForm.host}
-                    onChange={(e) => setRepositoryForm({ ...repositoryForm, host: e.target.value })}
-                    placeholder="192.168.1.100"
-                    required
-                    fullWidth
-                  />
-
-                  <TextField
-                    label="Username"
-                    value={repositoryForm.username}
-                    onChange={(e) =>
-                      setRepositoryForm({ ...repositoryForm, username: e.target.value })
-                    }
-                    placeholder="user"
-                    required
-                    fullWidth
-                  />
-
-                  <TextField
-                    label="Port"
-                    type="number"
-                    value={repositoryForm.port}
-                    onChange={(e) =>
-                      setRepositoryForm({ ...repositoryForm, port: parseInt(e.target.value) })
-                    }
-                    required
-                    fullWidth
-                  />
-
-                  <FormControl fullWidth required>
-                    <InputLabel>SSH Key</InputLabel>
-                    <Select
-                      value={repositoryForm.ssh_key_id ?? ''}
-                      label="SSH Key"
-                      onChange={(e) =>
-                        setRepositoryForm({
-                          ...repositoryForm,
-                          ssh_key_id: e.target.value ? Number(e.target.value) : null,
-                        })
-                      }
-                    >
-                      <MenuItem value="">Select SSH Key</MenuItem>
-                      {sshKeys
-                        .filter((key: SSHKey) => key.is_active)
-                        .map((key: SSHKey) => (
-                          <MenuItem key={key.id} value={key.id.toString()}>
-                            {key.name} ({key.key_type})
-                          </MenuItem>
-                        ))}
-                    </Select>
-                  </FormControl>
-                </>
-              )}
-
               <TextField
                 label="Path"
                 value={repositoryForm.path}
@@ -1152,18 +1045,10 @@ export default function Repositories() {
                     handlePathChange(e.target.value)
                   }
                 }}
-                placeholder={
-                  repositoryForm.repository_type === 'local'
-                    ? '/path/to/repository'
-                    : '/path/on/remote/server'
-                }
+                placeholder="Click browse icon to select path"
                 required
                 fullWidth
-                helperText={
-                  repositoryForm.repository_type === 'local'
-                    ? 'Path on this machine or mounted storage'
-                    : 'Path on remote server (or paste full ssh:// URL to auto-fill connection)'
-                }
+                helperText="Use the browse button to select a path (auto-detects local or SSH)"
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
@@ -2568,17 +2453,7 @@ export default function Repositories() {
         title="Select Repository Path"
         initialPath="/"
         multiSelect={false}
-        connectionType={repositoryForm.repository_type === 'local' ? 'local' : 'ssh'}
-        sshConfig={
-          repositoryForm.repository_type !== 'local' && repositoryForm.ssh_key_id
-            ? {
-                ssh_key_id: repositoryForm.ssh_key_id,
-                host: repositoryForm.host,
-                username: repositoryForm.username,
-                port: repositoryForm.port,
-              }
-            : undefined
-        }
+        connectionType="local"
         selectMode="directories"
       />
 
@@ -2669,17 +2544,7 @@ export default function Repositories() {
         title="Select Repository Path"
         initialPath="/"
         multiSelect={false}
-        connectionType={repositoryForm.repository_type === 'local' ? 'local' : 'ssh'}
-        sshConfig={
-          repositoryForm.repository_type !== 'local' && repositoryForm.ssh_key_id
-            ? {
-                ssh_key_id: repositoryForm.ssh_key_id,
-                host: repositoryForm.host,
-                username: repositoryForm.username,
-                port: repositoryForm.port,
-              }
-            : undefined
-        }
+        connectionType="local"
         selectMode="directories"
       />
 
