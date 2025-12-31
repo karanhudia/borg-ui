@@ -190,8 +190,8 @@ export default function Repositories() {
       // Invalidate AppContext query to update tab enablement immediately
       queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
       appState.refetch()
-      // Keep modal open and set newly created repository ID to allow adding library scripts
-      setNewlyCreatedRepositoryId(response.data.id)
+      // Close modal after successful creation
+      closeRepositoryModal()
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to create repository')
@@ -211,8 +211,8 @@ export default function Repositories() {
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
       queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
       appState.refetch()
-      // Keep modal open and set newly created repository ID to allow adding library scripts
-      setNewlyCreatedRepositoryId(response.data.repository.id)
+      // Close modal after successful import
+      closeRepositoryModal()
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to import repository')
