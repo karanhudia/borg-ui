@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useLocation } from 'react-router-dom'
 import {
   Box,
   Card,
@@ -21,13 +22,13 @@ import {
   Chip,
 } from '@mui/material'
 import {
-  Download,
   Database,
   Archive as ArchiveIcon,
   RefreshCw,
   CheckCircle,
   AlertCircle,
   Clock,
+  RotateCcw,
 } from 'lucide-react'
 import { restoreAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
@@ -83,6 +84,7 @@ const Restore: React.FC = () => {
     repositoryName: string
   } | null>(null)
   const queryClient = useQueryClient()
+  const location = useLocation()
 
   // Get repositories list
   const { data: repositoriesData, isLoading: loadingRepositories } = useQuery({
@@ -235,6 +237,36 @@ const Restore: React.FC = () => {
     return new Date(b.start).getTime() - new Date(a.start).getTime()
   })
 
+  // Handle incoming navigation state (from "Restore" button in Archives)
+  useEffect(() => {
+    if (location.state && repositories.length > 0) {
+      const state = location.state as any
+      if (state.repositoryPath && state.repositoryId) {
+        // Set repository
+        setSelectedRepository(state.repositoryPath)
+        const repo = repositories.find((r: Repository) => r.id === state.repositoryId)
+        setSelectedRepoData(repo || null)
+
+        // Reset scroll position to top
+        window.scrollTo(0, 0)
+      }
+    }
+  }, [location.state, repositories])
+
+  // Handle archive selection when archives are loaded
+  useEffect(() => {
+    if (location.state && archivesList.length > 0) {
+      const state = location.state as any
+      if (state.archiveName && selectedRepoData) {
+        const archive = archivesList.find((a: Archive) => a.name === state.archiveName)
+        if (archive) {
+          // Auto-open the restore dialog for this archive
+          handleRestoreArchiveClick(archive)
+        }
+      }
+    }
+  }, [archivesList, location.state, selectedRepoData])
+
   // Get archive statistics
   const archiveStats = useMemo(() => {
     if (!archiveInfo?.data?.archive?.stats) return null
@@ -302,7 +334,7 @@ const Restore: React.FC = () => {
   // Archives table actions
   const archivesActions: ActionButton<Archive>[] = [
     {
-      icon: <Download size={16} />,
+      icon: <RotateCcw size={16} />,
       label: 'Restore',
       onClick: (archive) => handleRestoreArchiveClick(archive),
       color: 'primary',
@@ -638,7 +670,7 @@ const Restore: React.FC = () => {
       >
         <DialogTitle>
           <Stack direction="row" spacing={2} alignItems="center">
-            <Download size={24} />
+            <RotateCcw size={24} />
             <Box>
               <Typography variant="h6" fontWeight={600}>
                 Restore Archive
@@ -763,7 +795,7 @@ const Restore: React.FC = () => {
               restoreMutation.isPending ? (
                 <CircularProgress size={16} color="inherit" />
               ) : (
-                <Download size={16} />
+                <RotateCcw size={16} />
               )
             }
           >
