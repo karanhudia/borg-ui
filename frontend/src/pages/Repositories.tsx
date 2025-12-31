@@ -857,7 +857,8 @@ export default function Repositories() {
               Create your first Borg repository to start backing up your data.
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Create a local repository or remote repository via SSH. The type will be automatically detected based on the path you provide.
+              Create a local repository or remote repository via SSH. The type will be automatically
+              detected based on the path you provide.
             </Typography>
             {user?.is_admin && (
               <Stack direction="row" spacing={2} justifyContent="center">

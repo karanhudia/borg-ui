@@ -187,7 +187,9 @@ const LogManagementTab: React.FC = () => {
         </Box>
         <Button
           variant="contained"
-          startIcon={saveSettingsMutation.isPending ? <CircularProgress size={16} /> : <Save size={16} />}
+          startIcon={
+            saveSettingsMutation.isPending ? <CircularProgress size={16} /> : <Save size={16} />
+          }
           onClick={handleSaveSettings}
           disabled={!hasChanges || saveSettingsMutation.isPending}
         >
@@ -228,7 +230,11 @@ const LogManagementTab: React.FC = () => {
                     }}
                   >
                     <Box>
-                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ textTransform: 'uppercase', fontWeight: 600 }}
+                      >
                         Total Size
                       </Typography>
                       <Typography variant="h5" fontWeight={600} sx={{ mt: 0.5 }}>
@@ -236,7 +242,11 @@ const LogManagementTab: React.FC = () => {
                       </Typography>
                     </Box>
                     <Box>
-                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ textTransform: 'uppercase', fontWeight: 600 }}
+                      >
                         File Count
                       </Typography>
                       <Typography variant="h5" fontWeight={600} sx={{ mt: 0.5 }}>
@@ -244,7 +254,11 @@ const LogManagementTab: React.FC = () => {
                       </Typography>
                     </Box>
                     <Box>
-                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ textTransform: 'uppercase', fontWeight: 600 }}
+                      >
                         Oldest Log
                       </Typography>
                       <Typography variant="body1" sx={{ mt: 0.5 }}>
@@ -252,7 +266,11 @@ const LogManagementTab: React.FC = () => {
                       </Typography>
                     </Box>
                     <Box>
-                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ textTransform: 'uppercase', fontWeight: 600 }}
+                      >
                         Newest Log
                       </Typography>
                       <Typography variant="body1" sx={{ mt: 0.5 }}>
@@ -267,7 +285,11 @@ const LogManagementTab: React.FC = () => {
                         {usagePercent}% of {logStorage?.limit_mb || 0} MB
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        {Math.max(0, (logStorage?.limit_mb || 0) - (logStorage?.total_size_mb || 0))} MB available
+                        {Math.max(
+                          0,
+                          (logStorage?.limit_mb || 0) - (logStorage?.total_size_mb || 0)
+                        )}{' '}
+                        MB available
                       </Typography>
                     </Box>
                     <LinearProgress
@@ -280,8 +302,8 @@ const LogManagementTab: React.FC = () => {
 
                   {isHighUsage && (
                     <Alert severity="warning" icon={<AlertTriangle size={20} />}>
-                      Log storage usage is at {usagePercent}%. Consider running cleanup or increasing the
-                      size limit.
+                      Log storage usage is at {usagePercent}%. Consider running cleanup or
+                      increasing the size limit.
                     </Alert>
                   )}
 
@@ -289,7 +311,13 @@ const LogManagementTab: React.FC = () => {
                     <Button
                       variant="outlined"
                       color="error"
-                      startIcon={cleanupMutation.isPending ? <CircularProgress size={16} /> : <Trash2 size={16} />}
+                      startIcon={
+                        cleanupMutation.isPending ? (
+                          <CircularProgress size={16} />
+                        ) : (
+                          <Trash2 size={16} />
+                        )
+                      }
                       onClick={handleCleanup}
                       disabled={cleanupMutation.isPending}
                     >
@@ -318,7 +346,10 @@ const LogManagementTab: React.FC = () => {
               <Divider />
 
               <FormControl component="fieldset">
-                <RadioGroup value={logSavePolicy} onChange={(e) => setLogSavePolicy(e.target.value)}>
+                <RadioGroup
+                  value={logSavePolicy}
+                  onChange={(e) => setLogSavePolicy(e.target.value)}
+                >
                   <FormControlLabel
                     value="failed_only"
                     control={<Radio />}
