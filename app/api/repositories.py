@@ -345,6 +345,13 @@ async def create_repository(
 
         if repo_data.repository_type == "local":
             # For local repositories, ensure path is absolute
+            # But first check if path looks like an SSH URL
+            if repo_path.startswith("ssh://"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Path appears to be an SSH URL but repository_type is 'local'. Please set repository_type to 'ssh'."
+                )
+
             if not os.path.isabs(repo_path):
                 # If relative path, make it relative to data directory
                 repo_path = os.path.join(settings.data_dir, repo_path)
@@ -558,6 +565,13 @@ async def import_repository(
 
         if repo_data.repository_type == "local":
             # For local repositories, ensure path is absolute
+            # But first check if path looks like an SSH URL
+            if repo_path.startswith("ssh://"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Path appears to be an SSH URL but repository_type is 'local'. Please set repository_type to 'ssh'."
+                )
+
             if not os.path.isabs(repo_path):
                 # If relative path, make it relative to data directory
                 repo_path = os.path.join(settings.data_dir, repo_path)
