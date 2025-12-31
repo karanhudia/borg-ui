@@ -710,7 +710,9 @@ const Backup: React.FC = () => {
                           ETA:
                         </Typography>
                         <Typography variant="body2" fontWeight={500} color="success.main">
-                          {formatDurationSeconds(job.progress_details?.estimated_time_remaining || 0)}
+                          {formatDurationSeconds(
+                            job.progress_details?.estimated_time_remaining || 0
+                          )}
                         </Typography>
                       </Box>
                     )}
