@@ -166,6 +166,8 @@ const Archives: React.FC = () => {
       setSelectedRepositoryId(repositoryId)
       const repo = repositories.find((r: Repository) => r.id === repositoryId)
       setSelectedRepository(repo || null)
+      // Reset scroll position to top
+      window.scrollTo(0, 0)
     }
   }, [location.state, repositories])
 
