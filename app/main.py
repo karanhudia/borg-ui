@@ -53,7 +53,7 @@ from app.config import settings
 app = FastAPI(
     title="Borg Web UI",
     description="A lightweight web interface for Borg backup management",
-    version="1.38.1",
+    version="1.38.2",
     root_path=settings.base_path,  # Enable reverse proxy support
     docs_url=f"{settings.base_path}/api/docs" if settings.base_path else "/api/docs",
     redoc_url=f"{settings.base_path}/api/redoc" if settings.base_path else "/api/redoc"
