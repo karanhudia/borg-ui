@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Card, CardContent, Box, Typography, Button, Tooltip, Chip } from '@mui/material'
-import { Info, CheckCircle as CheckCircleIcon, Refresh, Delete } from '@mui/icons-material'
+import {
+  Info,
+  CheckCircle as CheckCircleIcon,
+  Refresh,
+  Delete,
+  PlayArrow,
+  FolderOpen,
+} from '@mui/icons-material'
 import { useMaintenanceJobs } from '../hooks/useMaintenanceJobs'
 import { formatDateShort, formatDateTimeFull, formatElapsedTime } from '../utils/dateUtils'
 import { useQueryClient } from '@tanstack/react-query'
@@ -33,6 +40,8 @@ interface RepositoryCardProps {
   onPrune: () => void
   onEdit: () => void
   onDelete: () => void
+  onBackupNow: () => void
+  onViewArchives: () => void
   getCompressionLabel: (compression: string) => string
   isAdmin: boolean
   onJobCompleted?: (repositoryId: number) => void
@@ -47,6 +56,8 @@ export default function RepositoryCard({
   onPrune,
   onEdit,
   onDelete,
+  onBackupNow,
+  onViewArchives,
   getCompressionLabel,
   isAdmin,
   onJobCompleted,
@@ -291,6 +302,27 @@ export default function RepositoryCard({
                 sx={{ textTransform: 'none' }}
               >
                 Prune
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<PlayArrow />}
+                onClick={onBackupNow}
+                disabled={isMaintenanceRunning}
+                color="success"
+                sx={{ textTransform: 'none' }}
+              >
+                Backup Now
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<FolderOpen />}
+                onClick={onViewArchives}
+                disabled={isMaintenanceRunning}
+                sx={{ textTransform: 'none' }}
+              >
+                View Archives
               </Button>
               <Button
                 variant="outlined"

@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useLocation } from 'react-router-dom'
 import {
   Box,
   Card,
@@ -77,6 +78,14 @@ const Backup: React.FC = () => {
   } | null>(null)
   const [selectedJob, setSelectedJob] = useState<BackupJob | null>(null)
   const queryClient = useQueryClient()
+  const location = useLocation()
+
+  // Handle incoming navigation state (from "Backup Now" button)
+  useEffect(() => {
+    if (location.state && (location.state as any).repositoryPath) {
+      setSelectedRepository((location.state as any).repositoryPath)
+    }
+  }, [location.state])
 
   // Get backup status and history (manual backups only)
   const { data: backupStatus, isLoading: loadingStatus } = useQuery({
