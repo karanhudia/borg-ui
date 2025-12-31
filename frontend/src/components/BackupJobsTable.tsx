@@ -111,6 +111,7 @@ export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
       id: 'id',
       label: 'Job ID',
       align: 'left',
+      width: '80px',
       render: (job: any) => (
         <Typography variant="body2" fontWeight={600} color="primary">
           #{job.id}
@@ -121,7 +122,8 @@ export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
       id: 'repository',
       label: 'Repository',
       align: 'left',
-      minWidth: '250px',
+      minWidth: '200px',
+      width: '25%',
       render: (job: any) => {
         // Handle Activity items with different repository field names
         if (job.type && job.type === 'package') {
@@ -158,6 +160,7 @@ export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
             id: 'type',
             label: 'Type',
             align: 'left' as const,
+            width: '140px',
             render: (job: any) => (
               <Chip label={getTypeLabel(job.type)} color={getTypeColor(job.type)} size="small" />
             ),
@@ -170,7 +173,8 @@ export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
           {
             id: 'trigger',
             label: 'Trigger',
-            align: 'left' as const,
+            align: 'center' as const,
+            width: '90px',
             render: (job: any) => {
               const isScheduled = job.triggered_by === 'schedule'
               return (
@@ -183,15 +187,12 @@ export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
                   placement="top"
                   arrow
                 >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {isScheduled ? (
-                      <Calendar size={16} color="#1976d2" />
+                      <Calendar size={18} color="#1976d2" />
                     ) : (
-                      <User size={16} color="#666" />
+                      <User size={18} color="#666" />
                     )}
-                    <Typography variant="body2" color="text.secondary">
-                      {isScheduled ? 'Scheduled' : 'Manual'}
-                    </Typography>
                   </Box>
                 </Tooltip>
               )
@@ -203,12 +204,14 @@ export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
       id: 'status',
       label: 'Status',
       align: 'left',
+      width: '130px',
       render: (job: any) => <StatusBadge status={job.status} />,
     },
     {
       id: 'started_at',
       label: 'Started',
       align: 'left',
+      width: '140px',
       render: (job: any) => (
         <Typography variant="body2" color="text.secondary">
           {job.started_at ? formatDate(job.started_at) : '-'}
@@ -219,6 +222,7 @@ export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
       id: 'duration',
       label: 'Duration',
       align: 'left',
+      width: '110px',
       render: (job: any) => (
         <Typography variant="body2" color="text.secondary">
           {formatTimeRange(job.started_at, job.completed_at, job.status)}
