@@ -179,11 +179,7 @@ export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
               const isScheduled = job.triggered_by === 'schedule'
               return (
                 <Tooltip
-                  title={
-                    isScheduled
-                      ? `Scheduled (ID: ${job.schedule_id || 'N/A'})`
-                      : 'Manual'
-                  }
+                  title={isScheduled ? `Scheduled (ID: ${job.schedule_id || 'N/A'})` : 'Manual'}
                   placement="top"
                   arrow
                 >

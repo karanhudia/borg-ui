@@ -106,9 +106,7 @@ export default function FileExplorerDialog({
       const response = await sshKeysAPI.getSSHConnections()
       const connections = response.data?.connections || []
       // Show all connected SSH connections (mount point is optional)
-      setSshConnections(
-        connections.filter((conn: SSHConnection) => conn.status === 'connected')
-      )
+      setSshConnections(connections.filter((conn: SSHConnection) => conn.status === 'connected'))
     } catch (err) {
       // Silently fail - mount points are optional
       console.error('Failed to load SSH connections:', err)
@@ -250,9 +248,10 @@ export default function FileExplorerDialog({
     if (currentPath !== '/' || activeConnectionType !== 'local') return []
     return sshConnections.map((conn) => {
       // Use mount_point name if available, otherwise show full SSH URL
-      const displayName = conn.mount_point && conn.mount_point.trim()
-        ? conn.mount_point
-        : `ssh://${conn.username}@${conn.host}:${conn.port}${conn.default_path || '/'}`
+      const displayName =
+        conn.mount_point && conn.mount_point.trim()
+          ? conn.mount_point
+          : `ssh://${conn.username}@${conn.host}:${conn.port}${conn.default_path || '/'}`
 
       return {
         name: displayName,

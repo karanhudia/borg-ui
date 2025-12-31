@@ -572,9 +572,7 @@ export default function Repositories() {
         const connections = connectionsData?.data?.connections || []
         const matchingConnection = connections.find(
           (c: SSHConnection) =>
-            c.username === username &&
-            c.host === host &&
-            c.port === parseInt(port)
+            c.username === username && c.host === host && c.port === parseInt(port)
         )
 
         setRepositoryForm({
@@ -1080,9 +1078,9 @@ export default function Repositories() {
               {repositoryForm.repository_type === 'ssh' && (
                 <Alert severity="info" sx={{ mt: 1 }}>
                   <Typography variant="body2">
-                    💡 <strong>Tip:</strong> For easier browsing, configure a mount point for your SSH
-                    connections in the SSH Keys page. Without a mount point, the full SSH URL will be
-                    displayed.
+                    💡 <strong>Tip:</strong> For easier browsing, configure a mount point for your
+                    SSH connections in the SSH Keys page. Without a mount point, the full SSH URL
+                    will be displayed.
                   </Typography>
                 </Alert>
               )}
