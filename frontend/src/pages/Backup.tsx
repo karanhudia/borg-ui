@@ -84,6 +84,8 @@ const Backup: React.FC = () => {
   useEffect(() => {
     if (location.state && (location.state as any).repositoryPath) {
       setSelectedRepository((location.state as any).repositoryPath)
+      // Reset scroll position to top
+      window.scrollTo(0, 0)
     }
   }, [location.state])
 

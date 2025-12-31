@@ -303,17 +303,19 @@ export default function RepositoryCard({
               >
                 Prune
               </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<PlayArrow />}
-                onClick={onBackupNow}
-                disabled={isMaintenanceRunning}
-                color="success"
-                sx={{ textTransform: 'none' }}
-              >
-                Backup Now
-              </Button>
+              {repository.mode === 'full' && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<PlayArrow />}
+                  onClick={onBackupNow}
+                  disabled={isMaintenanceRunning}
+                  color="success"
+                  sx={{ textTransform: 'none' }}
+                >
+                  Backup Now
+                </Button>
+              )}
               <Button
                 variant="outlined"
                 size="small"
