@@ -59,7 +59,7 @@ services:
       # Core settings (optional, all have defaults)
       - PORT=${PORT:-8081}
       - ENVIRONMENT=${ENVIRONMENT:-production}
-      - BASE_PATH=${BASE_PATH:-/}
+      - BASE_PATH=/myborg
 
       # User/Group IDs for file permissions
       # Match your host user: id -u && id -g

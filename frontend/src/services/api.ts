@@ -1,9 +1,17 @@
 import axios from 'axios'
 
-// Base path for the application (e.g., "/borg")
-const BASE_PATH = import.meta.env.VITE_BASE_PATH || ''
-// Remove trailing slash from base path
-const normalizedBasePath = BASE_PATH.endsWith('/') ? BASE_PATH.slice(0, -1) : BASE_PATH
+// Get base path from runtime injection (set by backend in HTML)
+// This allows changing BASE_PATH without rebuilding the frontend
+declare global {
+  interface Window {
+    BASE_PATH?: string
+  }
+}
+
+const BASE_PATH = window.BASE_PATH || '/'
+// Normalize: remove trailing slash and ensure it's "/" for root
+const normalizedBasePath =
+  BASE_PATH === '/' ? '' : BASE_PATH.endsWith('/') ? BASE_PATH.slice(0, -1) : BASE_PATH
 
 // API URL respects base path
 const API_BASE_URL = import.meta.env.VITE_API_URL || `${normalizedBasePath}/api`
