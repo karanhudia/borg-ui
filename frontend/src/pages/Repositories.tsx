@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
+import { useNavigate } from 'react-router-dom'
 import {
   Box,
   Card,
@@ -84,6 +85,7 @@ export default function Repositories() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const appState = useAppState()
+  const navigate = useNavigate()
   const [showRepositoryModal, setShowRepositoryModal] = useState(false)
   const [repositoryModalMode, setRepositoryModalMode] = useState<'create' | 'import'>('create')
   const [newlyCreatedRepositoryId, setNewlyCreatedRepositoryId] = useState<number | null>(null)
@@ -435,6 +437,14 @@ export default function Repositories() {
   const handleClosePruneDialog = () => {
     setPruningRepository(null)
     setPruneResults(null)
+  }
+
+  const handleBackupNow = (repository: Repository) => {
+    navigate('/backup', { state: { repositoryPath: repository.path } })
+  }
+
+  const handleViewArchives = (repository: Repository) => {
+    navigate('/archives', { state: { repositoryId: repository.id } })
   }
 
   const handlePruneDryRun = () => {
@@ -892,6 +902,8 @@ export default function Repositories() {
               onPrune={() => handlePruneRepository(repository)}
               onEdit={() => openEditModal(repository)}
               onDelete={() => handleDeleteRepository(repository)}
+              onBackupNow={() => handleBackupNow(repository)}
+              onViewArchives={() => handleViewArchives(repository)}
               getCompressionLabel={getCompressionLabel}
               isAdmin={user?.is_admin || false}
               onJobCompleted={handleJobCompleted}

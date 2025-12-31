@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useLocation } from 'react-router-dom'
 import {
   Box,
   Card,
@@ -62,6 +63,7 @@ const Archives: React.FC = () => {
     repositoryName: string
   } | null>(null)
   const queryClient = useQueryClient()
+  const location = useLocation()
 
   // Get repositories list
   const { data: repositoriesData, isLoading: loadingRepositories } = useQuery({
@@ -156,6 +158,17 @@ const Archives: React.FC = () => {
 
   // Get repositories from API response
   const repositories = repositoriesData?.data?.repositories || []
+
+  // Handle incoming navigation state (from "View Archives" button)
+  useEffect(() => {
+    if (location.state && (location.state as any).repositoryId && repositories.length > 0) {
+      const repositoryId = (location.state as any).repositoryId
+      setSelectedRepositoryId(repositoryId)
+      const repo = repositories.find((r: Repository) => r.id === repositoryId)
+      setSelectedRepository(repo || null)
+    }
+  }, [location.state, repositories])
+
   const archivesList = (archives?.data?.archives || []).sort((a: Archive, b: Archive) => {
     // Sort by start date, latest first
     return new Date(b.start).getTime() - new Date(a.start).getTime()
