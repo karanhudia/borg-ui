@@ -146,6 +146,7 @@ const Activity: React.FC = () => {
       <BackupJobsTable
         jobs={activities || []}
         showTypeColumn={true}
+        showTriggerColumn={true}
         loading={isLoading}
         actions={{
           viewLogs: true,

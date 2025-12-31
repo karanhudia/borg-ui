@@ -321,6 +321,7 @@ export default function Dashboard() {
               jobs={status.data.recent_jobs}
               repositories={repositoriesData?.data?.repositories || []}
               loading={isLoading}
+              showTriggerColumn={true}
               actions={{
                 viewLogs: true,
                 downloadLogs: true,

@@ -1,6 +1,6 @@
 import React from 'react'
 import { Box, Typography, Chip, Tooltip } from '@mui/material'
-import { Eye, Download, Trash2, Lock, Play, AlertCircle, Clock } from 'lucide-react'
+import { Eye, Download, Trash2, Lock, Play, AlertCircle, Clock, Calendar, User } from 'lucide-react'
 import DataTable, { Column, ActionButton } from './DataTable'
 import StatusBadge from './StatusBadge'
 import RepositoryCell from './RepositoryCell'
@@ -12,6 +12,7 @@ interface BackupJobsTableProps {
 
   // Display options
   showTypeColumn?: boolean
+  showTriggerColumn?: boolean
   repositories?: any[]
 
   // State
@@ -89,6 +90,7 @@ const getTypeColor = (
 export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
   jobs,
   showTypeColumn = false,
+  showTriggerColumn = false,
   repositories = [],
   loading = false,
   emptyState,
@@ -162,25 +164,46 @@ export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
           },
         ]
       : []),
+    // Trigger column - conditionally included
+    ...(showTriggerColumn
+      ? [
+          {
+            id: 'trigger',
+            label: 'Trigger',
+            align: 'left' as const,
+            render: (job: any) => {
+              const isScheduled = job.triggered_by === 'schedule'
+              return (
+                <Tooltip
+                  title={
+                    isScheduled
+                      ? `Scheduled (ID: ${job.schedule_id || 'N/A'})`
+                      : 'Manual'
+                  }
+                  placement="top"
+                  arrow
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    {isScheduled ? (
+                      <Calendar size={16} color="#1976d2" />
+                    ) : (
+                      <User size={16} color="#666" />
+                    )}
+                    <Typography variant="body2" color="text.secondary">
+                      {isScheduled ? 'Scheduled' : 'Manual'}
+                    </Typography>
+                  </Box>
+                </Tooltip>
+              )
+            },
+          },
+        ]
+      : []),
     {
       id: 'status',
       label: 'Status',
       align: 'left',
-      render: (job: any) => (
-        <Tooltip
-          title={
-            job.triggered_by === 'schedule'
-              ? `Triggered by: Schedule (ID: ${job.schedule_id})`
-              : 'Triggered by: Manual'
-          }
-          placement="top"
-          arrow
-        >
-          <span>
-            <StatusBadge status={job.status} />
-          </span>
-        </Tooltip>
-      ),
+      render: (job: any) => <StatusBadge status={job.status} />,
     },
     {
       id: 'started_at',
