@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Box,
   Card,
@@ -31,6 +31,7 @@ import {
   Database,
   Gauge,
   Layers,
+  RotateCcw,
 } from 'lucide-react'
 import { archivesAPI, repositoriesAPI, browseAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
@@ -64,6 +65,7 @@ const Archives: React.FC = () => {
   } | null>(null)
   const queryClient = useQueryClient()
   const location = useLocation()
+  const navigate = useNavigate()
 
   // Get repositories list
   const { data: repositoriesData, isLoading: loadingRepositories } = useQuery({
@@ -228,6 +230,18 @@ const Archives: React.FC = () => {
   const handleViewArchive = (archive: Archive) => {
     setViewArchive(archive)
     setCurrentPath('/')
+  }
+
+  const handleRestoreArchive = (archive: Archive) => {
+    if (selectedRepository) {
+      navigate('/restore', {
+        state: {
+          repositoryPath: selectedRepository.path,
+          repositoryId: selectedRepository.id,
+          archiveName: archive.name,
+        },
+      })
+    }
   }
 
   return (
@@ -533,6 +547,16 @@ const Archives: React.FC = () => {
                           sx={{ textTransform: 'none' }}
                         >
                           View
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          color="success"
+                          startIcon={<RotateCcw size={16} />}
+                          onClick={() => handleRestoreArchive(archive)}
+                          sx={{ textTransform: 'none' }}
+                        >
+                          Restore
                         </Button>
                         <IconButton
                           color="error"
