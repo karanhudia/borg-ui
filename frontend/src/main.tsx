@@ -10,6 +10,9 @@ import { ThemeProvider } from './context/ThemeContext'
 import App from './App.tsx'
 import './index.css'
 
+// Get base path from environment (e.g., "/borg" for example.com/borg/)
+const BASE_PATH = import.meta.env.VITE_BASE_PATH || '/'
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -27,7 +30,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <ThemeProvider>
       <CssBaseline />
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
+        <BrowserRouter basename={BASE_PATH}>
           <AuthProvider>
             <AppProvider>
               <App />

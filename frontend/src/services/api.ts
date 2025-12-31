@@ -1,6 +1,12 @@
 import axios from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
+// Base path for the application (e.g., "/borg")
+const BASE_PATH = import.meta.env.VITE_BASE_PATH || ''
+// Remove trailing slash from base path
+const normalizedBasePath = BASE_PATH.endsWith('/') ? BASE_PATH.slice(0, -1) : BASE_PATH
+
+// API URL respects base path
+const API_BASE_URL = import.meta.env.VITE_API_URL || `${normalizedBasePath}/api`
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -26,7 +32,7 @@ api.interceptors.response.use(
     // Don't redirect if we're already trying to login (avoid swallowing login errors)
     if (error.response?.status === 401 && error.config?.url !== '/auth/login') {
       localStorage.removeItem('access_token')
-      window.location.href = '/login'
+      window.location.href = `${normalizedBasePath}/login`
     }
     return Promise.reject(error)
   }
@@ -176,7 +182,8 @@ export const settingsAPI = {
 export const eventsAPI = {
   streamEvents: () => {
     const token = localStorage.getItem('access_token')
-    const url = `/api/events/stream${token ? `?token=${token}` : ''}`
+    // Use base path for SSE connection
+    const url = `${normalizedBasePath}/api/events/stream${token ? `?token=${token}` : ''}`
     return new EventSource(url)
   },
 }
