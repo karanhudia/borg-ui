@@ -329,16 +329,6 @@ const Backup: React.FC = () => {
               </Alert>
             )}
 
-          {!selectedRepository &&
-            !loadingRepositories &&
-            repositoriesData?.data?.repositories?.length > 0 && (
-              <Alert severity="info" sx={{ mt: 2 }}>
-                <Typography variant="body2">
-                  Choose a repository above to view backup details and start a backup operation
-                </Typography>
-              </Alert>
-            )}
-
           {repositoriesData?.data?.repositories?.length === 0 && !loadingRepositories && (
             <Alert severity="warning" sx={{ mt: 2 }}>
               <Typography variant="body2" fontWeight={500} gutterBottom>
