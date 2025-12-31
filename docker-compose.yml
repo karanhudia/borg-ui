@@ -17,6 +17,7 @@ services:
       target: production
       args:
         - APP_VERSION=${APP_VERSION:-local-dev}
+        - BASE_PATH=${BASE_PATH:-/}
     container_name: borg-web-ui
     restart: unless-stopped
 
@@ -76,6 +77,7 @@ services:
       # Optional overrides (all have smart defaults)
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - PORT=${PORT:-8081}
+      - BASE_PATH=${BASE_PATH:-/}
       # Timezone configuration (defaults to host timezone via /etc/localtime mount)
       # Override if needed: TZ=Asia/Kolkata, TZ=America/New_York, etc.
       - TZ=${TZ:-}

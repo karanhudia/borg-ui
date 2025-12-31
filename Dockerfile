@@ -1,6 +1,11 @@
 # Build stage for frontend
 FROM node:22-alpine AS frontend-builder
 WORKDIR /app/frontend
+
+# Accept BASE_PATH as build argument (defaults to "/")
+ARG BASE_PATH=/
+ENV VITE_BASE_PATH=${BASE_PATH}
+
 COPY frontend/package*.json ./
 RUN npm install
 COPY frontend/ .
@@ -33,7 +38,9 @@ FROM python:3.10-slim AS production
 
 # Build arguments
 ARG APP_VERSION=dev
+ARG BASE_PATH=/
 ENV APP_VERSION=${APP_VERSION}
+ENV BASE_PATH=${BASE_PATH}
 
 # Docker image metadata
 LABEL org.opencontainers.image.title="Borg Web UI"
