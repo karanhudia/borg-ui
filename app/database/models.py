@@ -274,6 +274,9 @@ class SystemSettings(Base):
     backup_timeout = Column(Integer, default=3600)  # Default 1 hour in seconds
     max_concurrent_backups = Column(Integer, default=1)
     log_retention_days = Column(Integer, default=30)
+    log_save_policy = Column(String, default="failed_and_warnings")  # Options: "failed_only", "failed_and_warnings", "all_jobs"
+    log_max_total_size_mb = Column(Integer, default=500)  # Maximum total size of all log files in MB
+    log_cleanup_on_startup = Column(Boolean, default=True)  # Run log cleanup on application startup
     email_notifications = Column(Boolean, default=False)
     webhook_url = Column(String, nullable=True)
     auto_cleanup = Column(Boolean, default=False)

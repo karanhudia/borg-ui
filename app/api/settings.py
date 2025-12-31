@@ -43,6 +43,9 @@ class SystemSettingsUpdate(BaseModel):
     backup_timeout: Optional[int] = None
     max_concurrent_backups: Optional[int] = None
     log_retention_days: Optional[int] = None
+    log_save_policy: Optional[str] = None
+    log_max_total_size_mb: Optional[int] = None
+    log_cleanup_on_startup: Optional[bool] = None
     email_notifications: Optional[bool] = None
     webhook_url: Optional[str] = None
     auto_cleanup: Optional[bool] = None
@@ -72,19 +75,50 @@ async def get_system_settings(
             db.commit()
             db.refresh(settings)
         
+        # Get log storage statistics
+        from app.services.log_manager import log_manager
+        try:
+            log_storage = log_manager.calculate_log_storage()
+            usage_percent = 0
+            if settings.log_max_total_size_mb and settings.log_max_total_size_mb > 0:
+                usage_percent = min(100, int((log_storage["total_size_mb"] / settings.log_max_total_size_mb) * 100))
+
+            log_storage_info = {
+                "total_size_mb": log_storage["total_size_mb"],
+                "file_count": log_storage["file_count"],
+                "oldest_log_date": log_storage["oldest_log_date"].isoformat() if log_storage["oldest_log_date"] else None,
+                "newest_log_date": log_storage["newest_log_date"].isoformat() if log_storage["newest_log_date"] else None,
+                "usage_percent": usage_percent,
+                "files_by_type": log_storage["files_by_type"]
+            }
+        except Exception as e:
+            logger.warning("Failed to calculate log storage", error=str(e))
+            log_storage_info = {
+                "total_size_mb": 0,
+                "file_count": 0,
+                "oldest_log_date": None,
+                "newest_log_date": None,
+                "usage_percent": 0,
+                "files_by_type": {}
+            }
+
         return {
             "success": True,
             "settings": {
                 "backup_timeout": settings.backup_timeout,
                 "max_concurrent_backups": settings.max_concurrent_backups,
                 "log_retention_days": settings.log_retention_days,
+                "log_save_policy": settings.log_save_policy,
+                "log_max_total_size_mb": settings.log_max_total_size_mb,
+                "log_cleanup_on_startup": settings.log_cleanup_on_startup,
                 "email_notifications": settings.email_notifications,
                 "webhook_url": settings.webhook_url,
                 "auto_cleanup": settings.auto_cleanup,
                 "cleanup_retention_days": settings.cleanup_retention_days,
                 "borg_version": borg.get_version(),
                 "app_version": "1.36.1"
-            }
+            },
+            "log_storage": log_storage_info
         }
     except Exception as e:
         logger.error("Failed to get system settings", error=str(e))
@@ -101,11 +135,41 @@ async def update_system_settings(
         raise HTTPException(status_code=403, detail="Admin access required")
     
     try:
+        # Validate log management settings
+        warnings = []
+
+        if settings_update.log_save_policy is not None:
+            valid_policies = ["failed_only", "failed_and_warnings", "all_jobs"]
+            if settings_update.log_save_policy not in valid_policies:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid log_save_policy. Must be one of: {', '.join(valid_policies)}"
+                )
+
+        if settings_update.log_max_total_size_mb is not None:
+            if settings_update.log_max_total_size_mb < 10:
+                raise HTTPException(
+                    status_code=400,
+                    detail="log_max_total_size_mb must be at least 10 MB"
+                )
+
+            # Check if new limit is below current usage
+            from app.services.log_manager import log_manager
+            try:
+                log_storage = log_manager.calculate_log_storage()
+                if log_storage["total_size_mb"] > settings_update.log_max_total_size_mb:
+                    warnings.append(
+                        f"Warning: Current log storage ({log_storage['total_size_mb']} MB) exceeds new limit "
+                        f"({settings_update.log_max_total_size_mb} MB). Consider running log cleanup."
+                    )
+            except Exception as e:
+                logger.warning("Failed to check log storage for validation", error=str(e))
+
         settings = db.query(SystemSettings).first()
         if not settings:
             settings = SystemSettings()
             db.add(settings)
-        
+
         # Update settings
         if settings_update.backup_timeout is not None:
             settings.backup_timeout = settings_update.backup_timeout
@@ -113,6 +177,12 @@ async def update_system_settings(
             settings.max_concurrent_backups = settings_update.max_concurrent_backups
         if settings_update.log_retention_days is not None:
             settings.log_retention_days = settings_update.log_retention_days
+        if settings_update.log_save_policy is not None:
+            settings.log_save_policy = settings_update.log_save_policy
+        if settings_update.log_max_total_size_mb is not None:
+            settings.log_max_total_size_mb = settings_update.log_max_total_size_mb
+        if settings_update.log_cleanup_on_startup is not None:
+            settings.log_cleanup_on_startup = settings_update.log_cleanup_on_startup
         if settings_update.email_notifications is not None:
             settings.email_notifications = settings_update.email_notifications
         if settings_update.webhook_url is not None:
@@ -121,16 +191,20 @@ async def update_system_settings(
             settings.auto_cleanup = settings_update.auto_cleanup
         if settings_update.cleanup_retention_days is not None:
             settings.cleanup_retention_days = settings_update.cleanup_retention_days
-        
+
         settings.updated_at = datetime.utcnow()
         db.commit()
-        
+
         logger.info("System settings updated", user=current_user.username)
-        
-        return {
+
+        response = {
             "success": True,
             "message": "System settings updated successfully"
         }
+        if warnings:
+            response["warnings"] = warnings
+
+        return response
     except Exception as e:
         logger.error("Failed to update system settings", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to update system settings: {str(e)}")
@@ -491,5 +565,135 @@ async def cleanup_system(
         error_msg = str(e) if str(e) else "Unknown error occurred"
         logger.error("Failed to run system cleanup", error=error_msg)
         raise HTTPException(status_code=500, detail=f"Failed to run system cleanup: {error_msg}")
+
+@router.get("/system/logs/storage")
+async def get_log_storage_stats(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get detailed log storage statistics.
+
+    Returns comprehensive information about log files including:
+    - Total size and file count
+    - Breakdown by job type
+    - Oldest and newest log dates
+    - Usage percentage against configured limit
+    """
+    try:
+        from app.services.log_manager import log_manager
+
+        # Get system settings for limit
+        settings = db.query(SystemSettings).first()
+        if not settings:
+            settings = SystemSettings()
+            db.add(settings)
+            db.commit()
+
+        # Calculate log storage
+        log_storage = log_manager.calculate_log_storage()
+
+        # Calculate usage percentage
+        usage_percent = 0
+        if settings.log_max_total_size_mb and settings.log_max_total_size_mb > 0:
+            usage_percent = min(100, int((log_storage["total_size_mb"] / settings.log_max_total_size_mb) * 100))
+
+        return {
+            "success": True,
+            "storage": {
+                "total_size_bytes": log_storage["total_size_bytes"],
+                "total_size_mb": log_storage["total_size_mb"],
+                "file_count": log_storage["file_count"],
+                "oldest_log_date": log_storage["oldest_log_date"].isoformat() if log_storage["oldest_log_date"] else None,
+                "newest_log_date": log_storage["newest_log_date"].isoformat() if log_storage["newest_log_date"] else None,
+                "files_by_type": log_storage["files_by_type"],
+                "usage_percent": usage_percent,
+                "limit_mb": settings.log_max_total_size_mb,
+                "retention_days": settings.log_retention_days
+            }
+        }
+    except Exception as e:
+        logger.error("Failed to get log storage stats", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to get log storage statistics: {str(e)}")
+
+@router.post("/system/logs/cleanup")
+async def manual_log_cleanup(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Manually trigger log cleanup based on current settings.
+
+    This endpoint:
+    - Requires admin access
+    - Reads log_retention_days and log_max_total_size_mb from settings
+    - Protects logs for running jobs
+    - Performs age-based cleanup first, then size-based cleanup
+    - Returns detailed cleanup statistics
+    """
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        from app.services.log_manager import log_manager
+
+        # Get system settings
+        settings = db.query(SystemSettings).first()
+        if not settings:
+            settings = SystemSettings()
+            db.add(settings)
+            db.commit()
+
+        max_age_days = settings.log_retention_days or 30
+        max_total_size_mb = settings.log_max_total_size_mb or 500
+
+        logger.info("Manual log cleanup triggered",
+                   user=current_user.username,
+                   max_age_days=max_age_days,
+                   max_total_size_mb=max_total_size_mb)
+
+        # Run cleanup
+        result = log_manager.cleanup_logs_combined(
+            db=db,
+            max_age_days=max_age_days,
+            max_total_size_mb=max_total_size_mb,
+            dry_run=False
+        )
+
+        # Get updated storage stats
+        log_storage = log_manager.calculate_log_storage()
+
+        logger.info("Manual log cleanup completed",
+                   user=current_user.username,
+                   deleted_count=result["total_deleted_count"],
+                   size_freed_mb=result["total_deleted_size_mb"])
+
+        return {
+            "success": result["success"],
+            "message": f"Log cleanup completed. Deleted {result['total_deleted_count']} files, freed {result['total_deleted_size_mb']} MB.",
+            "cleanup_results": {
+                "age_cleanup": {
+                    "deleted_count": result["age_cleanup"]["deleted_count"],
+                    "deleted_size_mb": result["age_cleanup"]["deleted_size_mb"],
+                    "skipped_count": result["age_cleanup"]["skipped_count"]
+                },
+                "size_cleanup": {
+                    "deleted_count": result["size_cleanup"]["deleted_count"],
+                    "deleted_size_mb": result["size_cleanup"]["deleted_size_mb"],
+                    "skipped_count": result["size_cleanup"]["skipped_count"],
+                    "final_size_mb": result["size_cleanup"]["final_size_mb"]
+                },
+                "total_deleted_count": result["total_deleted_count"],
+                "total_deleted_size_mb": result["total_deleted_size_mb"],
+                "errors": result["total_errors"]
+            },
+            "current_storage": {
+                "total_size_mb": log_storage["total_size_mb"],
+                "file_count": log_storage["file_count"]
+            }
+        }
+    except Exception as e:
+        logger.error("Failed to run manual log cleanup", user=current_user.username, error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to run log cleanup: {str(e)}")
 
  

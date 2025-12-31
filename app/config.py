@@ -139,7 +139,18 @@ else:
 settings.environment = os.getenv("ENVIRONMENT", settings.environment)
 settings.log_level = os.getenv("LOG_LEVEL", settings.log_level)
 settings.port = int(os.getenv("PORT", settings.port))
-settings.base_path = os.getenv("BASE_PATH", settings.base_path)
+
+# BASE_PATH needs normalization after loading from environment
+base_path_env = os.getenv("BASE_PATH", settings.base_path)
+if not base_path_env or base_path_env == "/":
+    settings.base_path = ""
+else:
+    base_path_env = base_path_env.strip()
+    # Ensure leading slash
+    if not base_path_env.startswith("/"):
+        base_path_env = "/" + base_path_env
+    # Strip trailing slash
+    settings.base_path = base_path_env.rstrip("/")
 
 # Environment-specific overrides
 if settings.environment == "production":

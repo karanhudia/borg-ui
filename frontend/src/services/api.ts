@@ -161,6 +161,10 @@ export const settingsAPI = {
   getSystemSettings: () => api.get('/settings/system'),
   updateSystemSettings: (settings: any) => api.put('/settings/system', settings),
 
+  // Log management
+  getLogStorageStats: () => api.get('/settings/system/logs/storage'),
+  manualLogCleanup: () => api.post('/settings/system/logs/cleanup'),
+
   // User management
   getUsers: () => api.get('/settings/users'),
   createUser: (userData: any) => api.post('/settings/users', userData),
