@@ -204,14 +204,14 @@ export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
       id: 'status',
       label: 'Status',
       align: 'left',
-      width: '130px',
+      width: '100px',
       render: (job: any) => <StatusBadge status={job.status} />,
     },
     {
       id: 'started_at',
       label: 'Started',
       align: 'left',
-      width: '140px',
+      width: '180px',
       render: (job: any) => (
         <Typography variant="body2" color="text.secondary">
           {job.started_at ? formatDate(job.started_at) : '-'}
