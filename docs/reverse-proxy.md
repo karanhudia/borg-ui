@@ -23,7 +23,7 @@ Borg Web UI supports running behind reverse proxies in two configurations:
 ## Subfolder Deployment (BASE_PATH)
 
 {: .new }
-> **New in v1.37.0**: BASE_PATH support for subfolder deployments
+> **Updated in v1.38.3**: No rebuild required! Just set BASE_PATH and restart.
 
 ### Quick Start
 
@@ -36,13 +36,13 @@ environment:
   - BASE_PATH=/borg
 ```
 
-2. **Rebuild the container:**
+2. **Restart the container:**
 
 ```bash
-docker-compose up -d --build
+docker-compose restart
 ```
 
-**Important**: BASE_PATH affects frontend asset paths, so a rebuild is required when changing it.
+**That's it!** No rebuild needed. Change BASE_PATH anytime and just restart.
 
 ### Configuration
 
@@ -51,13 +51,9 @@ Add to your `docker-compose.yml`:
 ```yaml
 services:
   borg-ui:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        - BASE_PATH=/borg  # Build-time argument for frontend assets
+    image: ainullcode/borg-ui:latest
     environment:
-      - BASE_PATH=/borg    # Runtime variable for backend routing
+      - BASE_PATH=/borg
 ```
 
 Or in `.env` file:
@@ -70,6 +66,7 @@ BASE_PATH=/borg
 - Must start with `/` (e.g., `/borg` not `borg`)
 - No trailing slash (e.g., `/borg` not `/borg/`)
 - Defaults to `/` if not set
+- Can be changed at any time without rebuilding
 
 ---
 
@@ -318,25 +315,22 @@ Then configure your proxy to use `http://borg-web-ui:8081` instead of `localhost
 
 **Symptom**: Frontend shows blank page or 404 errors for assets
 
-**Solution**: Rebuild container after changing BASE_PATH
+**Solution**: Clear browser cache and hard refresh (Ctrl+Shift+R or Cmd+Shift+R)
 
 ```bash
-docker-compose down
-docker-compose up -d --build
+# Restart container to apply BASE_PATH
+docker-compose restart
 ```
 
 ### Authentication Redirects
 
 **Symptom**: Login redirects to wrong URL
 
-**Solution**: Ensure BASE_PATH is set correctly in both build args and environment
+**Solution**: Ensure BASE_PATH is set correctly and restart container
 
 ```yaml
-build:
-  args:
-    - BASE_PATH=/borg  # For frontend
 environment:
-  - BASE_PATH=/borg    # For backend
+  - BASE_PATH=/borg
 ```
 
 ### API Calls Failing
@@ -470,9 +464,6 @@ services:
   borg-ui:
     image: ainullcode/borg-ui:latest
     container_name: borg-web-ui
-    build:
-      args:
-        - BASE_PATH=/backups
     environment:
       - BASE_PATH=/backups
     networks:

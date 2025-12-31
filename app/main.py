@@ -184,7 +184,13 @@ async def root():
     """Serve the main application"""
     try:
         with open("app/static/index.html", "r") as f:
-            return HTMLResponse(content=f.read())
+            html_content = f.read()
+            # Inject BASE_PATH into HTML for runtime detection
+            base_path_value = settings.base_path if settings.base_path else "/"
+            injection = f'<script>window.BASE_PATH = "{base_path_value}";</script>'
+            # Insert before </head> tag
+            html_content = html_content.replace('</head>', f'{injection}</head>')
+            return HTMLResponse(content=html_content)
     except FileNotFoundError:
         return HTMLResponse(content="<h1>Borg Web UI</h1><p>Frontend not built yet. Please run the build process.</p>")
 
@@ -214,7 +220,13 @@ async def catch_all(full_path: str):
     # Serve index.html for all other routes (frontend routes)
     try:
         with open("app/static/index.html", "r") as f:
-            return HTMLResponse(content=f.read())
+            html_content = f.read()
+            # Inject BASE_PATH into HTML for runtime detection
+            base_path_value = settings.base_path if settings.base_path else "/"
+            injection = f'<script>window.BASE_PATH = "{base_path_value}";</script>'
+            # Insert before </head> tag
+            html_content = html_content.replace('</head>', f'{injection}</head>')
+            return HTMLResponse(content=html_content)
     except FileNotFoundError:
         return HTMLResponse(content="<h1>Borg Web UI</h1><p>Frontend not built yet. Please run the build process.</p>")
 
