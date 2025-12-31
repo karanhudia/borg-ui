@@ -1105,10 +1105,10 @@ class BackupService:
 
             logger.info("Starting borg backup", job_id=job_id, repository=actual_repository_path, archive=archive_name, command=" ".join(cmd))
 
-            # Send backup start notification
+            # Send backup start notification (size will be updated by background task)
             try:
                 await notification_service.send_backup_start(
-                    db, repository, archive_name, source_paths, total_expected_size
+                    db, repository, archive_name, source_paths, None
                 )
             except Exception as e:
                 logger.warning("Failed to send backup start notification", error=str(e))
