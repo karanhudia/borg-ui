@@ -157,9 +157,9 @@ const Backup: React.FC = () => {
   }
 
   // Handle download logs
-  const handleDownloadLogs = (jobId: string) => {
+  const handleDownloadLogs = (job: any) => {
     try {
-      backupAPI.downloadLogs(jobId)
+      backupAPI.downloadLogs(job.id)
       toast.success('Downloading logs...')
     } catch (error) {
       toast.error('Failed to download logs')
