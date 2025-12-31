@@ -162,6 +162,8 @@ export default function DataTable<T>({
                   bgcolor: headerBgColor,
                   fontWeight: 600,
                   color: 'text.secondary',
+                  width: '140px',
+                  minWidth: '140px',
                 }}
               >
                 Actions
@@ -203,7 +205,7 @@ export default function DataTable<T>({
                 </TableCell>
               ))}
               {actions && actions.length > 0 && (
-                <TableCell align="right">
+                <TableCell align="right" sx={{ width: '140px', minWidth: '140px' }}>
                   <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
                     {actions.map((action, idx) => {
                       const shouldShow = action.show ? action.show(row) : true
