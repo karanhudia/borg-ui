@@ -79,6 +79,30 @@ environment:
 
 **Note:** If not set, defaults to `admin123`. You'll be prompted to change it on first login.
 
+### Reverse Proxy / BASE_PATH
+
+{: .new }
+> **New in v1.37.0**: BASE_PATH support for subfolder deployments
+
+Run Borg Web UI in a subfolder behind a reverse proxy:
+
+```yaml
+environment:
+  - BASE_PATH=/borg  # Access at example.com/borg/
+```
+
+**Important Notes:**
+- Requires container rebuild: `docker-compose up -d --build`
+- Must start with `/` and have no trailing slash
+- Defaults to `/` (root path) if not set
+
+**Examples:**
+- `/borg` → Access at `example.com/borg/`
+- `/backup-ui` → Access at `example.com/backup-ui/`
+- `/` → Access at `example.com/` (default)
+
+See [Reverse Proxy Setup](reverse-proxy.md) for complete configuration examples with Nginx, Traefik, Caddy, and Apache.
+
 ---
 
 ## Volume Mounts
@@ -199,7 +223,9 @@ No need for a separate `borg_backups` volume!
 
 ### Using a Reverse Proxy
 
-**Nginx example:**
+Borg Web UI supports both root domain and subfolder deployments behind reverse proxies.
+
+**Quick Example (Nginx root domain):**
 
 ```nginx
 server {
@@ -212,23 +238,24 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket/SSE support
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 86400;
     }
 }
 ```
 
-**Traefik example:**
+**For complete reverse proxy setup including:**
+- Subfolder deployments (e.g., `example.com/borg/`)
+- Nginx, Traefik, Caddy, Apache configurations
+- SSL/HTTPS setup
+- Docker network integration
+- Troubleshooting
 
-```yaml
-services:
-  borg-ui:
-    image: ainullcode/borg-ui:latest
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.borg-ui.rule=Host(`backups.example.com`)"
-      - "traefik.http.routers.borg-ui.entrypoints=websecure"
-      - "traefik.http.routers.borg-ui.tls.certresolver=letsencrypt"
-      - "traefik.http.services.borg-ui.loadbalancer.server.port=8081"
-```
+See the **[Reverse Proxy Setup Guide](reverse-proxy.md)**
 
 ### Custom Network
 
