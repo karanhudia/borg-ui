@@ -859,29 +859,23 @@ export default function Repositories() {
               Create your first Borg repository to start backing up your data.
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Choose between a local repository on this machine or a remote repository via SSH.
+              Create a local repository or remote repository via SSH. The type will be automatically detected based on the path you provide.
             </Typography>
             {user?.is_admin && (
               <Stack direction="row" spacing={2} justifyContent="center">
                 <Button
                   variant="contained"
-                  startIcon={<Computer />}
-                  onClick={() => {
-                    openRepositoryModal('create')
-                    setRepositoryForm({ ...repositoryForm, repository_type: 'local' })
-                  }}
+                  startIcon={<Add />}
+                  onClick={() => openRepositoryModal('create')}
                 >
-                  Create Local Repository
+                  Create Repository
                 </Button>
                 <Button
                   variant="outlined"
-                  startIcon={<Wifi />}
-                  onClick={() => {
-                    openRepositoryModal('create')
-                    setRepositoryForm({ ...repositoryForm, repository_type: 'ssh' })
-                  }}
+                  startIcon={<FileUpload />}
+                  onClick={() => openRepositoryModal('import')}
                 >
-                  Create Remote Repository (SSH)
+                  Import Existing
                 </Button>
               </Stack>
             )}
