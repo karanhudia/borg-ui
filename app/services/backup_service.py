@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 import structlog
 from sqlalchemy.orm import Session
-from app.database.models import BackupJob, Repository, RepositoryScript
+from app.database.models import BackupJob, Repository, RepositoryScript, SystemSettings
 from app.database.database import SessionLocal
 from app.config import settings
 from app.core.borg_errors import format_error_message, get_error_details
@@ -154,62 +154,71 @@ class BackupService:
                 "using_library": False
             }
 
-    def rotate_logs(self, max_age_days: int = 30, max_files: int = 100):
+    def rotate_logs(self, db: Session = None):
         """
-        Rotate backup log files to prevent disk space issues
-        - Deletes logs older than max_age_days
-        - Keeps only max_files most recent log files
+        Rotate backup log files using configurable size + age based rotation.
+
+        Reads settings from database:
+        - log_retention_days: Maximum age of logs
+        - log_max_total_size_mb: Maximum total size of all logs
+
+        Uses log_manager service for cleanup with protection for running jobs.
+
+        Args:
+            db: Database session (required to query settings and running jobs)
         """
         try:
-            import time
+            # Import log_manager here to avoid circular dependency
+            from app.services.log_manager import log_manager
 
             if not self.log_dir.exists():
                 return
 
-            # Get all log files
-            log_files = list(self.log_dir.glob("backup_*.log"))
+            # If no database session provided, create one
+            if db is None:
+                db = SessionLocal()
+                close_db = True
+            else:
+                close_db = False
 
-            if not log_files:
-                return
+            try:
+                # Get system settings
+                system_settings = db.query(SystemSettings).first()
+                if not system_settings:
+                    system_settings = SystemSettings()
+                    db.add(system_settings)
+                    db.commit()
 
-            current_time = time.time()
-            max_age_seconds = max_age_days * 24 * 60 * 60
-            deleted_count = 0
+                max_age_days = system_settings.log_retention_days or 30
+                max_total_size_mb = system_settings.log_max_total_size_mb or 500
 
-            # Delete files older than max_age_days
-            for log_file in log_files:
-                try:
-                    file_age = current_time - log_file.stat().st_mtime
-                    if file_age > max_age_seconds:
-                        log_file.unlink()
-                        deleted_count += 1
-                        logger.debug("Deleted old log file", file=log_file.name, age_days=int(file_age / 86400))
-                except Exception as e:
-                    logger.warning("Failed to delete log file", file=log_file.name, error=str(e))
-
-            # Get remaining files and sort by modification time (newest first)
-            log_files = sorted(
-                [f for f in self.log_dir.glob("backup_*.log")],
-                key=lambda f: f.stat().st_mtime,
-                reverse=True
-            )
-
-            # Keep only max_files most recent
-            if len(log_files) > max_files:
-                for log_file in log_files[max_files:]:
-                    try:
-                        log_file.unlink()
-                        deleted_count += 1
-                        logger.debug("Deleted excess log file", file=log_file.name)
-                    except Exception as e:
-                        logger.warning("Failed to delete log file", file=log_file.name, error=str(e))
-
-            if deleted_count > 0:
-                logger.info("Log rotation completed",
-                          deleted=deleted_count,
-                          remaining=len(log_files) - deleted_count,
+                logger.info("Starting log rotation",
                           max_age_days=max_age_days,
-                          max_files=max_files)
+                          max_total_size_mb=max_total_size_mb)
+
+                # Use log_manager for combined cleanup (age + size)
+                result = log_manager.cleanup_logs_combined(
+                    db=db,
+                    max_age_days=max_age_days,
+                    max_total_size_mb=max_total_size_mb,
+                    dry_run=False
+                )
+
+                if result["success"]:
+                    logger.info("Log rotation completed successfully",
+                              total_deleted=result["total_deleted_count"],
+                              size_freed_mb=result["total_deleted_size_mb"],
+                              age_deleted=result["age_cleanup"]["deleted_count"],
+                              size_deleted=result["size_cleanup"]["deleted_count"])
+                else:
+                    logger.warning("Log rotation completed with errors",
+                                 total_deleted=result["total_deleted_count"],
+                                 size_freed_mb=result["total_deleted_size_mb"],
+                                 errors=result["total_errors"])
+
+            finally:
+                if close_db:
+                    db.close()
 
         except Exception as e:
             logger.error("Log rotation failed", error=str(e))
@@ -1568,10 +1577,40 @@ class BackupService:
             if job.completed_at is None:
                 job.completed_at = datetime.utcnow()
 
-            # CONDITIONAL LOG SAVING: Only save logs on failure/cancellation for debugging
-            # Always save hook logs if present
-            if job.status in ['failed', 'cancelled'] or actual_returncode not in [0, None]:
-                # Save log buffer to file for debugging
+            # CONFIGURABLE LOG SAVING: Check system settings for log save policy
+            # Get log save policy from SystemSettings
+            system_settings = db.query(SystemSettings).first()
+            if not system_settings:
+                system_settings = SystemSettings()
+                db.add(system_settings)
+                db.commit()
+
+            log_save_policy = system_settings.log_save_policy or "failed_and_warnings"
+
+            # Determine if logs should be saved based on policy
+            should_save_logs = False
+
+            if log_save_policy == "all_jobs":
+                # Save logs for all jobs
+                should_save_logs = True
+            elif log_save_policy == "failed_and_warnings":
+                # Save if job failed/cancelled OR has warnings
+                combined_logs = hook_logs + log_buffer if hook_logs else log_buffer
+                has_warnings = any('WARNING' in line or 'ERROR' in line for line in combined_logs)
+                should_save_logs = (
+                    job.status in ['failed', 'cancelled'] or
+                    actual_returncode not in [0, None] or
+                    has_warnings
+                )
+            elif log_save_policy == "failed_only":
+                # Save only if job failed/cancelled
+                should_save_logs = (
+                    job.status in ['failed', 'cancelled'] or
+                    actual_returncode not in [0, None]
+                )
+
+            # Save logs to file if policy dictates
+            if should_save_logs:
                 log_file = self.log_dir / f"backup_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
                 try:
                     combined_logs = hook_logs + log_buffer if hook_logs else log_buffer
@@ -1579,22 +1618,24 @@ class BackupService:
                     # Store log file path so Activity page can read and display logs
                     job.log_file_path = str(log_file)
                     job.logs = f"Logs saved to: {log_file.name}"
-                    logger.warning("Backup failed/cancelled, logs saved for debugging",
-                                 job_id=job_id,
-                                 status=job.status,
-                                 log_file=str(log_file),
-                                 log_lines=len(combined_logs))
+                    logger.info("Logs saved per policy",
+                                job_id=job_id,
+                                status=job.status,
+                                policy=log_save_policy,
+                                log_file=str(log_file),
+                                log_lines=len(combined_logs))
                 except Exception as e:
                     job.logs = f"Failed to save logs: {str(e)}"
                     logger.error("Failed to save log buffer to file", job_id=job_id, error=str(e))
             else:
-                # Success - save hook logs if present, otherwise no logs for performance
+                # No logs saved per policy
                 if hook_logs:
+                    # Save hook logs in database for reference
                     job.logs = "\n".join(hook_logs)
-                    logger.info("Backup completed successfully with hooks, hook logs saved", job_id=job_id)
+                    logger.info("Backup completed, only hook logs saved", job_id=job_id, policy=log_save_policy)
                 else:
                     job.logs = None
-                    logger.info("Backup completed successfully, no logs saved", job_id=job_id)
+                    logger.info("Backup completed, no logs saved per policy", job_id=job_id, policy=log_save_policy)
 
             db.commit()
             logger.info("Backup completed", job_id=job_id, status=job.status)
