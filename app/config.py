@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     # Application settings
     app_name: str = "Borg Web UI"
-    app_version: str = "1.36.1"
+    app_version: str = "1.38.1"
     debug: bool = False
     environment: str = "production"  # Default to production for safety
     base_path: str = "/"  # Base path for reverse proxy support (e.g., "/borg")
