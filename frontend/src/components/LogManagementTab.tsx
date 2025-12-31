@@ -145,7 +145,11 @@ const LogManagementTab: React.FC = () => {
   }
 
   const handleCleanup = () => {
-    if (window.confirm('Are you sure you want to run log cleanup? This will delete old log files according to your settings.')) {
+    if (
+      window.confirm(
+        'Are you sure you want to run log cleanup? This will delete old log files according to your settings.'
+      )
+    ) {
       cleanupMutation.mutate()
     }
   }
@@ -171,222 +175,19 @@ const LogManagementTab: React.FC = () => {
   const isHighUsage = usagePercent >= 80
 
   return (
-    <Stack spacing={3}>
-      {/* Current Usage Card */}
-      <Card>
-        <CardContent>
-          <Stack spacing={2}>
-            <Box display="flex" alignItems="center" gap={1}>
-              <HardDrive size={24} />
-              <Typography variant="h6">Log Storage Usage</Typography>
-            </Box>
-
-            <Divider />
-
-            {loadingStorage ? (
-              <Box py={2}>
-                <LinearProgress />
-              </Box>
-            ) : (
-              <>
-                <Box
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(4, 1fr)' },
-                    gap: 2,
-                  }}
-                >
-                  <Box>
-                    <Typography variant="body2" color="text.secondary">
-                      Total Size
-                    </Typography>
-                    <Typography variant="h6">{logStorage?.total_size_mb || 0} MB</Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="body2" color="text.secondary">
-                      File Count
-                    </Typography>
-                    <Typography variant="h6">{logStorage?.file_count || 0}</Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="body2" color="text.secondary">
-                      Oldest Log
-                    </Typography>
-                    <Typography variant="body1">{formatDate(logStorage?.oldest_log_date || null)}</Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="body2" color="text.secondary">
-                      Newest Log
-                    </Typography>
-                    <Typography variant="body1">{formatDate(logStorage?.newest_log_date || null)}</Typography>
-                  </Box>
-                </Box>
-
-                <Box>
-                  <Box display="flex" justifyContent="space-between" mb={1}>
-                    <Typography variant="body2" color="text.secondary">
-                      Usage: {usagePercent}%
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Limit: {logStorage?.limit_mb || 0} MB
-                    </Typography>
-                  </Box>
-                  <LinearProgress
-                    variant="determinate"
-                    value={Math.min(usagePercent, 100)}
-                    color={isHighUsage ? 'warning' : 'primary'}
-                    sx={{ height: 10, borderRadius: 5 }}
-                  />
-                </Box>
-
-                {isHighUsage && (
-                  <Alert severity="warning" icon={<AlertTriangle size={20} />}>
-                    Log storage usage is at {usagePercent}%. Consider running cleanup or increasing the size limit.
-                  </Alert>
-                )}
-
-                <Box>
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    startIcon={cleanupMutation.isPending ? <CircularProgress size={16} /> : <Trash2 size={16} />}
-                    onClick={handleCleanup}
-                    disabled={cleanupMutation.isPending}
-                    fullWidth
-                  >
-                    {cleanupMutation.isPending ? 'Running Cleanup...' : 'Run Cleanup Now'}
-                  </Button>
-                </Box>
-              </>
-            )}
-          </Stack>
-        </CardContent>
-      </Card>
-
-      {/* Log Storage Policy */}
-      <Card>
-        <CardContent>
-          <Stack spacing={2}>
-            <Typography variant="h6">Log Storage Policy</Typography>
-            <Divider />
-
-            <FormControl component="fieldset">
-              <FormLabel component="legend">Which jobs should have logs saved to disk?</FormLabel>
-              <RadioGroup value={logSavePolicy} onChange={(e) => setLogSavePolicy(e.target.value)}>
-                <FormControlLabel
-                  value="failed_only"
-                  control={<Radio />}
-                  label={
-                    <Box>
-                      <Typography variant="body1">Failed Jobs Only</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Save logs only for failed or cancelled jobs (minimal disk usage)
-                      </Typography>
-                    </Box>
-                  }
-                />
-                <FormControlLabel
-                  value="failed_and_warnings"
-                  control={<Radio />}
-                  label={
-                    <Box>
-                      <Typography variant="body1">Failed Jobs and Warnings (Recommended)</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Save logs for failed jobs and any job with warnings or errors
-                      </Typography>
-                    </Box>
-                  }
-                />
-                <FormControlLabel
-                  value="all_jobs"
-                  control={<Radio />}
-                  label={
-                    <Box>
-                      <Typography variant="body1">All Jobs</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Save logs for all jobs, including successful ones (maximum disk usage)
-                      </Typography>
-                    </Box>
-                  }
-                />
-              </RadioGroup>
-            </FormControl>
-          </Stack>
-        </CardContent>
-      </Card>
-
-      {/* Retention Settings */}
-      <Card>
-        <CardContent>
-          <Stack spacing={3}>
-            <Typography variant="h6">Retention Settings</Typography>
-            <Divider />
-
-            <Box>
-              <Typography variant="body2" gutterBottom>
-                Days to Keep Logs: {retentionDays} days
-              </Typography>
-              <Slider
-                value={retentionDays}
-                onChange={(_, value) => setRetentionDays(value as number)}
-                min={7}
-                max={90}
-                step={1}
-                marks={[
-                  { value: 7, label: '7d' },
-                  { value: 30, label: '30d' },
-                  { value: 60, label: '60d' },
-                  { value: 90, label: '90d' },
-                ]}
-                valueLabelDisplay="auto"
-              />
-              <Typography variant="caption" color="text.secondary">
-                Logs older than this will be deleted during cleanup
-              </Typography>
-            </Box>
-
-            <Box>
-              <TextField
-                label="Maximum Total Size (MB)"
-                type="number"
-                value={maxTotalSizeMb}
-                onChange={(e) => setMaxTotalSizeMb(Math.max(10, parseInt(e.target.value) || 10))}
-                inputProps={{ min: 10, max: 10000, step: 50 }}
-                fullWidth
-                helperText="Total size limit for all log files. Minimum: 10 MB, Maximum: 10,000 MB (10 GB)"
-              />
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
-
-      {/* Cleanup Options */}
-      <Card>
-        <CardContent>
-          <Stack spacing={2}>
-            <Typography variant="h6">Cleanup Options</Typography>
-            <Divider />
-
-            <FormControlLabel
-              control={<Checkbox checked={cleanupOnStartup} onChange={(e) => setCleanupOnStartup(e.target.checked)} />}
-              label={
-                <Box>
-                  <Typography variant="body1">Run cleanup on application startup</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Automatically clean old logs when the application starts
-                  </Typography>
-                </Box>
-              }
-            />
-          </Stack>
-        </CardContent>
-      </Card>
-
-      {/* Save Button */}
-      <Box display="flex" justifyContent="flex-end" gap={2}>
+    <Box>
+      {/* Header Section */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Box>
+          <Typography variant="h6" fontWeight={600}>
+            Log Management
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Configure log storage, retention, and cleanup policies for job logs
+          </Typography>
+        </Box>
         <Button
           variant="contained"
-          color="primary"
           startIcon={saveSettingsMutation.isPending ? <CircularProgress size={16} /> : <Save size={16} />}
           onClick={handleSaveSettings}
           disabled={!hasChanges || saveSettingsMutation.isPending}
@@ -394,7 +195,275 @@ const LogManagementTab: React.FC = () => {
           {saveSettingsMutation.isPending ? 'Saving...' : 'Save Settings'}
         </Button>
       </Box>
-    </Stack>
+
+      <Stack spacing={3}>
+        {/* Current Usage Card */}
+        <Card>
+          <CardContent>
+            <Stack spacing={3}>
+              <Box>
+                <Box display="flex" alignItems="center" gap={1} mb={1}>
+                  <HardDrive size={20} />
+                  <Typography variant="subtitle1" fontWeight={600}>
+                    Storage Usage
+                  </Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  Current log storage utilization and statistics
+                </Typography>
+              </Box>
+
+              <Divider />
+
+              {loadingStorage ? (
+                <Box py={2}>
+                  <LinearProgress />
+                </Box>
+              ) : (
+                <>
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(4, 1fr)' },
+                      gap: 3,
+                    }}
+                  >
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                        Total Size
+                      </Typography>
+                      <Typography variant="h5" fontWeight={600} sx={{ mt: 0.5 }}>
+                        {logStorage?.total_size_mb || 0} MB
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                        File Count
+                      </Typography>
+                      <Typography variant="h5" fontWeight={600} sx={{ mt: 0.5 }}>
+                        {logStorage?.file_count || 0}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                        Oldest Log
+                      </Typography>
+                      <Typography variant="body1" sx={{ mt: 0.5 }}>
+                        {formatDate(logStorage?.oldest_log_date || null)}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                        Newest Log
+                      </Typography>
+                      <Typography variant="body1" sx={{ mt: 0.5 }}>
+                        {formatDate(logStorage?.newest_log_date || null)}
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  <Box>
+                    <Box display="flex" justifyContent="space-between" mb={1}>
+                      <Typography variant="body2" fontWeight={600}>
+                        {usagePercent}% of {logStorage?.limit_mb || 0} MB
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {Math.max(0, (logStorage?.limit_mb || 0) - (logStorage?.total_size_mb || 0))} MB available
+                      </Typography>
+                    </Box>
+                    <LinearProgress
+                      variant="determinate"
+                      value={Math.min(usagePercent, 100)}
+                      color={isHighUsage ? 'warning' : 'primary'}
+                      sx={{ height: 8, borderRadius: 4 }}
+                    />
+                  </Box>
+
+                  {isHighUsage && (
+                    <Alert severity="warning" icon={<AlertTriangle size={20} />}>
+                      Log storage usage is at {usagePercent}%. Consider running cleanup or increasing the
+                      size limit.
+                    </Alert>
+                  )}
+
+                  <Box sx={{ pt: 1 }}>
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      startIcon={cleanupMutation.isPending ? <CircularProgress size={16} /> : <Trash2 size={16} />}
+                      onClick={handleCleanup}
+                      disabled={cleanupMutation.isPending}
+                    >
+                      {cleanupMutation.isPending ? 'Running Cleanup...' : 'Run Cleanup Now'}
+                    </Button>
+                  </Box>
+                </>
+              )}
+            </Stack>
+          </CardContent>
+        </Card>
+
+        {/* Log Storage Policy */}
+        <Card>
+          <CardContent>
+            <Stack spacing={3}>
+              <Box>
+                <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                  Log Storage Policy
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Choose which job types should have their logs saved to disk
+                </Typography>
+              </Box>
+
+              <Divider />
+
+              <FormControl component="fieldset">
+                <RadioGroup value={logSavePolicy} onChange={(e) => setLogSavePolicy(e.target.value)}>
+                  <FormControlLabel
+                    value="failed_only"
+                    control={<Radio />}
+                    label={
+                      <Box sx={{ py: 1 }}>
+                        <Typography variant="body1" fontWeight={500}>
+                          Failed Jobs Only
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Save logs only for failed or cancelled jobs (minimal disk usage)
+                        </Typography>
+                      </Box>
+                    }
+                    sx={{ mb: 1, alignItems: 'flex-start', '.MuiRadio-root': { mt: 1.25 } }}
+                  />
+                  <FormControlLabel
+                    value="failed_and_warnings"
+                    control={<Radio />}
+                    label={
+                      <Box sx={{ py: 1 }}>
+                        <Typography variant="body1" fontWeight={500}>
+                          Failed Jobs and Warnings (Recommended)
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Save logs for failed jobs and any job with warnings or errors
+                        </Typography>
+                      </Box>
+                    }
+                    sx={{ mb: 1, alignItems: 'flex-start', '.MuiRadio-root': { mt: 1.25 } }}
+                  />
+                  <FormControlLabel
+                    value="all_jobs"
+                    control={<Radio />}
+                    label={
+                      <Box sx={{ py: 1 }}>
+                        <Typography variant="body1" fontWeight={500}>
+                          All Jobs
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Save logs for all jobs, including successful ones (maximum disk usage)
+                        </Typography>
+                      </Box>
+                    }
+                    sx={{ alignItems: 'flex-start', '.MuiRadio-root': { mt: 1.25 } }}
+                  />
+                </RadioGroup>
+              </FormControl>
+            </Stack>
+          </CardContent>
+        </Card>
+
+        {/* Retention Settings */}
+        <Card>
+          <CardContent>
+            <Stack spacing={3}>
+              <Box>
+                <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                  Retention Settings
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Configure how long logs are kept and maximum storage size
+                </Typography>
+              </Box>
+
+              <Divider />
+
+              <Box>
+                <Typography variant="body2" fontWeight={600} gutterBottom>
+                  Log Retention Period: {retentionDays} days
+                </Typography>
+                <Box sx={{ px: 1, pt: 1 }}>
+                  <Slider
+                    value={retentionDays}
+                    onChange={(_, value) => setRetentionDays(value as number)}
+                    min={7}
+                    max={90}
+                    step={1}
+                    marks={[
+                      { value: 7, label: '7d' },
+                      { value: 30, label: '30d' },
+                      { value: 60, label: '60d' },
+                      { value: 90, label: '90d' },
+                    ]}
+                    valueLabelDisplay="auto"
+                  />
+                </Box>
+                <Typography variant="caption" color="text.secondary">
+                  Logs older than this will be automatically deleted during cleanup
+                </Typography>
+              </Box>
+
+              <Box>
+                <TextField
+                  label="Maximum Total Size (MB)"
+                  type="number"
+                  value={maxTotalSizeMb}
+                  onChange={(e) => setMaxTotalSizeMb(Math.max(10, parseInt(e.target.value) || 10))}
+                  inputProps={{ min: 10, max: 10000, step: 50 }}
+                  fullWidth
+                  helperText="Total size limit for all log files. Min: 10 MB, Max: 10,000 MB (10 GB)"
+                />
+              </Box>
+            </Stack>
+          </CardContent>
+        </Card>
+
+        {/* Cleanup Options */}
+        <Card>
+          <CardContent>
+            <Stack spacing={3}>
+              <Box>
+                <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                  Automatic Cleanup
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Configure when log cleanup runs automatically
+                </Typography>
+              </Box>
+
+              <Divider />
+
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={cleanupOnStartup}
+                    onChange={(e) => setCleanupOnStartup(e.target.checked)}
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body1" fontWeight={500}>
+                      Run cleanup on application startup
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Automatically clean old logs when the application starts
+                    </Typography>
+                  </Box>
+                }
+              />
+            </Stack>
+          </CardContent>
+        </Card>
+      </Stack>
+    </Box>
   )
 }
 
