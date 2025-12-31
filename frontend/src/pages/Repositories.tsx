@@ -577,6 +577,33 @@ export default function Repositories() {
   //   }
   // }
 
+  // Auto-detect and parse SSH connection details from path
+  const handlePathChange = (newPath: string) => {
+    if (newPath.startsWith('ssh://')) {
+      // Parse SSH URL: ssh://username@host:port/path
+      const match = newPath.match(/ssh:\/\/([^@]+)@([^:]+):(\d+)(.*)/)
+      if (match) {
+        const [, username, host, port, remotePath] = match
+        setRepositoryForm({
+          ...repositoryForm,
+          path: remotePath || '/',
+          repository_type: 'ssh',
+          username,
+          host,
+          port: parseInt(port),
+        })
+        return
+      }
+    }
+
+    // Local path
+    setRepositoryForm({
+      ...repositoryForm,
+      path: newPath,
+      repository_type: 'local',
+    })
+  }
+
   // Generate borg init command preview
   const getBorgInitCommand = () => {
     let repoPath = repositoryForm.path || '/path/to/repository'
@@ -1027,20 +1054,14 @@ export default function Repositories() {
                 </Alert>
               )}
 
-              <FormControl fullWidth>
-                <InputLabel>Repository Type</InputLabel>
-                <Select
-                  value={repositoryForm.repository_type}
-                  label="Repository Type"
-                  onChange={(e) =>
-                    setRepositoryForm({ ...repositoryForm, repository_type: e.target.value })
-                  }
-                >
-                  <MenuItem value="local">Local</MenuItem>
-                  <MenuItem value="ssh">SSH</MenuItem>
-                  <MenuItem value="sftp">SFTP</MenuItem>
-                </Select>
-              </FormControl>
+              {/* Repository type is auto-detected - show current type */}
+              <Alert severity="info">
+                <Typography variant="body2">
+                  {repositoryForm.repository_type === 'local'
+                    ? '📁 Local Repository: Stored on this machine or mounted storage'
+                    : '🌐 Remote Repository (SSH): Stored on a remote server via SSH'}
+                </Typography>
+              </Alert>
 
               {repositoryForm.repository_type !== 'local' && (
                 <>
@@ -1125,14 +1146,24 @@ export default function Repositories() {
                 label="Path"
                 value={repositoryForm.path}
                 onChange={(e) => setRepositoryForm({ ...repositoryForm, path: e.target.value })}
+                onBlur={(e) => {
+                  // Auto-detect SSH connection details when field loses focus
+                  if (e.target.value && e.target.value.startsWith('ssh://')) {
+                    handlePathChange(e.target.value)
+                  }
+                }}
                 placeholder={
                   repositoryForm.repository_type === 'local'
                     ? '/path/to/repository'
-                    : '/path/to/repository'
+                    : '/path/on/remote/server'
                 }
                 required
                 fullWidth
-                helperText="Any path is allowed. Directory will be created automatically."
+                helperText={
+                  repositoryForm.repository_type === 'local'
+                    ? 'Path on this machine or mounted storage'
+                    : 'Path on remote server (or paste full ssh:// URL to auto-fill connection)'
+                }
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
@@ -2531,7 +2562,7 @@ export default function Repositories() {
         onClose={() => setShowPathExplorer(false)}
         onSelect={(paths) => {
           if (paths.length > 0) {
-            setRepositoryForm({ ...repositoryForm, path: paths[0] })
+            handlePathChange(paths[0])
           }
         }}
         title="Select Repository Path"
@@ -2632,7 +2663,7 @@ export default function Repositories() {
         onClose={() => setShowImportPathExplorer(false)}
         onSelect={(paths) => {
           if (paths.length > 0) {
-            setRepositoryForm({ ...repositoryForm, path: paths[0] })
+            handlePathChange(paths[0])
           }
         }}
         title="Select Repository Path"
