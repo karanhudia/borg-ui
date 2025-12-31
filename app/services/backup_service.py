@@ -365,14 +365,27 @@ class BackupService:
             bytes_value /= 1024.0
         return f"{bytes_value:.2f} PB"
 
-    async def _calculate_source_size(self, source_paths: list[str]) -> int:
+    async def _calculate_source_size(self, source_paths: list[str], exclude_patterns: list[str] = None) -> int:
         """
         Calculate total size of source directories in bytes using du
         Supports both local paths and SSH URLs (ssh://user@host:port/path)
-        Returns total size in bytes, or 0 if calculation fails
+        Applies exclude patterns to match Borg's exclusion logic
+
+        Args:
+            source_paths: List of source directory paths
+            exclude_patterns: List of patterns to exclude (same format as Borg excludes)
+
+        Returns:
+            Total size in bytes, or 0 if calculation fails
         """
         try:
-            logger.info("Starting source size calculation", paths=source_paths, path_count=len(source_paths))
+            if exclude_patterns is None:
+                exclude_patterns = []
+
+            logger.info("Starting source size calculation",
+                       paths=source_paths,
+                       path_count=len(source_paths),
+                       exclude_patterns=exclude_patterns)
             total_size = 0
 
             for path in source_paths:
@@ -385,8 +398,15 @@ class BackupService:
                         if match:
                             username, host, port, remote_path = match.groups()
 
-                            # Use SSH to run du on the remote host
+                            # Build du command with exclude patterns
                             # -s: summarize, -b: bytes (portable across systems)
+                            du_excludes = ""
+                            for pattern in exclude_patterns:
+                                # Escape single quotes in pattern for shell safety
+                                safe_pattern = pattern.replace("'", "'\\''")
+                                du_excludes += f" --exclude='{safe_pattern}'"
+
+                            # Use SSH to run du on the remote host
                             cmd = [
                                 "ssh",
                                 "-o", "StrictHostKeyChecking=no",
@@ -395,7 +415,7 @@ class BackupService:
                                 "-o", "ConnectTimeout=10",
                                 "-p", port,
                                 f"{username}@{host}",
-                                f"du -sb {remote_path} 2>/dev/null | cut -f1"
+                                f"du -sb{du_excludes} {remote_path} 2>/dev/null | cut -f1"
                             ]
 
                             process = await asyncio.create_subprocess_exec(
@@ -422,7 +442,14 @@ class BackupService:
                         # Local path - use local du
                         # -s: summarize (total for directory)
                         # -B1: block size of 1 byte (for precise byte count)
-                        cmd = ["du", "-s", "-B1", path]
+                        # --exclude: exclude patterns (same as Borg patterns)
+                        cmd = ["du", "-s", "-B1"]
+
+                        # Add exclude patterns
+                        for pattern in exclude_patterns:
+                            cmd.extend(["--exclude", pattern])
+
+                        cmd.append(path)
 
                         process = await asyncio.create_subprocess_exec(
                             *cmd,
@@ -471,17 +498,26 @@ class BackupService:
                        paths=source_paths)
             return 0
 
-    async def _calculate_and_update_size_background(self, job_id: int, source_paths: list[str]):
+    async def _calculate_and_update_size_background(self, job_id: int, source_paths: list[str], exclude_patterns: list[str] = None):
         """
         Background task to calculate source size and update job record
         Runs without blocking the backup start
+
+        Args:
+            job_id: The backup job ID
+            source_paths: List of source directory paths
+            exclude_patterns: List of patterns to exclude (same format as Borg excludes)
         """
         try:
+            if exclude_patterns is None:
+                exclude_patterns = []
+
             logger.info("Background size calculation started",
                        job_id=job_id,
                        source_paths=source_paths,
-                       path_count=len(source_paths))
-            total_expected_size = await self._calculate_source_size(source_paths)
+                       path_count=len(source_paths),
+                       exclude_count=len(exclude_patterns))
+            total_expected_size = await self._calculate_source_size(source_paths, exclude_patterns)
 
             if total_expected_size > 0:
                 # Update the job record with the calculated size
@@ -1048,8 +1084,11 @@ class BackupService:
             # Calculate total expected size of source directories in background
             # This runs asynchronously without blocking backup start
             # Progress percentage will update when calculation completes
-            logger.info("Starting background calculation of source directories size", source_paths=source_paths, job_id=job_id)
-            asyncio.create_task(self._calculate_and_update_size_background(job_id, source_paths))
+            logger.info("Starting background calculation of source directories size",
+                       source_paths=source_paths,
+                       job_id=job_id,
+                       exclude_patterns=exclude_patterns)
+            asyncio.create_task(self._calculate_and_update_size_background(job_id, source_paths, exclude_patterns))
 
             # Prepare source paths: mount SSH URLs via SSHFS
             logger.info("Preparing source paths (mounting SSH URLs if needed)", source_paths=source_paths, job_id=job_id)
