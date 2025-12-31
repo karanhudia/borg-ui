@@ -105,12 +105,9 @@ export default function FileExplorerDialog({
     try {
       const response = await sshKeysAPI.getSSHConnections()
       const connections = response.data?.connections || []
-      // Filter only connected connections with mount points
+      // Show all connected SSH connections (mount point is optional)
       setSshConnections(
-        connections.filter(
-          (conn: SSHConnection) =>
-            conn.status === 'connected' && conn.mount_point && conn.mount_point.trim()
-        )
+        connections.filter((conn: SSHConnection) => conn.status === 'connected')
       )
     } catch (err) {
       // Silently fail - mount points are optional
@@ -251,14 +248,21 @@ export default function FileExplorerDialog({
   // Add mount points as virtual items at root level
   const getMountPointItems = (): FileSystemItem[] => {
     if (currentPath !== '/' || activeConnectionType !== 'local') return []
-    return sshConnections.map((conn) => ({
-      name: conn.mount_point || '',
-      path: `ssh://${conn.username}@${conn.host}:${conn.port}${conn.default_path || '/'}`,
-      is_directory: true,
-      is_borg_repo: false,
-      is_mount_point: true,
-      ssh_connection: conn,
-    }))
+    return sshConnections.map((conn) => {
+      // Use mount_point name if available, otherwise show full SSH URL
+      const displayName = conn.mount_point && conn.mount_point.trim()
+        ? conn.mount_point
+        : `ssh://${conn.username}@${conn.host}:${conn.port}${conn.default_path || '/'}`
+
+      return {
+        name: displayName,
+        path: `ssh://${conn.username}@${conn.host}:${conn.port}${conn.default_path || '/'}`,
+        is_directory: true,
+        is_borg_repo: false,
+        is_mount_point: true,
+        ssh_connection: conn,
+      }
+    })
   }
 
   const allItems = [...getMountPointItems(), ...items]
@@ -363,6 +367,18 @@ export default function FileExplorerDialog({
           <Box sx={{ px: 2, pb: 1 }}>
             <Alert severity="error" sx={{ borderRadius: 1, py: 0.5 }}>
               {error}
+            </Alert>
+          </Box>
+        )}
+
+        {/* Mount Point Info */}
+        {currentPath === '/' && activeConnectionType === 'local' && sshConnections.length > 0 && (
+          <Box sx={{ px: 2, pb: 1 }}>
+            <Alert severity="info" sx={{ borderRadius: 1, py: 0.5 }}>
+              <Typography variant="caption">
+                💡 SSH connections are shown below. Configure mount points in SSH Keys page for
+                cleaner display names.
+              </Typography>
             </Alert>
           </Box>
         )}
