@@ -1082,7 +1082,8 @@ async def prune_repository(
         prune_job = PruneJob(
             repository_id=repo_id,
             repository_path=repository.path,  # Capture path for display
-            status="pending"
+            status="pending",
+            scheduled_prune=False  # Manual trigger
         )
         db.add(prune_job)
         db.commit()
