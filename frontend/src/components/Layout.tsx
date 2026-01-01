@@ -265,7 +265,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                             to={subItem.href}
                             selected={isActive}
                             sx={{
-                              pl: 4,
+                              pl: 7,
                               '&.Mui-selected': {
                                 backgroundColor: 'primary.main',
                                 color: 'white',
@@ -279,7 +279,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                             }}
                           >
                             <ListItemIcon
-                              sx={{ color: isActive ? 'white' : 'text.secondary', minWidth: 36 }}
+                              sx={{ color: isActive ? 'white' : 'text.secondary', minWidth: 40 }}
                             >
                               <SubIcon size={18} />
                             </ListItemIcon>
