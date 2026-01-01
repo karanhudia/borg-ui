@@ -36,26 +36,23 @@ environment:
   - BASE_PATH=/borg
 ```
 
-2. **Configure your reverse proxy to STRIP the prefix** (see examples below)
-
-3. **Restart the container:**
+2. **Restart the container:**
 
 ```bash
 docker-compose restart
 ```
 
-**That's it!** No rebuild needed. Change BASE_PATH anytime and just restart.
+**That's it!** No rebuild, no special proxy configuration needed. Works with any reverse proxy (Nginx, Traefik, Caddy, Cloudflare Tunnels, etc.) out of the box.
 
 ### How It Works
 
-**IMPORTANT**: Your reverse proxy MUST strip the prefix before forwarding requests to the app.
+The app handles BASE_PATH internally, so it works with any reverse proxy configuration:
 
 - User visits: `https://example.com/borg/dashboard`
-- Proxy strips `/borg` and forwards `/dashboard` to container
-- App receives `/dashboard` and handles it normally
-- FastAPI knows the external path is `/borg/dashboard` (for redirects, links, etc.)
+- Proxy forwards full path `/borg/dashboard` to container (no stripping needed)
+- App handles the request and serves the correct page
 
-This is the standard reverse proxy pattern and all examples below follow this approach.
+**No proxy configuration required** - the app adapts to whatever path it receives.
 
 ### Configuration
 
@@ -92,8 +89,8 @@ server {
     listen 80;
     server_name example.com;
 
-    location /borg/ {
-        proxy_pass http://localhost:8081/;
+    location /borg {
+        proxy_pass http://localhost:8081;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -114,6 +111,8 @@ server {
 environment:
   - BASE_PATH=/borg
 ```
+
+**Note**: Notice `location /borg` and `proxy_pass http://localhost:8081` (no trailing slashes) - this forwards the full path to the container.
 
 ### Root Domain
 
@@ -195,11 +194,9 @@ services:
       - "traefik.http.routers.borg-ui.entrypoints=websecure"
       - "traefik.http.routers.borg-ui.tls.certresolver=letsencrypt"
       - "traefik.http.services.borg-ui.loadbalancer.server.port=8081"
-
-      # Strip /borg prefix before forwarding to container
-      - "traefik.http.middlewares.borg-strip.stripprefix.prefixes=/borg"
-      - "traefik.http.routers.borg-ui.middlewares=borg-strip"
 ```
+
+**Note**: No stripprefix middleware needed - the app handles the BASE_PATH internally.
 
 ### Root Domain
 
@@ -224,8 +221,7 @@ services:
 
 ```caddyfile
 example.com {
-    route /borg* {
-        uri strip_prefix /borg
+    handle /borg* {
         reverse_proxy localhost:8081
     }
 }
@@ -237,6 +233,8 @@ example.com {
 environment:
   - BASE_PATH=/borg
 ```
+
+**Note**: No uri strip_prefix needed - the app handles the BASE_PATH internally.
 
 ### Root Domain
 
@@ -257,14 +255,14 @@ backups.example.com {
     ServerName example.com
 
     ProxyPreserveHost On
-    ProxyPass /borg/ http://localhost:8081/
-    ProxyPassReverse /borg/ http://localhost:8081/
+    ProxyPass /borg http://localhost:8081/borg
+    ProxyPassReverse /borg http://localhost:8081/borg
 
     # WebSocket support
     RewriteEngine on
     RewriteCond %{HTTP:Upgrade} websocket [NC]
     RewriteCond %{HTTP:Connection} upgrade [NC]
-    RewriteRule /borg/(.*) ws://localhost:8081/$1 [P,L]
+    RewriteRule /borg/(.*) ws://localhost:8081/borg/$1 [P,L]
 </VirtualHost>
 ```
 
@@ -274,6 +272,8 @@ backups.example.com {
 environment:
   - BASE_PATH=/borg
 ```
+
+**Note**: No prefix stripping - the proxy forwards the full path to the container.
 
 ### Root Domain
 
@@ -350,7 +350,7 @@ environment:
 
 **Symptom**: API returns 404 errors
 
-**Solution**: Check that proxy passes the path correctly. For Traefik, use `stripprefix` middleware.
+**Solution**: Ensure BASE_PATH matches the URL path and that your proxy is forwarding requests to the container. No special proxy configuration needed.
 
 ### SSE Connection Errors
 
@@ -370,10 +370,9 @@ proxy_read_timeout 86400;
 
 ## Testing
 
-### Local Testing (Without Reverse Proxy)
+### Local Testing
 
-For local development/testing, run the app at the root path:
-
+**Root deployment (no BASE_PATH):**
 ```yaml
 # docker-compose.yml or .env
 # Don't set BASE_PATH, or set it to empty/root
@@ -381,38 +380,41 @@ BASE_PATH=/
 # or simply omit BASE_PATH
 ```
 
-Then access at: `http://localhost:8081/`
+Access at: `http://localhost:8081/`
 
-**Note**: Direct access with BASE_PATH (e.g., `http://localhost:8081/borg/`) won't work without a reverse proxy, as the app expects the proxy to strip the prefix.
-
-### Testing with Reverse Proxy
-
-To test subfolder deployments, set up a local reverse proxy:
-
-**Quick Nginx test:**
-```nginx
-location /borg/ {
-    proxy_pass http://localhost:8081/;  # Trailing slash strips /borg
-}
+**Subfolder deployment:**
+```yaml
+# docker-compose.yml or .env
+BASE_PATH=/borg
 ```
 
-Then set `BASE_PATH=/borg` and access via nginx.
+Access at: `http://localhost:8081/borg/`
+
+**Works directly!** No reverse proxy needed for local testing.
 
 ### Verify Configuration
 
 1. **Check health endpoint:**
    ```bash
+   # Root deployment
    curl http://localhost:8081/health
+
+   # Subfolder deployment
+   curl http://localhost:8081/borg/health
    ```
 
 2. **Check API info:**
    ```bash
+   # Root deployment
    curl http://localhost:8081/api
+
+   # Subfolder deployment
+   curl http://localhost:8081/borg/api
    ```
 
 3. **Access web interface:**
    - Root deployment: `http://localhost:8081/`
-   - Subfolder: Must use reverse proxy (e.g., nginx at `/borg/`)
+   - Subfolder deployment: `http://localhost:8081/borg/`
 
 ### Debug Mode
 
