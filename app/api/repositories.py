@@ -9,7 +9,7 @@ import asyncio
 import json
 
 from app.database.database import get_db
-from app.database.models import User, Repository, CheckJob, CompactJob
+from app.database.models import User, Repository, CheckJob, CompactJob, PruneJob
 from app.core.security import get_current_user
 from app.core.borg import BorgInterface
 from app.config import settings
@@ -1048,7 +1048,7 @@ async def prune_repository(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Prune old archives based on retention policy"""
+    """Start a background prune job to remove old archives based on retention policy"""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
 
@@ -1056,6 +1056,18 @@ async def prune_repository(
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
             raise HTTPException(status_code=404, detail="Repository not found")
+
+        # Check if there's already a running prune job for this repository
+        running_job = db.query(PruneJob).filter(
+            PruneJob.repository_id == repo_id,
+            PruneJob.status == "running"
+        ).first()
+
+        if running_job:
+            raise HTTPException(
+                status_code=409,
+                detail=f"A prune operation is already running for this repository (Job ID: {running_job.id})"
+            )
 
         # Extract retention policy from request
         keep_hourly = request.get("keep_hourly", 0)
@@ -1066,34 +1078,50 @@ async def prune_repository(
         keep_yearly = request.get("keep_yearly", 1)
         dry_run = request.get("dry_run", False)
 
-        # Run prune
-        prune_result = await borg.prune_archives(
-            repository.path,
-            keep_hourly=keep_hourly,
-            keep_daily=keep_daily,
-            keep_weekly=keep_weekly,
-            keep_monthly=keep_monthly,
-            keep_quarterly=keep_quarterly,
-            keep_yearly=keep_yearly,
-            dry_run=dry_run,
-            remote_path=repository.remote_path,
-            passphrase=repository.passphrase
+        # Create prune job record
+        prune_job = PruneJob(
+            repository_id=repo_id,
+            repository_path=repository.path,  # Capture path for display
+            status="pending"
+        )
+        db.add(prune_job)
+        db.commit()
+        db.refresh(prune_job)
+
+        # Execute prune asynchronously (non-blocking)
+        from app.services.prune_service import prune_service
+        asyncio.create_task(
+            prune_service.execute_prune(
+                prune_job.id,
+                repo_id,
+                keep_hourly,
+                keep_daily,
+                keep_weekly,
+                keep_monthly,
+                keep_quarterly,
+                keep_yearly,
+                dry_run,
+                db
+            )
         )
 
-        # Update archive count after successful prune (not dry run)
-        if not dry_run and prune_result.get("success"):
-            await update_repository_stats(repository, db)
+        logger.info("Prune job created",
+                   job_id=prune_job.id,
+                   repository_id=repo_id,
+                   dry_run=dry_run,
+                   user=current_user.username)
 
         return {
-            "success": True,
+            "job_id": prune_job.id,
+            "status": "pending",
             "dry_run": dry_run,
-            "prune_result": prune_result
+            "message": "Prune job started"
         }
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to prune repository", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to prune repository: {str(e)}")
+        logger.error("Failed to start prune job", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to start prune: {str(e)}")
 
 @router.get("/{repo_id}/stats")
 async def get_repository_statistics(
