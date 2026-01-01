@@ -152,50 +152,50 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const drawer = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Box>
-        <Box
-          component={Link}
-          to="/dashboard"
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1.5,
-            textDecoration: 'none',
-            color: 'inherit',
-            cursor: 'pointer',
-            px: 2,
-            py: 2,
-            '&:hover': {
-              opacity: 0.8,
-            },
-          }}
-        >
+        <Toolbar sx={{ gap: 1.5 }}>
           <Box
+            component={Link}
+            to="/dashboard"
             sx={{
-              width: 36,
-              height: 36,
-              borderRadius: '50%',
-              backgroundColor: '#00dd00',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
+              gap: 1.5,
+              textDecoration: 'none',
+              color: 'inherit',
+              cursor: 'pointer',
+              '&:hover': {
+                opacity: 0.8,
+              },
             }}
           >
             <Box
-              component="img"
-              src="/logo.png"
-              alt="Borg UI Logo"
               sx={{
-                width: '70%',
-                height: '70%',
-                objectFit: 'contain',
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                backgroundColor: '#00dd00',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '5px',
               }}
-            />
+            >
+              <Box
+                component="img"
+                src="/logo.png"
+                alt="Borg UI Logo"
+                sx={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                }}
+              />
+            </Box>
+            <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 600 }}>
+              Borg UI
+            </Typography>
           </Box>
-          <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 600, fontSize: '1.125rem' }}>
-            Borg UI
-          </Typography>
-        </Box>
+        </Toolbar>
         <Divider />
         <List sx={{ pt: 0 }}>
           {navigationWithKeys.map((item) => {
