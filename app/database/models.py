@@ -265,6 +265,7 @@ class PruneJob(Base):
     completed_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
     logs = Column(Text, nullable=True)  # Full logs (stored after completion)
+    scheduled_prune = Column(Boolean, default=False, nullable=False)  # True if triggered by scheduler, False if manual
     created_at = Column(DateTime, default=utc_now)
 
 class SystemSettings(Base):
