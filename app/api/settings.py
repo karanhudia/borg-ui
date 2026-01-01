@@ -205,6 +205,9 @@ async def update_system_settings(
             response["warnings"] = warnings
 
         return response
+    except HTTPException:
+        # Re-raise HTTP exceptions (like validation errors) as-is
+        raise
     except Exception as e:
         logger.error("Failed to update system settings", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to update system settings: {str(e)}")
