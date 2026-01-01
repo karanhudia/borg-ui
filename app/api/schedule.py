@@ -728,7 +728,8 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
                     repository_id=repo.id,
                     repository_path=repo.path,
                     status="running",
-                    started_at=datetime.now(timezone.utc)
+                    started_at=datetime.now(timezone.utc),
+                    scheduled_compact=True  # Mark as scheduled (not manual)
                 )
                 db.add(compact_job)
                 db.commit()
