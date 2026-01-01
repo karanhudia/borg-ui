@@ -663,8 +663,8 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
                 prune_job = PruneJob(
                     repository_id=repo.id,
                     repository_path=repo.path,
-                    status="running",
-                    started_at=datetime.now(timezone.utc)
+                    status="pending",
+                    scheduled_prune=True  # Mark as scheduled (not manual)
                 )
                 db.add(prune_job)
                 db.commit()
@@ -674,8 +674,11 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
                 backup_job.maintenance_status = "running_prune"
                 db.commit()
 
-                prune_result = await borg.prune_archives(
-                    repository=repo.path,
+                # Use prune service for proper log handling
+                from app.services.prune_service import prune_service
+                await prune_service.execute_prune(
+                    job_id=prune_job.id,
+                    repository_id=repo.id,
                     keep_hourly=scheduled_job.prune_keep_hourly,
                     keep_daily=scheduled_job.prune_keep_daily,
                     keep_weekly=scheduled_job.prune_keep_weekly,
@@ -683,33 +686,22 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
                     keep_quarterly=scheduled_job.prune_keep_quarterly,
                     keep_yearly=scheduled_job.prune_keep_yearly,
                     dry_run=False,
-                    remote_path=repo.remote_path,
-                    passphrase=repo.passphrase
+                    db=db
                 )
 
-                if prune_result.get("success"):
+                # Refresh job to get updated status
+                db.refresh(prune_job)
+
+                if prune_job.status == "completed":
                     scheduled_job.last_prune = datetime.now(timezone.utc)
                     backup_job.maintenance_status = "prune_completed"
-
-                    # Update PruneJob record
-                    prune_job.status = "completed"
-                    prune_job.completed_at = datetime.now(timezone.utc)
-                    prune_job.logs = "Scheduled prune completed successfully"
-
                     db.commit()
                     logger.info("Scheduled prune completed", scheduled_job_id=scheduled_job_id, prune_job_id=prune_job.id)
                 else:
                     backup_job.maintenance_status = "prune_failed"
-
-                    # Update PruneJob record
-                    prune_job.status = "failed"
-                    prune_job.completed_at = datetime.now(timezone.utc)
-                    prune_job.error_message = prune_result.get("stderr", "Unknown error")
-                    prune_job.logs = prune_result.get("stderr", "")
-
                     db.commit()
                     logger.error("Scheduled prune failed", scheduled_job_id=scheduled_job_id, prune_job_id=prune_job.id,
-                                error=prune_result.get("stderr"))
+                                error=prune_job.error_message)
 
             except Exception as e:
                 backup_job.maintenance_status = "prune_failed"
