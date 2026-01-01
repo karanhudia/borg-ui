@@ -403,7 +403,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           boxShadow: 1,
         }}
       >
-        <Toolbar sx={{ pr: 6 }}>
+        <Toolbar sx={{ pr: '48px !important' }}>
           <IconButton
             color="inherit"
             aria-label="open drawer"
