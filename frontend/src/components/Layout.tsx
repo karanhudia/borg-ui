@@ -15,12 +15,10 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  Avatar,
-  Menu as MuiMenu,
-  MenuItem,
   Container,
   Tooltip,
   Collapse,
+  Button,
 } from '@mui/material'
 import {
   Home,
@@ -109,7 +107,6 @@ interface SystemInfo {
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
   const [settingsExpanded, setSettingsExpanded] = useState(false)
   const location = useLocation()
@@ -138,19 +135,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen)
-  }
-
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget)
-  }
-
-  const handleMenuClose = () => {
-    setAnchorEl(null)
-  }
-
-  const handleLogout = () => {
-    handleMenuClose()
-    logout()
   }
 
   const handleNavClick = (
@@ -430,34 +414,39 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Menu size={24} />
           </IconButton>
           <Box sx={{ flexGrow: 1 }} />
-          <IconButton onClick={handleMenuOpen} sx={{ p: 0 }}>
-            <Avatar sx={{ bgcolor: 'primary.main', width: 36, height: 36 }}>
-              {user?.username?.charAt(0).toUpperCase() || 'U'}
-            </Avatar>
-          </IconButton>
-          <MuiMenu
-            anchorEl={anchorEl}
-            open={Boolean(anchorEl)}
-            onClose={handleMenuClose}
-            transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-            anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+            }}
           >
-            <Box sx={{ px: 2, py: 1.5 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                {user?.username}
+            <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 0.5 }}>
+              <Typography variant="body2" color="text.secondary">
+                Welcome,
               </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {user?.email}
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {user?.email || user?.username}
               </Typography>
             </Box>
-            <Divider />
-            <MenuItem onClick={handleLogout}>
-              <ListItemIcon>
-                <LogOut size={18} />
-              </ListItemIcon>
-              <ListItemText>Logout</ListItemText>
-            </MenuItem>
-          </MuiMenu>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<LogOut size={18} />}
+              onClick={logout}
+              sx={{
+                textTransform: 'none',
+                borderColor: 'divider',
+                color: 'text.primary',
+                '&:hover': {
+                  borderColor: 'primary.main',
+                  backgroundColor: 'action.hover',
+                },
+              }}
+            >
+              Logout
+            </Button>
+          </Box>
         </Toolbar>
       </AppBar>
 
