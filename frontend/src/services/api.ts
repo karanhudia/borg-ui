@@ -170,6 +170,10 @@ export const settingsAPI = {
 
   // System maintenance
   cleanupSystem: () => api.post('/settings/system/cleanup'),
+
+  // Log management
+  getLogStorageStats: () => api.get('/settings/system/logs/storage'),
+  manualLogCleanup: () => api.post('/settings/system/logs/cleanup'),
 }
 
 // Events API (Server-Sent Events)
