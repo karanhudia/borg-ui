@@ -253,7 +253,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     </ListItemButton>
                   </ListItem>
 
-                  {/* Sub-items with modern styling and smooth animation */}
+                  {/* Sub-items with smooth animation */}
                   <Collapse in={settingsExpanded} timeout="auto" unmountOnExit>
                     <List component="div" disablePadding>
                       {item.subItems.map((subItem) => {
@@ -267,15 +267,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                               to={subItem.href}
                               selected={isActive}
                               sx={{
-                                pl: 4,
-                                py: 1,
-                                backgroundColor: isActive ? 'transparent' : 'action.hover',
-                                borderLeft: '3px solid',
-                                borderColor: isActive ? 'primary.main' : 'transparent',
                                 '&.Mui-selected': {
                                   backgroundColor: 'primary.main',
                                   color: 'white',
-                                  borderColor: 'primary.main',
                                   '&:hover': {
                                     backgroundColor: 'primary.dark',
                                   },
@@ -283,24 +277,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                                     color: 'white',
                                   },
                                 },
-                                '&:hover': {
-                                  backgroundColor: isActive ? 'primary.main' : 'action.selected',
-                                },
                               }}
                             >
-                              <ListItemIcon
-                                sx={{
-                                  color: isActive ? 'white' : 'text.secondary',
-                                  minWidth: 36,
-                                  ml: 1,
-                                }}
-                              >
-                                <SubIcon size={16} />
+                              <ListItemIcon sx={{ color: isActive ? 'white' : 'text.secondary' }}>
+                                <SubIcon size={20} />
                               </ListItemIcon>
                               <ListItemText
                                 primary={subItem.name}
                                 primaryTypographyProps={{
-                                  fontSize: '0.8125rem',
+                                  fontSize: '0.875rem',
                                   fontWeight: isActive ? 600 : 400,
                                   color: isActive ? 'white' : 'inherit',
                                 }}
