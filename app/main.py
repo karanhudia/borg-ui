@@ -54,8 +54,7 @@ app = FastAPI(
     title="Borg Web UI",
     description="A lightweight web interface for Borg backup management",
     version="1.38.2",
-    # Don't use root_path - we manually prefix routes with base_path
-    # This works when reverse proxy strips the prefix before forwarding
+    root_path=settings.base_path,  # Enable reverse proxy support
     docs_url=f"{settings.base_path}/api/docs" if settings.base_path else "/api/docs",
     redoc_url=f"{settings.base_path}/api/redoc" if settings.base_path else "/api/redoc"
 )
@@ -189,10 +188,8 @@ async def root():
             # Inject BASE_PATH into HTML for runtime detection
             base_path_value = settings.base_path if settings.base_path else "/"
             injection = f'<script>window.BASE_PATH = "{base_path_value}";</script>'
-            # Insert script and set base tag for relative paths
-            base_tag = f'<base href="{base_path_value}/">' if base_path_value != "/" else '<base href="/">'
-            # Insert both before </head> tag
-            html_content = html_content.replace('</head>', f'{base_tag}{injection}</head>')
+            # Insert before </head> tag
+            html_content = html_content.replace('</head>', f'{injection}</head>')
             return HTMLResponse(content=html_content)
     except FileNotFoundError:
         return HTMLResponse(content="<h1>Borg Web UI</h1><p>Frontend not built yet. Please run the build process.</p>")
@@ -227,10 +224,8 @@ async def catch_all(full_path: str):
             # Inject BASE_PATH into HTML for runtime detection
             base_path_value = settings.base_path if settings.base_path else "/"
             injection = f'<script>window.BASE_PATH = "{base_path_value}";</script>'
-            # Insert script and set base tag for relative paths
-            base_tag = f'<base href="{base_path_value}/">' if base_path_value != "/" else '<base href="/">'
-            # Insert both before </head> tag
-            html_content = html_content.replace('</head>', f'{base_tag}{injection}</head>')
+            # Insert before </head> tag
+            html_content = html_content.replace('</head>', f'{injection}</head>')
             return HTMLResponse(content=html_content)
     except FileNotFoundError:
         return HTMLResponse(content="<h1>Borg Web UI</h1><p>Frontend not built yet. Please run the build process.</p>")
@@ -250,26 +245,6 @@ async def api_info():
         "base_path": settings.base_path or "/",
         "status": "running"
     }
-
-@app.middleware("http")
-async def trailing_slash_middleware(request: Request, call_next):
-    """Remove trailing slashes from frontend routes (but not API routes)"""
-    path = request.url.path
-
-    # Only process if path has trailing slash and is not root
-    if path != "/" and path.endswith("/"):
-        # Don't strip trailing slash from API routes (they may need it)
-        api_prefix = f"{settings.base_path}/api" if settings.base_path else "/api"
-        if not path.startswith(api_prefix):
-            # Redirect to same path without trailing slash
-            new_path = path.rstrip("/")
-            # Preserve query string
-            query = str(request.url.query)
-            new_url = f"{new_path}?{query}" if query else new_path
-            from fastapi.responses import RedirectResponse
-            return RedirectResponse(url=new_url, status_code=307)
-
-    return await call_next(request)
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
