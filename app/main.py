@@ -189,8 +189,10 @@ async def root():
             # Inject BASE_PATH into HTML for runtime detection
             base_path_value = settings.base_path if settings.base_path else "/"
             injection = f'<script>window.BASE_PATH = "{base_path_value}";</script>'
-            # Insert before </head> tag
-            html_content = html_content.replace('</head>', f'{injection}</head>')
+            # Add base tag to resolve relative asset paths correctly
+            base_tag = f'<base href="{base_path_value}/">' if base_path_value != "/" else '<base href="/">'
+            # Insert both before </head> tag
+            html_content = html_content.replace('</head>', f'{base_tag}{injection}</head>')
             return HTMLResponse(content=html_content)
     except FileNotFoundError:
         return HTMLResponse(content="<h1>Borg Web UI</h1><p>Frontend not built yet. Please run the build process.</p>")
@@ -221,8 +223,10 @@ async def catch_all(full_path: str):
             # Inject BASE_PATH into HTML for runtime detection
             base_path_value = settings.base_path if settings.base_path else "/"
             injection = f'<script>window.BASE_PATH = "{base_path_value}";</script>'
-            # Insert before </head> tag
-            html_content = html_content.replace('</head>', f'{injection}</head>')
+            # Add base tag to resolve relative asset paths correctly
+            base_tag = f'<base href="{base_path_value}/">' if base_path_value != "/" else '<base href="/">'
+            # Insert both before </head> tag
+            html_content = html_content.replace('</head>', f'{base_tag}{injection}</head>')
             return HTMLResponse(content=html_content)
     except FileNotFoundError:
         return HTMLResponse(content="<h1>Borg Web UI</h1><p>Frontend not built yet. Please run the build process.</p>")
