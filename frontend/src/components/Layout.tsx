@@ -187,8 +187,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         >
           <Box
             sx={{
-              width: 24,
-              height: 24,
+              width: 36,
+              height: 36,
               borderRadius: '50%',
               backgroundColor: '#00dd00',
               display: 'flex',
@@ -231,6 +231,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     <ListItemButton
                       onClick={() => setSettingsExpanded(!settingsExpanded)}
                       sx={{
+                        px: 2,
                         '&:hover': {
                           backgroundColor: 'action.hover',
                         },
@@ -267,6 +268,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                               to={subItem.href}
                               selected={isActive}
                               sx={{
+                                px: 2,
                                 backgroundColor: 'action.hover',
                                 '&.Mui-selected': {
                                   backgroundColor: 'primary.main',
@@ -318,6 +320,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 disabled={!isEnabled}
                 onClick={(e: React.MouseEvent<HTMLDivElement>) => handleNavClick(e, item)}
                 sx={{
+                  px: 2,
                   '&.Mui-selected': {
                     backgroundColor: 'primary.main',
                     color: 'white',
