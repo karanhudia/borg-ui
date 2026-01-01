@@ -264,7 +264,9 @@ class PruneJob(Base):
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
-    logs = Column(Text, nullable=True)  # Full logs (stored after completion)
+    logs = Column(Text, nullable=True)  # Deprecated: kept for backwards compatibility, use log_file_path instead
+    log_file_path = Column(String, nullable=True)  # Path to log file on disk
+    has_logs = Column(Boolean, default=False)  # Flag indicating if logs are available
     scheduled_prune = Column(Boolean, default=False, nullable=False)  # True if triggered by scheduler, False if manual
     created_at = Column(DateTime, default=utc_now)
 

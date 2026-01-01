@@ -221,17 +221,23 @@ class PruneService:
                 log_file = self.log_dir / f"prune_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
                 try:
                     log_file.write_text('\n'.join(log_buffer))
-                    job.logs = f"Logs saved to: {log_file.name}"
+                    # Store file path and set has_logs flag (like backup jobs)
+                    job.log_file_path = str(log_file)
+                    job.has_logs = True
+                    job.logs = f"Logs saved to: {log_file.name}"  # Kept for backwards compatibility
                     if job.status == 'completed':
                         logger.info("Prune logs saved",
                                    job_id=job_id,
                                    log_file=str(log_file),
+                                   log_lines=len(log_buffer),
                                    dry_run=dry_run)
                     else:
                         logger.warning("Prune logs saved for debugging",
                                      job_id=job_id,
-                                     log_file=str(log_file))
+                                     log_file=str(log_file),
+                                     log_lines=len(log_buffer))
                 except Exception as e:
+                    job.has_logs = False
                     job.logs = f"Failed to save logs: {str(e)}"
                     logger.error("Failed to save log buffer", job_id=job_id, error=str(e))
 
