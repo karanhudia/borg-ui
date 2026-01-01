@@ -152,7 +152,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const drawer = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Box>
-        <Toolbar sx={{ gap: 1.5, pl: 2 }}>
+        <Toolbar sx={{ gap: 1.5, pl: { xs: 2, sm: 2 } }}>
           <Box
             component={Link}
             to="/dashboard"
