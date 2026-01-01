@@ -116,17 +116,27 @@ async def startup_event():
     except Exception as e:
         logger.warning("Failed to cache borg system info", error=str(e))
 
-    # Rotate old backup logs on startup
+    # Rotate old backup logs on startup (if enabled)
     from app.services.backup_service import backup_service
+    from app.database.database import SessionLocal
+    from app.database.models import SystemSettings
     try:
-        backup_service.rotate_logs(max_age_days=30, max_files=100)
-        logger.info("Log rotation completed")
+        db = SessionLocal()
+        try:
+            # Check if log cleanup on startup is enabled
+            settings = db.query(SystemSettings).first()
+            if settings and settings.log_cleanup_on_startup:
+                backup_service.rotate_logs(db=db)
+                logger.info("Log rotation completed")
+            else:
+                logger.info("Log cleanup on startup is disabled, skipping")
+        finally:
+            db.close()
     except Exception as e:
         logger.warning("Failed to rotate logs", error=str(e))
 
     # Cleanup orphaned jobs from container restarts
     from app.utils.process_utils import cleanup_orphaned_jobs
-    from app.database.database import SessionLocal
     try:
         db = SessionLocal()
         cleanup_orphaned_jobs(db)
