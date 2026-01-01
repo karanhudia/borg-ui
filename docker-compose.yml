@@ -1,13 +1,13 @@
-# Simplified Docker Compose - Zero Configuration Required!
+# Borg Web UI - Docker Compose Configuration
 #
-# Auto-configured settings:
-# - SECRET_KEY: Auto-generated on first run and persisted
-# - DATABASE_URL: Auto-derived from data_dir (/data)
-# - BORG_CONFIG_PATH: Auto-derived from data_dir
+# Zero-configuration setup with smart defaults:
+# - SECRET_KEY: Auto-generated and persisted to /data/.secret_key
+# - DATABASE_URL: Auto-configured to /data/borg.db
 # - LOG_LEVEL: Defaults to INFO
+# - PORT: Defaults to 8081
 #
-# Users configure backup repositories in borg config (local or SSH)
-# No need for borg_backups volume - repositories can be anywhere!
+# Configure backup repositories through the web UI (not Docker volumes)
+# Repositories can be local paths, SSH/SFTP, or cloud storage
 
 services:
   app:
@@ -20,71 +20,58 @@ services:
     container_name: borg-web-ui
     restart: unless-stopped
 
-    # Required for remote-to-remote backups (SSHFS mounting)
+    # Privileged mode: Required ONLY for remote-to-remote backups via SSHFS
+    # This allows mounting remote SSH locations as local filesystems
+    # If you only use local or direct SSH backups, you can disable this
+    # See: docs/installation.md for details
     privileged: true
-    # Alternatively, use these minimal permissions (comment out privileged above):
-    # cap_add:
-    #   - SYS_ADMIN
-    # devices:
-    #   - /dev/fuse:/dev/fuse
-    # security_opt:
-    #   - apparmor:unconfined
 
     ports:
       - "${PORT:-8081}:${PORT:-8081}"
 
     volumes:
-      # Single data volume for all persistent data
-      - borg_data:/data:rw
+      # Application data (database, logs, SSH keys)
+      - borg_data:/data
 
-      # Borg cache volume for persistent repository caches
-      # Prevents cache loss on container updates/rebuilds
-      - borg_cache:/home/borg/.cache/borg:rw
+      # Borg repository cache (improves backup performance)
+      - borg_cache:/home/borg/.cache/borg
 
-      # System volumes (read-only)
-      - /etc/cron.d:/etc/cron.d:ro
-      - /etc/localtime:/etc/localtime:ro
+      # System mounts
+      - /etc/localtime:/etc/localtime:ro  # Sync timezone with host
 
-      # Host filesystem mount for local-style repository access
-      # ⚠️ DEFAULT: Full root access enabled for DEVELOPMENT/TESTING ONLY
-      # WARNING: This gives the container read/write access to your entire filesystem
-      # For production use, replace with specific directory mounts (see examples below)
+      # Filesystem access for backups
+      # ⚠️ IMPORTANT: Replace with specific directories in production
+      # Default mounts entire root filesystem (development/testing only)
       - ${LOCAL_STORAGE_PATH:-/}:/local:rw
-      #
-      # 🔒 PRODUCTION EXAMPLES (recommended - comment out the line above and use these):
-      #
-      # Example 1: Mount your home directory (replace with your actual path)
-      # - /home/yourusername:/local:rw
-      #
-      # Example 2: Mount specific backup directories (recommended for servers)
-      # - /mnt/data:/local:rw
-      # - /var/www:/local/www:ro  # Read-only if only backing up, not restoring here
-      #
-      # Example 3: Mount multiple directories (safest approach)
-      # - /home/yourusername/documents:/local:rw
-      # - /opt/myapp:/local/myapp:rw
 
-      # OPTIONAL: Docker socket for container management in pre/post backup hooks
-      # Uncomment to allow pre/post backup scripts to control Docker containers
-      # Common use case: Stop database containers before backup, restart after
-      # WARNING: This gives the container access to your host's Docker daemon
-      # Security: Mount as read-only (:ro) when possible, but some operations need :rw
-      # See docs/docker-hooks.md for usage examples and security considerations
+      # Production examples (replace the line above):
+      # - /home/yourusername:/local:rw
+      # - /var/www:/local/www:ro
+      # - /mnt/data:/local/data:rw
+
+      # Optional: Docker container management in backup scripts
+      # Required for stopping/starting containers during backups
+      # See: docs/docker-hooks.md
       - /var/run/docker.sock:/var/run/docker.sock:rw
 
     environment:
-      # Optional overrides (all have smart defaults)
-      - ENVIRONMENT=${ENVIRONMENT:-production}
+      # Core settings (optional, all have defaults)
       - PORT=${PORT:-8081}
-      # Timezone configuration (defaults to host timezone via /etc/localtime mount)
-      # Override if needed: TZ=Asia/Kolkata, TZ=America/New_York, etc.
-      - TZ=${TZ:-}
-      # User/Group ID for file permissions (LinuxServer.io style)
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+
+      # User/Group IDs for file permissions
+      # Match your host user: id -u && id -g
       - PUID=${PUID:-1001}
       - PGID=${PGID:-1001}
-      # Uncomment to override defaults:
-      # - SECRET_KEY=your-custom-secret-key
+
+      # Timezone (optional, defaults to host via /etc/localtime)
+      # Examples: America/New_York, Europe/London, Asia/Kolkata
+      - TZ=${TZ:-}
+
+      # Advanced options (uncomment to customize)
       # - LOG_LEVEL=DEBUG
+      # - INITIAL_ADMIN_PASSWORD=your-secure-password
+      # - SECRET_KEY=your-custom-secret-key
 
     healthcheck:
       test: ["CMD", "sh", "-c", "curl -f http://localhost:$${PORT:-8081}/"]
@@ -98,25 +85,10 @@ services:
 
 networks:
   borg_network:
-    name: borg_network
     driver: bridge
 
-# Persistent data volumes
 volumes:
   borg_data:
-    name: borg_data
     driver: local
-    # Optional: Mount to custom location on host
-    # driver_opts:
-    #   type: none
-    #   o: bind
-    #   device: /mnt/storage/borg-data
-
   borg_cache:
-    name: borg_cache
     driver: local
-    # Optional: Mount to custom location on host
-    # driver_opts:
-    #   type: none
-    #   o: bind
-    #   device: /mnt/storage/borg-cache
