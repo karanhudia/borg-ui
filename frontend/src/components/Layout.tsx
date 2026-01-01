@@ -20,6 +20,7 @@ import {
   MenuItem,
   Container,
   Tooltip,
+  Collapse,
 } from '@mui/material'
 import {
   Home,
@@ -167,50 +168,50 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const drawer = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Box>
-        <Toolbar sx={{ gap: 1.5 }}>
+        <Box
+          component={Link}
+          to="/dashboard"
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            textDecoration: 'none',
+            color: 'inherit',
+            cursor: 'pointer',
+            px: 2,
+            py: 2,
+            '&:hover': {
+              opacity: 0.8,
+            },
+          }}
+        >
           <Box
-            component={Link}
-            to="/dashboard"
             sx={{
+              width: 24,
+              height: 24,
+              borderRadius: '50%',
+              backgroundColor: '#00dd00',
               display: 'flex',
               alignItems: 'center',
-              gap: 1.5,
-              textDecoration: 'none',
-              color: 'inherit',
-              cursor: 'pointer',
-              '&:hover': {
-                opacity: 0.8,
-              },
+              justifyContent: 'center',
+              flexShrink: 0,
             }}
           >
             <Box
+              component="img"
+              src="/logo.png"
+              alt="Borg UI Logo"
               sx={{
-                width: 36,
-                height: 36,
-                borderRadius: '50%',
-                backgroundColor: '#00dd00',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '6px',
+                width: '70%',
+                height: '70%',
+                objectFit: 'contain',
               }}
-            >
-              <Box
-                component="img"
-                src="/logo.png"
-                alt="Borg UI Logo"
-                sx={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                }}
-              />
-            </Box>
-            <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 600 }}>
-              Borg UI
-            </Typography>
+            />
           </Box>
-        </Toolbar>
+          <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 600, fontSize: '1.125rem' }}>
+            Borg UI
+          </Typography>
+        </Box>
         <Divider />
         <List sx={{ pt: 0 }}>
           {navigationWithKeys.map((item) => {
@@ -252,49 +253,64 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     </ListItemButton>
                   </ListItem>
 
-                  {/* Sub-items */}
-                  {settingsExpanded &&
-                    item.subItems.map((subItem) => {
-                      const isActive = location.pathname.startsWith(subItem.href)
-                      const SubIcon = subItem.icon
+                  {/* Sub-items with modern styling and smooth animation */}
+                  <Collapse in={settingsExpanded} timeout="auto" unmountOnExit>
+                    <List component="div" disablePadding>
+                      {item.subItems.map((subItem) => {
+                        const isActive = location.pathname.startsWith(subItem.href)
+                        const SubIcon = subItem.icon
 
-                      return (
-                        <ListItem key={subItem.name} disablePadding>
-                          <ListItemButton
-                            component={Link}
-                            to={subItem.href}
-                            selected={isActive}
-                            sx={{
-                              pl: 7,
-                              '&.Mui-selected': {
-                                backgroundColor: 'primary.main',
-                                color: 'white',
-                                '&:hover': {
-                                  backgroundColor: 'primary.dark',
-                                },
-                                '& .MuiListItemIcon-root': {
+                        return (
+                          <ListItem key={subItem.name} disablePadding>
+                            <ListItemButton
+                              component={Link}
+                              to={subItem.href}
+                              selected={isActive}
+                              sx={{
+                                pl: 4,
+                                py: 1,
+                                backgroundColor: isActive ? 'transparent' : 'action.hover',
+                                borderLeft: '3px solid',
+                                borderColor: isActive ? 'primary.main' : 'transparent',
+                                '&.Mui-selected': {
+                                  backgroundColor: 'primary.main',
                                   color: 'white',
+                                  borderColor: 'primary.main',
+                                  '&:hover': {
+                                    backgroundColor: 'primary.dark',
+                                  },
+                                  '& .MuiListItemIcon-root': {
+                                    color: 'white',
+                                  },
                                 },
-                              },
-                            }}
-                          >
-                            <ListItemIcon
-                              sx={{ color: isActive ? 'white' : 'text.secondary', minWidth: 40 }}
-                            >
-                              <SubIcon size={18} />
-                            </ListItemIcon>
-                            <ListItemText
-                              primary={subItem.name}
-                              primaryTypographyProps={{
-                                fontSize: '0.8125rem',
-                                fontWeight: isActive ? 600 : 400,
-                                color: isActive ? 'white' : 'inherit',
+                                '&:hover': {
+                                  backgroundColor: isActive ? 'primary.main' : 'action.selected',
+                                },
                               }}
-                            />
-                          </ListItemButton>
-                        </ListItem>
-                      )
-                    })}
+                            >
+                              <ListItemIcon
+                                sx={{
+                                  color: isActive ? 'white' : 'text.secondary',
+                                  minWidth: 36,
+                                  ml: 1,
+                                }}
+                              >
+                                <SubIcon size={16} />
+                              </ListItemIcon>
+                              <ListItemText
+                                primary={subItem.name}
+                                primaryTypographyProps={{
+                                  fontSize: '0.8125rem',
+                                  fontWeight: isActive ? 600 : 400,
+                                  color: isActive ? 'white' : 'inherit',
+                                }}
+                              />
+                            </ListItemButton>
+                          </ListItem>
+                        )
+                      })}
+                    </List>
+                  </Collapse>
                 </React.Fragment>
               )
             }
