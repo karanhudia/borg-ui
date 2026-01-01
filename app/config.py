@@ -13,7 +13,6 @@ class Settings(BaseSettings):
     app_version: str = "1.38.2"
     debug: bool = False
     environment: str = "production"  # Default to production for safety
-    base_path: str = "/"  # Base path for reverse proxy support (e.g., "/borg")
 
     # Data directory (for all persistent data) - this is the ONLY path users need to configure
     data_dir: str = "/data"
@@ -48,20 +47,6 @@ class Settings(BaseSettings):
             self._cors_origins_str = ",".join(value)
         else:
             self._cors_origins_str = value
-
-    @field_validator("base_path")
-    @classmethod
-    def normalize_base_path(cls, v: str) -> str:
-        """Normalize base path - ensure leading slash, no trailing slash"""
-        if not v or v == "/":
-            return ""
-        v = v.strip()
-        # Ensure leading slash
-        if not v.startswith("/"):
-            v = "/" + v
-        # Strip trailing slash
-        v = v.rstrip("/")
-        return v
 
     # Server settings
     host: str = "0.0.0.0"
@@ -139,18 +124,6 @@ else:
 settings.environment = os.getenv("ENVIRONMENT", settings.environment)
 settings.log_level = os.getenv("LOG_LEVEL", settings.log_level)
 settings.port = int(os.getenv("PORT", settings.port))
-
-# BASE_PATH needs normalization after loading from environment
-base_path_env = os.getenv("BASE_PATH", settings.base_path)
-if not base_path_env or base_path_env == "/":
-    settings.base_path = ""
-else:
-    base_path_env = base_path_env.strip()
-    # Ensure leading slash
-    if not base_path_env.startswith("/"):
-        base_path_env = "/" + base_path_env
-    # Strip trailing slash
-    settings.base_path = base_path_env.rstrip("/")
 
 # Environment-specific overrides
 if settings.environment == "production":

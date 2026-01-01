@@ -46,19 +46,17 @@ logger = structlog.get_logger()
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
-# Configure CORS and get settings
-from app.config import settings
-
 # Create FastAPI app
 app = FastAPI(
     title="Borg Web UI",
     description="A lightweight web interface for Borg backup management",
     version="1.38.2",
-    # Don't use root_path - we handle BASE_PATH with manual prefixing
-    # This works with any reverse proxy without special configuration
-    docs_url=f"{settings.base_path}/api/docs" if settings.base_path else "/api/docs",
-    redoc_url=f"{settings.base_path}/api/redoc" if settings.base_path else "/api/redoc"
+    docs_url="/api/docs",
+    redoc_url="/api/redoc"
 )
+
+# Configure CORS
+from app.config import settings
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -69,39 +67,30 @@ app.add_middleware(
 
 # Mount static files for frontend (only if directories exist)
 if os.path.exists("app/static/assets"):
-    app.mount(
-        f"{settings.base_path}/assets" if settings.base_path else "/assets",
-        StaticFiles(directory="app/static/assets"),
-        name="assets"
-    )
+    app.mount("/assets", StaticFiles(directory="app/static/assets"), name="assets")
 if os.path.exists("app/static"):
-    app.mount(
-        f"{settings.base_path}/static" if settings.base_path else "/static",
-        StaticFiles(directory="app/static"),
-        name="static"
-    )
+    app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Include API routers
-api_prefix = f"{settings.base_path}/api" if settings.base_path else "/api"
-app.include_router(auth.router, prefix=f"{api_prefix}/auth", tags=["Authentication"])
-app.include_router(dashboard.router, prefix=f"{api_prefix}/dashboard", tags=["Dashboard"])
-app.include_router(backup.router, prefix=f"{api_prefix}/backup", tags=["Backup"])
-app.include_router(archives.router, prefix=f"{api_prefix}/archives", tags=["Archives"])
-app.include_router(browse.router, prefix=f"{api_prefix}/browse", tags=["Browse"])
-app.include_router(restore.router, prefix=f"{api_prefix}/restore", tags=["Restore"])
-app.include_router(schedule.router, prefix=f"{api_prefix}/schedule", tags=["Schedule"])
-app.include_router(settings_api.router, prefix=f"{api_prefix}/settings", tags=["Settings"])
-app.include_router(events.router, prefix=f"{api_prefix}/events", tags=["Events"])
-app.include_router(repositories.router, prefix=f"{api_prefix}/repositories", tags=["Repositories"])
-app.include_router(ssh_keys.router, prefix=f"{api_prefix}/ssh-keys", tags=["SSH Keys"])
-app.include_router(system.router, prefix=f"{api_prefix}/system", tags=["System"])
-app.include_router(filesystem.router, prefix=f"{api_prefix}/filesystem", tags=["Filesystem"])
-app.include_router(scripts.router, prefix=f"{api_prefix}/scripts", tags=["Scripts"])  # Old script test endpoint
-app.include_router(scripts_library.router, prefix=api_prefix, tags=["Script Library"])  # New script management
-app.include_router(packages.router, prefix=f"{api_prefix}/packages", tags=["Packages"])
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
+app.include_router(backup.router, prefix="/api/backup", tags=["Backup"])
+app.include_router(archives.router, prefix="/api/archives", tags=["Archives"])
+app.include_router(browse.router, prefix="/api/browse", tags=["Browse"])
+app.include_router(restore.router, prefix="/api/restore", tags=["Restore"])
+app.include_router(schedule.router, prefix="/api/schedule", tags=["Schedule"])
+app.include_router(settings_api.router, prefix="/api/settings", tags=["Settings"])
+app.include_router(events.router, prefix="/api/events", tags=["Events"])
+app.include_router(repositories.router, prefix="/api/repositories", tags=["Repositories"])
+app.include_router(ssh_keys.router, prefix="/api/ssh-keys", tags=["SSH Keys"])
+app.include_router(system.router, prefix="/api/system", tags=["System"])
+app.include_router(filesystem.router, prefix="/api/filesystem", tags=["Filesystem"])
+app.include_router(scripts.router, prefix="/api/scripts", tags=["Scripts"])  # Old script test endpoint
+app.include_router(scripts_library.router, prefix="/api", tags=["Script Library"])  # New script management
+app.include_router(packages.router, prefix="/api/packages", tags=["Packages"])
 app.include_router(notifications.router)
 app.include_router(activity.router)
-app.include_router(config.router, prefix=api_prefix)
+app.include_router(config.router, prefix="/api")
 
 @app.on_event("startup")
 async def startup_event():
@@ -127,24 +116,13 @@ async def startup_event():
     except Exception as e:
         logger.warning("Failed to cache borg system info", error=str(e))
 
-    # Rotate old backup logs on startup (if enabled in settings)
+    # Rotate old backup logs on startup
     from app.services.backup_service import backup_service
-    from app.database.models import SystemSettings
-    from app.database.database import SessionLocal
     try:
-        db = SessionLocal()
-        try:
-            # Check if log cleanup on startup is enabled
-            system_settings = db.query(SystemSettings).first()
-            if system_settings and system_settings.log_cleanup_on_startup:
-                backup_service.rotate_logs(db=db)
-                logger.info("Log rotation completed on startup")
-            else:
-                logger.info("Log rotation on startup disabled in settings")
-        finally:
-            db.close()
+        backup_service.rotate_logs(max_age_days=30, max_files=100)
+        logger.info("Log rotation completed")
     except Exception as e:
-        logger.warning("Failed to rotate logs on startup", error=str(e))
+        logger.warning("Failed to rotate logs", error=str(e))
 
     # Cleanup orphaned jobs from container restarts
     from app.utils.process_utils import cleanup_orphaned_jobs
@@ -180,24 +158,16 @@ async def shutdown_event():
     """Cleanup on application shutdown"""
     logger.info("Shutting down Borg Web UI")
 
-@app.get(f"{settings.base_path}/" if settings.base_path else "/", response_class=HTMLResponse)
+@app.get("/", response_class=HTMLResponse)
 async def root():
     """Serve the main application"""
     try:
         with open("app/static/index.html", "r") as f:
-            html_content = f.read()
-            # Inject BASE_PATH into HTML for runtime detection
-            base_path_value = settings.base_path if settings.base_path else "/"
-            injection = f'<script>window.BASE_PATH = "{base_path_value}";</script>'
-            # Add base tag to resolve relative asset paths correctly
-            base_tag = f'<base href="{base_path_value}/">' if base_path_value != "/" else '<base href="/">'
-            # Insert both before </head> tag
-            html_content = html_content.replace('</head>', f'{base_tag}{injection}</head>')
-            return HTMLResponse(content=html_content)
+            return HTMLResponse(content=f.read())
     except FileNotFoundError:
         return HTMLResponse(content="<h1>Borg Web UI</h1><p>Frontend not built yet. Please run the build process.</p>")
 
-@app.get(f"{settings.base_path}/{{full_path:path}}" if settings.base_path else "/{full_path:path}", response_class=HTMLResponse)
+@app.get("/{full_path:path}", response_class=HTMLResponse)
 async def catch_all(full_path: str):
     """Catch-all route for SPA routing - serves index.html for frontend routes"""
     # Don't interfere with API routes
@@ -211,6 +181,7 @@ async def catch_all(full_path: str):
     # Serve static files from root (logo.png, favicon files, etc.)
     if full_path in ["logo.png", "logo.svg", "favicon.svg", "favicon.ico", "favicon-16x16.png", "favicon-32x32.png"]:
         from fastapi.responses import FileResponse
+        import os
         file_path = f"app/static/{full_path}"
         if os.path.exists(file_path):
             return FileResponse(file_path)
@@ -219,41 +190,30 @@ async def catch_all(full_path: str):
     # Serve index.html for all other routes (frontend routes)
     try:
         with open("app/static/index.html", "r") as f:
-            html_content = f.read()
-            # Inject BASE_PATH into HTML for runtime detection
-            base_path_value = settings.base_path if settings.base_path else "/"
-            injection = f'<script>window.BASE_PATH = "{base_path_value}";</script>'
-            # Add base tag to resolve relative asset paths correctly
-            base_tag = f'<base href="{base_path_value}/">' if base_path_value != "/" else '<base href="/">'
-            # Insert both before </head> tag
-            html_content = html_content.replace('</head>', f'{base_tag}{injection}</head>')
-            return HTMLResponse(content=html_content)
+            return HTMLResponse(content=f.read())
     except FileNotFoundError:
         return HTMLResponse(content="<h1>Borg Web UI</h1><p>Frontend not built yet. Please run the build process.</p>")
 
-@app.get(f"{settings.base_path}/health" if settings.base_path else "/health")
+@app.get("/health")
 async def health_check():
     """Health check endpoint for container orchestration and startup scripts"""
-    return {"status": "healthy", "service": "borg-web-ui", "base_path": settings.base_path or "/"}
+    return {"status": "healthy", "service": "borg-web-ui"}
 
-@app.get(f"{api_prefix}")
+@app.get("/api")
 async def api_info():
     """API information endpoint"""
     return {
         "name": "Borg Web UI API",
-        "version": "1.36.1",
-        "docs": f"{api_prefix}/docs",
-        "base_path": settings.base_path or "/",
+        "version": "1.38.2",
+        "docs": "/api/docs",
         "status": "running"
     }
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     """Log all requests (except static assets and SSE streams)"""
-    # Skip logging for static assets and SSE streams
-    skip_suffixes = ["/assets/", "/static/", "/api/events/stream"]
-    skip_paths = [f"{settings.base_path}{suffix}" if settings.base_path else suffix
-                  for suffix in skip_suffixes]
+    # Skip logging for static assets and SSE streams to reduce noise
+    skip_paths = ["/assets/", "/static/", "/api/events/stream"]
     should_log = not any(request.url.path.startswith(path) for path in skip_paths)
 
     if should_log:

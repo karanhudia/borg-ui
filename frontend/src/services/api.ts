@@ -1,20 +1,6 @@
 import axios from 'axios'
 
-// Get base path from runtime injection (set by backend in HTML)
-// This allows changing BASE_PATH without rebuilding the frontend
-declare global {
-  interface Window {
-    BASE_PATH?: string
-  }
-}
-
-const BASE_PATH = window.BASE_PATH || '/'
-// Normalize: remove trailing slash and ensure it's "/" for root
-const normalizedBasePath =
-  BASE_PATH === '/' ? '' : BASE_PATH.endsWith('/') ? BASE_PATH.slice(0, -1) : BASE_PATH
-
-// API URL respects base path
-const API_BASE_URL = import.meta.env.VITE_API_URL || `${normalizedBasePath}/api`
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -40,7 +26,7 @@ api.interceptors.response.use(
     // Don't redirect if we're already trying to login (avoid swallowing login errors)
     if (error.response?.status === 401 && error.config?.url !== '/auth/login') {
       localStorage.removeItem('access_token')
-      window.location.href = `${normalizedBasePath}/login`
+      window.location.href = '/login'
     }
     return Promise.reject(error)
   }
@@ -169,10 +155,6 @@ export const settingsAPI = {
   getSystemSettings: () => api.get('/settings/system'),
   updateSystemSettings: (settings: any) => api.put('/settings/system', settings),
 
-  // Log management
-  getLogStorageStats: () => api.get('/settings/system/logs/storage'),
-  manualLogCleanup: () => api.post('/settings/system/logs/cleanup'),
-
   // User management
   getUsers: () => api.get('/settings/users'),
   createUser: (userData: any) => api.post('/settings/users', userData),
@@ -194,8 +176,7 @@ export const settingsAPI = {
 export const eventsAPI = {
   streamEvents: () => {
     const token = localStorage.getItem('access_token')
-    // Use base path for SSE connection
-    const url = `${normalizedBasePath}/api/events/stream${token ? `?token=${token}` : ''}`
+    const url = `/api/events/stream${token ? `?token=${token}` : ''}`
     return new EventSource(url)
   },
 }

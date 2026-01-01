@@ -10,15 +10,6 @@ import { ThemeProvider } from './context/ThemeContext'
 import App from './App.tsx'
 import './index.css'
 
-// Get base path from runtime injection (e.g., "/borg" for example.com/borg/)
-// This is injected by the backend, so no rebuild needed when changing BASE_PATH
-declare global {
-  interface Window {
-    BASE_PATH?: string
-  }
-}
-const BASE_PATH = window.BASE_PATH || '/'
-
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -36,7 +27,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <ThemeProvider>
       <CssBaseline />
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter basename={BASE_PATH}>
+        <BrowserRouter>
           <AuthProvider>
             <AppProvider>
               <App />
