@@ -23,7 +23,7 @@ Borg Web UI supports running behind reverse proxies in two configurations:
 ## Subfolder Deployment (BASE_PATH)
 
 {: .new }
-> **Updated in v1.38.3**: No rebuild required! Just set BASE_PATH and restart.
+> **Updated in v1.38+**: No rebuild required! Just set BASE_PATH and restart.
 
 ### Quick Start
 
@@ -36,13 +36,26 @@ environment:
   - BASE_PATH=/borg
 ```
 
-2. **Restart the container:**
+2. **Configure your reverse proxy to STRIP the prefix** (see examples below)
+
+3. **Restart the container:**
 
 ```bash
 docker-compose restart
 ```
 
 **That's it!** No rebuild needed. Change BASE_PATH anytime and just restart.
+
+### How It Works
+
+**IMPORTANT**: Your reverse proxy MUST strip the prefix before forwarding requests to the app.
+
+- User visits: `https://example.com/borg/dashboard`
+- Proxy strips `/borg` and forwards `/dashboard` to container
+- App receives `/dashboard` and handles it normally
+- FastAPI knows the external path is `/borg/dashboard` (for redirects, links, etc.)
+
+This is the standard reverse proxy pattern and all examples below follow this approach.
 
 ### Configuration
 
@@ -357,25 +370,49 @@ proxy_read_timeout 86400;
 
 ## Testing
 
+### Local Testing (Without Reverse Proxy)
+
+For local development/testing, run the app at the root path:
+
+```yaml
+# docker-compose.yml or .env
+# Don't set BASE_PATH, or set it to empty/root
+BASE_PATH=/
+# or simply omit BASE_PATH
+```
+
+Then access at: `http://localhost:8081/`
+
+**Note**: Direct access with BASE_PATH (e.g., `http://localhost:8081/borg/`) won't work without a reverse proxy, as the app expects the proxy to strip the prefix.
+
+### Testing with Reverse Proxy
+
+To test subfolder deployments, set up a local reverse proxy:
+
+**Quick Nginx test:**
+```nginx
+location /borg/ {
+    proxy_pass http://localhost:8081/;  # Trailing slash strips /borg
+}
+```
+
+Then set `BASE_PATH=/borg` and access via nginx.
+
 ### Verify Configuration
 
 1. **Check health endpoint:**
    ```bash
    curl http://localhost:8081/health
-   # or with BASE_PATH
-   curl http://localhost:8081/borg/health
    ```
 
 2. **Check API info:**
    ```bash
    curl http://localhost:8081/api
-   # or with BASE_PATH
-   curl http://localhost:8081/borg/api
    ```
 
 3. **Access web interface:**
-   - Root: `http://localhost:8081/`
-   - Subfolder: `http://localhost:8081/borg/`
+   - Root deployment: `http://localhost:8081/`
+   - Subfolder: Must use reverse proxy (e.g., nginx at `/borg/`)
 
 ### Debug Mode
 
