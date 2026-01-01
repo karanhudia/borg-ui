@@ -1185,7 +1185,8 @@ class BackupService:
             temp_log_file = self.log_dir / f"backup_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
             log_file_handle = None
             try:
-                log_file_handle = open(temp_log_file, 'w', buffering=1)  # Line buffered for performance
+                # 64KB buffer - optimal for log files, reduces disk I/O without excessive memory use
+                log_file_handle = open(temp_log_file, 'w', buffering=65536)
             except Exception as e:
                 logger.warning("Failed to create log file, logs will only be in memory", job_id=job_id, error=str(e))
                 temp_log_file = None
