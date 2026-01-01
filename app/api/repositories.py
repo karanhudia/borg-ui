@@ -1089,34 +1089,56 @@ async def prune_repository(
         db.commit()
         db.refresh(prune_job)
 
-        # Execute prune asynchronously (non-blocking)
+        # Execute prune synchronously and return results
+        # (Prune operations are fast enough to wait for completion)
         from app.services.prune_service import prune_service
-        asyncio.create_task(
-            prune_service.execute_prune(
-                prune_job.id,
-                repo_id,
-                keep_hourly,
-                keep_daily,
-                keep_weekly,
-                keep_monthly,
-                keep_quarterly,
-                keep_yearly,
-                dry_run,
-                db
-            )
-        )
 
-        logger.info("Prune job created",
+        logger.info("Starting prune job",
                    job_id=prune_job.id,
                    repository_id=repo_id,
                    dry_run=dry_run,
                    user=current_user.username)
 
+        # Wait for prune to complete and get logs
+        await prune_service.execute_prune(
+            prune_job.id,
+            repo_id,
+            keep_hourly,
+            keep_daily,
+            keep_weekly,
+            keep_monthly,
+            keep_quarterly,
+            keep_yearly,
+            dry_run,
+            db
+        )
+
+        # Refresh job to get updated status and logs
+        db.refresh(prune_job)
+
+        # Read log file if it exists
+        stdout_output = ""
+        stderr_output = ""
+        if prune_job.log_file_path and os.path.exists(prune_job.log_file_path):
+            try:
+                with open(prune_job.log_file_path, 'r') as f:
+                    log_content = f.read()
+                    # All output goes to stdout for prune
+                    stdout_output = log_content
+            except Exception as e:
+                logger.warning("Failed to read prune log file", error=str(e))
+                stderr_output = f"Failed to read log file: {str(e)}"
+
+        # Return results in format expected by frontend
         return {
             "job_id": prune_job.id,
-            "status": "pending",
+            "status": prune_job.status,
             "dry_run": dry_run,
-            "message": "Prune job started"
+            "prune_result": {
+                "success": prune_job.status == "completed",
+                "stdout": stdout_output,
+                "stderr": stderr_output if stderr_output or prune_job.error_message else (prune_job.error_message or "")
+            }
         }
     except HTTPException:
         raise
