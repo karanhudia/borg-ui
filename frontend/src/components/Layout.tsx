@@ -418,7 +418,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             sx={{
               display: 'flex',
               alignItems: 'center',
-              gap: 6,
+              gap: 2,
             }}
           >
             <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 0.5 }}>
