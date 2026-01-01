@@ -165,6 +165,9 @@ async def list_recent_activity(
             repo_name = repo.name if repo else f"Repository #{job.repository_id}"
             repo_path = repo.path if repo else job.repository_path
 
+            # Determine trigger type based on scheduled_compact field
+            triggered_by = 'schedule' if getattr(job, 'scheduled_compact', False) else 'manual'
+
             activities.append({
                 'id': job.id,
                 'type': 'compact',
@@ -175,11 +178,11 @@ async def list_recent_activity(
                 'repository': repo_name,
                 'repository_path': repo_path,
                 'log_file_path': getattr(job, 'log_file_path', None),
-                'triggered_by': 'schedule',  # Compact jobs are scheduled by default
+                'triggered_by': triggered_by,
                 'schedule_id': None,
                 'archive_name': None,
                 'package_name': None,
-                'has_logs': bool(job.logs)
+                'has_logs': bool(getattr(job, 'log_file_path', None))
             })
 
     # Fetch prune jobs

@@ -1013,7 +1013,9 @@ async def compact_repository(
         # Create compact job record
         compact_job = CompactJob(
             repository_id=repo_id,
-            status="pending"
+            repository_path=repository.path,  # Capture path for display
+            status="pending",
+            scheduled_compact=False  # Manual trigger
         )
         db.add(compact_job)
         db.commit()
