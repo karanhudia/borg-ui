@@ -237,7 +237,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       }}
                     >
                       <ListItemIcon
-                        sx={{ color: isAnySubItemActive ? 'primary.main' : 'text.secondary' }}
+                        sx={{ color: isAnySubItemActive ? 'primary.main' : 'text.secondary', minWidth: 40 }}
                       >
                         <Icon size={20} />
                       </ListItemIcon>
