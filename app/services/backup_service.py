@@ -1174,12 +1174,21 @@ class BackupService:
             last_commit_time = asyncio.get_event_loop().time()
             COMMIT_INTERVAL = 3.0  # Commit every 3 seconds for performance
 
-            # In-memory circular log buffer (only saved on failure)
+            # In-memory circular log buffer (for UI streaming)
             log_buffer = []
             MAX_BUFFER_SIZE = 1000  # Keep last 1000 lines (~100KB RAM)
 
             # Store buffer reference for external access (Activity page)
             self.log_buffers[job_id] = log_buffer
+
+            # Create temporary log file to capture ALL logs (not just buffer)
+            temp_log_file = self.log_dir / f"backup_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+            log_file_handle = None
+            try:
+                log_file_handle = open(temp_log_file, 'w', buffering=1)  # Line buffered for performance
+            except Exception as e:
+                logger.warning("Failed to create log file, logs will only be in memory", job_id=job_id, error=str(e))
+                temp_log_file = None
 
             # Smart current_file tracking: Only show files taking >3 seconds
             file_start_times = {}  # Track when each file started processing
@@ -1217,7 +1226,14 @@ class BackupService:
 
                         line_str = line.decode('utf-8', errors='replace').strip()
 
-                        # Add to in-memory circular log buffer (for failure debugging)
+                        # Write to full log file (captures ALL logs for download)
+                        if log_file_handle:
+                            try:
+                                log_file_handle.write(line_str + '\n')
+                            except Exception:
+                                pass  # Silently ignore write errors to avoid breaking backup
+
+                        # Add to in-memory circular log buffer (for UI streaming)
                         log_buffer.append(line_str)
                         if len(log_buffer) > MAX_BUFFER_SIZE:
                             log_buffer.pop(0)  # Remove oldest line
@@ -1675,30 +1691,66 @@ class BackupService:
                     actual_returncode not in [0, None]
                 )
 
-            # Save logs to file if policy dictates
-            if should_save_logs:
-                log_file = self.log_dir / f"backup_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+            # Close the log file handle
+            if log_file_handle:
                 try:
-                    combined_logs = hook_logs + log_buffer if hook_logs else log_buffer
-                    log_file.write_text('\n'.join(combined_logs))
-                    # Store log file path so Activity page can read and display logs
-                    job.log_file_path = str(log_file)
-                    job.has_logs = True  # Mark that logs are available
-                    job.logs = f"Logs saved to: {log_file.name}"
-                    logger.info("Logs saved per policy",
-                                job_id=job_id,
-                                status=job.status,
-                                policy=log_save_policy,
-                                log_file=str(log_file),
-                                log_lines=len(combined_logs))
+                    log_file_handle.close()
+                except Exception:
+                    pass
+
+            # Handle log file based on policy
+            if should_save_logs:
+                try:
+                    # Append hook logs to the full log file if we have them
+                    if hook_logs and temp_log_file and temp_log_file.exists():
+                        with open(temp_log_file, 'a') as f:
+                            f.write('\n=== Hook Logs ===\n')
+                            f.write('\n'.join(hook_logs))
+                            f.write('\n')
+
+                    # Use the temp log file as the permanent log file (contains ALL logs)
+                    if temp_log_file and temp_log_file.exists():
+                        job.log_file_path = str(temp_log_file)
+                        job.has_logs = True
+                        job.logs = f"Logs saved to: {temp_log_file.name}"
+
+                        # Count lines in file for logging
+                        try:
+                            with open(temp_log_file, 'r') as f:
+                                line_count = sum(1 for _ in f)
+                        except Exception:
+                            line_count = 0
+
+                        logger.info("Full logs saved per policy",
+                                    job_id=job_id,
+                                    status=job.status,
+                                    policy=log_save_policy,
+                                    log_file=str(temp_log_file),
+                                    log_lines=line_count)
+                    else:
+                        # Fallback: save buffer if no temp file
+                        fallback_log_file = self.log_dir / f"backup_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+                        combined_logs = hook_logs + log_buffer if hook_logs else log_buffer
+                        fallback_log_file.write_text('\n'.join(combined_logs))
+                        job.log_file_path = str(fallback_log_file)
+                        job.has_logs = True
+                        job.logs = f"Logs saved to: {fallback_log_file.name}"
+                        logger.warning("Using buffer fallback for logs", job_id=job_id, log_lines=len(combined_logs))
                 except Exception as e:
                     job.has_logs = False
                     job.logs = f"Failed to save logs: {str(e)}"
-                    logger.error("Failed to save log buffer to file", job_id=job_id, error=str(e))
+                    logger.error("Failed to save log file", job_id=job_id, error=str(e))
             else:
-                # No logs saved per policy
+                # Delete temp log file since policy says not to save
+                if temp_log_file and temp_log_file.exists():
+                    try:
+                        temp_log_file.unlink()
+                        logger.debug("Deleted temp log file per policy", job_id=job_id, policy=log_save_policy)
+                    except Exception as e:
+                        logger.warning("Failed to delete temp log file", job_id=job_id, error=str(e))
+
+                # Save hook logs in database for reference if we have them
                 if hook_logs:
-                    # Save hook logs in database for reference
                     job.logs = "\n".join(hook_logs)
                     logger.info("Backup completed, only hook logs saved", job_id=job_id, policy=log_save_policy)
                 else:
@@ -1719,6 +1771,14 @@ class BackupService:
 
         except Exception as e:
             logger.error("Backup execution failed", job_id=job_id, error=str(e))
+
+            # Close log file handle if open
+            if 'log_file_handle' in locals() and log_file_handle:
+                try:
+                    log_file_handle.close()
+                except Exception:
+                    pass
+
             job.status = "failed"
             job.error_message = str(e)
             job.completed_at = datetime.utcnow()
@@ -1732,6 +1792,14 @@ class BackupService:
             except Exception as notif_error:
                 logger.warning("Failed to send backup failure notification", error=str(notif_error))
         finally:
+            # Ensure log file handle is closed
+            if 'log_file_handle' in locals() and log_file_handle:
+                try:
+                    log_file_handle.close()
+                    logger.debug("Closed log file handle", job_id=job_id)
+                except Exception:
+                    pass
+
             # Remove from running processes
             if job_id in self.running_processes:
                 del self.running_processes[job_id]
