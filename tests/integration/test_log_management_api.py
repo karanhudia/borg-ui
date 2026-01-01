@@ -168,7 +168,7 @@ class TestGetSystemSettings:
         """Should require authentication"""
         response = client.get("/api/settings/system")
 
-        assert response.status_code == 401
+        assert response.status_code == 403
 
 
 class TestUpdateSystemSettings:
@@ -318,7 +318,7 @@ class TestGetLogStorageStats:
         """Should require authentication"""
         response = client.get("/api/settings/system/logs/storage")
 
-        assert response.status_code == 401
+        assert response.status_code == 403
 
     def test_get_log_storage_allows_regular_users(self, client, user_token):
         """Should allow regular users to view log storage stats"""
