@@ -267,14 +267,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                               to={subItem.href}
                               selected={isActive}
                               sx={{
-                                pl: 4,
                                 backgroundColor: 'action.hover',
-                                borderLeft: '4px solid',
-                                borderLeftColor: isActive ? 'primary.main' : 'transparent',
                                 '&.Mui-selected': {
                                   backgroundColor: 'primary.main',
                                   color: 'white',
-                                  borderLeftColor: 'primary.light',
                                   '&:hover': {
                                     backgroundColor: 'primary.dark',
                                   },
@@ -284,7 +280,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                                 },
                                 '&:hover': {
                                   backgroundColor: isActive ? 'primary.main' : 'action.selected',
-                                  borderLeftColor: isActive ? 'primary.light' : 'primary.main',
                                 },
                               }}
                             >
