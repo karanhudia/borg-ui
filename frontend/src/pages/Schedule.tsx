@@ -63,7 +63,9 @@ interface ScheduledJob {
   id: number
   name: string
   cron_expression: string
-  repository: string | null
+  repository: string | null  // Legacy single-repo
+  repository_id: number | null  // Single-repo by ID
+  repository_ids: number[] | null  // Multi-repo
   enabled: boolean
   last_run: string | null
   next_run: string | null
@@ -71,6 +73,9 @@ interface ScheduledJob {
   updated_at: string | null
   description: string | null
   archive_name_template: string | null
+  run_repository_scripts: boolean  // Whether to run per-repository scripts
+  pre_backup_script_id: number | null  // Schedule-level pre-backup script
+  post_backup_script_id: number | null  // Schedule-level post-backup script
   run_prune_after: boolean
   run_compact_after: boolean
   prune_keep_hourly: number
@@ -170,6 +175,18 @@ const Schedule: React.FC = () => {
     queryFn: scheduleAPI.getCronPresets,
   })
 
+  // Get scripts library
+  const { data: scriptsData } = useQuery({
+    queryKey: ['scripts'],
+    queryFn: async () => {
+      const response = await fetch('/api/scripts', {
+        credentials: 'include',
+      })
+      if (!response.ok) throw new Error('Failed to fetch scripts')
+      return response.json()
+    },
+  })
+
   // Get upcoming jobs
   const { data: upcomingData } = useQuery({
     queryKey: ['upcoming-jobs'],
@@ -264,10 +281,14 @@ const Schedule: React.FC = () => {
   const [createForm, setCreateForm] = useState({
     name: '',
     cron_expression: '0 2 * * *',
-    repository: '',
+    repository: '',  // Keep for backward compatibility
+    repository_ids: [] as number[],  // Multi-repo selection
     enabled: true,
     description: '',
     archive_name_template: '{job_name}-{now}',
+    run_repository_scripts: false,
+    pre_backup_script_id: null as number | null,
+    post_backup_script_id: null as number | null,
     run_prune_after: false,
     run_compact_after: false,
     prune_keep_hourly: 0,
@@ -282,9 +303,13 @@ const Schedule: React.FC = () => {
     name: '',
     cron_expression: '',
     repository: '',
+    repository_ids: [] as number[],
     enabled: true,
     description: '',
     archive_name_template: '',
+    run_repository_scripts: false,
+    pre_backup_script_id: null as number | null,
+    post_backup_script_id: null as number | null,
     run_prune_after: false,
     run_compact_after: false,
     prune_keep_hourly: 0,
@@ -300,9 +325,13 @@ const Schedule: React.FC = () => {
       name: '',
       cron_expression: '0 2 * * *',
       repository: '',
+      repository_ids: [],
       enabled: true,
       description: '',
       archive_name_template: '{job_name}-{now}',
+      run_repository_scripts: false,
+      pre_backup_script_id: null,
+      post_backup_script_id: null,
       run_prune_after: false,
       run_compact_after: false,
       prune_keep_hourly: 0,
@@ -316,33 +345,50 @@ const Schedule: React.FC = () => {
 
   const handleCreateJob = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!createForm.repository) {
-      toast.error('Please select a repository')
+    // Validate that at least one repository is selected
+    if (!createForm.repository && createForm.repository_ids.length === 0) {
+      toast.error('Please select at least one repository')
       return
     }
     // Convert cron expression from local time to UTC before sending to server
     const utcCron = convertCronToUTC(createForm.cron_expression)
-    createJobMutation.mutate({
+
+    // Prepare payload - send repository_ids if multi-repo, otherwise send repository
+    const payload = {
       ...createForm,
       cron_expression: utcCron,
-    })
+      // Only send repository_ids if multi-repo (more than one selected)
+      repository_ids: createForm.repository_ids.length > 0 ? createForm.repository_ids : undefined,
+      // Clear repository if using multi-repo
+      repository: createForm.repository_ids.length > 0 ? undefined : createForm.repository,
+    }
+
+    createJobMutation.mutate(payload)
   }
 
   const handleUpdateJob = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!editForm.repository) {
+    if (!editForm.repository && editForm.repository_ids.length === 0) {
       toast.error('Please select a repository')
       return
     }
     if (editingJob) {
       // Convert cron expression from local time to UTC before sending to server
       const utcCron = convertCronToUTC(editForm.cron_expression)
+
+      // Prepare payload - send repository_ids if multi-repo, otherwise send repository
+      const payload = {
+        ...editForm,
+        cron_expression: utcCron,
+        // Only send repository_ids if multi-repo (more than one selected)
+        repository_ids: editForm.repository_ids.length > 0 ? editForm.repository_ids : undefined,
+        // Clear repository if using multi-repo
+        repository: editForm.repository_ids.length > 0 ? undefined : editForm.repository,
+      }
+
       updateJobMutation.mutate({
         id: editingJob.id,
-        data: {
-          ...editForm,
-          cron_expression: utcCron,
-        },
+        data: payload,
       })
     }
   }
@@ -376,9 +422,13 @@ const Schedule: React.FC = () => {
       name: job.name,
       cron_expression: localCron,
       repository: job.repository || '',
+      repository_ids: job.repository_ids || [],
       enabled: job.enabled,
       description: job.description || '',
       archive_name_template: job.archive_name_template || '{job_name}-{now}',
+      run_repository_scripts: job.run_repository_scripts || false,
+      pre_backup_script_id: job.pre_backup_script_id || null,
+      post_backup_script_id: job.post_backup_script_id || null,
       run_prune_after: job.run_prune_after || false,
       run_compact_after: job.run_compact_after || false,
       prune_keep_hourly: job.prune_keep_hourly ?? 0,
