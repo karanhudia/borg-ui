@@ -28,6 +28,7 @@ import {
   Paper,
   Tabs,
   Tab,
+  Checkbox,
 } from '@mui/material'
 import {
   Plus,
@@ -587,12 +588,53 @@ const Schedule: React.FC = () => {
       id: 'repository',
       label: 'Repository',
       width: '30%',
-      render: (job) => (
-        <RepositoryCell
-          repositoryName={getRepositoryName(job.repository || '')}
-          repositoryPath={job.repository || ''}
-        />
-      ),
+      render: (job) => {
+        // Handle multi-repo schedules
+        if (job.repository_ids && job.repository_ids.length > 0) {
+          const repos = repositories.filter((r: any) => job.repository_ids?.includes(r.id))
+          if (repos.length === 0) {
+            return <Typography variant="caption" color="text.secondary">Unknown</Typography>
+          }
+          return (
+            <Box>
+              {repos.slice(0, 2).map((repo: any) => (
+                <RepositoryCell
+                  key={repo.id}
+                  repositoryName={repo.name}
+                  repositoryPath={repo.path}
+                />
+              ))}
+              {repos.length > 2 && (
+                <Typography variant="caption" color="text.secondary">
+                  +{repos.length - 2} more
+                </Typography>
+              )}
+            </Box>
+          )
+        }
+        // Handle single-repo schedules (legacy format with repository path)
+        if (job.repository) {
+          return (
+            <RepositoryCell
+              repositoryName={getRepositoryName(job.repository)}
+              repositoryPath={job.repository}
+            />
+          )
+        }
+        // Handle single-repo schedules (new format with repository_id)
+        if (job.repository_id) {
+          const repo = repositories.find((r: any) => r.id === job.repository_id)
+          if (repo) {
+            return (
+              <RepositoryCell
+                repositoryName={repo.name}
+                repositoryPath={repo.path}
+              />
+            )
+          }
+        }
+        return <Typography variant="caption" color="text.secondary">Unknown</Typography>
+      },
     },
     {
       id: 'schedule',
@@ -1021,7 +1063,12 @@ const Schedule: React.FC = () => {
                           {job.name}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {getRepositoryName(job.repository)}
+                          {job.repository_ids && job.repository_ids.length > 0
+                            ? `${job.repository_ids.length} repositories`
+                            : job.repository_id
+                            ? repositories.find((r: any) => r.id === job.repository_id)?.name ||
+                              'Unknown'
+                            : getRepositoryName(job.repository)}
                         </Typography>
                       </Box>
                       <Box sx={{ textAlign: 'right' }}>
@@ -1137,12 +1184,19 @@ const Schedule: React.FC = () => {
               />
 
               <FormControl fullWidth required size="medium">
-                <InputLabel sx={{ fontSize: '1.1rem' }}>Repository</InputLabel>
+                <InputLabel sx={{ fontSize: '1.1rem' }}>Repositories</InputLabel>
                 <Select
-                  value={createForm.repository}
-                  onChange={(e) => setCreateForm({ ...createForm, repository: e.target.value })}
-                  label="Repository"
-                  sx={{ fontSize: '1.1rem', height: { xs: 48, sm: 56 } }}
+                  multiple
+                  value={createForm.repository_ids}
+                  onChange={(e) => setCreateForm({ ...createForm, repository_ids: e.target.value as number[] })}
+                  label="Repositories"
+                  renderValue={(selected) => {
+                    const selectedIds = selected as number[]
+                    if (selectedIds.length === 0) return 'Select repositories...'
+                    const selectedRepos = repositories.filter((r: any) => selectedIds.includes(r.id))
+                    return selectedRepos.map((r: any) => r.name).join(', ')
+                  }}
+                  sx={{ fontSize: '1.1rem', minHeight: 56 }}
                   MenuProps={{
                     PaperProps: {
                       style: {
@@ -1154,8 +1208,9 @@ const Schedule: React.FC = () => {
                   {repositories
                     .filter((repo: any) => repo.mode !== 'observe')
                     .map((repo: any) => (
-                      <MenuItem key={repo.id} value={repo.path} sx={{ fontSize: '1rem' }}>
-                        <Box>
+                      <MenuItem key={repo.id} value={repo.id} sx={{ fontSize: '1rem' }}>
+                        <Checkbox checked={createForm.repository_ids.includes(repo.id)} />
+                        <Box sx={{ ml: 1 }}>
                           <Typography variant="body2" sx={{ fontSize: '1rem' }}>
                             {repo.name}
                           </Typography>
@@ -1171,6 +1226,12 @@ const Schedule: React.FC = () => {
                     ))}
                 </Select>
               </FormControl>
+
+              {createForm.repository_ids.length > 1 && (
+                <Alert severity="info" sx={{ fontSize: '0.9rem' }}>
+                  Selected {createForm.repository_ids.length} repositories. They will be backed up sequentially in the order shown above.
+                </Alert>
+              )}
 
               {repositories.some((repo: any) => repo.mode === 'observe') && (
                 <Alert severity="info">
@@ -1260,6 +1321,73 @@ const Schedule: React.FC = () => {
                 }
                 label="Enable immediately"
               />
+
+              {/* Multi-Repo Scripts Section */}
+              {createForm.repository_ids.length > 0 && (
+                <Box sx={{ mt: 2, p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                  <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                    Schedule-Level Scripts
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+                    These scripts run once per schedule (e.g., wake server before all backups, shutdown after)
+                  </Typography>
+
+                  <Stack spacing={2}>
+                    <FormControl fullWidth size="medium">
+                      <InputLabel>Pre-Backup Script (runs once before all backups)</InputLabel>
+                      <Select
+                        value={createForm.pre_backup_script_id || ''}
+                        onChange={(e) => setCreateForm({ ...createForm, pre_backup_script_id: e.target.value ? Number(e.target.value) : null })}
+                        label="Pre-Backup Script (runs once before all backups)"
+                      >
+                        <MenuItem value="">
+                          <em>None</em>
+                        </MenuItem>
+                        {scriptsData?.data?.scripts?.map((script: any) => (
+                          <MenuItem key={script.id} value={script.id}>
+                            {script.name} {script.continue_on_failure && '(continues on failure)'}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+
+                    <FormControl fullWidth size="medium">
+                      <InputLabel>Post-Backup Script (runs once after all backups)</InputLabel>
+                      <Select
+                        value={createForm.post_backup_script_id || ''}
+                        onChange={(e) => setCreateForm({ ...createForm, post_backup_script_id: e.target.value ? Number(e.target.value) : null })}
+                        label="Post-Backup Script (runs once after all backups)"
+                      >
+                        <MenuItem value="">
+                          <em>None</em>
+                        </MenuItem>
+                        {scriptsData?.data?.scripts?.map((script: any) => (
+                          <MenuItem key={script.id} value={script.id}>
+                            {script.name} {script.continue_on_failure && '(continues on failure)'}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={createForm.run_repository_scripts}
+                          onChange={(e) => setCreateForm({ ...createForm, run_repository_scripts: e.target.checked })}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body2">Run repository-level scripts</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            If enabled, each repository's pre/post scripts will run during its backup
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  </Stack>
+                </Box>
+              )}
 
               {/* Maintenance Section */}
               <Box sx={{ mt: 2, p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
@@ -1434,12 +1562,19 @@ const Schedule: React.FC = () => {
               />
 
               <FormControl fullWidth required size="medium">
-                <InputLabel sx={{ fontSize: '1.1rem' }}>Repository</InputLabel>
+                <InputLabel sx={{ fontSize: '1.1rem' }}>Repositories</InputLabel>
                 <Select
-                  value={editForm.repository}
-                  onChange={(e) => setEditForm({ ...editForm, repository: e.target.value })}
-                  label="Repository"
-                  sx={{ fontSize: '1.1rem', height: { xs: 48, sm: 56 } }}
+                  multiple
+                  value={editForm.repository_ids}
+                  onChange={(e) => setEditForm({ ...editForm, repository_ids: e.target.value as number[] })}
+                  label="Repositories"
+                  renderValue={(selected) => {
+                    const selectedIds = selected as number[]
+                    if (selectedIds.length === 0) return 'Select repositories...'
+                    const selectedRepos = repositories.filter((r: any) => selectedIds.includes(r.id))
+                    return selectedRepos.map((r: any) => r.name).join(', ')
+                  }}
+                  sx={{ fontSize: '1.1rem', minHeight: 56 }}
                   MenuProps={{
                     PaperProps: {
                       style: {
@@ -1451,8 +1586,9 @@ const Schedule: React.FC = () => {
                   {repositories
                     .filter((repo: any) => repo.mode !== 'observe')
                     .map((repo: any) => (
-                      <MenuItem key={repo.id} value={repo.path} sx={{ fontSize: '1rem' }}>
-                        <Box>
+                      <MenuItem key={repo.id} value={repo.id} sx={{ fontSize: '1rem' }}>
+                        <Checkbox checked={editForm.repository_ids.includes(repo.id)} />
+                        <Box sx={{ ml: 1 }}>
                           <Typography variant="body2" sx={{ fontSize: '1rem' }}>
                             {repo.name}
                           </Typography>
@@ -1468,6 +1604,12 @@ const Schedule: React.FC = () => {
                     ))}
                 </Select>
               </FormControl>
+
+              {editForm.repository_ids.length > 1 && (
+                <Alert severity="info" sx={{ fontSize: '0.9rem' }}>
+                  Selected {editForm.repository_ids.length} repositories. They will be backed up sequentially in the order shown above.
+                </Alert>
+              )}
 
               {repositories.some((repo: any) => repo.mode === 'observe') && (
                 <Alert severity="info">
@@ -1553,6 +1695,73 @@ const Schedule: React.FC = () => {
                 }
                 label="Enabled"
               />
+
+              {/* Multi-Repo Scripts Section */}
+              {editForm.repository_ids.length > 0 && (
+                <Box sx={{ mt: 2, p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                  <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                    Schedule-Level Scripts
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+                    These scripts run once per schedule (e.g., wake server before all backups, shutdown after)
+                  </Typography>
+
+                  <Stack spacing={2}>
+                    <FormControl fullWidth size="medium">
+                      <InputLabel>Pre-Backup Script (runs once before all backups)</InputLabel>
+                      <Select
+                        value={editForm.pre_backup_script_id || ''}
+                        onChange={(e) => setEditForm({ ...editForm, pre_backup_script_id: e.target.value ? Number(e.target.value) : null })}
+                        label="Pre-Backup Script (runs once before all backups)"
+                      >
+                        <MenuItem value="">
+                          <em>None</em>
+                        </MenuItem>
+                        {scriptsData?.data?.scripts?.map((script: any) => (
+                          <MenuItem key={script.id} value={script.id}>
+                            {script.name} {script.continue_on_failure && '(continues on failure)'}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+
+                    <FormControl fullWidth size="medium">
+                      <InputLabel>Post-Backup Script (runs once after all backups)</InputLabel>
+                      <Select
+                        value={editForm.post_backup_script_id || ''}
+                        onChange={(e) => setEditForm({ ...editForm, post_backup_script_id: e.target.value ? Number(e.target.value) : null })}
+                        label="Post-Backup Script (runs once after all backups)"
+                      >
+                        <MenuItem value="">
+                          <em>None</em>
+                        </MenuItem>
+                        {scriptsData?.data?.scripts?.map((script: any) => (
+                          <MenuItem key={script.id} value={script.id}>
+                            {script.name} {script.continue_on_failure && '(continues on failure)'}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={editForm.run_repository_scripts}
+                          onChange={(e) => setEditForm({ ...editForm, run_repository_scripts: e.target.checked })}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body2">Run repository-level scripts</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            If enabled, each repository's pre/post scripts will run during its backup
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  </Stack>
+                </Box>
+              )}
 
               {/* Maintenance Section */}
               <Box sx={{ mt: 2, p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>

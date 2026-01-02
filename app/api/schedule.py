@@ -86,35 +86,50 @@ async def get_scheduled_jobs(
     """Get all scheduled jobs"""
     try:
         jobs = db.query(ScheduledJob).all()
+        result_jobs = []
+
+        for job in jobs:
+            # Get repository_ids from junction table
+            repo_links = db.query(ScheduledJobRepository)\
+                .filter_by(scheduled_job_id=job.id)\
+                .order_by(ScheduledJobRepository.execution_order)\
+                .all()
+            repository_ids = [link.repository_id for link in repo_links] if repo_links else None
+
+            result_jobs.append({
+                "id": job.id,
+                "name": job.name,
+                "cron_expression": job.cron_expression,
+                "repository": job.repository,
+                "repository_id": job.repository_id,
+                "repository_ids": repository_ids,
+                "enabled": job.enabled,
+                "last_run": serialize_datetime(job.last_run),
+                "next_run": serialize_datetime(job.next_run),
+                "created_at": serialize_datetime(job.created_at),
+                "updated_at": serialize_datetime(job.updated_at),
+                "description": job.description,
+                "archive_name_template": job.archive_name_template,
+                # Multi-repo settings
+                "run_repository_scripts": job.run_repository_scripts,
+                "pre_backup_script_id": job.pre_backup_script_id,
+                "post_backup_script_id": job.post_backup_script_id,
+                # Prune and compact settings
+                "run_prune_after": job.run_prune_after,
+                "run_compact_after": job.run_compact_after,
+                "prune_keep_hourly": job.prune_keep_hourly,
+                "prune_keep_daily": job.prune_keep_daily,
+                "prune_keep_weekly": job.prune_keep_weekly,
+                "prune_keep_monthly": job.prune_keep_monthly,
+                "prune_keep_quarterly": job.prune_keep_quarterly,
+                "prune_keep_yearly": job.prune_keep_yearly,
+                "last_prune": serialize_datetime(job.last_prune),
+                "last_compact": serialize_datetime(job.last_compact),
+            })
+
         return {
             "success": True,
-            "jobs": [
-                {
-                    "id": job.id,
-                    "name": job.name,
-                    "cron_expression": job.cron_expression,
-                    "repository": job.repository,
-                    "enabled": job.enabled,
-                    "last_run": serialize_datetime(job.last_run),
-                    "next_run": serialize_datetime(job.next_run),
-                    "created_at": serialize_datetime(job.created_at),
-                    "updated_at": serialize_datetime(job.updated_at),
-                    "description": job.description,
-                    "archive_name_template": job.archive_name_template,
-                    # Prune and compact settings
-                    "run_prune_after": job.run_prune_after,
-                    "run_compact_after": job.run_compact_after,
-                    "prune_keep_hourly": job.prune_keep_hourly,
-                    "prune_keep_daily": job.prune_keep_daily,
-                    "prune_keep_weekly": job.prune_keep_weekly,
-                    "prune_keep_monthly": job.prune_keep_monthly,
-                    "prune_keep_quarterly": job.prune_keep_quarterly,
-                    "prune_keep_yearly": job.prune_keep_yearly,
-                    "last_prune": serialize_datetime(job.last_prune),
-                    "last_compact": serialize_datetime(job.last_compact),
-                }
-                for job in jobs
-            ]
+            "jobs": result_jobs
         }
     except Exception as e:
         logger.error("Failed to get scheduled jobs", error=str(e))
@@ -610,57 +625,87 @@ async def run_scheduled_job_now(
         if not job:
             raise HTTPException(status_code=404, detail="Scheduled job not found")
 
-        # Get repository info
-        repo = db.query(Repository).filter(Repository.path == job.repository).first()
-        if not repo:
-            raise HTTPException(status_code=404, detail="Repository not found for scheduled job")
+        # Check if this is a multi-repo schedule or single-repo schedule
+        repo_links = db.query(ScheduledJobRepository)\
+            .filter_by(scheduled_job_id=job.id)\
+            .all()
 
-        # Create backup job record with scheduled_job_id
-        backup_job = BackupJob(
-            repository=job.repository or "default",
-            status="pending",
-            scheduled_job_id=job.id  # Link to scheduled job
-        )
-        db.add(backup_job)
-        db.commit()
-        db.refresh(backup_job)
+        if repo_links:
+            # Multi-repository schedule
+            logger.info("Running multi-repo schedule manually", job_id=job_id, repo_count=len(repo_links))
+            asyncio.create_task(execute_multi_repo_schedule(job, db))
 
-        # Generate archive name from template
-        archive_name = None
-        if job.archive_name_template:
-            # Replace template placeholders
-            archive_name = job.archive_name_template
-            archive_name = archive_name.replace("{job_name}", job.name)
-            archive_name = archive_name.replace("{now}", datetime.now().strftime('%Y-%m-%dT%H:%M:%S'))
-            archive_name = archive_name.replace("{date}", datetime.now().strftime('%Y-%m-%d'))
-            archive_name = archive_name.replace("{time}", datetime.now().strftime('%H:%M:%S'))
-            archive_name = archive_name.replace("{timestamp}", str(int(datetime.now().timestamp())))
-        else:
-            # Default template if none specified: use job name
-            archive_name = f"{job.name}-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
+            # Update last run time
+            job.last_run = datetime.now(timezone.utc)
+            job.updated_at = datetime.now(timezone.utc)
+            db.commit()
 
-        # Execute backup with optional prune/compact asynchronously (non-blocking)
-        asyncio.create_task(
-            execute_scheduled_backup_with_maintenance(
-                backup_job.id,
-                job.repository,
-                job.id,
-                archive_name=archive_name
+            return {
+                "message": f"Multi-repository schedule started ({len(repo_links)} repositories)",
+                "status": "pending"
+            }
+
+        elif job.repository or job.repository_id:
+            # Single-repository schedule (legacy or new format)
+            # Get repository by path (legacy) or ID (new)
+            if job.repository_id:
+                repo = db.query(Repository).filter_by(id=job.repository_id).first()
+            else:
+                repo = db.query(Repository).filter(Repository.path == job.repository).first()
+
+            if not repo:
+                raise HTTPException(status_code=404, detail="Repository not found for scheduled job")
+
+            # Create backup job record with scheduled_job_id
+            backup_job = BackupJob(
+                repository=repo.path,
+                status="pending",
+                scheduled_job_id=job.id  # Link to scheduled job
             )
-        )
+            db.add(backup_job)
+            db.commit()
+            db.refresh(backup_job)
 
-        # Update last run time
-        job.last_run = datetime.now(timezone.utc)
-        job.updated_at = datetime.now(timezone.utc)
-        db.commit()
+            # Generate archive name from template
+            archive_name = None
+            if job.archive_name_template:
+                # Replace template placeholders
+                archive_name = job.archive_name_template
+                archive_name = archive_name.replace("{job_name}", job.name)
+                archive_name = archive_name.replace("{repo_name}", repo.name)
+                archive_name = archive_name.replace("{now}", datetime.now().strftime('%Y-%m-%dT%H:%M:%S'))
+                archive_name = archive_name.replace("{date}", datetime.now().strftime('%Y-%m-%d'))
+                archive_name = archive_name.replace("{time}", datetime.now().strftime('%H:%M:%S'))
+                archive_name = archive_name.replace("{timestamp}", str(int(datetime.now().timestamp())))
+            else:
+                # Default template if none specified: use job name
+                archive_name = f"{job.name}-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
 
-        logger.info("Scheduled job run manually", job_id=job_id, user=current_user.username, backup_job_id=backup_job.id)
+            # Execute backup with optional prune/compact asynchronously (non-blocking)
+            asyncio.create_task(
+                execute_scheduled_backup_with_maintenance(
+                    backup_job.id,
+                    repo.path,
+                    job.id,
+                    archive_name=archive_name
+                )
+            )
 
-        return {
-            "job_id": backup_job.id,
-            "status": "pending",
-            "message": "Scheduled job started successfully"
-        }
+            # Update last run time
+            job.last_run = datetime.now(timezone.utc)
+            job.updated_at = datetime.now(timezone.utc)
+            db.commit()
+
+            logger.info("Scheduled job run manually", job_id=job_id, user=current_user.username, backup_job_id=backup_job.id)
+
+            return {
+                "job_id": backup_job.id,
+                "status": "pending",
+                "message": "Scheduled job started successfully"
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Scheduled job has no repositories configured")
+
     except HTTPException:
         raise
     except Exception as e:

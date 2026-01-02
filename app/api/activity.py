@@ -17,7 +17,7 @@ import structlog
 import tempfile
 
 from app.database.database import get_db
-from app.database.models import BackupJob, RestoreJob, CheckJob, CompactJob, PruneJob, PackageInstallJob, Repository, InstalledPackage
+from app.database.models import BackupJob, RestoreJob, CheckJob, CompactJob, PruneJob, PackageInstallJob, Repository, InstalledPackage, ScheduledJob
 from app.api.auth import get_current_user, User
 from app.utils.datetime_utils import serialize_datetime
 from app.services.backup_service import backup_service
@@ -38,6 +38,7 @@ class ActivityItem(BaseModel):
     log_file_path: Optional[str]  # Path to streaming log file
     triggered_by: str = 'manual'  # 'manual' or 'schedule'
     schedule_id: Optional[int] = None  # ScheduledJob ID if triggered_by schedule
+    schedule_name: Optional[str] = None  # Schedule name if triggered_by schedule
 
     # Type-specific metadata
     archive_name: Optional[str] = None  # For backup/restore
@@ -82,6 +83,13 @@ async def list_recent_activity(
             # Determine trigger type
             triggered_by = 'schedule' if job.scheduled_job_id else 'manual'
 
+            # Get schedule name if this is a scheduled backup
+            schedule_name = None
+            if job.scheduled_job_id:
+                scheduled_job = db.query(ScheduledJob).filter(ScheduledJob.id == job.scheduled_job_id).first()
+                if scheduled_job:
+                    schedule_name = scheduled_job.name
+
             activities.append({
                 'id': job.id,
                 'type': 'backup',
@@ -94,6 +102,7 @@ async def list_recent_activity(
                 'log_file_path': job.log_file_path,
                 'triggered_by': triggered_by,
                 'schedule_id': job.scheduled_job_id,
+                'schedule_name': schedule_name,
                 'archive_name': None,
                 'package_name': None,
                 'has_logs': bool(job.log_file_path or job.logs)
