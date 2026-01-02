@@ -110,7 +110,6 @@ const Activity: React.FC = () => {
       if (
         activity.type === 'backup' &&
         activity.schedule_id &&
-        activity.schedule_name &&
         activity.triggered_by === 'schedule'
       ) {
         const key = `schedule-${activity.schedule_id}`
@@ -129,7 +128,7 @@ const Activity: React.FC = () => {
       .map(([key, jobs]) => ({
         key,
         schedule_id: jobs[0].schedule_id!,
-        schedule_name: jobs[0].schedule_name!,
+        schedule_name: jobs[0].schedule_name || `Schedule #${jobs[0].schedule_id}`,
         jobs: jobs.sort((a, b) => {
           // Sort by started_at within group
           if (!a.started_at) return 1
