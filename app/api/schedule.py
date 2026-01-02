@@ -28,10 +28,16 @@ from pydantic import BaseModel
 class ScheduledJobCreate(BaseModel):
     name: str
     cron_expression: str
-    repository: Optional[str] = None
+    repository: Optional[str] = None  # Legacy single-repo (by path)
+    repository_id: Optional[int] = None  # Single-repo (by ID)
+    repository_ids: Optional[List[int]] = None  # Multi-repo (list of repo IDs)
     enabled: bool = True
     description: Optional[str] = None
     archive_name_template: Optional[str] = None  # Template for archive names (e.g., "{job_name}-{now}")
+    # Multi-repo settings
+    run_repository_scripts: bool = False  # Whether to run per-repository pre/post scripts
+    pre_backup_script_id: Optional[int] = None  # Schedule-level pre-backup script
+    post_backup_script_id: Optional[int] = None  # Schedule-level post-backup script
     # Prune and compact settings
     run_prune_after: bool = False
     run_compact_after: bool = False
@@ -45,10 +51,16 @@ class ScheduledJobCreate(BaseModel):
 class ScheduledJobUpdate(BaseModel):
     name: Optional[str] = None
     cron_expression: Optional[str] = None
-    repository: Optional[str] = None
+    repository: Optional[str] = None  # Legacy single-repo (by path)
+    repository_id: Optional[int] = None  # Single-repo (by ID)
+    repository_ids: Optional[List[int]] = None  # Multi-repo (list of repo IDs)
     enabled: Optional[bool] = None
     description: Optional[str] = None
     archive_name_template: Optional[str] = None  # Template for archive names (e.g., "{job_name}-{now}")
+    # Multi-repo settings
+    run_repository_scripts: Optional[bool] = None
+    pre_backup_script_id: Optional[int] = None
+    post_backup_script_id: Optional[int] = None
     # Prune and compact settings
     run_prune_after: Optional[bool] = None
     run_compact_after: Optional[bool] = None
@@ -131,25 +143,45 @@ async def create_scheduled_job(
         if existing_job:
             raise HTTPException(status_code=400, detail="Job name already exists")
 
-        # Validate repository is not in observability-only mode
+        # Validate repositories are not in observability-only mode
+        from app.database.models import Repository
+
+        # Check single repo (legacy by path or new by ID)
         if job_data.repository:
-            from app.database.models import Repository
             repo = db.query(Repository).filter(Repository.path == job_data.repository).first()
             if repo and repo.mode == "observe":
                 raise HTTPException(
                     status_code=400,
                     detail="Cannot schedule backups for observability-only repositories. This repository is configured for browsing and restoring existing archives only."
                 )
+        elif job_data.repository_id:
+            repo = db.query(Repository).filter_by(id=job_data.repository_id).first()
+            if repo and repo.mode == "observe":
+                raise HTTPException(status_code=400, detail=f"Repository '{repo.name}' is in observability-only mode")
+
+        # Check multi-repo
+        if job_data.repository_ids:
+            for repo_id in job_data.repository_ids:
+                repo = db.query(Repository).filter_by(id=repo_id).first()
+                if not repo:
+                    raise HTTPException(status_code=400, detail=f"Repository ID {repo_id} not found")
+                if repo.mode == "observe":
+                    raise HTTPException(status_code=400, detail=f"Repository '{repo.name}' is in observability-only mode")
 
         # Create scheduled job
         scheduled_job = ScheduledJob(
             name=job_data.name,
             cron_expression=job_data.cron_expression,
-            repository=job_data.repository,
+            repository=job_data.repository,  # Legacy
+            repository_id=job_data.repository_id,  # Single-repo by ID
             enabled=job_data.enabled,
             next_run=next_run,
             description=job_data.description,
             archive_name_template=job_data.archive_name_template,
+            # Multi-repo settings
+            run_repository_scripts=job_data.run_repository_scripts,
+            pre_backup_script_id=job_data.pre_backup_script_id,
+            post_backup_script_id=job_data.post_backup_script_id,
             # Prune and compact settings
             run_prune_after=job_data.run_prune_after,
             run_compact_after=job_data.run_compact_after,
@@ -160,10 +192,22 @@ async def create_scheduled_job(
             prune_keep_quarterly=job_data.prune_keep_quarterly,
             prune_keep_yearly=job_data.prune_keep_yearly
         )
-        
+
         db.add(scheduled_job)
         db.commit()
         db.refresh(scheduled_job)
+
+        # Create junction table entries for multi-repo schedule
+        if job_data.repository_ids:
+            for order, repo_id in enumerate(job_data.repository_ids):
+                repo_link = ScheduledJobRepository(
+                    scheduled_job_id=scheduled_job.id,
+                    repository_id=repo_id,
+                    execution_order=order
+                )
+                db.add(repo_link)
+            db.commit()
+            logger.info("Created multi-repo schedule", schedule_id=scheduled_job.id, repo_count=len(job_data.repository_ids))
         
         logger.info("Scheduled job created", name=job_data.name, user=current_user.username)
         
@@ -428,6 +472,48 @@ async def update_scheduled_job(
 
         if job_data.prune_keep_yearly is not None:
             job.prune_keep_yearly = job_data.prune_keep_yearly
+
+        # Update multi-repo settings
+        if job_data.repository_id is not None:
+            from app.database.models import Repository
+            repo = db.query(Repository).filter_by(id=job_data.repository_id).first()
+            if repo and repo.mode == "observe":
+                raise HTTPException(status_code=400, detail=f"Repository '{repo.name}' is in observability-only mode")
+            job.repository_id = job_data.repository_id
+
+        if job_data.run_repository_scripts is not None:
+            job.run_repository_scripts = job_data.run_repository_scripts
+
+        if job_data.pre_backup_script_id is not None:
+            job.pre_backup_script_id = job_data.pre_backup_script_id
+
+        if job_data.post_backup_script_id is not None:
+            job.post_backup_script_id = job_data.post_backup_script_id
+
+        # Handle repository_ids update (multi-repo)
+        if job_data.repository_ids is not None:
+            from app.database.models import Repository
+            # Validate all repositories
+            for repo_id in job_data.repository_ids:
+                repo = db.query(Repository).filter_by(id=repo_id).first()
+                if not repo:
+                    raise HTTPException(status_code=400, detail=f"Repository ID {repo_id} not found")
+                if repo.mode == "observe":
+                    raise HTTPException(status_code=400, detail=f"Repository '{repo.name}' is in observability-only mode")
+
+            # Delete existing junction table entries
+            db.query(ScheduledJobRepository).filter_by(scheduled_job_id=job_id).delete()
+
+            # Create new junction table entries
+            for order, repo_id in enumerate(job_data.repository_ids):
+                repo_link = ScheduledJobRepository(
+                    scheduled_job_id=job_id,
+                    repository_id=repo_id,
+                    execution_order=order
+                )
+                db.add(repo_link)
+
+            logger.info("Updated multi-repo schedule", schedule_id=job_id, repo_count=len(job_data.repository_ids))
 
         job.updated_at = datetime.now(timezone.utc)
         db.commit()
