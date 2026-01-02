@@ -8,7 +8,7 @@ import json
 import os
 import asyncio
 
-from app.database.database import get_db
+from app.database.database import get_db, SessionLocal
 from app.database.models import User, ScheduledJob, ScheduledJobRepository, CompactJob, PruneJob, Repository, BackupJob, Script
 from app.core.security import get_current_user
 from app.core.borg import BorgInterface
@@ -633,12 +633,14 @@ async def run_scheduled_job_now(
         if repo_links:
             # Multi-repository schedule
             logger.info("Running multi-repo schedule manually", job_id=job_id, repo_count=len(repo_links))
-            asyncio.create_task(execute_multi_repo_schedule(job, db))
 
-            # Update last run time
+            # Update last run time BEFORE starting task
             job.last_run = datetime.now(timezone.utc)
             job.updated_at = datetime.now(timezone.utc)
             db.commit()
+
+            # Pass job_id instead of job object to avoid session issues
+            asyncio.create_task(execute_multi_repo_schedule_by_id(job_id))
 
             return {
                 "message": f"Multi-repository schedule started ({len(repo_links)} repositories)",
@@ -777,6 +779,30 @@ async def run_script_from_library(script: Script, db: Session, job_id: int = Non
         if not script.continue_on_failure:
             raise
         return {"success": False, "error": str(e)}
+
+
+async def execute_multi_repo_schedule_by_id(scheduled_job_id: int):
+    """Execute a multi-repository scheduled backup by job ID
+
+    This wrapper function creates its own database session to avoid
+    DetachedInstanceError when called from async tasks.
+
+    Args:
+        scheduled_job_id: The ScheduledJob ID to execute
+    """
+    # Create new database session for this async task
+    db = SessionLocal()
+    try:
+        # Load the scheduled job
+        scheduled_job = db.query(ScheduledJob).filter(ScheduledJob.id == scheduled_job_id).first()
+        if not scheduled_job:
+            logger.error("Scheduled job not found", scheduled_job_id=scheduled_job_id)
+            return
+
+        # Execute the multi-repo schedule
+        await execute_multi_repo_schedule(scheduled_job, db)
+    finally:
+        db.close()
 
 
 async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
@@ -1112,7 +1138,8 @@ async def check_scheduled_jobs():
                     if repo_links:
                         # Multi-repository schedule
                         logger.info("Detected multi-repo schedule", job_id=job.id, repo_count=len(repo_links))
-                        asyncio.create_task(execute_multi_repo_schedule(job, db))
+                        # Pass job_id instead of job object to avoid session issues
+                        asyncio.create_task(execute_multi_repo_schedule_by_id(job.id))
 
                     elif job.repository or job.repository_id:
                         # Single-repository schedule (legacy or new format)
