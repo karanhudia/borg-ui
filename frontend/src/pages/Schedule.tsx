@@ -419,11 +419,28 @@ const Schedule: React.FC = () => {
     setEditingJob(job)
     // Convert UTC cron expression from server to local time for editing
     const localCron = convertCronToLocal(job.cron_expression)
+
+    // Handle converting old single-repo format to new multi-repo format
+    let repository_ids: number[] = []
+    if (job.repository_ids && job.repository_ids.length > 0) {
+      // New format: already has repository_ids array
+      repository_ids = job.repository_ids
+    } else if (job.repository_id) {
+      // Old format: single repository_id (integer)
+      repository_ids = [job.repository_id]
+    } else if (job.repository) {
+      // Legacy format: repository path (string) - need to find ID
+      const repo = repositories.find((r: any) => r.path === job.repository)
+      if (repo) {
+        repository_ids = [repo.id]
+      }
+    }
+
     setEditForm({
       name: job.name,
       cron_expression: localCron,
       repository: job.repository || '',
-      repository_ids: job.repository_ids || [],
+      repository_ids: repository_ids,
       enabled: job.enabled,
       description: job.description || '',
       archive_name_template: job.archive_name_template || '{job_name}-{now}',

@@ -64,6 +64,7 @@ const Activity: React.FC = () => {
       const response = await activityAPI.list(params)
       return response.data
     },
+    refetchInterval: 3000, // Refresh every 3 seconds
   })
 
   const getTypeLabel = (type: string): string => {
