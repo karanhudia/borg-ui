@@ -196,12 +196,18 @@ class ScheduledJob(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False, index=True)
     cron_expression = Column(String, nullable=False)  # e.g., "0 2 * * *" for daily at 2 AM
-    repository = Column(String, nullable=True)  # Repository path/ID to backup
+    repository = Column(String, nullable=True)  # Repository path/ID to backup (legacy, for single-repo schedules)
+    repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=True)  # For single-repo schedules (nullable for multi-repo)
     enabled = Column(Boolean, default=True)  # Whether the job is active
     last_run = Column(DateTime, nullable=True)  # Last execution time
     next_run = Column(DateTime, nullable=True)  # Next scheduled execution time
     description = Column(Text, nullable=True)  # User description of the job
     archive_name_template = Column(String, nullable=True)  # Template for archive names (e.g., "{job_name}-{now}")
+
+    # Multi-repository schedule settings
+    run_repository_scripts = Column(Boolean, default=False, nullable=False)  # Whether to run per-repository pre/post scripts
+    pre_backup_script_id = Column(Integer, ForeignKey("scripts.id"), nullable=True)  # Schedule-level pre-backup script (runs once)
+    post_backup_script_id = Column(Integer, ForeignKey("scripts.id"), nullable=True)  # Schedule-level post-backup script (runs once)
 
     # Prune and compact settings
     run_prune_after = Column(Boolean, default=False)  # Run prune after backup
@@ -217,6 +223,20 @@ class ScheduledJob(Base):
 
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, nullable=True)
+
+class ScheduledJobRepository(Base):
+    """Junction table for multi-repository scheduled jobs"""
+    __tablename__ = "scheduled_job_repositories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    scheduled_job_id = Column(Integer, ForeignKey("scheduled_jobs.id", ondelete="CASCADE"), nullable=False, index=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id", ondelete="CASCADE"), nullable=False, index=True)
+    execution_order = Column(Integer, nullable=False)  # Order in which repositories should be backed up
+
+    created_at = Column(DateTime, default=utc_now)
+
+    def __repr__(self):
+        return f"<ScheduledJobRepository(schedule_id={self.scheduled_job_id}, repo_id={self.repository_id}, order={self.execution_order})>"
 
 class CheckJob(Base):
     __tablename__ = "check_jobs"

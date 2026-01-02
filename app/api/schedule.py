@@ -9,7 +9,7 @@ import os
 import asyncio
 
 from app.database.database import get_db
-from app.database.models import User, ScheduledJob, CompactJob, PruneJob, Repository, BackupJob
+from app.database.models import User, ScheduledJob, ScheduledJobRepository, CompactJob, PruneJob, Repository, BackupJob, Script
 from app.core.security import get_current_user
 from app.core.borg import BorgInterface
 from app.config import settings
@@ -618,6 +618,173 @@ async def validate_cron_expression(
         raise HTTPException(status_code=500, detail=f"Failed to validate cron expression: {str(e)}")
 
 # Background task to check and run scheduled jobs
+async def run_script_from_library(script: Script, db: Session, job_id: int = None):
+    """Execute a script from the library
+
+    Args:
+        script: Script object from database
+        db: Database session
+        job_id: Optional backup job ID for context
+    """
+    from app.services.script_executor import execute_script_async
+
+    try:
+        logger.info("Executing schedule script", script_id=script.id, script_name=script.name)
+        result = await execute_script_async(
+            script_id=script.id,
+            repository_id=None,  # Schedule-level scripts don't have a specific repo
+            backup_job_id=job_id,
+            db=db
+        )
+
+        if not result.get("success") and not script.continue_on_failure:
+            raise Exception(f"Script {script.name} failed: {result.get('stderr', 'Unknown error')}")
+
+        return result
+    except Exception as e:
+        logger.error("Script execution failed", script_name=script.name, error=str(e))
+        if not script.continue_on_failure:
+            raise
+        return {"success": False, "error": str(e)}
+
+
+async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
+    """Execute a multi-repository scheduled backup
+
+    Args:
+        scheduled_job: The ScheduledJob object
+        db: Database session
+    """
+    from app.database.models import Repository, BackupJob
+    from app.services.backup_service import backup_service
+
+    logger.info("Executing multi-repo schedule", schedule_id=scheduled_job.id, name=scheduled_job.name)
+
+    # Get all repositories for this schedule (ordered)
+    repo_links = db.query(ScheduledJobRepository)\
+        .filter_by(scheduled_job_id=scheduled_job.id)\
+        .order_by(ScheduledJobRepository.execution_order)\
+        .all()
+
+    if not repo_links:
+        logger.error("No repositories found for multi-repo schedule", schedule_id=scheduled_job.id)
+        return
+
+    repositories = []
+    for link in repo_links:
+        repo = db.query(Repository).filter_by(id=link.repository_id).first()
+        if repo:
+            repositories.append(repo)
+        else:
+            logger.warning("Repository not found", repo_id=link.repository_id)
+
+    if not repositories:
+        logger.error("No valid repositories found for schedule", schedule_id=scheduled_job.id)
+        return
+
+    # 1. Run schedule-level pre-backup script (ONCE)
+    if scheduled_job.pre_backup_script_id:
+        try:
+            script = db.query(Script).filter_by(id=scheduled_job.pre_backup_script_id).first()
+            if script:
+                await run_script_from_library(script, db)
+                logger.info("Pre-backup script completed", script_name=script.name)
+            else:
+                logger.warning("Pre-backup script not found", script_id=scheduled_job.pre_backup_script_id)
+        except Exception as e:
+            logger.error("Pre-backup script failed, aborting schedule", error=str(e))
+            return  # Abort if pre-script fails and continue_on_failure is False
+
+    # 2. Execute backups for each repository sequentially
+    backup_jobs = []
+    for repo in repositories:
+        try:
+            logger.info("Starting backup for repository", repo_name=repo.name, repo_path=repo.path)
+
+            # Create backup job record
+            backup_job = BackupJob(
+                repository=repo.path,
+                status="pending",
+                scheduled_job_id=scheduled_job.id
+            )
+            db.add(backup_job)
+            db.commit()
+            db.refresh(backup_job)
+            backup_jobs.append(backup_job)
+
+            # Generate archive name from template
+            archive_name = None
+            if scheduled_job.archive_name_template:
+                archive_name = scheduled_job.archive_name_template
+                archive_name = archive_name.replace("{job_name}", scheduled_job.name)
+                archive_name = archive_name.replace("{repo_name}", repo.name)
+                archive_name = archive_name.replace("{now}", datetime.now().strftime('%Y-%m-%dT%H:%M:%S'))
+                archive_name = archive_name.replace("{date}", datetime.now().strftime('%Y-%m-%d'))
+                archive_name = archive_name.replace("{time}", datetime.now().strftime('%H:%M:%S'))
+                archive_name = archive_name.replace("{timestamp}", str(int(datetime.now().timestamp())))
+            else:
+                archive_name = f"{scheduled_job.name}-{repo.name}-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
+
+            # Run repository-level pre-script if enabled
+            if scheduled_job.run_repository_scripts and repo.pre_backup_script_id:
+                try:
+                    script = db.query(Script).filter_by(id=repo.pre_backup_script_id).first()
+                    if script:
+                        await run_script_from_library(script, db, job_id=backup_job.id)
+                        logger.info("Repository pre-script completed", repo_name=repo.name, script_name=script.name)
+                except Exception as e:
+                    logger.error("Repository pre-script failed", repo_name=repo.name, error=str(e))
+                    # Continue with backup even if repo pre-script fails
+
+            # Execute backup
+            await backup_service.execute_backup(backup_job.id, repo.path, db, archive_name=archive_name)
+
+            # Run repository-level post-script if enabled
+            if scheduled_job.run_repository_scripts and repo.post_backup_script_id:
+                try:
+                    script = db.query(Script).filter_by(id=repo.post_backup_script_id).first()
+                    if script:
+                        await run_script_from_library(script, db, job_id=backup_job.id)
+                        logger.info("Repository post-script completed", repo_name=repo.name, script_name=script.name)
+                except Exception as e:
+                    logger.error("Repository post-script failed", repo_name=repo.name, error=str(e))
+
+            # Run prune/compact if enabled and backup succeeded
+            db.refresh(backup_job)
+            if backup_job.status in ["completed", "completed_with_warnings"]:
+                # Call the existing maintenance function for this specific backup
+                await execute_scheduled_backup_with_maintenance(
+                    backup_job.id,
+                    repo.path,
+                    scheduled_job.id,
+                    archive_name=archive_name
+                )
+
+            logger.info("Backup completed for repository", repo_name=repo.name, status=backup_job.status)
+
+        except Exception as e:
+            logger.error("Backup failed for repository", repo_name=repo.name, error=str(e))
+            # Continue with next repository even if this one fails
+
+    # 3. Run schedule-level post-backup script (ONCE, always runs)
+    if scheduled_job.post_backup_script_id:
+        try:
+            script = db.query(Script).filter_by(id=scheduled_job.post_backup_script_id).first()
+            if script:
+                await run_script_from_library(script, db)
+                logger.info("Post-backup script completed", script_name=script.name)
+            else:
+                logger.warning("Post-backup script not found", script_id=scheduled_job.post_backup_script_id)
+        except Exception as e:
+            logger.error("Post-backup script failed", error=str(e))
+            # Post-script failure doesn't affect job completion
+
+    logger.info("Multi-repo schedule completed",
+               schedule_id=scheduled_job.id,
+               total_repos=len(repositories),
+               completed_jobs=len([j for j in backup_jobs if j.status in ["completed", "completed_with_warnings"]]))
+
+
 async def execute_scheduled_backup_with_maintenance(backup_job_id: int, repository_path: str,
                                                      scheduled_job_id: int, archive_name: str = None):
     """Execute backup and optionally run prune/compact after successful backup
@@ -806,48 +973,68 @@ async def check_scheduled_jobs():
                 try:
                     logger.info("Running scheduled job", job_id=job.id, name=job.name)
 
-                    # Get repository info
-                    from app.database.models import Repository, BackupJob
-                    from app.services.backup_service import backup_service
+                    # Check if this is a multi-repo schedule or single-repo schedule
+                    repo_links = db.query(ScheduledJobRepository)\
+                        .filter_by(scheduled_job_id=job.id)\
+                        .all()
 
-                    repo = db.query(Repository).filter(Repository.path == job.repository).first()
-                    if not repo:
-                        logger.error("Repository not found for scheduled job", job_id=job.id, repository=job.repository)
-                        continue
+                    if repo_links:
+                        # Multi-repository schedule
+                        logger.info("Detected multi-repo schedule", job_id=job.id, repo_count=len(repo_links))
+                        asyncio.create_task(execute_multi_repo_schedule(job, db))
 
-                    # Create backup job record with scheduled_job_id
-                    backup_job = BackupJob(
-                        repository=job.repository or "default",
-                        status="pending",
-                        scheduled_job_id=job.id  # Link to scheduled job
-                    )
-                    db.add(backup_job)
-                    db.commit()
-                    db.refresh(backup_job)
+                    elif job.repository or job.repository_id:
+                        # Single-repository schedule (legacy or new format)
+                        from app.database.models import Repository, BackupJob
+                        from app.services.backup_service import backup_service
 
-                    # Generate archive name from template
-                    archive_name = None
-                    if job.archive_name_template:
-                        # Replace template placeholders
-                        archive_name = job.archive_name_template
-                        archive_name = archive_name.replace("{job_name}", job.name)
-                        archive_name = archive_name.replace("{now}", datetime.now().strftime('%Y-%m-%dT%H:%M:%S'))
-                        archive_name = archive_name.replace("{date}", datetime.now().strftime('%Y-%m-%d'))
-                        archive_name = archive_name.replace("{time}", datetime.now().strftime('%H:%M:%S'))
-                        archive_name = archive_name.replace("{timestamp}", str(int(datetime.now().timestamp())))
-                    else:
-                        # Default template if none specified: use job name
-                        archive_name = f"{job.name}-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
+                        # Get repository by path (legacy) or ID (new)
+                        if job.repository_id:
+                            repo = db.query(Repository).filter_by(id=job.repository_id).first()
+                        else:
+                            repo = db.query(Repository).filter(Repository.path == job.repository).first()
 
-                    # Execute backup with optional prune/compact asynchronously (non-blocking)
-                    asyncio.create_task(
-                        execute_scheduled_backup_with_maintenance(
-                            backup_job.id,
-                            job.repository,
-                            job.id,
-                            archive_name=archive_name
+                        if not repo:
+                            logger.error("Repository not found for scheduled job", job_id=job.id, repository=job.repository or job.repository_id)
+                            continue
+
+                        # Create backup job record with scheduled_job_id
+                        backup_job = BackupJob(
+                            repository=repo.path,
+                            status="pending",
+                            scheduled_job_id=job.id  # Link to scheduled job
                         )
-                    )
+                        db.add(backup_job)
+                        db.commit()
+                        db.refresh(backup_job)
+
+                        # Generate archive name from template
+                        archive_name = None
+                        if job.archive_name_template:
+                            # Replace template placeholders
+                            archive_name = job.archive_name_template
+                            archive_name = archive_name.replace("{job_name}", job.name)
+                            archive_name = archive_name.replace("{repo_name}", repo.name)
+                            archive_name = archive_name.replace("{now}", datetime.now().strftime('%Y-%m-%dT%H:%M:%S'))
+                            archive_name = archive_name.replace("{date}", datetime.now().strftime('%Y-%m-%d'))
+                            archive_name = archive_name.replace("{time}", datetime.now().strftime('%H:%M:%S'))
+                            archive_name = archive_name.replace("{timestamp}", str(int(datetime.now().timestamp())))
+                        else:
+                            # Default template if none specified: use job name
+                            archive_name = f"{job.name}-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
+
+                        # Execute backup with optional prune/compact asynchronously (non-blocking)
+                        asyncio.create_task(
+                            execute_scheduled_backup_with_maintenance(
+                                backup_job.id,
+                                repo.path,
+                                job.id,
+                                archive_name=archive_name
+                            )
+                        )
+                    else:
+                        logger.error("Scheduled job has no repositories configured", job_id=job.id)
+                        continue
 
                     # Update job status
                     job.last_run = datetime.now(timezone.utc)
