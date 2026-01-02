@@ -1228,9 +1228,104 @@ const Schedule: React.FC = () => {
               </FormControl>
 
               {createForm.repository_ids.length > 1 && (
-                <Alert severity="info" sx={{ fontSize: '0.9rem' }}>
-                  Selected {createForm.repository_ids.length} repositories. They will be backed up sequentially in the order shown above.
-                </Alert>
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Backup Order (drag to reorder)
+                  </Typography>
+                  <Stack spacing={1}>
+                    {createForm.repository_ids.map((repoId, index) => {
+                      const repo = repositories.find((r: any) => r.id === repoId)
+                      if (!repo) return null
+                      return (
+                        <Box
+                          key={repoId}
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                            p: 1.5,
+                            border: 1,
+                            borderColor: 'divider',
+                            borderRadius: 1,
+                            bgcolor: 'background.paper',
+                          }}
+                        >
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              minWidth: 24,
+                              fontWeight: 600,
+                              color: 'text.secondary',
+                            }}
+                          >
+                            {index + 1}.
+                          </Typography>
+                          <Box sx={{ flexGrow: 1 }}>
+                            <Typography variant="body2" fontWeight={500}>
+                              {repo.name}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {repo.path}
+                            </Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', gap: 0.5 }}>
+                            <IconButton
+                              size="small"
+                              disabled={index === 0}
+                              onClick={() => {
+                                const newIds = [...createForm.repository_ids]
+                                ;[newIds[index - 1], newIds[index]] = [
+                                  newIds[index],
+                                  newIds[index - 1],
+                                ]
+                                setCreateForm({ ...createForm, repository_ids: newIds })
+                              }}
+                              title="Move up"
+                            >
+                              <svg
+                                width="20"
+                                height="20"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <polyline points="18 15 12 9 6 15"></polyline>
+                              </svg>
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              disabled={index === createForm.repository_ids.length - 1}
+                              onClick={() => {
+                                const newIds = [...createForm.repository_ids]
+                                ;[newIds[index], newIds[index + 1]] = [
+                                  newIds[index + 1],
+                                  newIds[index],
+                                ]
+                                setCreateForm({ ...createForm, repository_ids: newIds })
+                              }}
+                              title="Move down"
+                            >
+                              <svg
+                                width="20"
+                                height="20"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                              </svg>
+                            </IconButton>
+                          </Box>
+                        </Box>
+                      )
+                    })}
+                  </Stack>
+                  <Alert severity="info" sx={{ fontSize: '0.9rem', mt: 1 }}>
+                    Repositories will be backed up sequentially in the order shown above.
+                  </Alert>
+                </Box>
               )}
 
               {repositories.some((repo: any) => repo.mode === 'observe') && (
@@ -1334,11 +1429,12 @@ const Schedule: React.FC = () => {
 
                   <Stack spacing={2}>
                     <FormControl fullWidth size="medium">
-                      <InputLabel>Pre-Backup Script (runs once before all backups)</InputLabel>
+                      <InputLabel sx={{ fontSize: '1.1rem' }}>Pre-Backup Script (runs once before all backups)</InputLabel>
                       <Select
                         value={createForm.pre_backup_script_id || ''}
                         onChange={(e) => setCreateForm({ ...createForm, pre_backup_script_id: e.target.value ? Number(e.target.value) : null })}
                         label="Pre-Backup Script (runs once before all backups)"
+                        sx={{ fontSize: '1.1rem', minHeight: 56 }}
                       >
                         <MenuItem value="">
                           <em>None</em>
@@ -1352,11 +1448,12 @@ const Schedule: React.FC = () => {
                     </FormControl>
 
                     <FormControl fullWidth size="medium">
-                      <InputLabel>Post-Backup Script (runs once after all backups)</InputLabel>
+                      <InputLabel sx={{ fontSize: '1.1rem' }}>Post-Backup Script (runs once after all backups)</InputLabel>
                       <Select
                         value={createForm.post_backup_script_id || ''}
                         onChange={(e) => setCreateForm({ ...createForm, post_backup_script_id: e.target.value ? Number(e.target.value) : null })}
                         label="Post-Backup Script (runs once after all backups)"
+                        sx={{ fontSize: '1.1rem', minHeight: 56 }}
                       >
                         <MenuItem value="">
                           <em>None</em>
@@ -1606,9 +1703,104 @@ const Schedule: React.FC = () => {
               </FormControl>
 
               {editForm.repository_ids.length > 1 && (
-                <Alert severity="info" sx={{ fontSize: '0.9rem' }}>
-                  Selected {editForm.repository_ids.length} repositories. They will be backed up sequentially in the order shown above.
-                </Alert>
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Backup Order (drag to reorder)
+                  </Typography>
+                  <Stack spacing={1}>
+                    {editForm.repository_ids.map((repoId, index) => {
+                      const repo = repositories.find((r: any) => r.id === repoId)
+                      if (!repo) return null
+                      return (
+                        <Box
+                          key={repoId}
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                            p: 1.5,
+                            border: 1,
+                            borderColor: 'divider',
+                            borderRadius: 1,
+                            bgcolor: 'background.paper',
+                          }}
+                        >
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              minWidth: 24,
+                              fontWeight: 600,
+                              color: 'text.secondary',
+                            }}
+                          >
+                            {index + 1}.
+                          </Typography>
+                          <Box sx={{ flexGrow: 1 }}>
+                            <Typography variant="body2" fontWeight={500}>
+                              {repo.name}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {repo.path}
+                            </Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', gap: 0.5 }}>
+                            <IconButton
+                              size="small"
+                              disabled={index === 0}
+                              onClick={() => {
+                                const newIds = [...editForm.repository_ids]
+                                ;[newIds[index - 1], newIds[index]] = [
+                                  newIds[index],
+                                  newIds[index - 1],
+                                ]
+                                setEditForm({ ...editForm, repository_ids: newIds })
+                              }}
+                              title="Move up"
+                            >
+                              <svg
+                                width="20"
+                                height="20"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <polyline points="18 15 12 9 6 15"></polyline>
+                              </svg>
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              disabled={index === editForm.repository_ids.length - 1}
+                              onClick={() => {
+                                const newIds = [...editForm.repository_ids]
+                                ;[newIds[index], newIds[index + 1]] = [
+                                  newIds[index + 1],
+                                  newIds[index],
+                                ]
+                                setEditForm({ ...editForm, repository_ids: newIds })
+                              }}
+                              title="Move down"
+                            >
+                              <svg
+                                width="20"
+                                height="20"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                              </svg>
+                            </IconButton>
+                          </Box>
+                        </Box>
+                      )
+                    })}
+                  </Stack>
+                  <Alert severity="info" sx={{ fontSize: '0.9rem', mt: 1 }}>
+                    Repositories will be backed up sequentially in the order shown above.
+                  </Alert>
+                </Box>
               )}
 
               {repositories.some((repo: any) => repo.mode === 'observe') && (
@@ -1708,11 +1900,12 @@ const Schedule: React.FC = () => {
 
                   <Stack spacing={2}>
                     <FormControl fullWidth size="medium">
-                      <InputLabel>Pre-Backup Script (runs once before all backups)</InputLabel>
+                      <InputLabel sx={{ fontSize: '1.1rem' }}>Pre-Backup Script (runs once before all backups)</InputLabel>
                       <Select
                         value={editForm.pre_backup_script_id || ''}
                         onChange={(e) => setEditForm({ ...editForm, pre_backup_script_id: e.target.value ? Number(e.target.value) : null })}
                         label="Pre-Backup Script (runs once before all backups)"
+                        sx={{ fontSize: '1.1rem', minHeight: 56 }}
                       >
                         <MenuItem value="">
                           <em>None</em>
@@ -1726,11 +1919,12 @@ const Schedule: React.FC = () => {
                     </FormControl>
 
                     <FormControl fullWidth size="medium">
-                      <InputLabel>Post-Backup Script (runs once after all backups)</InputLabel>
+                      <InputLabel sx={{ fontSize: '1.1rem' }}>Post-Backup Script (runs once after all backups)</InputLabel>
                       <Select
                         value={editForm.post_backup_script_id || ''}
                         onChange={(e) => setEditForm({ ...editForm, post_backup_script_id: e.target.value ? Number(e.target.value) : null })}
                         label="Post-Backup Script (runs once after all backups)"
+                        sx={{ fontSize: '1.1rem', minHeight: 56 }}
                       >
                         <MenuItem value="">
                           <em>None</em>
