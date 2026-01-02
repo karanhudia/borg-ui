@@ -2,8 +2,6 @@ import asyncio
 import structlog
 import json
 import os
-import shutil
-import tempfile
 from pathlib import Path
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
@@ -66,10 +64,19 @@ class RestoreService:
                        destination=destination,
                        paths=paths)
 
-            # Create temporary directory for extraction
-            # This allows us to handle path manipulation correctly
-            temp_dir = tempfile.mkdtemp(prefix=f"borg_restore_{job_id}_")
-            logger.info("Created temporary extraction directory", temp_dir=temp_dir)
+            # Ensure destination directory exists
+            dest_path = Path(destination)
+            if not dest_path.exists():
+                try:
+                    dest_path.mkdir(parents=True, exist_ok=True)
+                    logger.info("Created destination directory", path=destination)
+                except Exception as e:
+                    logger.error("Failed to create destination directory", error=str(e))
+                    job.status = "failed"
+                    job.error_message = f"Failed to create destination directory: {str(e)}"
+                    job.completed_at = datetime.now(timezone.utc)
+                    db_session.commit()
+                    return
 
             try:
                 # Build borg extract command with progress tracking
@@ -103,15 +110,15 @@ class RestoreService:
                 ]
                 env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
 
-                logger.info("Executing restore command", command=" ".join(cmd), cwd=temp_dir)
+                logger.info("Executing restore command", command=" ".join(cmd), cwd=destination)
 
                 # Execute command with progress tracking
-                # Extract to temporary directory first
+                # Extract directly to destination (no temp directory)
                 process = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
-                    cwd=temp_dir,
+                    cwd=destination,
                     env=env
                 )
 
@@ -219,107 +226,7 @@ class RestoreService:
 
                 # Update job with results
                 if process.returncode == 0:
-                    # Extraction succeeded, now move files to destination
-                    logger.info("Extraction completed, preparing to move files",
-                               temp_dir=temp_dir,
-                               destination=destination)
-
-                    # Ensure destination exists
-                    dest_path = Path(destination)
-                    if not dest_path.exists():
-                        try:
-                            dest_path.mkdir(parents=True, exist_ok=True)
-                            logger.info("Created destination directory", path=destination)
-                        except Exception as e:
-                            logger.error("Failed to create destination directory", error=str(e))
-                            raise
-
-                    # Determine ownership target
-                    # Default to current process user, but try to match destination directory ownership if possible
-                    target_uid = os.getuid()
-                    target_gid = os.getgid()
-                    
-                    try:
-                        # Try to use permissions of destination (or its parent)
-                        stat_path = dest_path if dest_path.exists() else dest_path.parent
-                        if stat_path.exists():
-                            stat_info = os.stat(str(stat_path))
-                            target_uid = stat_info.st_uid
-                            target_gid = stat_info.st_gid
-                            logger.info("Targeting ownership", uid=target_uid, gid=target_gid, reference=str(stat_path))
-                    except Exception as e:
-                        logger.warning("Could not determine target ownership using defaults", error=str(e))
-
-                    # Helper function to copy/move
-                    def move_and_chown(src, dst):
-                        """Move file/dir and fix ownership"""
-                        # If destination exists and is a dir, copying a dir into it might nest it
-                        # check if we want that? usually yes for restore
-                        
-                        try:
-                            # Use shutil.copytree for directories, copy2 for files
-                            if os.path.isdir(src):
-                                # If dst exists, we merge? shutil.copytree with dirs_exist_ok=True checks this
-                                shutil.copytree(src, dst, dirs_exist_ok=True)
-                            else:
-                                shutil.copy2(src, dst)
-                                
-                            # Fix ownership
-                            # We recursively chown if it's a directory
-                            if os.path.isdir(dst):
-                                os.chown(dst, target_uid, target_gid)
-                                for root, dirs, files in os.walk(dst):
-                                    for d in dirs:
-                                        os.chown(os.path.join(root, d), target_uid, target_gid)
-                                    for f in files:
-                                        os.chown(os.path.join(root, f), target_uid, target_gid)
-                            else:
-                                os.chown(dst, target_uid, target_gid)
-                                
-                        except Exception as e:
-                            # Log but assume success of copy
-                             logger.warning("Error during copy/ownership adjustment", src=src, dst=dst, error=str(e))
-
-                    # Find the extracted content in temp directory
-                    temp_path = Path(temp_dir)
-                    
-                    if paths and len(paths) > 0:
-                        # User selected specific paths to restore
-                        logger.info("Moving specific selected paths", count=len(paths))
-                        for selected_path in paths:
-                            # Find the extracted path in temp directory
-                            # Borg preserves full structure, so we look for the relative path inside temp
-                            selected_path_clean = selected_path.lstrip('/')
-                            source_path = temp_path / selected_path_clean
-                            
-                            logger.debug("Processing selected path", 
-                                       selected=selected_path, 
-                                       source=str(source_path))
-
-                            if source_path.exists():
-                                # Restore the item (file or directory) to destination
-                                # We want to preserve the name of the selected item
-                                # e.g. selecting /home/user/docs should put docs FOLDER into destination
-                                # result: /destination/docs/...
-                                
-                                item_dest = dest_path / source_path.name
-                                move_and_chown(str(source_path), str(item_dest))
-                                    
-                                logger.info(f"Restored {selected_path} to {item_dest}")
-                            else:
-                                logger.warning(f"Selected path not found in extracted archive: {selected_path}")
-                                # Try to find if it was extracted somewhere else or partial match?
-                                # This can happen if borg stripped components automatically (unlikely without flag)
-                    else:
-                        # Full archive restore
-                        # We copy everything from temp root to destination
-                        logger.info("Moving full archive contents")
-                        for item in temp_path.iterdir():
-                            item_dest = dest_path / item.name
-                            move_and_chown(str(item), str(item_dest))
-
-                    logger.info("Files moved to destination successfully")
-
+                    # Extraction completed successfully (directly to destination)
                     job.status = "completed"
                     job.progress = 100
                     job.progress_percent = 100.0
@@ -329,7 +236,9 @@ class RestoreService:
                     logger.info("Restore completed successfully",
                                job_id=job_id,
                                repository=repository_path,
-                               archive=archive_name)
+                               archive=archive_name,
+                               destination=destination,
+                               nfiles=nfiles)
 
                     # Send success notification
                     try:
@@ -360,16 +269,13 @@ class RestoreService:
 
                 db_session.commit()
 
-            finally:
-                # Clean up temporary directory
-                if os.path.exists(temp_dir):
-                    try:
-                        shutil.rmtree(temp_dir)
-                        logger.info("Cleaned up temporary directory", temp_dir=temp_dir)
-                    except Exception as cleanup_error:
-                        logger.warning("Failed to clean up temporary directory",
-                                     temp_dir=temp_dir,
-                                     error=str(cleanup_error))
+            except Exception as e:
+                # Handle any unexpected errors during extraction
+                logger.error("Unexpected error during extraction", job_id=job_id, error=str(e))
+                job.status = "failed"
+                job.error_message = str(e)
+                job.completed_at = datetime.now(timezone.utc)
+                db_session.commit()
 
         except Exception as e:
             logger.error("Restore execution failed",
