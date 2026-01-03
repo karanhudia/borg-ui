@@ -288,6 +288,10 @@ class BorgInterface:
         if dry_run:
             cmd.append("--dry-run")
 
+        # Skip extended attributes and ACLs to avoid errors on filesystems that don't support them
+        # This prevents "Operation not supported" errors when extracting files with NFS4 ACLs, etc.
+        cmd.extend(["--noacls", "--noxattrs", "--noflags"])
+
         cmd.append(f"{repository}::{archive}")
 
         # Add paths to extract
