@@ -714,11 +714,19 @@ export default function Repositories() {
 
     // Add algorithm (unless it's 'none')
     if (algorithm !== 'none') {
-      parts.push(algorithm)
+      // Special case: 'auto' algorithm requires a fallback compression algorithm
+      // Format: auto,FALLBACK where FALLBACK is the compression to use if data is compressible
+      if (algorithm === 'auto') {
+        // When 'auto' is selected, it should be 'auto,lz4' (or another algorithm)
+        // The 'auto' algorithm by itself is invalid - Borg requires a fallback
+        parts.push('auto', 'lz4') // Default to lz4 as fallback
+      } else {
+        parts.push(algorithm)
 
-      // Add level if specified (but not for 'auto' algorithm as it doesn't support levels)
-      if (level && algorithm !== 'auto') {
-        parts.push(level)
+        // Add level if specified
+        if (level) {
+          parts.push(level)
+        }
       }
     } else {
       parts.push('none')
@@ -1194,47 +1202,55 @@ export default function Repositories() {
                                   : 'Leave empty for default'
                           }
                           helperText={
-                            repositoryForm.compressionAlgorithm === 'zstd'
-                              ? 'zstd: Level 1-22. Higher = better compression but slower.'
-                              : repositoryForm.compressionAlgorithm === 'zlib'
-                                ? 'zlib: Level 0-9. Level 0 means no compression (use "none" instead).'
-                                : repositoryForm.compressionAlgorithm === 'lzma'
-                                  ? 'lzma: Level 0-9. Levels above 6 are pointless and waste CPU/RAM.'
-                                  : 'Leave empty to use default level.'
+                            repositoryForm.compressionAlgorithm === 'auto'
+                              ? 'Auto algorithm uses lz4 as fallback. Level setting not applicable.'
+                              : repositoryForm.compressionAlgorithm === 'zstd'
+                                ? 'zstd: Level 1-22. Higher = better compression but slower.'
+                                : repositoryForm.compressionAlgorithm === 'zlib'
+                                  ? 'zlib: Level 0-9. Level 0 means no compression (use "none" instead).'
+                                  : repositoryForm.compressionAlgorithm === 'lzma'
+                                    ? 'lzma: Level 0-9. Levels above 6 are pointless and waste CPU/RAM.'
+                                    : 'Leave empty to use default level.'
                           }
                           fullWidth
+                          disabled={repositoryForm.compressionAlgorithm === 'auto'}
                         />
 
-                        <FormControlLabel
-                          control={
-                            <Checkbox
-                              checked={repositoryForm.compressionAutoDetect}
-                              onChange={(e) => {
-                                const newAutoDetect = e.target.checked
-                                setRepositoryForm({
-                                  ...repositoryForm,
-                                  compressionAutoDetect: newAutoDetect,
-                                  compression: buildCompressionString(
-                                    repositoryForm.compressionAlgorithm,
-                                    repositoryForm.compressionLevel,
-                                    newAutoDetect,
-                                    repositoryForm.compressionObfuscate
-                                  ),
-                                })
-                              }}
-                            />
-                          }
-                          label="Auto-detect compressibility (auto,C[,L])"
-                        />
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ mt: -1, mb: 1, display: 'block' }}
-                        >
-                          Uses lz4 to test if data is compressible. For incompressible data (e.g.,
-                          media files), uses "none". For compressible data, uses your selected
-                          algorithm.
-                        </Typography>
+                        {repositoryForm.compressionAlgorithm !== 'auto' &&
+                          repositoryForm.compressionAlgorithm !== 'obfuscate' && (
+                            <>
+                              <FormControlLabel
+                                control={
+                                  <Checkbox
+                                    checked={repositoryForm.compressionAutoDetect}
+                                    onChange={(e) => {
+                                      const newAutoDetect = e.target.checked
+                                      setRepositoryForm({
+                                        ...repositoryForm,
+                                        compressionAutoDetect: newAutoDetect,
+                                        compression: buildCompressionString(
+                                          repositoryForm.compressionAlgorithm,
+                                          repositoryForm.compressionLevel,
+                                          newAutoDetect,
+                                          repositoryForm.compressionObfuscate
+                                        ),
+                                      })
+                                    }}
+                                  />
+                                }
+                                label="Auto-detect compressibility (auto,C[,L])"
+                              />
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ mt: -1, mb: 1, display: 'block' }}
+                              >
+                                Uses lz4 to test if data is compressible. For incompressible data
+                                (e.g., media files), uses "none". For compressible data, uses your
+                                selected algorithm.
+                              </Typography>
+                            </>
+                          )}
 
                         <TextField
                           label="Obfuscate Spec (Optional)"
@@ -1776,47 +1792,55 @@ export default function Repositories() {
                                   : 'Leave empty for default'
                           }
                           helperText={
-                            editForm.compressionAlgorithm === 'zstd'
-                              ? 'zstd: Level 1-22. Higher = better compression but slower.'
-                              : editForm.compressionAlgorithm === 'zlib'
-                                ? 'zlib: Level 0-9. Level 0 means no compression (use "none" instead).'
-                                : editForm.compressionAlgorithm === 'lzma'
-                                  ? 'lzma: Level 0-9. Levels above 6 are pointless and waste CPU/RAM.'
-                                  : 'Leave empty to use default level.'
+                            editForm.compressionAlgorithm === 'auto'
+                              ? 'Auto algorithm uses lz4 as fallback. Level setting not applicable.'
+                              : editForm.compressionAlgorithm === 'zstd'
+                                ? 'zstd: Level 1-22. Higher = better compression but slower.'
+                                : editForm.compressionAlgorithm === 'zlib'
+                                  ? 'zlib: Level 0-9. Level 0 means no compression (use "none" instead).'
+                                  : editForm.compressionAlgorithm === 'lzma'
+                                    ? 'lzma: Level 0-9. Levels above 6 are pointless and waste CPU/RAM.'
+                                    : 'Leave empty to use default level.'
                           }
                           fullWidth
+                          disabled={editForm.compressionAlgorithm === 'auto'}
                         />
 
-                        <FormControlLabel
-                          control={
-                            <Checkbox
-                              checked={editForm.compressionAutoDetect}
-                              onChange={(e) => {
-                                const newAutoDetect = e.target.checked
-                                setEditForm({
-                                  ...editForm,
-                                  compressionAutoDetect: newAutoDetect,
-                                  compression: buildCompressionString(
-                                    editForm.compressionAlgorithm,
-                                    editForm.compressionLevel,
-                                    newAutoDetect,
-                                    editForm.compressionObfuscate
-                                  ),
-                                })
-                              }}
-                            />
-                          }
-                          label="Auto-detect compressibility (auto,C[,L])"
-                        />
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ mt: -1, mb: 1, display: 'block' }}
-                        >
-                          Uses lz4 to test if data is compressible. For incompressible data (e.g.,
-                          media files), uses "none". For compressible data, uses your selected
-                          algorithm.
-                        </Typography>
+                        {editForm.compressionAlgorithm !== 'auto' &&
+                          editForm.compressionAlgorithm !== 'obfuscate' && (
+                            <>
+                              <FormControlLabel
+                                control={
+                                  <Checkbox
+                                    checked={editForm.compressionAutoDetect}
+                                    onChange={(e) => {
+                                      const newAutoDetect = e.target.checked
+                                      setEditForm({
+                                        ...editForm,
+                                        compressionAutoDetect: newAutoDetect,
+                                        compression: buildCompressionString(
+                                          editForm.compressionAlgorithm,
+                                          editForm.compressionLevel,
+                                          newAutoDetect,
+                                          editForm.compressionObfuscate
+                                        ),
+                                      })
+                                    }}
+                                  />
+                                }
+                                label="Auto-detect compressibility (auto,C[,L])"
+                              />
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ mt: -1, mb: 1, display: 'block' }}
+                              >
+                                Uses lz4 to test if data is compressible. For incompressible data
+                                (e.g., media files), uses "none". For compressible data, uses your
+                                selected algorithm.
+                              </Typography>
+                            </>
+                          )}
 
                         <TextField
                           label="Obfuscate Spec (Optional)"
