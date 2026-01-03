@@ -1128,13 +1128,17 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
                 )
 
                 if compact_result.get("success"):
+                    # Update timestamps on both scheduled job and repository
                     scheduled_job.last_compact = datetime.now(timezone.utc)
+                    repo.last_compact = datetime.now(timezone.utc)
                     backup_job.maintenance_status = "compact_completed"
 
-                    # Update CompactJob record
+                    # Update CompactJob record with actual compact output
                     compact_job.status = "completed"
                     compact_job.completed_at = datetime.now(timezone.utc)
-                    compact_job.logs = "Scheduled compact completed successfully"
+                    # Use actual compact logs from borg command output
+                    compact_logs = compact_result.get("stdout", "") or compact_result.get("output", "")
+                    compact_job.logs = compact_logs if compact_logs else "Scheduled compact completed successfully"
 
                     db.commit()
                     logger.info("Scheduled compact completed", scheduled_job_id=scheduled_job_id, compact_job_id=compact_job.id)
