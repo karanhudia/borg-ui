@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
@@ -43,7 +43,7 @@ import {
   RefreshCw,
   X,
 } from 'lucide-react'
-import { scheduleAPI, repositoriesAPI, backupAPI } from '../services/api'
+import { scheduleAPI, repositoriesAPI, backupAPI, scriptsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import RepositoryCell from '../components/RepositoryCell'
 import {
@@ -57,16 +57,18 @@ import {
 import BackupJobsTable from '../components/BackupJobsTable'
 import StatusBadge from '../components/StatusBadge'
 import { TerminalLogViewer } from '../components/TerminalLogViewer'
-import ScheduledChecksSection from '../components/ScheduledChecksSection'
+import ScheduledChecksSection, {
+  ScheduledChecksSectionRef,
+} from '../components/ScheduledChecksSection'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
 
 interface ScheduledJob {
   id: number
   name: string
   cron_expression: string
-  repository: string | null  // Legacy single-repo
-  repository_id: number | null  // Single-repo by ID
-  repository_ids: number[] | null  // Multi-repo
+  repository: string | null // Legacy single-repo
+  repository_id: number | null // Single-repo by ID
+  repository_ids: number[] | null // Multi-repo
   enabled: boolean
   last_run: string | null
   next_run: string | null
@@ -74,9 +76,9 @@ interface ScheduledJob {
   updated_at: string | null
   description: string | null
   archive_name_template: string | null
-  run_repository_scripts: boolean  // Whether to run per-repository scripts
-  pre_backup_script_id: number | null  // Schedule-level pre-backup script
-  post_backup_script_id: number | null  // Schedule-level post-backup script
+  run_repository_scripts: boolean // Whether to run per-repository scripts
+  pre_backup_script_id: number | null // Schedule-level pre-backup script
+  post_backup_script_id: number | null // Schedule-level post-backup script
   run_prune_after: boolean
   run_compact_after: boolean
   prune_keep_hourly: number
@@ -129,6 +131,7 @@ const Schedule: React.FC = () => {
   const [showCronBuilder, setShowCronBuilder] = useState(false)
   const [deleteConfirmJob, setDeleteConfirmJob] = useState<ScheduledJob | null>(null)
   const [selectedBackupJob, setSelectedBackupJob] = useState<BackupJob | null>(null)
+  const scheduledChecksSectionRef = useRef<ScheduledChecksSectionRef>(null)
 
   // Redirect /schedule to /schedule/backups
   useEffect(() => {
@@ -179,13 +182,7 @@ const Schedule: React.FC = () => {
   // Get scripts library
   const { data: scriptsData } = useQuery({
     queryKey: ['scripts'],
-    queryFn: async () => {
-      const response = await fetch('/api/scripts', {
-        credentials: 'include',
-      })
-      if (!response.ok) throw new Error('Failed to fetch scripts')
-      return response.json()
-    },
+    queryFn: () => scriptsAPI.list(),
   })
 
   // Get upcoming jobs
@@ -282,8 +279,8 @@ const Schedule: React.FC = () => {
   const [createForm, setCreateForm] = useState({
     name: '',
     cron_expression: '0 2 * * *',
-    repository: '',  // Keep for backward compatibility
-    repository_ids: [] as number[],  // Multi-repo selection
+    repository: '', // Keep for backward compatibility
+    repository_ids: [] as number[], // Multi-repo selection
     enabled: true,
     description: '',
     archive_name_template: '{job_name}-{now}',
@@ -610,7 +607,11 @@ const Schedule: React.FC = () => {
         if (job.repository_ids && job.repository_ids.length > 0) {
           const repos = repositories.filter((r: any) => job.repository_ids?.includes(r.id))
           if (repos.length === 0) {
-            return <Typography variant="caption" color="text.secondary">Unknown</Typography>
+            return (
+              <Typography variant="caption" color="text.secondary">
+                Unknown
+              </Typography>
+            )
           }
           return (
             <Box>
@@ -642,15 +643,14 @@ const Schedule: React.FC = () => {
         if (job.repository_id) {
           const repo = repositories.find((r: any) => r.id === job.repository_id)
           if (repo) {
-            return (
-              <RepositoryCell
-                repositoryName={repo.name}
-                repositoryPath={repo.path}
-              />
-            )
+            return <RepositoryCell repositoryName={repo.name} repositoryPath={repo.path} />
           }
         }
-        return <Typography variant="caption" color="text.secondary">Unknown</Typography>
+        return (
+          <Typography variant="caption" color="text.secondary">
+            Unknown
+          </Typography>
+        )
       },
     },
     {
@@ -815,6 +815,27 @@ const Schedule: React.FC = () => {
             Manage automated backups and repository checks
           </Typography>
         </Box>
+
+        {/* Action Button */}
+        {currentTab === 0 ? (
+          <Button
+            variant="contained"
+            startIcon={<Plus size={18} />}
+            onClick={openCreateModal}
+            disabled={repositories.length === 0}
+          >
+            Create Backup Schedule
+          </Button>
+        ) : (
+          <Button
+            variant="contained"
+            startIcon={<Plus size={18} />}
+            onClick={() => scheduledChecksSectionRef.current?.openAddDialog()}
+            disabled={repositories.length === 0}
+          >
+            Add Check Schedule
+          </Button>
+        )}
       </Box>
 
       {/* Tabs */}
@@ -828,18 +849,6 @@ const Schedule: React.FC = () => {
       {/* Tab Content: Backup Jobs */}
       {currentTab === 0 && (
         <Box>
-          {/* Action Button */}
-          <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button
-              variant="contained"
-              startIcon={<Plus size={18} />}
-              onClick={openCreateModal}
-              disabled={repositories.length === 0}
-            >
-              Create Backup Schedule
-            </Button>
-          </Box>
-
           {/* No repositories warning */}
           {repositories.length === 0 && (
             <Alert severity="info" sx={{ mb: 3 }}>
@@ -1083,9 +1092,9 @@ const Schedule: React.FC = () => {
                           {job.repository_ids && job.repository_ids.length > 0
                             ? `${job.repository_ids.length} repositories`
                             : job.repository_id
-                            ? repositories.find((r: any) => r.id === job.repository_id)?.name ||
-                              'Unknown'
-                            : getRepositoryName(job.repository)}
+                              ? repositories.find((r: any) => r.id === job.repository_id)?.name ||
+                                'Unknown'
+                              : getRepositoryName(job.repository)}
                         </Typography>
                       </Box>
                       <Box sx={{ textAlign: 'right' }}>
@@ -1168,7 +1177,7 @@ const Schedule: React.FC = () => {
       {/* Tab Content: Repository Checks */}
       {currentTab === 1 && (
         <Box>
-          <ScheduledChecksSection />
+          <ScheduledChecksSection ref={scheduledChecksSectionRef} />
         </Box>
       )}
 
@@ -1205,12 +1214,16 @@ const Schedule: React.FC = () => {
                 <Select
                   multiple
                   value={createForm.repository_ids}
-                  onChange={(e) => setCreateForm({ ...createForm, repository_ids: e.target.value as number[] })}
+                  onChange={(e) =>
+                    setCreateForm({ ...createForm, repository_ids: e.target.value as number[] })
+                  }
                   label="Repositories"
                   renderValue={(selected) => {
                     const selectedIds = selected as number[]
                     if (selectedIds.length === 0) return 'Select repositories...'
-                    const selectedRepos = repositories.filter((r: any) => selectedIds.includes(r.id))
+                    const selectedRepos = repositories.filter((r: any) =>
+                      selectedIds.includes(r.id)
+                    )
                     return selectedRepos.map((r: any) => r.name).join(', ')
                   }}
                   sx={{ fontSize: '1.1rem', minHeight: 56 }}
@@ -1345,12 +1358,6 @@ const Schedule: React.FC = () => {
                 </Box>
               )}
 
-              {repositories.some((repo: any) => repo.mode === 'observe') && (
-                <Alert severity="info">
-                  Observability-only repositories cannot be used for scheduled backups.
-                </Alert>
-              )}
-
               <Box>
                 <TextField
                   label="Schedule"
@@ -1440,44 +1447,64 @@ const Schedule: React.FC = () => {
                   <Typography variant="subtitle2" fontWeight={600} gutterBottom>
                     Schedule-Level Scripts
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
-                    These scripts run once per schedule (e.g., wake server before all backups, shutdown after)
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    display="block"
+                    sx={{ mb: 2 }}
+                  >
+                    These scripts run once per schedule (e.g., wake server before all backups,
+                    shutdown after)
                   </Typography>
 
                   <Stack spacing={2}>
                     <FormControl fullWidth size="medium">
-                      <InputLabel sx={{ fontSize: '1.1rem' }}>Pre-Backup Script (runs once before all backups)</InputLabel>
+                      <InputLabel sx={{ fontSize: '1.1rem' }}>
+                        Pre-Backup Script (runs once before all backups)
+                      </InputLabel>
                       <Select
                         value={createForm.pre_backup_script_id || ''}
-                        onChange={(e) => setCreateForm({ ...createForm, pre_backup_script_id: e.target.value ? Number(e.target.value) : null })}
+                        onChange={(e) =>
+                          setCreateForm({
+                            ...createForm,
+                            pre_backup_script_id: e.target.value ? Number(e.target.value) : null,
+                          })
+                        }
                         label="Pre-Backup Script (runs once before all backups)"
                         sx={{ fontSize: '1.1rem', minHeight: 56 }}
                       >
                         <MenuItem value="">
                           <em>None</em>
                         </MenuItem>
-                        {scriptsData?.data?.scripts?.map((script: any) => (
+                        {scriptsData?.data?.map((script: any) => (
                           <MenuItem key={script.id} value={script.id}>
-                            {script.name} {script.continue_on_failure && '(continues on failure)'}
+                            {script.name}
                           </MenuItem>
                         ))}
                       </Select>
                     </FormControl>
 
                     <FormControl fullWidth size="medium">
-                      <InputLabel sx={{ fontSize: '1.1rem' }}>Post-Backup Script (runs once after all backups)</InputLabel>
+                      <InputLabel sx={{ fontSize: '1.1rem' }}>
+                        Post-Backup Script (runs once after all backups)
+                      </InputLabel>
                       <Select
                         value={createForm.post_backup_script_id || ''}
-                        onChange={(e) => setCreateForm({ ...createForm, post_backup_script_id: e.target.value ? Number(e.target.value) : null })}
+                        onChange={(e) =>
+                          setCreateForm({
+                            ...createForm,
+                            post_backup_script_id: e.target.value ? Number(e.target.value) : null,
+                          })
+                        }
                         label="Post-Backup Script (runs once after all backups)"
                         sx={{ fontSize: '1.1rem', minHeight: 56 }}
                       >
                         <MenuItem value="">
                           <em>None</em>
                         </MenuItem>
-                        {scriptsData?.data?.scripts?.map((script: any) => (
+                        {scriptsData?.data?.map((script: any) => (
                           <MenuItem key={script.id} value={script.id}>
-                            {script.name} {script.continue_on_failure && '(continues on failure)'}
+                            {script.name}
                           </MenuItem>
                         ))}
                       </Select>
@@ -1487,14 +1514,20 @@ const Schedule: React.FC = () => {
                       control={
                         <Checkbox
                           checked={createForm.run_repository_scripts}
-                          onChange={(e) => setCreateForm({ ...createForm, run_repository_scripts: e.target.checked })}
+                          onChange={(e) =>
+                            setCreateForm({
+                              ...createForm,
+                              run_repository_scripts: e.target.checked,
+                            })
+                          }
                         />
                       }
                       label={
                         <Box>
                           <Typography variant="body2">Run repository-level scripts</Typography>
                           <Typography variant="caption" color="text.secondary">
-                            If enabled, each repository's pre/post scripts will run during its backup
+                            If enabled, each repository's pre/post scripts will run during its
+                            backup
                           </Typography>
                         </Box>
                       }
@@ -1680,12 +1713,16 @@ const Schedule: React.FC = () => {
                 <Select
                   multiple
                   value={editForm.repository_ids}
-                  onChange={(e) => setEditForm({ ...editForm, repository_ids: e.target.value as number[] })}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, repository_ids: e.target.value as number[] })
+                  }
                   label="Repositories"
                   renderValue={(selected) => {
                     const selectedIds = selected as number[]
                     if (selectedIds.length === 0) return 'Select repositories...'
-                    const selectedRepos = repositories.filter((r: any) => selectedIds.includes(r.id))
+                    const selectedRepos = repositories.filter((r: any) =>
+                      selectedIds.includes(r.id)
+                    )
                     return selectedRepos.map((r: any) => r.name).join(', ')
                   }}
                   sx={{ fontSize: '1.1rem', minHeight: 56 }}
@@ -1820,12 +1857,6 @@ const Schedule: React.FC = () => {
                 </Box>
               )}
 
-              {repositories.some((repo: any) => repo.mode === 'observe') && (
-                <Alert severity="info">
-                  Observability-only repositories cannot be used for scheduled backups.
-                </Alert>
-              )}
-
               <Box>
                 <TextField
                   label="Schedule"
@@ -1911,44 +1942,64 @@ const Schedule: React.FC = () => {
                   <Typography variant="subtitle2" fontWeight={600} gutterBottom>
                     Schedule-Level Scripts
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
-                    These scripts run once per schedule (e.g., wake server before all backups, shutdown after)
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    display="block"
+                    sx={{ mb: 2 }}
+                  >
+                    These scripts run once per schedule (e.g., wake server before all backups,
+                    shutdown after)
                   </Typography>
 
                   <Stack spacing={2}>
                     <FormControl fullWidth size="medium">
-                      <InputLabel sx={{ fontSize: '1.1rem' }}>Pre-Backup Script (runs once before all backups)</InputLabel>
+                      <InputLabel sx={{ fontSize: '1.1rem' }}>
+                        Pre-Backup Script (runs once before all backups)
+                      </InputLabel>
                       <Select
                         value={editForm.pre_backup_script_id || ''}
-                        onChange={(e) => setEditForm({ ...editForm, pre_backup_script_id: e.target.value ? Number(e.target.value) : null })}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            pre_backup_script_id: e.target.value ? Number(e.target.value) : null,
+                          })
+                        }
                         label="Pre-Backup Script (runs once before all backups)"
                         sx={{ fontSize: '1.1rem', minHeight: 56 }}
                       >
                         <MenuItem value="">
                           <em>None</em>
                         </MenuItem>
-                        {scriptsData?.data?.scripts?.map((script: any) => (
+                        {scriptsData?.data?.map((script: any) => (
                           <MenuItem key={script.id} value={script.id}>
-                            {script.name} {script.continue_on_failure && '(continues on failure)'}
+                            {script.name}
                           </MenuItem>
                         ))}
                       </Select>
                     </FormControl>
 
                     <FormControl fullWidth size="medium">
-                      <InputLabel sx={{ fontSize: '1.1rem' }}>Post-Backup Script (runs once after all backups)</InputLabel>
+                      <InputLabel sx={{ fontSize: '1.1rem' }}>
+                        Post-Backup Script (runs once after all backups)
+                      </InputLabel>
                       <Select
                         value={editForm.post_backup_script_id || ''}
-                        onChange={(e) => setEditForm({ ...editForm, post_backup_script_id: e.target.value ? Number(e.target.value) : null })}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            post_backup_script_id: e.target.value ? Number(e.target.value) : null,
+                          })
+                        }
                         label="Post-Backup Script (runs once after all backups)"
                         sx={{ fontSize: '1.1rem', minHeight: 56 }}
                       >
                         <MenuItem value="">
                           <em>None</em>
                         </MenuItem>
-                        {scriptsData?.data?.scripts?.map((script: any) => (
+                        {scriptsData?.data?.map((script: any) => (
                           <MenuItem key={script.id} value={script.id}>
-                            {script.name} {script.continue_on_failure && '(continues on failure)'}
+                            {script.name}
                           </MenuItem>
                         ))}
                       </Select>
@@ -1958,14 +2009,17 @@ const Schedule: React.FC = () => {
                       control={
                         <Checkbox
                           checked={editForm.run_repository_scripts}
-                          onChange={(e) => setEditForm({ ...editForm, run_repository_scripts: e.target.checked })}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, run_repository_scripts: e.target.checked })
+                          }
                         />
                       }
                       label={
                         <Box>
                           <Typography variant="body2">Run repository-level scripts</Typography>
                           <Typography variant="caption" color="text.secondary">
-                            If enabled, each repository's pre/post scripts will run during its backup
+                            If enabled, each repository's pre/post scripts will run during its
+                            backup
                           </Typography>
                         </Box>
                       }

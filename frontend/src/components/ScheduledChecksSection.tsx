@@ -1,11 +1,10 @@
-import React, { useState } from 'react'
+import { useState, useImperativeHandle, forwardRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
   Card,
   CardContent,
   Typography,
-  Button,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -20,8 +19,9 @@ import {
   Chip,
   Stack,
   Alert,
+  Button,
 } from '@mui/material'
-import { Plus, Edit, Trash2, Play, Shield } from 'lucide-react'
+import { Edit, Trash2, Play, Shield } from 'lucide-react'
 import { repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { formatDate, formatRelativeTime } from '../utils/dateUtils'
@@ -40,7 +40,11 @@ interface ScheduledCheck {
   enabled: boolean
 }
 
-const ScheduledChecksSection: React.FC = () => {
+export interface ScheduledChecksSectionRef {
+  openAddDialog: () => void
+}
+
+const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref) => {
   const queryClient = useQueryClient()
   const [showDialog, setShowDialog] = useState(false)
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(null)
@@ -146,6 +150,11 @@ const ScheduledChecksSection: React.FC = () => {
     setShowDialog(true)
   }
 
+  // Expose openAddDialog to parent via ref
+  useImperativeHandle(ref, () => ({
+    openAddDialog,
+  }))
+
   const handleSubmit = () => {
     if (!selectedRepositoryId) {
       toast.error('Please select a repository')
@@ -243,26 +252,6 @@ const ScheduledChecksSection: React.FC = () => {
 
   return (
     <Box>
-      {/* Header */}
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
-          <Typography variant="h5" fontWeight={600} gutterBottom>
-            Scheduled Checks
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Automatically verify repository integrity on a schedule
-          </Typography>
-        </Box>
-        <Button
-          variant="outlined"
-          startIcon={<Plus size={18} />}
-          onClick={openAddDialog}
-          disabled={repositories.length === 0}
-        >
-          Add Check Schedule
-        </Button>
-      </Box>
-
       {/* No repositories warning */}
       {repositories.length === 0 && (
         <Alert severity="info" sx={{ mb: 3 }}>
@@ -452,6 +441,8 @@ const ScheduledChecksSection: React.FC = () => {
       </Dialog>
     </Box>
   )
-}
+})
+
+ScheduledChecksSection.displayName = 'ScheduledChecksSection'
 
 export default ScheduledChecksSection

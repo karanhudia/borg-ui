@@ -759,26 +759,32 @@ async def run_script_from_library(script: Script, db: Session, job_id: int = Non
         db: Database session
         job_id: Optional backup job ID for context
     """
-    from app.services.script_executor import execute_script_async
+    from app.services.script_executor import execute_script
+    from pathlib import Path
 
     try:
         logger.info("Executing schedule script", script_id=script.id, script_name=script.name)
-        result = await execute_script_async(
-            script_id=script.id,
-            repository_id=None,  # Schedule-level scripts don't have a specific repo
-            backup_job_id=job_id,
-            db=db
+
+        # Read script content from file
+        full_path = Path(settings.data_dir) / "scripts" / script.file_path
+        if not full_path.exists():
+            raise Exception(f"Script file not found: {script.file_path}")
+        script_content = full_path.read_text()
+
+        # Execute script
+        result = await execute_script(
+            script=script_content,
+            timeout=float(script.timeout),
+            context=f"schedule:{script.name}"
         )
 
-        if not result.get("success") and not script.continue_on_failure:
+        if not result.get("success"):
             raise Exception(f"Script {script.name} failed: {result.get('stderr', 'Unknown error')}")
 
         return result
     except Exception as e:
         logger.error("Script execution failed", script_name=script.name, error=str(e))
-        if not script.continue_on_failure:
-            raise
-        return {"success": False, "error": str(e)}
+        raise
 
 
 async def execute_multi_repo_schedule_by_id(scheduled_job_id: int):
@@ -850,10 +856,18 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                 logger.warning("Pre-backup script not found", script_id=scheduled_job.pre_backup_script_id)
         except Exception as e:
             logger.error("Pre-backup script failed, aborting schedule", error=str(e))
-            return  # Abort if pre-script fails and continue_on_failure is False
+            return  # Abort entire schedule if pre-backup script fails
 
     # 2. Execute backups for each repository sequentially
     backup_jobs = []
+
+    # Generate timestamp once for this schedule execution (with milliseconds for uniqueness)
+    now = datetime.now()
+    timestamp_now = now.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]  # Include milliseconds (3 digits)
+    timestamp_date = now.strftime('%Y-%m-%d')
+    timestamp_time = now.strftime('%H:%M:%S')
+    timestamp_unix = str(int(now.timestamp() * 1000))  # Unix timestamp in milliseconds
+
     for repo in repositories:
         try:
             logger.info("Starting backup for repository", repo_name=repo.name, repo_path=repo.path)
@@ -875,12 +889,12 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                 archive_name = scheduled_job.archive_name_template
                 archive_name = archive_name.replace("{job_name}", scheduled_job.name)
                 archive_name = archive_name.replace("{repo_name}", repo.name)
-                archive_name = archive_name.replace("{now}", datetime.now().strftime('%Y-%m-%dT%H:%M:%S'))
-                archive_name = archive_name.replace("{date}", datetime.now().strftime('%Y-%m-%d'))
-                archive_name = archive_name.replace("{time}", datetime.now().strftime('%H:%M:%S'))
-                archive_name = archive_name.replace("{timestamp}", str(int(datetime.now().timestamp())))
+                archive_name = archive_name.replace("{now}", timestamp_now)
+                archive_name = archive_name.replace("{date}", timestamp_date)
+                archive_name = archive_name.replace("{time}", timestamp_time)
+                archive_name = archive_name.replace("{timestamp}", timestamp_unix)
             else:
-                archive_name = f"{scheduled_job.name}-{repo.name}-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
+                archive_name = f"{scheduled_job.name}-{repo.name}-{timestamp_now}"
 
             # Run repository-level pre-script if enabled
             if scheduled_job.run_repository_scripts and repo.pre_backup_script_id:
@@ -909,13 +923,57 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
             # Run prune/compact if enabled and backup succeeded
             db.refresh(backup_job)
             if backup_job.status in ["completed", "completed_with_warnings"]:
-                # Call the existing maintenance function for this specific backup
-                await execute_scheduled_backup_with_maintenance(
-                    backup_job.id,
-                    repo.path,
-                    scheduled_job.id,
-                    archive_name=archive_name
-                )
+                # Run prune if enabled
+                if scheduled_job.run_prune_after:
+                    try:
+                        logger.info("Running scheduled prune", repository=repo.path)
+                        prune_job = PruneJob(
+                            repository_id=repo.id,
+                            repository_path=repo.path,
+                            status="pending",
+                            scheduled_prune=True
+                        )
+                        db.add(prune_job)
+                        db.commit()
+                        db.refresh(prune_job)
+
+                        await borg.prune_repository(
+                            repository_path=repo.path,
+                            keep_hourly=scheduled_job.prune_keep_hourly,
+                            keep_daily=scheduled_job.prune_keep_daily,
+                            keep_weekly=scheduled_job.prune_keep_weekly,
+                            keep_monthly=scheduled_job.prune_keep_monthly,
+                            keep_quarterly=scheduled_job.prune_keep_quarterly,
+                            keep_yearly=scheduled_job.prune_keep_yearly,
+                            job_id=prune_job.id,
+                            db=db
+                        )
+                        logger.info("Scheduled prune completed", repository=repo.path)
+                    except Exception as e:
+                        logger.error("Scheduled prune failed", repository=repo.path, error=str(e))
+
+                # Run compact if enabled
+                if scheduled_job.run_compact_after:
+                    try:
+                        logger.info("Running scheduled compact", repository=repo.path)
+                        compact_job = CompactJob(
+                            repository_id=repo.id,
+                            repository_path=repo.path,
+                            status="pending",
+                            scheduled_compact=True
+                        )
+                        db.add(compact_job)
+                        db.commit()
+                        db.refresh(compact_job)
+
+                        await borg.compact_repository(
+                            repository_path=repo.path,
+                            job_id=compact_job.id,
+                            db=db
+                        )
+                        logger.info("Scheduled compact completed", repository=repo.path)
+                    except Exception as e:
+                        logger.error("Scheduled compact failed", repository=repo.path, error=str(e))
 
             logger.info("Backup completed for repository", repo_name=repo.name, status=backup_job.status)
 

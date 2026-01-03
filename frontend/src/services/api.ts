@@ -326,4 +326,21 @@ export const configExportImportAPI = {
   listExportableRepositories: () => api.get('/config/export/repositories'),
 }
 
+export const scriptsAPI = {
+  // List all scripts from library
+  list: (params?: { category?: string; search?: string }) => api.get('/scripts', { params }),
+
+  // Get a specific script
+  get: (scriptId: number) => api.get(`/scripts/${scriptId}`),
+
+  // Create a new script
+  create: (data: any) => api.post('/scripts', data),
+
+  // Update a script
+  update: (scriptId: number, data: any) => api.put(`/scripts/${scriptId}`, data),
+
+  // Delete a script
+  delete: (scriptId: number) => api.delete(`/scripts/${scriptId}`),
+}
+
 export default api
