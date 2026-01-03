@@ -14,13 +14,8 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  Chip,
-  Stack,
 } from '@mui/material'
-import { History, RefreshCw, Info, ChevronDown } from 'lucide-react'
+import { History, RefreshCw, Info } from 'lucide-react'
 import { activityAPI } from '../services/api'
 import BackupJobsTable from '../components/BackupJobsTable'
 import { TerminalLogViewer } from '../components/TerminalLogViewer'
@@ -98,64 +93,10 @@ const Activity: React.FC = () => {
     activityAPI.downloadLogs(job.type, job.id)
   }
 
-  // Group activities by schedule for multi-repo schedules
+  // Just return all activities without grouping
   const processedActivities = React.useMemo(() => {
     if (!activities) return { grouped: [], individual: [] }
-
-    const scheduleGroups: { [key: string]: ActivityItem[] } = {}
-    const individualActivities: ActivityItem[] = []
-
-    // Group backup jobs by schedule_id
-    activities.forEach((activity: ActivityItem) => {
-      if (
-        activity.type === 'backup' &&
-        activity.schedule_id &&
-        activity.triggered_by === 'schedule'
-      ) {
-        const key = `schedule-${activity.schedule_id}`
-        if (!scheduleGroups[key]) {
-          scheduleGroups[key] = []
-        }
-        scheduleGroups[key].push(activity)
-      } else {
-        individualActivities.push(activity)
-      }
-    })
-
-    // Convert schedule groups to array, filtering out single-job schedules
-    const groupedSchedules = Object.entries(scheduleGroups)
-      .filter(([_, jobs]) => jobs.length > 1) // Only group if multiple repos
-      .map(([key, jobs]) => ({
-        key,
-        schedule_id: jobs[0].schedule_id!,
-        schedule_name: jobs[0].schedule_name || `Schedule #${jobs[0].schedule_id}`,
-        jobs: jobs.sort((a, b) => {
-          // Sort by started_at within group
-          if (!a.started_at) return 1
-          if (!b.started_at) return -1
-          return new Date(a.started_at).getTime() - new Date(b.started_at).getTime()
-        }),
-        // Aggregate status: if any failed, show failed; if any running, show running; else completed
-        overall_status:
-          jobs.some((j) => j.status === 'failed')
-            ? 'failed'
-            : jobs.some((j) => j.status === 'running')
-            ? 'running'
-            : jobs.some((j) => j.status === 'completed_with_warnings')
-            ? 'completed_with_warnings'
-            : 'completed',
-        started_at: jobs[0].started_at, // Use first job's start time
-        completed_at: jobs[jobs.length - 1].completed_at, // Use last job's completion time
-      }))
-
-    // Add single-job schedules back to individual activities
-    Object.entries(scheduleGroups)
-      .filter(([_, jobs]) => jobs.length === 1)
-      .forEach(([_, jobs]) => {
-        individualActivities.push(...jobs)
-      })
-
-    return { grouped: groupedSchedules, individual: individualActivities }
+    return { grouped: [], individual: activities }
   }, [activities])
 
   return (
@@ -227,84 +168,26 @@ const Activity: React.FC = () => {
           enableHover={true}
         />
       ) : (
-        <>
-          {/* Grouped Multi-Repo Schedules */}
-          {processedActivities.grouped.map((group) => (
-            <Accordion key={group.key} sx={{ mb: 2 }}>
-              <AccordionSummary
-                expandIcon={<ChevronDown size={20} />}
-                sx={{
-                  '&:hover': { bgcolor: 'action.hover' },
-                }}
-              >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%', pr: 2 }}>
-                  <Box sx={{ flexGrow: 1 }}>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Typography variant="subtitle1" fontWeight={600}>
-                        {group.schedule_name}
-                      </Typography>
-                      <Chip
-                        label={`${group.jobs.length} repositories`}
-                        size="small"
-                        color="primary"
-                        variant="outlined"
-                      />
-                      <StatusBadge status={group.overall_status} />
-                    </Stack>
-                    <Typography variant="caption" color="text.secondary">
-                      Started: {group.started_at ? new Date(group.started_at).toLocaleString() : 'N/A'}
-                      {group.completed_at &&
-                        ` • Completed: ${new Date(group.completed_at).toLocaleString()}`}
-                    </Typography>
-                  </Box>
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails>
-                <BackupJobsTable
-                  jobs={group.jobs}
-                  showTypeColumn={false}
-                  showTriggerColumn={false}
-                  loading={false}
-                  actions={{
-                    viewLogs: true,
-                    downloadLogs: true,
-                  }}
-                  onViewLogs={handleViewLogs}
-                  onDownloadLogs={handleDownloadLogs}
-                  getRowKey={(activity) => `${activity.type}-${activity.id}`}
-                  headerBgColor="transparent"
-                  enableHover={true}
-                />
-              </AccordionDetails>
-            </Accordion>
-          ))}
-
-          {/* Individual Activities */}
-          <BackupJobsTable
-            jobs={processedActivities.individual}
-            showTypeColumn={true}
-            showTriggerColumn={true}
-            loading={false}
-            actions={{
-              viewLogs: true,
-              downloadLogs: true,
-            }}
-            onViewLogs={handleViewLogs}
-            onDownloadLogs={handleDownloadLogs}
-            getRowKey={(activity) => `${activity.type}-${activity.id}`}
-            headerBgColor="background.default"
-            enableHover={true}
-            emptyState={
-              processedActivities.grouped.length === 0
-                ? {
-                    icon: <Info size={48} />,
-                    title: 'No activity found',
-                    description: 'There are no operations matching your filters',
-                  }
-                : undefined
-            }
-          />
-        </>
+        <BackupJobsTable
+          jobs={processedActivities.individual}
+          showTypeColumn={true}
+          showTriggerColumn={true}
+          loading={false}
+          actions={{
+            viewLogs: true,
+            downloadLogs: true,
+          }}
+          onViewLogs={handleViewLogs}
+          onDownloadLogs={handleDownloadLogs}
+          getRowKey={(activity) => `${activity.type}-${activity.id}`}
+          headerBgColor="background.default"
+          enableHover={true}
+          emptyState={{
+            icon: <Info size={48} />,
+            title: 'No activity found',
+            description: 'There are no operations matching your filters',
+          }}
+        />
       )}
 
       {/* Logs Dialog */}
