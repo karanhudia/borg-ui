@@ -9,11 +9,16 @@ from sqlalchemy import text
 
 def upgrade(conn):
     """Add has_keyfile column to repositories table"""
-    conn.execute(text("""
-        ALTER TABLE repositories
-        ADD COLUMN has_keyfile BOOLEAN DEFAULT FALSE
-    """))
-    conn.commit()
+    # Check if column already exists
+    result = conn.execute(text("PRAGMA table_info(repositories)"))
+    columns = [row[1] for row in result]
+
+    if 'has_keyfile' not in columns:
+        conn.execute(text("""
+            ALTER TABLE repositories
+            ADD COLUMN has_keyfile BOOLEAN DEFAULT FALSE
+        """))
+        conn.commit()
 
 def downgrade(conn):
     """Remove has_keyfile column from repositories table"""
