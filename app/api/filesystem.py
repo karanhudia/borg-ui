@@ -13,6 +13,7 @@ from app.core.security import get_current_user
 from app.database.database import get_db
 from sqlalchemy.orm import Session
 from app.database.models import SSHKey
+from app.config import settings
 
 logger = structlog.get_logger()
 
@@ -27,6 +28,7 @@ class FileSystemItem(BaseModel):
     size: Optional[int] = None
     modified: Optional[str] = None
     is_borg_repo: bool = False
+    is_local_mount: bool = False  # Whether this is a host filesystem mount point
     permissions: Optional[str] = None
 
 
@@ -35,6 +37,7 @@ class BrowseResponse(BaseModel):
     current_path: str
     items: List[FileSystemItem]
     parent_path: Optional[str] = None
+    is_inside_local_mount: bool = False  # Whether current path is inside a host mount
 
 
 def is_borg_repository(path: str) -> bool:
@@ -191,7 +194,9 @@ async def browse_local_filesystem(path: str) -> BrowseResponse:
     try:
         # List directory contents
         entries = os.listdir(path)
-        entries.sort(key=lambda x: (not os.path.isdir(os.path.join(path, x)), x.lower()))
+
+        # Get mount points once for reuse
+        mount_points = settings.get_local_mount_points()
 
         for entry in entries:
             try:
@@ -204,6 +209,10 @@ async def browse_local_filesystem(path: str) -> BrowseResponse:
                 if is_dir:
                     is_borg = is_borg_repository(full_path)
 
+                # Check if this path is a local mount point (host filesystem)
+                # Only mark the mount point itself, not its children
+                is_local = is_dir and full_path in mount_points
+
                 item = FileSystemItem(
                     name=entry,
                     path=full_path,
@@ -211,6 +220,7 @@ async def browse_local_filesystem(path: str) -> BrowseResponse:
                     size=stat_info.st_size if not is_dir else None,
                     modified=datetime.fromtimestamp(stat_info.st_mtime, tz=timezone.utc).isoformat(),
                     is_borg_repo=is_borg,
+                    is_local_mount=is_local,
                     permissions=oct(stat_info.st_mode)[-3:]
                 )
                 items.append(item)
@@ -219,13 +229,20 @@ async def browse_local_filesystem(path: str) -> BrowseResponse:
                 logger.debug("Skipping inaccessible item", item=entry, error=str(e))
                 continue
 
+        # Sort items: local mounts first, then directories, then alphabetically
+        items.sort(key=lambda x: (not x.is_local_mount, not x.is_directory, x.name.lower()))
+
         # Get parent path
         parent_path = os.path.dirname(path) if path != "/" else None
+
+        # Check if current path is inside a local mount
+        is_inside_mount = any(path == mp or path.startswith(mp + "/") for mp in mount_points)
 
         return BrowseResponse(
             current_path=path,
             items=items,
-            parent_path=parent_path
+            parent_path=parent_path,
+            is_inside_local_mount=is_inside_mount
         )
 
     except PermissionError:
@@ -365,6 +382,7 @@ async def browse_ssh_filesystem(
                     size=size if not is_dir else None,
                     modified=datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat(),
                     is_borg_repo=is_borg,
+                    is_local_mount=False,  # SSH paths are not local mounts
                     permissions=permissions[1:] if len(permissions) > 1 else None
                 )
                 items.append(item)
@@ -373,16 +391,21 @@ async def browse_ssh_filesystem(
                 logger.debug("Failed to parse ls line", line=line, error=str(e))
                 continue
 
-        # Sort: directories first, then by name
-        items.sort(key=lambda x: (not x.is_directory, x.name.lower()))
+        # Sort items: local mounts first, then directories, then alphabetically
+        items.sort(key=lambda x: (not x.is_local_mount, not x.is_directory, x.name.lower()))
 
         # Get parent path
         parent_path = os.path.dirname(path) if path != "/" else None
 
+        # Check if current path is inside a local mount
+        mount_points = settings.get_local_mount_points()
+        is_inside_mount = any(path == mp or path.startswith(mp + "/") for mp in mount_points)
+
         return BrowseResponse(
             current_path=path,
             items=items,
-            parent_path=parent_path
+            parent_path=parent_path,
+            is_inside_local_mount=is_inside_mount
         )
 
     except subprocess.TimeoutExpired:

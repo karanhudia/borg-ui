@@ -88,6 +88,7 @@ export default function Repositories() {
   const [repositoryModalMode, setRepositoryModalMode] = useState<'create' | 'import'>('create')
   const [newlyCreatedRepositoryId, setNewlyCreatedRepositoryId] = useState<number | null>(null)
   const [editingRepository, setEditingRepository] = useState<Repository | null>(null)
+  const [selectedKeyfile, setSelectedKeyfile] = useState<File | null>(null)
   const [viewingInfoRepository, setViewingInfoRepository] = useState<Repository | null>(null)
   const [checkingRepository, setCheckingRepository] = useState<Repository | null>(null)
   const [compactingRepository, setCompactingRepository] = useState<Repository | null>(null)
@@ -186,13 +187,36 @@ export default function Repositories() {
 
   const importRepositoryMutation = useMutation({
     mutationFn: repositoriesAPI.importRepository,
-    onSuccess: (response: any) => {
+    onSuccess: async (response: any) => {
       const message = response?.data?.message || 'Repository imported successfully'
       const archiveCount = response?.data?.repository?.archive_count || 0
+      const repositoryId = response?.data?.repository?.id
 
-      toast.success(`${message}${archiveCount > 0 ? ` (${archiveCount} archives found)` : ''}`, {
-        duration: 5000,
-      })
+      // Upload keyfile if one was selected and repository uses keyfile encryption
+      if (selectedKeyfile && repositoryId) {
+        try {
+          const formData = new FormData()
+          formData.append('keyfile', selectedKeyfile)
+
+          await repositoriesAPI.uploadKeyfile(repositoryId, formData)
+          toast.success(
+            `${message}${archiveCount > 0 ? ` (${archiveCount} archives found)` : ''} - Keyfile uploaded`,
+            {
+              duration: 5000,
+            }
+          )
+        } catch (error: any) {
+          toast.error(
+            error.response?.data?.detail || 'Repository imported but keyfile upload failed'
+          )
+          // Don't close modal so user can try again
+          return
+        }
+      } else {
+        toast.success(`${message}${archiveCount > 0 ? ` (${archiveCount} archives found)` : ''}`, {
+          duration: 5000,
+        })
+      }
 
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
       queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
@@ -502,6 +526,7 @@ export default function Repositories() {
   const closeRepositoryModal = () => {
     setShowRepositoryModal(false)
     setNewlyCreatedRepositoryId(null)
+    setSelectedKeyfile(null)
   }
 
   const openEditModal = (repository: Repository) => {
@@ -1253,6 +1278,42 @@ export default function Repositories() {
                   placeholder="Enter passphrase"
                   fullWidth
                 />
+              )}
+
+              {/* Keyfile Upload - Only shown during import mode */}
+              {repositoryModalMode === 'import' && (
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Borg Keyfile (Optional)
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    display="block"
+                    sx={{ mb: 1 }}
+                  >
+                    If your repository uses keyfile or keyfile-blake2 encryption, upload the keyfile
+                    here (usually found in ~/.config/borg/keys/)
+                  </Typography>
+                  <Button variant="outlined" component="label" fullWidth>
+                    {selectedKeyfile ? `Selected: ${selectedKeyfile.name}` : 'Choose Keyfile'}
+                    <input
+                      type="file"
+                      hidden
+                      accept=".key,*"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setSelectedKeyfile(e.target.files[0])
+                        }
+                      }}
+                    />
+                  </Button>
+                  {selectedKeyfile && (
+                    <Alert severity="success" sx={{ mt: 1 }}>
+                      Keyfile will be uploaded after repository is imported
+                    </Alert>
+                  )}
+                </Box>
               )}
 
               {/* Source Directories */}

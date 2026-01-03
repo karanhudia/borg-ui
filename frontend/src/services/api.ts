@@ -228,6 +228,13 @@ export const repositoriesAPI = {
     api.put(`/repositories/${id}/check-schedule`, data),
   list: () => api.get('/repositories/'),
   startCheck: (id: number, data: any) => api.post(`/repositories/${id}/check`, data),
+  // Keyfile management
+  uploadKeyfile: (id: number, formData: FormData) =>
+    api.post(`/repositories/${id}/keyfile`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }),
 }
 
 // SSH Keys API

@@ -32,7 +32,8 @@ interface FileSystemItem {
   size?: number
   modified?: string
   is_borg_repo: boolean
-  is_mount_point?: boolean
+  is_local_mount?: boolean // Local host filesystem mount
+  is_mount_point?: boolean // SSH mount point
   ssh_connection?: SSHConnection
   permissions?: string
 }
@@ -87,6 +88,7 @@ export default function FileExplorerDialog({
   // Track current browsing mode (can switch from local to ssh when clicking mount points)
   const [activeConnectionType, setActiveConnectionType] = useState(connectionType)
   const [activeSshConfig, setActiveSshConfig] = useState(sshConfig)
+  const [isInsideLocalMount, setIsInsideLocalMount] = useState(false)
 
   useEffect(() => {
     if (open) {
@@ -145,6 +147,7 @@ export default function FileExplorerDialog({
       const response = await api.get('/filesystem/browse', { params })
       setItems(response.data.items || [])
       setCurrentPath(response.data.current_path)
+      setIsInsideLocalMount(response.data.is_inside_local_mount || false)
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to load directory')
       setItems([])
@@ -282,14 +285,22 @@ export default function FileExplorerDialog({
           <Typography variant="h6" fontWeight={600}>
             {title}
           </Typography>
-          {activeConnectionType === 'ssh' && activeSshConfig && (
+          {activeConnectionType === 'ssh' && activeSshConfig ? (
             <Chip
               label={`${activeSshConfig.username}@${activeSshConfig.host}`}
               size="small"
               color="primary"
               variant="outlined"
             />
-          )}
+          ) : isInsideLocalMount && activeConnectionType === 'local' ? (
+            <Chip
+              icon={<HardDrive size={14} />}
+              label="Host"
+              size="small"
+              color="primary"
+              variant="outlined"
+            />
+          ) : null}
         </Box>
       </DialogTitle>
 
@@ -472,6 +483,8 @@ export default function FileExplorerDialog({
                         <ListItemIcon sx={{ minWidth: 32 }}>
                           {item.is_mount_point ? (
                             <HardDrive size={18} color="#10b981" />
+                          ) : item.is_local_mount ? (
+                            <HardDrive size={18} color="#6366f1" />
                           ) : item.is_borg_repo ? (
                             <Archive size={18} color="#ff6b6b" />
                           ) : item.is_directory ? (
@@ -489,6 +502,14 @@ export default function FileExplorerDialog({
                                   label="Remote"
                                   size="small"
                                   color="success"
+                                  sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600 }}
+                                />
+                              )}
+                              {item.is_local_mount && (
+                                <Chip
+                                  label="Host"
+                                  size="small"
+                                  color="primary"
                                   sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600 }}
                                 />
                               )}

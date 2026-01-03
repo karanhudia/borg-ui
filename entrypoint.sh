@@ -118,6 +118,32 @@ fi
 echo "[$(date)] Deploying SSH keys..."
 python3 /app/app/scripts/deploy_ssh_key.py || echo "[$(date)] Warning: SSH key deployment failed"
 
+# Setup Borg keyfiles directory to persist across container restarts
+# Borg stores keyfiles at ~/.config/borg/keys/ by default, but this is not persistent
+# We symlink it to /data/borg_keys/ which is mounted as a Docker volume
+echo "[$(date)] Setting up Borg keyfiles directory..."
+mkdir -p /data/borg_keys
+mkdir -p /home/borg/.config/borg
+
+# If .config/borg/keys exists as a real directory, migrate keys to persistent storage
+if [ -d /home/borg/.config/borg/keys ] && [ ! -L /home/borg/.config/borg/keys ]; then
+    echo "[$(date)] Migrating existing keyfiles to persistent storage..."
+    cp -a /home/borg/.config/borg/keys/* /data/borg_keys/ 2>/dev/null || true
+    rm -rf /home/borg/.config/borg/keys
+fi
+
+# Create symlink to persistent storage
+if [ ! -L /home/borg/.config/borg/keys ]; then
+    ln -sf /data/borg_keys /home/borg/.config/borg/keys
+    echo "[$(date)] Created symlink /home/borg/.config/borg/keys -> /data/borg_keys"
+fi
+
+# Set proper permissions
+chown -R borg:borg /data/borg_keys /home/borg/.config/borg
+chmod 700 /data/borg_keys
+chmod 600 /data/borg_keys/* 2>/dev/null || true
+echo "[$(date)] Borg keyfiles directory setup complete"
+
 # Switch to borg user and start the application
 echo "[$(date)] Starting Borg Web UI as user borg (${PUID}:${PGID})..."
 cd /app

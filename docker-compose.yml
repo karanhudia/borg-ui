@@ -73,6 +73,12 @@ services:
       # - INITIAL_ADMIN_PASSWORD=your-secure-password
       # - SECRET_KEY=your-custom-secret-key
 
+      # Local mount points (for file browser detection)
+      # Comma-separated list of container paths where host directories are mounted
+      # Default: /local (matches the volume mount above)
+      # Customize if you change volume mappings (e.g., LOCAL_MOUNT_POINTS=/local,/mylocalserver,/data)
+      - LOCAL_MOUNT_POINTS=${LOCAL_MOUNT_POINTS:-/local}
+
     healthcheck:
       test: ["CMD", "sh", "-c", "curl -f http://localhost:$${PORT:-8081}/"]
       interval: 30s

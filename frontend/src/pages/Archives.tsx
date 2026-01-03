@@ -610,44 +610,44 @@ const Archives: React.FC = () => {
             </Box>
           ) : archiveContents?.data?.items ? (
             <Stack spacing={3}>
+              {/* Breadcrumb Navigation - Always visible for navigation */}
+              <Box
+                sx={{
+                  mb: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: 0.5,
+                }}
+              >
+                {getBreadcrumbs().map((crumb, index) => (
+                  <React.Fragment key={crumb.path}>
+                    {index > 0 && (
+                      <Typography variant="body2" color="text.secondary">
+                        /
+                      </Typography>
+                    )}
+                    <Typography
+                      variant="body2"
+                      onClick={() => navigateToPath(crumb.path)}
+                      sx={{
+                        cursor: 'pointer',
+                        color: 'primary.main',
+                        textDecoration: 'underline',
+                        '&:hover': {
+                          color: 'primary.dark',
+                        },
+                      }}
+                    >
+                      {crumb.label}
+                    </Typography>
+                  </React.Fragment>
+                ))}
+              </Box>
+
               {/* Interactive File Browser */}
               {archiveContents?.data?.items && archiveContents.data.items.length > 0 ? (
                 <Box>
-                  {/* Breadcrumb Navigation */}
-                  <Box
-                    sx={{
-                      mb: 2,
-                      display: 'flex',
-                      alignItems: 'center',
-                      flexWrap: 'wrap',
-                      gap: 0.5,
-                    }}
-                  >
-                    {getBreadcrumbs().map((crumb, index) => (
-                      <React.Fragment key={crumb.path}>
-                        {index > 0 && (
-                          <Typography variant="body2" color="text.secondary">
-                            /
-                          </Typography>
-                        )}
-                        <Typography
-                          variant="body2"
-                          onClick={() => navigateToPath(crumb.path)}
-                          sx={{
-                            cursor: 'pointer',
-                            color: 'primary.main',
-                            textDecoration: 'underline',
-                            '&:hover': {
-                              color: 'primary.dark',
-                            },
-                          }}
-                        >
-                          {crumb.label}
-                        </Typography>
-                      </React.Fragment>
-                    ))}
-                  </Box>
-
                   {/* Files and Folders List */}
                   <Box sx={{ maxHeight: 400, overflowY: 'auto' }}>
                     {(() => {

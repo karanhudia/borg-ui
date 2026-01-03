@@ -253,6 +253,19 @@ volumes:
 - For multiple directories, add multiple volume mounts
 - Never mount root (`/`) unless absolutely necessary for system-level backups
 
+**Custom Mount Names:**
+
+If you prefer a different container path than `/local`, update both the volume and the `LOCAL_MOUNT_POINTS` environment variable:
+
+```yaml
+volumes:
+  - /home/john:/mylocalserver:rw        # Custom mount path
+environment:
+  - LOCAL_MOUNT_POINTS=/mylocalserver   # Tell the file browser
+```
+
+This highlights your mount in the file browser with a 💾 icon and **"Host"** badge, making it easy to find your data.
+
 See [Configuration Guide](configuration.md) for more examples and details.
 
 ### Set User/Group IDs
