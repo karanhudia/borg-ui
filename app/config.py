@@ -48,6 +48,12 @@ class Settings(BaseSettings):
         else:
             self._cors_origins_str = value
 
+    def get_local_mount_points(self) -> List[str]:
+        """Get local mount points as list"""
+        if not self.local_mount_points:
+            return []
+        return [path.strip() for path in self.local_mount_points.split(",") if path.strip()]
+
     # Server settings
     host: str = "0.0.0.0"
     port: int = 8081
@@ -64,7 +70,12 @@ class Settings(BaseSettings):
     # Health check settings
     health_check_interval: int = 30
     health_check_timeout: int = 10
-    
+
+    # File browser settings
+    # Comma-separated list of container paths where host directories are mounted
+    # Used to highlight these paths in the file browser (like SSH mount points)
+    local_mount_points: str = "/local"
+
     class Config:
         env_file = ".env"
         case_sensitive = False

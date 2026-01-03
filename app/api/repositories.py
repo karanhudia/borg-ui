@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -744,6 +744,85 @@ async def import_repository(
     except Exception as e:
         logger.error("Failed to import repository", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to import repository: {str(e)}")
+
+@router.post("/{repo_id}/keyfile")
+async def upload_keyfile(
+    repo_id: int,
+    keyfile: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Upload a keyfile for a repository that uses keyfile or keyfile-blake2 encryption.
+
+    This endpoint allows uploading keyfiles for existing repositories that were created
+    elsewhere and use keyfile-based encryption modes.
+    """
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        # Get repository
+        repository = db.query(Repository).filter(Repository.id == repo_id).first()
+        if not repository:
+            raise HTTPException(status_code=404, detail="Repository not found")
+
+        # Verify repository uses keyfile encryption
+        if repository.encryption not in ["keyfile", "keyfile-blake2"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Repository uses '{repository.encryption}' encryption, which doesn't require a keyfile. "
+                       f"Keyfile upload is only needed for 'keyfile' or 'keyfile-blake2' encryption modes."
+            )
+
+        # Validate keyfile content
+        content = await keyfile.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="Keyfile is empty")
+
+        # Extract repository ID from repository path to generate keyfile name
+        # Borg uses the repository ID in keyfile names
+        import re
+        import hashlib
+
+        # For local paths: generate a simple filename
+        # For SSH paths: extract host and path
+        safe_name = re.sub(r'[^\w\-_.]', '_', repository.path)
+        keyfile_name = f"{safe_name}.key"
+
+        # Store keyfile in /data/borg_keys/
+        keyfile_dir = os.path.join(settings.data_dir, "borg_keys")
+        os.makedirs(keyfile_dir, exist_ok=True)
+
+        keyfile_path = os.path.join(keyfile_dir, keyfile_name)
+
+        # Write keyfile
+        with open(keyfile_path, 'wb') as f:
+            f.write(content)
+
+        # Set proper permissions (600 - owner read/write only)
+        os.chmod(keyfile_path, 0o600)
+
+        # Update repository to indicate it has a keyfile
+        repository.has_keyfile = True
+        db.commit()
+
+        logger.info("Keyfile uploaded successfully",
+                   repo_id=repo_id,
+                   repo_name=repository.name,
+                   keyfile_path=keyfile_path)
+
+        return {
+            "success": True,
+            "message": "Keyfile uploaded successfully",
+            "keyfile_name": keyfile_name
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to upload keyfile", repo_id=repo_id, error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to upload keyfile: {str(e)}")
 
 @router.get("/{repo_id}")
 async def get_repository(

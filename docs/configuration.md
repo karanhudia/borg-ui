@@ -103,6 +103,50 @@ environment:
 
 See [Reverse Proxy Setup](reverse-proxy.md) for complete configuration examples with Nginx, Traefik, Caddy, and Apache.
 
+### File Browser Mount Points
+
+{: .new }
+> **New in v1.39.2**: LOCAL_MOUNT_POINTS for improved file browser navigation
+
+Specify which container paths are host filesystem mounts to highlight them in the file browser:
+
+```yaml
+environment:
+  - LOCAL_MOUNT_POINTS=/local  # Default
+```
+
+**What it does:**
+- Highlights host filesystem mounts with a 💾 **HardDrive** icon and **"Host"** badge
+- Makes it easy to identify where your actual data lives
+- Similar to how SSH mount points are displayed with **"Remote"** badge
+
+**Custom configurations:**
+
+```yaml
+# Single mount (default)
+volumes:
+  - /:/local:rw
+environment:
+  - LOCAL_MOUNT_POINTS=/local
+
+# Multiple mounts (comma-separated)
+volumes:
+  - /home/john:/mylocalserver:rw
+  - /mnt/nas:/nas:rw
+environment:
+  - LOCAL_MOUNT_POINTS=/mylocalserver,/nas
+
+# No highlighting (empty string)
+environment:
+  - LOCAL_MOUNT_POINTS=
+```
+
+**In the file browser:**
+- 💾 `/local` **[Host]** - Highlighted as host mount
+- 🌐 `/mnt/ssh-connection` **[Remote]** - SSH mount point
+- 📦 `/backups/repo1` **[Borg]** - Borg repository
+- 📁 `/data` - Regular directory
+
 ---
 
 ## Volume Mounts
