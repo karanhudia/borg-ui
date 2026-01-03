@@ -988,8 +988,7 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                         compact_job = CompactJob(
                             repository_id=repo.id,
                             repository_path=repo.path,
-                            status="running",
-                            started_at=datetime.now(timezone.utc),
+                            status="pending",
                             scheduled_compact=True
                         )
                         db.add(compact_job)
@@ -1000,47 +999,36 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                         backup_job.maintenance_status = "running_compact"
                         db.commit()
 
-                        compact_result = await borg.compact_repository(
-                            repository=repo.path,
-                            remote_path=repo.remote_path,
-                            passphrase=repo.passphrase
+                        # Use compact service for proper log handling (same as manual compact)
+                        from app.services.compact_service import compact_service
+                        await compact_service.execute_compact(
+                            compact_job.id,
+                            repo.id,
+                            db
                         )
 
-                        if compact_result.get("success"):
-                            # Update timestamps on both scheduled job and repository
+                        # Refresh job to get updated status
+                        db.refresh(compact_job)
+
+                        if compact_job.status == "completed":
                             scheduled_job.last_compact = datetime.now(timezone.utc)
-                            repo.last_compact = datetime.now(timezone.utc)
                             backup_job.maintenance_status = "compact_completed"
-
-                            # Update CompactJob record with actual compact output
-                            compact_job.status = "completed"
-                            compact_job.completed_at = datetime.now(timezone.utc)
-                            # Use actual compact logs from borg command output
-                            compact_logs = compact_result.get("stdout", "") or compact_result.get("output", "")
-                            compact_job.logs = compact_logs if compact_logs else "Scheduled compact completed successfully"
-
                             db.commit()
                             logger.info("Scheduled compact completed", repository=repo.path)
                         else:
                             backup_job.maintenance_status = "compact_failed"
-
-                            # Update CompactJob record
-                            compact_job.status = "failed"
-                            compact_job.completed_at = datetime.now(timezone.utc)
-                            error_msg = compact_result.get("stderr", "") or compact_result.get("error", "Unknown error")
-                            compact_job.error_message = error_msg
-                            compact_job.logs = compact_result.get("stdout", "") or compact_result.get("output", "")
-
                             db.commit()
-                            logger.error("Scheduled compact failed", repository=repo.path, error=error_msg)
+                            logger.error("Scheduled compact failed", repository=repo.path, error=compact_job.error_message)
                     except Exception as e:
                         backup_job.maintenance_status = "compact_failed"
                         # Update CompactJob record if it was created
                         try:
                             if 'compact_job' in locals():
-                                compact_job.status = "failed"
-                                compact_job.completed_at = datetime.now(timezone.utc)
-                                compact_job.error_message = str(e)
+                                db.refresh(compact_job)
+                                if compact_job.status not in ["failed", "cancelled", "completed"]:
+                                    compact_job.status = "failed"
+                                    compact_job.completed_at = datetime.now(timezone.utc)
+                                    compact_job.error_message = str(e)
                         except:
                             pass
                         db.commit()
@@ -1180,8 +1168,7 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
                 compact_job = CompactJob(
                     repository_id=repo.id,
                     repository_path=repo.path,
-                    status="running",
-                    started_at=datetime.now(timezone.utc),
+                    status="pending",
                     scheduled_compact=True  # Mark as scheduled (not manual)
                 )
                 db.add(compact_job)
@@ -1192,39 +1179,27 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
                 backup_job.maintenance_status = "running_compact"
                 db.commit()
 
-                compact_result = await borg.compact_repository(
-                    repository=repo.path,
-                    remote_path=repo.remote_path,
-                    passphrase=repo.passphrase
+                # Use compact service for proper log handling (same as manual compact)
+                from app.services.compact_service import compact_service
+                await compact_service.execute_compact(
+                    compact_job.id,
+                    repo.id,
+                    db
                 )
 
-                if compact_result.get("success"):
-                    # Update timestamps on both scheduled job and repository
+                # Refresh job to get updated status
+                db.refresh(compact_job)
+
+                if compact_job.status == "completed":
                     scheduled_job.last_compact = datetime.now(timezone.utc)
-                    repo.last_compact = datetime.now(timezone.utc)
                     backup_job.maintenance_status = "compact_completed"
-
-                    # Update CompactJob record with actual compact output
-                    compact_job.status = "completed"
-                    compact_job.completed_at = datetime.now(timezone.utc)
-                    # Use actual compact logs from borg command output
-                    compact_logs = compact_result.get("stdout", "") or compact_result.get("output", "")
-                    compact_job.logs = compact_logs if compact_logs else "Scheduled compact completed successfully"
-
                     db.commit()
                     logger.info("Scheduled compact completed", scheduled_job_id=scheduled_job_id, compact_job_id=compact_job.id)
                 else:
                     backup_job.maintenance_status = "compact_failed"
-
-                    # Update CompactJob record
-                    compact_job.status = "failed"
-                    compact_job.completed_at = datetime.now(timezone.utc)
-                    compact_job.error_message = compact_result.get("stderr", "Unknown error")
-                    compact_job.logs = compact_result.get("stderr", "")
-
                     db.commit()
                     logger.error("Scheduled compact failed", scheduled_job_id=scheduled_job_id, compact_job_id=compact_job.id,
-                                error=compact_result.get("stderr"))
+                                error=compact_job.error_message)
 
             except Exception as e:
                 backup_job.maintenance_status = "compact_failed"
@@ -1232,9 +1207,11 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
                 # Update CompactJob record if it was created
                 try:
                     if 'compact_job' in locals():
-                        compact_job.status = "failed"
-                        compact_job.completed_at = datetime.now(timezone.utc)
-                        compact_job.error_message = str(e)
+                        db.refresh(compact_job)
+                        if compact_job.status not in ["failed", "cancelled", "completed"]:
+                            compact_job.status = "failed"
+                            compact_job.completed_at = datetime.now(timezone.utc)
+                            compact_job.error_message = str(e)
                 except:
                     pass
 
