@@ -123,7 +123,7 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
           <TextField
             {...params}
             label={label}
-            placeholder={selectedIds.length === 0 ? placeholder : undefined}
+            placeholder={selectedIds.length === 0 ? placeholder : 'Search or add more...'}
             helperText={helperText}
             required={required}
             size={size}
@@ -147,11 +147,11 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
       {/* Display selected repositories */}
       {selectedRepos.length > 0 && (
         <Box sx={{ mt: 2 }}>
-          {allowReorder && selectedRepos.length > 1 && (
-            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-              Selected repositories ({selectedRepos.length}) - Use arrows to change backup order
-            </Typography>
-          )}
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+            {allowReorder && selectedRepos.length > 1
+              ? `Selected repositories (${selectedRepos.length}) - Use arrows to change backup order`
+              : `Selected repositories (${selectedRepos.length})`}
+          </Typography>
           <Stack spacing={1}>
             {selectedRepos.map((repo, index) => (
               <Box

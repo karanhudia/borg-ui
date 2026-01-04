@@ -162,9 +162,12 @@ const Schedule: React.FC = () => {
   })
 
   // Get repositories
-  const { data: repositoriesData } = useQuery({
+  const { data: repositories } = useQuery({
     queryKey: ['repositories'],
-    queryFn: repositoriesAPI.getRepositories,
+    queryFn: async () => {
+      const response = await repositoriesAPI.getRepositories()
+      return response.data.repositories
+    },
   })
 
   // Get backup jobs history (scheduled only)
@@ -487,8 +490,7 @@ const Schedule: React.FC = () => {
   }
 
   const getRepositoryName = (path: string) => {
-    const repos = repositoriesData?.data?.repositories || []
-    const repo = repos.find((r: any) => r.path === path)
+    const repo = repositories?.find((r: any) => r.path === path)
     return repo?.name || path
   }
 
@@ -531,7 +533,6 @@ const Schedule: React.FC = () => {
   }
 
   const jobs = jobsData?.data?.jobs || []
-  const repositories = repositoriesData?.data?.repositories || []
   const allBackupJobs = backupJobsData?.data?.jobs || []
   const runningBackupJobs = allBackupJobs.filter(
     (job: BackupJob) =>
@@ -1151,7 +1152,7 @@ const Schedule: React.FC = () => {
 
               <BackupJobsTable
                 jobs={recentBackupJobs}
-                repositories={repositoriesData?.data?.repositories || []}
+                repositories={repositories || []}
                 loading={loadingBackupJobs}
                 actions={{
                   viewLogs: true,
