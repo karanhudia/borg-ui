@@ -20,18 +20,29 @@ SSH keys allow Borg Web UI to access remote backup repositories securely without
 - Cloud backup services (Hetzner, BorgBase, etc.)
 - Offsite backup locations
 
+**🎯 UI-First Approach:** Everything is done through the web interface - no terminal commands needed! Just click **Deploy Key to Server**, enter your server password, and the UI handles the rest.
+
 **Single-Key System:** Borg Web UI uses one system SSH key for all remote connections, simplifying key management while maintaining security.
 
 ---
 
-## Quick Start
+## Quick Start (UI-Based Setup)
 
-1. Navigate to **Remote Machines** page
-2. Click **Generate System Key** (if not already generated)
-3. Select key type (ED25519 recommended)
-4. Copy the public key
-5. Add it to remote server's `~/.ssh/authorized_keys`
-6. Add connections to your remote servers
+**Everything is done through the web interface - no terminal needed!**
+
+1. Go to **Remote Machines** page
+2. Click **Generate System Key** (one-time setup)
+3. Click **Deploy Key to Server**
+4. Enter your remote server details:
+   - Host (e.g., `192.168.1.100`)
+   - Username (e.g., `root` or `backup-user`)
+   - Password (used once for deployment)
+   - Mount point (optional, e.g., `/mnt/remote-server`)
+   - Default path (optional, e.g., `/backups`)
+5. Click **Deploy** - the UI automatically installs your SSH key!
+6. Done! Your remote machine is now ready for backups
+
+**That's it!** No manual SSH commands needed. The key is automatically deployed and your connection is saved.
 
 ---
 
@@ -71,9 +82,43 @@ docker exec borg-web-ui cat /home/borg/.ssh/id_ed25519.pub
 
 ## Deploying SSH Keys
 
-### Method 1: Manual Deployment (Most Common)
+### Method 1: Automatic Deployment via Web UI (Recommended)
 
-1. **Get the public key** from Borg Web UI
+**The easiest way - everything is done through the interface:**
+
+1. Go to **Remote Machines** page
+2. Click **Deploy Key to Server** button
+3. Fill in the deployment form:
+   ```
+   Host: 192.168.1.100
+   Port: 22
+   Username: root
+   Password: your-server-password
+   Default Path: /backups (optional)
+   Mount Point: /mnt/remote-server (optional)
+   ```
+4. Click **Deploy**
+
+**What happens:**
+- UI connects to your server using the password (SSH password authentication)
+- Automatically creates `~/.ssh/` directory with correct permissions
+- Installs your public key to `~/.ssh/authorized_keys`
+- Saves the connection in your Remote Machines list
+- You can now use SSH key authentication (no more passwords needed!)
+
+**Benefits:**
+- ✅ No terminal commands needed
+- ✅ Automatic permission setting
+- ✅ Connection saved for future use
+- ✅ Password only used once for initial setup
+
+---
+
+### Method 2: Manual Deployment (Alternative)
+
+If you prefer manual deployment or password authentication is disabled:
+
+1. **Get the public key** from Remote Machines page
 2. **Copy it to remote server:**
 
 ```bash
@@ -85,13 +130,6 @@ mkdir -p ~/.ssh
 echo "ssh-ed25519 AAAAC3... borg-web-ui" >> ~/.ssh/authorized_keys
 chmod 600 ~/.ssh/authorized_keys
 chmod 700 ~/.ssh
-```
-
-### Method 2: Using ssh-copy-id
-
-```bash
-# From a machine with SSH access to the remote server
-ssh-copy-id -i /path/to/public-key.pub user@remote-server
 ```
 
 ### Method 3: Via Control Panel
