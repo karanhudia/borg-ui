@@ -96,7 +96,9 @@ class PruneService:
             if keep_monthly > 0:
                 cmd.extend(["--keep-monthly", str(keep_monthly)])
             if keep_quarterly > 0:
-                cmd.extend(["--keep-quarterly", str(keep_quarterly)])
+                # Borg 1.4.x uses --keep-3monthly for quarterly (every 3 months)
+                # --keep-quarterly was added in borg 1.5.0
+                cmd.extend(["--keep-3monthly", str(keep_quarterly)])
             if keep_yearly > 0:
                 cmd.extend(["--keep-yearly", str(keep_yearly)])
 
