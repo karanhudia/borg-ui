@@ -304,6 +304,13 @@ class SystemSettings(Base):
     log_save_policy = Column(String, default="failed_and_warnings")  # Options: "failed_only", "failed_and_warnings", "all_jobs"
     log_max_total_size_mb = Column(Integer, default=500)  # Maximum total size of all log files in MB
     log_cleanup_on_startup = Column(Boolean, default=True)  # Run log cleanup on application startup
+
+    # Borg operation timeouts (in seconds)
+    borg_info_timeout = Column(Integer, default=600)  # Default 10 minutes for borg info operations
+    borg_list_timeout = Column(Integer, default=300)  # Default 5 minutes for borg list operations
+    borg_init_timeout = Column(Integer, default=300)  # Default 5 minutes for borg init operations
+    borg_general_timeout = Column(Integer, default=600)  # Default 10 minutes for other borg operations
+
     email_notifications = Column(Boolean, default=False)
     webhook_url = Column(String, nullable=True)
     auto_cleanup = Column(Boolean, default=False)
