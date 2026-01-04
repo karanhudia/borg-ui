@@ -258,7 +258,7 @@ class BackupService:
                 stderr=asyncio.subprocess.PIPE,
                 env=env
             )
-            info_stdout, info_stderr = await asyncio.wait_for(info_process.communicate(), timeout=30)
+            info_stdout, info_stderr = await asyncio.wait_for(info_process.communicate(), timeout=settings.borg_info_timeout)
 
             if info_process.returncode == 0:
                 try:
@@ -311,7 +311,7 @@ class BackupService:
                 stderr=asyncio.subprocess.PIPE,
                 env=env
             )
-            list_stdout, list_stderr = await asyncio.wait_for(list_process.communicate(), timeout=30)
+            list_stdout, list_stderr = await asyncio.wait_for(list_process.communicate(), timeout=settings.borg_list_timeout)
 
             if list_process.returncode == 0:
                 try:
@@ -330,7 +330,7 @@ class BackupService:
                 stderr=asyncio.subprocess.PIPE,
                 env=env
             )
-            info_stdout, info_stderr = await asyncio.wait_for(info_process.communicate(), timeout=30)
+            info_stdout, info_stderr = await asyncio.wait_for(info_process.communicate(), timeout=settings.borg_info_timeout)
 
             if info_process.returncode == 0:
                 try:
@@ -424,7 +424,7 @@ class BackupService:
                                 stderr=asyncio.subprocess.PIPE
                             )
 
-                            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=120)
+                            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=settings.script_timeout)
 
                             if process.returncode == 0:
                                 output = stdout.decode().strip()

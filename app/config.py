@@ -66,7 +66,15 @@ class Settings(BaseSettings):
     # Backup settings
     max_backup_jobs: int = 5
     backup_timeout: int = 3600  # 1 hour
-    
+
+    # Borg operation timeouts (in seconds)
+    # These can be increased for very large repositories (e.g., 830TB with 166 min cache build)
+    borg_info_timeout: int = 600      # 10 minutes - for borg info operations (repo verification, stats)
+    borg_list_timeout: int = 600      # 10 minutes - for borg list operations (archives, files)
+    borg_init_timeout: int = 300      # 5 minutes - for borg init operations (new repo creation)
+    borg_extract_timeout: int = 3600  # 1 hour - for borg extract operations (restore)
+    script_timeout: int = 120         # 2 minutes - for pre/post backup scripts
+
     # Health check settings
     health_check_interval: int = 30
     health_check_timeout: int = 10

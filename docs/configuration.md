@@ -320,12 +320,56 @@ services:
 
 ### For Large Repositories
 
+{: .new }
+> **New in v1.41.2**: Configurable operation timeouts for very large repositories
+
 Increase Borg cache size by mounting to fast storage:
 
 ```yaml
 volumes:
   - /path/to/ssd/borg-cache:/home/borg/.cache/borg
 ```
+
+#### Operation Timeouts for Very Large Repositories
+
+For repositories with:
+- Very large size (e.g., 830TB original, 2.35TB deduplicated)
+- Many archives (e.g., 236+ archives)
+- Long cache build times (e.g., 166 minutes on first `borg info`)
+
+You can increase operation timeouts via environment variables:
+
+```yaml
+environment:
+  # Borg operation timeouts (in seconds)
+  - BORG_INFO_TIMEOUT=12000     # 3.3 hours for borg info (default: 600 = 10 min)
+  - BORG_LIST_TIMEOUT=3600      # 1 hour for borg list (default: 600 = 10 min)
+  - BORG_INIT_TIMEOUT=900       # 15 min for borg init (default: 300 = 5 min)
+  - BORG_EXTRACT_TIMEOUT=7200   # 2 hours for restore (default: 3600 = 1 hour)
+  - SCRIPT_TIMEOUT=300          # 5 min for hooks (default: 120 = 2 min)
+```
+
+**Timeout Usage:**
+
+| Operation | When Used | Default | Recommended for Large Repos |
+|-----------|-----------|---------|------------------------------|
+| `BORG_INFO_TIMEOUT` | Repository verification, stats, import | 10 min | 1-4 hours (based on cache build time) |
+| `BORG_LIST_TIMEOUT` | Listing archives/files, restore browser | 10 min | 30-60 min |
+| `BORG_INIT_TIMEOUT` | Creating new repositories | 5 min | 10-15 min |
+| `BORG_EXTRACT_TIMEOUT` | Restore operations | 1 hour | 2-4 hours |
+| `SCRIPT_TIMEOUT` | Pre/post backup scripts | 2 min | 5-10 min |
+
+**Example for 830TB repository:**
+```yaml
+environment:
+  - BORG_INFO_TIMEOUT=12000   # 3.3 hours (166 min × 1.2 for safety margin)
+  - BORG_LIST_TIMEOUT=3600    # 1 hour
+```
+
+**Symptoms you need higher timeouts:**
+- "Repository verification timed out" during import
+- Operations fail with timeout errors in logs
+- Large operations (info/list) succeed when run manually but fail in UI
 
 ### For Raspberry Pi / Low Memory
 
