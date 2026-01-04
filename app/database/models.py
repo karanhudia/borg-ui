@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Float, BigInteger
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Float, BigInteger, Table
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.database.database import Base
@@ -309,7 +309,18 @@ class SystemSettings(Base):
     auto_cleanup = Column(Boolean, default=False)
     cleanup_retention_days = Column(Integer, default=90)
     created_at = Column(DateTime, default=utc_now)
-    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now) 
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+
+
+# Association table for repository notification filters
+repository_notifications = Table(
+    'repository_notifications',
+    Base.metadata,
+    Column('notification_setting_id', Integer, ForeignKey('notification_settings.id', ondelete='CASCADE'), primary_key=True),
+    Column('repository_id', Integer, ForeignKey('repositories.id', ondelete='CASCADE'), primary_key=True)
+)
+
+
 class NotificationSettings(Base):
     """
     Notification settings model.
@@ -335,6 +346,12 @@ class NotificationSettings(Base):
     notify_on_schedule_failure = Column(Boolean, default=True, nullable=False)
     notify_on_check_success = Column(Boolean, default=False, nullable=False)
     notify_on_check_failure = Column(Boolean, default=True, nullable=False)
+
+    # Repository filtering
+    monitor_all_repositories = Column(Boolean, default=True, nullable=False)  # If True, applies to all repos
+
+    # Relationships
+    repositories = relationship('Repository', secondary=repository_notifications, backref='notification_settings')
 
     # Timestamps
     created_at = Column(DateTime, default=utc_now, nullable=False)

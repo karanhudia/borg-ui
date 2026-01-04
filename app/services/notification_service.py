@@ -10,9 +10,42 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 import structlog
 
-from app.database.models import NotificationSettings
+from app.database.models import NotificationSettings, Repository
 
 logger = structlog.get_logger()
+
+
+def _notification_applies_to_repository(
+    db: Session,
+    setting: NotificationSettings,
+    repository_name: str
+) -> bool:
+    """
+    Check if a notification setting applies to the given repository.
+
+    Args:
+        db: Database session
+        setting: NotificationSettings object
+        repository_name: Name of the repository
+
+    Returns:
+        True if notification should be sent, False otherwise
+    """
+    # If monitoring all repositories, always apply
+    if setting.monitor_all_repositories:
+        return True
+
+    # If not monitoring all, check if this specific repository is in the list
+    if not setting.repositories:
+        return False
+
+    # Get repository by name to check if it's in the filtered list
+    repo = db.query(Repository).filter(Repository.name == repository_name).first()
+    if not repo:
+        return False
+
+    # Check if this repository is in the notification's filtered list
+    return repo in setting.repositories
 
 
 def _format_bytes(bytes_value: int) -> str:
@@ -279,6 +312,10 @@ class NotificationService:
 
         # Send to all enabled services with this event trigger
         for setting in settings:
+            # Check if this notification applies to this repository
+            if not _notification_applies_to_repository(db, setting, repository_name):
+                continue
+
             title = "🚀 Backup Started"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
@@ -375,6 +412,10 @@ class NotificationService:
         )
 
         for setting in settings:
+            # Check if this notification applies to this repository
+            if not _notification_applies_to_repository(db, setting, repository_name):
+                continue
+
             title = "✅ Backup Successful"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
@@ -443,6 +484,10 @@ class NotificationService:
         )
 
         for setting in settings:
+            # Check if this notification applies to this repository
+            if not _notification_applies_to_repository(db, setting, repository_name):
+                continue
+
             title = "❌ Backup Failed"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
@@ -545,6 +590,10 @@ class NotificationService:
         )
 
         for setting in settings:
+            # Check if this notification applies to this repository
+            if not _notification_applies_to_repository(db, setting, repository_name):
+                continue
+
             title = "⚠️ Backup Completed with Warnings"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
@@ -601,6 +650,10 @@ class NotificationService:
         )
 
         for setting in settings:
+            # Check if this notification applies to this repository
+            if not _notification_applies_to_repository(db, setting, repository_name):
+                continue
+
             title = "✅ Restore Successful"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
@@ -664,6 +717,10 @@ class NotificationService:
         )
 
         for setting in settings:
+            # Check if this notification applies to this repository
+            if not _notification_applies_to_repository(db, setting, repository_name):
+                continue
+
             title = "❌ Restore Failed"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
@@ -727,6 +784,10 @@ class NotificationService:
         )
 
         for setting in settings:
+            # Check if this notification applies to this repository
+            if not _notification_applies_to_repository(db, setting, repository_name):
+                continue
+
             title = "❌ Scheduled Backup Failed"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
@@ -966,6 +1027,10 @@ class NotificationService:
 
         # Send to all enabled services with this event trigger
         for setting in settings:
+            # Check if this notification applies to this repository
+            if not _notification_applies_to_repository(db, setting, repository_name):
+                continue
+
             title = f"{emoji} Repository {title_text}"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"

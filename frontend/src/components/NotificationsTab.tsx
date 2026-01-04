@@ -25,6 +25,10 @@ import {
   Alert,
   Collapse,
   Link,
+  FormControl,
+  FormLabel,
+  RadioGroup,
+  Radio,
 } from '@mui/material'
 import {
   Plus,
@@ -40,9 +44,10 @@ import {
   RotateCcw,
   Settings,
 } from 'lucide-react'
-import { notificationsAPI } from '../services/api'
+import { notificationsAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { formatDate } from '../utils/dateUtils'
+import MultiRepositorySelector, { Repository } from './MultiRepositorySelector'
 
 interface NotificationSetting {
   id: number
@@ -58,6 +63,8 @@ interface NotificationSetting {
   notify_on_check_success: boolean
   notify_on_check_failure: boolean
   notify_on_schedule_failure: boolean
+  monitor_all_repositories: boolean
+  repositories: Repository[]
   created_at: string
   updated_at: string
   last_used_at: string | null
@@ -84,6 +91,8 @@ const NotificationsTab: React.FC = () => {
     notify_on_check_success: false,
     notify_on_check_failure: true,
     notify_on_schedule_failure: true,
+    monitor_all_repositories: true,
+    repository_ids: [] as number[],
   })
 
   // Fetch notifications
@@ -92,6 +101,15 @@ const NotificationsTab: React.FC = () => {
     queryFn: async () => {
       const response = await notificationsAPI.list()
       return response.data
+    },
+  })
+
+  // Fetch repositories for filtering
+  const { data: repositories } = useQuery({
+    queryKey: ['repositories'],
+    queryFn: async () => {
+      const response = await repositoriesAPI.list()
+      return response.data.repositories
     },
   })
 
@@ -168,6 +186,8 @@ const NotificationsTab: React.FC = () => {
       notify_on_check_success: false,
       notify_on_check_failure: true,
       notify_on_schedule_failure: true,
+      monitor_all_repositories: true,
+      repository_ids: [],
     })
   }
 
@@ -186,6 +206,10 @@ const NotificationsTab: React.FC = () => {
       notify_on_check_success: notification.notify_on_check_success,
       notify_on_check_failure: notification.notify_on_check_failure,
       notify_on_schedule_failure: notification.notify_on_schedule_failure,
+      monitor_all_repositories: notification.monitor_all_repositories,
+      repository_ids: Array.isArray(notification.repositories)
+        ? notification.repositories.map((r) => r.id)
+        : [],
     })
     setShowDialog(true)
   }
@@ -361,6 +385,7 @@ const NotificationsTab: React.FC = () => {
                   <TableCell>Service</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Events</TableCell>
+                  <TableCell>Repositories</TableCell>
                   <TableCell>Last Used</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
@@ -433,6 +458,27 @@ const NotificationsTab: React.FC = () => {
                           />
                         )}
                       </Stack>
+                    </TableCell>
+                    <TableCell>
+                      {notification.monitor_all_repositories ? (
+                        <Chip label="All Repositories" size="small" variant="outlined" />
+                      ) : notification.repositories.length > 0 ? (
+                        <Chip
+                          label={`${notification.repositories.length} ${
+                            notification.repositories.length === 1 ? 'Repository' : 'Repositories'
+                          }`}
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                        />
+                      ) : (
+                        <Chip
+                          label="None Selected"
+                          size="small"
+                          color="warning"
+                          variant="outlined"
+                        />
+                      )}
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" color="text.secondary">
@@ -667,6 +713,42 @@ const NotificationsTab: React.FC = () => {
                   backup failures are handled above.
                 </Typography>
               </Box>
+            </Box>
+
+            {/* Repository Filter Section */}
+            <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+              <FormControl component="fieldset">
+                <FormLabel component="legend" sx={{ mb: 1 }}>
+                  Apply To Repositories
+                </FormLabel>
+                <RadioGroup
+                  value={formData.monitor_all_repositories ? 'all' : 'selected'}
+                  onChange={(e) =>
+                    setFormData({ ...formData, monitor_all_repositories: e.target.value === 'all' })
+                  }
+                >
+                  <FormControlLabel value="all" control={<Radio />} label="All Repositories" />
+                  <FormControlLabel
+                    value="selected"
+                    control={<Radio />}
+                    label="Selected Repositories Only"
+                  />
+                </RadioGroup>
+              </FormControl>
+
+              {!formData.monitor_all_repositories && (
+                <Box sx={{ mt: 2 }}>
+                  <MultiRepositorySelector
+                    repositories={repositories || []}
+                    selectedIds={formData.repository_ids}
+                    onChange={(ids) => setFormData({ ...formData, repository_ids: ids })}
+                    label="Select Repositories"
+                    placeholder="Choose repositories to monitor"
+                    helperText="Only send notifications for backups from these repositories"
+                    allowReorder={false}
+                  />
+                </Box>
+              )}
             </Box>
           </Stack>
         </DialogContent>
