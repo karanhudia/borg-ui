@@ -73,6 +73,17 @@ services:
       # - INITIAL_ADMIN_PASSWORD=your-secure-password
       # - SECRET_KEY=your-custom-secret-key
 
+      # Borg operation timeouts in seconds (uncomment to customize for large repos)
+      # Increase these for very large repositories (e.g., 830TB with 166 min cache build)
+      # - BORG_INFO_TIMEOUT=600      # borg info operations (default: 10 min)
+      # - BORG_LIST_TIMEOUT=600      # borg list operations (default: 10 min)
+      # - BORG_INIT_TIMEOUT=300      # borg init operations (default: 5 min)
+      # - BORG_EXTRACT_TIMEOUT=3600  # borg extract operations (default: 1 hour)
+      # - SCRIPT_TIMEOUT=120         # pre/post backup scripts (default: 2 min)
+
+      # Example for very large repository (e.g., 166 min to build cache):
+      # - BORG_INFO_TIMEOUT=12000    # 3.3 hours
+
       # Local mount points (for file browser detection)
       # Comma-separated list of container paths where host directories are mounted
       # Default: /local (matches the volume mount above)

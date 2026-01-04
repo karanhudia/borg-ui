@@ -122,7 +122,7 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
                 stderr=asyncio.subprocess.PIPE,
                 env=env
             )
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=settings.borg_info_timeout)
 
             if process.returncode == 0:
                 info_data = json.loads(stdout.decode())
@@ -1397,7 +1397,7 @@ async def verify_existing_repository(path: str, passphrase: str = None, ssh_key_
         cmd.append(path)
 
         # Execute command
-        logger.info("Executing borg info command", command=" ".join(cmd))
+        logger.info("Executing borg info command", command=" ".join(cmd), timeout=settings.borg_info_timeout)
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
@@ -1405,7 +1405,7 @@ async def verify_existing_repository(path: str, passphrase: str = None, ssh_key_
             env=env
         )
 
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=settings.borg_info_timeout)
         stdout_str = stdout.decode() if stdout else ""
         stderr_str = stderr.decode() if stderr else ""
 
@@ -1554,7 +1554,7 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
         logger.info("Full borg init command prepared", command=" ".join(cmd), path=path)
 
         # Execute command
-        logger.info("Executing borg init command...")
+        logger.info("Executing borg init command...", timeout=settings.borg_init_timeout)
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
@@ -1562,7 +1562,7 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
             env=env
         )
 
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=settings.borg_init_timeout)
         stdout_str = stdout.decode() if stdout else ""
         stderr_str = stderr.decode() if stderr else ""
 
@@ -1656,8 +1656,8 @@ async def list_repository_archives(
                 env=env
             )
 
-            # Use 200 second timeout (longer than BORG_LOCK_WAIT of 180s) to allow for slow SSH connections
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=200)
+            # Use configurable timeout to allow for large repositories and slow SSH connections
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=settings.borg_list_timeout)
 
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
@@ -1764,8 +1764,8 @@ async def get_repository_info(
                 env=env
             )
 
-            # Use 200 second timeout (longer than BORG_LOCK_WAIT of 180s) to allow for slow SSH connections
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=200)
+            # Use configurable timeout to allow for large repositories and slow SSH connections
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=settings.borg_list_timeout)
 
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
@@ -1923,7 +1923,7 @@ async def get_archive_info(
             env=env
         )
 
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=200)
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=settings.borg_info_timeout)
 
         if process.returncode != 0:
             error_msg = stderr.decode() if stderr else "Unknown error"
@@ -1966,7 +1966,7 @@ async def get_archive_info(
                     stderr=asyncio.subprocess.PIPE,
                     env=list_env
                 )
-                list_stdout, list_stderr = await asyncio.wait_for(list_process.communicate(), timeout=60)
+                list_stdout, list_stderr = await asyncio.wait_for(list_process.communicate(), timeout=settings.borg_list_timeout)
 
                 if list_process.returncode == 0:
                     # Parse JSON-lines output
@@ -2071,7 +2071,7 @@ async def list_archive_files(
             env=env
         )
 
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=settings.borg_list_timeout)
 
         if process.returncode != 0:
             error_msg = stderr.decode() if stderr else "Unknown error"
