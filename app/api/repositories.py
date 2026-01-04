@@ -9,7 +9,7 @@ import asyncio
 import json
 
 from app.database.database import get_db
-from app.database.models import User, Repository, CheckJob, CompactJob, PruneJob, SystemSettings
+from app.database.models import User, Repository, CheckJob, CompactJob, PruneJob
 from app.core.security import get_current_user
 from app.core.borg import BorgInterface
 from app.config import settings
@@ -81,12 +81,6 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
     Returns True if successful, False otherwise.
     """
     try:
-        # Get timeout from system settings
-        timeout = 600  # Default 10 minutes for borg info
-        system_settings = db.query(SystemSettings).first()
-        if system_settings and system_settings.borg_info_timeout:
-            timeout = system_settings.borg_info_timeout
-
         # Get archive list and count
         list_result = await borg.list_archives(
             repository.path,
@@ -128,7 +122,7 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
                 stderr=asyncio.subprocess.PIPE,
                 env=env
             )
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
 
             if process.returncode == 0:
                 info_data = json.loads(stdout.decode())
@@ -475,8 +469,7 @@ async def create_repository(
             repo_data.encryption,
             repo_data.passphrase,
             repo_data.ssh_key_id if repo_data.repository_type in ["ssh", "sftp"] else None,
-            repo_data.remote_path,
-            db
+            repo_data.remote_path
         )
 
         if not init_result["success"]:
@@ -651,8 +644,7 @@ async def import_repository(
             repo_path,
             repo_data.passphrase,
             repo_data.ssh_key_id if repo_data.repository_type in ["ssh", "sftp"] else None,
-            repo_data.remote_path,
-            db
+            repo_data.remote_path
         )
 
         if not verify_result["success"]:
@@ -1347,19 +1339,11 @@ async def check_remote_borg_installation(host: str, username: str, port: int, ss
             except Exception as e:
                 logger.warning("Failed to clean up temp SSH key", error=str(e))
 
-async def verify_existing_repository(path: str, passphrase: str = None, ssh_key_id: int = None, remote_path: str = None, db: Session = None) -> Dict[str, Any]:
+async def verify_existing_repository(path: str, passphrase: str = None, ssh_key_id: int = None, remote_path: str = None) -> Dict[str, Any]:
     """Verify an existing Borg repository by running borg info"""
     temp_key_file = None
     try:
         logger.info("Verifying existing repository", path=path, has_passphrase=bool(passphrase))
-
-        # Get timeout from system settings
-        timeout = 600  # Default 10 minutes
-        if db:
-            system_settings = db.query(SystemSettings).first()
-            if system_settings and system_settings.borg_info_timeout:
-                timeout = system_settings.borg_info_timeout
-        logger.info("Using borg info timeout", timeout=timeout)
 
         # Build borg info command
         cmd = ["borg", "info", "--json"]
@@ -1421,7 +1405,7 @@ async def verify_existing_repository(path: str, passphrase: str = None, ssh_key_
             env=env
         )
 
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
         stdout_str = stdout.decode() if stdout else ""
         stderr_str = stderr.decode() if stderr else ""
 
@@ -1472,18 +1456,10 @@ async def verify_existing_repository(path: str, passphrase: str = None, ssh_key_
             except Exception as e:
                 logger.warning("Failed to clean up temp SSH key", error=str(e))
 
-async def initialize_borg_repository(path: str, encryption: str, passphrase: str = None, ssh_key_id: int = None, remote_path: str = None, db: Session = None) -> Dict[str, Any]:
+async def initialize_borg_repository(path: str, encryption: str, passphrase: str = None, ssh_key_id: int = None, remote_path: str = None) -> Dict[str, Any]:
     """Initialize a new Borg repository"""
     temp_key_file = None
     try:
-        # Get timeout from system settings
-        timeout = 300  # Default 5 minutes for borg init
-        if db:
-            system_settings = db.query(SystemSettings).first()
-            if system_settings and system_settings.borg_init_timeout:
-                timeout = system_settings.borg_init_timeout
-        logger.info("Using borg init timeout", timeout=timeout)
-
         logger.info("Starting repository initialization",
                    path=path,
                    encryption=encryption,
@@ -1586,7 +1562,7 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
             env=env
         )
 
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
         stdout_str = stdout.decode() if stdout else ""
         stderr_str = stderr.decode() if stderr else ""
 

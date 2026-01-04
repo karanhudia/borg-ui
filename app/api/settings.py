@@ -46,10 +46,6 @@ class SystemSettingsUpdate(BaseModel):
     log_save_policy: Optional[str] = None
     log_max_total_size_mb: Optional[int] = None
     log_cleanup_on_startup: Optional[bool] = None
-    borg_info_timeout: Optional[int] = None
-    borg_list_timeout: Optional[int] = None
-    borg_init_timeout: Optional[int] = None
-    borg_general_timeout: Optional[int] = None
     email_notifications: Optional[bool] = None
     webhook_url: Optional[str] = None
     auto_cleanup: Optional[bool] = None

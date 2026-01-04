@@ -30,7 +30,6 @@ import NotificationsTab from '../components/NotificationsTab'
 import PackagesTab from '../components/PackagesTab'
 import ExportImportTab from '../components/ExportImportTab'
 import LogManagementTab from '../components/LogManagementTab'
-import TimeoutsTab from '../components/TimeoutsTab'
 import Scripts from './Scripts'
 import Activity from './Activity'
 import { formatDateShort } from '../utils/dateUtils'
@@ -56,7 +55,7 @@ const Settings: React.FC = () => {
   const getTabOrder = () => {
     const baseTabs = ['account', 'appearance', 'notifications']
     if (user?.is_admin) {
-      return [...baseTabs, 'logs', 'timeouts', 'packages', 'scripts', 'export', 'users', 'activity']
+      return [...baseTabs, 'logs', 'packages', 'scripts', 'export', 'users', 'activity']
     }
     return [...baseTabs, 'scripts', 'export', 'activity']
   }
@@ -462,20 +461,17 @@ const Settings: React.FC = () => {
       {/* Log Management Tab - Admin Only */}
       {activeTab === 3 && user?.is_admin && <LogManagementTab />}
 
-      {/* Timeouts Tab - Admin Only */}
-      {activeTab === 4 && user?.is_admin && <TimeoutsTab />}
-
       {/* System Packages Tab - Admin Only */}
-      {activeTab === 5 && user?.is_admin && <PackagesTab />}
+      {activeTab === 4 && user?.is_admin && <PackagesTab />}
 
       {/* Scripts Tab */}
-      {activeTab === (user?.is_admin ? 6 : 3) && <Scripts />}
+      {activeTab === (user?.is_admin ? 5 : 3) && <Scripts />}
 
       {/* Export/Import Tab */}
-      {activeTab === (user?.is_admin ? 7 : 4) && <ExportImportTab />}
+      {activeTab === (user?.is_admin ? 6 : 4) && <ExportImportTab />}
 
       {/* User Management Tab - Admin Only */}
-      {activeTab === 8 && user?.is_admin && (
+      {activeTab === 7 && user?.is_admin && (
         <Box>
           <Box
             sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}
@@ -505,7 +501,7 @@ const Settings: React.FC = () => {
       )}
 
       {/* Activity Tab */}
-      {activeTab === (user?.is_admin ? 9 : 5) && <Activity />}
+      {activeTab === (user?.is_admin ? 8 : 5) && <Activity />}
 
       {/* Create/Edit User Modal */}
       <Dialog
