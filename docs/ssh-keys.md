@@ -20,16 +20,18 @@ SSH keys allow Borg Web UI to access remote backup repositories securely without
 - Cloud backup services (Hetzner, BorgBase, etc.)
 - Offsite backup locations
 
+**Single-Key System:** Borg Web UI uses one system SSH key for all remote connections, simplifying key management while maintaining security.
+
 ---
 
 ## Quick Start
 
-1. Navigate to **SSH Keys** page
-2. Click **Generate SSH Key**
-3. Name it (e.g., "Remote Server")
+1. Navigate to **Remote Machines** page
+2. Click **Generate System Key** (if not already generated)
+3. Select key type (ED25519 recommended)
 4. Copy the public key
 5. Add it to remote server's `~/.ssh/authorized_keys`
-6. Test the connection
+6. Add connections to your remote servers
 
 ---
 
@@ -37,13 +39,14 @@ SSH keys allow Borg Web UI to access remote backup repositories securely without
 
 ### Via Web Interface
 
-1. Go to **SSH Keys** page
-2. Click **Generate SSH Key**
-3. Enter a name (e.g., "backup-server", "nas")
-4. Select key type:
-   - **RSA 4096** (recommended, most compatible)
-   - **ED25519** (modern, faster, smaller)
-5. Click **Generate**
+1. Go to **Remote Machines** page
+2. Click **Generate System Key** (one-time setup)
+3. Select key type:
+   - **ED25519** (recommended, modern, smaller)
+   - **RSA 4096** (maximum compatibility)
+4. Click **Generate**
+
+**Note:** You only need to generate the system key once. It will be used for all remote connections.
 
 **How SSH keys are stored:**
 - Private keys are encrypted and stored in the SQLite database (`/data/borg.db`)
@@ -117,13 +120,15 @@ Many hosting providers and NAS systems have web interfaces to add SSH keys:
 
 ### Via Web Interface
 
-1. Go to **SSH Keys** page
-2. Click **Test Connection** next to your key
+1. Go to **Remote Machines** page
+2. Click **Add Connection** or **Test Connection** on an existing connection
 3. Enter connection details:
    - Host: `remote-server.example.com`
    - Port: `22` (or custom)
    - Username: `backup-user`
-4. Click **Test**
+4. Click **Test** or **Deploy**
+
+The system automatically uses your system SSH key for all connections.
 
 ### Via Command Line
 
@@ -145,7 +150,7 @@ When creating or importing a repository:
    user@hostname:/path/to/repo
    ```
 
-2. Borg Web UI automatically uses the correct SSH key
+2. Borg Web UI automatically uses your system SSH key
 
 3. Examples:
    ```
@@ -153,6 +158,8 @@ When creating or importing a repository:
    user@server.example.com:~/backups/my-repo
    u123456@u123456.your-storagebox.de:./backup-repo
    ```
+
+**Note:** The same system SSH key is used for all SSH repositories. Ensure you've deployed the key to all remote servers you want to access.
 
 ---
 
@@ -374,36 +381,43 @@ docker exec borg-web-ui ls -la /root/.ssh
 
 ---
 
-## Advanced: Multiple SSH Keys
+## Single-Key System
 
-For different repositories on different servers:
+Borg Web UI uses a **single system SSH key** for all remote connections. This simplifies key management:
 
-1. Generate multiple keys with descriptive names via the web UI
-2. Associate each SSH key with the appropriate repository in the web UI
+1. **Generate one key**: Create the system SSH key once via **Remote Machines** page
+2. **Deploy to multiple servers**: Deploy the same key to all your remote servers
+3. **Automatic management**: The system uses this key for all SSH repositories and connections
 
-**Alternative:** Manual SSH config (advanced users):
+**Benefits:**
+- Simpler management - one key to maintain
+- Easier deployment - same key works everywhere
+- Automatic usage - no need to select which key to use
+
+**How it works:**
+```
+System SSH Key → Deployed to:
+                 ├─ Server 1 (Hetzner)
+                 ├─ Server 2 (NAS)
+                 └─ Server 3 (Raspberry Pi)
+```
+
+All repositories and connections automatically use the system key.
+
+**Advanced: Custom SSH Config (Optional)**
+
+For advanced scenarios requiring different key types per host, manually configure SSH:
 
 ```bash
 docker exec borg-web-ui tee -a /home/borg/.ssh/config << 'EOF'
-Host server1
-    HostName server1.example.com
+Host special-server
+    HostName server.example.com
     User backup
-    IdentityFile /home/borg/.ssh/id_ed25519
-
-Host server2
-    HostName server2.example.com
-    User backup
-    IdentityFile /home/borg/.ssh/id_rsa
+    IdentityFile /home/borg/.ssh/custom_key
 EOF
 ```
 
-**Note:** The web UI automatically manages SSH keys per repository, so manual SSH config is rarely needed.
-
-3. Use short names in repository URLs:
-   ```
-   server1:/backups/repo1
-   server2:/backups/repo2
-   ```
+**Note:** This is rarely needed. The single system key works for nearly all use cases.
 
 ---
 
