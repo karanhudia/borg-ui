@@ -162,11 +162,11 @@ const Schedule: React.FC = () => {
   })
 
   // Get repositories
-  const { data: repositories } = useQuery({
+  const { data: repositories = [] } = useQuery({
     queryKey: ['repositories'],
     queryFn: async () => {
       const response = await repositoriesAPI.getRepositories()
-      return response.data.repositories
+      return response.data.repositories || []
     },
   })
 
