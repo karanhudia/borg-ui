@@ -162,13 +162,12 @@ const Schedule: React.FC = () => {
   })
 
   // Get repositories
-  const { data: repositories = [] } = useQuery({
+  const { data: repositoriesData } = useQuery({
     queryKey: ['repositories'],
-    queryFn: async () => {
-      const response = await repositoriesAPI.getRepositories()
-      return response.data.repositories || []
-    },
+    queryFn: repositoriesAPI.getRepositories,
   })
+
+  const repositories = repositoriesData?.data?.repositories || []
 
   // Get backup jobs history (scheduled only)
   const { data: backupJobsData, isLoading: loadingBackupJobs } = useQuery({
@@ -1006,7 +1005,7 @@ const Schedule: React.FC = () => {
                           </Typography>
                           <Typography variant="body2" fontWeight={500}>
                             {job.progress_details?.compressed_size !== undefined &&
-                            job.progress_details?.compressed_size !== null
+                              job.progress_details?.compressed_size !== null
                               ? formatBytesUtil(job.progress_details.compressed_size)
                               : 'N/A'}
                           </Typography>
@@ -1017,7 +1016,7 @@ const Schedule: React.FC = () => {
                           </Typography>
                           <Typography variant="body2" fontWeight={500} color="success.main">
                             {job.progress_details?.deduplicated_size !== undefined &&
-                            job.progress_details?.deduplicated_size !== null
+                              job.progress_details?.deduplicated_size !== null
                               ? formatBytesUtil(job.progress_details.deduplicated_size)
                               : 'N/A'}
                           </Typography>
@@ -1095,7 +1094,7 @@ const Schedule: React.FC = () => {
                             ? `${job.repository_ids.length} repositories`
                             : job.repository_id
                               ? repositories.find((r: any) => r.id === job.repository_id)?.name ||
-                                'Unknown'
+                              'Unknown'
                               : getRepositoryName(job.repository)}
                         </Typography>
                       </Box>

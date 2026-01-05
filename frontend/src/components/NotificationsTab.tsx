@@ -105,13 +105,12 @@ const NotificationsTab: React.FC = () => {
   })
 
   // Fetch repositories for filtering
-  const { data: repositories } = useQuery({
+  const { data: repositoriesData } = useQuery({
     queryKey: ['repositories'],
-    queryFn: async () => {
-      const response = await repositoriesAPI.list()
-      return response.data.repositories
-    },
+    queryFn: repositoriesAPI.list,
   })
+
+  const repositories = repositoriesData?.data?.repositories || []
 
   // Create notification
   const createMutation = useMutation({
@@ -464,9 +463,8 @@ const NotificationsTab: React.FC = () => {
                         <Chip label="All Repositories" size="small" variant="outlined" />
                       ) : notification.repositories.length > 0 ? (
                         <Chip
-                          label={`${notification.repositories.length} ${
-                            notification.repositories.length === 1 ? 'Repository' : 'Repositories'
-                          }`}
+                          label={`${notification.repositories.length} ${notification.repositories.length === 1 ? 'Repository' : 'Repositories'
+                            }`}
                           size="small"
                           color="primary"
                           variant="outlined"
