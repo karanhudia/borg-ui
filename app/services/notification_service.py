@@ -15,10 +15,21 @@ from app.database.models import NotificationSettings, Repository
 logger = structlog.get_logger()
 
 
+def _get_repository(db: Session, name_or_path: str) -> Optional[Repository]:
+    """Get repository by name or path."""
+    from sqlalchemy import or_
+    return db.query(Repository).filter(
+        or_(
+            Repository.name == name_or_path,
+            Repository.path == name_or_path
+        )
+    ).first()
+
+
 def _notification_applies_to_repository(
     db: Session,
     setting: NotificationSettings,
-    repository_name: str
+    repository_name_or_path: str
 ) -> bool:
     """
     Check if a notification setting applies to the given repository.
@@ -26,7 +37,7 @@ def _notification_applies_to_repository(
     Args:
         db: Database session
         setting: NotificationSettings object
-        repository_name: Name of the repository
+        repository_name_or_path: Name or path of the repository
 
     Returns:
         True if notification should be sent, False otherwise
@@ -39,13 +50,18 @@ def _notification_applies_to_repository(
     if not setting.repositories:
         return False
 
-    # Get repository by name to check if it's in the filtered list
-    repo = db.query(Repository).filter(Repository.name == repository_name).first()
+    # Get repository by name OR path to check if it's in the filtered list
+    repo = _get_repository(db, repository_name_or_path)
+    
     if not repo:
+        # Try finding by partial path matching if exact match fails (common for SSH repos)
+        # But for now let's stick to exact match and basic robust checks
         return False
 
-    # Check if this repository is in the notification's filtered list
-    return repo in setting.repositories
+    # Check if this repository ID is in the notification's filtered list
+    # Use ID comparison for robustness
+    setting_repo_ids = [r.id for r in setting.repositories]
+    return repo.id in setting_repo_ids
 
 
 def _format_bytes(bytes_value: int) -> str:
@@ -277,11 +293,18 @@ class NotificationService:
         if not settings:
             return
 
+        # Look up repository details
+        repo = _get_repository(db, repository_name)
+
         # Build content blocks
         content_blocks = [
             {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': repository_name},
+            {'label': 'Repository', 'value': repo.name if repo else repository_name},
         ]
+        
+        # Add path if repository found
+        if repo:
+            content_blocks.append({'label': 'Location', 'value': repo.path})
 
         # Add source directories if provided
         if source_directories:
@@ -348,11 +371,18 @@ class NotificationService:
         if not settings:
             return
 
+        # Look up repository details
+        repo = _get_repository(db, repository_name)
+
         # Build content blocks for HTML email and markdown
         content_blocks = [
             {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': repository_name},
+            {'label': 'Repository', 'value': repo.name if repo else repository_name},
         ]
+        
+        # Add path if repository found
+        if repo:
+            content_blocks.append({'label': 'Location', 'value': repo.path})
 
         # Add statistics as a grid for HTML, and as simple blocks for markdown
         stats_blocks = []
@@ -393,8 +423,10 @@ class NotificationService:
         # Create content blocks for markdown (including stats)
         markdown_blocks = [
             {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': repository_name},
+            {'label': 'Repository', 'value': repo.name if repo else repository_name},
         ]
+        if repo:
+            markdown_blocks.append({'label': 'Location', 'value': repo.path})
         markdown_blocks.extend(stats_blocks)
 
         # Create HTML body for email
@@ -446,10 +478,17 @@ class NotificationService:
         if not settings:
             return
 
+        # Look up repository details
+        repo = _get_repository(db, repository_name)
+
         # Build content blocks
         content_blocks = [
-            {'label': 'Repository', 'value': repository_name},
+            {'label': 'Repository', 'value': repo.name if repo else repository_name},
         ]
+        
+        # Add path if repository found
+        if repo:
+            content_blocks.append({'label': 'Location', 'value': repo.path})
 
         if job_id:
             content_blocks.append({'label': 'Job ID', 'value': str(job_id)})
@@ -471,8 +510,10 @@ class NotificationService:
 
         # Create markdown body (without HTML error box)
         markdown_blocks = [
-            {'label': 'Repository', 'value': repository_name},
+            {'label': 'Repository', 'value': repo.name if repo else repository_name},
         ]
+        if repo:
+            markdown_blocks.append({'label': 'Location', 'value': repo.path})
         if job_id:
             markdown_blocks.append({'label': 'Job ID', 'value': str(job_id)})
         markdown_blocks.append({'label': 'Error', 'value': f"```\n{error_message}\n```"})
@@ -522,11 +563,18 @@ class NotificationService:
         if not settings:
             return
 
+        # Look up repository details
+        repo = _get_repository(db, repository_name)
+
         # Build content blocks for HTML email and markdown
         content_blocks = [
             {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': repository_name},
+            {'label': 'Repository', 'value': repo.name if repo else repository_name},
         ]
+
+        # Add path if repository found
+        if repo:
+            content_blocks.append({'label': 'Location', 'value': repo.path})
 
         # Add statistics as a grid for HTML, and as simple blocks for markdown
         stats_blocks = []
@@ -578,8 +626,10 @@ class NotificationService:
         # Create markdown body
         markdown_blocks = [
             {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': repository_name},
+            {'label': 'Repository', 'value': repo.name if repo else repository_name},
         ]
+        if repo:
+            markdown_blocks.append({'label': 'Location', 'value': repo.path})
         markdown_blocks.extend(stats_blocks)
         markdown_blocks.append({'label': 'Warning', 'value': f"```\n{warning_message}\n```"})
 
@@ -626,12 +676,19 @@ class NotificationService:
         if not settings:
             return
 
+        # Look up repository details
+        repo = _get_repository(db, repository_name)
+
         # Build content blocks
         content_blocks = [
             {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': repository_name},
-            {'label': 'Destination', 'value': target_path},
+            {'label': 'Repository', 'value': repo.name if repo else repository_name},
         ]
+        # Add path if repository found
+        if repo:
+            content_blocks.append({'label': 'Location', 'value': repo.path})
+            
+        content_blocks.append({'label': 'Destination', 'value': target_path})
 
         # Use provided completion time or current time as fallback
         completed_at = completion_time or datetime.now()
@@ -684,11 +741,18 @@ class NotificationService:
         if not settings:
             return
 
+        # Look up repository details
+        repo = _get_repository(db, repository_name)
+
         # Build content blocks
         content_blocks = [
             {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': repository_name},
+            {'label': 'Repository', 'value': repo.name if repo else repository_name},
         ]
+
+        # Add path if repository found
+        if repo:
+            content_blocks.append({'label': 'Location', 'value': repo.path})
 
         error_html = f'''
         <div class="error-box">
@@ -706,9 +770,12 @@ class NotificationService:
         # Create markdown body
         markdown_blocks = [
             {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': repository_name},
-            {'label': 'Error', 'value': f"```\n{error_message}\n```"},
+            {'label': 'Repository', 'value': repo.name if repo else repository_name},
         ]
+        if repo:
+            markdown_blocks.append({'label': 'Location', 'value': repo.path})
+            
+        markdown_blocks.append({'label': 'Error', 'value': f"```\n{error_message}\n```"})
 
         markdown_body = _create_markdown_message(
             title="❌ Restore Failed",
@@ -751,11 +818,17 @@ class NotificationService:
         if not settings:
             return
 
+        # Look up repository details
+        repo = _get_repository(db, repository_name)
+
         # Build content blocks
         content_blocks = [
             {'label': 'Schedule', 'value': schedule_name},
-            {'label': 'Repository', 'value': repository_name},
+            {'label': 'Repository', 'value': repo.name if repo else repository_name},
         ]
+        # Add path if repository found
+        if repo:
+            content_blocks.append({'label': 'Location', 'value': repo.path})
 
         error_html = f'''
         <div class="error-box">
@@ -773,9 +846,12 @@ class NotificationService:
         # Create markdown body
         markdown_blocks = [
             {'label': 'Schedule', 'value': schedule_name},
-            {'label': 'Repository', 'value': repository_name},
-            {'label': 'Error', 'value': f"```\n{error_message}\n```"},
+            {'label': 'Repository', 'value': repo.name if repo else repository_name},
         ]
+        if repo:
+            markdown_blocks.append({'label': 'Location', 'value': repo.path})
+            
+        markdown_blocks.append({'label': 'Error', 'value': f"```\n{error_message}\n```"})
 
         markdown_body = _create_markdown_message(
             title="❌ Scheduled Backup Failed",
