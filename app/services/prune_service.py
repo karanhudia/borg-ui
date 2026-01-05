@@ -84,7 +84,15 @@ class PruneService:
             env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
 
             # Build prune command
-            cmd = ["borg", "prune", "--list", "--stats", "--log-json"]
+            # Note: --stats is not supported with --dry-run in Borg 1.4.x
+            cmd = ["borg", "prune", "--list", "--log-json"]
+
+            # Add dry-run flag if requested
+            if dry_run:
+                cmd.append("--dry-run")
+            else:
+                # Only add --stats for non-dry-run operations
+                cmd.append("--stats")
 
             # Add retention policy arguments
             if keep_hourly > 0:
@@ -101,10 +109,6 @@ class PruneService:
                 cmd.extend(["--keep-3monthly", str(keep_quarterly)])
             if keep_yearly > 0:
                 cmd.extend(["--keep-yearly", str(keep_yearly)])
-
-            # Add dry-run flag if requested
-            if dry_run:
-                cmd.append("--dry-run")
 
             # Add remote path if specified
             if repository.remote_path:
