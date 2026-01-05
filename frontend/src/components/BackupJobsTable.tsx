@@ -143,7 +143,7 @@ export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
         }
 
         // Standard backup job handling
-        const repo = repositories.find((r: any) => r.path === job.repository)
+        const repo = repositories?.find((r: any) => r.path === job.repository)
         return (
           <RepositoryCell
             repositoryName={repo?.name || job.repository}
