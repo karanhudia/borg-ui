@@ -431,7 +431,7 @@ const Schedule: React.FC = () => {
       repository_ids = [job.repository_id]
     } else if (job.repository) {
       // Legacy format: repository path (string) - need to find ID
-      const repo = repositories.find((r: any) => r.path === job.repository)
+      const repo = repositories?.find((r: any) => r.path === job.repository)
       if (repo) {
         repository_ids = [repo.id]
       }
@@ -607,7 +607,7 @@ const Schedule: React.FC = () => {
       render: (job) => {
         // Handle multi-repo schedules
         if (job.repository_ids && job.repository_ids.length > 0) {
-          const repos = repositories.filter((r: any) => job.repository_ids?.includes(r.id))
+          const repos = repositories?.filter((r: any) => job.repository_ids?.includes(r.id)) || []
           if (repos.length === 0) {
             return (
               <Typography variant="caption" color="text.secondary">
@@ -643,7 +643,7 @@ const Schedule: React.FC = () => {
         }
         // Handle single-repo schedules (new format with repository_id)
         if (job.repository_id) {
-          const repo = repositories.find((r: any) => r.id === job.repository_id)
+          const repo = repositories?.find((r: any) => r.id === job.repository_id)
           if (repo) {
             return <RepositoryCell repositoryName={repo.name} repositoryPath={repo.path} />
           }
@@ -824,7 +824,7 @@ const Schedule: React.FC = () => {
             variant="contained"
             startIcon={<Plus size={18} />}
             onClick={openCreateModal}
-            disabled={repositories.length === 0}
+            disabled={!repositories || repositories.length === 0}
           >
             Create Backup Schedule
           </Button>
@@ -833,7 +833,7 @@ const Schedule: React.FC = () => {
             variant="contained"
             startIcon={<Plus size={18} />}
             onClick={() => scheduledChecksSectionRef.current?.openAddDialog()}
-            disabled={repositories.length === 0}
+            disabled={!repositories || repositories.length === 0}
           >
             Add Check Schedule
           </Button>
@@ -852,7 +852,7 @@ const Schedule: React.FC = () => {
       {currentTab === 0 && (
         <Box>
           {/* No repositories warning */}
-          {repositories.length === 0 && (
+          {(!repositories || repositories.length === 0) && (
             <Alert severity="info" sx={{ mb: 3 }}>
               You need to create at least one repository before scheduling backups.
             </Alert>
