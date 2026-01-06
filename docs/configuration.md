@@ -380,6 +380,59 @@ environment:
 
 ---
 
+## Redis Cache Configuration
+
+{: .new }
+> **New in v1.39.0**: Redis-based archive caching for 600x faster browsing
+
+Borg Web UI includes Redis caching for dramatically faster archive browsing. Without cache, navigating folders in large archives (1M+ files) takes 60-90 seconds. With cache, it takes less than 100ms.
+
+### Default Setup (Local Redis)
+
+Redis is included in `docker-compose.yml` - no configuration needed.
+
+```yaml
+# Already configured in docker-compose.yml
+redis:
+  image: redis:7-alpine
+  command: redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru
+```
+
+**Manage via UI:**
+- Go to **Settings → Cache** tab
+- View statistics, configure TTL/size, clear cache
+- Default: 2-hour TTL, 2GB size limit
+
+### External Redis (For Large Repositories)
+
+Connect to Redis on a separate machine with more RAM:
+
+```yaml
+# docker-compose.yml
+services:
+  app:
+    environment:
+      # External Redis URL (can also configure via Settings → Cache in UI)
+      - REDIS_URL=redis://192.168.1.100:6379/0
+
+      # Or with password
+      # - REDIS_URL=redis://:password@192.168.1.100:6379/0
+
+      # Cache settings
+      - CACHE_TTL_SECONDS=7200    # 2 hours
+      - CACHE_MAX_SIZE_MB=2048    # 2GB
+```
+
+**When to use external Redis:**
+- Repositories with 5M+ files
+- Multiple large archives
+- Limited RAM on Borg Web UI host
+- NAS/workstation with spare RAM available
+
+**Full setup guide with examples:** [Cache Configuration](cache)
+
+---
+
 ## Security Configuration
 
 ### Change SECRET_KEY
@@ -573,6 +626,7 @@ volumes:
 
 ## Next Steps
 
+- [Cache Configuration](cache.md) - Set up external Redis for 600x faster browsing
 - [Notifications Setup](notifications.md) - Configure alerts
 - [SSH Keys Guide](ssh-keys.md) - Set up remote backups
 - [Usage Guide](usage-guide.md) - Create your first backup
