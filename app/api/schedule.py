@@ -925,6 +925,7 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
             if backup_job.status in ["completed", "completed_with_warnings"]:
                 # Run prune if enabled
                 if scheduled_job.run_prune_after:
+                    prune_job = None
                     try:
                         logger.info("Running scheduled prune", repository=repo.path)
                         prune_job = PruneJob(
@@ -969,16 +970,19 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                             db.commit()
                             logger.error("Scheduled prune failed", repository=repo.path, error=prune_job.error_message)
                     except Exception as e:
-                        backup_job.maintenance_status = "prune_failed"
-                        # Update PruneJob record if it was created
+                        # Ensure maintenance_status is always cleared even if commit fails
                         try:
-                            if 'prune_job' in locals():
+                            backup_job.maintenance_status = "prune_failed"
+                            # Update PruneJob record if it was created
+                            if prune_job:
                                 prune_job.status = "failed"
                                 prune_job.completed_at = datetime.now(timezone.utc)
                                 prune_job.error_message = str(e)
-                        except:
-                            pass
-                        db.commit()
+                            db.commit()
+                        except Exception as commit_error:
+                            logger.error("Failed to update prune status", error=str(commit_error))
+                            # If commit fails, at least clear the running status in memory
+                            backup_job.maintenance_status = None
                         logger.error("Scheduled prune failed", repository=repo.path, error=str(e))
 
                 # Run compact if enabled
@@ -1097,6 +1101,7 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
 
         # Run prune if enabled
         if scheduled_job.run_prune_after:
+            prune_job = None
             try:
                 logger.info("Running scheduled prune", scheduled_job_id=scheduled_job_id, repository=repository_path)
 
@@ -1145,18 +1150,19 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
                                 error=prune_job.error_message)
 
             except Exception as e:
-                backup_job.maintenance_status = "prune_failed"
-
-                # Update PruneJob record if it was created
+                # Ensure maintenance_status is always cleared even if commit fails
                 try:
-                    if 'prune_job' in locals():
+                    backup_job.maintenance_status = "prune_failed"
+                    # Update PruneJob record if it was created
+                    if prune_job:
                         prune_job.status = "failed"
                         prune_job.completed_at = datetime.now(timezone.utc)
                         prune_job.error_message = str(e)
-                except:
-                    pass
-
-                db.commit()
+                    db.commit()
+                except Exception as commit_error:
+                    logger.error("Failed to update prune status", error=str(commit_error))
+                    # If commit fails, at least clear the running status in memory
+                    backup_job.maintenance_status = None
                 logger.error("Failed to run scheduled prune", scheduled_job_id=scheduled_job_id, error=str(e))
 
         # Run compact if enabled (only after successful prune or if prune not enabled)
