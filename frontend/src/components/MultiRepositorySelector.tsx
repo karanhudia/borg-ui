@@ -44,6 +44,9 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
   error = false,
   filterMode = null,
 }) => {
+  // Track whether user has interacted with the field
+  const [touched, setTouched] = React.useState(false)
+
   // Ensure repositories is always an array
   const safeRepositories = Array.isArray(repositories) ? repositories : []
 
@@ -83,7 +86,9 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
         disabled={disabled}
         options={availableRepos}
         value={selectedRepos}
+        onOpen={() => setTouched(true)}
         onChange={(_, newValue) => {
+          setTouched(true)
           // Preserve order for existing items, add new items at end
           const newIds = newValue.map((r) => r.id)
           const existingIds = selectedIds.filter((id) => newIds.includes(id))
@@ -127,11 +132,12 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
             helperText={helperText}
             required={required}
             size={size}
-            error={error || (required && selectedIds.length === 0)}
+            error={error || (touched && required && selectedIds.length === 0)}
             inputProps={{
               ...params.inputProps,
               required: required && selectedIds.length === 0,
             }}
+            onBlur={() => setTouched(true)}
           />
         )}
         sx={{
