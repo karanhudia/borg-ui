@@ -152,7 +152,7 @@ async def create_scheduled_job(
             next_run = cron.get_next(datetime)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid cron expression: {str(e)}")
-        
+
         # Check if job name already exists
         existing_job = db.query(ScheduledJob).filter(ScheduledJob.name == job_data.name).first()
         if existing_job:
