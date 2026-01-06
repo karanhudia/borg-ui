@@ -43,6 +43,7 @@ import {
   Palette,
   Users,
   Download as DownloadIcon,
+  Server,
 } from 'lucide-react'
 import api from '../services/api'
 
@@ -91,6 +92,7 @@ const navigationWithKeys: NavigationItem[] = [
       { name: 'Account', href: '/settings/account', icon: User },
       { name: 'Appearance', href: '/settings/appearance', icon: Palette },
       { name: 'Notifications', href: '/settings/notifications', icon: Bell },
+      { name: 'Cache', href: '/settings/cache', icon: Server },
       { name: 'Logs', href: '/settings/logs', icon: FileText },
       { name: 'Packages', href: '/settings/packages', icon: Package },
       { name: 'Scripts', href: '/settings/scripts', icon: FileCode },

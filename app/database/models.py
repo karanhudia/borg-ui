@@ -304,6 +304,8 @@ class SystemSettings(Base):
     log_save_policy = Column(String, default="failed_and_warnings")  # Options: "failed_only", "failed_and_warnings", "all_jobs"
     log_max_total_size_mb = Column(Integer, default=500)  # Maximum total size of all log files in MB
     log_cleanup_on_startup = Column(Boolean, default=True)  # Run log cleanup on application startup
+    cache_ttl_minutes = Column(Integer, default=120)  # Cache TTL in minutes (2 hours default)
+    cache_max_size_mb = Column(Integer, default=2048)  # Maximum cache size in MB (2GB default)
     email_notifications = Column(Boolean, default=False)
     webhook_url = Column(String, nullable=True)
     auto_cleanup = Column(Boolean, default=False)

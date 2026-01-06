@@ -90,12 +90,49 @@ services:
       # Customize if you change volume mappings (e.g., LOCAL_MOUNT_POINTS=/local,/mylocalserver,/data)
       - LOCAL_MOUNT_POINTS=${LOCAL_MOUNT_POINTS:-/local}
 
+      # Redis cache settings (uncomment to customize)
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      # - REDIS_PASSWORD=your-redis-password
+      - CACHE_TTL_SECONDS=7200        # 2 hours
+      - CACHE_MAX_SIZE_MB=2048        # 2GB
+
     healthcheck:
       test: ["CMD", "sh", "-c", "curl -f http://localhost:$${PORT:-8081}/"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+
+    networks:
+      - borg_network
+
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    container_name: borg-redis
+    restart: unless-stopped
+
+    command: >
+      redis-server
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
 
     networks:
       - borg_network
