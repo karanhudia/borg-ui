@@ -103,9 +103,9 @@ services:
 
       # Option 2: Local Redis (docker-compose service) - default, no config needed
       # Used if REDIS_URL is not set
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_DB=0
+#      - REDIS_HOST=redis
+#      - REDIS_PORT=6379
+#      - REDIS_DB=0
       # - REDIS_PASSWORD=your-redis-password
 
       # Cache behavior (can also configure via Settings → Cache in UI)
@@ -122,34 +122,34 @@ services:
     networks:
       - borg_network
 
-    depends_on:
-      redis:
-        condition: service_healthy
+#    depends_on:
+#      redis:
+#        condition: service_healthy
 
-  redis:
-    image: redis:7-alpine
-    container_name: borg-redis
-    restart: unless-stopped
-
-    command: >
-      redis-server
-      --maxmemory 2gb
-      --maxmemory-policy allkeys-lru
-      --save ""
-      --appendonly no
-
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
-
-    networks:
-      - borg_network
+#  redis:
+#    image: redis:7-alpine
+#    container_name: borg-redis
+#    restart: unless-stopped
+#
+#    command: >
+#      redis-server
+#      --maxmemory 2gb
+#      --maxmemory-policy allkeys-lru
+#      --save ""
+#      --appendonly no
+#
+#    ports:
+#      - "${REDIS_PORT:-6379}:6379"
+#
+#    healthcheck:
+#      test: ["CMD", "redis-cli", "ping"]
+#      interval: 10s
+#      timeout: 3s
+#      retries: 3
+#      start_period: 10s
+#
+#    networks:
+#      - borg_network
 
 networks:
   borg_network:
