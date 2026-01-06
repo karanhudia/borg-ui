@@ -1,8 +1,9 @@
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 import structlog
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
+from croniter import croniter
 from app.database.models import Repository, CheckJob
 from app.database.database import SessionLocal
 from app.services.check_service import check_service
@@ -11,7 +12,7 @@ logger = structlog.get_logger()
 
 
 class CheckScheduler:
-    """Scheduler for interval-based repository checks"""
+    """Scheduler for cron-based repository checks"""
 
     def __init__(self):
         self.running = False
@@ -26,11 +27,11 @@ class CheckScheduler:
             now = datetime.utcnow()
 
             # Find repositories that:
-            # 1. Have check_interval_days set (not NULL and > 0)
+            # 1. Have check_cron_expression set (not NULL and not empty)
             # 2. Either never checked (next_scheduled_check is NULL) or due for check (next_scheduled_check <= now)
             repos = db.query(Repository).filter(
-                Repository.check_interval_days.isnot(None),
-                Repository.check_interval_days > 0,
+                Repository.check_cron_expression.isnot(None),
+                Repository.check_cron_expression != "",
                 or_(
                     Repository.next_scheduled_check.is_(None),
                     Repository.next_scheduled_check <= now
@@ -65,14 +66,25 @@ class CheckScheduler:
 
                     # Update schedule timestamps BEFORE executing (in case execution fails)
                     repo.last_scheduled_check = now
-                    repo.next_scheduled_check = now + timedelta(days=repo.check_interval_days)
+
+                    # Calculate next check time from cron expression
+                    try:
+                        cron = croniter(repo.check_cron_expression, now)
+                        repo.next_scheduled_check = cron.get_next(datetime)
+                    except Exception as e:
+                        logger.error("Failed to calculate next check time",
+                                   repo_id=repo.id,
+                                   cron_expression=repo.check_cron_expression,
+                                   error=str(e))
+                        repo.next_scheduled_check = None
+
                     db.commit()
 
                     logger.info("Updated check schedule",
                                repo_id=repo.id,
                                repo_name=repo.name,
                                next_check=repo.next_scheduled_check,
-                               interval_days=repo.check_interval_days)
+                               cron_expression=repo.check_cron_expression)
 
                     # Execute check asynchronously (don't await - fire and forget)
                     asyncio.create_task(
