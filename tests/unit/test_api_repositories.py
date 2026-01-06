@@ -676,7 +676,7 @@ class TestRepositoryCheckSchedule:
             path="/tmp/test",
             encryption="none",
             repository_type="local",
-            check_interval_days=7,
+            check_cron_expression="0 2 * * 0",  # Weekly on Sunday at 2 AM
             check_max_duration=3600,
             notify_on_check_success=False,
             notify_on_check_failure=True
@@ -690,7 +690,7 @@ class TestRepositoryCheckSchedule:
         assert response.status_code == 200
         data = response.json()
         assert data["repository_id"] == repo.id
-        assert data["check_interval_days"] == 7
+        assert data["check_cron_expression"] == "0 2 * * 0"
         assert data["check_max_duration"] == 3600
         assert data["notify_on_check_success"] == False
         assert data["notify_on_check_failure"] == True
@@ -703,7 +703,7 @@ class TestRepositoryCheckSchedule:
             path="/tmp/test",
             encryption="none",
             repository_type="local",
-            check_interval_days=None
+            check_cron_expression=None
         )
         test_db.add(repo)
         test_db.commit()
@@ -714,7 +714,7 @@ class TestRepositoryCheckSchedule:
         assert response.status_code == 200
         data = response.json()
         assert data["repository_id"] == repo.id
-        assert data["check_interval_days"] is None
+        assert data["check_cron_expression"] is None
         assert data["enabled"] == False
 
     def test_update_check_schedule(self, test_client: TestClient, admin_headers, test_db):
@@ -731,7 +731,7 @@ class TestRepositoryCheckSchedule:
 
         # Update check schedule
         payload = {
-            "interval_days": 14,
+            "cron_expression": "0 3 * * *",  # Daily at 3 AM
             "max_duration": 7200,
             "notify_on_success": True,
             "notify_on_failure": False
@@ -745,7 +745,7 @@ class TestRepositoryCheckSchedule:
         assert response.status_code == 200
         data = response.json()
         assert data["success"] == True
-        assert data["repository"]["check_interval_days"] == 14
+        assert data["repository"]["check_cron_expression"] == "0 3 * * *"
         assert data["repository"]["check_max_duration"] == 7200
         assert data["repository"]["notify_on_check_success"] == True
         assert data["repository"]["notify_on_check_failure"] == False
@@ -758,14 +758,14 @@ class TestRepositoryCheckSchedule:
             path="/tmp/test",
             encryption="none",
             repository_type="local",
-            check_interval_days=7
+            check_cron_expression="0 2 * * 0"  # Weekly on Sunday at 2 AM
         )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
 
         # Disable check schedule
-        payload = {"interval_days": 0}
+        payload = {"cron_expression": ""}
         response = test_client.put(
             f"/api/repositories/{repo.id}/check-schedule",
             headers=admin_headers,
@@ -775,7 +775,7 @@ class TestRepositoryCheckSchedule:
         assert response.status_code == 200
         data = response.json()
         assert data["success"] == True
-        assert data["repository"]["check_interval_days"] is None
+        assert data["repository"]["check_cron_expression"] is None
         assert data["repository"]["next_scheduled_check"] is None
 
     def test_get_check_schedule_not_found(self, test_client: TestClient, admin_headers):
@@ -786,7 +786,7 @@ class TestRepositoryCheckSchedule:
 
     def test_update_check_schedule_not_found(self, test_client: TestClient, admin_headers):
         """Test updating check schedule for non-existent repository"""
-        payload = {"interval_days": 7}
+        payload = {"cron_expression": "0 2 * * 0"}
         response = test_client.put(
             "/api/repositories/99999/check-schedule",
             headers=admin_headers,
