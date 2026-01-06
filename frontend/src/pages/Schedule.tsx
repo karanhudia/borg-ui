@@ -132,6 +132,8 @@ const Schedule: React.FC = () => {
   const [showCronBuilder, setShowCronBuilder] = useState(false)
   const [deleteConfirmJob, setDeleteConfirmJob] = useState<ScheduledJob | null>(null)
   const [selectedBackupJob, setSelectedBackupJob] = useState<BackupJob | null>(null)
+  const [showCreateValidation, setShowCreateValidation] = useState(false)
+  const [showEditValidation, setShowEditValidation] = useState(false)
   const scheduledChecksSectionRef = useRef<ScheduledChecksSectionRef>(null)
 
   // Redirect /schedule to /schedule/backups
@@ -322,6 +324,7 @@ const Schedule: React.FC = () => {
   })
 
   const resetCreateForm = () => {
+    setShowCreateValidation(false) // Reset validation state
     setCreateForm({
       name: '',
       cron_expression: '0 2 * * *',
@@ -346,6 +349,7 @@ const Schedule: React.FC = () => {
 
   const handleCreateJob = (e: React.FormEvent) => {
     e.preventDefault()
+    setShowCreateValidation(true) // Enable validation display
     // Validate that at least one repository is selected
     if (!createForm.repository && createForm.repository_ids.length === 0) {
       toast.error('Please select at least one repository')
@@ -369,6 +373,7 @@ const Schedule: React.FC = () => {
 
   const handleUpdateJob = (e: React.FormEvent) => {
     e.preventDefault()
+    setShowEditValidation(true) // Enable validation display
     if (!editForm.repository && editForm.repository_ids.length === 0) {
       toast.error('Please select a repository')
       return
@@ -416,6 +421,7 @@ const Schedule: React.FC = () => {
   }
 
   const openEditModal = (job: ScheduledJob) => {
+    setShowEditValidation(false) // Reset validation state
     setEditingJob(job)
     // Convert UTC cron expression from server to local time for editing
     const localCron = convertCronToLocal(job.cron_expression)
@@ -1221,6 +1227,7 @@ const Schedule: React.FC = () => {
                 size="medium"
                 allowReorder={true}
                 filterMode="observe"
+                showValidation={showCreateValidation}
               />
 
               <Box>
@@ -1584,6 +1591,7 @@ const Schedule: React.FC = () => {
                 size="medium"
                 allowReorder={true}
                 filterMode="observe"
+                showValidation={showEditValidation}
               />
 
               <Box>

@@ -20,6 +20,7 @@ interface MultiRepositorySelectorProps {
   size?: 'small' | 'medium'
   allowReorder?: boolean
   error?: boolean
+  showValidation?: boolean // Only show error if explicitly requested (e.g., after submit attempt)
   filterMode?: 'observe' | null // Exclude repositories with this mode
 }
 
@@ -42,6 +43,7 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
   size = 'medium',
   allowReorder = false,
   error = false,
+  showValidation = false,
   filterMode = null,
 }) => {
   // Ensure repositories is always an array
@@ -127,7 +129,7 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
             helperText={helperText}
             required={required}
             size={size}
-            error={error || (required && selectedIds.length === 0)}
+            error={error || (showValidation && required && selectedIds.length === 0)}
             inputProps={{
               ...params.inputProps,
               required: required && selectedIds.length === 0,
