@@ -670,18 +670,19 @@ async def run_scheduled_job_now(
 
             # Generate archive name from template
             archive_name = None
+            now = datetime.now()
             if job.archive_name_template:
-                # Replace template placeholders
+                # Replace template placeholders (with milliseconds for uniqueness)
                 archive_name = job.archive_name_template
                 archive_name = archive_name.replace("{job_name}", job.name)
                 archive_name = archive_name.replace("{repo_name}", repo.name)
-                archive_name = archive_name.replace("{now}", datetime.now().strftime('%Y-%m-%dT%H:%M:%S'))
-                archive_name = archive_name.replace("{date}", datetime.now().strftime('%Y-%m-%d'))
-                archive_name = archive_name.replace("{time}", datetime.now().strftime('%H:%M:%S'))
-                archive_name = archive_name.replace("{timestamp}", str(int(datetime.now().timestamp())))
+                archive_name = archive_name.replace("{now}", now.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3])
+                archive_name = archive_name.replace("{date}", now.strftime('%Y-%m-%d'))
+                archive_name = archive_name.replace("{time}", now.strftime('%H:%M:%S'))
+                archive_name = archive_name.replace("{timestamp}", str(int(now.timestamp() * 1000)))
             else:
-                # Default template if none specified: use job name
-                archive_name = f"{job.name}-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
+                # Default template if none specified: use job name with milliseconds for uniqueness
+                archive_name = f"{job.name}-{now.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}"
 
             # Execute backup with optional prune/compact asynchronously (non-blocking)
             asyncio.create_task(
@@ -1278,18 +1279,19 @@ async def check_scheduled_jobs():
 
                         # Generate archive name from template
                         archive_name = None
+                        now = datetime.now()
                         if job.archive_name_template:
-                            # Replace template placeholders
+                            # Replace template placeholders (with milliseconds for uniqueness)
                             archive_name = job.archive_name_template
                             archive_name = archive_name.replace("{job_name}", job.name)
                             archive_name = archive_name.replace("{repo_name}", repo.name)
-                            archive_name = archive_name.replace("{now}", datetime.now().strftime('%Y-%m-%dT%H:%M:%S'))
-                            archive_name = archive_name.replace("{date}", datetime.now().strftime('%Y-%m-%d'))
-                            archive_name = archive_name.replace("{time}", datetime.now().strftime('%H:%M:%S'))
-                            archive_name = archive_name.replace("{timestamp}", str(int(datetime.now().timestamp())))
+                            archive_name = archive_name.replace("{now}", now.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3])
+                            archive_name = archive_name.replace("{date}", now.strftime('%Y-%m-%d'))
+                            archive_name = archive_name.replace("{time}", now.strftime('%H:%M:%S'))
+                            archive_name = archive_name.replace("{timestamp}", str(int(now.timestamp() * 1000)))
                         else:
-                            # Default template if none specified: use job name
-                            archive_name = f"{job.name}-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
+                            # Default template if none specified: use job name with milliseconds for uniqueness
+                            archive_name = f"{job.name}-{now.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}"
 
                         # Execute backup with optional prune/compact asynchronously (non-blocking)
                         asyncio.create_task(
