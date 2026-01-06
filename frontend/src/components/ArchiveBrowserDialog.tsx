@@ -283,7 +283,9 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
         {/* Items list - takes remaining space */}
         <Box sx={{ flexGrow: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexGrow: 1 }}>
+            <Box
+              sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexGrow: 1 }}
+            >
               <CircularProgress />
             </Box>
           ) : error ? (

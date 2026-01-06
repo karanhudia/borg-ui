@@ -489,8 +489,9 @@ const NotificationsTab: React.FC = () => {
                         <Chip label="All Repositories" size="small" variant="outlined" />
                       ) : notification.repositories.length > 0 ? (
                         <Chip
-                          label={`${notification.repositories.length} ${notification.repositories.length === 1 ? 'Repository' : 'Repositories'
-                            }`}
+                          label={`${notification.repositories.length} ${
+                            notification.repositories.length === 1 ? 'Repository' : 'Repositories'
+                          }`}
                           size="small"
                           color="primary"
                           variant="outlined"
