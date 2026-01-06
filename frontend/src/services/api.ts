@@ -174,6 +174,15 @@ export const settingsAPI = {
   // Log management
   getLogStorageStats: () => api.get('/settings/system/logs/storage'),
   manualLogCleanup: () => api.post('/settings/system/logs/cleanup'),
+
+  // Cache management
+  getCacheStats: () => api.get('/settings/cache/stats'),
+  clearCache: (repositoryId?: number) =>
+    api.post('/settings/cache/clear', null, { params: { repository_id: repositoryId } }),
+  updateCacheSettings: (ttlMinutes: number, maxSizeMb: number) =>
+    api.put('/settings/cache/settings', null, {
+      params: { cache_ttl_minutes: ttlMinutes, cache_max_size_mb: maxSizeMb },
+    }),
 }
 
 // Events API (Server-Sent Events)

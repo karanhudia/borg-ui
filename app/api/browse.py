@@ -9,16 +9,11 @@ from app.database.models import User, Repository
 from app.database.database import get_db
 from app.api.auth import get_current_user
 from app.core.borg import borg
+from app.services.cache_service import archive_cache
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()
-
-# In-memory cache for borg list results
-# Key: (repository_id, archive_name)
-# Value: {"data": list_of_items, "timestamp": datetime}
-_archive_cache = {}
-CACHE_TTL_SECONDS = 300  # 5 minutes
 
 @router.get("/{repository_id}/{archive_name}")
 async def browse_archive_contents(
@@ -35,26 +30,14 @@ async def browse_archive_contents(
             raise HTTPException(status_code=404, detail="Repository not found")
 
         # Check cache first
-        cache_key = (repository_id, archive_name)
-        now = datetime.utcnow()
+        all_items = await archive_cache.get(repository_id, archive_name)
 
-        if cache_key in _archive_cache:
-            cache_entry = _archive_cache[cache_key]
-            cache_age = (now - cache_entry["timestamp"]).total_seconds()
-            if cache_age < CACHE_TTL_SECONDS:
-                logger.info("Using cached archive contents",
-                           archive=archive_name,
-                           cache_age_seconds=int(cache_age))
-                all_items = cache_entry["data"]
-            else:
-                # Cache expired, remove it
-                del _archive_cache[cache_key]
-                all_items = None
+        if all_items is not None:
+            logger.info("Using cached archive contents",
+                       archive=archive_name,
+                       items_count=len(all_items))
         else:
-            all_items = None
-
-        # If not in cache or expired, fetch from borg
-        if all_items is None:
+            # If not in cache, fetch from borg
             result = await borg.list_archive_contents(
                 repository.path,
                 archive_name,
@@ -63,7 +46,7 @@ async def browse_archive_contents(
                 passphrase=repository.passphrase
             )
 
-            # Parse and cache all items
+            # Parse all items
             all_items = []
             if result.get("stdout"):
                 lines = result["stdout"].strip().split("\n")
@@ -87,10 +70,7 @@ async def browse_archive_contents(
                             continue
 
                 # Store in cache
-                _archive_cache[cache_key] = {
-                    "data": all_items,
-                    "timestamp": now
-                }
+                await archive_cache.set(repository_id, archive_name, all_items)
                 logger.info("Cached archive contents",
                            archive=archive_name,
                            items_count=len(all_items))

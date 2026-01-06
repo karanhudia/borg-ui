@@ -1,6 +1,6 @@
 import os
 import secrets
-from typing import List, Union
+from typing import List, Union, Optional
 from pathlib import Path
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
@@ -59,10 +59,18 @@ class Settings(BaseSettings):
     port: int = 8081
     workers: int = 2
     
-    # Cache settings
+    # Cache settings (legacy browse.py, being replaced by Redis cache)
     cache_enabled: bool = True
     cache_ttl: int = 300  # 5 minutes
-    
+
+    # Redis/Archive cache settings
+    redis_host: str = "localhost"
+    redis_port: int = 6379
+    redis_db: int = 0
+    redis_password: Optional[str] = None
+    cache_ttl_seconds: int = 7200  # 2 hours
+    cache_max_size_mb: int = 2048  # 2GB
+
     # Backup settings
     max_backup_jobs: int = 5
     backup_timeout: int = 3600  # 1 hour

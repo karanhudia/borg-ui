@@ -10,6 +10,7 @@ from app.core.security import get_current_user, get_password_hash, verify_passwo
 from sqlalchemy import text
 from app.core.borg import BorgInterface
 from app.config import settings as app_settings
+from app.services.cache_service import archive_cache
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["settings"])
@@ -698,5 +699,186 @@ async def manual_log_cleanup(
     except Exception as e:
         logger.error("Failed to run manual log cleanup", user=current_user.username, error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to run log cleanup: {str(e)}")
+
+
+# ============================================================================
+# Cache Management Endpoints
+# ============================================================================
+
+@router.get("/cache/stats")
+async def get_cache_stats(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get cache statistics and configuration.
+
+    Returns:
+    - Backend type (redis/in-memory)
+    - Cache statistics (hits, misses, hit rate, size, entry count)
+    - Current settings (TTL, max size)
+    - Availability status
+
+    Accessible to all authenticated users.
+    """
+    try:
+        # Get cache stats from service
+        stats = await archive_cache.get_stats()
+
+        # Get database settings
+        settings = db.query(SystemSettings).first()
+        if not settings:
+            settings = SystemSettings()
+            db.add(settings)
+            db.commit()
+
+        # Combine with database settings
+        stats["cache_ttl_minutes"] = settings.cache_ttl_minutes
+        stats["cache_max_size_mb"] = settings.cache_max_size_mb
+
+        return stats
+
+    except Exception as e:
+        logger.error("Failed to get cache stats", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to get cache statistics: {str(e)}")
+
+
+@router.post("/cache/clear")
+async def clear_cache(
+    repository_id: Optional[int] = Query(None, description="Repository ID to clear cache for (or None for all)"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Clear archive cache.
+
+    - If repository_id provided: Clear cache for that repository only
+    - If repository_id is None: Clear all cache entries
+
+    Requires admin access.
+
+    Returns:
+    - Number of cache entries cleared
+    """
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        if repository_id is not None:
+            # Validate repository exists
+            repository = db.query(Repository).filter(Repository.id == repository_id).first()
+            if not repository:
+                raise HTTPException(status_code=404, detail="Repository not found")
+
+            # Clear cache for specific repository
+            cleared_count = await archive_cache.clear_repository(repository_id)
+            logger.info("Cache cleared for repository",
+                       user=current_user.username,
+                       repository_id=repository_id,
+                       cleared_count=cleared_count)
+
+            return {
+                "cleared_count": cleared_count,
+                "repository_id": repository_id,
+                "message": f"Cleared {cleared_count} cache entries for repository {repository_id}"
+            }
+        else:
+            # Clear all cache
+            cleared_count = await archive_cache.clear_all()
+            logger.info("Cache cleared (all repositories)",
+                       user=current_user.username,
+                       cleared_count=cleared_count)
+
+            return {
+                "cleared_count": cleared_count,
+                "repository_id": None,
+                "message": f"Cleared all cache ({cleared_count} entries)"
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to clear cache",
+                    user=current_user.username,
+                    repository_id=repository_id,
+                    error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to clear cache: {str(e)}")
+
+
+@router.put("/cache/settings")
+async def update_cache_settings(
+    cache_ttl_minutes: Optional[int] = Query(None, ge=1, le=10080, description="Cache TTL in minutes (1-10080)"),
+    cache_max_size_mb: Optional[int] = Query(None, ge=100, le=10240, description="Max cache size in MB (100-10240)"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Update cache settings.
+
+    Parameters:
+    - cache_ttl_minutes: Cache time-to-live in minutes (1 minute to 7 days)
+    - cache_max_size_mb: Maximum cache size in megabytes (100MB to 10GB)
+
+    Note: TTL changes only affect new cache entries. Existing entries keep their original TTL.
+
+    Requires admin access.
+
+    Returns:
+    - Updated settings
+    """
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    if cache_ttl_minutes is None and cache_max_size_mb is None:
+        raise HTTPException(status_code=400, detail="At least one setting must be provided")
+
+    try:
+        # Get or create system settings
+        settings = db.query(SystemSettings).first()
+        if not settings:
+            settings = SystemSettings()
+            db.add(settings)
+
+        # Track changes for logging
+        changes = {}
+
+        # Update TTL
+        if cache_ttl_minutes is not None:
+            old_ttl = settings.cache_ttl_minutes
+            settings.cache_ttl_minutes = cache_ttl_minutes
+            changes["cache_ttl_minutes"] = {"old": old_ttl, "new": cache_ttl_minutes}
+
+            # Update config for new cache entries
+            app_settings.cache_ttl_seconds = cache_ttl_minutes * 60
+
+        # Update max size
+        if cache_max_size_mb is not None:
+            old_size = settings.cache_max_size_mb
+            settings.cache_max_size_mb = cache_max_size_mb
+            changes["cache_max_size_mb"] = {"old": old_size, "new": cache_max_size_mb}
+
+            # Update config for cache service
+            app_settings.cache_max_size_mb = cache_max_size_mb
+
+        db.commit()
+
+        logger.info("Cache settings updated",
+                   user=current_user.username,
+                   changes=changes)
+
+        return {
+            "cache_ttl_minutes": settings.cache_ttl_minutes,
+            "cache_max_size_mb": settings.cache_max_size_mb,
+            "message": "Cache settings updated successfully. Note: TTL changes only affect new cache entries."
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error("Failed to update cache settings",
+                    user=current_user.username,
+                    error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to update cache settings: {str(e)}")
 
  
