@@ -65,6 +65,7 @@ See [Installation Guide](installation) for other methods and security best pract
 
 - **[Notifications Setup](notifications)** - Email, Slack, Discord, and 100+ services
 - **[SSH Keys Guide](ssh-keys)** - Remote backup configuration
+- **[Cache Configuration](cache)** - Redis setup for 600x faster archive browsing
 - **[Security Guide](security)** - Hardening and best practices
 
 ### Reference

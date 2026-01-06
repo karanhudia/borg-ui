@@ -90,8 +90,10 @@ services:
       # Customize if you change volume mappings (e.g., LOCAL_MOUNT_POINTS=/local,/mylocalserver,/data)
       - LOCAL_MOUNT_POINTS=${LOCAL_MOUNT_POINTS:-/local}
 
-      # Redis cache settings
-      # Option 1: External Redis URL (takes precedence if set)
+      # Redis cache settings (for 600x faster archive browsing)
+      # See: https://karanhudia.github.io/borg-ui/cache for detailed setup guide
+
+      # Option 1: External Redis URL (takes precedence if set, can also configure via UI)
       # Use this for remote Redis instances with more RAM
       # Examples:
       #   - redis://192.168.1.100:6379/0 (external Redis)
@@ -99,14 +101,14 @@ services:
       #   - rediss://secure-host:6380/0 (with TLS)
       # - REDIS_URL=redis://192.168.1.100:6379/0
 
-      # Option 2: Local Redis (docker-compose service)
+      # Option 2: Local Redis (docker-compose service) - default, no config needed
       # Used if REDIS_URL is not set
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_DB=0
       # - REDIS_PASSWORD=your-redis-password
 
-      # Cache behavior
+      # Cache behavior (can also configure via Settings → Cache in UI)
       - CACHE_TTL_SECONDS=7200        # 2 hours
       - CACHE_MAX_SIZE_MB=2048        # 2GB
 

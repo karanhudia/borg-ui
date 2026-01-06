@@ -34,7 +34,7 @@ A modern web interface for [Borg Backup](https://borgbackup.readthedocs.io/). Ze
 ## Features
 
 - **Backup Management** - Create, schedule, and monitor backups with live progress tracking
-- **Archive Browser** - Browse and restore files from any backup archive
+- **Archive Browser** - Browse and restore files from any backup archive with Redis caching (600x faster for large repos)
 - **Repository Management** - Support for local, SSH, and SFTP repositories with multiple compression options
 - **Scheduling** - Visual cron job builder with execution history
 - **Pre/Post Backup Hooks** - Run custom scripts before/after backups (e.g., stop Docker containers, database dumps)
