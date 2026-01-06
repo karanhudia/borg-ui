@@ -14,8 +14,6 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  FormControlLabel,
-  Checkbox,
   Chip,
   Stack,
   Alert,
@@ -24,14 +22,20 @@ import {
 import { Edit, Trash2, Play, Shield } from 'lucide-react'
 import { repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
-import { formatDate, formatRelativeTime } from '../utils/dateUtils'
+import {
+  formatDate,
+  formatRelativeTime,
+  convertCronToUTC,
+  convertCronToLocal,
+} from '../utils/dateUtils'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
+import CronPickerField from './CronPickerField'
 
 interface ScheduledCheck {
   repository_id: number
   repository_name: string
   repository_path: string
-  check_interval_days: number | null
+  check_cron_expression: string | null
   last_scheduled_check: string | null
   next_scheduled_check: string | null
   check_max_duration: number
@@ -49,12 +53,9 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
   const [showDialog, setShowDialog] = useState(false)
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(null)
   const [formData, setFormData] = useState({
-    interval_days: 7,
+    cron_expression: '0 2 * * 0', // Default: Weekly on Sunday at 2 AM
     max_duration: 3600,
   })
-  const [useCustomInterval, setUseCustomInterval] = useState(false)
-  const [customIntervalValue, setCustomIntervalValue] = useState(1)
-  const [customIntervalUnit, setCustomIntervalUnit] = useState<'hours' | 'days'>('days')
 
   // Fetch repositories
   const { data: repositoriesData, isLoading: loadingRepositories } = useQuery({
@@ -117,36 +118,22 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
   const openAddDialog = () => {
     setSelectedRepositoryId(null)
     setFormData({
-      interval_days: 7,
+      cron_expression: '0 2 * * 0', // Weekly on Sunday at 2 AM
       max_duration: 3600,
     })
-    setUseCustomInterval(false)
     setShowDialog(true)
   }
 
   const openEditDialog = (check: ScheduledCheck) => {
     setSelectedRepositoryId(check.repository_id)
-    const intervalDays = check.check_interval_days || 7
-    // Check if interval is custom (not in preset list)
-    const isCustom = ![7, 14, 30, 90].includes(intervalDays)
+    // Convert UTC cron expression to local time for editing
+    const localCron = check.check_cron_expression
+      ? convertCronToLocal(check.check_cron_expression)
+      : '0 2 * * 0'
     setFormData({
-      interval_days: intervalDays,
+      cron_expression: localCron,
       max_duration: check.check_max_duration,
     })
-    setUseCustomInterval(isCustom)
-
-    // Set custom interval values
-    if (isCustom) {
-      // If less than 1 day, show in hours
-      if (intervalDays < 1) {
-        setCustomIntervalValue(intervalDays * 24)
-        setCustomIntervalUnit('hours')
-      } else {
-        setCustomIntervalValue(intervalDays)
-        setCustomIntervalUnit('days')
-      }
-    }
-
     setShowDialog(true)
   }
 
@@ -161,9 +148,15 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
       return
     }
 
+    // Convert cron expression from local time to UTC before sending to server
+    const utcCron = convertCronToUTC(formData.cron_expression)
+
     updateMutation.mutate({
       repoId: selectedRepositoryId,
-      data: formData,
+      data: {
+        ...formData,
+        cron_expression: utcCron,
+      },
     })
   }
 
@@ -171,7 +164,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
     if (confirm(`Disable scheduled check for ${check.repository_name}?`)) {
       updateMutation.mutate({
         repoId: check.repository_id,
-        data: { interval_days: 0 },
+        data: { cron_expression: '' },
       })
     }
   }
@@ -192,16 +185,23 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
       ),
     },
     {
-      id: 'interval',
-      label: 'Interval',
-      render: (check) => (
-        <Chip
-          label={`Every ${check.check_interval_days} days`}
-          size="small"
-          color="info"
-          variant="outlined"
-        />
-      ),
+      id: 'schedule',
+      label: 'Schedule',
+      render: (check) => {
+        // Convert UTC cron expression to local time for display
+        const localCron = check.check_cron_expression
+          ? convertCronToLocal(check.check_cron_expression)
+          : 'Not configured'
+        return (
+          <Chip
+            label={localCron}
+            size="small"
+            color="info"
+            variant="outlined"
+            sx={{ fontFamily: 'monospace' }}
+          />
+        )
+      },
     },
     {
       id: 'last_check',
@@ -328,90 +328,14 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
               </Select>
             </FormControl>
 
-            <Box>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={useCustomInterval}
-                    onChange={(e) => {
-                      setUseCustomInterval(e.target.checked)
-                      if (!e.target.checked) {
-                        setFormData({ ...formData, interval_days: 7 })
-                      }
-                    }}
-                  />
-                }
-                label="Use custom interval"
-              />
-            </Box>
-
-            {!useCustomInterval ? (
-              <FormControl fullWidth>
-                <InputLabel>Check Interval</InputLabel>
-                <Select
-                  value={formData.interval_days}
-                  onChange={(e) =>
-                    setFormData({ ...formData, interval_days: Number(e.target.value) })
-                  }
-                  label="Check Interval"
-                >
-                  <MenuItem value={7}>Every 7 days (weekly)</MenuItem>
-                  <MenuItem value={14}>Every 14 days</MenuItem>
-                  <MenuItem value={30}>Every 30 days (monthly)</MenuItem>
-                  <MenuItem value={90}>Every 90 days (quarterly)</MenuItem>
-                </Select>
-              </FormControl>
-            ) : (
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                <TextField
-                  label="Interval"
-                  type="number"
-                  value={customIntervalValue}
-                  onChange={(e) => {
-                    const val = Number(e.target.value)
-                    setCustomIntervalValue(val)
-                    const days = customIntervalUnit === 'hours' ? val / 24 : val
-                    setFormData({ ...formData, interval_days: days })
-                  }}
-                  helperText={
-                    customIntervalUnit === 'hours'
-                      ? `${customIntervalValue} hours = ${(customIntervalValue / 24).toFixed(2)} days`
-                      : `${customIntervalValue} day${customIntervalValue !== 1 ? 's' : ''}`
-                  }
-                  sx={{ flex: 2 }}
-                  inputProps={{
-                    min: customIntervalUnit === 'hours' ? 1 : 0.1,
-                    step: customIntervalUnit === 'hours' ? 1 : 0.1,
-                  }}
-                />
-                <FormControl sx={{ flex: 1 }}>
-                  <InputLabel>Unit</InputLabel>
-                  <Select
-                    value={customIntervalUnit}
-                    onChange={(e) => {
-                      const newUnit = e.target.value as 'hours' | 'days'
-                      setCustomIntervalUnit(newUnit)
-                      // Convert the value
-                      if (newUnit === 'hours') {
-                        // Converting from days to hours
-                        const hours = customIntervalValue * 24
-                        setCustomIntervalValue(hours)
-                        setFormData({ ...formData, interval_days: hours / 24 })
-                      } else {
-                        // Converting from hours to days
-                        const days = customIntervalValue / 24
-                        setCustomIntervalValue(days)
-                        setFormData({ ...formData, interval_days: days })
-                      }
-                    }}
-                    label="Unit"
-                  >
-                    <MenuItem value="hours">Hours</MenuItem>
-                    <MenuItem value="days">Days</MenuItem>
-                  </Select>
-                </FormControl>
-              </Box>
-            )}
+            <CronPickerField
+              value={formData.cron_expression}
+              onChange={(value) => setFormData({ ...formData, cron_expression: value })}
+              label="Check Schedule"
+              required={true}
+              fullWidth={true}
+              size="medium"
+            />
 
             <TextField
               label="Max Duration (seconds)"

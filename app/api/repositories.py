@@ -2429,16 +2429,26 @@ async def update_check_schedule(
 ):
     """Update scheduled check configuration for repository"""
     try:
-        from datetime import datetime, timedelta
+        from datetime import datetime
+        from croniter import croniter
 
         repo = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repo:
             raise HTTPException(status_code=404, detail="Repository not found")
 
         # Update check schedule settings
-        interval_days = request.get("interval_days")
-        if interval_days is not None:
-            repo.check_interval_days = interval_days if interval_days > 0 else None
+        cron_expression = request.get("cron_expression")
+        if cron_expression is not None:
+            # Set to None if empty string or "disabled"
+            if not cron_expression or cron_expression.strip() == "":
+                repo.check_cron_expression = None
+            else:
+                # Validate cron expression
+                try:
+                    croniter(cron_expression)
+                    repo.check_cron_expression = cron_expression
+                except Exception as e:
+                    raise HTTPException(status_code=400, detail=f"Invalid cron expression: {str(e)}")
 
         max_duration = request.get("max_duration")
         if max_duration is not None:
@@ -2452,11 +2462,15 @@ async def update_check_schedule(
         if notify_on_failure is not None:
             repo.notify_on_check_failure = notify_on_failure
 
-        # Calculate next check time
-        if repo.check_interval_days and repo.check_interval_days > 0:
-            # If there's a last scheduled check, use that as base, otherwise use now
-            last_check = repo.last_scheduled_check or datetime.utcnow()
-            repo.next_scheduled_check = last_check + timedelta(days=repo.check_interval_days)
+        # Calculate next check time from cron expression
+        if repo.check_cron_expression:
+            try:
+                base_time = datetime.utcnow()
+                cron = croniter(repo.check_cron_expression, base_time)
+                repo.next_scheduled_check = cron.get_next(datetime)
+            except Exception as e:
+                logger.error("Failed to calculate next check time", error=str(e), repo_id=repo_id)
+                repo.next_scheduled_check = None
         else:
             # Disabled - clear next scheduled check
             repo.next_scheduled_check = None
@@ -2466,7 +2480,7 @@ async def update_check_schedule(
 
         logger.info("Check schedule updated",
                    repo_id=repo_id,
-                   interval_days=repo.check_interval_days,
+                   cron_expression=repo.check_cron_expression,
                    next_check=repo.next_scheduled_check)
 
         return {
@@ -2474,7 +2488,7 @@ async def update_check_schedule(
             "repository": {
                 "id": repo.id,
                 "name": repo.name,
-                "check_interval_days": repo.check_interval_days,
+                "check_cron_expression": repo.check_cron_expression,
                 "last_scheduled_check": serialize_datetime(repo.last_scheduled_check),
                 "next_scheduled_check": serialize_datetime(repo.next_scheduled_check),
                 "check_max_duration": repo.check_max_duration,
@@ -2504,13 +2518,13 @@ async def get_check_schedule(
             "repository_id": repo.id,
             "repository_name": repo.name,
             "repository_path": repo.path,
-            "check_interval_days": repo.check_interval_days,
+            "check_cron_expression": repo.check_cron_expression,
             "last_scheduled_check": serialize_datetime(repo.last_scheduled_check),
             "next_scheduled_check": serialize_datetime(repo.next_scheduled_check),
             "check_max_duration": repo.check_max_duration,
             "notify_on_check_success": repo.notify_on_check_success,
             "notify_on_check_failure": repo.notify_on_check_failure,
-            "enabled": repo.check_interval_days is not None and repo.check_interval_days > 0
+            "enabled": repo.check_cron_expression is not None and repo.check_cron_expression != ""
         }
     except HTTPException:
         raise

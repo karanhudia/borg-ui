@@ -69,7 +69,7 @@ class Repository(Base):
     custom_flags = Column(Text, nullable=True)  # Custom command-line flags for borg create (e.g., "--stats --progress")
 
     # Scheduled checks
-    check_interval_days = Column(Integer, nullable=True)  # NULL = disabled, 7 = weekly, 30 = monthly
+    check_cron_expression = Column(String, nullable=True)  # NULL = disabled, cron expression for schedule
     last_scheduled_check = Column(DateTime, nullable=True)  # Last scheduled check execution time
     next_scheduled_check = Column(DateTime, nullable=True)  # Next scheduled check time
     check_max_duration = Column(Integer, default=3600)  # Max check duration in seconds (for partial checks)
