@@ -59,6 +59,12 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
     .map((id) => availableRepos.find((r) => r.id === id))
     .filter(Boolean) as Repository[]
 
+  // Debug logging (temporary)
+  if (process.env.NODE_ENV === 'development' && selectedIds.length > 0) {
+    console.log('[MultiRepositorySelector] selectedIds:', selectedIds)
+    console.log('[MultiRepositorySelector] selectedRepos:', selectedRepos.map(r => ({ id: r.id, name: r.name })))
+  }
+
   // Handle reordering
   const handleMoveUp = (index: number) => {
     if (index === 0) return
