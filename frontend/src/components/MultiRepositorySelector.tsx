@@ -20,7 +20,6 @@ interface MultiRepositorySelectorProps {
   size?: 'small' | 'medium'
   allowReorder?: boolean
   error?: boolean
-  showValidation?: boolean // Only show error if explicitly requested (e.g., after submit attempt)
   filterMode?: 'observe' | null // Exclude repositories with this mode
 }
 
@@ -43,7 +42,6 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
   size = 'medium',
   allowReorder = false,
   error = false,
-  showValidation = false,
   filterMode = null,
 }) => {
   // Ensure repositories is always an array
@@ -58,12 +56,6 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
   const selectedRepos = selectedIds
     .map((id) => availableRepos.find((r) => r.id === id))
     .filter(Boolean) as Repository[]
-
-  // Debug logging (temporary)
-  if (process.env.NODE_ENV === 'development' && selectedIds.length > 0) {
-    console.log('[MultiRepositorySelector] selectedIds:', selectedIds)
-    console.log('[MultiRepositorySelector] selectedRepos:', selectedRepos.map(r => ({ id: r.id, name: r.name })))
-  }
 
   // Handle reordering
   const handleMoveUp = (index: number) => {
@@ -92,11 +84,11 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
         options={availableRepos}
         value={selectedRepos}
         onChange={(_, newValue) => {
-          // Use the order from the autocomplete selection
+          // Preserve order for existing items, add new items at end
           const newIds = newValue.map((r) => r.id)
-          // Remove duplicates (in case of any bug) and preserve selection order
-          const uniqueIds = Array.from(new Set(newIds))
-          onChange(uniqueIds)
+          const existingIds = selectedIds.filter((id) => newIds.includes(id))
+          const addedIds = newIds.filter((id) => !selectedIds.includes(id))
+          onChange([...existingIds, ...addedIds])
         }}
         getOptionLabel={(option) => option.name}
         isOptionEqualToValue={(option, value) => option.id === value.id}
@@ -135,7 +127,7 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
             helperText={helperText}
             required={required}
             size={size}
-            error={error || (showValidation && required && selectedIds.length === 0)}
+            error={error || (required && selectedIds.length === 0)}
             inputProps={{
               ...params.inputProps,
               required: required && selectedIds.length === 0,
