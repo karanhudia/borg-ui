@@ -174,9 +174,25 @@ async def create_scheduled_job(
             if repo and repo.mode == "observe":
                 raise HTTPException(status_code=400, detail=f"Repository '{repo.name}' is in observability-only mode")
 
-        # Check multi-repo
+        # Check multi-repo and deduplicate
+        unique_repo_ids = None
         if job_data.repository_ids:
+            # Remove duplicates while preserving order
+            seen = set()
+            unique_repo_ids = []
             for repo_id in job_data.repository_ids:
+                if repo_id not in seen:
+                    seen.add(repo_id)
+                    unique_repo_ids.append(repo_id)
+
+            # Log if duplicates were found
+            if len(unique_repo_ids) != len(job_data.repository_ids):
+                logger.warning("Removed duplicate repository IDs from create request",
+                             original=job_data.repository_ids,
+                             cleaned=unique_repo_ids)
+
+            # Validate repositories
+            for repo_id in unique_repo_ids:
                 repo = db.query(Repository).filter_by(id=repo_id).first()
                 if not repo:
                     raise HTTPException(status_code=400, detail=f"Repository ID {repo_id} not found")
@@ -212,9 +228,9 @@ async def create_scheduled_job(
         db.commit()
         db.refresh(scheduled_job)
 
-        # Create junction table entries for multi-repo schedule
-        if job_data.repository_ids:
-            for order, repo_id in enumerate(job_data.repository_ids):
+        # Create junction table entries for multi-repo schedule with deduplicated list
+        if unique_repo_ids:
+            for order, repo_id in enumerate(unique_repo_ids):
                 repo_link = ScheduledJobRepository(
                     scheduled_job_id=scheduled_job.id,
                     repository_id=repo_id,
@@ -222,7 +238,7 @@ async def create_scheduled_job(
                 )
                 db.add(repo_link)
             db.commit()
-            logger.info("Created multi-repo schedule", schedule_id=scheduled_job.id, repo_count=len(job_data.repository_ids))
+            logger.info("Created multi-repo schedule", schedule_id=scheduled_job.id, repo_count=len(unique_repo_ids))
         
         logger.info("Scheduled job created", name=job_data.name, user=current_user.username)
         
@@ -508,8 +524,23 @@ async def update_scheduled_job(
         # Handle repository_ids update (multi-repo)
         if job_data.repository_ids is not None:
             from app.database.models import Repository
-            # Validate all repositories
+
+            # Remove duplicates while preserving order
+            seen = set()
+            unique_repo_ids = []
             for repo_id in job_data.repository_ids:
+                if repo_id not in seen:
+                    seen.add(repo_id)
+                    unique_repo_ids.append(repo_id)
+
+            # Log if duplicates were found
+            if len(unique_repo_ids) != len(job_data.repository_ids):
+                logger.warning("Removed duplicate repository IDs from request",
+                             original=job_data.repository_ids,
+                             cleaned=unique_repo_ids)
+
+            # Validate all repositories
+            for repo_id in unique_repo_ids:
                 repo = db.query(Repository).filter_by(id=repo_id).first()
                 if not repo:
                     raise HTTPException(status_code=400, detail=f"Repository ID {repo_id} not found")
@@ -519,8 +550,8 @@ async def update_scheduled_job(
             # Delete existing junction table entries
             db.query(ScheduledJobRepository).filter_by(scheduled_job_id=job_id).delete()
 
-            # Create new junction table entries
-            for order, repo_id in enumerate(job_data.repository_ids):
+            # Create new junction table entries with deduplicated list
+            for order, repo_id in enumerate(unique_repo_ids):
                 repo_link = ScheduledJobRepository(
                     scheduled_job_id=job_id,
                     repository_id=repo_id,
@@ -528,7 +559,7 @@ async def update_scheduled_job(
                 )
                 db.add(repo_link)
 
-            logger.info("Updated multi-repo schedule", schedule_id=job_id, repo_count=len(job_data.repository_ids))
+            logger.info("Updated multi-repo schedule", schedule_id=job_id, repo_count=len(unique_repo_ids))
 
         job.updated_at = datetime.now(timezone.utc)
         db.commit()
