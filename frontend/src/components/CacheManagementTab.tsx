@@ -48,6 +48,7 @@ const CacheManagementTab: React.FC = () => {
   const [redisUrl, setRedisUrl] = useState('')
   const [hasChanges, setHasChanges] = useState(false)
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
+  const [testingConnection, setTestingConnection] = useState(false)
 
   // Fetch cache stats (refresh every 10s for real-time monitoring)
   const { data: cacheData, isLoading: loadingCache } = useQuery({
@@ -121,6 +122,39 @@ const CacheManagementTab: React.FC = () => {
 
   const handleClearCache = () => {
     clearCacheMutation.mutate()
+  }
+
+  // Test Redis connection
+  const handleTestConnection = async () => {
+    if (!redisUrl.trim()) {
+      toast.error('Please enter a Redis URL first')
+      return
+    }
+
+    setTestingConnection(true)
+    try {
+      const response = await settingsAPI.updateCacheSettings(
+        stats?.cache_ttl_minutes || ttlMinutes,
+        stats?.cache_max_size_mb || maxSizeMb,
+        redisUrl
+      )
+
+      const data = response.data
+      if (data.backend === 'redis') {
+        toast.success(`✓ Connected to Redis: ${data.connection_info}`, { duration: 5000 })
+        queryClient.invalidateQueries({ queryKey: ['cache-stats'] })
+        setHasChanges(false)
+      } else {
+        toast.error(`Failed to connect: ${data.message || 'Using in-memory fallback'}`, {
+          duration: 5000,
+        })
+      }
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.detail || 'Connection test failed'
+      toast.error(errorMsg, { duration: 5000 })
+    } finally {
+      setTestingConnection(false)
+    }
   }
 
   // Calculate metrics
@@ -197,7 +231,13 @@ const CacheManagementTab: React.FC = () => {
               <Divider />
 
               {/* Status Grid */}
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr 1fr' }, gap: 2 }}>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr 1fr' },
+                  gap: 2,
+                }}
+              >
                 <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
                   <Typography variant="h4" color="primary">
                     {stats?.entry_count || 0}
@@ -265,16 +305,16 @@ const CacheManagementTab: React.FC = () => {
               {/* Warning if usage is high */}
               {usagePercent >= 80 && (
                 <Alert severity="warning" icon={<AlertTriangle size={20} />}>
-                  Cache usage is at {usagePercent.toFixed(1)}%. Consider increasing the max size limit or
-                  clearing old entries.
+                  Cache usage is at {usagePercent.toFixed(1)}%. Consider increasing the max size
+                  limit or clearing old entries.
                 </Alert>
               )}
 
               {/* Backend Info */}
               {stats?.backend === 'in-memory' && (
                 <Alert severity="info">
-                  Currently using in-memory cache. Redis is unavailable or not configured. In-memory cache is
-                  limited and will be lost on restart.
+                  Currently using in-memory cache. Redis is unavailable or not configured. In-memory
+                  cache is limited and will be lost on restart.
                 </Alert>
               )}
 
@@ -301,7 +341,9 @@ const CacheManagementTab: React.FC = () => {
               <Typography variant="h6">Cache Configuration</Typography>
               <Divider />
 
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
+              <Box
+                sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}
+              >
                 <TextField
                   label="Cache TTL (minutes)"
                   type="number"
@@ -323,18 +365,34 @@ const CacheManagementTab: React.FC = () => {
                 />
               </Box>
 
-              <TextField
-                label="External Redis URL (Optional)"
-                fullWidth
-                value={redisUrl}
-                onChange={(e) => setRedisUrl(e.target.value)}
-                placeholder="redis://192.168.1.100:6379/0"
-                helperText="Leave empty to use local Docker Redis. Format: redis://[password@]host:port/db or rediss:// for TLS"
-              />
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="flex-start">
+                <TextField
+                  label="External Redis URL (Optional)"
+                  fullWidth
+                  value={redisUrl}
+                  onChange={(e) => setRedisUrl(e.target.value)}
+                  placeholder="redis://192.168.1.100:6379/0"
+                  helperText="Format: redis://[password@]host:port/db or rediss:// for TLS"
+                  error={
+                    redisUrl.trim() !== '' &&
+                    !redisUrl.startsWith('redis://') &&
+                    !redisUrl.startsWith('rediss://')
+                  }
+                />
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleTestConnection}
+                  disabled={!redisUrl.trim() || testingConnection}
+                  sx={{ minWidth: 120, mt: 2.5, flexShrink: 0 }}
+                >
+                  {testingConnection ? 'Testing...' : 'Test Connection'}
+                </Button>
+              </Stack>
 
               <Alert severity="info">
-                <strong>Note:</strong> TTL changes only affect new cache entries. Existing entries keep their
-                original TTL until they expire.
+                <strong>Note:</strong> TTL changes only affect new cache entries. Existing entries
+                keep their original TTL until they expire.
               </Alert>
 
               <Box>
@@ -350,7 +408,6 @@ const CacheManagementTab: React.FC = () => {
             </Stack>
           </CardContent>
         </Card>
-
       </Stack>
 
       {/* Clear Cache Confirmation Dialog */}
@@ -358,8 +415,8 @@ const CacheManagementTab: React.FC = () => {
         <DialogTitle>Clear All Cache?</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            This will remove all {stats?.entry_count || 0} cached archive entries. The next time you browse an
-            archive, it will need to rebuild the cache (60-90 seconds for large archives).
+            This will remove all {stats?.entry_count || 0} cached archive entries. The next time you
+            browse an archive, it will need to rebuild the cache (60-90 seconds for large archives).
             <br />
             <br />
             Are you sure you want to continue?

@@ -600,7 +600,14 @@ const Archives: React.FC = () => {
             </Box>
           </Stack>
         </DialogTitle>
-        <DialogContent>
+        <DialogContent
+          dividers
+          sx={{
+            height: 600,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
           {loadingArchiveContents ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
               <CircularProgress size={48} />
@@ -609,15 +616,15 @@ const Archives: React.FC = () => {
               </Typography>
             </Box>
           ) : archiveContents?.data?.items ? (
-            <Stack spacing={3}>
+            <Stack spacing={2} sx={{ height: '100%', overflow: 'hidden' }}>
               {/* Breadcrumb Navigation - Always visible for navigation */}
               <Box
                 sx={{
-                  mb: 2,
                   display: 'flex',
                   alignItems: 'center',
                   flexWrap: 'wrap',
                   gap: 0.5,
+                  flexShrink: 0,
                 }}
               >
                 {getBreadcrumbs().map((crumb, index) => (
@@ -647,9 +654,9 @@ const Archives: React.FC = () => {
 
               {/* Interactive File Browser */}
               {archiveContents?.data?.items && archiveContents.data.items.length > 0 ? (
-                <Box>
+                <Box sx={{ flex: 1, overflow: 'hidden' }}>
                   {/* Files and Folders List */}
-                  <Box sx={{ maxHeight: 400, overflowY: 'auto' }}>
+                  <Box sx={{ height: '100%', overflowY: 'auto' }}>
                     {(() => {
                       const { folders, files } = getFilesInCurrentPath()
 

@@ -821,11 +821,20 @@ class ArchiveCacheService:
                     client = self._redis_backend._get_client()
                     client.ping()
                     self._current_backend = self._redis_backend
+                    # Get connection info for display
+                    safe_url = redis_url
+                    if "@" in safe_url:
+                        parts = safe_url.split("@", 1)
+                        if ":" in parts[0]:
+                            protocol = parts[0].split("://", 1)[0]
+                            safe_url = f"{protocol}://:***@{parts[1]}"
+
                     logger.info(f"Reconfigured to external Redis backend (URL: {redis_url})")
                     return {
                         "success": True,
                         "backend": "redis",
                         "connection_type": "external_url",
+                        "connection_info": safe_url,
                         "message": f"Successfully connected to external Redis"
                     }
                 except Exception as e:
@@ -850,6 +859,7 @@ class ArchiveCacheService:
                         "success": True,
                         "backend": "redis",
                         "connection_type": "local",
+                        "connection_info": f"{settings.redis_host}:{settings.redis_port}/{settings.redis_db}",
                         "message": f"Connected to local Redis at {settings.redis_host}:{settings.redis_port}"
                     }
                 except Exception as e:
