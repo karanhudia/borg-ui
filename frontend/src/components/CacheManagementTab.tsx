@@ -35,6 +35,8 @@ interface CacheStats {
   cache_max_size_mb: number
   ttl_seconds?: number
   max_size_mb?: number
+  connection_type?: string
+  connection_info?: string
 }
 
 const CacheManagementTab: React.FC = () => {
@@ -176,6 +178,17 @@ const CacheManagementTab: React.FC = () => {
                   />
                 )}
               </Box>
+
+              {/* Connection Info */}
+              {stats && stats.connection_info && (
+                <Alert severity="info" sx={{ py: 0.5 }}>
+                  <Typography variant="caption">
+                    <strong>Connection:</strong> {stats.connection_info}
+                    {stats.connection_type === 'external_url' && ' (External Redis)'}
+                    {stats.connection_type === 'local' && ' (Local Docker)'}
+                  </Typography>
+                </Alert>
+              )}
 
               <Divider />
 
@@ -364,10 +377,15 @@ const CacheManagementTab: React.FC = () => {
                 <Typography variant="body2" color="text.secondary" component="div">
                   <ul style={{ margin: 0, paddingLeft: 20 }}>
                     <li>
-                      <strong>Redis:</strong> Distributed, persistent across restarts, supports clustering
+                      <strong>External Redis (URL):</strong> Connect to Redis on separate machine with more RAM
+                      (configure via REDIS_URL env variable)
                     </li>
                     <li>
-                      <strong>In-Memory:</strong> Fallback mode when Redis unavailable, lost on restart
+                      <strong>Local Redis (Docker):</strong> Redis container in docker-compose, persistent across
+                      app restarts
+                    </li>
+                    <li>
+                      <strong>In-Memory:</strong> Fallback mode when Redis unavailable, lost on app restart
                     </li>
                   </ul>
                 </Typography>

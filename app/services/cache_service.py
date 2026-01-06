@@ -126,6 +126,7 @@ class RedisBackend(CacheBackend):
 
     def __init__(
         self,
+        url: Optional[str] = None,
         host: str = "localhost",
         port: int = 6379,
         db: int = 0,
@@ -136,28 +137,39 @@ class RedisBackend(CacheBackend):
         Initialize Redis backend.
 
         Args:
-            host: Redis host
-            port: Redis port
-            db: Redis database number
-            password: Optional Redis password
+            url: Redis URL (e.g., redis://hostname:6379/0) - takes precedence if provided
+            host: Redis host (used if url not provided)
+            port: Redis port (used if url not provided)
+            db: Redis database number (used if url not provided)
+            password: Optional Redis password (used if url not provided)
             max_connections: Max connections in pool
         """
+        self.url = url
         self.host = host
         self.port = port
         self.db = db
         self.password = password
 
-        # Connection pool
-        self.pool = ConnectionPool(
-            host=host,
-            port=port,
-            db=db,
-            password=password,
-            max_connections=max_connections,
-            decode_responses=False,  # We handle bytes
-            socket_timeout=5,
-            socket_connect_timeout=5,
-        )
+        # Connection pool - use URL if provided, otherwise use host/port
+        if url:
+            self.pool = ConnectionPool.from_url(
+                url,
+                max_connections=max_connections,
+                decode_responses=False,  # We handle bytes
+                socket_timeout=5,
+                socket_connect_timeout=5,
+            )
+        else:
+            self.pool = ConnectionPool(
+                host=host,
+                port=port,
+                db=db,
+                password=password,
+                max_connections=max_connections,
+                decode_responses=False,  # We handle bytes
+                socket_timeout=5,
+                socket_connect_timeout=5,
+            )
 
         self._client: Optional[redis.Redis] = None
         self._is_available = False
@@ -483,8 +495,20 @@ class ArchiveCacheService:
         )
         self._current_backend: CacheBackend = self._memory_backend
 
-        # Try to initialize Redis if configured
-        if settings.redis_host and settings.redis_host.lower() != "disabled":
+        # Precedence: redis_url > redis_host/port > in-memory fallback
+
+        # Option 1: Try external Redis URL (highest priority)
+        if settings.redis_url and settings.redis_url.lower() != "disabled":
+            try:
+                self._redis_backend = RedisBackend(url=settings.redis_url)
+                self._current_backend = self._redis_backend
+                logger.info(f"Archive cache initialized with external Redis backend (URL: {settings.redis_url})")
+            except Exception as e:
+                logger.warning(f"Failed to initialize external Redis from URL, trying local: {e}")
+                # Fall through to try local Redis
+
+        # Option 2: Try local Redis (if external URL not configured or failed)
+        if self._current_backend == self._memory_backend and settings.redis_host and settings.redis_host.lower() != "disabled":
             try:
                 self._redis_backend = RedisBackend(
                     host=settings.redis_host,
@@ -493,12 +517,14 @@ class ArchiveCacheService:
                     password=settings.redis_password,
                 )
                 self._current_backend = self._redis_backend
-                logger.info(f"Archive cache initialized with Redis backend ({settings.redis_host}:{settings.redis_port})")
+                logger.info(f"Archive cache initialized with local Redis backend ({settings.redis_host}:{settings.redis_port})")
             except Exception as e:
-                logger.warning(f"Failed to initialize Redis, using in-memory cache: {e}")
+                logger.warning(f"Failed to initialize local Redis, using in-memory cache: {e}")
                 self._current_backend = self._memory_backend
-        else:
-            logger.info("Archive cache initialized with in-memory backend")
+
+        # Option 3: In-memory fallback (if no Redis configured or both failed)
+        if self._current_backend == self._memory_backend and not self._redis_backend:
+            logger.info("Archive cache initialized with in-memory backend (no Redis configured)")
 
     def _make_key(self, repo_id: int, archive_name: str) -> str:
         """
@@ -675,6 +701,30 @@ class ArchiveCacheService:
             # Add service-level info
             stats["ttl_seconds"] = settings.cache_ttl_seconds
             stats["max_size_mb"] = settings.cache_max_size_mb
+
+            # Add connection information
+            if isinstance(self._current_backend, RedisBackend):
+                if self._redis_backend and self._redis_backend.url:
+                    stats["connection_type"] = "external_url"
+                    # Redact password from URL for security
+                    safe_url = self._redis_backend.url
+                    if "@" in safe_url:
+                        # URL format: redis://:password@host:port/db
+                        # Redact password: redis://:***@host:port/db
+                        parts = safe_url.split("@", 1)
+                        if ":" in parts[0]:
+                            protocol = parts[0].split("://", 1)[0]
+                            stats["connection_info"] = f"{protocol}://:***@{parts[1]}"
+                        else:
+                            stats["connection_info"] = safe_url
+                    else:
+                        stats["connection_info"] = safe_url
+                else:
+                    stats["connection_type"] = "local"
+                    stats["connection_info"] = f"{self._redis_backend.host}:{self._redis_backend.port}/{self._redis_backend.db}"
+            else:
+                stats["connection_type"] = "in-memory"
+                stats["connection_info"] = "Python process memory"
 
             # Add Redis fallback status if applicable
             if self._redis_backend and self._current_backend == self._memory_backend:

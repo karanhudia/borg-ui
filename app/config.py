@@ -64,10 +64,18 @@ class Settings(BaseSettings):
     cache_ttl: int = 300  # 5 minutes
 
     # Redis/Archive cache settings
+    # Option 1: External Redis URL (takes precedence if set)
+    # Format: redis://[password@]hostname:port/db or rediss:// for TLS
+    # Example: redis://192.168.1.100:6379/0 or redis://:password@remote-host:6379/0
+    redis_url: Optional[str] = None
+
+    # Option 2: Local Redis (used if redis_url not set)
     redis_host: str = "localhost"
     redis_port: int = 6379
     redis_db: int = 0
     redis_password: Optional[str] = None
+
+    # Cache behavior settings
     cache_ttl_seconds: int = 7200  # 2 hours
     cache_max_size_mb: int = 2048  # 2GB
 
