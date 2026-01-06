@@ -215,8 +215,7 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
       <DialogContent
         dividers
         sx={{
-          minHeight: 600,
-          maxHeight: 600,
+          maxHeight: 'calc(100vh - 200px)',
           display: 'flex',
           flexDirection: 'column',
         }}
