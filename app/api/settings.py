@@ -735,6 +735,7 @@ async def get_cache_stats(
         # Combine with database settings
         stats["cache_ttl_minutes"] = settings.cache_ttl_minutes
         stats["cache_max_size_mb"] = settings.cache_max_size_mb
+        stats["redis_url"] = settings.redis_url
 
         return stats
 
@@ -809,6 +810,7 @@ async def clear_cache(
 async def update_cache_settings(
     cache_ttl_minutes: Optional[int] = Query(None, ge=1, le=10080, description="Cache TTL in minutes (1-10080)"),
     cache_max_size_mb: Optional[int] = Query(None, ge=100, le=10240, description="Max cache size in MB (100-10240)"),
+    redis_url: Optional[str] = Query(None, description="External Redis URL (e.g., redis://host:6379/0)"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -818,6 +820,7 @@ async def update_cache_settings(
     Parameters:
     - cache_ttl_minutes: Cache time-to-live in minutes (1 minute to 7 days)
     - cache_max_size_mb: Maximum cache size in megabytes (100MB to 10GB)
+    - redis_url: External Redis URL (optional). Use empty string to clear and use local Redis.
 
     Note: TTL changes only affect new cache entries. Existing entries keep their original TTL.
 
@@ -825,11 +828,12 @@ async def update_cache_settings(
 
     Returns:
     - Updated settings
+    - Redis connection result if redis_url was changed
     """
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    if cache_ttl_minutes is None and cache_max_size_mb is None:
+    if cache_ttl_minutes is None and cache_max_size_mb is None and redis_url is None:
         raise HTTPException(status_code=400, detail="At least one setting must be provided")
 
     try:
@@ -841,6 +845,36 @@ async def update_cache_settings(
 
         # Track changes for logging
         changes = {}
+        reconfigure_result = None
+
+        # Update Redis URL if provided
+        if redis_url is not None:
+            old_url = settings.redis_url
+            settings.redis_url = redis_url if redis_url.strip() else None
+            changes["redis_url"] = {
+                "old": old_url,
+                "new": settings.redis_url
+            }
+
+            # Reconfigure cache service with new Redis URL
+            try:
+                reconfigure_result = archive_cache.reconfigure(
+                    redis_url=settings.redis_url,
+                    cache_max_size_mb=cache_max_size_mb or settings.cache_max_size_mb
+                )
+
+                if not reconfigure_result["success"]:
+                    logger.warning("Redis reconfiguration failed, using fallback",
+                                 redis_url=settings.redis_url,
+                                 backend=reconfigure_result["backend"])
+            except Exception as reconfig_error:
+                logger.error("Failed to reconfigure cache service",
+                           redis_url=settings.redis_url,
+                           error=str(reconfig_error))
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to connect to Redis: {str(reconfig_error)}"
+                )
 
         # Update TTL
         if cache_ttl_minutes is not None:
@@ -860,17 +894,39 @@ async def update_cache_settings(
             # Update config for cache service
             app_settings.cache_max_size_mb = cache_max_size_mb
 
+            # If we didn't already reconfigure for redis_url, reconfigure for size
+            if redis_url is None and reconfigure_result is None:
+                try:
+                    reconfigure_result = archive_cache.reconfigure(
+                        cache_max_size_mb=cache_max_size_mb
+                    )
+                except Exception as reconfig_error:
+                    logger.warning("Failed to reconfigure cache size",
+                                 error=str(reconfig_error))
+
         db.commit()
 
         logger.info("Cache settings updated",
                    user=current_user.username,
                    changes=changes)
 
-        return {
+        response = {
             "cache_ttl_minutes": settings.cache_ttl_minutes,
             "cache_max_size_mb": settings.cache_max_size_mb,
+            "redis_url": settings.redis_url,
             "message": "Cache settings updated successfully. Note: TTL changes only affect new cache entries."
         }
+
+        # Add reconfiguration result if available
+        if reconfigure_result:
+            response["backend"] = reconfigure_result["backend"]
+            response["connection_info"] = reconfigure_result.get("connection_info")
+            if reconfigure_result["backend"] == "redis":
+                response["message"] += f" Connected to Redis: {reconfigure_result.get('connection_info', 'N/A')}"
+            elif reconfigure_result["backend"] == "in-memory":
+                response["message"] += " Using in-memory cache (Redis connection failed)."
+
+        return response
 
     except HTTPException:
         raise

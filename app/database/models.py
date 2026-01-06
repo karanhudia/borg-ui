@@ -306,6 +306,7 @@ class SystemSettings(Base):
     log_cleanup_on_startup = Column(Boolean, default=True)  # Run log cleanup on application startup
     cache_ttl_minutes = Column(Integer, default=120)  # Cache TTL in minutes (2 hours default)
     cache_max_size_mb = Column(Integer, default=2048)  # Maximum cache size in MB (2GB default)
+    redis_url = Column(String, nullable=True)  # External Redis URL (e.g., redis://host:6379/0)
     email_notifications = Column(Boolean, default=False)
     webhook_url = Column(String, nullable=True)
     auto_cleanup = Column(Boolean, default=False)

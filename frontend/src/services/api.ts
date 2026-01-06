@@ -179,10 +179,17 @@ export const settingsAPI = {
   getCacheStats: () => api.get('/settings/cache/stats'),
   clearCache: (repositoryId?: number) =>
     api.post('/settings/cache/clear', null, { params: { repository_id: repositoryId } }),
-  updateCacheSettings: (ttlMinutes: number, maxSizeMb: number) =>
-    api.put('/settings/cache/settings', null, {
-      params: { cache_ttl_minutes: ttlMinutes, cache_max_size_mb: maxSizeMb },
-    }),
+  updateCacheSettings: (ttlMinutes: number, maxSizeMb: number, redisUrl?: string) => {
+    const params: any = {
+      cache_ttl_minutes: ttlMinutes,
+      cache_max_size_mb: maxSizeMb,
+    }
+    // Only include redis_url if it's provided
+    if (redisUrl !== undefined) {
+      params.redis_url = redisUrl
+    }
+    return api.put('/settings/cache/settings', null, { params })
+  },
 }
 
 // Events API (Server-Sent Events)

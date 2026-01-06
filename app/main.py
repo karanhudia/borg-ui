@@ -108,6 +108,31 @@ async def startup_event():
     # Create first user if no users exist
     await create_first_user()
 
+    # Load Redis URL from database and reconfigure cache service
+    from app.services.cache_service import archive_cache
+    from app.database.database import SessionLocal
+    from app.database.models import SystemSettings
+    try:
+        db = SessionLocal()
+        try:
+            settings_obj = db.query(SystemSettings).first()
+            if settings_obj and settings_obj.redis_url:
+                result = archive_cache.reconfigure(
+                    redis_url=settings_obj.redis_url,
+                    cache_max_size_mb=settings_obj.cache_max_size_mb
+                )
+                if result["success"]:
+                    logger.info("Cache service configured from database",
+                               backend=result["backend"],
+                               connection_info=result.get("connection_info"))
+                else:
+                    logger.warning("Failed to configure Redis from database, using fallback",
+                                 backend=result["backend"])
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning("Failed to configure cache from database", error=str(e))
+
     # Cache borg system info on startup (prevents repeated borg --version calls)
     from app.core.borg import borg
     try:

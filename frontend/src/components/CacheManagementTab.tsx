@@ -45,6 +45,7 @@ const CacheManagementTab: React.FC = () => {
   // Local state for form values
   const [ttlMinutes, setTtlMinutes] = useState(120)
   const [maxSizeMb, setMaxSizeMb] = useState(2048)
+  const [redisUrl, setRedisUrl] = useState('')
   const [hasChanges, setHasChanges] = useState(false)
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
 
@@ -65,6 +66,7 @@ const CacheManagementTab: React.FC = () => {
     if (stats) {
       setTtlMinutes(stats.cache_ttl_minutes || 120)
       setMaxSizeMb(stats.cache_max_size_mb || 2048)
+      setRedisUrl((stats as any).redis_url || '')
       setHasChanges(false)
     }
   }, [stats])
@@ -74,19 +76,21 @@ const CacheManagementTab: React.FC = () => {
     if (stats) {
       const changed =
         ttlMinutes !== (stats.cache_ttl_minutes || 120) ||
-        maxSizeMb !== (stats.cache_max_size_mb || 2048)
+        maxSizeMb !== (stats.cache_max_size_mb || 2048) ||
+        redisUrl !== ((stats as any).redis_url || '')
       setHasChanges(changed)
     }
-  }, [ttlMinutes, maxSizeMb, stats])
+  }, [ttlMinutes, maxSizeMb, redisUrl, stats])
 
   // Save settings mutation
   const saveSettingsMutation = useMutation({
     mutationFn: async () => {
-      return await settingsAPI.updateCacheSettings(ttlMinutes, maxSizeMb)
+      return await settingsAPI.updateCacheSettings(ttlMinutes, maxSizeMb, redisUrl)
     },
-    onSuccess: () => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['cache-stats'] })
-      toast.success('Cache settings saved successfully')
+      const message = response.data?.message || 'Cache settings saved successfully'
+      toast.success(message, { duration: 5000 })
       setHasChanges(false)
     },
     onError: (error: any) => {
@@ -318,6 +322,15 @@ const CacheManagementTab: React.FC = () => {
                   helperText={`Maximum cache size. Range: 100 MB to 10 GB. Current: ${(maxSizeMb / 1024).toFixed(2)} GB`}
                 />
               </Box>
+
+              <TextField
+                label="External Redis URL (Optional)"
+                fullWidth
+                value={redisUrl}
+                onChange={(e) => setRedisUrl(e.target.value)}
+                placeholder="redis://192.168.1.100:6379/0"
+                helperText="Leave empty to use local Docker Redis. Format: redis://[password@]host:port/db or rediss:// for TLS"
+              />
 
               <Alert severity="info">
                 <strong>Note:</strong> TTL changes only affect new cache entries. Existing entries keep their

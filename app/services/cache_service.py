@@ -751,6 +751,94 @@ class ArchiveCacheService:
         else:
             return "in-memory"
 
+    def reconfigure(self, redis_url: Optional[str] = None, cache_max_size_mb: Optional[int] = None):
+        """
+        Reconfigure the cache service with new settings.
+
+        This method allows changing Redis connection or cache size at runtime.
+        Useful when user updates settings via UI.
+
+        Args:
+            redis_url: New Redis URL (or None to clear)
+            cache_max_size_mb: New maximum cache size in MB
+
+        Returns:
+            Dict with status and connection info
+        """
+        try:
+            # Update in-memory backend size if provided
+            if cache_max_size_mb is not None:
+                self._memory_backend = InMemoryBackend(
+                    max_size_bytes=cache_max_size_mb * 1024 * 1024
+                )
+                logger.info(f"Updated in-memory cache max size to {cache_max_size_mb}MB")
+
+            # Reconfigure Redis connection
+            old_backend_type = self.get_backend_type()
+
+            # Reset to in-memory first
+            self._current_backend = self._memory_backend
+            self._redis_backend = None
+
+            # Try new Redis URL if provided
+            if redis_url and redis_url.lower() not in ("disabled", "none", ""):
+                try:
+                    self._redis_backend = RedisBackend(url=redis_url)
+                    # Test connection
+                    client = self._redis_backend._get_client()
+                    client.ping()
+                    self._current_backend = self._redis_backend
+                    logger.info(f"Reconfigured to external Redis backend (URL: {redis_url})")
+                    return {
+                        "success": True,
+                        "backend": "redis",
+                        "connection_type": "external_url",
+                        "message": f"Successfully connected to external Redis"
+                    }
+                except Exception as e:
+                    logger.warning(f"Failed to connect to new Redis URL, falling back to local: {e}")
+                    # Fall through to try local Redis
+
+            # Try local Redis (if external URL not provided or failed)
+            if self._current_backend == self._memory_backend and settings.redis_host and settings.redis_host.lower() != "disabled":
+                try:
+                    self._redis_backend = RedisBackend(
+                        host=settings.redis_host,
+                        port=settings.redis_port,
+                        db=settings.redis_db,
+                        password=settings.redis_password,
+                    )
+                    # Test connection
+                    client = self._redis_backend._get_client()
+                    client.ping()
+                    self._current_backend = self._redis_backend
+                    logger.info(f"Reconfigured to local Redis backend ({settings.redis_host}:{settings.redis_port})")
+                    return {
+                        "success": True,
+                        "backend": "redis",
+                        "connection_type": "local",
+                        "message": f"Connected to local Redis at {settings.redis_host}:{settings.redis_port}"
+                    }
+                except Exception as e:
+                    logger.warning(f"Failed to connect to local Redis, using in-memory: {e}")
+
+            # Fallback to in-memory
+            logger.info("Reconfigured to in-memory backend")
+            return {
+                "success": True,
+                "backend": "in-memory",
+                "connection_type": "in-memory",
+                "message": "Using in-memory cache (Redis not configured or unavailable)"
+            }
+
+        except Exception as e:
+            logger.error(f"Cache reconfiguration error: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "message": f"Failed to reconfigure cache: {str(e)}"
+            }
+
 
 # Global singleton instance
 archive_cache = ArchiveCacheService()
