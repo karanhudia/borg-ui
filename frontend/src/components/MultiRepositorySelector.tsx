@@ -86,11 +86,11 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
         options={availableRepos}
         value={selectedRepos}
         onChange={(_, newValue) => {
-          // Preserve order for existing items, add new items at end
+          // Use the order from the autocomplete selection
           const newIds = newValue.map((r) => r.id)
-          const existingIds = selectedIds.filter((id) => newIds.includes(id))
-          const addedIds = newIds.filter((id) => !selectedIds.includes(id))
-          onChange([...existingIds, ...addedIds])
+          // Remove duplicates (in case of any bug) and preserve selection order
+          const uniqueIds = Array.from(new Set(newIds))
+          onChange(uniqueIds)
         }}
         getOptionLabel={(option) => option.name}
         isOptionEqualToValue={(option, value) => option.id === value.id}
