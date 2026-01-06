@@ -43,6 +43,7 @@ import {
   Archive,
   RotateCcw,
   Settings,
+  Copy,
 } from 'lucide-react'
 import { notificationsAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
@@ -194,6 +195,31 @@ const NotificationsTab: React.FC = () => {
     setEditingNotification(notification)
     setFormData({
       name: notification.name,
+      service_url: notification.service_url,
+      enabled: notification.enabled,
+      title_prefix: notification.title_prefix || '',
+      notify_on_backup_start: notification.notify_on_backup_start,
+      notify_on_backup_success: notification.notify_on_backup_success,
+      notify_on_backup_failure: notification.notify_on_backup_failure,
+      notify_on_restore_success: notification.notify_on_restore_success,
+      notify_on_restore_failure: notification.notify_on_restore_failure,
+      notify_on_check_success: notification.notify_on_check_success,
+      notify_on_check_failure: notification.notify_on_check_failure,
+      notify_on_schedule_failure: notification.notify_on_schedule_failure,
+      monitor_all_repositories: notification.monitor_all_repositories,
+      repository_ids: Array.isArray(notification.repositories)
+        ? notification.repositories.map((r) => r.id)
+        : [],
+    })
+    setShowDialog(true)
+  }
+
+  const handleDuplicate = (notification: NotificationSetting) => {
+    // Clear editing state so it creates a new notification
+    setEditingNotification(null)
+    // Copy all settings and append "(Copy)" to the name
+    setFormData({
+      name: `${notification.name} (Copy)`,
       service_url: notification.service_url,
       enabled: notification.enabled,
       title_prefix: notification.title_prefix || '',
@@ -499,8 +525,17 @@ const NotificationsTab: React.FC = () => {
                         </IconButton>
                         <IconButton
                           size="small"
+                          onClick={() => handleDuplicate(notification)}
+                          color="default"
+                          title="Duplicate notification"
+                        >
+                          <Copy size={16} />
+                        </IconButton>
+                        <IconButton
+                          size="small"
                           onClick={() => openEditDialog(notification)}
                           color="primary"
+                          title="Edit notification"
                         >
                           <Edit size={16} />
                         </IconButton>
@@ -508,6 +543,7 @@ const NotificationsTab: React.FC = () => {
                           size="small"
                           onClick={() => setDeleteConfirm(notification)}
                           color="error"
+                          title="Delete notification"
                         >
                           <Trash2 size={16} />
                         </IconButton>
