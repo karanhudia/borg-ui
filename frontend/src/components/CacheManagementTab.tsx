@@ -152,11 +152,11 @@ const CacheManagementTab: React.FC = () => {
   }
 
   return (
-    <Box sx={{ maxWidth: 1200, mx: 'auto', p: 3 }}>
+    <Box>
       <Stack spacing={3}>
         {/* Header */}
-        <Box>
-          <Typography variant="h5" gutterBottom>
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h6" fontWeight={600}>
             Archive Cache Management
           </Typography>
           <Typography variant="body2" color="text.secondary">
@@ -351,66 +351,6 @@ const CacheManagementTab: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Info Card */}
-        <Card>
-          <CardContent>
-            <Stack spacing={2}>
-              <Typography variant="h6">About Archive Caching</Typography>
-              <Divider />
-
-              <Typography variant="body2" color="text.secondary">
-                Archive caching significantly improves browsing performance for large repositories by storing
-                parsed archive contents in memory.
-              </Typography>
-
-              <Box>
-                <Typography variant="subtitle2" gutterBottom>
-                  Performance Impact:
-                </Typography>
-                <Typography variant="body2" color="text.secondary" component="div">
-                  <ul style={{ margin: 0, paddingLeft: 20 }}>
-                    <li>
-                      <strong>Without cache:</strong> 60-90 seconds per folder navigation (runs borg list every
-                      time)
-                    </li>
-                    <li>
-                      <strong>With cache:</strong> &lt;100ms per navigation (600x faster!)
-                    </li>
-                    <li>
-                      <strong>First load:</strong> Same as without cache (builds cache for future use)
-                    </li>
-                  </ul>
-                </Typography>
-              </Box>
-
-              <Box>
-                <Typography variant="subtitle2" gutterBottom>
-                  Backend Types:
-                </Typography>
-                <Typography variant="body2" color="text.secondary" component="div">
-                  <ul style={{ margin: 0, paddingLeft: 20 }}>
-                    <li>
-                      <strong>External Redis (URL):</strong> Connect to Redis on separate machine with more RAM
-                      (configure via REDIS_URL env variable)
-                    </li>
-                    <li>
-                      <strong>Local Redis (Docker):</strong> Redis container in docker-compose, persistent across
-                      app restarts
-                    </li>
-                    <li>
-                      <strong>In-Memory:</strong> Fallback mode when Redis unavailable, lost on app restart
-                    </li>
-                  </ul>
-                </Typography>
-              </Box>
-
-              <Alert severity="success">
-                <strong>Tip:</strong> For repositories with millions of files, caching can reduce browsing time
-                from 10-15 minutes to under a minute!
-              </Alert>
-            </Stack>
-          </CardContent>
-        </Card>
       </Stack>
 
       {/* Clear Cache Confirmation Dialog */}
