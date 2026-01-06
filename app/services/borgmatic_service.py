@@ -76,8 +76,8 @@ class BorgmaticExportService:
                 config.update(retention)  # Merge retention keys at top level
 
         # Checks (top-level in new format - from repository check settings)
-        if repository.check_interval_days:
-            config['checks'] = [{'name': 'repository', 'frequency': f'{repository.check_interval_days} days'}]
+        # Note: Cron-based check schedules are not exported as borgmatic uses simple frequency format
+        # Users should configure checks directly in borgmatic if needed
 
         # Hooks (using deprecated but still supported format for maximum compatibility)
         if repository.pre_backup_script:
@@ -218,13 +218,13 @@ class BorgmaticExportService:
         return retention
 
     def _build_consistency_section(self, repository: Repository) -> Dict[str, Any]:
-        """Build borgmatic consistency section."""
-        return {
-            'checks': [
-                {'name': 'repository', 'frequency': f'{repository.check_interval_days} days'},
-                {'name': 'archives', 'frequency': f'{repository.check_interval_days} days'}
-            ]
-        }
+        """Build borgmatic consistency section.
+
+        Note: This method is deprecated as we migrated from interval-based to cron-based scheduling.
+        Cron expressions don't map cleanly to borgmatic's simple frequency format.
+        """
+        # Return empty dict as checks are now configured via cron expressions
+        return {}
 
     def _build_hooks_section(self, repository: Repository) -> Optional[Dict[str, Any]]:
         """Build borgmatic hooks section."""
