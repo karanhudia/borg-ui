@@ -21,6 +21,78 @@ Borg Web UI uses Redis-based caching to dramatically improve performance when br
 
 ---
 
+## Quick Start
+
+**Complete docker-compose.yml with Redis:**
+
+```yaml
+version: '3.8'
+
+services:
+  app:
+    image: ainullcode/borg-ui:latest
+    container_name: borg-web-ui
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    volumes:
+      - borg_data:/data
+      - borg_cache:/home/borg/.cache/borg
+      - /home/yourusername:/local:rw  # Replace with your path
+    environment:
+      - PUID=1000
+      - PGID=1000
+      # Redis connection (uses redis service below)
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      # Cache defaults (override in Settings → Cache UI)
+      - CACHE_TTL_SECONDS=7200
+      - CACHE_MAX_SIZE_MB=2048
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - borg_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: borg-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - borg_network
+
+networks:
+  borg_network:
+    driver: bridge
+
+volumes:
+  borg_data:
+    driver: local
+  borg_cache:
+    driver: local
+```
+
+Start: `docker compose up -d`
+
+Then configure cache settings in **Settings → Cache** tab.
+
+---
+
 ## Quick Facts
 
 - **Performance:** 60-90 seconds → <100ms for folder navigation

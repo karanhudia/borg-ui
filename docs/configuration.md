@@ -82,7 +82,7 @@ environment:
 ### Reverse Proxy / BASE_PATH
 
 {: .new }
-> **New in v1.37.0**: BASE_PATH support for subfolder deployments
+> **New in vX.Y.Z**: BASE_PATH support for subfolder deployments
 
 Run Borg Web UI in a subfolder behind a reverse proxy:
 
@@ -106,7 +106,7 @@ See [Reverse Proxy Setup](reverse-proxy.md) for complete configuration examples 
 ### File Browser Mount Points
 
 {: .new }
-> **New in v1.39.2**: LOCAL_MOUNT_POINTS for improved file browser navigation
+> **New in vX.Y.Z**: LOCAL_MOUNT_POINTS for improved file browser navigation
 
 Specify which container paths are host filesystem mounts to highlight them in the file browser:
 
@@ -321,7 +321,7 @@ services:
 ### For Large Repositories
 
 {: .new }
-> **New in v1.41.2**: Configurable operation timeouts for very large repositories
+> **New in vX.Y.Z**: Configurable operation timeouts for very large repositories
 
 Increase Borg cache size by mounting to fast storage:
 
@@ -383,7 +383,7 @@ environment:
 ## Redis Cache Configuration
 
 {: .new }
-> **New in v1.39.0**: Redis-based archive caching for 600x faster browsing
+> **New in vX.Y.Z**: Redis-based archive caching for 600x faster browsing
 
 Borg Web UI includes Redis caching for dramatically faster archive browsing. Without cache, navigating folders in large archives (1M+ files) takes 60-90 seconds. With cache, it takes less than 100ms.
 

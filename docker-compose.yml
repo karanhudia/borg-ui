@@ -91,24 +91,19 @@ services:
       - LOCAL_MOUNT_POINTS=${LOCAL_MOUNT_POINTS:-/local}
 
       # Redis cache settings (for 600x faster archive browsing)
-      # See: https://karanhudia.github.io/borg-ui/cache for detailed setup guide
+      # ⚙️ Configure via Settings → Cache tab in UI (recommended)
+      # Environment variables below set initial defaults only
+      # See: https://karanhudia.github.io/borg-ui/cache
 
-      # Option 1: External Redis URL (takes precedence if set, can also configure via UI)
-      # Use this for remote Redis instances with more RAM
-      # Examples:
-      #   - redis://192.168.1.100:6379/0 (external Redis)
-      #   - redis://:password@remote-host:6379/0 (with password)
-      #   - rediss://secure-host:6380/0 (with TLS)
+      # Local Redis connection (uses redis service below)
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+
+      # External Redis URL (optional - uncomment to use remote Redis)
       # - REDIS_URL=redis://192.168.1.100:6379/0
 
-      # Option 2: Local Redis (docker-compose service) - default, no config needed
-      # Used if REDIS_URL is not set
-#      - REDIS_HOST=redis
-#      - REDIS_PORT=6379
-#      - REDIS_DB=0
-      # - REDIS_PASSWORD=your-redis-password
-
-      # Cache behavior (can also configure via Settings → Cache in UI)
+      # Cache defaults (override in Settings → Cache UI)
       - CACHE_TTL_SECONDS=7200        # 2 hours
       - CACHE_MAX_SIZE_MB=2048        # 2GB
 
@@ -122,34 +117,34 @@ services:
     networks:
       - borg_network
 
-#    depends_on:
-#      redis:
-#        condition: service_healthy
+    depends_on:
+      redis:
+        condition: service_healthy
 
-#  redis:
-#    image: redis:7-alpine
-#    container_name: borg-redis
-#    restart: unless-stopped
-#
-#    command: >
-#      redis-server
-#      --maxmemory 2gb
-#      --maxmemory-policy allkeys-lru
-#      --save ""
-#      --appendonly no
-#
-#    ports:
-#      - "${REDIS_PORT:-6379}:6379"
-#
-#    healthcheck:
-#      test: ["CMD", "redis-cli", "ping"]
-#      interval: 10s
-#      timeout: 3s
-#      retries: 3
-#      start_period: 10s
-#
-#    networks:
-#      - borg_network
+  redis:
+    image: redis:7-alpine
+    container_name: borg-redis
+    restart: unless-stopped
+
+    command: >
+      redis-server
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+    networks:
+      - borg_network
 
 networks:
   borg_network:
