@@ -1576,7 +1576,15 @@ const Schedule: React.FC = () => {
       </Dialog>
 
       {/* Edit Job Modal */}
-      <Dialog open={!!editingJob} onClose={() => setEditingJob(null)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={!!editingJob}
+        onClose={() => {
+          setEditingJob(null)
+          setShowEditValidation(false)
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>Edit Scheduled Job</DialogTitle>
         <form onSubmit={handleUpdateJob}>
           <DialogContent>
