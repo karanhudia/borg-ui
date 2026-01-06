@@ -494,6 +494,8 @@ class ArchiveCacheService:
             max_size_bytes=settings.cache_max_size_mb * 1024 * 1024
         )
         self._current_backend: CacheBackend = self._memory_backend
+        self._redis_failure_count: int = 0
+        self._max_redis_failures: int = 3  # Switch to in-memory after 3 consecutive failures
 
         # Precedence: redis_url > redis_host/port > in-memory fallback
 
@@ -501,6 +503,9 @@ class ArchiveCacheService:
         if settings.redis_url and settings.redis_url.lower() != "disabled":
             try:
                 self._redis_backend = RedisBackend(url=settings.redis_url)
+                # Test connection before using
+                client = self._redis_backend._get_client()
+                client.ping()
                 self._current_backend = self._redis_backend
                 logger.info(f"Archive cache initialized with external Redis backend (URL: {settings.redis_url})")
             except Exception as e:
@@ -516,6 +521,9 @@ class ArchiveCacheService:
                     db=settings.redis_db,
                     password=settings.redis_password,
                 )
+                # Test connection before using
+                client = self._redis_backend._get_client()
+                client.ping()
                 self._current_backend = self._redis_backend
                 logger.info(f"Archive cache initialized with local Redis backend ({settings.redis_host}:{settings.redis_port})")
             except Exception as e:
@@ -593,6 +601,25 @@ class ArchiveCacheService:
 
         return json.loads(json_str)
 
+    def _handle_redis_failure(self):
+        """
+        Handle Redis operation failure - switch to in-memory after repeated failures.
+        """
+        if isinstance(self._current_backend, RedisBackend):
+            self._redis_failure_count += 1
+            if self._redis_failure_count >= self._max_redis_failures:
+                logger.warning(
+                    f"Redis failed {self._redis_failure_count} times, switching to in-memory cache"
+                )
+                self._current_backend = self._memory_backend
+
+    def _handle_redis_success(self):
+        """
+        Handle successful Redis operation - reset failure counter.
+        """
+        if isinstance(self._current_backend, RedisBackend):
+            self._redis_failure_count = 0
+
     async def get(self, repo_id: int, archive_name: str) -> Optional[List[Dict]]:
         """
         Get cached archive items.
@@ -612,10 +639,12 @@ class ArchiveCacheService:
                 return None
 
             items = self._deserialize(data)
+            self._handle_redis_success()
             logger.debug(f"Cache hit for {key} ({len(items)} items)")
             return items
         except Exception as e:
             logger.error(f"Cache get error for {key}: {e}")
+            self._handle_redis_failure()
             return None
 
     async def set(self, repo_id: int, archive_name: str, items: List[Dict]) -> bool:
@@ -642,10 +671,14 @@ class ArchiveCacheService:
 
             success = await self._current_backend.set(key, data, settings.cache_ttl_seconds)
             if success:
+                self._handle_redis_success()
                 logger.debug(f"Cached {key} ({len(items)} items, {len(data)} bytes)")
+            else:
+                self._handle_redis_failure()
             return success
         except Exception as e:
             logger.error(f"Cache set error for {key}: {e}")
+            self._handle_redis_failure()
             return False
 
     async def clear_repository(self, repo_id: int) -> int:

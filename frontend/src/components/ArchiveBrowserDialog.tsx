@@ -212,9 +212,17 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
         </Stack>
       </DialogTitle>
 
-      <DialogContent dividers>
+      <DialogContent
+        dividers
+        sx={{
+          minHeight: 600,
+          maxHeight: 600,
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
         {/* Breadcrumbs */}
-        <Box sx={{ mb: 2 }}>
+        <Box sx={{ mb: 2, flexShrink: 0 }}>
           <Breadcrumbs separator={<ChevronRight size={16} />}>
             <Link
               component="button"
@@ -251,7 +259,7 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
         </Box>
 
         {/* Action buttons */}
-        <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+        <Stack direction="row" spacing={1} sx={{ mb: 2, flexShrink: 0 }}>
           <Button size="small" variant="outlined" onClick={selectAllVisible} disabled={loading}>
             Select All Visible
           </Button>
@@ -266,71 +274,73 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
         </Stack>
 
         {/* Info alert */}
-        <Alert severity="info" sx={{ mb: 2 }}>
+        <Alert severity="info" sx={{ mb: 2, flexShrink: 0 }}>
           <Typography variant="body2">
             Select specific files or folders to restore. Click folders to browse, click checkboxes
             to select. If no selection is made, the entire archive will be restored.
           </Typography>
         </Alert>
 
-        {/* Items list */}
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-            <CircularProgress />
-          </Box>
-        ) : error ? (
-          <Alert severity="error">{error}</Alert>
-        ) : items.length === 0 ? (
-          <Alert severity="info">This directory is empty</Alert>
-        ) : (
-          <List sx={{ maxHeight: 400, overflow: 'auto' }}>
-            {items.map((item) => (
-              <ListItem key={item.path} disablePadding>
-                <ListItemButton
-                  onClick={() => handleItemClick(item)}
-                  sx={{
-                    '&:hover': {
-                      bgcolor: 'action.hover',
-                    },
-                  }}
-                >
-                  <ListItemIcon sx={{ minWidth: 40 }}>
-                    <Tooltip title={isSelected(item.path) ? 'Selected' : 'Not selected'}>
-                      <IconButton
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          toggleSelection(item.path)
-                        }}
-                        sx={{ p: 0 }}
-                      >
-                        {getCheckboxIcon(item)}
-                      </IconButton>
-                    </Tooltip>
-                  </ListItemIcon>
-                  <ListItemIcon sx={{ minWidth: 40 }}>
-                    {item.type === 'directory' ? (
-                      <Folder size={20} color="#1976d2" />
-                    ) : (
-                      <File size={20} color="#666" />
-                    )}
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={
-                      <Typography
-                        variant="body2"
-                        fontWeight={item.type === 'directory' ? 500 : 400}
-                      >
-                        {item.name}
-                      </Typography>
-                    }
-                    secondary={item.size ? formatBytes(item.size) : undefined}
-                  />
-                </ListItemButton>
-              </ListItem>
-            ))}
-          </List>
-        )}
+        {/* Items list - takes remaining space */}
+        <Box sx={{ flexGrow: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexGrow: 1 }}>
+              <CircularProgress />
+            </Box>
+          ) : error ? (
+            <Alert severity="error">{error}</Alert>
+          ) : items.length === 0 ? (
+            <Alert severity="info">This directory is empty</Alert>
+          ) : (
+            <List sx={{ flexGrow: 1, overflow: 'auto' }}>
+              {items.map((item) => (
+                <ListItem key={item.path} disablePadding>
+                  <ListItemButton
+                    onClick={() => handleItemClick(item)}
+                    sx={{
+                      '&:hover': {
+                        bgcolor: 'action.hover',
+                      },
+                    }}
+                  >
+                    <ListItemIcon sx={{ minWidth: 40 }}>
+                      <Tooltip title={isSelected(item.path) ? 'Selected' : 'Not selected'}>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            toggleSelection(item.path)
+                          }}
+                          sx={{ p: 0 }}
+                        >
+                          {getCheckboxIcon(item)}
+                        </IconButton>
+                      </Tooltip>
+                    </ListItemIcon>
+                    <ListItemIcon sx={{ minWidth: 40 }}>
+                      {item.type === 'directory' ? (
+                        <Folder size={20} color="#1976d2" />
+                      ) : (
+                        <File size={20} color="#666" />
+                      )}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={
+                        <Typography
+                          variant="body2"
+                          fontWeight={item.type === 'directory' ? 500 : 400}
+                        >
+                          {item.name}
+                        </Typography>
+                      }
+                      secondary={item.size ? formatBytes(item.size) : undefined}
+                    />
+                  </ListItemButton>
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </Box>
       </DialogContent>
 
       <DialogActions>
