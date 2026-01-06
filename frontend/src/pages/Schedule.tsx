@@ -355,6 +355,14 @@ const Schedule: React.FC = () => {
       toast.error('Please select at least one repository')
       return
     }
+    // Check for duplicate repository IDs
+    if (createForm.repository_ids.length > 0) {
+      const uniqueIds = new Set(createForm.repository_ids)
+      if (uniqueIds.size !== createForm.repository_ids.length) {
+        toast.error('Duplicate repositories detected. Each repository can only be selected once.')
+        return
+      }
+    }
     // Convert cron expression from local time to UTC before sending to server
     const utcCron = convertCronToUTC(createForm.cron_expression)
 
@@ -377,6 +385,14 @@ const Schedule: React.FC = () => {
     if (!editForm.repository && editForm.repository_ids.length === 0) {
       toast.error('Please select a repository')
       return
+    }
+    // Check for duplicate repository IDs
+    if (editForm.repository_ids.length > 0) {
+      const uniqueIds = new Set(editForm.repository_ids)
+      if (uniqueIds.size !== editForm.repository_ids.length) {
+        toast.error('Duplicate repositories detected. Each repository can only be selected once.')
+        return
+      }
     }
     if (editingJob) {
       // Convert cron expression from local time to UTC before sending to server
