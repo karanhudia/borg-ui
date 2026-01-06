@@ -1207,7 +1207,10 @@ const Schedule: React.FC = () => {
       {/* Create Job Modal */}
       <Dialog
         open={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
+        onClose={() => {
+          setShowCreateModal(false)
+          setShowCreateValidation(false)
+        }}
         maxWidth="sm"
         fullWidth
       >
@@ -1577,6 +1580,7 @@ const Schedule: React.FC = () => {
 
       {/* Edit Job Modal */}
       <Dialog
+        key={editingJob?.id || 'edit-dialog'}
         open={!!editingJob}
         onClose={() => {
           setEditingJob(null)
@@ -1605,6 +1609,7 @@ const Schedule: React.FC = () => {
               />
 
               <MultiRepositorySelector
+                key={`edit-repos-${editingJob?.id}`}
                 repositories={repositories}
                 selectedIds={editForm.repository_ids}
                 onChange={(ids) => setEditForm({ ...editForm, repository_ids: ids })}
