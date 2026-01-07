@@ -65,7 +65,7 @@ export default function RepositoryCard({
   const queryClient = useQueryClient()
 
   // Use maintenance jobs hook - always poll to handle page refreshes
-  const { hasRunningJobs, checkJob, compactJob } = useMaintenanceJobs(
+  const { hasRunningJobs, checkJob, compactJob, pruneJob } = useMaintenanceJobs(
     repository.id,
     true // Always enabled to handle page refreshes while jobs are running
   )
@@ -85,7 +85,7 @@ export default function RepositoryCard({
     }
 
     // Get the earliest start time from running jobs
-    const startTime = checkJob?.started_at || compactJob?.started_at
+    const startTime = checkJob?.started_at || compactJob?.started_at || pruneJob?.started_at
     if (!startTime) return
 
     // Update immediately
@@ -97,7 +97,7 @@ export default function RepositoryCard({
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [hasRunningJobs, checkJob?.started_at, compactJob?.started_at])
+  }, [hasRunningJobs, checkJob?.started_at, compactJob?.started_at, pruneJob?.started_at])
 
   // Handle job completion - when polling detects completion, refresh repositories list
   useEffect(() => {
@@ -295,10 +295,10 @@ export default function RepositoryCard({
               <Button
                 variant="outlined"
                 size="small"
-                startIcon={<Delete />}
+                startIcon={pruneJob ? <Refresh className="animate-spin" /> : <Delete />}
                 onClick={onPrune}
-                disabled={false}
-                color="secondary"
+                disabled={isMaintenanceRunning}
+                color={pruneJob ? 'primary' : 'secondary'}
                 sx={{ textTransform: 'none' }}
               >
                 Prune
