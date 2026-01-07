@@ -287,7 +287,8 @@ async def browse_ssh_filesystem(
         os.chmod(temp_key_file, 0o600)
         # Use SSH to list directory contents (compatible with restricted shells like Hetzner Storage Box)
         # Format: permissions links owner group size timestamp name
-        ls_cmd = f'ls -lA "{path}"'
+        # Use LC_ALL=C to ensure English output (prevents parsing issues with localized date formats)
+        ls_cmd = f'LC_ALL=C ls -lA "{path}"'
 
         ssh_cmd = [
             "ssh",
