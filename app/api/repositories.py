@@ -2264,6 +2264,19 @@ async def get_check_job_status(
         if not job:
             raise HTTPException(status_code=404, detail="Check job not found")
 
+        # Read log file if it exists (like prune/compact jobs)
+        log_content = ""
+        if job.log_file_path and os.path.exists(job.log_file_path):
+            try:
+                with open(job.log_file_path, 'r') as f:
+                    log_content = f.read()
+            except Exception as e:
+                logger.warning("Failed to read check log file", error=str(e))
+                log_content = f"Failed to read log file: {str(e)}"
+        elif job.logs:
+            # Fallback to old logs field for backwards compatibility
+            log_content = job.logs
+
         return {
             "id": job.id,
             "repository_id": job.repository_id,
@@ -2273,7 +2286,7 @@ async def get_check_job_status(
             "progress": job.progress,
             "progress_message": job.progress_message,
             "error_message": job.error_message,
-            "logs": job.logs
+            "logs": log_content
         }
     except HTTPException:
         raise
@@ -2305,6 +2318,7 @@ async def get_repository_check_jobs(
                     "progress": job.progress,
                     "progress_message": job.progress_message,
                     "error_message": job.error_message,
+                    "has_logs": job.has_logs,
                 }
                 for job in jobs
             ]

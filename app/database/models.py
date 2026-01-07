@@ -251,7 +251,9 @@ class CheckJob(Base):
     progress = Column(Integer, default=0)  # 0-100 percentage
     progress_message = Column(String, nullable=True)  # Current progress message (e.g., "Checking segments 25%")
     error_message = Column(Text, nullable=True)
-    logs = Column(Text, nullable=True)  # Full logs (stored after completion)
+    logs = Column(Text, nullable=True)  # Deprecated: kept for backwards compatibility, use log_file_path instead
+    log_file_path = Column(String, nullable=True)  # Path to log file on disk
+    has_logs = Column(Boolean, default=False)  # Flag indicating if logs are available
     max_duration = Column(Integer, nullable=True)  # Maximum duration in seconds (for partial checks)
     process_pid = Column(Integer, nullable=True)  # Container PID for orphan detection
     process_start_time = Column(BigInteger, nullable=True)  # Process start time in jiffies for PID uniqueness
