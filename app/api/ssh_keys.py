@@ -54,7 +54,8 @@ async def collect_storage_info(connection: SSHConnection, ssh_key: SSHKey) -> Op
             # Use default_path or root for df check
             check_path = connection.default_path or "/"
 
-            # Run df command on remote host
+            # Run df command on remote host with C locale to ensure English output
+            # This prevents parsing issues with non-English systems (e.g., German "Dateisystem")
             df_cmd = [
                 "ssh",
                 "-i", temp_key_file,
@@ -64,7 +65,7 @@ async def collect_storage_info(connection: SSHConnection, ssh_key: SSHKey) -> Op
                 "-o", "ConnectTimeout=10",
                 "-p", str(connection.port),
                 f"{connection.username}@{connection.host}",
-                f"df -k {check_path}"
+                f"LC_ALL=C df -k {check_path}"
             ]
 
             process = await asyncio.create_subprocess_exec(
