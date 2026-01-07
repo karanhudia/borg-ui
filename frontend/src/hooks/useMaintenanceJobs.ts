@@ -12,10 +12,11 @@ interface RunningJobsResponse {
   has_running_jobs: boolean
   check_job: MaintenanceJob | null
   compact_job: MaintenanceJob | null
+  prune_job: MaintenanceJob | null
 }
 
 /**
- * Hook to track running maintenance jobs (check/compact) for a repository
+ * Hook to track running maintenance jobs (check/compact/prune) for a repository
  * Polls every 3 seconds when there are active jobs
  */
 export function useMaintenanceJobs(repositoryId: number | null, enabled: boolean = true) {
@@ -45,6 +46,7 @@ export function useMaintenanceJobs(repositoryId: number | null, enabled: boolean
     hasRunningJobs: data?.has_running_jobs ?? false,
     checkJob: data?.check_job ?? null,
     compactJob: data?.compact_job ?? null,
+    pruneJob: data?.prune_job ?? null,
     isLoading,
   }
 }

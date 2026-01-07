@@ -262,7 +262,7 @@ async def get_repositories(
         # Check for running maintenance jobs for each repository
         repo_list = []
         for repo in repositories:
-            # Check if this repository has running check or compact jobs
+            # Check if this repository has running check, compact, or prune jobs
             has_check = db.query(CheckJob).filter(
                 CheckJob.repository_id == repo.id,
                 CheckJob.status == "running"
@@ -271,6 +271,11 @@ async def get_repositories(
             has_compact = db.query(CompactJob).filter(
                 CompactJob.repository_id == repo.id,
                 CompactJob.status == "running"
+            ).first() is not None
+
+            has_prune = db.query(PruneJob).filter(
+                PruneJob.repository_id == repo.id,
+                PruneJob.status == "running"
             ).first() is not None
 
             repo_list.append({
@@ -302,7 +307,7 @@ async def get_repositories(
                 "continue_on_hook_failure": repo.continue_on_hook_failure,
                 "mode": repo.mode or "full",  # Default to "full" for backward compatibility
                 "custom_flags": repo.custom_flags,
-                "has_running_maintenance": has_check or has_compact
+                "has_running_maintenance": has_check or has_compact or has_prune
             })
 
         return {
@@ -2396,7 +2401,7 @@ async def get_running_jobs(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Check if repository has any running check or compact jobs"""
+    """Check if repository has any running check, compact, or prune jobs"""
     try:
         # Force refresh from database to get latest values
         db.expire_all()
@@ -2411,8 +2416,13 @@ async def get_running_jobs(
             CompactJob.status == "running"
         ).first()
 
+        prune_job = db.query(PruneJob).filter(
+            PruneJob.repository_id == repo_id,
+            PruneJob.status == "running"
+        ).first()
+
         result = {
-            "has_running_jobs": bool(check_job or compact_job),
+            "has_running_jobs": bool(check_job or compact_job or prune_job),
             "check_job": {
                 "id": check_job.id,
                 "progress": check_job.progress,
@@ -2424,7 +2434,11 @@ async def get_running_jobs(
                 "progress": compact_job.progress,
                 "progress_message": compact_job.progress_message,
                 "started_at": serialize_datetime(compact_job.started_at)
-            } if compact_job else None
+            } if compact_job else None,
+            "prune_job": {
+                "id": prune_job.id,
+                "started_at": serialize_datetime(prune_job.started_at)
+            } if prune_job else None
         }
 
         logger.info("Running jobs API response", repository_id=repo_id, result=result)
