@@ -189,13 +189,25 @@ const CacheManagementTab: React.FC = () => {
     <Box>
       <Stack spacing={3}>
         {/* Header */}
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="h6" fontWeight={600}>
-            Archive Cache Management
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Monitor and configure the Redis-based archive caching system for faster browsing
-          </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Box>
+            <Typography variant="h6" fontWeight={600}>
+              Archive Cache Management
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Monitor and configure the Redis-based archive caching system for faster browsing
+            </Typography>
+          </Box>
+          <Button
+            variant="contained"
+            startIcon={
+              saveSettingsMutation.isPending ? <CircularProgress size={16} /> : <Save size={16} />
+            }
+            onClick={handleSaveSettings}
+            disabled={!hasChanges || saveSettingsMutation.isPending}
+          >
+            {saveSettingsMutation.isPending ? 'Saving...' : 'Save Settings'}
+          </Button>
         </Box>
 
         {/* Cache Status Card */}
@@ -394,17 +406,6 @@ const CacheManagementTab: React.FC = () => {
                 <strong>Note:</strong> TTL changes only affect new cache entries. Existing entries
                 keep their original TTL until they expire.
               </Alert>
-
-              <Box>
-                <Button
-                  variant="contained"
-                  startIcon={<Save size={20} />}
-                  onClick={handleSaveSettings}
-                  disabled={!hasChanges || saveSettingsMutation.isPending}
-                >
-                  {saveSettingsMutation.isPending ? 'Saving...' : 'Save Settings'}
-                </Button>
-              </Box>
             </Stack>
           </CardContent>
         </Card>
