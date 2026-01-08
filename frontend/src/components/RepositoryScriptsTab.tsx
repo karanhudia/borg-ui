@@ -22,6 +22,7 @@ import {
 import { Trash2, FileCode, Clock } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import api from '../services/api'
+import ScriptParameterInputs, { ScriptParameter } from './ScriptParameterInputs'
 
 interface Script {
   id: number
@@ -30,6 +31,7 @@ interface Script {
   timeout: number
   run_on: string
   category: string
+  parameters?: ScriptParameter[] | null
 }
 
 interface RepositoryScript {
@@ -44,6 +46,8 @@ interface RepositoryScript {
   continue_on_error: boolean | null
   default_timeout: number
   default_run_on: string
+  parameters?: ScriptParameter[] | null
+  parameter_values?: Record<string, string> | null
 }
 
 interface RepositoryScriptsTabProps {
@@ -119,6 +123,7 @@ export default function RepositoryScriptsTab({
         execution_order: nextOrder,
         enabled: true,
         continue_on_error: assignmentData.continue_on_error,
+        parameter_values: assignmentData.parameter_values,
       })
 
       toast.success('Script assigned successfully')
@@ -215,6 +220,17 @@ export default function RepositoryScriptsTab({
                 size="small"
                 sx={{ height: 20, fontSize: '0.7rem' }}
               />
+              {script.parameters && script.parameters.length > 0 && (
+                <Tooltip title={`${script.parameters.length} parameter(s) configured`}>
+                  <Chip
+                    label={`${script.parameters.length} param${script.parameters.length > 1 ? 's' : ''}`}
+                    size="small"
+                    color="info"
+                    variant="outlined"
+                    sx={{ height: 20, fontSize: '0.7rem' }}
+                  />
+                </Tooltip>
+              )}
               {!isPreBackup && (
                 <Chip
                   label={effectiveRunOn}
@@ -291,6 +307,7 @@ export default function RepositoryScriptsTab({
 interface AssignmentData {
   script_id: number | ''
   continue_on_error: boolean
+  parameter_values?: Record<string, string>
 }
 
 interface RepositoryScriptDialogProps {
@@ -317,19 +334,36 @@ function RepositoryScriptDialog({
   hasInlineScript,
 }: RepositoryScriptDialogProps) {
   const [continueOnError, setContinueOnError] = useState(true)
+  const [parameterValues, setParameterValues] = useState<Record<string, string>>({})
   const isPreBackup = hookType === 'pre-backup'
+
+  // Get selected script details
+  const selectedScript = availableScripts.find((s) => s.id === selectedScriptId)
+
+  // Check if selected script has parameters
+  const hasParameters =
+    selectedScript?.parameters && Array.isArray(selectedScript.parameters) && selectedScript.parameters.length > 0
 
   // Reset local state when dialog opens/closes
   useEffect(() => {
     if (open) {
       setContinueOnError(true)
+      setParameterValues({})
     }
   }, [open])
+
+  // Debug: log selected script and parameters
+  useEffect(() => {
+    if (selectedScript) {
+      console.log('Selected script:', selectedScript.name, 'Parameters:', selectedScript.parameters)
+    }
+  }, [selectedScript])
 
   const handleSubmit = () => {
     onSubmit({
       script_id: selectedScriptId,
       continue_on_error: continueOnError,
+      parameter_values: parameterValues,
     })
   }
 
@@ -372,6 +406,17 @@ function RepositoryScriptDialog({
               ))}
             </Select>
           </FormControl>
+
+          {/* Show parameters if selected script has them */}
+          {hasParameters && (
+            <Box sx={{ pt: 1 }}>
+              <ScriptParameterInputs
+                parameters={selectedScript.parameters!}
+                values={parameterValues}
+                onChange={setParameterValues}
+              />
+            </Box>
+          )}
 
           {isPreBackup && (
             <Box sx={{ ml: 1 }}>

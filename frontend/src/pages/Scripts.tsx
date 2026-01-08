@@ -29,6 +29,7 @@ import { Plus, Edit, Trash2, Play, FileCode, Clock, CheckCircle, XCircle } from 
 import { toast } from 'react-hot-toast'
 import api from '../services/api'
 import CodeEditor from '../components/CodeEditor'
+import ScriptParameterInputs, { ScriptParameter } from '../components/ScriptParameterInputs'
 
 interface Script {
   id: number
@@ -42,6 +43,7 @@ interface Script {
   is_template: boolean
   created_at: string
   updated_at: string
+  parameters?: ScriptParameter[] | null
 }
 
 interface ScriptDetail extends Script {
@@ -78,6 +80,8 @@ export default function Scripts() {
   const [editingScript, setEditingScript] = useState<ScriptDetail | null>(null)
   const [testResult, setTestResult] = useState<TestResult | null>(null)
   const [testingScript, setTestingScript] = useState(false)
+  const [testingScriptData, setTestingScriptData] = useState<Script | null>(null)
+  const [testParameterValues, setTestParameterValues] = useState<Record<string, string>>({})
 
   // Form state
   const [formData, setFormData] = useState({
@@ -175,17 +179,33 @@ export default function Scripts() {
   }
 
   const handleTest = async (script: Script) => {
+    setTestingScriptData(script)
+    setTestParameterValues({})
+    setTestResult(null)
+    setTestDialogOpen(true)
+  }
+
+  const executeTest = async () => {
+    if (!testingScriptData) return
+
     try {
       setTestingScript(true)
       setTestResult(null)
-      setTestDialogOpen(true)
 
-      const response = await api.post(`/scripts/${script.id}/test`)
+      const response = await api.post(`/scripts/${testingScriptData.id}/test`, {
+        parameter_values: testParameterValues,
+        timeout: undefined,
+      })
       setTestResult(response.data)
     } catch (error: any) {
       console.error('Failed to test script:', error)
-      toast.error('Failed to test script')
-      setTestDialogOpen(false)
+      setTestResult({
+        success: false,
+        exit_code: -1,
+        stdout: '',
+        stderr: error.response?.data?.detail || error.message || 'Failed to test script',
+        execution_time: 0,
+      })
     } finally {
       setTestingScript(false)
     }
@@ -279,6 +299,15 @@ export default function Scripts() {
                     <Typography variant="body2" sx={{ fontWeight: 500 }}>
                       {script.name}
                     </Typography>
+                    {script.parameters && script.parameters.length > 0 && (
+                      <Chip
+                        label={`${script.parameters.length} param${script.parameters.length > 1 ? 's' : ''}`}
+                        size="small"
+                        color="info"
+                        variant="outlined"
+                        sx={{ fontSize: '0.7rem' }}
+                      />
+                    )}
                   </Box>
                 </TableCell>
                 <TableCell>
@@ -435,11 +464,45 @@ export default function Scripts() {
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Play size={20} />
-            Script Test Result
+            Test Script: {testingScriptData?.name}
           </Box>
         </DialogTitle>
         <DialogContent>
-          {testingScript ? (
+          {!testResult ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 1 }}>
+              {/* Show parameters if script has them */}
+              {testingScriptData?.parameters && testingScriptData.parameters.length > 0 ? (
+                <>
+                  <Alert severity="info">
+                    This script has parameters. Provide values below to test with specific
+                    configuration.
+                  </Alert>
+                  <ScriptParameterInputs
+                    parameters={testingScriptData.parameters}
+                    values={testParameterValues}
+                    onChange={setTestParameterValues}
+                  />
+                </>
+              ) : (
+                <Alert severity="info">
+                  This script has no parameters. Click "Run Test" to execute it.
+                </Alert>
+              )}
+
+              {/* Test button */}
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, pt: 2 }}>
+                <Button onClick={() => setTestDialogOpen(false)}>Cancel</Button>
+                <Button
+                  onClick={executeTest}
+                  variant="contained"
+                  startIcon={testingScript ? <CircularProgress size={16} /> : <Play size={16} />}
+                  disabled={testingScript}
+                >
+                  {testingScript ? 'Running...' : 'Run Test'}
+                </Button>
+              </Box>
+            </Box>
+          ) : testingScript ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 4 }}>
               <CircularProgress />
               <Typography sx={{ ml: 2 }}>Running script...</Typography>
@@ -510,7 +573,14 @@ export default function Scripts() {
           ) : null}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setTestDialogOpen(false)}>Close</Button>
+          {testResult ? (
+            <>
+              <Button onClick={() => setTestResult(null)} variant="outlined">
+                Test Again
+              </Button>
+              <Button onClick={() => setTestDialogOpen(false)}>Close</Button>
+            </>
+          ) : null}
         </DialogActions>
       </Dialog>
     </Box>
