@@ -79,6 +79,7 @@ async def browse_archive_contents(
         def calculate_directory_size(dir_path: str) -> int:
             """Calculate total size of all files in a directory recursively"""
             total_size = 0
+            file_count = 0
             # Ensure consistent path format for comparison
             search_prefix = f"{dir_path}/" if dir_path else ""
 
@@ -90,11 +91,18 @@ async def browse_archive_contents(
                         # Only count files, not directories themselves
                         if item.get("type") != "d" and item.get("size") is not None:
                             total_size += item.get("size", 0)
+                            file_count += 1
                 else:
                     # Root level - count all files
                     if item.get("type") != "d" and item.get("size") is not None:
                         total_size += item.get("size", 0)
+                        file_count += 1
 
+            logger.debug("Directory size calculated",
+                        dir_path=dir_path,
+                        total_size=total_size,
+                        file_count=file_count,
+                        search_prefix=search_prefix)
             return total_size
 
         # Now filter the cached items for the requested path
@@ -177,7 +185,8 @@ async def browse_archive_contents(
                    archive=archive_name,
                    path=path,
                    items_count=len(items),
-                   first_few_items=[item["name"] for item in items[:10]])
+                   first_few_items=[item["name"] for item in items[:10]],
+                   directory_sizes=[(item["name"], item.get("size")) for item in items[:5] if item["type"] == "directory"])
 
         return {"items": items}
     except HTTPException:
