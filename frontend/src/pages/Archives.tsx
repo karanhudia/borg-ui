@@ -706,11 +706,7 @@ const Archives: React.FC = () => {
                                   {folder.name}
                                 </Typography>
                               </Stack>
-                              <Typography
-                                variant="body2"
-                                color="text.secondary"
-                                sx={{ ml: 2 }}
-                              >
+                              <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
                                 {formatBytesUtil(folder.size)}
                               </Typography>
                             </Box>
