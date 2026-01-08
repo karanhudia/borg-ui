@@ -161,7 +161,7 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
 
   // Format file size
   const formatBytes = (bytes?: number): string => {
-    if (!bytes) return ''
+    if (bytes === undefined || bytes === null) return ''
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
     if (bytes === 0) return '0 B'
     const i = Math.floor(Math.log(bytes) / Math.log(1024))
