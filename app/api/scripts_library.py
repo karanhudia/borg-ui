@@ -70,6 +70,10 @@ class RepositoryScriptAssignment(BaseModel):
     continue_on_error: Optional[bool] = True
     parameter_values: Optional[dict] = None  # Parameter values (passwords will be encrypted)
 
+class ScriptTestRequest(BaseModel):
+    parameter_values: Optional[dict] = None  # Optional parameter values for testing
+    timeout: Optional[int] = None
+
 class RepositoryScriptUpdate(BaseModel):
     execution_order: Optional[float] = None
     enabled: Optional[bool] = None
@@ -426,7 +430,7 @@ async def delete_script(
 @router.post("/scripts/{script_id}/test")
 async def test_script(
     script_id: int,
-    timeout: Optional[int] = None,
+    test_data: ScriptTestRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -441,8 +445,40 @@ async def test_script(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to read script file: {str(e)}")
 
+    # Render template with parameters if provided
+    if script.parameters and test_data.parameter_values:
+        try:
+            from app.services.template_service import render_script_template, get_system_variables
+            
+            # Parse parameter definitions
+            parameters = json.loads(script.parameters)
+            
+            # Build test system variables
+            system_vars = get_system_variables(
+                repository_id=None,
+                repository_name="test-repository",
+                repository_path="/test/path",
+                hook_type="pre-backup"
+            )
+            
+            # Render template with test values (don't encrypt - these are plain test values)
+            content = render_script_template(
+                content,
+                parameters,
+                test_data.parameter_values,
+                decrypt_passwords=False,  # Test values aren't encrypted
+                system_vars=system_vars
+            )
+            
+            logger.info("Rendered test script with parameters",
+                       script_id=script_id,
+                       param_count=len(parameters))
+        except Exception as e:
+            logger.error("Failed to render test script template", script_id=script_id, error=str(e))
+            raise HTTPException(status_code=400, detail=f"Failed to render script template: {str(e)}")
+
     # Execute script
-    test_timeout = timeout or script.timeout
+    test_timeout = test_data.timeout or script.timeout
     try:
         result = await execute_script(
             script=content,
