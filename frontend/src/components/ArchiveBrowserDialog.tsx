@@ -334,7 +334,7 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
                           {item.name}
                         </Typography>
                       }
-                      secondary={item.size ? formatBytes(item.size) : undefined}
+                      secondary={formatBytes(item.size)}
                     />
                   </ListItemButton>
                 </ListItem>

@@ -191,6 +191,7 @@ const Archives: React.FC = () => {
         folders.push({
           name: item.name,
           path: item.path,
+          size: item.size,
           type: 'd',
         })
       } else {
@@ -698,13 +699,20 @@ const Archives: React.FC = () => {
                                 direction="row"
                                 spacing={1.5}
                                 alignItems="center"
-                                sx={{ color: 'text.primary' }}
+                                sx={{ color: 'text.primary', flex: 1 }}
                               >
                                 <Folder size={20} />
                                 <Typography variant="body2" fontWeight={500}>
                                   {folder.name}
                                 </Typography>
                               </Stack>
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ ml: 2 }}
+                              >
+                                {formatBytesUtil(folder.size)}
+                              </Typography>
                             </Box>
                           ))}
 
