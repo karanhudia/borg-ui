@@ -900,9 +900,11 @@ class NotificationService:
             # Send test notification with detailed logging
             logger.info("Attempting to send test notification", service_url_prefix=service_url.split(':')[0])
 
+            # Use longer timeout for slow services like Signal (60 seconds)
             success = apobj.notify(
                 title="🔔 Borg UI Test Notification",
-                body="This is a test notification from Borg Web UI. If you received this, your notification service is configured correctly!"
+                body="This is a test notification from Borg Web UI. If you received this, your notification service is configured correctly!",
+                timeout=60
             )
 
             if success:
@@ -956,19 +958,22 @@ class NotificationService:
             apobj.add(setting.service_url)
 
             # Choose format based on service type
+            # Use longer timeout (60s) for slow services like Signal
             if _is_email_service(setting.service_url):
                 # Email service - use HTML format
                 success = apobj.notify(
                     title=title,
                     body=html_body,
-                    body_format=apprise.NotifyFormat.HTML
+                    body_format=apprise.NotifyFormat.HTML,
+                    timeout=60
                 )
             else:
                 # Chat service - use Markdown format
                 success = apobj.notify(
                     title=title,
                     body=markdown_body,
-                    body_format=apprise.NotifyFormat.MARKDOWN
+                    body_format=apprise.NotifyFormat.MARKDOWN,
+                    timeout=60
                 )
 
             if success:
