@@ -489,6 +489,9 @@ class Script(Base):
     usage_count = Column(Integer, default=0, nullable=False)  # How many repos use this?
     last_used_at = Column(DateTime, nullable=True)
 
+    # Script parameters
+    parameters = Column(Text, nullable=True)  # JSON array of parameter definitions: [{'name': 'PARAM', 'type': 'text'|'password', 'default': '', 'description': '', 'required': bool}]
+
     # Relationships
     repository_scripts = relationship("RepositoryScript", back_populates="script", cascade="all, delete-orphan")
     executions = relationship("ScriptExecution", back_populates="script", cascade="all, delete-orphan")
@@ -513,6 +516,9 @@ class RepositoryScript(Base):
     custom_timeout = Column(Integer, nullable=True)  # Override script's default timeout
     custom_run_on = Column(String(50), nullable=True)  # Override script's run_on condition
     continue_on_error = Column(Boolean, default=True)  # Override script's continue_on_error
+
+    # Script parameter values
+    parameter_values = Column(Text, nullable=True)  # JSON dict of parameter values: {'PARAM': 'value'}. Password-type values are encrypted.
 
     # Configuration
     created_at = Column(DateTime, default=utc_now, nullable=False)

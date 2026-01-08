@@ -6,6 +6,7 @@ Handles execution of scripts from the script library, including:
 - Chaining multiple scripts in order
 - Checking run_on conditions
 - Recording executions in database
+- Rendering script templates with parameters
 """
 from typing import List, Dict, Optional, Literal
 from sqlalchemy.orm import Session, joinedload
@@ -13,9 +14,11 @@ from datetime import datetime
 from pathlib import Path
 import time
 import structlog
+import json
 
 from app.database.models import Script, RepositoryScript, ScriptExecution, Repository, BackupJob
 from app.services.script_executor import execute_script
+from app.services.template_service import render_script_template, get_system_variables
 from app.config import settings
 
 logger = structlog.get_logger()
@@ -208,6 +211,43 @@ class ScriptLibraryExecutor:
                 raise FileNotFoundError(f"Script file not found: {script.file_path}")
 
             script_content = file_path.read_text()
+
+            # Get repository info for system variables
+            repository = self.db.query(Repository).filter(Repository.id == repository_id).first()
+            
+            # Render script template with parameters if they exist
+            if script.parameters:
+                try:
+                    # Parse parameter definitions
+                    parameters = json.loads(script.parameters)
+                    
+                    # Get parameter values (may be encrypted)
+                    parameter_values = json.loads(repo_script.parameter_values) if repo_script.parameter_values else {}
+                    
+                    # Build system variables
+                    system_vars = get_system_variables(
+                        repository_id=repository_id,
+                        repository_name=repository.name if repository else None,
+                        repository_path=repository.path if repository else None,
+                        hook_type=hook_type
+                    )
+                    
+                    # Render template (this will decrypt password-type parameters)
+                    script_content = render_script_template(
+                        script_content,
+                        parameters,
+                        parameter_values,
+                        decrypt_passwords=True,
+                        system_vars=system_vars
+                    )
+                    
+                    logger.info("Rendered script template with parameters",
+                               script_id=script.id,
+                               param_count=len(parameters),
+                               password_params=[p['name'] for p in parameters if p.get('type') == 'password'])
+                except Exception as e:
+                    logger.error("Failed to render script template", script_id=script.id, error=str(e))
+                    raise
 
             # Get timeout (custom or default)
             timeout = repo_script.custom_timeout or script.timeout

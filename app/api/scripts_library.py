@@ -15,10 +15,12 @@ import hashlib
 
 from app.database.database import get_db
 from app.database.models import Script, RepositoryScript, ScriptExecution, Repository, User
-from app.core.security import get_current_user
+from app.core.security import get_current_user, encrypt_secret
 from app.config import settings
 from app.services.script_executor import execute_script
+from app.utils.script_params import parse_script_parameters, mask_password_values
 import structlog
+import json
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -51,6 +53,7 @@ class ScriptResponse(BaseModel):
     is_template: bool
     created_at: datetime
     updated_at: datetime
+    parameters: Optional[List[dict]] = None  # Parameter definitions
 
 class ScriptDetailResponse(ScriptResponse):
     content: str  # Include script content in detail view
@@ -65,8 +68,16 @@ class RepositoryScriptAssignment(BaseModel):
     custom_timeout: Optional[int] = None
     custom_run_on: Optional[str] = None
     continue_on_error: Optional[bool] = True
+    parameter_values: Optional[dict] = None  # Parameter values (passwords will be encrypted)
 
-# Helper functions
+class RepositoryScriptUpdate(BaseModel):
+    execution_order: Optional[float] = None
+    enabled: Optional[bool] = None
+    custom_timeout: Optional[int] = None
+    custom_run_on: Optional[str] = None
+    continue_on_error: Optional[bool] = None
+    parameter_values: Optional[dict] = None  # Parameter values (passwords will be encrypted)
+
 def ensure_scripts_directory():
     """Ensure /data/scripts/library directory exists"""
     scripts_dir = Path(settings.data_dir) / "scripts" / "library"
@@ -142,7 +153,8 @@ async def list_scripts(
             usage_count=script.usage_count,
             is_template=script.is_template,
             created_at=script.created_at,
-            updated_at=script.updated_at
+            updated_at=script.updated_at,
+            parameters=json.loads(script.parameters) if script.parameters else None
         )
         for script in scripts
     ]
@@ -209,6 +221,7 @@ async def get_script(
         is_template=script.is_template,
         created_at=script.created_at,
         updated_at=script.updated_at,
+        parameters=json.loads(script.parameters) if script.parameters else None,
         content=content,
         repositories=repositories,
         recent_executions=recent_executions
@@ -247,6 +260,10 @@ async def create_script(
         logger.error("Failed to write script file", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to write script file: {str(e)}")
 
+    # Parse parameters from script content
+    parameters = parse_script_parameters(script_data.content)
+    parameters_json = json.dumps(parameters) if parameters else None
+
     # Create database record
     script = Script(
         name=script_data.name,
@@ -255,6 +272,7 @@ async def create_script(
         category=script_data.category,
         timeout=script_data.timeout,
         run_on=script_data.run_on,
+        parameters=parameters_json,
         created_by_user_id=current_user.id,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow()
@@ -277,7 +295,8 @@ async def create_script(
         usage_count=0,
         is_template=False,
         created_at=script.created_at,
-        updated_at=script.updated_at
+        updated_at=script.updated_at,
+        parameters=parameters if parameters else None
     )
 
 @router.put("/scripts/{script_id}", response_model=ScriptResponse)
@@ -326,6 +345,10 @@ async def update_script(
         try:
             write_script_file(file_path, script_data.content)
             logger.info("Script file updated", script_id=script_id, path=str(file_path))
+            
+            # Re-parse parameters when content changes
+            parameters = parse_script_parameters(script_data.content)
+            script.parameters = json.dumps(parameters) if parameters else None
         except Exception as e:
             logger.error("Failed to update script file", script_id=script_id, error=str(e))
             raise HTTPException(status_code=500, detail=f"Failed to update script file: {str(e)}")
@@ -347,7 +370,8 @@ async def update_script(
         usage_count=script.usage_count,
         is_template=script.is_template,
         created_at=script.created_at,
-        updated_at=script.updated_at
+        updated_at=script.updated_at,
+        parameters=json.loads(script.parameters) if script.parameters else None
     )
 
 @router.delete("/scripts/{script_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -463,6 +487,13 @@ async def get_repository_scripts(
     ).options(joinedload(RepositoryScript.script)).order_by(RepositoryScript.execution_order).all()
 
     def format_script(rs):
+        # Get script parameters for masking
+        script_params = json.loads(rs.script.parameters) if rs.script.parameters else []
+        
+        # Get parameter values and mask passwords
+        param_values = json.loads(rs.parameter_values) if rs.parameter_values else {}
+        masked_values = mask_password_values(script_params, param_values) if param_values else None
+        
         return {
             "id": rs.id,
             "script_id": rs.script_id,
@@ -474,7 +505,9 @@ async def get_repository_scripts(
             "custom_run_on": rs.custom_run_on,
             "continue_on_error": rs.continue_on_error,
             "default_timeout": rs.script.timeout,
-            "default_run_on": rs.script.run_on
+            "default_run_on": rs.script.run_on,
+            "parameters": script_params,
+            "parameter_values": masked_values
         }
 
     return {
@@ -517,6 +550,40 @@ async def assign_script_to_repository(
             detail=f"Script '{script.name}' is already assigned to this repository as {assignment.hook_type}"
         )
 
+    # Process parameter values - encrypt password-type parameters
+    parameter_values_json = None
+    if assignment.parameter_values:
+        # Get script parameter definitions
+        script_params = json.loads(script.parameters) if script.parameters else []
+        
+        # Create dict to store processed values
+        processed_values = {}
+        
+        for param_def in script_params:
+            param_name = param_def['name']
+            param_type = param_def.get('type', 'text')
+            
+            # Get value from assignment
+            if param_name in assignment.parameter_values:
+                value = assignment.parameter_values[param_name]
+                
+                # Encrypt password-type parameters
+                if param_type == 'password' and value:
+                    try:
+                        processed_values[param_name] = encrypt_secret(value)
+                        logger.debug("Encrypted password parameter", param_name=param_name)
+                    except Exception as e:
+                        logger.error("Failed to encrypt parameter", param_name=param_name, error=str(e))
+                        raise HTTPException(
+                            status_code=500,
+                            detail=f"Failed to encrypt parameter '{param_name}': {str(e)}"
+                        )
+                else:
+                    # Plain text parameter
+                    processed_values[param_name] = value
+        
+        parameter_values_json = json.dumps(processed_values) if processed_values else None
+
     # Create assignment
     repo_script = RepositoryScript(
         repository_id=repository_id,
@@ -527,6 +594,7 @@ async def assign_script_to_repository(
         custom_timeout=assignment.custom_timeout,
         custom_run_on=assignment.custom_run_on,
         continue_on_error=assignment.continue_on_error if assignment.continue_on_error is not None else True,
+        parameter_values=parameter_values_json,
         created_at=datetime.utcnow()
     )
 
@@ -552,11 +620,7 @@ async def assign_script_to_repository(
 async def update_repository_script_assignment(
     repository_id: int,
     repo_script_id: int,
-    execution_order: Optional[float] = None,
-    enabled: Optional[bool] = None,
-    custom_timeout: Optional[int] = None,
-    custom_run_on: Optional[str] = None,
-    continue_on_error: Optional[bool] = None,
+    update_data: RepositoryScriptUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -564,30 +628,61 @@ async def update_repository_script_assignment(
     repo_script = db.query(RepositoryScript).filter(
         RepositoryScript.id == repo_script_id,
         RepositoryScript.repository_id == repository_id
-    ).first()
+    ).options(joinedload(RepositoryScript.script)).first()
 
     if not repo_script:
         raise HTTPException(status_code=404, detail="Script assignment not found")
 
-    if execution_order is not None:
-        repo_script.execution_order = execution_order
+    if update_data.execution_order is not None:
+        repo_script.execution_order = update_data.execution_order
 
-    if enabled is not None:
-        repo_script.enabled = enabled
+    if update_data.enabled is not None:
+        repo_script.enabled = update_data.enabled
 
-    if custom_timeout is not None:
-        repo_script.custom_timeout = custom_timeout
+    if update_data.custom_timeout is not None:
+        repo_script.custom_timeout = update_data.custom_timeout
 
-    if custom_run_on is not None:
+    if update_data.custom_run_on is not None:
         valid_run_on = ['success', 'failure', 'always', 'warning']
-        if custom_run_on not in valid_run_on:
-            raise HTTPException(status_code=400, detail=f"run_on must be one of: {', '.join(valid_run_on)}")
-        repo_script.custom_run_on = custom_run_on
+        if update_data.custom_run_on not in valid_run_on:
+            raise HTTPException(status_code=400, detail=f"custom_run_on must be one of: {', '.join(valid_run_on)}")
+        repo_script.custom_run_on = update_data.custom_run_on
 
-    if continue_on_error is not None:
-        repo_script.continue_on_error = continue_on_error
+    if update_data.continue_on_error is not None:
+        repo_script.continue_on_error = update_data.continue_on_error
+
+    # Update parameter values with encryption
+    if update_data.parameter_values is not None:
+        # Get script parameter definitions
+        script_params = json.loads(repo_script.script.parameters) if repo_script.script.parameters else []
+        
+        # Process and encrypt password-type parameters
+        processed_values = {}
+        for param_def in script_params:
+            param_name = param_def['name']
+            param_type = param_def.get('type', 'text')
+            
+            if param_name in update_data.parameter_values:
+                value = update_data.parameter_values[param_name]
+                
+                # Encrypt password-type parameters
+                if param_type == 'password' and value:
+                    try:
+                        processed_values[param_name] = encrypt_secret(value)
+                    except Exception as e:
+                        logger.error("Failed to encrypt parameter", param_name=param_name, error=str(e))
+                        raise HTTPException(
+                            status_code=500,
+                            detail=f"Failed to encrypt parameter '{param_name}': {str(e)}"
+                        )
+                else:
+                    # Plain text parameter
+                    processed_values[param_name] = value
+        
+        repo_script.parameter_values = json.dumps(processed_values) if processed_values else None
 
     db.commit()
+    db.refresh(repo_script)
 
     logger.info("Repository script assignment updated",
                 repo_script_id=repo_script_id,
