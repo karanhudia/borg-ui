@@ -91,8 +91,8 @@ class CompactService:
             ]
             env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
 
-            # Build command
-            cmd = ["borg", "compact", "--progress", "--log-json"]
+            # Build command with --verbose to show freed space summary
+            cmd = ["borg", "compact", "--progress", "--verbose", "--log-json"]
             if repository.remote_path:
                 cmd.extend(["--remote-path", repository.remote_path])
             cmd.append(repository.path)
