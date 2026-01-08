@@ -75,6 +75,28 @@ async def browse_archive_contents(
                            archive=archive_name,
                            items_count=len(all_items))
 
+        # Helper function to calculate directory size
+        def calculate_directory_size(dir_path: str) -> int:
+            """Calculate total size of all files in a directory recursively"""
+            total_size = 0
+            # Ensure consistent path format for comparison
+            search_prefix = f"{dir_path}/" if dir_path else ""
+
+            for item in all_items:
+                item_path = item["path"]
+                # Check if this item is under the directory
+                if search_prefix:
+                    if item_path.startswith(search_prefix) or item_path == dir_path:
+                        # Only count files, not directories themselves
+                        if item.get("type") != "d" and item.get("size") is not None:
+                            total_size += item.get("size", 0)
+                else:
+                    # Root level - count all files
+                    if item.get("type") != "d" and item.get("size") is not None:
+                        total_size += item.get("size", 0)
+
+            return total_size
+
         # Now filter the cached items for the requested path
         items = []
         seen_paths = set()
@@ -113,22 +135,40 @@ async def browse_archive_contents(
                 dir_name = relative_path.split("/")[0]
                 if dir_name not in seen_paths:
                     seen_paths.add(dir_name)
+                    full_dir_path = f"{path}/{dir_name}" if path else dir_name
+                    # Calculate directory size
+                    dir_size = calculate_directory_size(full_dir_path)
                     items.append({
                         "name": dir_name,
                         "type": "directory",
-                        "path": f"{path}/{dir_name}" if path else dir_name
+                        "size": dir_size,
+                        "path": full_dir_path
                     })
             else:
                 # This is an immediate child
                 if relative_path not in seen_paths:
                     seen_paths.add(relative_path)
-                    items.append({
-                        "name": relative_path,
-                        "type": "directory" if item_type == "d" else "file",
-                        "size": item_size,
-                        "mtime": item_mtime,
-                        "path": f"{path}/{relative_path}" if path else relative_path
-                    })
+                    full_path = f"{path}/{relative_path}" if path else relative_path
+
+                    # For directories, calculate their size
+                    if item_type == "d":
+                        dir_size = calculate_directory_size(full_path)
+                        items.append({
+                            "name": relative_path,
+                            "type": "directory",
+                            "size": dir_size,
+                            "mtime": item_mtime,
+                            "path": full_path
+                        })
+                    else:
+                        # For files, use the actual size
+                        items.append({
+                            "name": relative_path,
+                            "type": "file",
+                            "size": item_size,
+                            "mtime": item_mtime,
+                            "path": full_path
+                        })
 
         # Sort: directories first, then by name
         items.sort(key=lambda x: (x["type"] != "directory", x["name"].lower()))
