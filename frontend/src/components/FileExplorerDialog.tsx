@@ -21,7 +21,8 @@ import {
   InputAdornment,
   Checkbox,
 } from '@mui/material'
-import { Folder, File, ChevronRight, Home, Search, Archive, HardDrive, FolderPlus } from 'lucide-react'
+import { File, ChevronRight, Home, Search, Archive, HardDrive, FolderPlus } from 'lucide-react'
+import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import api from '../services/api'
 import { sshKeysAPI } from '../services/api'
 
@@ -495,7 +496,7 @@ export default function FileExplorerDialog({
                   py={4}
                   sx={{ color: 'text.secondary' }}
                 >
-                  <Folder size={36} />
+                  <FolderOpenIcon sx={{ fontSize: 36 }} />
                   <Typography variant="body2" color="text.secondary" mt={1.5}>
                     No items found
                   </Typography>
@@ -556,7 +557,7 @@ export default function FileExplorerDialog({
                           ) : item.is_borg_repo ? (
                             <Archive size={18} color="#ff6b6b" />
                           ) : item.is_directory ? (
-                            <Folder size={18} color="#2563eb" />
+                            <FolderOpenIcon sx={{ fontSize: 18, color: '#2563eb' }} />
                           ) : (
                             <File size={18} color="#999" />
                           )}
