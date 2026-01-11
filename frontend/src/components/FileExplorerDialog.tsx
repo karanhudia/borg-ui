@@ -21,7 +21,7 @@ import {
   InputAdornment,
   Checkbox,
 } from '@mui/material'
-import { Folder, File, ChevronRight, Home, Search, Archive, HardDrive } from 'lucide-react'
+import { Folder, File, ChevronRight, Home, Search, Archive, HardDrive, FolderPlus } from 'lucide-react'
 import api from '../services/api'
 import { sshKeysAPI } from '../services/api'
 
@@ -90,12 +90,24 @@ export default function FileExplorerDialog({
   const [activeSshConfig, setActiveSshConfig] = useState(sshConfig)
   const [isInsideLocalMount, setIsInsideLocalMount] = useState(false)
 
+  // Create folder dialog
+  const [showCreateFolder, setShowCreateFolder] = useState(false)
+  const [newFolderName, setNewFolderName] = useState('')
+  const [creatingFolder, setCreatingFolder] = useState(false)
+
   useEffect(() => {
     if (open) {
+      // Reset to initial state when dialog opens
+      setCurrentPath(initialPath)
       setActiveConnectionType(connectionType)
       setActiveSshConfig(sshConfig)
-      loadDirectory(initialPath)
       setSelectedPaths([])
+      setSearchTerm('')
+      setError(null)
+
+      // Load the initial directory
+      loadDirectory(initialPath)
+
       // Load SSH connections to show mount points
       if (connectionType === 'local') {
         loadSSHConnections()
@@ -221,6 +233,47 @@ export default function FileExplorerDialog({
     onClose()
   }
 
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) return
+
+    setCreatingFolder(true)
+    try {
+      const params: any = {
+        path: currentPath,
+        folder_name: newFolderName.trim(),
+        connection_type: activeConnectionType,
+      }
+
+      if (activeConnectionType === 'ssh' && activeSshConfig) {
+        params.ssh_key_id = activeSshConfig.ssh_key_id
+        params.host = activeSshConfig.host
+        params.username = activeSshConfig.username
+        params.port = activeSshConfig.port
+      }
+
+      await api.post('/filesystem/create-folder', params)
+
+      // Refresh directory
+      await loadDirectory(currentPath)
+
+      // Close dialog and reset
+      setShowCreateFolder(false)
+      setNewFolderName('')
+      setError(null)
+    } catch (err: any) {
+      console.error('Failed to create folder:', err)
+      const errorMessage = err.response?.data?.detail || err.message || 'Failed to create folder'
+      // Handle validation errors from FastAPI
+      if (typeof errorMessage === 'object') {
+        setError(JSON.stringify(errorMessage))
+      } else {
+        setError(errorMessage)
+      }
+    } finally {
+      setCreatingFolder(false)
+    }
+  }
+
   const getBreadcrumbs = () => {
     const parts = currentPath.split('/').filter(Boolean)
     const breadcrumbs: { label: string; path: string }[] = [{ label: 'Root', path: '/' }]
@@ -273,6 +326,7 @@ export default function FileExplorerDialog({
   )
 
   return (
+    <>
     <Dialog
       open={open}
       onClose={onClose}
@@ -346,8 +400,8 @@ export default function FileExplorerDialog({
           </Breadcrumbs>
         </Box>
 
-        {/* Search */}
-        <Box sx={{ px: 2, py: 1 }}>
+        {/* Search and Create Folder */}
+        <Box sx={{ px: 2, py: 1, display: 'flex', gap: 1 }}>
           <TextField
             fullWidth
             size="small"
@@ -370,6 +424,20 @@ export default function FileExplorerDialog({
               },
             }}
           />
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<FolderPlus size={16} />}
+            onClick={() => setShowCreateFolder(true)}
+            sx={{
+              flexShrink: 0,
+              whiteSpace: 'nowrap',
+              height: '35px',
+              minHeight: '35px',
+            }}
+          >
+            New Folder
+          </Button>
         </Box>
 
         {/* Error Display */}
@@ -574,5 +642,50 @@ export default function FileExplorerDialog({
         </Button>
       </DialogActions>
     </Dialog>
+
+      {/* Create Folder Dialog */}
+      <Dialog open={showCreateFolder} onClose={() => !creatingFolder && setShowCreateFolder(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Create New Folder</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            fullWidth
+            label="Folder Name"
+            value={newFolderName}
+            onChange={(e) => setNewFolderName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && newFolderName.trim()) {
+                handleCreateFolder()
+              }
+            }}
+            placeholder="Enter folder name"
+            margin="dense"
+            disabled={creatingFolder}
+          />
+          {error && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {error}
+            </Alert>
+          )}
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => {
+            setShowCreateFolder(false)
+            setNewFolderName('')
+            setError(null)
+          }} disabled={creatingFolder}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCreateFolder}
+            variant="contained"
+            disabled={!newFolderName.trim() || creatingFolder}
+          >
+            {creatingFolder ? 'Creating...' : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   )
 }

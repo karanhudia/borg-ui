@@ -873,6 +873,28 @@ class BackupService:
                 logger.error("Job not found", job_id=job_id)
                 return
 
+            # Check if this is a remote backup
+            if job.execution_mode == "remote_ssh":
+                logger.info("Delegating to remote backup service", job_id=job_id)
+                from app.services.remote_backup_service import remote_backup_service
+
+                # Get repository record
+                repo_record = db.query(Repository).filter(Repository.path == repository).first()
+                if not repo_record:
+                    raise Exception(f"Repository not found: {repository}")
+
+                # Execute remote backup
+                await remote_backup_service.execute_remote_backup(
+                    job_id=job_id,
+                    source_ssh_connection_id=job.source_ssh_connection_id,
+                    repository_id=repo_record.id,
+                    source_paths=json.loads(repo_record.source_directories or "[]"),
+                    exclude_patterns=json.loads(repo_record.exclude_patterns or "[]"),
+                    compression=repo_record.compression,
+                    custom_flags=repo_record.custom_flags
+                )
+                return
+
             # No log files - maximum performance
             job.status = "running"
             job.started_at = datetime.utcnow()

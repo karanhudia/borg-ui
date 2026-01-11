@@ -7,7 +7,10 @@ from typing import List, Optional
 import os
 import subprocess
 import structlog
+import tempfile
+import base64
 from datetime import datetime, timezone
+from cryptography.fernet import Fernet
 
 from app.core.security import get_current_user
 from app.database.database import get_db
@@ -285,49 +288,72 @@ async def browse_ssh_filesystem(
             temp_key_file = f.name
 
         os.chmod(temp_key_file, 0o600)
-        # Use SSH to list directory contents (compatible with restricted shells like Hetzner Storage Box)
-        # Format: permissions links owner group size timestamp name
-        # Use LC_ALL=C to ensure English output (prevents parsing issues with localized date formats)
-        ls_cmd = f'LC_ALL=C ls -lA "{path}"'
 
-        ssh_cmd = [
-            "ssh",
-            "-i", temp_key_file,
-            "-p", str(port),
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "ConnectTimeout=10",
-            f"{username}@{host}",
-            ls_cmd
-        ]
+        # Use SFTP for browsing (compatible with restricted shells like Hetzner Storage Box)
+        # SFTP batch commands: ls -la shows detailed listing
+        sftp_batch_file = None
+        try:
+            # Create SFTP batch file with commands
+            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.sftp') as batch_f:
+                batch_f.write(f"cd \"{path}\"\n")
+                batch_f.write("ls -la\n")
+                sftp_batch_file = batch_f.name
 
-        result = subprocess.run(
-            ssh_cmd,
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
+            logger.info("Browsing SSH path via SFTP", host=host, path=path)
+
+            sftp_cmd = [
+                "sftp",
+                "-b", sftp_batch_file,
+                "-i", temp_key_file,
+                "-P", str(port),
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "UserKnownHostsFile=/dev/null",
+                "-o", "ConnectTimeout=10",
+                f"{username}@{host}"
+            ]
+
+            result = subprocess.run(
+                sftp_cmd,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+        finally:
+            # Clean up SFTP batch file
+            if sftp_batch_file and os.path.exists(sftp_batch_file):
+                try:
+                    os.unlink(sftp_batch_file)
+                except Exception:
+                    pass
 
         if result.returncode != 0:
+            error_msg = result.stderr.strip() if result.stderr else result.stdout.strip() if result.stdout else "Unknown error"
+            logger.error("SFTP ls command failed",
+                        host=host,
+                        path=path,
+                        returncode=result.returncode,
+                        stderr=result.stderr[:500] if result.stderr else None,
+                        stdout=result.stdout[:500] if result.stdout else None)
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to list remote directory: {result.stderr or result.stdout or 'Permission denied or path not found'}"
+                detail=f"Failed to list remote directory '{path}': {error_msg or 'Permission denied or path not found'}"
             )
 
         # Log raw output for debugging
         output_lines = result.stdout.strip().split('\n')
-        logger.info("SSH ls output received",
+        logger.info("SFTP ls output received",
                     path=path,
                     lines_count=len(output_lines),
                     first_few_lines=output_lines[:5] if output_lines else [])
 
-        # Parse ls output
+        # Parse SFTP ls output
         items = []
         lines = result.stdout.strip().split('\n')
         seen_names = set()  # Track seen names to avoid duplicates
 
         for line in lines:
-            if not line or line.startswith('total'):
+            # Skip SFTP prompts, commands echoed back, and total lines
+            if not line or line.startswith('sftp>') or line.startswith('total') or 'Connecting to' in line:
                 continue
 
             try:
@@ -411,9 +437,16 @@ async def browse_ssh_filesystem(
 
     except subprocess.TimeoutExpired:
         raise HTTPException(status_code=504, detail="SSH connection timeout")
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error("Error browsing SSH filesystem", host=host, path=path, error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to browse remote filesystem: {str(e)}")
+        logger.error("Error browsing SSH filesystem",
+                    host=host,
+                    path=path,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to browse remote filesystem: {str(e) or 'Unknown error'}")
     finally:
         # Clean up temporary key file
         if temp_key_file and os.path.exists(temp_key_file):
@@ -529,3 +562,140 @@ async def validate_path(
     except Exception as e:
         logger.error("Error validating path", path=path, error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to validate path: {str(e)}")
+
+
+class CreateFolderRequest(BaseModel):
+    path: str
+    folder_name: str
+    connection_type: str = "local"
+    ssh_key_id: Optional[int] = None
+    host: Optional[str] = None
+    username: Optional[str] = None
+    port: int = 22
+
+
+@router.post("/create-folder")
+async def create_folder(
+    request: CreateFolderRequest,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new folder in the specified path"""
+    path = request.path
+    folder_name = request.folder_name
+    connection_type = request.connection_type
+    ssh_key_id = request.ssh_key_id
+    host = request.host
+    username = request.username
+    port = request.port
+    try:
+        # Sanitize folder name to prevent path traversal
+        folder_name = folder_name.strip().replace('/', '').replace('..', '')
+        if not folder_name:
+            raise HTTPException(status_code=400, detail="Invalid folder name")
+
+        full_path = os.path.join(path, folder_name)
+
+        if connection_type == "local":
+            # Create local folder
+            try:
+                os.makedirs(full_path, exist_ok=False)
+                logger.info("Created local folder", path=full_path, user=current_user.username)
+                return {"success": True, "path": full_path, "message": "Folder created successfully"}
+            except FileExistsError:
+                raise HTTPException(status_code=400, detail=f"Folder '{folder_name}' already exists")
+            except PermissionError:
+                raise HTTPException(status_code=403, detail="Permission denied to create folder")
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to create folder: {str(e)}")
+
+        elif connection_type == "ssh":
+            # Create folder via SFTP (works with restricted shells like Hetzner)
+            if not all([ssh_key_id, host, username]):
+                raise HTTPException(status_code=400, detail="SSH connection details required")
+
+            # Get SSH key
+            ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
+            if not ssh_key:
+                raise HTTPException(status_code=404, detail="SSH key not found")
+
+            # Decrypt private key
+            encryption_key = settings.secret_key.encode()[:32]
+            cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
+            private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+
+            # Ensure private key ends with newline
+            if not private_key.endswith('\n'):
+                private_key += '\n'
+
+            # Create temporary key file
+            temp_key_file = None
+            sftp_batch_file = None
+            try:
+                with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+                    f.write(private_key)
+                    temp_key_file = f.name
+                os.chmod(temp_key_file, 0o600)
+
+                # Create SFTP batch file to create directory
+                with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.sftp') as batch_f:
+                    batch_f.write(f'mkdir "{full_path}"\n')
+                    sftp_batch_file = batch_f.name
+
+                logger.info("Creating folder via SFTP", host=host, path=full_path)
+
+                sftp_cmd = [
+                    "sftp",
+                    "-b", sftp_batch_file,
+                    "-i", temp_key_file,
+                    "-P", str(port),
+                    "-o", "StrictHostKeyChecking=no",
+                    "-o", "UserKnownHostsFile=/dev/null",
+                    "-o", "ConnectTimeout=10",
+                    f"{username}@{host}"
+                ]
+
+                result = subprocess.run(
+                    sftp_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+
+                if result.returncode == 0 or "File exists" not in result.stderr:
+                    logger.info("Created remote folder", host=host, path=full_path)
+                    return {"success": True, "path": full_path, "message": "Folder created successfully"}
+                elif "File exists" in result.stderr:
+                    raise HTTPException(status_code=400, detail=f"Folder '{folder_name}' already exists")
+                else:
+                    error_msg = result.stderr.strip() if result.stderr else "Unknown error"
+                    logger.error("Failed to create remote folder",
+                                host=host,
+                                path=full_path,
+                                stderr=result.stderr[:500] if result.stderr else None)
+                    raise HTTPException(status_code=500, detail=f"Failed to create folder: {error_msg}")
+
+            finally:
+                # Clean up temporary files
+                if temp_key_file and os.path.exists(temp_key_file):
+                    try:
+                        os.unlink(temp_key_file)
+                    except Exception:
+                        pass
+                if sftp_batch_file and os.path.exists(sftp_batch_file):
+                    try:
+                        os.unlink(sftp_batch_file)
+                    except Exception:
+                        pass
+        else:
+            raise HTTPException(status_code=400, detail="Invalid connection type")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error creating folder",
+                    path=path,
+                    folder_name=folder_name,
+                    error=str(e),
+                    exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to create folder: {str(e)}")

@@ -48,6 +48,7 @@ import CheckWarningDialog from '../components/CheckWarningDialog'
 import CompactWarningDialog from '../components/CompactWarningDialog'
 import RepositoryCard from '../components/RepositoryCard'
 import AdvancedRepositoryOptions from '../components/AdvancedRepositoryOptions'
+import RepositoryWizard from '../components/RepositoryWizard'
 
 interface Repository {
   id: number
@@ -88,6 +89,11 @@ export default function Repositories() {
   const [repositoryModalMode, setRepositoryModalMode] = useState<'create' | 'import'>('create')
   const [newlyCreatedRepositoryId, setNewlyCreatedRepositoryId] = useState<number | null>(null)
   const [editingRepository, setEditingRepository] = useState<Repository | null>(null)
+
+  // NEW: Wizard state
+  const [showWizard, setShowWizard] = useState(false)
+  const [wizardMode, setWizardMode] = useState<'create' | 'edit' | 'import'>('create')
+  const [wizardRepository, setWizardRepository] = useState<Repository | null>(null)
   const [selectedKeyfile, setSelectedKeyfile] = useState<File | null>(null)
   const [viewingInfoRepository, setViewingInfoRepository] = useState<Repository | null>(null)
   const [checkingRepository, setCheckingRepository] = useState<Repository | null>(null)
@@ -529,6 +535,40 @@ export default function Repositories() {
     setSelectedKeyfile(null)
   }
 
+  // NEW: Wizard functions
+  const openWizard = (mode: 'create' | 'edit' | 'import', repository?: Repository) => {
+    setWizardMode(mode)
+    setWizardRepository(repository || null)
+    setShowWizard(true)
+  }
+
+  const closeWizard = () => {
+    setShowWizard(false)
+    setWizardRepository(null)
+  }
+
+  const handleWizardSubmit = async (data: any) => {
+    try {
+      if (wizardMode === 'edit' && wizardRepository) {
+        // Edit existing repository
+        await repositoriesAPI.updateRepository(wizardRepository.id, data)
+        toast.success('Repository updated successfully')
+      } else if (wizardMode === 'import') {
+        // Import existing repository
+        await repositoriesAPI.importRepository(data)
+        toast.success('Repository imported successfully')
+      } else {
+        // Create new repository
+        await repositoriesAPI.createRepository(data)
+        toast.success('Repository created successfully')
+      }
+      queryClient.invalidateQueries({ queryKey: ['repositories'] })
+      closeWizard()
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || `Failed to ${wizardMode} repository`)
+    }
+  }
+
   const openEditModal = (repository: Repository) => {
     setEditingRepository(repository)
     const parsed = parseCompressionString(repository.compression)
@@ -810,10 +850,26 @@ export default function Repositories() {
               <Button
                 variant="contained"
                 startIcon={<Add />}
+                onClick={() => openWizard('create')}
+                sx={{ flexShrink: 0 }}
+              >
+                Create Repository (New)
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<FileUpload />}
+                onClick={() => openWizard('import')}
+                sx={{ flexShrink: 0 }}
+              >
+                Import Existing (New)
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<Add />}
                 onClick={() => openRepositoryModal('create')}
                 sx={{ flexShrink: 0 }}
               >
-                Create Repository
+                Create (Old)
               </Button>
               <Button
                 variant="outlined"
@@ -821,7 +877,7 @@ export default function Repositories() {
                 onClick={() => openRepositoryModal('import')}
                 sx={{ flexShrink: 0 }}
               >
-                Import Existing
+                Import (Old)
               </Button>
             </Stack>
           )}
@@ -2700,6 +2756,15 @@ export default function Repositories() {
           }}
         />
       )}
+
+      {/* NEW: Repository Wizard */}
+      <RepositoryWizard
+        open={showWizard}
+        onClose={closeWizard}
+        mode={wizardMode}
+        repository={wizardRepository || undefined}
+        onSubmit={handleWizardSubmit}
+      />
     </Box>
   )
 }
