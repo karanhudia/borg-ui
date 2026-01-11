@@ -120,6 +120,12 @@ class SSHConnection(Base):
     storage_percent_used = Column(Float, nullable=True)  # Percentage of storage used
     last_storage_check = Column(DateTime, nullable=True)  # Last time storage was checked
 
+    # Remote backup source configuration
+    is_backup_source = Column(Boolean, default=False)  # Mark this connection as a backup source
+    borg_binary_path = Column(String, default="/usr/bin/borg")  # Path to borg on remote host
+    borg_version = Column(String, nullable=True)  # Detected borg version
+    last_borg_check = Column(DateTime, nullable=True)  # Last time borg was verified
+
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
@@ -167,6 +173,12 @@ class BackupJob(Base):
 
     # Maintenance status tracking
     maintenance_status = Column(String, nullable=True)  # null, "running_prune", "prune_completed", "prune_failed", "running_compact", "compact_completed", "compact_failed", "maintenance_completed"
+
+    # Remote backup execution
+    execution_mode = Column(String, default="local")  # "local" or "remote_ssh"
+    source_ssh_connection_id = Column(Integer, ForeignKey("ssh_connections.id"), nullable=True)  # SSH connection for remote execution
+    remote_process_pid = Column(Integer, nullable=True)  # PID on remote host
+    remote_hostname = Column(String, nullable=True)  # Remote hostname for reference
 
     created_at = Column(DateTime, default=utc_now)
 
@@ -221,6 +233,10 @@ class ScheduledJob(Base):
     prune_keep_yearly = Column(Integer, default=1)  # Keep N yearly backups
     last_prune = Column(DateTime, nullable=True)  # Last prune execution time
     last_compact = Column(DateTime, nullable=True)  # Last compact execution time
+
+    # Remote backup execution
+    execution_mode = Column(String, default="local")  # "local" or "remote_ssh"
+    source_ssh_connection_id = Column(Integer, ForeignKey("ssh_connections.id"), nullable=True)  # SSH connection for remote execution
 
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, nullable=True)

@@ -1498,3 +1498,141 @@ async def test_ssh_key_connection(ssh_key: SSHKey, host: str, username: str, por
             "success": False,
             "error": f"Unexpected error during SSH connection test: {str(e)}"
         }
+
+# Remote Backup Source Management
+
+@router.patch("/connections/{connection_id}/backup-source")
+async def toggle_backup_source(
+    connection_id: int,
+    enable: bool,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Enable/disable SSH connection as backup source and verify Borg installation"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        from app.services.remote_backup_service import remote_backup_service
+
+        connection = db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
+        if not connection:
+            raise HTTPException(status_code=404, detail="SSH connection not found")
+
+        # If enabling, verify borg is installed on remote host
+        if enable:
+            logger.info("Verifying Borg on remote host", connection_id=connection_id)
+            result = await remote_backup_service.verify_remote_borg(connection_id)
+
+            if not result["installed"]:
+                error_msg = result.get("error", "Borg is not installed on remote host")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cannot enable as backup source: {error_msg}. Please install Borg on the remote host first."
+                )
+
+            # Update connection with borg info
+            connection.is_backup_source = True
+            connection.borg_version = result["version"]
+            connection.borg_binary_path = result["path"]
+            connection.last_borg_check = datetime.utcnow()
+
+            logger.info("Enabled SSH connection as backup source",
+                       connection_id=connection_id,
+                       borg_version=result["version"])
+        else:
+            # Disable backup source
+            connection.is_backup_source = False
+            logger.info("Disabled SSH connection as backup source", connection_id=connection_id)
+
+        db.commit()
+
+        return {
+            "success": True,
+            "is_backup_source": connection.is_backup_source,
+            "borg_version": connection.borg_version,
+            "borg_binary_path": connection.borg_binary_path,
+            "last_borg_check": serialize_datetime(connection.last_borg_check) if connection.last_borg_check else None
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to toggle backup source",
+                    connection_id=connection_id,
+                    error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to toggle backup source: {str(e)}")
+
+@router.get("/connections/backup-sources")
+async def list_backup_sources(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """List all SSH connections enabled as backup sources"""
+    try:
+        sources = db.query(SSHConnection).filter(
+            SSHConnection.is_backup_source == True
+        ).all()
+
+        return {
+            "sources": [
+                {
+                    "id": s.id,
+                    "name": f"{s.username}@{s.host}:{s.port}",
+                    "host": s.host,
+                    "username": s.username,
+                    "port": s.port,
+                    "borg_version": s.borg_version,
+                    "borg_binary_path": s.borg_binary_path,
+                    "last_borg_check": serialize_datetime(s.last_borg_check) if s.last_borg_check else None,
+                    "status": s.status
+                }
+                for s in sources
+            ]
+        }
+    except Exception as e:
+        logger.error("Failed to list backup sources", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to list backup sources: {str(e)}")
+
+@router.post("/connections/{connection_id}/verify-borg")
+async def verify_borg_installation(
+    connection_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Verify Borg is installed on remote host"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        from app.services.remote_backup_service import remote_backup_service
+
+        connection = db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
+        if not connection:
+            raise HTTPException(status_code=404, detail="SSH connection not found")
+
+        logger.info("Verifying Borg installation", connection_id=connection_id)
+        result = await remote_backup_service.verify_remote_borg(connection_id)
+
+        # Update connection with latest borg info if successful
+        if result["installed"]:
+            connection.borg_version = result["version"]
+            connection.borg_binary_path = result["path"]
+            connection.last_borg_check = datetime.utcnow()
+            db.commit()
+
+        return {
+            "installed": result["installed"],
+            "version": result.get("version"),
+            "path": result.get("path"),
+            "error": result.get("error"),
+            "last_check": serialize_datetime(datetime.utcnow())
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to verify Borg installation",
+                    connection_id=connection_id,
+                    error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to verify Borg installation: {str(e)}")
