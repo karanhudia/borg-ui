@@ -384,11 +384,12 @@ const CacheManagementTab: React.FC = () => {
                   value={redisUrl}
                   onChange={(e) => setRedisUrl(e.target.value)}
                   placeholder="redis://192.168.1.100:6379/0"
-                  helperText="Format: redis://[password@]host:port/db or rediss:// for TLS"
+                  helperText="Format: redis://[password@]host:port/db, rediss:// for TLS, or unix:// for Unix sockets"
                   error={
                     redisUrl.trim() !== '' &&
                     !redisUrl.startsWith('redis://') &&
-                    !redisUrl.startsWith('rediss://')
+                    !redisUrl.startsWith('rediss://') &&
+                    !redisUrl.startsWith('unix://')
                   }
                 />
                 <Button
