@@ -418,6 +418,9 @@ services:
       # Or with password
       # - REDIS_URL=redis://:password@192.168.1.100:6379/0
 
+      # Or with Unix socket (when Redis and Borg UI are on same system)
+      # - REDIS_URL=unix:///run/redis-socket/redis.sock?db=0&password=password
+
       # Cache settings
       - CACHE_TTL_SECONDS=7200    # 2 hours
       - CACHE_MAX_SIZE_MB=2048    # 2GB

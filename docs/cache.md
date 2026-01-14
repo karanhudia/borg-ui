@@ -325,6 +325,53 @@ rediss://my-cluster.abc123.cache.amazonaws.com:6379/0
 rediss://:password@secure-redis.example.com:6380/0
 ```
 
+### Option 6: Unix Socket Connections
+
+For connecting to Redis via Unix socket (useful when Redis and Borg UI are on the same system):
+
+**Docker Compose Configuration:**
+
+```yaml
+services:
+  borg-ui:
+    image: ainullcode/borg-ui:latest
+    container_name: borg-ui
+    volumes:
+      - /path/to/redis/socket:/run/redis-socket # Ensure container has necessary privileges to access socket
+
+  redis-borg-ui:
+    image: redis:latest
+    container_name: redis-borg-ui
+    network_mode: none
+    volumes:
+      - /path/to/redis/socket:/run/redis-socket
+      - /path/to/redis.conf:/etc/redis.conf
+    command: redis-server /etc/redis.conf
+```
+
+**Redis Configuration (`redis.conf`):**
+
+```conf
+# Use Unix socket
+unixsocket /run/redis-socket/redis.sock
+unixsocketperm 660
+port 0
+
+# Enable password (optional)
+requirepass mypassword
+
+# Set memory limit
+maxmemory 8gb
+maxmemory-policy allkeys-lru
+```
+
+**Configure in Borg Web UI:**
+- Go to **Settings → Cache**
+- Enter: `unix:///run/redis-socket/redis.sock?db=0[&password=mypassword]`
+- Click **Save Settings**
+
+**Note:** Ensure the Borg UI container has the necessary privileges and volume mounts to access the Unix socket file.
+
 ---
 
 ## Configuration via UI
@@ -392,6 +439,7 @@ services:
 ### Basic Format
 ```
 redis://[password@]host:port/database
+unix:///path/to/redis.sock?db=database[&password=password]
 ```
 
 ### Examples
@@ -430,12 +478,19 @@ rediss://secure-redis.example.com:6380/0
 rediss://:password@secure-redis.example.com:6380/0
 ```
 
+**Unix socket connection:**
+```
+unix:///run/redis-socket/redis.sock?db=0
+unix:///run/redis-socket/redis.sock?db=0&password=password
+```
+
 **URL Components:**
-- `redis://` or `rediss://` - Protocol (rediss = TLS)
-- `:password@` - Optional password (note the colon before password)
-- `host` - IP address or hostname
-- `port` - Redis port (default: 6379)
-- `/database` - Database number (0-15, default: 0)
+- `redis://` or `rediss://` or `unix://` - Protocol (rediss = TLS, unix = Unix socket)
+- `:password@` - Optional password (the colon before password and @ after password is for TCP/TLS only)
+- `host` - IP address or hostname (TCP/TLS only)
+- `port` - Redis port (default: 6379, TCP/TLS only)
+- `/database` - Database number (0-15, default: 0, TCP/TLS only)
+- `/path/to/redis.sock` - Unix socket file path (Unix socket only)
 
 ---
 

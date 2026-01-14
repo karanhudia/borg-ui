@@ -65,8 +65,8 @@ class Settings(BaseSettings):
 
     # Redis/Archive cache settings
     # Option 1: External Redis URL (takes precedence if set)
-    # Format: redis://[password@]hostname:port/db or rediss:// for TLS
-    # Example: redis://192.168.1.100:6379/0 or redis://:password@remote-host:6379/0
+    # Format: redis://[password@]hostname:port/db, rediss:// for TLS, or unix:// for Unix sockets
+    # Example: redis://192.168.1.100:6379/0 or redis://:password@remote-host:6379/0 or unix:///run/redis-socket/redis.sock?db=0
     redis_url: Optional[str] = None
 
     # Option 2: Local Redis (used if redis_url not set)
