@@ -49,7 +49,7 @@ class EventManager:
             if user_id in self.connections:
                 del self.connections[user_id]
                 logger.debug("Removed SSE connection", user_id=user_id, total_connections=len(self.connections))
-    
+
     async def broadcast_event(self, event_type: str, data: Dict[str, Any], user_id: str = None):
         """Broadcast an event to all connections or a specific user"""
         event = {
@@ -73,7 +73,7 @@ class EventManager:
                         await queue.put(event)
                     except Exception as e:
                         logger.error("Failed to broadcast event to user", user_id=uid, error=str(e))
-    
+
     async def get_connection_count(self) -> int:
         """Get the number of active connections"""
         async with self.lock:
@@ -89,7 +89,7 @@ def format_sse_event(event: Dict[str, Any]) -> str:
 async def event_generator(user_id: str) -> AsyncGenerator[str, None]:
     """Generate SSE events for a user"""
     queue = await event_manager.add_connection(user_id)
-    
+
     try:
         # Send initial connection event
         yield format_sse_event({
@@ -97,7 +97,7 @@ async def event_generator(user_id: str) -> AsyncGenerator[str, None]:
             "data": {"message": "SSE connection established"},
             "timestamp": serialize_datetime(datetime.utcnow())
         })
-        
+
         # Keep connection alive and send events
         while True:
             try:
@@ -172,31 +172,6 @@ async def stream_events(
         logger.error("Failed to start event stream", error=str(e))
         raise HTTPException(status_code=500, detail="Failed to start event stream")
 
-# Background task for periodic system status updates
-# DISABLED: This was causing excessive borg --version/--help calls every 30 seconds
-# Borg version is now cached on startup and doesn't change during runtime
-# async def periodic_system_status():
-#     """Send periodic system status updates"""
-#     while True:
-#         try:
-#             # Get system information
-#             system_info = await borg.get_system_info()
-#
-#             if system_info["success"]:
-#                 await event_manager.broadcast_event(
-#                     "system_status",
-#                     {
-#                         "type": "periodic_update",
-#                         "data": system_info
-#                     }
-#                 )
-#
-#             # Wait for 30 seconds before next update
-#             await asyncio.sleep(30)
-#         except Exception as e:
-#             logger.error("Error in periodic system status", error=str(e))
-#             await asyncio.sleep(30)
-
 # Background task for monitoring backup jobs
 async def monitor_backup_jobs():
     """Monitor and update backup job status"""
@@ -205,7 +180,7 @@ async def monitor_backup_jobs():
             # TODO: Implement backup job monitoring
             # This would check the status of running backup jobs
             # and send progress updates via SSE
-            
+
             await asyncio.sleep(5)  # Check every 5 seconds
         except Exception as e:
             logger.error("Error in backup job monitoring", error=str(e))
