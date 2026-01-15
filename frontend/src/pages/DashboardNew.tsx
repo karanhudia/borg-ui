@@ -30,16 +30,6 @@ import {
   MemoryStick,
   ArrowRight,
 } from 'lucide-react'
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  ResponsiveContainer,
-  Cell,
-} from 'recharts'
 import { formatDistanceToNow } from 'date-fns'
 
 interface DashboardOverview {
