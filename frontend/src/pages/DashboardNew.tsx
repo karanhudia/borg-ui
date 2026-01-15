@@ -51,6 +51,12 @@ interface DashboardOverview {
     total_size_bytes: number
     total_archives: number
     average_dedup_ratio: number | null
+    breakdown: Array<{
+      name: string
+      size: string
+      size_bytes: number
+      percentage: number
+    }>
   }
   repository_health: Array<{
     id: number
@@ -335,103 +341,140 @@ export default function DashboardNew() {
             </Typography>
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Current status and maintenance overview for all repositories
+            Current status and maintenance overview
           </Typography>
 
+          {/* Health summary chips */}
+          <Stack direction="row" spacing={1} sx={{ mb: 3 }}>
+            <Chip
+              icon={<XCircle size={16} />}
+              label={`${overview.repository_health.filter((r) => r.health_status === 'critical').length} Critical`}
+              size="small"
+              color="error"
+              variant={
+                overview.repository_health.filter((r) => r.health_status === 'critical').length > 0
+                  ? 'filled'
+                  : 'outlined'
+              }
+            />
+            <Chip
+              icon={<AlertTriangle size={16} />}
+              label={`${overview.repository_health.filter((r) => r.health_status === 'warning').length} Warning`}
+              size="small"
+              color="warning"
+              variant={
+                overview.repository_health.filter((r) => r.health_status === 'warning').length > 0
+                  ? 'filled'
+                  : 'outlined'
+              }
+            />
+            <Chip
+              icon={<CheckCircle size={16} />}
+              label={`${overview.repository_health.filter((r) => r.health_status === 'healthy').length} Healthy`}
+              size="small"
+              color="success"
+              variant="outlined"
+            />
+          </Stack>
+
           <Stack spacing={2}>
-            {overview.repository_health.slice(0, 3).map((repo) => (
-              <Card
-                key={repo.id}
-                variant="outlined"
-                sx={{
-                  borderLeft: 4,
-                  borderLeftColor:
-                    repo.health_status === 'critical'
-                      ? 'error.main'
-                      : repo.health_status === 'warning'
-                        ? 'warning.main'
-                        : 'success.main',
-                  '&:hover': { bgcolor: 'action.hover', cursor: 'pointer' },
-                }}
-                onClick={() => navigate(`/repositories`)}
-              >
-                <CardContent>
-                  <Stack direction="row" spacing={2} alignItems="flex-start">
-                    <Box sx={{ flex: 1 }}>
-                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                        <Typography variant="subtitle1" fontWeight={600}>
-                          {repo.name}
-                        </Typography>
-                        {getStatusIcon(repo.health_status)}
-                        <Chip
-                          label={repo.type.toUpperCase()}
-                          size="small"
-                          sx={{ height: 20, fontSize: '0.7rem' }}
-                        />
-                      </Stack>
-
-                      <Stack direction="row" spacing={3} sx={{ mb: 1 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          Last backup:{' '}
-                          {repo.last_backup
-                            ? formatDistanceToNow(new Date(repo.last_backup), { addSuffix: true })
-                            : 'Never'}
-                        </Typography>
-                        {repo.has_schedule && (
-                          <Typography variant="body2" color="text.secondary">
-                            Next: {repo.schedule_enabled ? 'Scheduled' : 'Paused'}
+            {/* Show only critical and warning repos by default */}
+            {overview.repository_health
+              .filter((r) => r.health_status === 'critical' || r.health_status === 'warning')
+              .slice(0, 3)
+              .map((repo) => (
+                <Card
+                  key={repo.id}
+                  variant="outlined"
+                  sx={{
+                    borderLeft: 4,
+                    borderLeftColor:
+                      repo.health_status === 'critical'
+                        ? 'error.main'
+                        : repo.health_status === 'warning'
+                          ? 'warning.main'
+                          : 'success.main',
+                    '&:hover': { bgcolor: 'action.hover', cursor: 'pointer' },
+                  }}
+                  onClick={() => navigate(`/repositories`)}
+                >
+                  <CardContent>
+                    <Stack direction="row" spacing={2} alignItems="flex-start">
+                      <Box sx={{ flex: 1 }}>
+                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                          <Typography variant="subtitle1" fontWeight={600}>
+                            {repo.name}
                           </Typography>
-                        )}
-                      </Stack>
-
-                      <Stack direction="row" spacing={3}>
-                        <Typography variant="body2" color="text.secondary">
-                          {repo.archive_count} archives
-                        </Typography>
-                        {repo.dedup_ratio !== null && (
-                          <Typography variant="body2" color="text.secondary">
-                            Dedup: {repo.dedup_ratio}%
-                          </Typography>
-                        )}
-                      </Stack>
-
-                      {repo.warnings.length > 0 && (
-                        <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
-                          {repo.warnings.map((warning, idx) => (
-                            <Chip
-                              key={idx}
-                              label={warning}
-                              size="small"
-                              color={repo.health_status === 'critical' ? 'error' : 'warning'}
-                              sx={{ height: 22 }}
-                            />
-                          ))}
+                          {getStatusIcon(repo.health_status)}
+                          <Chip
+                            label={repo.type.toUpperCase()}
+                            size="small"
+                            sx={{ height: 20, fontSize: '0.7rem' }}
+                          />
                         </Stack>
-                      )}
-                    </Box>
 
-                    <Box sx={{ textAlign: 'right' }}>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        Storage
-                      </Typography>
-                      <Typography variant="h6" fontWeight={600}>
-                        {repo.total_size}
-                      </Typography>
-                      {repo.size_bytes > 0 && (
-                        <LinearProgress
-                          variant="determinate"
-                          value={Math.min(
-                            (repo.size_bytes / overview.storage.total_size_bytes) * 100,
-                            100
+                        <Stack direction="row" spacing={3} sx={{ mb: 1 }}>
+                          <Typography variant="body2" color="text.secondary">
+                            Last backup:{' '}
+                            {repo.last_backup
+                              ? formatDistanceToNow(new Date(repo.last_backup), { addSuffix: true })
+                              : 'Never'}
+                          </Typography>
+                          {repo.has_schedule && (
+                            <Typography variant="body2" color="text.secondary">
+                              Next: {repo.schedule_enabled ? 'Scheduled' : 'Paused'}
+                            </Typography>
                           )}
-                          sx={{ mt: 1, height: 6, borderRadius: 1, width: 100 }}
-                        />
-                      )}
-                    </Box>
-                  </Stack>
-                </CardContent>
-              </Card>
-            ))}
+                        </Stack>
+
+                        <Stack direction="row" spacing={3}>
+                          <Typography variant="body2" color="text.secondary">
+                            {repo.archive_count} archives
+                          </Typography>
+                          {repo.dedup_ratio !== null && (
+                            <Typography variant="body2" color="text.secondary">
+                              Dedup: {repo.dedup_ratio}%
+                            </Typography>
+                          )}
+                        </Stack>
+
+                        {repo.warnings.length > 0 && (
+                          <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
+                            {repo.warnings.map((warning, idx) => (
+                              <Chip
+                                key={idx}
+                                label={warning}
+                                size="small"
+                                color={repo.health_status === 'critical' ? 'error' : 'warning'}
+                                sx={{ height: 22 }}
+                              />
+                            ))}
+                          </Stack>
+                        )}
+                      </Box>
+
+                      <Box sx={{ textAlign: 'right' }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                          Storage
+                        </Typography>
+                        <Typography variant="h6" fontWeight={600}>
+                          {repo.total_size}
+                        </Typography>
+                        {repo.size_bytes > 0 && (
+                          <LinearProgress
+                            variant="determinate"
+                            value={Math.min(
+                              (repo.size_bytes / overview.storage.total_size_bytes) * 100,
+                              100
+                            )}
+                            sx={{ mt: 1, height: 6, borderRadius: 1, width: 100 }}
+                          />
+                        )}
+                      </Box>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              ))}
 
             {overview.repository_health.length > 3 && (
               <Button
@@ -605,35 +648,84 @@ export default function DashboardNew() {
               <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
                 <HardDrive size={20} />
                 <Typography variant="h6" fontWeight={600}>
-                  Storage Overview
+                  Storage Breakdown
                 </Typography>
               </Stack>
 
               <Typography variant="h4" fontWeight={600}>
                 {overview.storage.total_size}
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Total backup data
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                across {overview.storage.total_archives} archives
               </Typography>
 
-              <Stack spacing={1}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Total Archives
-                  </Typography>
-                  <Typography variant="body2" fontWeight={600}>
-                    {overview.storage.total_archives}
-                  </Typography>
+              {/* Storage breakdown visualization */}
+              <Box sx={{ mb: 2 }}>
+                <Box
+                  sx={{
+                    height: 32,
+                    borderRadius: 1,
+                    overflow: 'hidden',
+                    display: 'flex',
+                    bgcolor: 'grey.100',
+                  }}
+                >
+                  {overview.storage.breakdown.slice(0, 5).map((repo, index) => {
+                    const colors = ['#2196f3', '#4caf50', '#ff9800', '#9c27b0', '#f44336']
+                    return (
+                      <Box
+                        key={repo.name}
+                        sx={{
+                          width: `${repo.percentage}%`,
+                          bgcolor: colors[index % colors.length],
+                          transition: 'all 0.3s',
+                          '&:hover': {
+                            opacity: 0.8,
+                          },
+                        }}
+                        title={`${repo.name}: ${repo.size} (${repo.percentage}%)`}
+                      />
+                    )
+                  })}
                 </Box>
-                {overview.storage.average_dedup_ratio !== null && (
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Dedup Ratio
-                    </Typography>
-                    <Typography variant="body2" fontWeight={600}>
-                      {overview.storage.average_dedup_ratio}%
-                    </Typography>
-                  </Box>
+              </Box>
+
+              {/* Legend */}
+              <Stack spacing={1}>
+                {overview.storage.breakdown.slice(0, 5).map((repo, index) => {
+                  const colors = ['#2196f3', '#4caf50', '#ff9800', '#9c27b0', '#f44336']
+                  return (
+                    <Box
+                      key={repo.name}
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Box
+                          sx={{
+                            width: 12,
+                            height: 12,
+                            borderRadius: '50%',
+                            bgcolor: colors[index % colors.length],
+                          }}
+                        />
+                        <Typography variant="body2" color="text.secondary" noWrap>
+                          {repo.name}
+                        </Typography>
+                      </Stack>
+                      <Typography variant="body2" fontWeight={600}>
+                        {repo.size} ({repo.percentage}%)
+                      </Typography>
+                    </Box>
+                  )
+                })}
+                {overview.storage.breakdown.length > 5 && (
+                  <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center' }}>
+                    +{overview.storage.breakdown.length - 5} more repositories
+                  </Typography>
                 )}
               </Stack>
             </CardContent>
