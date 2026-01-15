@@ -19,6 +19,7 @@ import {
   MenuItem,
   Select,
   FormControl,
+  Switch,
 } from '@mui/material'
 import { Users, Trash2, Plus, Edit, Key, AlertCircle, Moon, Sun } from 'lucide-react'
 import { settingsAPI } from '../services/api'
@@ -56,7 +57,7 @@ const Settings: React.FC = () => {
   const getTabOrder = () => {
     const baseTabs = ['account', 'appearance', 'notifications']
     if (user?.is_admin) {
-      return [...baseTabs, 'cache', 'logs', 'packages', 'scripts', 'export', 'users', 'activity']
+      return [...baseTabs, 'beta', 'cache', 'logs', 'packages', 'scripts', 'export', 'users', 'activity']
     }
     return [...baseTabs, 'scripts', 'export', 'activity']
   }
@@ -153,6 +154,26 @@ const Settings: React.FC = () => {
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to reset password')
+    },
+  })
+
+  // System settings
+  const { data: systemSettingsData } = useQuery({
+    queryKey: ['systemSettings'],
+    queryFn: settingsAPI.getSystemSettings,
+    enabled: user?.is_admin === true,
+  })
+
+  const systemSettings = systemSettingsData?.data?.settings
+
+  const updateSystemSettingsMutation = useMutation({
+    mutationFn: settingsAPI.updateSystemSettings,
+    onSuccess: () => {
+      toast.success('Settings updated successfully')
+      queryClient.invalidateQueries({ queryKey: ['systemSettings'] })
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to update settings')
     },
   })
 
@@ -459,23 +480,65 @@ const Settings: React.FC = () => {
       {/* Notifications Tab */}
       {activeTab === 2 && <NotificationsTab />}
 
+      {/* Beta Features Tab - Admin Only */}
+      {activeTab === 3 && user?.is_admin && (
+        <Box>
+          <Box>
+            <Typography variant="h6" fontWeight={600} gutterBottom>
+              Beta Features
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Try experimental features before they're released to everyone. These features are still
+              in development and may change.
+            </Typography>
+          </Box>
+
+          <Card sx={{ maxWidth: 600 }}>
+            <Box sx={{ p: 3 }}>
+              <Stack spacing={3}>
+                <Box
+                  sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="subtitle1" fontWeight={500}>
+                      New Repository Wizard
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Modern step-by-step wizard for creating and editing repositories with improved UX
+                      and validation
+                    </Typography>
+                  </Box>
+                  <Switch
+                    checked={systemSettings?.use_new_wizard || false}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      updateSystemSettingsMutation.mutate({ use_new_wizard: e.target.checked })
+                    }}
+                    disabled={updateSystemSettingsMutation.isPending}
+                  />
+                </Box>
+              </Stack>
+            </Box>
+          </Card>
+        </Box>
+      )}
+
       {/* Cache Management Tab - Admin Only */}
-      {activeTab === 3 && user?.is_admin && <CacheManagementTab />}
+      {activeTab === 4 && user?.is_admin && <CacheManagementTab />}
 
       {/* Log Management Tab - Admin Only */}
-      {activeTab === 4 && user?.is_admin && <LogManagementTab />}
+      {activeTab === 5 && user?.is_admin && <LogManagementTab />}
 
       {/* System Packages Tab - Admin Only */}
-      {activeTab === 5 && user?.is_admin && <PackagesTab />}
+      {activeTab === 6 && user?.is_admin && <PackagesTab />}
 
       {/* Scripts Tab */}
-      {activeTab === (user?.is_admin ? 6 : 3) && <Scripts />}
+      {activeTab === (user?.is_admin ? 7 : 3) && <Scripts />}
 
       {/* Export/Import Tab */}
-      {activeTab === (user?.is_admin ? 7 : 4) && <ExportImportTab />}
+      {activeTab === (user?.is_admin ? 8 : 4) && <ExportImportTab />}
 
       {/* User Management Tab - Admin Only */}
-      {activeTab === 8 && user?.is_admin && (
+      {activeTab === 9 && user?.is_admin && (
         <Box>
           <Box
             sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}
@@ -505,7 +568,7 @@ const Settings: React.FC = () => {
       )}
 
       {/* Activity Tab */}
-      {activeTab === (user?.is_admin ? 9 : 5) && <Activity />}
+      {activeTab === (user?.is_admin ? 10 : 5) && <Activity />}
 
       {/* Create/Edit User Modal */}
       <Dialog

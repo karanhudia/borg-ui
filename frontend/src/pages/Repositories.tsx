@@ -36,7 +36,7 @@ import {
   Inventory,
   FileUpload,
 } from '@mui/icons-material'
-import { repositoriesAPI, sshKeysAPI } from '../services/api'
+import { repositoriesAPI, sshKeysAPI, settingsAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { useAppState } from '../context/AppContext'
 import { formatDateShort, formatBytes } from '../utils/dateUtils'
@@ -125,6 +125,11 @@ export default function Repositories() {
   const { data: connectionsData } = useQuery({
     queryKey: ['ssh-connections'],
     queryFn: sshKeysAPI.getSSHConnections,
+  })
+
+  const { data: systemSettingsData } = useQuery({
+    queryKey: ['systemSettings'],
+    queryFn: settingsAPI.getSystemSettings,
   })
 
   // Get repository info using borg info command
@@ -570,6 +575,18 @@ export default function Repositories() {
   }
 
   const openEditModal = (repository: Repository) => {
+    // Check feature flag to use new wizard or old modal
+    const useNewWizard = systemSettingsData?.data?.settings?.use_new_wizard || false
+
+    if (useNewWizard) {
+      // Use new wizard
+      setWizardMode('edit')
+      setWizardRepository(repository)
+      setShowWizard(true)
+      return
+    }
+
+    // Use old edit modal
     setEditingRepository(repository)
     const parsed = parseCompressionString(repository.compression)
     setEditForm({
@@ -847,38 +864,45 @@ export default function Repositories() {
           </Box>
           {user?.is_admin && (
             <Stack direction="row" spacing={2}>
-              <Button
-                variant="contained"
-                startIcon={<Add />}
-                onClick={() => openWizard('create')}
-                sx={{ flexShrink: 0 }}
-              >
-                Create Repository (New)
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<FileUpload />}
-                onClick={() => openWizard('import')}
-                sx={{ flexShrink: 0 }}
-              >
-                Import Existing (New)
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<Add />}
-                onClick={() => openRepositoryModal('create')}
-                sx={{ flexShrink: 0 }}
-              >
-                Create (Old)
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<FileUpload />}
-                onClick={() => openRepositoryModal('import')}
-                sx={{ flexShrink: 0 }}
-              >
-                Import (Old)
-              </Button>
+              {systemSettingsData?.data?.settings?.use_new_wizard ? (
+                <>
+                  <Button
+                    variant="contained"
+                    startIcon={<Add />}
+                    onClick={() => openWizard('create')}
+                    sx={{ flexShrink: 0 }}
+                  >
+                    Create Repository
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<FileUpload />}
+                    onClick={() => openWizard('import')}
+                    sx={{ flexShrink: 0 }}
+                  >
+                    Import Existing
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="contained"
+                    startIcon={<Add />}
+                    onClick={() => openRepositoryModal('create')}
+                    sx={{ flexShrink: 0 }}
+                  >
+                    Create Repository
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<FileUpload />}
+                    onClick={() => openRepositoryModal('import')}
+                    sx={{ flexShrink: 0 }}
+                  >
+                    Import Existing
+                  </Button>
+                </>
+              )}
             </Stack>
           )}
         </Box>
@@ -951,20 +975,41 @@ export default function Repositories() {
             </Typography>
             {user?.is_admin && (
               <Stack direction="row" spacing={2} justifyContent="center">
-                <Button
-                  variant="contained"
-                  startIcon={<Add />}
-                  onClick={() => openRepositoryModal('create')}
-                >
-                  Create Repository
-                </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<FileUpload />}
-                  onClick={() => openRepositoryModal('import')}
-                >
-                  Import Existing
-                </Button>
+                {systemSettingsData?.data?.settings?.use_new_wizard ? (
+                  <>
+                    <Button
+                      variant="contained"
+                      startIcon={<Add />}
+                      onClick={() => openWizard('create')}
+                    >
+                      Create Repository
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      startIcon={<FileUpload />}
+                      onClick={() => openWizard('import')}
+                    >
+                      Import Existing
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      variant="contained"
+                      startIcon={<Add />}
+                      onClick={() => openRepositoryModal('create')}
+                    >
+                      Create Repository
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      startIcon={<FileUpload />}
+                      onClick={() => openRepositoryModal('import')}
+                    >
+                      Import Existing
+                    </Button>
+                  </>
+                )}
               </Stack>
             )}
           </CardContent>

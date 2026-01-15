@@ -10,7 +10,7 @@ import {
   InputAdornment,
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
-import { FolderOpen } from 'lucide-react'
+import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 
 interface SourceDirectoriesInputProps {
   directories: string[]
@@ -91,7 +91,7 @@ export default function SourceDirectoriesInput({
             endAdornment: onBrowseClick && (
               <InputAdornment position="end">
                 <IconButton onClick={onBrowseClick} edge="end" size="small" title="Browse directories" disabled={disabled}>
-                  <FolderOpen fontSize="small" />
+                  <FolderOpenIcon fontSize="small" />
                 </IconButton>
               </InputAdornment>
             ),

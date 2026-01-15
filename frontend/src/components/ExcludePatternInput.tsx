@@ -9,7 +9,7 @@ import {
   InputAdornment,
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
-import { FolderOpen } from 'lucide-react'
+import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 
 interface ExcludePatternInputProps {
   patterns: string[]
@@ -81,7 +81,7 @@ export default function ExcludePatternInput({
             endAdornment: onBrowseClick && (
               <InputAdornment position="end">
                 <IconButton onClick={onBrowseClick} edge="end" size="small" title="Browse to exclude" disabled={disabled}>
-                  <FolderOpen fontSize="small" />
+                  <FolderOpenIcon fontSize="small" />
                 </IconButton>
               </InputAdornment>
             ),

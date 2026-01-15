@@ -47,6 +47,7 @@ class Repository(Base):
     port = Column(Integer, default=22)  # SSH port
     username = Column(String, nullable=True)  # SSH username
     ssh_key_id = Column(Integer, ForeignKey("ssh_keys.id"), nullable=True)  # Associated SSH key
+    connection_id = Column(Integer, ForeignKey("ssh_connections.id"), nullable=True)  # Associated SSH connection (preferred over host/port/username)
     remote_path = Column(String, nullable=True)  # Path to borg binary on remote server (e.g., /usr/local/bin/borg)
 
     # New fields for authentication status
@@ -329,6 +330,10 @@ class SystemSettings(Base):
     webhook_url = Column(String, nullable=True)
     auto_cleanup = Column(Boolean, default=False)
     cleanup_retention_days = Column(Integer, default=90)
+
+    # Beta features
+    use_new_wizard = Column(Boolean, default=False, nullable=False)  # Enable new repository wizard (beta)
+
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
