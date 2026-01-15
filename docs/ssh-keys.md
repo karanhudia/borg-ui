@@ -46,9 +46,11 @@ SSH keys allow Borg Web UI to access remote backup repositories securely without
 
 ---
 
-## Generating SSH Keys
+## Managing SSH Keys
 
-### Via Web Interface
+### Generating a New SSH Key
+
+**Via Web Interface:**
 
 1. Go to **Remote Machines** page
 2. Click **Generate System Key** (one-time setup)
@@ -65,6 +67,68 @@ SSH keys allow Borg Web UI to access remote backup repositories securely without
 - When running as root (`PUID=0`), a symlink `/root/.ssh` → `/home/borg/.ssh` is created automatically
 - During backup operations, keys are decrypted from the database and used via temporary files
 - `/data/ssh_keys/` is used only for temporary files during deployment and testing operations
+
+---
+
+### Importing an Existing SSH Key
+
+**Use Case:** Import an SSH key from your host filesystem (e.g., mounted Docker volume) instead of generating a new one.
+
+**Via Web Interface:**
+
+1. Go to **Remote Machines** page
+2. Click **Import System Key**
+3. Fill in the import form:
+   ```
+   Key Name: System SSH Key
+   Private Key Path: /home/borg/.ssh/id_ed25519
+   Public Key Path: (leave empty to auto-detect .pub file)
+   Description: Imported system SSH key
+   ```
+4. Click **Import**
+
+**What happens:**
+- The UI reads the key files from the specified paths
+- Keys are encrypted and stored in the database
+- The system key is deployed to `/home/borg/.ssh/`
+- You can now use the imported key for all connections
+
+**Common scenarios:**
+```bash
+# Mount your existing SSH key when starting the container
+docker run -v ~/.ssh:/host-ssh:ro \
+  -v /path/to/data:/data \
+  borgui/borg-web-ui
+
+# Then import from: /host-ssh/id_ed25519
+```
+
+**Note:** The imported key must be readable by the container user. Use appropriate volume mount permissions.
+
+---
+
+### Deleting the SSH Key
+
+**Warning:** Deleting the system SSH key will prevent all SSH-based backups and connections from working until you generate or import a new key.
+
+**Via Web Interface:**
+
+1. Go to **Remote Machines** page
+2. Click **Delete Key** (trash icon next to the key)
+3. Confirm deletion
+4. The key is removed from the database and filesystem
+
+**What happens:**
+- System SSH key is deleted from the database
+- Key files removed from `/home/borg/.ssh/`
+- All existing SSH connections will fail until a new key is generated or imported
+- Remote servers still have the old public key in `authorized_keys` (manual cleanup recommended)
+
+**After deletion:**
+- Generate a new key or import an existing one
+- Re-deploy to all your remote servers
+
+---
 
 ### Via Command Line (Alternative)
 
@@ -114,6 +178,87 @@ docker exec borg-web-ui cat /home/borg/.ssh/id_ed25519.pub
 
 ---
 
+### Re-deploying to Existing Connections
+
+**Use Case:** Deploy your current system SSH key to a connection that was previously set up, or after rotating your SSH key.
+
+1. Go to **Remote Machines** page
+2. Find the connection in the **Remote Connections** list
+3. Click **Deploy to Server** button (three dots menu)
+4. Enter the SSH password for authentication
+5. Click **Deploy Key**
+
+**What happens:**
+- Your current system SSH key is deployed to the connection
+- Existing `authorized_keys` is updated with the new public key
+- Old key remains in place (doesn't remove previous entries)
+- Connection details (host, port, username) are already filled from saved connection
+
+**When to use:**
+- After rotating your SSH key (deleted and generated new one)
+- After importing a different SSH key
+- When a remote server was rebuilt and needs the key re-deployed
+- Testing key deployment without creating a new connection
+
+---
+
+### Adding Connections Manually (Without Deployment)
+
+**Use Case:** Add a connection where the SSH key is already deployed, or you deployed it manually.
+
+1. Go to **Remote Machines** page
+2. Click **Add Manual Connection**
+3. Fill in connection details:
+   ```
+   Host: 192.168.1.100
+   Port: 22
+   Username: root
+   Default Path: /backups (optional)
+   Mount Point: /mnt/remote-server (optional)
+   ```
+4. Click **Add Connection**
+
+**What happens:**
+- Connection is saved to your list
+- **No password needed** - assumes key is already deployed
+- You can test the connection immediately
+- Connection is ready to use for repositories
+
+**When to use:**
+- SSH key already deployed via control panel (Hetzner, BorgBase, etc.)
+- Key deployed manually via command line
+- Migrating from another backup system
+- Remote server doesn't support password authentication
+
+---
+
+### Testing Connections
+
+**Test before using in production:**
+
+1. Go to **Remote Machines** page
+2. Find connection in the list
+3. Click **Test Connection** button
+4. View test results:
+   - ✅ Success: Connection works, SSH key is properly configured
+   - ❌ Failed: Shows error message (permission denied, timeout, etc.)
+
+**What it tests:**
+- Network connectivity to the host
+- SSH port accessibility
+- SSH key authentication
+- Permission to execute commands
+
+**Troubleshooting:**
+- If test fails, check:
+  - Host/IP is correct and accessible
+  - SSH port is open (firewall rules)
+  - Username exists on remote server
+  - SSH key is properly deployed to `~/.ssh/authorized_keys`
+  - Permissions are correct (`chmod 600 authorized_keys`, `chmod 700 ~/.ssh`)
+
+---
+
 ### Method 2: Manual Deployment (Alternative)
 
 If you prefer manual deployment or password authentication is disabled:
@@ -154,21 +299,62 @@ Many hosting providers and NAS systems have web interfaces to add SSH keys:
 
 ---
 
-## Testing SSH Connection
+## Managing Remote Connections
 
-### Via Web Interface
+### Editing Connections
+
+**Update connection details (host, port, username, paths):**
 
 1. Go to **Remote Machines** page
-2. Click **Add Connection** or **Test Connection** on an existing connection
-3. Enter connection details:
-   - Host: `remote-server.example.com`
-   - Port: `22` (or custom)
-   - Username: `backup-user`
-4. Click **Test** or **Deploy**
+2. Find connection in the **Remote Connections** list
+3. Click **Edit** button (three dots menu)
+4. Update any field:
+   - Host
+   - Username
+   - Port
+   - Default Path
+   - Mount Point
+5. Click **Save**
+
+**Note:** Editing a connection does not re-deploy the SSH key. If you changed the host or username, you may need to deploy the key again.
+
+---
+
+### Deleting Connections
+
+**Remove a saved connection:**
+
+1. Go to **Remote Machines** page
+2. Find connection in the **Remote Connections** list
+3. Click **Delete** button (three dots menu)
+4. Confirm deletion
+
+**What happens:**
+- Connection is removed from Borg Web UI
+- SSH key remains on the remote server (in `~/.ssh/authorized_keys`)
+- Repositories using this connection may still work (if using the same host/username)
+
+**Manual cleanup on remote server:**
+```bash
+# Remove the public key from authorized_keys
+ssh user@remote-server
+vim ~/.ssh/authorized_keys
+# Delete the line starting with "ssh-ed25519 ... borg-web-ui"
+```
+
+---
+
+### Testing SSH Connection
+
+**Via Web Interface:**
+
+1. Go to **Remote Machines** page
+2. Click **Test Connection** on an existing connection
+3. View test results
 
 The system automatically uses your system SSH key for all connections.
 
-### Via Command Line
+**Via Command Line:**
 
 ```bash
 # Test from inside container using the deployed system key
@@ -271,13 +457,41 @@ For additional security, protect SSH keys with passphrases:
 
 ### 4. Regular Key Rotation
 
-Rotate SSH keys periodically:
+Rotate SSH keys periodically for security:
 
-1. Generate new key
-2. Deploy to servers
-3. Test with new key
-4. Remove old key from servers
-5. Delete old key from Borg Web UI
+**Via Web Interface:**
+
+1. **Generate new key:**
+   - Go to Remote Machines page
+   - Click **Generate System Key**
+   - Select key type (ED25519 recommended)
+   - Click **Generate**
+   - Old key is automatically replaced
+
+2. **Deploy to all servers:**
+   - For each connection in your list:
+     - Click **Deploy to Server** (three dots menu)
+     - Enter SSH password
+     - Click **Deploy Key**
+   - Or manually add the new public key to each server
+
+3. **Test connections:**
+   - Click **Test Connection** for each remote machine
+   - Verify all connections work with the new key
+
+4. **Clean up old key:**
+   - SSH to each remote server
+   - Edit `~/.ssh/authorized_keys`
+   - Remove the old key line (will have old timestamp)
+   - Keep the new key line
+
+**Alternative with Import:**
+
+If you generate keys externally:
+1. Generate new key on host system
+2. Delete old key in Borg Web UI
+3. Import new key from filesystem
+4. Re-deploy to all servers
 
 ### 5. Firewall Rules
 
@@ -361,6 +575,61 @@ docker exec borg-web-ui ssh-keygen -l -f /home/borg/.ssh/id_ed25519
 docker exec borg-web-ui ls -la /root/.ssh
 # Should show: /root/.ssh -> /home/borg/.ssh
 ```
+
+**If key is missing:**
+- Generate new key via Remote Machines page
+- Or import existing key from mounted volume
+- Deploy to all remote servers
+
+### Rotating Compromised Keys
+
+**If you suspect your SSH key is compromised:**
+
+1. **Immediately generate a new key:**
+   - Go to Remote Machines page
+   - Generate System Key (replaces old key)
+
+2. **Deploy new key to all servers:**
+   - Use **Deploy to Server** on each connection
+   - Or manually deploy via control panels
+
+3. **Remove old key from servers:**
+   ```bash
+   # On each remote server
+   vim ~/.ssh/authorized_keys
+   # Delete the compromised key line
+   ```
+
+4. **Verify all connections:**
+   - Test each connection in Remote Machines page
+   - Check that backups still work
+
+### Import Fails with Permission Denied
+
+**If importing an SSH key fails:**
+
+1. **Check file permissions:**
+   ```bash
+   # Files must be readable by container user
+   ls -la /path/to/key
+   ```
+
+2. **Fix permissions if needed:**
+   ```bash
+   # On host system
+   chmod 644 /path/to/id_ed25519.pub
+   chmod 600 /path/to/id_ed25519
+   ```
+
+3. **Verify mount path:**
+   - Ensure the volume is mounted correctly in docker-compose.yml
+   - Path in import dialog must match container path (not host path)
+
+4. **Check key format:**
+   ```bash
+   # Verify key is valid
+   ssh-keygen -l -f /path/to/id_ed25519
+   ```
 
 ---
 
