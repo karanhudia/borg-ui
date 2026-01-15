@@ -80,7 +80,13 @@ export default function ExcludePatternInput({
           InputProps={{
             endAdornment: onBrowseClick && (
               <InputAdornment position="end">
-                <IconButton onClick={onBrowseClick} edge="end" size="small" title="Browse to exclude" disabled={disabled}>
+                <IconButton
+                  onClick={onBrowseClick}
+                  edge="end"
+                  size="small"
+                  title="Browse to exclude"
+                  disabled={disabled}
+                >
                   <FolderOpenIcon fontSize="small" />
                 </IconButton>
               </InputAdornment>

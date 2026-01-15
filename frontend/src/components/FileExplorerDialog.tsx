@@ -334,325 +334,330 @@ export default function FileExplorerDialog({
 
   return (
     <>
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="md"
-      fullWidth
-      fullScreen={fullScreen}
-      PaperProps={{ sx: { height: fullScreen ? '100%' : '75vh' } }}
-    >
-      <DialogTitle sx={{ pb: 1, pt: 2 }}>
-        <Box display="flex" alignItems="center" justifyContent="space-between">
-          <Typography variant="h6" fontWeight={600}>
-            {title}
-          </Typography>
-          {activeConnectionType === 'ssh' && activeSshConfig ? (
-            <Chip
-              label={`${activeSshConfig.username}@${activeSshConfig.host}`}
-              size="small"
-              color="primary"
-              variant="outlined"
-            />
-          ) : isInsideLocalMount && activeConnectionType === 'local' ? (
-            <Chip
-              icon={<HardDrive size={14} />}
-              label="Host"
-              size="small"
-              color="primary"
-              variant="outlined"
-            />
-          ) : null}
-        </Box>
-      </DialogTitle>
-
-      <DialogContent sx={{ p: 0 }}>
-        {/* Breadcrumb Navigation */}
-        <Box
-          sx={{
-            px: 2,
-            py: 1,
-            bgcolor: 'background.default',
-            borderBottom: 1,
-            borderColor: 'divider',
-          }}
-        >
-          <Breadcrumbs
-            separator={<ChevronRight size={12} />}
-            maxItems={6}
-            sx={{ '& .MuiBreadcrumbs-separator': { mx: 0.25 } }}
-          >
-            {getBreadcrumbs().map((crumb, index) => (
-              <Link
-                key={index}
-                component="button"
-                variant="caption"
-                onClick={() => handleBreadcrumbClick(crumb.path)}
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 0.25,
-                  textDecoration: 'none',
-                  color: 'text.primary',
-                  fontWeight: index === getBreadcrumbs().length - 1 ? 600 : 400,
-                  '&:hover': {
-                    textDecoration: 'underline',
-                    color: 'primary.main',
-                  },
-                }}
-              >
-                {index === 0 && <Home size={12} />}
-                {crumb.label}
-              </Link>
-            ))}
-          </Breadcrumbs>
-        </Box>
-
-        {/* Search and Create Folder */}
-        <Box sx={{ px: 2, py: 1, display: 'flex', gap: 1 }}>
-          <TextField
-            fullWidth
-            size="small"
-            placeholder="Search..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search size={16} />
-                </InputAdornment>
-              ),
-            }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                bgcolor: 'background.paper',
-              },
-              '& .MuiOutlinedInput-input': {
-                py: 0.75,
-              },
-            }}
-          />
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<FolderPlus size={16} />}
-            onClick={() => setShowCreateFolder(true)}
-            sx={{
-              flexShrink: 0,
-              whiteSpace: 'nowrap',
-              height: '35px',
-              minHeight: '35px',
-            }}
-          >
-            New Folder
-          </Button>
-        </Box>
-
-        {/* Error Display */}
-        {error && (
-          <Box sx={{ px: 2, pb: 1 }}>
-            <Alert severity="error" sx={{ borderRadius: 1, py: 0.5 }}>
-              {error}
-            </Alert>
-          </Box>
-        )}
-
-        {/* Mount Point Info */}
-        {currentPath === '/' && activeConnectionType === 'local' && sshConnections.length > 0 && (
-          <Box sx={{ px: 2, pb: 1 }}>
-            <Alert severity="info" sx={{ borderRadius: 1, py: 0.5 }}>
-              <Typography variant="caption">
-                💡 SSH connections are shown below. Configure mount points in SSH Keys page for
-                cleaner display names.
-              </Typography>
-            </Alert>
-          </Box>
-        )}
-
-        {/* Loading State */}
-        {loading ? (
-          <Box
-            display="flex"
-            flexDirection="column"
-            alignItems="center"
-            justifyContent="center"
-            py={4}
-          >
-            <CircularProgress size={32} />
-            <Typography variant="caption" color="text.secondary" mt={1.5}>
-              Loading...
+      <Dialog
+        open={open}
+        onClose={onClose}
+        maxWidth="md"
+        fullWidth
+        fullScreen={fullScreen}
+        PaperProps={{ sx: { height: fullScreen ? '100%' : '75vh' } }}
+      >
+        <DialogTitle sx={{ pb: 1, pt: 2 }}>
+          <Box display="flex" alignItems="center" justifyContent="space-between">
+            <Typography variant="h6" fontWeight={600}>
+              {title}
             </Typography>
+            {activeConnectionType === 'ssh' && activeSshConfig ? (
+              <Chip
+                label={`${activeSshConfig.username}@${activeSshConfig.host}`}
+                size="small"
+                color="primary"
+                variant="outlined"
+              />
+            ) : isInsideLocalMount && activeConnectionType === 'local' ? (
+              <Chip
+                icon={<HardDrive size={14} />}
+                label="Host"
+                size="small"
+                color="primary"
+                variant="outlined"
+              />
+            ) : null}
           </Box>
-        ) : (
-          <>
-            {/* File List */}
-            <List
+        </DialogTitle>
+
+        <DialogContent sx={{ p: 0 }}>
+          {/* Breadcrumb Navigation */}
+          <Box
+            sx={{
+              px: 2,
+              py: 1,
+              bgcolor: 'background.default',
+              borderBottom: 1,
+              borderColor: 'divider',
+            }}
+          >
+            <Breadcrumbs
+              separator={<ChevronRight size={12} />}
+              maxItems={6}
+              sx={{ '& .MuiBreadcrumbs-separator': { mx: 0.25 } }}
+            >
+              {getBreadcrumbs().map((crumb, index) => (
+                <Link
+                  key={index}
+                  component="button"
+                  variant="caption"
+                  onClick={() => handleBreadcrumbClick(crumb.path)}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.25,
+                    textDecoration: 'none',
+                    color: 'text.primary',
+                    fontWeight: index === getBreadcrumbs().length - 1 ? 600 : 400,
+                    '&:hover': {
+                      textDecoration: 'underline',
+                      color: 'primary.main',
+                    },
+                  }}
+                >
+                  {index === 0 && <Home size={12} />}
+                  {crumb.label}
+                </Link>
+              ))}
+            </Breadcrumbs>
+          </Box>
+
+          {/* Search and Create Folder */}
+          <Box sx={{ px: 2, py: 1, display: 'flex', gap: 1 }}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Search..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search size={16} />
+                  </InputAdornment>
+                ),
+              }}
               sx={{
-                flex: 1,
-                overflow: 'auto',
-                px: 0.5,
-                py: 0,
+                '& .MuiOutlinedInput-root': {
+                  bgcolor: 'background.paper',
+                },
+                '& .MuiOutlinedInput-input': {
+                  py: 0.75,
+                },
+              }}
+            />
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<FolderPlus size={16} />}
+              onClick={() => setShowCreateFolder(true)}
+              sx={{
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
+                height: '35px',
+                minHeight: '35px',
               }}
             >
-              {filteredItems.length === 0 ? (
+              New Folder
+            </Button>
+          </Box>
+
+          {/* Error Display */}
+          {error && (
+            <Box sx={{ px: 2, pb: 1 }}>
+              <Alert severity="error" sx={{ borderRadius: 1, py: 0.5 }}>
+                {error}
+              </Alert>
+            </Box>
+          )}
+
+          {/* Mount Point Info */}
+          {currentPath === '/' && activeConnectionType === 'local' && sshConnections.length > 0 && (
+            <Box sx={{ px: 2, pb: 1 }}>
+              <Alert severity="info" sx={{ borderRadius: 1, py: 0.5 }}>
+                <Typography variant="caption">
+                  💡 SSH connections are shown below. Configure mount points in SSH Keys page for
+                  cleaner display names.
+                </Typography>
+              </Alert>
+            </Box>
+          )}
+
+          {/* Loading State */}
+          {loading ? (
+            <Box
+              display="flex"
+              flexDirection="column"
+              alignItems="center"
+              justifyContent="center"
+              py={4}
+            >
+              <CircularProgress size={32} />
+              <Typography variant="caption" color="text.secondary" mt={1.5}>
+                Loading...
+              </Typography>
+            </Box>
+          ) : (
+            <>
+              {/* File List */}
+              <List
+                sx={{
+                  flex: 1,
+                  overflow: 'auto',
+                  px: 0.5,
+                  py: 0,
+                }}
+              >
+                {filteredItems.length === 0 ? (
+                  <Box
+                    display="flex"
+                    flexDirection="column"
+                    alignItems="center"
+                    justifyContent="center"
+                    py={4}
+                    sx={{ color: 'text.secondary' }}
+                  >
+                    <FolderOpenIcon sx={{ fontSize: 36 }} />
+                    <Typography variant="body2" color="text.secondary" mt={1.5}>
+                      No items found
+                    </Typography>
+                    <Typography variant="caption" color="text.disabled">
+                      {searchTerm ? 'Try a different search' : 'Empty directory'}
+                    </Typography>
+                  </Box>
+                ) : (
+                  filteredItems.map((item) => {
+                    const isSelectable =
+                      (selectMode === 'directories' && item.is_directory) ||
+                      (selectMode === 'files' && !item.is_directory) ||
+                      selectMode === 'both'
+
+                    const isSelected = selectedPaths.includes(item.path)
+
+                    return (
+                      <ListItem
+                        key={item.path}
+                        disablePadding
+                        secondaryAction={
+                          isSelectable && multiSelect ? (
+                            <Checkbox
+                              edge="end"
+                              checked={isSelected}
+                              onChange={() => handleItemSelect(item)}
+                              size="small"
+                            />
+                          ) : null
+                        }
+                      >
+                        <ListItemButton
+                          onClick={() =>
+                            item.is_directory
+                              ? handleItemClick(item)
+                              : isSelectable && handleItemSelect(item)
+                          }
+                          selected={isSelected && !multiSelect}
+                          sx={{
+                            py: 0.5,
+                            px: 1.5,
+                            '&:hover': {
+                              bgcolor: 'action.hover',
+                            },
+                            '&.Mui-selected': {
+                              bgcolor: 'primary.50',
+                              '&:hover': {
+                                bgcolor: 'primary.100',
+                              },
+                            },
+                          }}
+                        >
+                          <ListItemIcon sx={{ minWidth: 32 }}>
+                            {item.is_mount_point ? (
+                              <HardDrive size={18} color="#10b981" />
+                            ) : item.is_local_mount ? (
+                              <HardDrive size={18} color="#6366f1" />
+                            ) : item.is_borg_repo ? (
+                              <Archive size={18} color="#ff6b6b" />
+                            ) : item.is_directory ? (
+                              <FolderOpenIcon sx={{ fontSize: 18, color: '#2563eb' }} />
+                            ) : (
+                              <File size={18} color="#999" />
+                            )}
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={
+                              <Box display="flex" alignItems="center" gap={0.75}>
+                                <Typography variant="body2">{item.name}</Typography>
+                                {item.is_mount_point && (
+                                  <Chip
+                                    label="Remote"
+                                    size="small"
+                                    color="success"
+                                    sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600 }}
+                                  />
+                                )}
+                                {item.is_local_mount && (
+                                  <Chip
+                                    label="Host"
+                                    size="small"
+                                    color="primary"
+                                    sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600 }}
+                                  />
+                                )}
+                                {item.is_borg_repo && (
+                                  <Chip
+                                    label="Borg"
+                                    size="small"
+                                    color="warning"
+                                    sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600 }}
+                                  />
+                                )}
+                                {!item.is_directory && item.size && (
+                                  <Typography
+                                    variant="caption"
+                                    color="text.disabled"
+                                    sx={{ ml: 'auto' }}
+                                  >
+                                    {formatFileSize(item.size)}
+                                  </Typography>
+                                )}
+                              </Box>
+                            }
+                          />
+                        </ListItemButton>
+                      </ListItem>
+                    )
+                  })
+                )}
+              </List>
+
+              {/* Info Box */}
+              {multiSelect && selectedPaths.length > 0 && (
                 <Box
-                  display="flex"
-                  flexDirection="column"
-                  alignItems="center"
-                  justifyContent="center"
-                  py={4}
-                  sx={{ color: 'text.secondary' }}
+                  sx={{ px: 2, py: 1, bgcolor: 'primary.50', borderTop: 1, borderColor: 'divider' }}
                 >
-                  <FolderOpenIcon sx={{ fontSize: 36 }} />
-                  <Typography variant="body2" color="text.secondary" mt={1.5}>
-                    No items found
-                  </Typography>
-                  <Typography variant="caption" color="text.disabled">
-                    {searchTerm ? 'Try a different search' : 'Empty directory'}
+                  <Typography variant="caption" color="primary.main" fontWeight={600}>
+                    {selectedPaths.length} selected
                   </Typography>
                 </Box>
-              ) : (
-                filteredItems.map((item) => {
-                  const isSelectable =
-                    (selectMode === 'directories' && item.is_directory) ||
-                    (selectMode === 'files' && !item.is_directory) ||
-                    selectMode === 'both'
-
-                  const isSelected = selectedPaths.includes(item.path)
-
-                  return (
-                    <ListItem
-                      key={item.path}
-                      disablePadding
-                      secondaryAction={
-                        isSelectable && multiSelect ? (
-                          <Checkbox
-                            edge="end"
-                            checked={isSelected}
-                            onChange={() => handleItemSelect(item)}
-                            size="small"
-                          />
-                        ) : null
-                      }
-                    >
-                      <ListItemButton
-                        onClick={() =>
-                          item.is_directory
-                            ? handleItemClick(item)
-                            : isSelectable && handleItemSelect(item)
-                        }
-                        selected={isSelected && !multiSelect}
-                        sx={{
-                          py: 0.5,
-                          px: 1.5,
-                          '&:hover': {
-                            bgcolor: 'action.hover',
-                          },
-                          '&.Mui-selected': {
-                            bgcolor: 'primary.50',
-                            '&:hover': {
-                              bgcolor: 'primary.100',
-                            },
-                          },
-                        }}
-                      >
-                        <ListItemIcon sx={{ minWidth: 32 }}>
-                          {item.is_mount_point ? (
-                            <HardDrive size={18} color="#10b981" />
-                          ) : item.is_local_mount ? (
-                            <HardDrive size={18} color="#6366f1" />
-                          ) : item.is_borg_repo ? (
-                            <Archive size={18} color="#ff6b6b" />
-                          ) : item.is_directory ? (
-                            <FolderOpenIcon sx={{ fontSize: 18, color: '#2563eb' }} />
-                          ) : (
-                            <File size={18} color="#999" />
-                          )}
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={
-                            <Box display="flex" alignItems="center" gap={0.75}>
-                              <Typography variant="body2">{item.name}</Typography>
-                              {item.is_mount_point && (
-                                <Chip
-                                  label="Remote"
-                                  size="small"
-                                  color="success"
-                                  sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600 }}
-                                />
-                              )}
-                              {item.is_local_mount && (
-                                <Chip
-                                  label="Host"
-                                  size="small"
-                                  color="primary"
-                                  sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600 }}
-                                />
-                              )}
-                              {item.is_borg_repo && (
-                                <Chip
-                                  label="Borg"
-                                  size="small"
-                                  color="warning"
-                                  sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600 }}
-                                />
-                              )}
-                              {!item.is_directory && item.size && (
-                                <Typography
-                                  variant="caption"
-                                  color="text.disabled"
-                                  sx={{ ml: 'auto' }}
-                                >
-                                  {formatFileSize(item.size)}
-                                </Typography>
-                              )}
-                            </Box>
-                          }
-                        />
-                      </ListItemButton>
-                    </ListItem>
-                  )
-                })
               )}
-            </List>
+            </>
+          )}
+        </DialogContent>
 
-            {/* Info Box */}
-            {multiSelect && selectedPaths.length > 0 && (
-              <Box
-                sx={{ px: 2, py: 1, bgcolor: 'primary.50', borderTop: 1, borderColor: 'divider' }}
-              >
-                <Typography variant="caption" color="primary.main" fontWeight={600}>
-                  {selectedPaths.length} selected
-                </Typography>
-              </Box>
-            )}
-          </>
-        )}
-      </DialogContent>
-
-      <DialogActions sx={{ px: 2, py: 1.5, borderTop: 1, borderColor: 'divider' }}>
-        <Button onClick={onClose} size="small" sx={{ color: 'text.secondary' }}>
-          Cancel
-        </Button>
-        <Box sx={{ flex: 1 }} />
-        {selectMode === 'directories' && (
-          <Button onClick={handleSelectCurrent} variant="outlined" size="small" sx={{ mr: 1 }}>
-            Use Current
+        <DialogActions sx={{ px: 2, py: 1.5, borderTop: 1, borderColor: 'divider' }}>
+          <Button onClick={onClose} size="small" sx={{ color: 'text.secondary' }}>
+            Cancel
           </Button>
-        )}
-        <Button
-          onClick={handleConfirm}
-          variant="contained"
-          size="small"
-          disabled={selectedPaths.length === 0}
-        >
-          Select {multiSelect && selectedPaths.length > 0 ? `(${selectedPaths.length})` : ''}
-        </Button>
-      </DialogActions>
-    </Dialog>
+          <Box sx={{ flex: 1 }} />
+          {selectMode === 'directories' && (
+            <Button onClick={handleSelectCurrent} variant="outlined" size="small" sx={{ mr: 1 }}>
+              Use Current
+            </Button>
+          )}
+          <Button
+            onClick={handleConfirm}
+            variant="contained"
+            size="small"
+            disabled={selectedPaths.length === 0}
+          >
+            Select {multiSelect && selectedPaths.length > 0 ? `(${selectedPaths.length})` : ''}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Create Folder Dialog */}
-      <Dialog open={showCreateFolder} onClose={() => !creatingFolder && setShowCreateFolder(false)} maxWidth="xs" fullWidth>
+      <Dialog
+        open={showCreateFolder}
+        onClose={() => !creatingFolder && setShowCreateFolder(false)}
+        maxWidth="xs"
+        fullWidth
+      >
         <DialogTitle>Create New Folder</DialogTitle>
         <DialogContent>
           <TextField
@@ -678,11 +683,14 @@ export default function FileExplorerDialog({
         </DialogContent>
 
         <DialogActions>
-          <Button onClick={() => {
-            setShowCreateFolder(false)
-            setNewFolderName('')
-            setError(null)
-          }} disabled={creatingFolder}>
+          <Button
+            onClick={() => {
+              setShowCreateFolder(false)
+              setNewFolderName('')
+              setError(null)
+            }}
+            disabled={creatingFolder}
+          >
             Cancel
           </Button>
           <Button

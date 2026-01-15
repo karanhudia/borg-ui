@@ -1191,7 +1191,10 @@ const Schedule: React.FC = () => {
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                 Showing {recentBackupJobs.length} of {filteredBackupJobs.length} backup jobs
-                {(filterSchedule !== 'all' || filterRepository !== 'all' || filterStatus !== 'all') && ' (filtered)'}
+                {(filterSchedule !== 'all' ||
+                  filterRepository !== 'all' ||
+                  filterStatus !== 'all') &&
+                  ' (filtered)'}
               </Typography>
 
               {/* Filters */}

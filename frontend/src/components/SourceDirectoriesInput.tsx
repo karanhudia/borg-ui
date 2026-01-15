@@ -90,7 +90,13 @@ export default function SourceDirectoriesInput({
           InputProps={{
             endAdornment: onBrowseClick && (
               <InputAdornment position="end">
-                <IconButton onClick={onBrowseClick} edge="end" size="small" title="Browse directories" disabled={disabled}>
+                <IconButton
+                  onClick={onBrowseClick}
+                  edge="end"
+                  size="small"
+                  title="Browse directories"
+                  disabled={disabled}
+                >
                   <FolderOpenIcon fontSize="small" />
                 </IconButton>
               </InputAdornment>

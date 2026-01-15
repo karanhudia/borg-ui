@@ -143,20 +143,21 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         console.log('=== SSH Connection Auto-Matching ===')
         console.log('Repository:', repository.name)
         console.log('Looking for:', { host: repoHost, username: repoUsername, port: repoPort })
-        console.log('Available connections:', sshConnections.map(c => ({
-          id: c.id,
-          mount: c.mount_point,
-          host: c.host,
-          username: c.username,
-          port: c.port
-        })))
+        console.log(
+          'Available connections:',
+          sshConnections.map((c) => ({
+            id: c.id,
+            mount: c.mount_point,
+            host: c.host,
+            username: c.username,
+            port: c.port,
+          }))
+        )
 
         // Match by host, username, and port
         const matchingConnection = sshConnections.find(
           (conn) =>
-            conn.host === repoHost &&
-            conn.username === repoUsername &&
-            conn.port === repoPort
+            conn.host === repoHost && conn.username === repoUsername && conn.port === repoPort
         )
 
         if (matchingConnection) {
@@ -356,7 +357,10 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       if (dataSource === 'local' && sourceDirs.length === 0) return false
       return true
     }
-    if (activeStep === 2 || (activeStep === 1 && (repositoryMode === 'observe' || mode === 'import'))) {
+    if (
+      activeStep === 2 ||
+      (activeStep === 1 && (repositoryMode === 'observe' || mode === 'import'))
+    ) {
       // Security step
       // In edit mode, passphrase is optional (keep existing if not changed)
       if (mode === 'edit') {
@@ -410,7 +414,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         helperText="A friendly name to identify this repository"
       />
 
-{mode === 'import' && (
+      {mode === 'import' && (
         <FormControl fullWidth>
           <InputLabel>Repository Mode</InputLabel>
           <Select
@@ -463,11 +467,13 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               borderColor: repositoryLocation === 'local' ? 'primary.main' : 'divider',
             }}
           >
-            <CardActionArea onClick={() => {
-              setRepositoryLocation('local')
-              setRepositoryType('local')
-              setRepoSshConnectionId('')
-            }}>
+            <CardActionArea
+              onClick={() => {
+                setRepositoryLocation('local')
+                setRepositoryType('local')
+                setRepoSshConnectionId('')
+              }}
+            >
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                   <Server size={24} color={repositoryLocation === 'local' ? '#1976d2' : '#666'} />
@@ -488,10 +494,12 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               borderColor: repositoryLocation === 'ssh' ? 'primary.main' : 'divider',
             }}
           >
-            <CardActionArea onClick={() => {
-              setRepositoryLocation('ssh')
-              setRepositoryType('ssh')
-            }}>
+            <CardActionArea
+              onClick={() => {
+                setRepositoryLocation('ssh')
+                setRepositoryType('ssh')
+              }}
+            >
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                   <Cloud size={24} color={repositoryLocation === 'ssh' ? '#1976d2' : '#666'} />
@@ -509,9 +517,10 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       {/* SSH Connection Selection */}
       {repositoryLocation === 'ssh' && (
         <>
-          {(!Array.isArray(sshConnections) || sshConnections.length === 0) ? (
+          {!Array.isArray(sshConnections) || sshConnections.length === 0 ? (
             <Alert severity="warning">
-              No SSH connections configured. Please configure SSH connections in the SSH Keys page first.
+              No SSH connections configured. Please configure SSH connections in the SSH Keys page
+              first.
             </Alert>
           ) : (
             <FormControl fullWidth>
@@ -530,7 +539,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
                     py: '16.5px',
                     display: 'flex',
                     alignItems: 'center',
-                  }
+                  },
                 }}
               >
                 {sshConnections.map((conn) => (
@@ -571,9 +580,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         label="Repository Path"
         value={path}
         onChange={(e) => setPath(e.target.value)}
-        placeholder={
-          repositoryLocation === 'local' ? '/backups/my-repo' : '/path/on/remote/server'
-        }
+        placeholder={repositoryLocation === 'local' ? '/backups/my-repo' : '/path/on/remote/server'}
         required
         fullWidth
         helperText="Path where the repository will be stored"
@@ -671,15 +678,16 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
           {repositoryLocation === 'ssh' && repoSshConnectionId && (
             <Alert severity="info">
               <Typography variant="body2">
-                <strong>Note:</strong> You can only select the same remote machine that stores the repository.
-                Backing up from one remote client to another is not supported.
+                <strong>Note:</strong> You can only select the same remote machine that stores the
+                repository. Backing up from one remote client to another is not supported.
               </Typography>
             </Alert>
           )}
 
-          {(!Array.isArray(sshConnections) || sshConnections.length === 0) ? (
+          {!Array.isArray(sshConnections) || sshConnections.length === 0 ? (
             <Alert severity="warning">
-              No SSH connections configured. Please configure SSH connections in the SSH Keys page first.
+              No SSH connections configured. Please configure SSH connections in the SSH Keys page
+              first.
             </Alert>
           ) : (
             <FormControl fullWidth>
@@ -698,7 +706,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
                     py: '16.5px',
                     display: 'flex',
                     alignItems: 'center',
-                  }
+                  },
                 }}
               >
                 {sshConnections
@@ -710,40 +718,40 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
                     return true
                   })
                   .map((conn) => (
-                  <MenuItem key={conn.id} value={String(conn.id)}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                      <Laptop size={16} />
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="body2">
-                          {conn.username}@{conn.host}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Port {conn.port}
-                          {conn.mount_point && ` • ${conn.mount_point}`}
-                        </Typography>
+                    <MenuItem key={conn.id} value={String(conn.id)}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                        <Laptop size={16} />
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="body2">
+                            {conn.username}@{conn.host}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Port {conn.port}
+                            {conn.mount_point && ` • ${conn.mount_point}`}
+                          </Typography>
+                        </Box>
+                        {conn.status === 'connected' && (
+                          <Box
+                            sx={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: '50%',
+                              bgcolor: 'success.main',
+                            }}
+                            title="Connected"
+                          />
+                        )}
                       </Box>
-                      {conn.status === 'connected' && (
-                        <Box
-                          sx={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: '50%',
-                            bgcolor: 'success.main',
-                          }}
-                          title="Connected"
-                        />
-                      )}
-                    </Box>
-                  </MenuItem>
-                ))}
+                    </MenuItem>
+                  ))}
               </Select>
             </FormControl>
           )}
 
           <Alert severity="info">
             <Typography variant="body2">
-              <strong>Note:</strong> The Borg UI server will mount the remote machine's filesystem and perform the backup.
-              Data will be pulled from the remote machine to the repository.
+              <strong>Note:</strong> The Borg UI server will mount the remote machine's filesystem
+              and perform the backup. Data will be pulled from the remote machine to the repository.
             </Typography>
           </Alert>
         </>
@@ -774,7 +782,9 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
           type="password"
           value={passphrase}
           onChange={(e) => setPassphrase(e.target.value)}
-          placeholder={mode === 'edit' ? 'Leave blank to keep last saved passphrase' : 'Enter passphrase'}
+          placeholder={
+            mode === 'edit' ? 'Leave blank to keep last saved passphrase' : 'Enter passphrase'
+          }
           required={mode !== 'edit'}
           fullWidth
           helperText={
@@ -791,7 +801,8 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
             Borg Keyfile (Optional)
           </Typography>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-            Upload keyfile if using keyfile/keyfile-blake2 encryption (found in ~/.config/borg/keys/)
+            Upload keyfile if using keyfile/keyfile-blake2 encryption (found in
+            ~/.config/borg/keys/)
           </Typography>
           <Button variant="outlined" component="label" fullWidth>
             {selectedKeyfile ? `Selected: ${selectedKeyfile.name}` : 'Choose Keyfile'}
@@ -1011,7 +1022,11 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
             </Button>
           ) : (
             <Button variant="contained" onClick={handleSubmit} disabled={!canProceed()}>
-              {mode === 'create' ? 'Create Repository' : mode === 'edit' ? 'Save Changes' : 'Import Repository'}
+              {mode === 'create'
+                ? 'Create Repository'
+                : mode === 'edit'
+                  ? 'Save Changes'
+                  : 'Import Repository'}
             </Button>
           )}
         </DialogActions>

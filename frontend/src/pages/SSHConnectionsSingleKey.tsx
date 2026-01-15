@@ -24,7 +24,17 @@ import {
   Tooltip,
   InputAdornment,
 } from '@mui/material'
-import { Key, Copy, RefreshCw, Wifi, CheckCircle, XCircle, AlertTriangle, Plus, Trash2 } from 'lucide-react'
+import {
+  Key,
+  Copy,
+  RefreshCw,
+  Wifi,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
+  Plus,
+  Trash2,
+} from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import RemoteMachineCard from '../components/RemoteMachineCard'
 
@@ -530,7 +540,8 @@ export default function SSHConnectionsSingleKey() {
             // No key exists - show generation UI
             <Box>
               <Alert severity="warning" sx={{ mb: 2 }}>
-                No system SSH key found. Generate a new one or import an existing one to start connecting to remote servers.
+                No system SSH key found. Generate a new one or import an existing one to start
+                connecting to remote servers.
               </Alert>
               <Stack direction="row" spacing={2}>
                 <Button
@@ -673,12 +684,7 @@ export default function SSHConnectionsSingleKey() {
       {/* Connections Table */}
       <Card>
         <CardContent>
-          <Stack
-            direction="row"
-            alignItems="center"
-            justifyContent="space-between"
-            sx={{ mb: 2 }}
-          >
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
             <Typography variant="h6" fontWeight={600}>
               Remote Connections
             </Typography>
@@ -701,8 +707,8 @@ export default function SSHConnectionsSingleKey() {
           {connections.length === 0 ? (
             <Alert severity="info">
               {keyExists
-                ? "No connections yet. Deploy your SSH key to a remote server to get started."
-                : "No connections yet. Generate or import an SSH key first, then deploy it to remote servers."}
+                ? 'No connections yet. Deploy your SSH key to a remote server to get started.'
+                : 'No connections yet. Generate or import an SSH key first, then deploy it to remote servers.'}
             </Alert>
           ) : (
             <Box
@@ -780,7 +786,8 @@ export default function SSHConnectionsSingleKey() {
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Alert severity="info">
-              Import an existing SSH key from your filesystem (e.g., mounted volume). The key will be read from the specified paths and stored in the database.
+              Import an existing SSH key from your filesystem (e.g., mounted volume). The key will
+              be read from the specified paths and stored in the database.
             </Alert>
 
             <TextField
@@ -1197,7 +1204,8 @@ export default function SSHConnectionsSingleKey() {
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Alert severity="info">
-              This will deploy your current system SSH key to this connection. You'll need to provide the password to authenticate.
+              This will deploy your current system SSH key to this connection. You'll need to
+              provide the password to authenticate.
             </Alert>
             {selectedConnection && (
               <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
@@ -1309,8 +1317,8 @@ export default function SSHConnectionsSingleKey() {
 
             <Alert severity="info" sx={{ mt: 2 }}>
               <Typography variant="body2">
-                Connection records will be preserved. Generate or import a new key, then deploy it to
-                restore access.
+                Connection records will be preserved. Generate or import a new key, then deploy it
+                to restore access.
               </Typography>
             </Alert>
           </Stack>
