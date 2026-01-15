@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any
 
 from app.database.database import get_db
-from app.database.models import User, BackupJob, Repository, Schedule, CheckJob, CompactJob, PruneJob, SSHConnection
+from app.database.models import User, BackupJob, Repository, ScheduledJob, ScheduledJobRepository, CheckJob, CompactJob, PruneJob, SSHConnection
 from app.core.security import get_current_user
 from app.core.borg import borg
 from app.utils.datetime_utils import serialize_datetime
@@ -242,7 +242,7 @@ async def get_dashboard_overview(
         repositories = db.query(Repository).all()
 
         # Get all schedules
-        schedules = db.query(Schedule).all()
+        schedules = db.query(ScheduledJob).all()
 
         # Get SSH connections
         ssh_connections = db.query(SSHConnection).all()
@@ -301,8 +301,21 @@ async def get_dashboard_overview(
             else:
                 warnings.append("Never compacted")
 
-            # Get associated schedule
-            repo_schedule = next((s for s in schedules if repo.id in s.repository_ids), None) if hasattr(schedules[0] if schedules else None, 'repository_ids') else None
+            # Get associated schedule (check both single-repo and multi-repo schedules)
+            repo_schedule = None
+            for schedule in schedules:
+                # Check single-repo schedule
+                if schedule.repository_id == repo.id:
+                    repo_schedule = schedule
+                    break
+                # Check multi-repo schedule (via junction table)
+                multi_repos = db.query(ScheduledJobRepository).filter(
+                    ScheduledJobRepository.scheduled_job_id == schedule.id,
+                    ScheduledJobRepository.repository_id == repo.id
+                ).first()
+                if multi_repos:
+                    repo_schedule = schedule
+                    break
 
             # Calculate dedup ratio (if we have the data)
             dedup_ratio = None
@@ -360,12 +373,29 @@ async def get_dashboard_overview(
         active_schedules = [s for s in schedules if s.enabled]
         upcoming_tasks = []
         for schedule in active_schedules[:10]:  # Limit to 10
+            # Get repository info for this schedule
+            repo_names = []
+            if schedule.repository_id:
+                # Single-repo schedule
+                repo = db.query(Repository).filter(Repository.id == schedule.repository_id).first()
+                if repo:
+                    repo_names.append(repo.name)
+            else:
+                # Multi-repo schedule - get all associated repos
+                multi_repos = db.query(ScheduledJobRepository).filter(
+                    ScheduledJobRepository.scheduled_job_id == schedule.id
+                ).all()
+                for mr in multi_repos:
+                    repo = db.query(Repository).filter(Repository.id == mr.repository_id).first()
+                    if repo:
+                        repo_names.append(repo.name)
+
             upcoming_tasks.append({
                 "id": schedule.id,
                 "name": schedule.name,
-                "repositories": schedule.repository_ids if hasattr(schedule, 'repository_ids') else [],
+                "repositories": repo_names,
                 "cron": schedule.cron_expression,
-                "next_run": "Calculating...",  # Would need croniter to calculate
+                "next_run": serialize_datetime(schedule.next_run) if schedule.next_run else "Not scheduled",
             })
 
         # Get maintenance alerts
