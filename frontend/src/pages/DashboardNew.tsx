@@ -335,8 +335,191 @@ export default function DashboardNew() {
       <Box
         sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 3, mb: 3 }}
       >
+        {/* Storage Overview */}
+        <Card sx={{ height: '100%' }}>
+          <CardContent>
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+              <HardDrive size={20} />
+              <Typography variant="h6" fontWeight={600}>
+                Storage Breakdown
+              </Typography>
+            </Stack>
+
+            <Typography variant="h4" fontWeight={600}>
+              {overview.storage.total_size}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              across {overview.storage.total_archives} archives
+            </Typography>
+
+            {/* Storage breakdown visualization */}
+            <Box sx={{ mb: 2 }}>
+              <Box
+                sx={{
+                  height: 32,
+                  borderRadius: 1,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  bgcolor: 'grey.100',
+                }}
+              >
+                {overview.storage.breakdown.slice(0, 3).map((repo, index) => {
+                  const colors = ['#2196f3', '#4caf50', '#ff9800']
+                  return (
+                    <Box
+                      key={repo.name}
+                      sx={{
+                        width: `${repo.percentage}%`,
+                        bgcolor: colors[index % colors.length],
+                        transition: 'all 0.3s',
+                        '&:hover': {
+                          opacity: 0.8,
+                        },
+                      }}
+                      title={`${repo.name}: ${repo.size} (${repo.percentage}%)`}
+                    />
+                  )
+                })}
+              </Box>
+            </Box>
+
+            {/* Legend */}
+            <Stack spacing={1}>
+              {overview.storage.breakdown.slice(0, 3).map((repo, index) => {
+                const colors = ['#2196f3', '#4caf50', '#ff9800']
+                return (
+                  <Box
+                    key={repo.name}
+                    sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                  >
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Box
+                        sx={{
+                          width: 12,
+                          height: 12,
+                          borderRadius: '50%',
+                          bgcolor: colors[index % colors.length],
+                        }}
+                      />
+                      <Typography variant="body2" color="text.secondary" noWrap>
+                        {repo.name}
+                      </Typography>
+                    </Stack>
+                    <Typography variant="body2" fontWeight={600}>
+                      {repo.size} ({repo.percentage}%)
+                    </Typography>
+                  </Box>
+                )
+              })}
+              {overview.storage.breakdown.length > 3 && (
+                <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center' }}>
+                  +{overview.storage.breakdown.length - 3} more repositories
+                </Typography>
+              )}
+            </Stack>
+          </CardContent>
+        </Card>
+
+        {/* System Resources */}
+        <Card sx={{ height: '100%' }}>
+          <CardContent>
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+              <Server size={20} />
+              <Typography variant="h6" fontWeight={600}>
+                System Resources
+              </Typography>
+            </Stack>
+
+            <Stack spacing={2}>
+              <Box>
+                <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
+                  <Stack direction="row" spacing={0.5} alignItems="center">
+                    <Cpu size={14} />
+                    <Typography variant="body2">CPU</Typography>
+                  </Stack>
+                  <Typography variant="body2" fontWeight={600}>
+                    {overview.system_metrics.cpu_usage.toFixed(1)}%
+                  </Typography>
+                </Stack>
+                <LinearProgress
+                  variant="determinate"
+                  value={Math.min(overview.system_metrics.cpu_usage, 100)}
+                  sx={{ height: 6, borderRadius: 1 }}
+                  color={
+                    overview.system_metrics.cpu_usage > 80
+                      ? 'error'
+                      : overview.system_metrics.cpu_usage > 60
+                        ? 'warning'
+                        : 'info'
+                  }
+                />
+              </Box>
+
+              <Box>
+                <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
+                  <Stack direction="row" spacing={0.5} alignItems="center">
+                    <MemoryStick size={14} />
+                    <Typography variant="body2">Memory</Typography>
+                  </Stack>
+                  <Typography variant="body2" fontWeight={600}>
+                    {formatBytes(
+                      overview.system_metrics.memory_total -
+                        overview.system_metrics.memory_available
+                    )}{' '}
+                    / {formatBytes(overview.system_metrics.memory_total)} GB
+                  </Typography>
+                </Stack>
+                <LinearProgress
+                  variant="determinate"
+                  value={Math.min(overview.system_metrics.memory_usage, 100)}
+                  sx={{ height: 6, borderRadius: 1 }}
+                  color={
+                    overview.system_metrics.memory_usage > 80
+                      ? 'error'
+                      : overview.system_metrics.memory_usage > 60
+                        ? 'warning'
+                        : 'success'
+                  }
+                />
+              </Box>
+
+              <Box>
+                <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
+                  <Stack direction="row" spacing={0.5} alignItems="center">
+                    <HardDrive size={14} />
+                    <Typography variant="body2">Disk</Typography>
+                  </Stack>
+                  <Typography variant="body2" fontWeight={600}>
+                    {formatBytes(
+                      overview.system_metrics.disk_total - overview.system_metrics.disk_free
+                    )}{' '}
+                    / {formatBytes(overview.system_metrics.disk_total)} GB
+                  </Typography>
+                </Stack>
+                <LinearProgress
+                  variant="determinate"
+                  value={Math.min(overview.system_metrics.disk_usage, 100)}
+                  sx={{ height: 6, borderRadius: 1 }}
+                  color={
+                    overview.system_metrics.disk_usage > 80
+                      ? 'error'
+                      : overview.system_metrics.disk_usage > 60
+                        ? 'warning'
+                        : 'warning'
+                  }
+                />
+              </Box>
+            </Stack>
+          </CardContent>
+        </Card>
+      </Box>
+
+      {/* Storage Breakdown & Upcoming Maintenance - Second Row */}
+      <Box
+        sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 3, mb: 3 }}
+      >
         {/* Repository Health - Compact */}
-        <Card>
+        <Card sx={{ height: '100%' }}>
           <CardContent>
             <Stack
               direction="row"
@@ -502,191 +685,8 @@ export default function DashboardNew() {
           </CardContent>
         </Card>
 
-        {/* System Resources */}
-        <Card>
-          <CardContent>
-            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
-              <Server size={20} />
-              <Typography variant="h6" fontWeight={600}>
-                System Resources
-              </Typography>
-            </Stack>
-
-            <Stack spacing={2}>
-              <Box>
-                <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
-                  <Stack direction="row" spacing={0.5} alignItems="center">
-                    <Cpu size={14} />
-                    <Typography variant="body2">CPU</Typography>
-                  </Stack>
-                  <Typography variant="body2" fontWeight={600}>
-                    {overview.system_metrics.cpu_usage.toFixed(1)}%
-                  </Typography>
-                </Stack>
-                <LinearProgress
-                  variant="determinate"
-                  value={Math.min(overview.system_metrics.cpu_usage, 100)}
-                  sx={{ height: 6, borderRadius: 1 }}
-                  color={
-                    overview.system_metrics.cpu_usage > 80
-                      ? 'error'
-                      : overview.system_metrics.cpu_usage > 60
-                        ? 'warning'
-                        : 'info'
-                  }
-                />
-              </Box>
-
-              <Box>
-                <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
-                  <Stack direction="row" spacing={0.5} alignItems="center">
-                    <MemoryStick size={14} />
-                    <Typography variant="body2">Memory</Typography>
-                  </Stack>
-                  <Typography variant="body2" fontWeight={600}>
-                    {formatBytes(
-                      overview.system_metrics.memory_total -
-                        overview.system_metrics.memory_available
-                    )}{' '}
-                    / {formatBytes(overview.system_metrics.memory_total)} GB
-                  </Typography>
-                </Stack>
-                <LinearProgress
-                  variant="determinate"
-                  value={Math.min(overview.system_metrics.memory_usage, 100)}
-                  sx={{ height: 6, borderRadius: 1 }}
-                  color={
-                    overview.system_metrics.memory_usage > 80
-                      ? 'error'
-                      : overview.system_metrics.memory_usage > 60
-                        ? 'warning'
-                        : 'success'
-                  }
-                />
-              </Box>
-
-              <Box>
-                <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
-                  <Stack direction="row" spacing={0.5} alignItems="center">
-                    <HardDrive size={14} />
-                    <Typography variant="body2">Disk</Typography>
-                  </Stack>
-                  <Typography variant="body2" fontWeight={600}>
-                    {formatBytes(
-                      overview.system_metrics.disk_total - overview.system_metrics.disk_free
-                    )}{' '}
-                    / {formatBytes(overview.system_metrics.disk_total)} GB
-                  </Typography>
-                </Stack>
-                <LinearProgress
-                  variant="determinate"
-                  value={Math.min(overview.system_metrics.disk_usage, 100)}
-                  sx={{ height: 6, borderRadius: 1 }}
-                  color={
-                    overview.system_metrics.disk_usage > 80
-                      ? 'error'
-                      : overview.system_metrics.disk_usage > 60
-                        ? 'warning'
-                        : 'warning'
-                  }
-                />
-              </Box>
-            </Stack>
-          </CardContent>
-        </Card>
-      </Box>
-
-      {/* Storage Breakdown & Upcoming Maintenance - Second Row */}
-      <Box
-        sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 3, mb: 3 }}
-      >
-        {/* Storage Overview */}
-        <Card>
-          <CardContent>
-            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
-              <HardDrive size={20} />
-              <Typography variant="h6" fontWeight={600}>
-                Storage Breakdown
-              </Typography>
-            </Stack>
-
-            <Typography variant="h4" fontWeight={600}>
-              {overview.storage.total_size}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              across {overview.storage.total_archives} archives
-            </Typography>
-
-            {/* Storage breakdown visualization */}
-            <Box sx={{ mb: 2 }}>
-              <Box
-                sx={{
-                  height: 32,
-                  borderRadius: 1,
-                  overflow: 'hidden',
-                  display: 'flex',
-                  bgcolor: 'grey.100',
-                }}
-              >
-                {overview.storage.breakdown.slice(0, 5).map((repo, index) => {
-                  const colors = ['#2196f3', '#4caf50', '#ff9800', '#9c27b0', '#f44336']
-                  return (
-                    <Box
-                      key={repo.name}
-                      sx={{
-                        width: `${repo.percentage}%`,
-                        bgcolor: colors[index % colors.length],
-                        transition: 'all 0.3s',
-                        '&:hover': {
-                          opacity: 0.8,
-                        },
-                      }}
-                      title={`${repo.name}: ${repo.size} (${repo.percentage}%)`}
-                    />
-                  )
-                })}
-              </Box>
-            </Box>
-
-            {/* Legend */}
-            <Stack spacing={1}>
-              {overview.storage.breakdown.slice(0, 5).map((repo, index) => {
-                const colors = ['#2196f3', '#4caf50', '#ff9800', '#9c27b0', '#f44336']
-                return (
-                  <Box
-                    key={repo.name}
-                    sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                  >
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Box
-                        sx={{
-                          width: 12,
-                          height: 12,
-                          borderRadius: '50%',
-                          bgcolor: colors[index % colors.length],
-                        }}
-                      />
-                      <Typography variant="body2" color="text.secondary" noWrap>
-                        {repo.name}
-                      </Typography>
-                    </Stack>
-                    <Typography variant="body2" fontWeight={600}>
-                      {repo.size} ({repo.percentage}%)
-                    </Typography>
-                  </Box>
-                )
-              })}
-              {overview.storage.breakdown.length > 5 && (
-                <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center' }}>
-                  +{overview.storage.breakdown.length - 5} more repositories
-                </Typography>
-              )}
-            </Stack>
-          </CardContent>
-        </Card>
-
         {/* Upcoming & Maintenance */}
-        <Card>
+        <Card sx={{ height: '100%' }}>
           <CardContent>
             <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
               <Clock size={20} />
@@ -727,7 +727,7 @@ export default function DashboardNew() {
                 </Alert>
               ) : (
                 <Stack spacing={1}>
-                  {overview.maintenance_alerts.slice(0, 5).map((alert, idx) => (
+                  {overview.maintenance_alerts.slice(0, 3).map((alert, idx) => (
                     <Alert
                       key={idx}
                       severity={alert.severity as any}
@@ -747,13 +747,13 @@ export default function DashboardNew() {
                     </Alert>
                   ))}
 
-                  {overview.maintenance_alerts.length > 5 && (
+                  {overview.maintenance_alerts.length > 3 && (
                     <Typography
                       variant="caption"
                       color="text.secondary"
                       sx={{ textAlign: 'center' }}
                     >
-                      +{overview.maintenance_alerts.length - 5} more alerts
+                      +{overview.maintenance_alerts.length - 3} more alerts
                     </Typography>
                   )}
                 </Stack>
