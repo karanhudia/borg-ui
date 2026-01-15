@@ -445,49 +445,58 @@ async def get_dashboard_overview(
                     "action": "schedule_compact"
                 })
 
-        # Get recent activity (last 10 jobs across all types)
-        recent_backups = db.query(BackupJob).order_by(BackupJob.started_at.desc()).limit(5).all()
-        recent_checks = db.query(CheckJob).order_by(CheckJob.started_at.desc()).limit(3).all()
-        recent_compacts = db.query(CompactJob).order_by(CompactJob.started_at.desc()).limit(2).all()
+        # Get recent activity (limited to 5 total across all types)
+        recent_backups = db.query(BackupJob).order_by(BackupJob.started_at.desc()).limit(10).all()
+        recent_checks = db.query(CheckJob).order_by(CheckJob.started_at.desc()).limit(10).all()
+        recent_compacts = db.query(CompactJob).order_by(CompactJob.started_at.desc()).limit(10).all()
+
+        # Create a lookup map for repository paths to names
+        repo_name_map = {repo.path: repo.name for repo in repositories}
 
         activity_feed = []
 
         for job in recent_backups:
+            # Get repo name from path (job.repository is the path)
+            repo_name = repo_name_map.get(job.repository, job.repository)
             activity_feed.append({
                 "id": job.id,
                 "type": "backup",
                 "status": job.status,
-                "repository": job.repository,
+                "repository": repo_name,
                 "timestamp": serialize_datetime(job.started_at),
                 "message": f"Backup {job.status}",
                 "error": job.error_message if job.status == "failed" else None
             })
 
         for job in recent_checks:
+            # Get repo name from path
+            repo_name = repo_name_map.get(job.repository_path, job.repository_path)
             activity_feed.append({
                 "id": job.id,
                 "type": "check",
                 "status": job.status,
-                "repository": job.repository_path,
+                "repository": repo_name,
                 "timestamp": serialize_datetime(job.started_at),
                 "message": f"Check {job.status}",
                 "error": job.error_message if job.status == "failed" else None
             })
 
         for job in recent_compacts:
+            # Get repo name from path
+            repo_name = repo_name_map.get(job.repository_path, job.repository_path)
             activity_feed.append({
                 "id": job.id,
                 "type": "compact",
                 "status": job.status,
-                "repository": job.repository_path,
+                "repository": repo_name,
                 "timestamp": serialize_datetime(job.started_at),
                 "message": f"Compact {job.status}",
                 "error": job.error_message if job.status == "failed" else None
             })
 
-        # Sort activity by timestamp
+        # Sort activity by timestamp and limit to 5
         activity_feed.sort(key=lambda x: x["timestamp"] or "", reverse=True)
-        activity_feed = activity_feed[:10]
+        activity_feed = activity_feed[:5]
 
         # Count SSH connections (active = status is "connected")
         ssh_active = len([c for c in ssh_connections if c.status == "connected"])
