@@ -92,15 +92,22 @@ interface ScheduledJob {
   last_compact: string | null
 }
 
+interface Repository {
+  id: number
+  name: string
+  path: string
+}
+
 interface BackupJob {
   id: string
   repository: string
-  status: 'running' | 'completed' | 'failed' | 'cancelled'
+  status: 'running' | 'completed' | 'failed' | 'cancelled' | 'completed_with_warnings'
   started_at: string
   completed_at?: string
   error_message?: string
   has_logs?: boolean
   maintenance_status?: string | null
+  scheduled_job_id?: number | null
   progress_details?: {
     original_size: number
     compressed_size: number
@@ -134,6 +141,18 @@ const Schedule: React.FC = () => {
   const [selectedBackupJob, setSelectedBackupJob] = useState<BackupJob | null>(null)
   const scheduledChecksSectionRef = useRef<ScheduledChecksSectionRef>(null)
 
+  // Backup History filters - load from localStorage
+  const [filterSchedule, setFilterSchedule] = useState<number | 'all'>(() => {
+    const saved = localStorage.getItem('scheduleBackupHistoryFilterSchedule')
+    return saved ? (saved === 'all' ? 'all' : parseInt(saved)) : 'all'
+  })
+  const [filterRepository, setFilterRepository] = useState<string | 'all'>(() => {
+    return localStorage.getItem('scheduleBackupHistoryFilterRepository') || 'all'
+  })
+  const [filterStatus, setFilterStatus] = useState<string | 'all'>(() => {
+    return localStorage.getItem('scheduleBackupHistoryFilterStatus') || 'all'
+  })
+
   // Redirect /schedule to /schedule/backups
   useEffect(() => {
     if (location.pathname === '/schedule') {
@@ -153,6 +172,19 @@ const Schedule: React.FC = () => {
   useEffect(() => {
     setCurrentTab(getCurrentTab())
   }, [location.pathname])
+
+  // Save filter state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('scheduleBackupHistoryFilterSchedule', String(filterSchedule))
+  }, [filterSchedule])
+
+  useEffect(() => {
+    localStorage.setItem('scheduleBackupHistoryFilterRepository', filterRepository)
+  }, [filterRepository])
+
+  useEffect(() => {
+    localStorage.setItem('scheduleBackupHistoryFilterStatus', filterStatus)
+  }, [filterStatus])
 
   // Get scheduled jobs
   const { data: jobsData, isLoading } = useQuery({
@@ -538,7 +570,19 @@ const Schedule: React.FC = () => {
       job.status === 'running' ||
       (job.maintenance_status && job.maintenance_status.includes('running'))
   )
-  const recentBackupJobs = allBackupJobs.slice(0, 10)
+
+  // Apply filters to backup history
+  const filteredBackupJobs = allBackupJobs.filter((job: BackupJob) => {
+    if (filterSchedule !== 'all' && job.scheduled_job_id !== filterSchedule) return false
+    if (filterRepository !== 'all' && job.repository !== filterRepository) return false
+    if (filterStatus !== 'all') {
+      if (filterStatus === 'completed' && job.status !== 'completed') return false
+      if (filterStatus === 'failed' && job.status !== 'failed') return false
+      if (filterStatus === 'warning' && job.status !== 'completed_with_warnings') return false
+    }
+    return true
+  })
+  const recentBackupJobs = filteredBackupJobs.slice(0, 10)
   const upcomingJobs = upcomingData?.data?.upcoming_jobs || []
 
   // Scheduled Jobs Table Column Definitions
@@ -1146,8 +1190,58 @@ const Schedule: React.FC = () => {
                 Backup History
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Recent backup jobs from scheduled tasks
+                Showing {recentBackupJobs.length} of {filteredBackupJobs.length} backup jobs
+                {(filterSchedule !== 'all' || filterRepository !== 'all' || filterStatus !== 'all') && ' (filtered)'}
               </Typography>
+
+              {/* Filters */}
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3 }}>
+                <FormControl size="small" sx={{ minWidth: 200 }}>
+                  <InputLabel>Schedule</InputLabel>
+                  <Select
+                    value={filterSchedule}
+                    label="Schedule"
+                    onChange={(e) => setFilterSchedule(e.target.value as number | 'all')}
+                  >
+                    <MenuItem value="all">All Schedules</MenuItem>
+                    {jobs.map((job: ScheduledJob) => (
+                      <MenuItem key={job.id} value={job.id}>
+                        {job.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <FormControl size="small" sx={{ minWidth: 200 }}>
+                  <InputLabel>Repository</InputLabel>
+                  <Select
+                    value={filterRepository}
+                    label="Repository"
+                    onChange={(e) => setFilterRepository(e.target.value)}
+                  >
+                    <MenuItem value="all">All Repositories</MenuItem>
+                    {repositories.map((repo: Repository) => (
+                      <MenuItem key={repo.id} value={repo.path}>
+                        {repo.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <FormControl size="small" sx={{ minWidth: 150 }}>
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    value={filterStatus}
+                    label="Status"
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                  >
+                    <MenuItem value="all">All Status</MenuItem>
+                    <MenuItem value="completed">Completed</MenuItem>
+                    <MenuItem value="failed">Failed</MenuItem>
+                    <MenuItem value="warning">Warning</MenuItem>
+                  </Select>
+                </FormControl>
+              </Stack>
 
               <BackupJobsTable
                 jobs={recentBackupJobs}

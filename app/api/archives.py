@@ -9,10 +9,12 @@ import tempfile
 from typing import List, Dict, Any
 
 from app.database.database import get_db
-from app.database.models import User, Repository
+from app.database.models import User, Repository, DeleteArchiveJob
 from app.core.security import get_current_user
 from app.core.borg import borg
 from app.api.repositories import update_repository_stats
+from app.services.delete_archive_service import delete_archive_service
+import asyncio
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -222,7 +224,10 @@ async def delete_archive(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Delete an archive"""
+    """Delete an archive in the background (non-blocking)"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     try:
         # Validate repository exists first
         repo = db.query(Repository).filter(Repository.path == repository).first()
@@ -232,29 +237,54 @@ async def delete_archive(
                 detail="Repository not found"
             )
 
-        result = await borg.delete_archive(
-            repository,
-            archive_id,
-            remote_path=repo.remote_path,
-            passphrase=repo.passphrase
-        )
-        if not result["success"]:
+        # Check if there's already a running delete job for this archive
+        running_job = db.query(DeleteArchiveJob).filter(
+            DeleteArchiveJob.repository_id == repo.id,
+            DeleteArchiveJob.archive_name == archive_id,
+            DeleteArchiveJob.status == "running"
+        ).first()
+
+        if running_job:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to delete archive: {result['stderr']}"
+                status_code=409,
+                detail=f"Delete operation is already running for this archive (Job ID: {running_job.id})"
             )
 
-        # Update archive count after successful deletion
-        await update_repository_stats(repo, db)
+        # Create delete job record
+        delete_job = DeleteArchiveJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            archive_name=archive_id,
+            status="pending"
+        )
+        db.add(delete_job)
+        db.commit()
+        db.refresh(delete_job)
 
-        return {"message": "Archive deleted successfully"}
+        # Execute delete asynchronously (non-blocking)
+        asyncio.create_task(
+            delete_archive_service.execute_delete(
+                delete_job.id,
+                repo.id,
+                archive_id,
+                db
+            )
+        )
+
+        logger.info("Delete archive job created", job_id=delete_job.id, repository_id=repo.id, archive=archive_id, user=current_user.username)
+
+        return {
+            "job_id": delete_job.id,
+            "status": "pending",
+            "message": "Archive deletion started in background"
+        }
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to delete archive", error=str(e))
+        logger.error("Failed to start delete archive job", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete archive"
+            detail=f"Failed to start archive deletion: {str(e)}"
         )
 
 @router.get("/download")
@@ -353,4 +383,64 @@ async def download_file_from_archive(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to download file: {str(e)}"
-        ) 
+        )
+
+# Delete job status endpoints
+@router.get("/delete-jobs/{job_id}")
+async def get_delete_job_status(
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get status of a delete archive job"""
+    try:
+        job = db.query(DeleteArchiveJob).filter(DeleteArchiveJob.id == job_id).first()
+        if not job:
+            raise HTTPException(status_code=404, detail="Delete job not found")
+
+        # Read log file if it exists
+        logs = None
+        if job.log_file_path and os.path.exists(job.log_file_path):
+            try:
+                with open(job.log_file_path, 'r') as f:
+                    logs = f.read()
+            except Exception as e:
+                logger.warning("Failed to read delete log file", error=str(e))
+
+        return {
+            "id": job.id,
+            "repository_id": job.repository_id,
+            "archive_name": job.archive_name,
+            "status": job.status,
+            "started_at": job.started_at.isoformat() if job.started_at else None,
+            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+            "progress": job.progress,
+            "progress_message": job.progress_message,
+            "error_message": job.error_message,
+            "logs": logs,
+            "has_logs": job.has_logs
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get delete job status", error=str(e), job_id=job_id)
+        raise HTTPException(status_code=500, detail=f"Failed to get job status: {str(e)}")
+
+@router.post("/delete-jobs/{job_id}/cancel")
+async def cancel_delete_job(
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Cancel a running delete job"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        await delete_archive_service.cancel_delete(job_id, db)
+        return {"message": "Delete job cancelled successfully"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Failed to cancel delete job", error=str(e), job_id=job_id)
+        raise HTTPException(status_code=500, detail=f"Failed to cancel delete job: {str(e)}")

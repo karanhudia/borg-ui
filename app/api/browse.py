@@ -5,7 +5,7 @@ import json
 import hashlib
 from datetime import datetime, timedelta
 
-from app.database.models import User, Repository
+from app.database.models import User, Repository, SystemSettings
 from app.database.database import get_db
 from app.api.auth import get_current_user
 from app.core.borg import borg
@@ -14,6 +14,11 @@ from app.services.cache_service import archive_cache
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()
+
+# Memory safety limits
+MAX_ITEMS_IN_MEMORY = 1_000_000  # Maximum number of items to load into memory
+MAX_ESTIMATED_MEMORY_MB = 1024   # Maximum estimated memory usage (1GB)
+ITEM_SIZE_ESTIMATE = 200         # Average bytes per item in memory (conservative estimate)
 
 @router.get("/{repository_id}/{archive_name}")
 async def browse_archive_contents(
@@ -28,6 +33,11 @@ async def browse_archive_contents(
         repository = db.query(Repository).filter(Repository.id == repository_id).first()
         if not repository:
             raise HTTPException(status_code=404, detail="Repository not found")
+
+        # Get memory limit settings from database
+        settings = db.query(SystemSettings).first()
+        max_items = settings.browse_max_items if settings and settings.browse_max_items else MAX_ITEMS_IN_MEMORY
+        max_memory_mb = settings.browse_max_memory_mb if settings and settings.browse_max_memory_mb else MAX_ESTIMATED_MEMORY_MB
 
         # Check cache first
         all_items = await archive_cache.get(repository_id, archive_name)
@@ -46,14 +56,48 @@ async def browse_archive_contents(
                 passphrase=repository.passphrase
             )
 
-            # Parse all items
+            # Parse all items with memory safety checks
             all_items = []
             if result.get("stdout"):
                 lines = result["stdout"].strip().split("\n")
-                logger.info("Fetching and caching archive contents",
-                           archive=archive_name,
-                           total_lines=len(lines))
+                total_lines = len(lines)
 
+                # Memory safety check: Estimate memory usage before loading
+                estimated_memory_mb = (total_lines * ITEM_SIZE_ESTIMATE) / (1024 * 1024)
+
+                logger.info("Fetching archive contents",
+                           archive=archive_name,
+                           total_lines=total_lines,
+                           estimated_memory_mb=round(estimated_memory_mb, 2))
+
+                # Check if archive is too large to safely load
+                if total_lines > max_items:
+                    logger.error("Archive too large for safe browsing",
+                               archive=archive_name,
+                               total_lines=total_lines,
+                               max_allowed=max_items)
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Archive is too large to browse ({total_lines:,} items). "
+                               f"Maximum supported: {max_items:,} items. "
+                               f"You can increase this limit in Settings > Cache Management, "
+                               f"or use command-line tools for very large archives."
+                    )
+
+                if estimated_memory_mb > max_memory_mb:
+                    logger.error("Estimated memory usage too high",
+                               archive=archive_name,
+                               estimated_memory_mb=round(estimated_memory_mb, 2),
+                               max_allowed_mb=max_memory_mb)
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Archive estimated to require {estimated_memory_mb:.0f}MB memory. "
+                               f"Maximum allowed: {max_memory_mb}MB. "
+                               f"You can increase this limit in Settings > Cache Management, "
+                               f"or use command-line tools for very large archives."
+                    )
+
+                # Process items in chunks to avoid large temporary lists
                 for line in lines:
                     if line:
                         try:
@@ -69,11 +113,16 @@ async def browse_archive_contents(
                         except json.JSONDecodeError:
                             continue
 
-                # Store in cache
-                await archive_cache.set(repository_id, archive_name, all_items)
-                logger.info("Cached archive contents",
-                           archive=archive_name,
-                           items_count=len(all_items))
+                # Store in cache (cache service will enforce its own size limits)
+                cache_success = await archive_cache.set(repository_id, archive_name, all_items)
+                if cache_success:
+                    logger.info("Cached archive contents",
+                               archive=archive_name,
+                               items_count=len(all_items))
+                else:
+                    logger.warning("Failed to cache archive (too large or cache full)",
+                                 archive=archive_name,
+                                 items_count=len(all_items))
 
         # Helper function to calculate directory size
         def calculate_directory_size(dir_path: str) -> int:

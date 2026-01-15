@@ -134,9 +134,13 @@ const Archives: React.FC = () => {
   const deleteArchiveMutation = useMutation({
     mutationFn: ({ repository, archive }: { repository: string; archive: string }) =>
       archivesAPI.deleteArchive(repository, archive),
-    onSuccess: () => {
-      toast.success('Archive deleted successfully!')
-      queryClient.invalidateQueries({ queryKey: ['repository-archives', selectedRepositoryId] })
+    onSuccess: (data) => {
+      // Backend now returns job_id for background deletion
+      toast.success(`Archive deletion started in background (Job ID: ${data.data.job_id})`)
+      // Refresh archives list after a delay to allow deletion to complete
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['repository-archives', selectedRepositoryId] })
+      }, 2000)
       setShowDeleteConfirm(null)
     },
     onError: (error: any) => {
@@ -861,8 +865,11 @@ const Archives: React.FC = () => {
           <Alert severity="warning" sx={{ mb: 2 }}>
             This action cannot be undone!
           </Alert>
-          <Typography variant="body2">
+          <Typography variant="body2" gutterBottom>
             Are you sure you want to delete the archive <strong>"{showDeleteConfirm}"</strong>?
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            The deletion will run in the background. You can close this dialog and continue working.
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -880,7 +887,7 @@ const Archives: React.FC = () => {
               )
             }
           >
-            {deleteArchiveMutation.isPending ? 'Deleting...' : 'Delete'}
+            {deleteArchiveMutation.isPending ? 'Starting...' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>

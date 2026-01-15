@@ -24,7 +24,7 @@ import {
   Tooltip,
   InputAdornment,
 } from '@mui/material'
-import { Key, Copy, RefreshCw, Wifi, CheckCircle, XCircle, AlertTriangle, Plus } from 'lucide-react'
+import { Key, Copy, RefreshCw, Wifi, CheckCircle, XCircle, AlertTriangle, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import RemoteMachineCard from '../components/RemoteMachineCard'
 
@@ -61,12 +61,22 @@ export default function SSHConnectionsSingleKey() {
 
   // State
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false)
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [deployDialogOpen, setDeployDialogOpen] = useState(false)
   const [testConnectionDialogOpen, setTestConnectionDialogOpen] = useState(false)
   const [editConnectionDialogOpen, setEditConnectionDialogOpen] = useState(false)
   const [deleteConnectionDialogOpen, setDeleteConnectionDialogOpen] = useState(false)
+  const [deleteKeyDialogOpen, setDeleteKeyDialogOpen] = useState(false)
+  const [redeployKeyDialogOpen, setRedeployKeyDialogOpen] = useState(false)
   const [selectedConnection, setSelectedConnection] = useState<SSHConnection | null>(null)
   const [keyType, setKeyType] = useState('ed25519')
+  const [redeployPassword, setRedeployPassword] = useState('')
+  const [importForm, setImportForm] = useState({
+    name: 'System SSH Key',
+    private_key_path: '',
+    public_key_path: '',
+    description: 'Imported system SSH key for all remote connections',
+  })
   const [connectionForm, setConnectionForm] = useState({
     host: '',
     username: '',
@@ -126,6 +136,24 @@ export default function SSHConnectionsSingleKey() {
     },
   })
 
+  const importKeyMutation = useMutation({
+    mutationFn: (data: any) => sshKeysAPI.importSSHKey(data),
+    onSuccess: () => {
+      toast.success('System SSH key imported successfully!')
+      queryClient.invalidateQueries({ queryKey: ['system-ssh-key'] })
+      setImportDialogOpen(false)
+      setImportForm({
+        name: 'System SSH Key',
+        private_key_path: '',
+        public_key_path: '',
+        description: 'Imported system SSH key for all remote connections',
+      })
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to import SSH key')
+    },
+  })
+
   const deployKeyMutation = useMutation({
     mutationFn: (data: { keyId: number; connectionData: any }) =>
       sshKeysAPI.deploySSHKey(data.keyId, data.connectionData),
@@ -166,11 +194,20 @@ export default function SSHConnectionsSingleKey() {
   const updateConnectionMutation = useMutation({
     mutationFn: (data: { connectionId: number; connectionData: any }) =>
       sshKeysAPI.updateSSHConnection(data.connectionId, data.connectionData),
-    onSuccess: () => {
-      toast.success('Connection updated successfully!')
-      queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
+    onSuccess: async (_response, variables) => {
+      toast.success('Connection updated successfully! Testing connection...')
       setEditConnectionDialogOpen(false)
       setSelectedConnection(null)
+
+      // Automatically test the connection after update
+      try {
+        await sshKeysAPI.testExistingConnection(variables.connectionId)
+        queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
+      } catch (error: any) {
+        // Test failure is already shown in the connection status
+        console.error('Failed to test connection:', error)
+        queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
+      }
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to update connection')
@@ -198,6 +235,52 @@ export default function SSHConnectionsSingleKey() {
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to refresh storage')
+    },
+  })
+
+  const testExistingConnectionMutation = useMutation({
+    mutationFn: (connectionId: number) => sshKeysAPI.testExistingConnection(connectionId),
+    onSuccess: (response) => {
+      if (response.data.success) {
+        toast.success('Connection test successful!')
+      } else {
+        toast.error(response.data.error || 'Connection test failed')
+      }
+      queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to test connection')
+    },
+  })
+
+  const deleteKeyMutation = useMutation({
+    mutationFn: (keyId: number) => sshKeysAPI.deleteSSHKey(keyId),
+    onSuccess: () => {
+      toast.success('System SSH key deleted successfully!')
+      queryClient.invalidateQueries({ queryKey: ['system-ssh-key'] })
+      queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
+      setDeleteKeyDialogOpen(false)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to delete SSH key')
+    },
+  })
+
+  const redeployKeyMutation = useMutation({
+    mutationFn: ({ connectionId, password }: { connectionId: number; password: string }) =>
+      sshKeysAPI.redeployKeyToConnection(connectionId, password),
+    onSuccess: (response) => {
+      if (response.data.success) {
+        toast.success('SSH key deployed successfully!')
+        queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
+        setRedeployKeyDialogOpen(false)
+        setRedeployPassword('')
+      } else {
+        toast.error(response.data.error || 'Failed to deploy SSH key')
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to deploy SSH key')
     },
   })
 
@@ -229,6 +312,10 @@ export default function SSHConnectionsSingleKey() {
       key_type: keyType,
       description: 'System SSH key for all remote connections',
     })
+  }
+
+  const handleImportKey = () => {
+    importKeyMutation.mutate(importForm)
   }
 
   const handleCopyPublicKey = () => {
@@ -284,6 +371,28 @@ export default function SSHConnectionsSingleKey() {
   const confirmDeleteConnection = () => {
     if (!selectedConnection) return
     deleteConnectionMutation.mutate(selectedConnection.id)
+  }
+
+  const handleTestConnection = (connection: SSHConnection) => {
+    testExistingConnectionMutation.mutate(connection.id)
+  }
+
+  const handleDeployKeyToConnection = (connection: SSHConnection) => {
+    setSelectedConnection(connection)
+    setRedeployKeyDialogOpen(true)
+  }
+
+  const handleConfirmRedeployKey = () => {
+    if (!selectedConnection || !redeployPassword) return
+    redeployKeyMutation.mutate({
+      connectionId: selectedConnection.id,
+      password: redeployPassword,
+    })
+  }
+
+  const handleDeleteKey = () => {
+    if (!systemKey) return
+    deleteKeyMutation.mutate(systemKey.id)
   }
 
   if (keyLoading || connectionsLoading) {
@@ -421,15 +530,24 @@ export default function SSHConnectionsSingleKey() {
             // No key exists - show generation UI
             <Box>
               <Alert severity="warning" sx={{ mb: 2 }}>
-                No system SSH key found. Generate one to start connecting to remote servers.
+                No system SSH key found. Generate a new one or import an existing one to start connecting to remote servers.
               </Alert>
-              <Button
-                variant="contained"
-                startIcon={<Plus size={18} />}
-                onClick={() => setGenerateDialogOpen(true)}
-              >
-                Generate System SSH Key
-              </Button>
+              <Stack direction="row" spacing={2}>
+                <Button
+                  variant="contained"
+                  startIcon={<Plus size={18} />}
+                  onClick={() => setGenerateDialogOpen(true)}
+                >
+                  Generate System SSH Key
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<Key size={18} />}
+                  onClick={() => setImportDialogOpen(true)}
+                >
+                  Import Existing Key
+                </Button>
+              </Stack>
             </Box>
           ) : (
             // Key exists - show key details
@@ -535,6 +653,16 @@ export default function SSHConnectionsSingleKey() {
                       Copy Key
                     </Button>
                   </Tooltip>
+                  <Tooltip title="Delete system SSH key (connections will be preserved)">
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      startIcon={<Trash2 size={18} />}
+                      onClick={() => setDeleteKeyDialogOpen(true)}
+                    >
+                      Delete Key
+                    </Button>
+                  </Tooltip>
                 </Stack>
               </Stack>
             </Box>
@@ -543,58 +671,66 @@ export default function SSHConnectionsSingleKey() {
       </Card>
 
       {/* Connections Table */}
-      {keyExists && (
-        <Card>
-          <CardContent>
-            <Stack
-              direction="row"
-              alignItems="center"
-              justifyContent="space-between"
-              sx={{ mb: 2 }}
-            >
-              <Typography variant="h6" fontWeight={600}>
-                Remote Connections
-              </Typography>
-              <Tooltip title="Refresh connections">
-                <IconButton
-                  size="small"
-                  onClick={() => queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })}
-                >
-                  <RefreshCw size={18} />
-                </IconButton>
-              </Tooltip>
-            </Stack>
-
-            {connections.length === 0 ? (
-              <Alert severity="info">
-                No connections yet. Deploy your SSH key to a remote server to get started.
-              </Alert>
-            ) : (
-              <Box
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: {
-                    xs: '1fr',
-                    sm: 'repeat(2, 1fr)',
-                    md: 'repeat(3, 1fr)',
-                  },
-                  gap: 3,
-                }}
+      <Card>
+        <CardContent>
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+            sx={{ mb: 2 }}
+          >
+            <Typography variant="h6" fontWeight={600}>
+              Remote Connections
+            </Typography>
+            <Tooltip title="Refresh connections">
+              <IconButton
+                size="small"
+                onClick={() => queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })}
               >
-                {connections.map((connection) => (
-                  <RemoteMachineCard
-                    key={connection.id}
-                    machine={connection}
-                    onEdit={handleEditConnection}
-                    onDelete={handleDeleteConnection}
-                    onRefreshStorage={(machine) => refreshStorageMutation.mutate(machine.id)}
-                  />
-                ))}
-              </Box>
-            )}
-          </CardContent>
-        </Card>
-      )}
+                <RefreshCw size={18} />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+
+          {!keyExists && connections.length > 0 && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              No SSH key configured. Generate or import a key to test these connections.
+            </Alert>
+          )}
+
+          {connections.length === 0 ? (
+            <Alert severity="info">
+              {keyExists
+                ? "No connections yet. Deploy your SSH key to a remote server to get started."
+                : "No connections yet. Generate or import an SSH key first, then deploy it to remote servers."}
+            </Alert>
+          ) : (
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  sm: 'repeat(2, 1fr)',
+                  md: 'repeat(3, 1fr)',
+                },
+                gap: 3,
+              }}
+            >
+              {connections.map((connection) => (
+                <RemoteMachineCard
+                  key={connection.id}
+                  machine={connection}
+                  onEdit={handleEditConnection}
+                  onDelete={handleDeleteConnection}
+                  onRefreshStorage={(machine) => refreshStorageMutation.mutate(machine.id)}
+                  onTestConnection={handleTestConnection}
+                  onDeployKey={handleDeployKeyToConnection}
+                />
+              ))}
+            </Box>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Generate Key Dialog */}
       <Dialog
@@ -629,6 +765,74 @@ export default function SSHConnectionsSingleKey() {
             disabled={generateKeyMutation.isPending}
           >
             {generateKeyMutation.isPending ? 'Generating...' : 'Generate Key'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Import Key Dialog */}
+      <Dialog
+        open={importDialogOpen}
+        onClose={() => setImportDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Import Existing SSH Key</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Alert severity="info">
+              Import an existing SSH key from your filesystem (e.g., mounted volume). The key will be read from the specified paths and stored in the database.
+            </Alert>
+
+            <TextField
+              label="Key Name"
+              fullWidth
+              value={importForm.name}
+              onChange={(e) => setImportForm({ ...importForm, name: e.target.value })}
+              placeholder="System SSH Key"
+              InputLabelProps={{ shrink: true }}
+            />
+
+            <TextField
+              label="Private Key Path"
+              fullWidth
+              required
+              value={importForm.private_key_path}
+              onChange={(e) => setImportForm({ ...importForm, private_key_path: e.target.value })}
+              placeholder="/home/borg/.ssh/id_ed25519 or /root/.ssh/id_rsa"
+              helperText="Absolute path to the private key file"
+              InputLabelProps={{ shrink: true }}
+            />
+
+            <TextField
+              label="Public Key Path (Optional)"
+              fullWidth
+              value={importForm.public_key_path}
+              onChange={(e) => setImportForm({ ...importForm, public_key_path: e.target.value })}
+              placeholder="Leave empty to auto-detect (adds .pub to private key path)"
+              helperText="If not provided, will try {private_key_path}.pub"
+              InputLabelProps={{ shrink: true }}
+            />
+
+            <TextField
+              label="Description"
+              fullWidth
+              value={importForm.description}
+              onChange={(e) => setImportForm({ ...importForm, description: e.target.value })}
+              placeholder="Imported system SSH key"
+              InputLabelProps={{ shrink: true }}
+              multiline
+              rows={2}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setImportDialogOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleImportKey}
+            disabled={importKeyMutation.isPending || !importForm.private_key_path}
+          >
+            {importKeyMutation.isPending ? 'Importing...' : 'Import Key'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -974,6 +1178,152 @@ export default function SSHConnectionsSingleKey() {
             disabled={deleteConnectionMutation.isPending}
           >
             {deleteConnectionMutation.isPending ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Redeploy Key Dialog */}
+      <Dialog
+        open={redeployKeyDialogOpen}
+        onClose={() => {
+          setRedeployKeyDialogOpen(false)
+          setSelectedConnection(null)
+          setRedeployPassword('')
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Deploy SSH Key to Connection</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Alert severity="info">
+              This will deploy your current system SSH key to this connection. You'll need to provide the password to authenticate.
+            </Alert>
+            {selectedConnection && (
+              <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+                <Typography variant="body2">
+                  <strong>Host:</strong> {selectedConnection.host}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Username:</strong> {selectedConnection.username}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Port:</strong> {selectedConnection.port}
+                </Typography>
+              </Box>
+            )}
+            <TextField
+              label="Password"
+              type="password"
+              fullWidth
+              value={redeployPassword}
+              onChange={(e) => setRedeployPassword(e.target.value)}
+              placeholder="Enter SSH password"
+              helperText="Password is used to deploy the public key to authorized_keys"
+              InputLabelProps={{ shrink: true }}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setRedeployKeyDialogOpen(false)
+              setSelectedConnection(null)
+              setRedeployPassword('')
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmRedeployKey}
+            disabled={redeployKeyMutation.isPending || !redeployPassword}
+          >
+            {redeployKeyMutation.isPending ? 'Deploying...' : 'Deploy Key'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete SSH Key Dialog */}
+      <Dialog
+        open={deleteKeyDialogOpen}
+        onClose={() => setDeleteKeyDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Delete System SSH Key</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Alert severity="warning" sx={{ mb: 1 }}>
+              <Typography variant="body2" fontWeight={600} gutterBottom>
+                Are you sure you want to delete this SSH key?
+              </Typography>
+            </Alert>
+
+            {systemKey && (
+              <Box
+                sx={{
+                  p: 2,
+                  bgcolor: 'background.default',
+                  borderRadius: 1,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                }}
+              >
+                <Stack spacing={1}>
+                  <Typography variant="body2">
+                    <strong>Key Name:</strong> {systemKey.name}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Key Type:</strong> {systemKey.key_type?.toUpperCase()}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Active Connections:</strong> {connections.length}
+                  </Typography>
+                  {systemKey.fingerprint && (
+                    <Typography
+                      variant="body2"
+                      sx={{ fontFamily: 'monospace', fontSize: '0.75rem', wordBreak: 'break-all' }}
+                    >
+                      <strong>Fingerprint:</strong> {systemKey.fingerprint}
+                    </Typography>
+                  )}
+                </Stack>
+              </Box>
+            )}
+
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              This action will:
+            </Typography>
+            <Box component="ul" sx={{ m: 0, pl: 3 }}>
+              <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
+                Remove the SSH key from database and filesystem
+              </Typography>
+              <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
+                Mark {connections.length} connection(s) as failed
+              </Typography>
+              <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
+                Clear SSH key from any repositories using it
+              </Typography>
+            </Box>
+
+            <Alert severity="info" sx={{ mt: 2 }}>
+              <Typography variant="body2">
+                Connection records will be preserved. Generate or import a new key, then deploy it to
+                restore access.
+              </Typography>
+            </Alert>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteKeyDialogOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDeleteKey}
+            disabled={deleteKeyMutation.isPending}
+          >
+            {deleteKeyMutation.isPending ? 'Deleting...' : 'Delete SSH Key'}
           </Button>
         </DialogActions>
       </Dialog>

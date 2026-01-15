@@ -24,6 +24,8 @@ import {
   Trash2,
   RefreshCw,
   HardDrive,
+  Network,
+  Key,
 } from 'lucide-react'
 
 interface StorageInfo {
@@ -59,6 +61,8 @@ interface RemoteMachineCardProps {
   onEdit: (machine: RemoteMachine) => void
   onDelete: (machine: RemoteMachine) => void
   onRefreshStorage: (machine: RemoteMachine) => void
+  onTestConnection: (machine: RemoteMachine) => void
+  onDeployKey: (machine: RemoteMachine) => void
 }
 
 export default function RemoteMachineCard({
@@ -66,6 +70,8 @@ export default function RemoteMachineCard({
   onEdit,
   onDelete,
   onRefreshStorage,
+  onTestConnection,
+  onDeployKey,
 }: RemoteMachineCardProps) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
 
@@ -286,6 +292,28 @@ export default function RemoteMachineCard({
 
       {/* Context Menu */}
       <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
+        <MenuItem
+          onClick={() => {
+            handleMenuClose()
+            onTestConnection(machine)
+          }}
+        >
+          <ListItemIcon>
+            <Network size={18} />
+          </ListItemIcon>
+          <ListItemText>Test Connection</ListItemText>
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            handleMenuClose()
+            onDeployKey(machine)
+          }}
+        >
+          <ListItemIcon>
+            <Key size={18} />
+          </ListItemIcon>
+          <ListItemText>Deploy Key</ListItemText>
+        </MenuItem>
         <MenuItem
           onClick={() => {
             handleMenuClose()
