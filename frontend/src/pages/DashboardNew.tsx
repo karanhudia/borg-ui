@@ -338,19 +338,23 @@ export default function DashboardNew() {
         {/* Storage Overview */}
         <Card sx={{ height: '100%' }}>
           <CardContent>
-            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
-              <HardDrive size={20} />
-              <Typography variant="h6" fontWeight={600}>
-                Storage Breakdown
+            <Stack
+              direction="row"
+              spacing={1.5}
+              alignItems="center"
+              justifyContent="space-between"
+              sx={{ mb: 3 }}
+            >
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                <HardDrive size={20} />
+                <Typography variant="h6" fontWeight={600}>
+                  Storage Breakdown
+                </Typography>
+              </Stack>
+              <Typography variant="h5" fontWeight={700} color="primary">
+                {overview.storage.total_size}
               </Typography>
             </Stack>
-
-            <Typography variant="h4" fontWeight={600}>
-              {overview.storage.total_size}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              across {overview.storage.total_archives} archives
-            </Typography>
 
             {/* Storage breakdown visualization */}
             <Box sx={{ mb: 2 }}>
