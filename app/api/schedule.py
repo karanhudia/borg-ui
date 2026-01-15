@@ -1350,7 +1350,11 @@ async def check_scheduled_jobs():
 
                     db.commit()
 
-                    logger.info("Scheduled job started", job_id=job.id, name=job.name, backup_job_id=backup_job.id)
+                    # Log with backup_job_id only for single-repo schedules
+                    log_data = {"job_id": job.id, "name": job.name}
+                    if 'backup_job' in locals():
+                        log_data["backup_job_id"] = backup_job.id
+                    logger.info("Scheduled job started", **log_data)
 
                 except Exception as e:
                     logger.error("Failed to run scheduled job", job_id=job.id, error=str(e))
