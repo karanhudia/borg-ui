@@ -59,6 +59,7 @@ export const dashboardAPI = {
   getStatus: () => api.get('/dashboard/status'),
   getMetrics: () => api.get('/dashboard/metrics'),
   getSchedule: () => api.get('/dashboard/schedule'),
+  getOverview: () => api.get('/dashboard/overview'),
 }
 
 // Configuration API - DEPRECATED (removed from UI)
