@@ -97,13 +97,13 @@ class SSHKey(Base):
 
     # Relationships
     repositories = relationship("Repository", back_populates="ssh_key")
-    connections = relationship("SSHConnection", back_populates="ssh_key", cascade="all, delete-orphan")
+    connections = relationship("SSHConnection", back_populates="ssh_key")
 
 class SSHConnection(Base):
     __tablename__ = "ssh_connections"
 
     id = Column(Integer, primary_key=True, index=True)
-    ssh_key_id = Column(Integer, ForeignKey("ssh_keys.id"))
+    ssh_key_id = Column(Integer, ForeignKey("ssh_keys.id"), nullable=True)
     host = Column(String)
     username = Column(String)
     port = Column(Integer, default=22)
@@ -313,6 +313,26 @@ class PruneJob(Base):
     scheduled_prune = Column(Boolean, default=False, nullable=False)  # True if triggered by scheduler, False if manual
     created_at = Column(DateTime, default=utc_now)
 
+class DeleteArchiveJob(Base):
+    __tablename__ = "delete_archive_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=False)
+    repository_path = Column(String, nullable=True)  # Captured at job creation for display even if repo is deleted
+    archive_name = Column(String, nullable=False)  # Name of the archive being deleted
+    status = Column(String, default="pending")  # pending, running, completed, failed, cancelled
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    progress = Column(Integer, default=0)  # 0-100 percentage
+    progress_message = Column(String, nullable=True)  # Current progress message
+    error_message = Column(Text, nullable=True)
+    logs = Column(Text, nullable=True)  # Deprecated: kept for backwards compatibility, use log_file_path instead
+    log_file_path = Column(String, nullable=True)  # Path to log file on disk
+    has_logs = Column(Boolean, default=False)  # Flag indicating if logs are available
+    process_pid = Column(Integer, nullable=True)  # Container PID for orphan detection
+    process_start_time = Column(BigInteger, nullable=True)  # Process start time in jiffies for PID uniqueness
+    created_at = Column(DateTime, default=utc_now)
+
 class SystemSettings(Base):
     __tablename__ = "system_settings"
 
@@ -326,6 +346,8 @@ class SystemSettings(Base):
     cache_ttl_minutes = Column(Integer, default=120)  # Cache TTL in minutes (2 hours default)
     cache_max_size_mb = Column(Integer, default=2048)  # Maximum cache size in MB (2GB default)
     redis_url = Column(String, nullable=True)  # External Redis URL (e.g., redis://host:6379/0)
+    browse_max_items = Column(Integer, default=1_000_000)  # Maximum items to load when browsing archives
+    browse_max_memory_mb = Column(Integer, default=1024)  # Maximum memory (MB) for archive browsing
     email_notifications = Column(Boolean, default=False)
     webhook_url = Column(String, nullable=True)
     auto_cleanup = Column(Boolean, default=False)

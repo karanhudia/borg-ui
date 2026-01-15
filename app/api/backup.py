@@ -103,6 +103,7 @@ async def get_all_backup_jobs(
                     "error_message": job.error_message,
                     "has_logs": bool(job.logs),  # Indicate if logs are available
                     "maintenance_status": job.maintenance_status,
+                    "scheduled_job_id": job.scheduled_job_id,  # Include for filtering by schedule
                     "progress_details": {
                         "original_size": job.original_size or 0,
                         "compressed_size": job.compressed_size or 0,

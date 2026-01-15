@@ -270,6 +270,8 @@ export const sshKeysAPI = {
   // Connection management
   deploySSHKey: (id: number, data: any) => api.post(`/ssh-keys/${id}/deploy`, data),
   testSSHConnection: (id: number, data: any) => api.post(`/ssh-keys/${id}/test-connection`, data),
+  testExistingConnection: (connectionId: number) =>
+    api.post(`/ssh-keys/connections/${connectionId}/test`),
   getSSHConnections: () => api.get('/ssh-keys/connections'),
   updateSSHConnection: (connectionId: number, data: any) =>
     api.put(`/ssh-keys/connections/${connectionId}`, data),
@@ -277,6 +279,9 @@ export const sshKeysAPI = {
     api.delete(`/ssh-keys/connections/${connectionId}`),
   refreshConnectionStorage: (connectionId: number) =>
     api.post(`/ssh-keys/connections/${connectionId}/refresh-storage`),
+  redeployKeyToConnection: (connectionId: number, password: string) =>
+    api.post(`/ssh-keys/connections/${connectionId}/redeploy`, { password }),
+  importSSHKey: (data: any) => api.post('/ssh-keys/import', data),
 }
 
 // Schedule API

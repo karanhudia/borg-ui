@@ -89,3 +89,44 @@ class TestSSHKeysEndpoints:
         )
 
         assert response.status_code in [404, 405]  # Not found or not implemented
+
+    def test_import_ssh_key_missing_path(self, test_client: TestClient, admin_headers):
+        """Test importing SSH key without providing private key path"""
+        response = test_client.post(
+            "/api/ssh-keys/import",
+            json={
+                "name": "imported-key"
+            },
+            headers=admin_headers
+        )
+
+        assert response.status_code == 422  # Validation error
+
+    def test_import_ssh_key_nonexistent_file(self, test_client: TestClient, admin_headers):
+        """Test importing SSH key with non-existent file path"""
+        response = test_client.post(
+            "/api/ssh-keys/import",
+            json={
+                "name": "imported-key",
+                "private_key_path": "/nonexistent/path/id_rsa"
+            },
+            headers=admin_headers
+        )
+
+        # Should return 404 or 400 depending on implementation
+        assert response.status_code in [400, 404, 500]
+
+    def test_test_existing_connection_nonexistent(self, test_client: TestClient, admin_headers):
+        """Test testing non-existent connection"""
+        response = test_client.post(
+            "/api/ssh-keys/connections/999999/test",
+            headers=admin_headers
+        )
+
+        assert response.status_code == 404
+
+    def test_test_existing_connection_unauthorized(self, test_client: TestClient):
+        """Test testing connection without authentication"""
+        response = test_client.post("/api/ssh-keys/connections/1/test")
+
+        assert response.status_code in [401, 403]

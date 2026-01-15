@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Body
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -378,6 +378,12 @@ class SSHKeyGenerate(BaseModel):
     key_type: str = "rsa"
     description: Optional[str] = None
 
+class SSHKeyImport(BaseModel):
+    name: str
+    private_key_path: str
+    public_key_path: Optional[str] = None  # If not provided, will try {private_key_path}.pub
+    description: Optional[str] = None
+
 @router.post("/generate")
 async def generate_ssh_key(
     key_data: SSHKeyGenerate,
@@ -470,6 +476,140 @@ async def generate_ssh_key(
     except Exception as e:
         logger.error("Failed to generate system SSH key", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to generate system SSH key: {str(e)}")
+
+@router.post("/import")
+async def import_ssh_key(
+    key_data: SSHKeyImport,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Import an existing SSH key from filesystem (e.g., mounted volume)"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        # Check if system key already exists
+        existing_system_key = db.query(SSHKey).filter(SSHKey.is_system_key == True).first()
+        if existing_system_key:
+            raise HTTPException(
+                status_code=400,
+                detail="System SSH key already exists. Only one system key is allowed. Delete the existing key first if you want to import a new one."
+            )
+
+        # Check if name already exists
+        existing_name = db.query(SSHKey).filter(SSHKey.name == key_data.name).first()
+        if existing_name:
+            raise HTTPException(status_code=400, detail=f"SSH key with name '{key_data.name}' already exists")
+
+        # Read private key from filesystem
+        private_key_path = key_data.private_key_path
+        if not os.path.exists(private_key_path):
+            raise HTTPException(status_code=404, detail=f"Private key file not found: {private_key_path}")
+
+        try:
+            with open(private_key_path, 'r') as f:
+                private_key = f.read()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to read private key: {str(e)}")
+
+        # Validate private key format
+        if not private_key.strip().startswith('-----BEGIN'):
+            raise HTTPException(status_code=400, detail="Invalid private key format. Must be in OpenSSH format.")
+
+        # Determine public key path
+        if key_data.public_key_path:
+            public_key_path = key_data.public_key_path
+        else:
+            public_key_path = f"{private_key_path}.pub"
+
+        # Read public key from filesystem
+        if not os.path.exists(public_key_path):
+            raise HTTPException(status_code=404, detail=f"Public key file not found: {public_key_path}")
+
+        try:
+            with open(public_key_path, 'r') as f:
+                public_key = f.read().strip()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to read public key: {str(e)}")
+
+        # Validate public key format and detect key type
+        key_type = None
+        if public_key.startswith('ssh-rsa'):
+            key_type = 'rsa'
+        elif public_key.startswith('ssh-ed25519'):
+            key_type = 'ed25519'
+        elif public_key.startswith('ecdsa-sha2'):
+            key_type = 'ecdsa'
+        else:
+            raise HTTPException(status_code=400, detail="Invalid public key format. Must start with ssh-rsa, ssh-ed25519, or ecdsa-sha2")
+
+        # Generate fingerprint
+        fingerprint = await generate_ssh_key_fingerprint(public_key)
+
+        # Encrypt private key
+        encryption_key = settings.secret_key.encode()[:32]
+        cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
+        encrypted_private_key = cipher.encrypt(private_key.encode()).decode()
+
+        # Create system SSH key record
+        ssh_key = SSHKey(
+            name=key_data.name,
+            description=key_data.description or f"Imported SSH key from {private_key_path}",
+            key_type=key_type,
+            public_key=public_key,
+            private_key=encrypted_private_key,
+            fingerprint=fingerprint,
+            is_system_key=True,
+            is_active=True
+        )
+
+        db.add(ssh_key)
+        db.commit()
+        db.refresh(ssh_key)
+
+        logger.info("System SSH key imported",
+                   name=ssh_key.name,
+                   key_type=key_type,
+                   fingerprint=fingerprint,
+                   private_key_path=private_key_path,
+                   user=current_user.username)
+
+        # Deploy SSH key to filesystem (this will write to /home/borg/.ssh)
+        try:
+            deploy_result = subprocess.run(
+                ["python3", "/app/app/scripts/deploy_ssh_key.py"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if deploy_result.returncode == 0:
+                logger.info("Imported SSH key deployed to /home/borg/.ssh", stdout=deploy_result.stdout)
+            else:
+                logger.warning("SSH key deployment had warnings",
+                             stderr=deploy_result.stderr,
+                             stdout=deploy_result.stdout)
+        except Exception as e:
+            logger.warning("Failed to deploy SSH key to filesystem", error=str(e))
+
+        return {
+            "success": True,
+            "message": f"System SSH key imported successfully from {private_key_path}",
+            "ssh_key": {
+                "id": ssh_key.id,
+                "name": ssh_key.name,
+                "description": ssh_key.description,
+                "key_type": ssh_key.key_type,
+                "public_key": ssh_key.public_key,
+                "fingerprint": ssh_key.fingerprint,
+                "is_system_key": ssh_key.is_system_key,
+                "is_active": ssh_key.is_active
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to import system SSH key", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to import system SSH key: {str(e)}")
 
 @router.post("/quick-setup")
 async def quick_ssh_setup(
@@ -703,7 +843,7 @@ async def get_ssh_connections(
             result_connections.append({
                 "id": conn.id,
                 "ssh_key_id": conn.ssh_key_id,
-                "ssh_key_name": conn.ssh_key.name,
+                "ssh_key_name": conn.ssh_key.name if conn.ssh_key else None,
                 "host": conn.host,
                 "username": conn.username,
                 "port": conn.port,
@@ -858,9 +998,22 @@ async def refresh_connection_storage(
         if not connection:
             raise HTTPException(status_code=404, detail="SSH connection not found")
 
+        # If connection has no SSH key, link it to the system key
         ssh_key = connection.ssh_key
         if not ssh_key:
-            raise HTTPException(status_code=404, detail="SSH key not found for this connection")
+            # Get system SSH key
+            system_key = db.query(SSHKey).filter(SSHKey.is_system_key == True).first()
+            if not system_key:
+                raise HTTPException(status_code=404, detail="No system SSH key found. Generate or import one first.")
+
+            # Link connection to system key
+            connection.ssh_key_id = system_key.id
+            db.commit()
+            ssh_key = system_key
+
+            logger.info("Linked connection to system key",
+                       connection_id=connection_id,
+                       ssh_key_id=system_key.id)
 
         logger.info("Refreshing storage for SSH connection",
                    connection_id=connection_id,
@@ -915,6 +1068,158 @@ async def refresh_connection_storage(
     except Exception as e:
         logger.error("Failed to refresh storage", error=str(e), connection_id=connection_id)
         raise HTTPException(status_code=500, detail=f"Failed to refresh storage: {str(e)}")
+
+@router.post("/connections/{connection_id}/test")
+async def test_existing_connection(
+    connection_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Test an existing SSH connection"""
+    try:
+        connection = db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
+        if not connection:
+            raise HTTPException(status_code=404, detail="SSH connection not found")
+
+        # If connection has no SSH key, link it to the system key
+        ssh_key = connection.ssh_key
+        if not ssh_key:
+            # Get system SSH key
+            system_key = db.query(SSHKey).filter(SSHKey.is_system_key == True).first()
+            if not system_key:
+                raise HTTPException(status_code=404, detail="No system SSH key found. Generate or import one first.")
+
+            # Link connection to system key
+            connection.ssh_key_id = system_key.id
+            db.commit()
+            ssh_key = system_key
+
+            logger.info("Linked connection to system key",
+                       connection_id=connection_id,
+                       ssh_key_id=system_key.id)
+
+        logger.info("Testing SSH connection",
+                   connection_id=connection_id,
+                   host=connection.host,
+                   username=connection.username,
+                   port=connection.port)
+
+        # Update connection status to "testing"
+        connection.status = "testing"
+        connection.last_test = datetime.utcnow()
+        db.commit()
+
+        # Test the connection using existing test function
+        test_result = await test_ssh_key_connection(
+            ssh_key=ssh_key,
+            host=connection.host,
+            username=connection.username,
+            port=connection.port
+        )
+
+        # Update connection with test results
+        if test_result["success"]:
+            connection.status = "connected"
+            connection.last_success = datetime.utcnow()
+            connection.error_message = None
+            logger.info("SSH connection test successful",
+                       connection_id=connection_id,
+                       host=connection.host)
+        else:
+            connection.status = "failed"
+            connection.error_message = test_result.get("error", "Connection test failed")
+            logger.warning("SSH connection test failed",
+                         connection_id=connection_id,
+                         host=connection.host,
+                         error=connection.error_message)
+
+        db.commit()
+        db.refresh(connection)
+
+        return {
+            "success": test_result["success"],
+            "message": "Connection tested successfully" if test_result["success"] else "Connection test failed",
+            "status": connection.status,
+            "error": connection.error_message
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to test connection", error=str(e), connection_id=connection_id)
+        raise HTTPException(status_code=500, detail=f"Failed to test connection: {str(e)}")
+
+@router.post("/connections/{connection_id}/redeploy")
+async def redeploy_key_to_connection(
+    connection_id: int,
+    password: str = Body(..., embed=True),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Redeploy the current system SSH key to an existing connection"""
+    try:
+        # Get the connection
+        connection = db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
+        if not connection:
+            raise HTTPException(status_code=404, detail="SSH connection not found")
+
+        # Get system SSH key
+        system_key = db.query(SSHKey).filter(SSHKey.is_system_key == True).first()
+        if not system_key:
+            raise HTTPException(status_code=404, detail="No system SSH key found. Generate or import one first.")
+
+        logger.info("Redeploying SSH key to existing connection",
+                   connection_id=connection_id,
+                   host=connection.host,
+                   username=connection.username)
+
+        # Deploy key using existing function
+        deploy_result = await deploy_ssh_key_with_copy_id(
+            ssh_key=system_key,
+            host=connection.host,
+            username=connection.username,
+            password=password,
+            port=connection.port
+        )
+
+        if deploy_result["success"]:
+            # Link connection to system key and update status
+            connection.ssh_key_id = system_key.id
+            connection.status = "connected"
+            connection.last_success = datetime.utcnow()
+            connection.error_message = None
+            db.commit()
+
+            logger.info("SSH key redeployed successfully",
+                       connection_id=connection_id,
+                       host=connection.host)
+
+            return {
+                "success": True,
+                "message": "SSH key deployed successfully to this connection"
+            }
+        else:
+            # Update connection with error
+            connection.status = "failed"
+            connection.error_message = deploy_result.get("error", "Failed to deploy SSH key")
+            db.commit()
+
+            logger.warning("SSH key redeployment failed",
+                          connection_id=connection_id,
+                          host=connection.host,
+                          error=connection.error_message)
+
+            return {
+                "success": False,
+                "message": "Failed to deploy SSH key",
+                "error": connection.error_message
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to redeploy SSH key", error=str(e), connection_id=connection_id)
+        raise HTTPException(status_code=500, detail=f"Failed to redeploy SSH key: {str(e)}")
 
 @router.delete("/connections/{connection_id}")
 async def delete_ssh_connection(
@@ -1053,7 +1358,7 @@ async def delete_ssh_key(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Delete SSH key (system key cannot be deleted via this endpoint)"""
+    """Delete SSH key. Connections will be preserved but marked as failed."""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
 
@@ -1062,29 +1367,68 @@ async def delete_ssh_key(
         if not ssh_key:
             raise HTTPException(status_code=404, detail="SSH key not found")
 
-        # Prevent deletion of system key
-        if ssh_key.is_system_key:
-            raise HTTPException(
-                status_code=403,
-                detail="Cannot delete the system SSH key. This is the primary key used for all remote connections."
-            )
-
-        # Check if key is used by any repositories
-        if ssh_key.repositories:
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot delete SSH key that is used by repositories. Remove from repositories first."
-            )
-
         key_name = ssh_key.name
+        key_type = ssh_key.key_type
+        connection_count = len(ssh_key.connections)
+        repository_count = len(ssh_key.repositories)
+
+        # Clear SSH key from repositories using it
+        if ssh_key.repositories:
+            for repo in ssh_key.repositories:
+                repo.ssh_key_id = None
+                repo.updated_at = datetime.utcnow()
+
+            logger.info("Cleared SSH key from repositories",
+                       key_name=key_name,
+                       repository_count=repository_count)
+
+        # Preserve connections but mark them as failed
+        if ssh_key.connections:
+            for connection in ssh_key.connections:
+                connection.ssh_key_id = None
+                connection.status = "failed"
+                connection.error_message = f"SSH key '{key_name}' was deleted. Deploy a new key to restore access."
+                connection.updated_at = datetime.utcnow()
+
+            logger.info("SSH connections preserved",
+                       key_name=key_name,
+                       connection_count=connection_count)
+
+        # Delete the SSH key from database
         db.delete(ssh_key)
         db.commit()
 
-        logger.info("SSH key deleted", name=key_name, user=current_user.username)
+        # Remove key files from filesystem
+        try:
+            ssh_dir = os.path.join(settings.ssh_keys_dir or "/home/borg/.ssh")
+            private_key_path = os.path.join(ssh_dir, f"id_{key_type}")
+            public_key_path = os.path.join(ssh_dir, f"id_{key_type}.pub")
+
+            if os.path.exists(private_key_path):
+                os.remove(private_key_path)
+                logger.info("Removed private key file", path=private_key_path)
+
+            if os.path.exists(public_key_path):
+                os.remove(public_key_path)
+                logger.info("Removed public key file", path=public_key_path)
+        except Exception as e:
+            logger.warning("Failed to remove SSH key files from filesystem", error=str(e))
+
+        logger.info("SSH key deleted",
+                   name=key_name,
+                   connection_count=connection_count,
+                   repository_count=repository_count,
+                   user=current_user.username)
+
+        msg_parts = ["SSH key deleted successfully."]
+        if connection_count > 0:
+            msg_parts.append(f"{connection_count} connection(s) preserved.")
+        if repository_count > 0:
+            msg_parts.append(f"{repository_count} repository/repositories cleared.")
 
         return {
             "success": True,
-            "message": "SSH key deleted successfully"
+            "message": " ".join(msg_parts)
         }
     except HTTPException:
         raise
@@ -1369,10 +1713,17 @@ async def test_ssh_key_connection(ssh_key: SSHKey, host: str, username: str, por
         # Set correct permissions for SSH private key
         os.chmod(key_file_path, 0o600)
 
+        # Write public key (required for SSH to validate key pair)
+        pub_file_path = f"{key_file_path}.pub"
+        with open(pub_file_path, 'w') as f:
+            f.write(ssh_key.public_key)
+        os.chmod(pub_file_path, 0o644)
+
         logger.info(
             "ssh_key_file_created_for_test",
             key_id=ssh_key.id,
-            key_file=key_file_path
+            key_file=key_file_path,
+            pub_file=pub_file_path
         )
 
         # Test SSH connection using 'pwd' command (more compatible with restricted shells like Hetzner Storage Box)
