@@ -450,14 +450,33 @@ async def get_dashboard_overview(
         recent_checks = db.query(CheckJob).order_by(CheckJob.started_at.desc()).limit(10).all()
         recent_compacts = db.query(CompactJob).order_by(CompactJob.started_at.desc()).limit(10).all()
 
-        # Create a lookup map for repository paths to names
-        repo_name_map = {repo.path: repo.name for repo in repositories}
+        # Create a lookup map for repository paths to names (with normalized paths)
+        repo_name_map = {}
+        repo_id_map = {}
+        for repo in repositories:
+            # Store by exact path and normalized path (no trailing slash)
+            repo_name_map[repo.path] = repo.name
+            repo_name_map[repo.path.rstrip('/')] = repo.name
+            repo_id_map[repo.id] = repo.name
 
         activity_feed = []
 
         for job in recent_backups:
-            # Get repo name from path (job.repository is the path)
-            repo_name = repo_name_map.get(job.repository, job.repository)
+            # Try multiple ways to get repo name
+            repo_name = None
+            # Try exact match
+            if job.repository in repo_name_map:
+                repo_name = repo_name_map[job.repository]
+            # Try normalized
+            elif job.repository and job.repository.rstrip('/') in repo_name_map:
+                repo_name = repo_name_map[job.repository.rstrip('/')]
+            # Try by repository_id if it exists
+            elif hasattr(job, 'repository_id') and job.repository_id and job.repository_id in repo_id_map:
+                repo_name = repo_id_map[job.repository_id]
+            # Fallback: use last part of path as name
+            else:
+                repo_name = job.repository.rstrip('/').split('/')[-1] if job.repository else "Unknown"
+
             activity_feed.append({
                 "id": job.id,
                 "type": "backup",
@@ -469,8 +488,17 @@ async def get_dashboard_overview(
             })
 
         for job in recent_checks:
-            # Get repo name from path
-            repo_name = repo_name_map.get(job.repository_path, job.repository_path)
+            # Try multiple ways to get repo name
+            repo_name = None
+            if job.repository_path in repo_name_map:
+                repo_name = repo_name_map[job.repository_path]
+            elif job.repository_path and job.repository_path.rstrip('/') in repo_name_map:
+                repo_name = repo_name_map[job.repository_path.rstrip('/')]
+            elif hasattr(job, 'repository_id') and job.repository_id and job.repository_id in repo_id_map:
+                repo_name = repo_id_map[job.repository_id]
+            else:
+                repo_name = job.repository_path.rstrip('/').split('/')[-1] if job.repository_path else "Unknown"
+
             activity_feed.append({
                 "id": job.id,
                 "type": "check",
@@ -482,8 +510,17 @@ async def get_dashboard_overview(
             })
 
         for job in recent_compacts:
-            # Get repo name from path
-            repo_name = repo_name_map.get(job.repository_path, job.repository_path)
+            # Try multiple ways to get repo name
+            repo_name = None
+            if job.repository_path in repo_name_map:
+                repo_name = repo_name_map[job.repository_path]
+            elif job.repository_path and job.repository_path.rstrip('/') in repo_name_map:
+                repo_name = repo_name_map[job.repository_path.rstrip('/')]
+            elif hasattr(job, 'repository_id') and job.repository_id and job.repository_id in repo_id_map:
+                repo_name = repo_id_map[job.repository_id]
+            else:
+                repo_name = job.repository_path.rstrip('/').split('/')[-1] if job.repository_path else "Unknown"
+
             activity_feed.append({
                 "id": job.id,
                 "type": "compact",
@@ -524,6 +561,15 @@ async def get_dashboard_overview(
                 "total_size_bytes": total_size_bytes,
                 "total_archives": total_archives,
                 "average_dedup_ratio": calculate_average_dedup(repositories),
+                "breakdown": sorted([
+                    {
+                        "name": repo.name,
+                        "size": repo.total_size,
+                        "size_bytes": parse_size_to_bytes(repo.total_size),
+                        "percentage": round((parse_size_to_bytes(repo.total_size) / total_size_bytes * 100), 1) if total_size_bytes > 0 else 0
+                    }
+                    for repo in repositories
+                ], key=lambda x: x["size_bytes"], reverse=True)
             },
             "repository_health": sorted(repo_health, key=lambda x: (
                 0 if x["health_status"] == "critical" else 1 if x["health_status"] == "warning" else 2
