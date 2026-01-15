@@ -20,6 +20,8 @@ import {
   TextField,
   InputAdornment,
   Checkbox,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material'
 import { File, ChevronRight, Home, Search, Archive, HardDrive, FolderPlus } from 'lucide-react'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
@@ -95,6 +97,10 @@ export default function FileExplorerDialog({
   const [showCreateFolder, setShowCreateFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [creatingFolder, setCreatingFolder] = useState(false)
+
+  // Responsive dialog
+  const theme = useTheme()
+  const fullScreen = useMediaQuery(theme.breakpoints.down('md'))
 
   useEffect(() => {
     if (open) {
@@ -333,7 +339,8 @@ export default function FileExplorerDialog({
       onClose={onClose}
       maxWidth="md"
       fullWidth
-      PaperProps={{ sx: { height: '75vh' } }}
+      fullScreen={fullScreen}
+      PaperProps={{ sx: { height: fullScreen ? '100%' : '75vh' } }}
     >
       <DialogTitle sx={{ pb: 1, pt: 2 }}>
         <Box display="flex" alignItems="center" justifyContent="space-between">

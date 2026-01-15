@@ -51,6 +51,7 @@ class SystemSettingsUpdate(BaseModel):
     webhook_url: Optional[str] = None
     auto_cleanup: Optional[bool] = None
     cleanup_retention_days: Optional[int] = None
+    use_new_wizard: Optional[bool] = None
 
 @router.get("/system")
 async def get_system_settings(
@@ -70,7 +71,8 @@ async def get_system_settings(
                 email_notifications=False,
                 webhook_url="",
                 auto_cleanup=True,
-                cleanup_retention_days=90
+                cleanup_retention_days=90,
+                use_new_wizard=False  # Beta features disabled by default
             )
             db.add(settings)
             db.commit()
@@ -116,6 +118,7 @@ async def get_system_settings(
                 "webhook_url": settings.webhook_url,
                 "auto_cleanup": settings.auto_cleanup,
                 "cleanup_retention_days": settings.cleanup_retention_days,
+                "use_new_wizard": settings.use_new_wizard,
                 "borg_version": borg.get_version(),
                 "app_version": "1.36.1"
             },
@@ -192,6 +195,8 @@ async def update_system_settings(
             settings.auto_cleanup = settings_update.auto_cleanup
         if settings_update.cleanup_retention_days is not None:
             settings.cleanup_retention_days = settings_update.cleanup_retention_days
+        if settings_update.use_new_wizard is not None:
+            settings.use_new_wizard = settings_update.use_new_wizard
 
         settings.updated_at = datetime.utcnow()
         db.commit()

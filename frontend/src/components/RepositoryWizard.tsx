@@ -6,7 +6,7 @@ import {
   DialogActions,
   Stepper,
   Step,
-  StepLabel,
+  StepButton,
   Box,
   Button,
   TextField,
@@ -24,12 +24,14 @@ import {
   CardContent,
   CardActionArea,
 } from '@mui/material'
-import { FolderOpen, Server, Cloud, HardDrive, Laptop } from 'lucide-react'
+import { Server, Cloud, HardDrive, Laptop } from 'lucide-react'
+import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import CompressionSettings from './CompressionSettings'
 import CommandPreview from './CommandPreview'
 import SourceDirectoriesInput from './SourceDirectoriesInput'
 import ExcludePatternInput from './ExcludePatternInput'
 import FileExplorerDialog from './FileExplorerDialog'
+import AdvancedRepositoryOptions from './AdvancedRepositoryOptions'
 import { sshKeysAPI } from '../services/api'
 
 interface RepositoryWizardProps {
@@ -84,6 +86,13 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   const [excludePatterns, setExcludePatterns] = useState<string[]>([])
   const [customFlags, setCustomFlags] = useState('')
 
+  // Scripts & Hooks
+  const [preBackupScript, setPreBackupScript] = useState('')
+  const [postBackupScript, setPostBackupScript] = useState('')
+  const [preHookTimeout, setPreHookTimeout] = useState(300)
+  const [postHookTimeout, setPostHookTimeout] = useState(300)
+  const [continueOnHookFailure, setContinueOnHookFailure] = useState(false)
+
   // Data from API
   const [sshConnections, setSshConnections] = useState<SSHConnection[]>([])
 
@@ -91,6 +100,13 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   const [showPathExplorer, setShowPathExplorer] = useState(false)
   const [showSourceExplorer, setShowSourceExplorer] = useState(false)
   const [showExcludeExplorer, setShowExcludeExplorer] = useState(false)
+
+  // Reset to first step when dialog opens
+  useEffect(() => {
+    if (open) {
+      setActiveStep(0)
+    }
+  }, [open, mode, repository?.id])
 
   // Load SSH connections
   useEffect(() => {
@@ -103,6 +119,55 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       }
     }
   }, [open, mode, repository])
+
+  // Auto-select SSH connection for edit mode (after SSH connections load)
+  useEffect(() => {
+    if (mode === 'edit' && repository && sshConnections.length > 0) {
+      // Only auto-select if not already selected and repository location is SSH
+      if (!repoSshConnectionId && repositoryLocation === 'ssh') {
+        // Parse SSH URL to extract host/username/port
+        let repoHost = repository.host || ''
+        let repoUsername = repository.username || ''
+        let repoPort = repository.port || 22
+
+        // If path is SSH URL format, parse it
+        if (repository.path && repository.path.startsWith('ssh://')) {
+          const sshUrlMatch = repository.path.match(/^ssh:\/\/([^@]+)@([^:\/]+):?(\d+)?(.*)$/)
+          if (sshUrlMatch) {
+            repoUsername = sshUrlMatch[1]
+            repoHost = sshUrlMatch[2]
+            repoPort = sshUrlMatch[3] ? parseInt(sshUrlMatch[3]) : 22
+          }
+        }
+
+        console.log('=== SSH Connection Auto-Matching ===')
+        console.log('Repository:', repository.name)
+        console.log('Looking for:', { host: repoHost, username: repoUsername, port: repoPort })
+        console.log('Available connections:', sshConnections.map(c => ({
+          id: c.id,
+          mount: c.mount_point,
+          host: c.host,
+          username: c.username,
+          port: c.port
+        })))
+
+        // Match by host, username, and port
+        const matchingConnection = sshConnections.find(
+          (conn) =>
+            conn.host === repoHost &&
+            conn.username === repoUsername &&
+            conn.port === repoPort
+        )
+
+        if (matchingConnection) {
+          console.log('✓ Matched:', matchingConnection.mount_point || matchingConnection.host)
+          setRepoSshConnectionId(matchingConnection.id)
+        } else {
+          console.warn('✗ No match found')
+        }
+      }
+    }
+  }, [mode, repository, sshConnections, repoSshConnectionId, repositoryLocation])
 
   const loadSshData = async () => {
     try {
@@ -119,13 +184,41 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     if (!repository) return
     setName(repository.name || '')
     setRepositoryMode(repository.mode || 'full')
-    setPath(repository.path || '')
+
+    let repoPath = repository.path || ''
+    let repoHost = repository.host || ''
+    let repoUsername = repository.username || ''
+    let repoPort = repository.port || 22
+
+    // Parse SSH URL format: ssh://user@host:port/path or ssh://user@host/path
+    if (repoPath.startsWith('ssh://')) {
+      // Try with port first: ssh://user@host:port/path
+      let sshUrlMatch = repoPath.match(/^ssh:\/\/([^@]+)@([^:\/]+):(\d+)(.*)$/)
+      if (sshUrlMatch) {
+        repoUsername = sshUrlMatch[1]
+        repoHost = sshUrlMatch[2]
+        repoPort = parseInt(sshUrlMatch[3])
+        repoPath = sshUrlMatch[4]
+      } else {
+        // Try without port (default 22): ssh://user@host/path
+        sshUrlMatch = repoPath.match(/^ssh:\/\/([^@]+)@([^\/]+)(.*)$/)
+        if (sshUrlMatch) {
+          repoUsername = sshUrlMatch[1]
+          repoHost = sshUrlMatch[2]
+          repoPort = 22
+          repoPath = sshUrlMatch[3]
+        }
+      }
+    }
+
+    setPath(repoPath)
     setRepositoryType(repository.repository_type || 'local')
     setRepositoryLocation(repository.repository_type === 'local' ? 'local' : 'ssh')
-    setHost(repository.host || '')
-    setUsername(repository.username || '')
-    setPort(String(repository.port || 22))
+    setHost(repoHost)
+    setUsername(repoUsername)
+    setPort(String(repoPort))
     setSshKeyId(repository.ssh_key_id || '')
+    setRepoSshConnectionId('') // Reset SSH connection selection so auto-match can run
     setEncryption(repository.encryption || 'repokey')
     setPassphrase(repository.passphrase || '')
     setRemotePath(repository.remote_path || '')
@@ -133,6 +226,11 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     setSourceDirs(repository.source_directories || [])
     setExcludePatterns(repository.exclude_patterns || [])
     setCustomFlags(repository.custom_flags || '')
+    setPreBackupScript(repository.pre_backup_script || '')
+    setPostBackupScript(repository.post_backup_script || '')
+    setPreHookTimeout(repository.pre_hook_timeout || 300)
+    setPostHookTimeout(repository.post_hook_timeout || 300)
+    setContinueOnHookFailure(repository.continue_on_hook_failure || false)
   }
 
   const resetForm = () => {
@@ -156,6 +254,11 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     setSourceDirs([])
     setExcludePatterns([])
     setCustomFlags('')
+    setPreBackupScript('')
+    setPostBackupScript('')
+    setPreHookTimeout(300)
+    setPostHookTimeout(300)
+    setContinueOnHookFailure(false)
     setSelectedKeyfile(null)
   }
 
@@ -218,6 +321,11 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       exclude_patterns: excludePatterns,
       custom_flags: customFlags,
       remote_path: remotePath,
+      pre_backup_script: preBackupScript,
+      post_backup_script: postBackupScript,
+      pre_hook_timeout: preHookTimeout,
+      post_hook_timeout: postHookTimeout,
+      continue_on_hook_failure: continueOnHookFailure,
     }
 
     if (repositoryType === 'ssh') {
@@ -225,6 +333,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       data.username = username
       data.port = parseInt(port) || 22
       data.ssh_key_id = sshKeyId
+      data.connection_id = repoSshConnectionId || null
     }
 
     // Add source connection info if remote source
@@ -249,6 +358,11 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     }
     if (activeStep === 2 || (activeStep === 1 && (repositoryMode === 'observe' || mode === 'import'))) {
       // Security step
+      // In edit mode, passphrase is optional (keep existing if not changed)
+      if (mode === 'edit') {
+        return true
+      }
+      // In create/import mode, passphrase is required for encrypted repos
       if (encryption !== 'none' && !passphrase.trim()) return false
       return true
     }
@@ -473,7 +587,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
                 title="Browse filesystem"
                 disabled={repositoryLocation === 'ssh' && !repoSshConnectionId}
               >
-                <FolderOpen fontSize="small" />
+                <FolderOpenIcon fontSize="small" />
               </IconButton>
             </InputAdornment>
           ),
@@ -656,14 +770,18 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
 
       {encryption !== 'none' && (
         <TextField
-          label="Passphrase"
+          label={mode === 'edit' ? 'Passphrase (Optional)' : 'Passphrase'}
           type="password"
           value={passphrase}
           onChange={(e) => setPassphrase(e.target.value)}
-          placeholder="Enter passphrase"
-          required
+          placeholder={mode === 'edit' ? 'Leave blank to keep last saved passphrase' : 'Enter passphrase'}
+          required={mode !== 'edit'}
           fullWidth
-          helperText="Keep this safe - you cannot access backups without it!"
+          helperText={
+            mode === 'edit'
+              ? 'Optional - leave blank to keep last saved passphrase'
+              : 'Keep this safe - you cannot access backups without it!'
+          }
         />
       )}
 
@@ -712,24 +830,11 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       <CompressionSettings value={compression} onChange={setCompression} />
 
       {dataSource === 'local' && (
-        <>
-          <ExcludePatternInput
-            patterns={excludePatterns}
-            onChange={setExcludePatterns}
-            onBrowseClick={() => setShowExcludeExplorer(true)}
-          />
-
-          <TextField
-            label="Custom Borg Flags (Optional)"
-            value={customFlags}
-            onChange={(e) => setCustomFlags(e.target.value)}
-            placeholder="--one-file-system --keep-exclude-tags"
-            fullWidth
-            multiline
-            rows={2}
-            helperText="Additional borg create flags (advanced)"
-          />
-        </>
+        <ExcludePatternInput
+          patterns={excludePatterns}
+          onChange={setExcludePatterns}
+          onBrowseClick={() => setShowExcludeExplorer(true)}
+        />
       )}
 
       {dataSource === 'remote' && (
@@ -740,6 +845,25 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
           </Typography>
         </Alert>
       )}
+
+      <AdvancedRepositoryOptions
+        repositoryId={mode === 'edit' ? repository?.id : null}
+        mode={repositoryMode}
+        remotePath={remotePath}
+        preBackupScript={preBackupScript}
+        postBackupScript={postBackupScript}
+        preHookTimeout={preHookTimeout}
+        postHookTimeout={postHookTimeout}
+        continueOnHookFailure={continueOnHookFailure}
+        customFlags={customFlags}
+        onRemotePathChange={setRemotePath}
+        onPreBackupScriptChange={setPreBackupScript}
+        onPostBackupScriptChange={setPostBackupScript}
+        onPreHookTimeoutChange={setPreHookTimeout}
+        onPostHookTimeoutChange={setPostHookTimeout}
+        onContinueOnHookFailureChange={setContinueOnHookFailure}
+        onCustomFlagsChange={setCustomFlags}
+      />
     </Box>
   )
 
@@ -864,10 +988,10 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         </DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
-            <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
-              {steps.map((label) => (
+            <Stepper nonLinear activeStep={activeStep} sx={{ mb: 4 }}>
+              {steps.map((label, index) => (
                 <Step key={label}>
-                  <StepLabel>{label}</StepLabel>
+                  <StepButton onClick={() => setActiveStep(index)}>{label}</StepButton>
                 </Step>
               ))}
             </Stepper>
