@@ -321,7 +321,7 @@ export default function DashboardNew() {
               </Box>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="body2" color="text.secondary" noWrap>
-                  Failed (Last 7d)
+                  Failed (Last 30d)
                 </Typography>
                 <Typography variant="h5" fontWeight={600} sx={{ mt: 0.5 }}>
                   {overview.summary.failed_jobs_30d}
@@ -349,7 +349,7 @@ export default function DashboardNew() {
           </Typography>
 
           <Stack spacing={2}>
-            {overview.repository_health.slice(0, 5).map((repo) => (
+            {overview.repository_health.slice(0, 3).map((repo) => (
               <Card
                 key={repo.id}
                 variant="outlined"
@@ -443,7 +443,7 @@ export default function DashboardNew() {
               </Card>
             ))}
 
-            {overview.repository_health.length > 5 && (
+            {overview.repository_health.length > 3 && (
               <Button
                 variant="text"
                 endIcon={<ArrowRight size={18} />}
@@ -463,79 +463,8 @@ export default function DashboardNew() {
         </CardContent>
       </Card>
 
-      {/* Backup Trends & Upcoming Tasks */}
-      <Box
-        sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: 3, mb: 3 }}
-      >
-        {/* Backup Success Rate Chart */}
-        <Card>
-          <CardContent>
-            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
-              <TrendingUp size={20} />
-              <Typography variant="h6" fontWeight={600}>
-                Backup Success Rate (Last 30 Days)
-              </Typography>
-            </Stack>
-
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="h4" fontWeight={600} display="inline">
-                {overview.summary.success_rate_30d.toFixed(1)}%
-              </Typography>
-              <Typography variant="body2" color="text.secondary" display="inline" sx={{ ml: 2 }}>
-                {overview.summary.successful_jobs_30d} successful,{' '}
-                {overview.summary.failed_jobs_30d} failed
-              </Typography>
-            </Box>
-
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={overview.backup_trends}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="week" />
-                <YAxis />
-                <RechartsTooltip
-                  content={({ active, payload }) => {
-                    if (active && payload && payload.length) {
-                      const data = payload[0].payload
-                      return (
-                        <Card sx={{ p: 1.5 }}>
-                          <Typography variant="body2" fontWeight={600}>
-                            {data.week}
-                          </Typography>
-                          <Typography variant="body2" color="success.main">
-                            Success: {data.successful} ({data.success_rate}%)
-                          </Typography>
-                          <Typography variant="body2" color="error.main">
-                            Failed: {data.failed}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            Total: {data.total}
-                          </Typography>
-                        </Card>
-                      )
-                    }
-                    return null
-                  }}
-                />
-                <Bar dataKey="success_rate" radius={[8, 8, 0, 0]}>
-                  {overview.backup_trends.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={
-                        entry.success_rate >= 95
-                          ? '#4caf50'
-                          : entry.success_rate >= 80
-                            ? '#ff9800'
-                            : '#f44336'
-                      }
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Upcoming Tasks & Maintenance */}
+      {/* Maintenance Alerts */}
+      <Box sx={{ mb: 3 }}>
         <Card>
           <CardContent>
             <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
