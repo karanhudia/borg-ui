@@ -331,164 +331,165 @@ export default function DashboardNew() {
         </Card>
       </Box>
 
-      {/* Repository Health */}
+      {/* Repository Health - Compact */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
-            <Server size={20} />
-            <Typography variant="h6" fontWeight={600}>
-              Repository Health
-            </Typography>
+          <Stack
+            direction="row"
+            spacing={1.5}
+            alignItems="center"
+            justifyContent="space-between"
+            sx={{ mb: 2 }}
+          >
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <Server size={20} />
+              <Typography variant="h6" fontWeight={600}>
+                Repository Health
+              </Typography>
+            </Stack>
+            {/* Health summary chips - compact */}
+            <Stack direction="row" spacing={1}>
+              {overview.repository_health.filter((r) => r.health_status === 'critical').length >
+                0 && (
+                <Chip
+                  icon={<XCircle size={14} />}
+                  label={
+                    overview.repository_health.filter((r) => r.health_status === 'critical').length
+                  }
+                  size="small"
+                  sx={{
+                    height: 24,
+                    bgcolor: 'rgba(211, 47, 47, 0.08)',
+                    color: 'error.dark',
+                    border: '1px solid rgba(211, 47, 47, 0.2)',
+                  }}
+                />
+              )}
+              {overview.repository_health.filter((r) => r.health_status === 'warning').length >
+                0 && (
+                <Chip
+                  icon={<AlertTriangle size={14} />}
+                  label={
+                    overview.repository_health.filter((r) => r.health_status === 'warning').length
+                  }
+                  size="small"
+                  sx={{
+                    height: 24,
+                    bgcolor: 'rgba(237, 108, 2, 0.08)',
+                    color: 'warning.dark',
+                    border: '1px solid rgba(237, 108, 2, 0.2)',
+                  }}
+                />
+              )}
+              <Chip
+                icon={<CheckCircle size={14} />}
+                label={
+                  overview.repository_health.filter((r) => r.health_status === 'healthy').length
+                }
+                size="small"
+                sx={{
+                  height: 24,
+                  bgcolor: 'rgba(46, 125, 50, 0.08)',
+                  color: 'success.dark',
+                  border: '1px solid rgba(46, 125, 50, 0.2)',
+                }}
+              />
+            </Stack>
           </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Current status and maintenance overview
-          </Typography>
 
-          {/* Health summary chips */}
-          <Stack direction="row" spacing={1} sx={{ mb: 3 }}>
-            <Chip
-              icon={<XCircle size={16} />}
-              label={`${overview.repository_health.filter((r) => r.health_status === 'critical').length} Critical`}
-              size="small"
-              color="error"
-              variant={
-                overview.repository_health.filter((r) => r.health_status === 'critical').length > 0
-                  ? 'filled'
-                  : 'outlined'
-              }
-            />
-            <Chip
-              icon={<AlertTriangle size={16} />}
-              label={`${overview.repository_health.filter((r) => r.health_status === 'warning').length} Warning`}
-              size="small"
-              color="warning"
-              variant={
-                overview.repository_health.filter((r) => r.health_status === 'warning').length > 0
-                  ? 'filled'
-                  : 'outlined'
-              }
-            />
-            <Chip
-              icon={<CheckCircle size={16} />}
-              label={`${overview.repository_health.filter((r) => r.health_status === 'healthy').length} Healthy`}
-              size="small"
-              color="success"
-              variant="outlined"
-            />
-          </Stack>
-
-          <Stack spacing={2}>
-            {/* Show only critical and warning repos by default */}
+          <Stack spacing={1}>
+            {/* Show only critical and warning repos - compact list */}
             {overview.repository_health
               .filter((r) => r.health_status === 'critical' || r.health_status === 'warning')
               .slice(0, 3)
               .map((repo) => (
-                <Card
+                <Box
                   key={repo.id}
-                  variant="outlined"
                   sx={{
-                    borderLeft: 4,
-                    borderLeftColor:
+                    p: 1.5,
+                    borderRadius: 1,
+                    bgcolor:
                       repo.health_status === 'critical'
-                        ? 'error.main'
-                        : repo.health_status === 'warning'
-                          ? 'warning.main'
-                          : 'success.main',
-                    '&:hover': { bgcolor: 'action.hover', cursor: 'pointer' },
+                        ? 'rgba(211, 47, 47, 0.04)'
+                        : 'rgba(237, 108, 2, 0.04)',
+                    border: '1px solid',
+                    borderColor:
+                      repo.health_status === 'critical'
+                        ? 'rgba(211, 47, 47, 0.15)'
+                        : 'rgba(237, 108, 2, 0.15)',
+                    '&:hover': {
+                      bgcolor:
+                        repo.health_status === 'critical'
+                          ? 'rgba(211, 47, 47, 0.08)'
+                          : 'rgba(237, 108, 2, 0.08)',
+                      cursor: 'pointer',
+                    },
                   }}
                   onClick={() => navigate(`/repositories`)}
                 >
-                  <CardContent>
-                    <Stack direction="row" spacing={2} alignItems="flex-start">
+                  <Stack
+                    direction="row"
+                    spacing={2}
+                    alignItems="center"
+                    justifyContent="space-between"
+                  >
+                    <Stack direction="row" spacing={2} alignItems="center" sx={{ flex: 1 }}>
+                      {getStatusIcon(repo.health_status)}
                       <Box sx={{ flex: 1 }}>
-                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                          <Typography variant="subtitle1" fontWeight={600}>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Typography variant="body2" fontWeight={600}>
                             {repo.name}
                           </Typography>
-                          {getStatusIcon(repo.health_status)}
                           <Chip
                             label={repo.type.toUpperCase()}
                             size="small"
-                            sx={{ height: 20, fontSize: '0.7rem' }}
+                            sx={{ height: 18, fontSize: '0.65rem' }}
                           />
                         </Stack>
-
-                        <Stack direction="row" spacing={3} sx={{ mb: 1 }}>
-                          <Typography variant="body2" color="text.secondary">
-                            Last backup:{' '}
-                            {repo.last_backup
-                              ? formatDistanceToNow(new Date(repo.last_backup), { addSuffix: true })
-                              : 'Never'}
-                          </Typography>
-                          {repo.has_schedule && (
-                            <Typography variant="body2" color="text.secondary">
-                              Next: {repo.schedule_enabled ? 'Scheduled' : 'Paused'}
-                            </Typography>
-                          )}
-                        </Stack>
-
-                        <Stack direction="row" spacing={3}>
-                          <Typography variant="body2" color="text.secondary">
-                            {repo.archive_count} archives
-                          </Typography>
-                          {repo.dedup_ratio !== null && (
-                            <Typography variant="body2" color="text.secondary">
-                              Dedup: {repo.dedup_ratio}%
-                            </Typography>
-                          )}
-                        </Stack>
-
-                        {repo.warnings.length > 0 && (
-                          <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
-                            {repo.warnings.map((warning, idx) => (
-                              <Chip
-                                key={idx}
-                                label={warning}
-                                size="small"
-                                color={repo.health_status === 'critical' ? 'error' : 'warning'}
-                                sx={{ height: 22 }}
-                              />
-                            ))}
-                          </Stack>
-                        )}
-                      </Box>
-
-                      <Box sx={{ textAlign: 'right' }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                          Storage
-                        </Typography>
-                        <Typography variant="h6" fontWeight={600}>
+                        <Typography variant="caption" color="text.secondary">
+                          {repo.warnings[0] || 'Needs attention'} • {repo.archive_count} archives •{' '}
                           {repo.total_size}
                         </Typography>
-                        {repo.size_bytes > 0 && (
-                          <LinearProgress
-                            variant="determinate"
-                            value={Math.min(
-                              (repo.size_bytes / overview.storage.total_size_bytes) * 100,
-                              100
-                            )}
-                            sx={{ mt: 1, height: 6, borderRadius: 1, width: 100 }}
-                          />
-                        )}
                       </Box>
                     </Stack>
-                  </CardContent>
-                </Card>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ whiteSpace: 'nowrap' }}
+                    >
+                      {repo.last_backup
+                        ? formatDistanceToNow(new Date(repo.last_backup), { addSuffix: true })
+                        : 'Never backed up'}
+                    </Typography>
+                  </Stack>
+                </Box>
               ))}
+
+            {overview.repository_health.filter(
+              (r) => r.health_status === 'critical' || r.health_status === 'warning'
+            ).length === 0 && (
+              <Box sx={{ textAlign: 'center', py: 2 }}>
+                <CheckCircle size={32} color="#4caf50" style={{ marginBottom: 8 }} />
+                <Typography variant="body2" color="text.secondary">
+                  All repositories are healthy!
+                </Typography>
+              </Box>
+            )}
 
             {overview.repository_health.length > 3 && (
               <Button
                 variant="text"
-                endIcon={<ArrowRight size={18} />}
+                size="small"
+                endIcon={<ArrowRight size={16} />}
                 onClick={() => navigate('/repositories')}
-                sx={{ alignSelf: 'flex-start' }}
+                sx={{ alignSelf: 'flex-start', mt: 1 }}
               >
-                View All {overview.repository_health.length} Repositories
+                View all {overview.repository_health.length} repositories
               </Button>
             )}
 
             {overview.repository_health.length === 0 && (
-              <Alert severity="info">
+              <Alert severity="info" sx={{ mt: 1 }}>
                 No repositories configured yet. Create your first repository to start backing up!
               </Alert>
             )}
