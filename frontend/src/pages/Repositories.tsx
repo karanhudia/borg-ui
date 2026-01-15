@@ -141,7 +141,6 @@ export default function Repositories() {
     queryKey: ['repository-info', viewingInfoRepository?.id],
     queryFn: () => repositoriesAPI.getRepositoryInfo(viewingInfoRepository!.id),
     enabled: !!viewingInfoRepository,
-    placeholderData: (previousData: any) => previousData, // Keep showing data during dialog close animation (was keepPreviousData in v3)
     retry: false,
   })
 
