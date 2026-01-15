@@ -96,12 +96,12 @@ discord://123456789012345678/abcdef-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 **URL Format:**
 ```
-telegram://bot_token/chat_id
+tgram://bot_token/chat_id
 ```
 
 **Example:**
 ```
-telegram://123456789:ABCdefGHIjklMNOpqrsTUVwxyz/987654321
+tgram://123456789:ABCdefGHIjklMNOpqrsTUVwxyz/987654321
 ```
 
 ### Microsoft Teams
