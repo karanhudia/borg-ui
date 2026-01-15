@@ -104,7 +104,6 @@ interface DashboardOverview {
     timestamp: string
     message: string
     error: string | null
-    freed_space?: string
   }>
   system_metrics: {
     cpu_usage: number
@@ -647,16 +646,6 @@ export default function DashboardNew() {
                           sx={{ mt: 0.5 }}
                         >
                           {activity.error}
-                        </Typography>
-                      )}
-                      {activity.freed_space && (
-                        <Typography
-                          variant="caption"
-                          color="success.main"
-                          display="block"
-                          sx={{ mt: 0.5 }}
-                        >
-                          Freed {activity.freed_space}
                         </Typography>
                       )}
                     </Box>

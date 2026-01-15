@@ -481,8 +481,8 @@ async def get_dashboard_overview(
                 "status": job.status,
                 "repository": job.repository_path,
                 "timestamp": serialize_datetime(job.started_at),
-                "message": f"Compact {job.status}" + (f" - Freed {job.space_freed}" if job.space_freed else ""),
-                "freed_space": job.space_freed if job.status == "completed" else None
+                "message": f"Compact {job.status}",
+                "error": job.error_message if job.status == "failed" else None
             })
 
         # Sort activity by timestamp
