@@ -189,7 +189,7 @@ export default function DashboardNew() {
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" fontWeight={600} gutterBottom>
-          Command Center
+          Dashboard
         </Typography>
         <Typography variant="body2" color="text.secondary">
           Comprehensive overview of your backup infrastructure
