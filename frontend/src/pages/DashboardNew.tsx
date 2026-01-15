@@ -1,4 +1,3 @@
-import React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -13,7 +12,6 @@ import {
   Chip,
   Button,
   IconButton,
-  Tooltip,
   Divider,
 } from '@mui/material'
 import {
@@ -28,12 +26,9 @@ import {
   TrendingUp,
   Wrench,
   Database,
-  Network,
   Cpu,
   MemoryStick,
   ArrowRight,
-  Play,
-  RefreshCw,
 } from 'lucide-react'
 import {
   BarChart,
