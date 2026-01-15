@@ -141,18 +141,12 @@ export default function CompressionSettings({
             onChange={(e) => setAlgorithm(e.target.value)}
           >
             <MenuItem value="none">none - Do not compress</MenuItem>
-            <MenuItem value="lz4">
-              lz4 - Very high speed, very low compression (default)
-            </MenuItem>
-            <MenuItem value="zstd">
-              zstd - Modern wide-range algorithm (default level 3)
-            </MenuItem>
+            <MenuItem value="lz4">lz4 - Very high speed, very low compression (default)</MenuItem>
+            <MenuItem value="zstd">zstd - Modern wide-range algorithm (default level 3)</MenuItem>
             <MenuItem value="zlib">
               zlib - Medium speed, medium compression (default level 6)
             </MenuItem>
-            <MenuItem value="lzma">
-              lzma - Low speed, high compression (default level 6)
-            </MenuItem>
+            <MenuItem value="lzma">lzma - Low speed, high compression (default level 6)</MenuItem>
             <MenuItem value="auto">auto - Automatic compression selection</MenuItem>
             <MenuItem value="obfuscate">obfuscate - Obfuscate compressed data</MenuItem>
           </Select>
@@ -224,7 +218,8 @@ export default function CompressionSettings({
             />
 
             <Alert severity="info" sx={{ mt: 1 }}>
-              Final compression spec: <strong>{buildCompressionString(algorithm, level, autoDetect, obfuscate)}</strong>
+              Final compression spec:{' '}
+              <strong>{buildCompressionString(algorithm, level, autoDetect, obfuscate)}</strong>
             </Alert>
           </>
         )}

@@ -57,7 +57,17 @@ const Settings: React.FC = () => {
   const getTabOrder = () => {
     const baseTabs = ['account', 'appearance', 'notifications']
     if (user?.is_admin) {
-      return [...baseTabs, 'beta', 'cache', 'logs', 'packages', 'scripts', 'export', 'users', 'activity']
+      return [
+        ...baseTabs,
+        'beta',
+        'cache',
+        'logs',
+        'packages',
+        'scripts',
+        'export',
+        'users',
+        'activity',
+      ]
     }
     return [...baseTabs, 'scripts', 'export', 'activity']
   }
@@ -488,8 +498,8 @@ const Settings: React.FC = () => {
               Beta Features
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Try experimental features before they're released to everyone. These features are still
-              in development and may change.
+              Try experimental features before they're released to everyone. These features are
+              still in development and may change.
             </Typography>
           </Box>
 
@@ -504,8 +514,8 @@ const Settings: React.FC = () => {
                       New Repository Wizard
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Modern step-by-step wizard for creating and editing repositories with improved UX
-                      and validation
+                      Modern step-by-step wizard for creating and editing repositories with improved
+                      UX and validation
                     </Typography>
                   </Box>
                   <Switch
