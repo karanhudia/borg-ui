@@ -120,7 +120,11 @@ interface DashboardOverview {
 export default function DashboardNew() {
   const navigate = useNavigate()
 
-  const { data, isLoading, error } = useQuery<{ data: DashboardOverview }>({
+  const {
+    data: overview,
+    isLoading,
+    error,
+  } = useQuery<DashboardOverview>({
     queryKey: ['dashboard-overview'],
     queryFn: async () => {
       const response = await fetch('/api/dashboard/overview', {
@@ -133,8 +137,6 @@ export default function DashboardNew() {
     },
     refetchInterval: 30000, // Refresh every 30 seconds
   })
-
-  const overview = data?.data
 
   if (isLoading) {
     return (
