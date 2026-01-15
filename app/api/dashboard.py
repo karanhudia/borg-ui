@@ -489,8 +489,8 @@ async def get_dashboard_overview(
         activity_feed.sort(key=lambda x: x["timestamp"] or "", reverse=True)
         activity_feed = activity_feed[:10]
 
-        # Count SSH connections
-        ssh_active = len([c for c in ssh_connections if c.is_active])
+        # Count SSH connections (active = status is "connected")
+        ssh_active = len([c for c in ssh_connections if c.status == "connected"])
         ssh_total = len(ssh_connections)
 
         # Get system metrics
