@@ -95,7 +95,8 @@ export default function PreferencesTab() {
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                 Help us improve Borg UI by sharing anonymous usage data. We collect page views,
-                feature clicks, and browser info—never passwords, keys, or backup data.
+                feature clicks, and browser type—without tracking IP addresses, hostnames, cookies,
+                or any personally identifiable information.
               </Typography>
 
               <>
