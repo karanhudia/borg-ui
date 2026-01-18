@@ -57,6 +57,13 @@ export const initMatomo = (): void => {
   _paq.push(['setTrackerUrl', `${config.url}/matomo.php`])
   _paq.push(['setSiteId', config.siteId])
 
+  // CRITICAL: Anonymize IP addresses - mask last 2 bytes (e.g. 192.168.xxx.xxx becomes 192.168.0.0)
+  _paq.push(['setDoNotTrack', true])
+  _paq.push(['disableCookies'])
+
+  // Note: Full IP anonymization must also be configured server-side in Matomo:
+  // Settings → Privacy → Anonymize Visitor IP addresses → Mask 2 bytes
+
   // Load Matomo script
   const script = document.createElement('script')
   script.async = true

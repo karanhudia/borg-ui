@@ -44,10 +44,13 @@ Borg UI collects **anonymous usage statistics** to help improve the product. We 
 - **Backup data** or file contents
 - **File paths** or repository names
 - **SSH keys** or connection credentials
-- **IP addresses** (anonymized automatically)
+- **IP addresses** - We do NOT collect or store IP addresses. All tracking is done without any IP address logging.
+- **Hostnames** - We do NOT collect computer names or hostnames
+- **User identifiers** - We do NOT track individual users across sessions
 - **Repository URLs** or storage locations
 - **Personal information** beyond voluntary submissions
 - **Archive contents** or file names
+- **Cookies** - We do NOT use cookies for tracking
 
 ## Why We Collect This
 
@@ -78,33 +81,40 @@ Your preference is stored in the database and respected across all sessions.
 - **Data stays under our control**
 - **Open source** - You can inspect the code
 
+**Privacy Protections:**
+- **No IP tracking** - We do NOT log or store IP addresses
+- **No cookies** - Tracking is completely cookieless
+- **No user IDs** - We do NOT track individual users
+- **No persistent identifiers** - Each session is anonymous
+- **Respect Do Not Track** - Browser DNT setting is honored
+
 **Tracking Method:**
 - JavaScript tracking code loaded from our server
 - Events sent via HTTP POST to our Matomo instance
-- IP addresses anonymized automatically (last 2 octets masked)
+- All data is completely anonymous and cannot be tied to individuals
 - User preference checked before every tracking call
 
 **Data Flow:**
 1. User performs action (e.g., clicks "Backup Now")
 2. Frontend checks if analytics is enabled (from database)
-3. If enabled, sends anonymous event to Matomo
+3. If enabled, sends anonymous event to Matomo (no IP, no user ID, no cookies)
 4. If disabled, event is discarded client-side (never sent)
 
 ## Data Retention
 
-- **Real-time data:** Kept indefinitely for trend analysis
-- **Individual visits:** Aggregated after 180 days
-- **IP addresses:** Anonymized on collection (never stored in full)
-- **User preferences:** Stored in your local database
+- **Aggregate data:** Kept indefinitely for trend analysis (page view counts, feature usage stats)
+- **No individual-level data:** We do not collect any data that can identify individuals, so there is no individual data to delete
+- **User preferences:** Stored only in your local Borg UI database (not sent to analytics server)
 
 ## Privacy Rights
 
 You have the right to:
 - **Opt-out** at any time via Settings → Preferences
-- **View collected data** on the public dashboard
-- **Request deletion** of your specific data (contact us)
+- **View collected data** on the public dashboard (all data is aggregated and anonymous)
 - **Ask questions** about our practices
 - **Provide feedback** on what we track - If you disagree with any data collection, please [open an issue](https://github.com/karanhudia/borg-ui/issues) and we will consider adjusting our tracking practices
+
+**Important:** Since we do not collect any personally identifiable information (no IPs, no user IDs, no cookies), there is no individual-level data to delete. All data is anonymous aggregate statistics only.
 
 ## Centralized Analytics Model
 

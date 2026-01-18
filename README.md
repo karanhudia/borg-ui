@@ -54,9 +54,9 @@ Borg UI collects **anonymous usage statistics** to help us improve the product. 
 - **Self-hosted Matomo** - No third-party services, data stays with us
 - **No sensitive data** - We never collect passwords, keys, backup data, or file paths
 
-**We collect:** Page views, feature usage, browser/device info, navigation patterns
+**We collect:** Page views, feature usage, browser type, screen resolution, navigation patterns
 
-**We DON'T collect:** Passwords, encryption keys, backup data, file paths, personal information
+**We DON'T collect:** IP addresses, hostnames, passwords, encryption keys, backup data, file paths, cookies, or any personally identifiable information
 
 Don't like what we're tracking? [Open an issue](https://github.com/karanhudia/borg-ui/issues) and we'll consider adjusting our practices.
 
