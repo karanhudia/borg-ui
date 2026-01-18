@@ -741,6 +741,8 @@ async def get_cache_stats(
         stats["cache_ttl_minutes"] = settings.cache_ttl_minutes
         stats["cache_max_size_mb"] = settings.cache_max_size_mb
         stats["redis_url"] = settings.redis_url
+        stats["browse_max_items"] = settings.browse_max_items
+        stats["browse_max_memory_mb"] = settings.browse_max_memory_mb
 
         return stats
 
@@ -816,6 +818,8 @@ async def update_cache_settings(
     cache_ttl_minutes: Optional[int] = Query(None, ge=1, le=10080, description="Cache TTL in minutes (1-10080)"),
     cache_max_size_mb: Optional[int] = Query(None, ge=100, le=10240, description="Max cache size in MB (100-10240)"),
     redis_url: Optional[str] = Query(None, description="External Redis URL (e.g., redis://host:6379/0)"),
+    browse_max_items: Optional[int] = Query(None, ge=100_000, le=50_000_000, description="Max items to load when browsing archives (100k-50M)"),
+    browse_max_memory_mb: Optional[int] = Query(None, ge=100, le=16384, description="Max memory for archive browsing in MB (100MB-16GB)"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -826,8 +830,11 @@ async def update_cache_settings(
     - cache_ttl_minutes: Cache time-to-live in minutes (1 minute to 7 days)
     - cache_max_size_mb: Maximum cache size in megabytes (100MB to 10GB)
     - redis_url: External Redis URL (optional). Use empty string to clear and use local Redis.
+    - browse_max_items: Maximum number of files to load when browsing archives (100k to 50M)
+    - browse_max_memory_mb: Maximum memory allowed for archive browsing (100MB to 16GB)
 
     Note: TTL changes only affect new cache entries. Existing entries keep their original TTL.
+    Note: Browse limits prevent OOM when viewing archives with millions of files.
 
     Requires admin access.
 
@@ -838,7 +845,7 @@ async def update_cache_settings(
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    if cache_ttl_minutes is None and cache_max_size_mb is None and redis_url is None:
+    if cache_ttl_minutes is None and cache_max_size_mb is None and redis_url is None and browse_max_items is None and browse_max_memory_mb is None:
         raise HTTPException(status_code=400, detail="At least one setting must be provided")
 
     try:
@@ -909,6 +916,17 @@ async def update_cache_settings(
                     logger.warning("Failed to reconfigure cache size",
                                  error=str(reconfig_error))
 
+        # Update browse limits
+        if browse_max_items is not None:
+            old_items = settings.browse_max_items
+            settings.browse_max_items = browse_max_items
+            changes["browse_max_items"] = {"old": old_items, "new": browse_max_items}
+
+        if browse_max_memory_mb is not None:
+            old_memory = settings.browse_max_memory_mb
+            settings.browse_max_memory_mb = browse_max_memory_mb
+            changes["browse_max_memory_mb"] = {"old": old_memory, "new": browse_max_memory_mb}
+
         db.commit()
 
         logger.info("Cache settings updated",
@@ -919,6 +937,8 @@ async def update_cache_settings(
             "cache_ttl_minutes": settings.cache_ttl_minutes,
             "cache_max_size_mb": settings.cache_max_size_mb,
             "redis_url": settings.redis_url,
+            "browse_max_items": settings.browse_max_items,
+            "browse_max_memory_mb": settings.browse_max_memory_mb,
             "message": "Cache settings updated successfully. Note: TTL changes only affect new cache entries."
         }
 

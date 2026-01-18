@@ -32,6 +32,7 @@ import PackagesTab from '../components/PackagesTab'
 import ExportImportTab from '../components/ExportImportTab'
 import LogManagementTab from '../components/LogManagementTab'
 import CacheManagementTab from '../components/CacheManagementTab'
+import MountsManagementTab from '../components/MountsManagementTab'
 import Scripts from './Scripts'
 import Activity from './Activity'
 import { formatDateShort } from '../utils/dateUtils'
@@ -62,6 +63,7 @@ const Settings: React.FC = () => {
         'beta',
         'cache',
         'logs',
+        'mounts',
         'packages',
         'scripts',
         'export',
@@ -69,7 +71,7 @@ const Settings: React.FC = () => {
         'activity',
       ]
     }
-    return [...baseTabs, 'scripts', 'export', 'activity']
+    return [...baseTabs, 'mounts', 'scripts', 'export', 'activity']
   }
 
   // Determine active tab from URL or default to 'account'
@@ -538,17 +540,20 @@ const Settings: React.FC = () => {
       {/* Log Management Tab - Admin Only */}
       {activeTab === 5 && user?.is_admin && <LogManagementTab />}
 
+      {/* Mounts Management Tab */}
+      {activeTab === (user?.is_admin ? 6 : 3) && <MountsManagementTab />}
+
       {/* System Packages Tab - Admin Only */}
-      {activeTab === 6 && user?.is_admin && <PackagesTab />}
+      {activeTab === 7 && user?.is_admin && <PackagesTab />}
 
       {/* Scripts Tab */}
-      {activeTab === (user?.is_admin ? 7 : 3) && <Scripts />}
+      {activeTab === (user?.is_admin ? 8 : 4) && <Scripts />}
 
       {/* Export/Import Tab */}
-      {activeTab === (user?.is_admin ? 8 : 4) && <ExportImportTab />}
+      {activeTab === (user?.is_admin ? 9 : 5) && <ExportImportTab />}
 
       {/* User Management Tab - Admin Only */}
-      {activeTab === 9 && user?.is_admin && (
+      {activeTab === 10 && user?.is_admin && (
         <Box>
           <Box
             sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}
@@ -578,7 +583,7 @@ const Settings: React.FC = () => {
       )}
 
       {/* Activity Tab */}
-      {activeTab === (user?.is_admin ? 10 : 5) && <Activity />}
+      {activeTab === (user?.is_admin ? 11 : 6) && <Activity />}
 
       {/* Create/Edit User Modal */}
       <Dialog

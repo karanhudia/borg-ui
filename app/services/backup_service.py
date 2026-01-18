@@ -26,7 +26,7 @@ class BackupService:
         self.running_processes = {}  # Track running backup processes by job_id
         self.error_msgids = {}  # Track error message IDs by job_id
         self.log_buffers = {}  # Track in-memory log buffers by job_id (for running jobs)
-        self.ssh_mounts = {}  # Track SSH mounts by job_id: {job_id: [(mount_point, ssh_url), ...]}
+        self.ssh_mounts = {}  # Track SSH mount IDs by job_id: {job_id: [mount_id, ...]}
 
     async def _run_hook(self, script: str, hook_name: str, timeout: int, job_id: int) -> dict:
         """
@@ -566,7 +566,10 @@ class BackupService:
             }
         return None
 
-    async def _mount_ssh_path(self, ssh_url: str, job_id: int) -> str:
+    # OLD IMPLEMENTATION - Kept for rollback (DO NOT USE)
+    # This method had a critical bug: missing SSH key authentication in SSHFS
+    # Use mount_service.mount_ssh_directory() instead
+    async def _mount_ssh_path_OLD_BROKEN(self, ssh_url: str, job_id: int) -> str:
         """
         Mount an SSH path via SSHFS to a temporary directory
         Returns: local mount point path, or None if mount failed
@@ -758,7 +761,8 @@ class BackupService:
                 pass
             return None
 
-    async def _unmount_ssh_path(self, mount_point: str, job_id: int):
+    # OLD IMPLEMENTATION - Kept for rollback (DO NOT USE)
+    async def _unmount_ssh_path_OLD(self, mount_point: str, job_id: int):
         """
         Unmount an SSHFS mount point
         """
@@ -804,50 +808,105 @@ class BackupService:
     async def _prepare_source_paths(self, source_paths: list[str], job_id: int) -> list[str]:
         """
         Prepare source paths for backup by mounting SSH URLs via SSHFS
+        Uses the new mount_service with proper SSH key authentication.
+
         Returns: list of processed paths (SSH URLs replaced with temp root directories)
         """
+        from app.services.mount_service import mount_service
+        from app.database.models import SSHConnection
+
         processed_paths = []
+        mount_ids = []
 
-        for path in source_paths:
-            if path.startswith('ssh://'):
-                # Mount SSH path - this returns the temp_root directory
-                temp_root = await self._mount_ssh_path(path, job_id)
-                if temp_root:
-                    processed_paths.append(temp_root)
-                    logger.info("Using mounted path for backup", original=path, backup_root=temp_root, job_id=job_id)
+        db = SessionLocal()
+        try:
+            for path in source_paths:
+                if path.startswith('ssh://'):
+                    # Parse SSH URL: ssh://user@host:port/path
+                    parsed = self._parse_ssh_url(path)
+                    if not parsed:
+                        logger.error("Failed to parse SSH URL", path=path, job_id=job_id)
+                        continue
+
+                    # Find SSHConnection matching host/user/port
+                    connection = db.query(SSHConnection).filter(
+                        SSHConnection.host == parsed['host'],
+                        SSHConnection.username == parsed['username'],
+                        SSHConnection.port == int(parsed['port'])
+                    ).first()
+
+                    if not connection:
+                        logger.error(
+                            "No SSH connection found for host",
+                            host=parsed['host'],
+                            username=parsed['username'],
+                            port=parsed['port'],
+                            path=path,
+                            job_id=job_id
+                        )
+                        continue
+
+                    # Mount using mount service with SSH key authentication
+                    try:
+                        temp_root, mount_id = await mount_service.mount_ssh_directory(
+                            connection_id=connection.id,
+                            remote_path=parsed['path'],
+                            job_id=job_id
+                        )
+
+                        processed_paths.append(temp_root)
+                        mount_ids.append(mount_id)
+
+                        logger.info(
+                            "Mounted SSH path for backup",
+                            original=path,
+                            backup_root=temp_root,
+                            mount_id=mount_id,
+                            job_id=job_id
+                        )
+
+                    except Exception as e:
+                        logger.error(
+                            "Failed to mount SSH path",
+                            path=path,
+                            error=str(e),
+                            job_id=job_id
+                        )
+                        # Don't add this path - skip it
                 else:
-                    logger.error("Failed to mount SSH path, skipping from backup", path=path, job_id=job_id)
-                    # Don't add this path to processed_paths - skip it
-            else:
-                # Local path - use as-is
-                processed_paths.append(path)
+                    # Local path - use as-is
+                    processed_paths.append(path)
 
-        return processed_paths
+            # Store mount_ids for cleanup
+            if mount_ids:
+                self.ssh_mounts[job_id] = mount_ids
+
+            return processed_paths
+
+        finally:
+            db.close()
 
     async def _cleanup_ssh_mounts(self, job_id: int):
         """
-        Cleanup all SSH mounts for a job
+        Cleanup all SSH mounts for a job using mount_service
         """
+        from app.services.mount_service import mount_service
+
         if job_id not in self.ssh_mounts:
             return
 
-        mounts = self.ssh_mounts[job_id]
-        logger.info("Cleaning up SSH mounts", job_id=job_id, mount_count=len(mounts))
+        mount_ids = self.ssh_mounts[job_id]
+        logger.info("Cleaning up SSH mounts", job_id=job_id, mount_count=len(mount_ids))
 
-        for mount_point, temp_root, ssh_url in mounts:
-            # Unmount the SSHFS mount
-            await self._unmount_ssh_path(mount_point, job_id)
-
-            # Remove the temporary root directory
+        for mount_id in mount_ids:
             try:
-                import shutil
-                shutil.rmtree(temp_root, ignore_errors=True)
-                logger.debug("Removed temporary root directory", temp_root=temp_root, job_id=job_id)
+                success = await mount_service.unmount(mount_id)
+                if success:
+                    logger.debug("Successfully unmounted", mount_id=mount_id, job_id=job_id)
+                else:
+                    logger.warning("Failed to unmount", mount_id=mount_id, job_id=job_id)
             except Exception as e:
-                logger.warning("Failed to remove temporary root directory",
-                             temp_root=temp_root,
-                             error=str(e),
-                             job_id=job_id)
+                logger.error("Error during unmount", mount_id=mount_id, error=str(e), job_id=job_id)
 
         # Remove from tracking
         del self.ssh_mounts[job_id]

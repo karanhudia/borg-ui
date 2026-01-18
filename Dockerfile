@@ -67,19 +67,25 @@ RUN apt-get update && apt-get install -y \
     libxxhash-dev \
     build-essential \
     pkg-config \
+    # FUSE support for borg mount
+    fuse3 \
+    libfuse3-dev \
     # Additional useful packages
     rsync \
     openssh-client \
     sshfs \
-    fuse \
     python3-pip \
     python3-dev \
     # Cleanup
     && rm -rf /var/lib/apt/lists/*
 
+# Install FUSE Python bindings first (required for borg mount)
+RUN pip install --no-cache-dir pyfuse3
+
 # Install Borg via pip (auto-update patch versions within 1.4.x)
 # This allows automatic security/bug fixes while preventing breaking changes
-RUN pip install --no-cache-dir 'borgbackup>=1.4.3,<1.5.0'
+# Install with FUSE support for borg mount functionality
+RUN pip install --no-cache-dir 'borgbackup[fuse]>=1.4.3,<1.5.0'
 
 # Install additional useful tools
 RUN apt-get update && apt-get install -y \

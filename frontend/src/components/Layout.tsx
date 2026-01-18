@@ -45,6 +45,7 @@ import {
   Download as DownloadIcon,
   Server,
   Zap,
+  HardDrive,
 } from 'lucide-react'
 import api from '../services/api'
 
@@ -96,6 +97,7 @@ const navigationWithKeys: NavigationItem[] = [
       { name: 'Beta', href: '/settings/beta', icon: Zap },
       { name: 'Cache', href: '/settings/cache', icon: Server },
       { name: 'Logs', href: '/settings/logs', icon: FileText },
+      { name: 'Mounts', href: '/settings/mounts', icon: HardDrive },
       { name: 'Packages', href: '/settings/packages', icon: Package },
       { name: 'Scripts', href: '/settings/scripts', icon: FileCode },
       { name: 'Export/Import', href: '/settings/export', icon: DownloadIcon },

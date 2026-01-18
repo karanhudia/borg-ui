@@ -6,7 +6,7 @@ import structlog
 import os
 from dotenv import load_dotenv
 
-from app.api import auth, dashboard, backup, archives, restore, schedule, settings as settings_api, events, repositories, ssh_keys, system, filesystem, browse, notifications, scripts, packages, activity, scripts_library
+from app.api import auth, dashboard, backup, archives, restore, schedule, settings as settings_api, events, repositories, ssh_keys, system, filesystem, browse, notifications, scripts, packages, activity, scripts_library, mounts
 from app.routers import config
 from app.database.database import engine
 from app.database.models import Base
@@ -91,6 +91,7 @@ app.include_router(packages.router, prefix="/api/packages", tags=["Packages"])
 app.include_router(notifications.router)
 app.include_router(activity.router)
 app.include_router(config.router, prefix="/api")
+app.include_router(mounts.router)  # Mount management API
 
 @app.on_event("startup")
 async def startup_event():
@@ -161,7 +162,7 @@ async def startup_event():
         logger.warning("Failed to rotate logs", error=str(e))
 
     # Cleanup orphaned jobs from container restarts
-    from app.utils.process_utils import cleanup_orphaned_jobs
+    from app.utils.process_utils import cleanup_orphaned_jobs, cleanup_orphaned_mounts
     try:
         db = SessionLocal()
         cleanup_orphaned_jobs(db)
@@ -169,6 +170,13 @@ async def startup_event():
         logger.info("Orphaned job cleanup completed")
     except Exception as e:
         logger.error("Failed to cleanup orphaned jobs", error=str(e))
+
+    # Cleanup orphaned mounts from container restarts
+    try:
+        cleanup_orphaned_mounts()
+        logger.info("Orphaned mount cleanup completed")
+    except Exception as e:
+        logger.error("Failed to cleanup orphaned mounts", error=str(e))
 
     # Note: Package auto-installation now handled by entrypoint.sh startup script
     # This runs asynchronously via /app/app/scripts/startup_packages.py

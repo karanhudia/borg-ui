@@ -19,6 +19,7 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  TextField,
   alpha,
 } from '@mui/material'
 import {
@@ -32,8 +33,9 @@ import {
   Gauge,
   Layers,
   RotateCcw,
+  HardDrive,
 } from 'lucide-react'
-import { archivesAPI, repositoriesAPI, browseAPI } from '../services/api'
+import { archivesAPI, repositoriesAPI, browseAPI, mountsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import LockErrorDialog from '../components/LockErrorDialog'
 import { formatDate, formatDateCompact, formatBytes as formatBytesUtil } from '../utils/dateUtils'
@@ -63,6 +65,8 @@ const Archives: React.FC = () => {
     repositoryId: number
     repositoryName: string
   } | null>(null)
+  const [mountDialogArchive, setMountDialogArchive] = useState<Archive | null>(null)
+  const [customMountPoint, setCustomMountPoint] = useState<string>('')
   const queryClient = useQueryClient()
   const location = useLocation()
   const navigate = useNavigate()
@@ -148,6 +152,40 @@ const Archives: React.FC = () => {
     },
   })
 
+  // Mount archive mutation
+  const mountArchiveMutation = useMutation({
+    mutationFn: ({
+      repository_id,
+      archive_name,
+      mount_point,
+    }: {
+      repository_id: number
+      archive_name: string
+      mount_point?: string
+    }) => mountsAPI.mountBorgArchive({ repository_id, archive_name, mount_point }),
+    onSuccess: (data) => {
+      const mountPoint = data.data.mount_point
+      const containerName = 'borg-web-ui'
+      const accessCommand = `docker exec -it ${containerName} bash -c "cd ${mountPoint} && bash"`
+
+      toast.success(
+        `Archive mounted successfully!\n\nMount is inside the container. To access files, run:\n\n${accessCommand}`,
+        {
+          duration: 15000,
+          style: {
+            maxWidth: '600px',
+            whiteSpace: 'pre-wrap',
+            fontFamily: 'monospace',
+            fontSize: '13px',
+          },
+        }
+      )
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to mount archive: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
   // Handle repository selection
   const handleRepositoryChange = (repositoryId: number) => {
     setSelectedRepositoryId(repositoryId)
@@ -160,6 +198,27 @@ const Archives: React.FC = () => {
     if (selectedRepository) {
       deleteArchiveMutation.mutate({ repository: selectedRepository.path, archive })
     }
+  }
+
+  // Handle archive mounting
+  const handleMountArchive = () => {
+    if (selectedRepositoryId && mountDialogArchive) {
+      mountArchiveMutation.mutate({
+        repository_id: selectedRepositoryId,
+        archive_name: mountDialogArchive.name,
+        mount_point: customMountPoint || undefined,
+      })
+      setMountDialogArchive(null)
+      setCustomMountPoint('')
+    }
+  }
+
+  // Open mount dialog
+  const openMountDialog = (archive: Archive) => {
+    setMountDialogArchive(archive)
+    // Pre-fill with archive name (sanitized for filesystem)
+    const safeName = archive.name.replace(/[/:]/g, '_').replace(/\s+/g, '_')
+    setCustomMountPoint(safeName)
   }
 
   // Get repositories from API response
@@ -563,6 +622,17 @@ const Archives: React.FC = () => {
                         >
                           Restore
                         </Button>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          color="info"
+                          startIcon={<HardDrive size={16} />}
+                          onClick={() => openMountDialog(archive)}
+                          sx={{ textTransform: 'none' }}
+                          disabled={mountArchiveMutation.isPending}
+                        >
+                          Mount
+                        </Button>
                         <IconButton
                           color="error"
                           size="small"
@@ -831,6 +901,56 @@ const Archives: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setViewArchive(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Mount Archive Dialog */}
+      <Dialog
+        open={!!mountDialogArchive}
+        onClose={() => setMountDialogArchive(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <HardDrive size={24} />
+            <Box>
+              <Typography variant="h6" fontWeight={600}>
+                Mount Archive
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {mountDialogArchive?.name}
+              </Typography>
+            </Box>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={3} sx={{ mt: 1 }}>
+            <Alert severity="info">
+              The archive will be mounted as a read-only filesystem inside the container. You'll
+              receive a command to access it via terminal.
+            </Alert>
+            <TextField
+              label="Mount Name"
+              value={customMountPoint}
+              onChange={(e) => setCustomMountPoint(e.target.value)}
+              placeholder="my-backup-2024"
+              helperText={`Will be mounted at: /data/mounts/${customMountPoint || '<name>'}`}
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMountDialogArchive(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleMountArchive}
+            disabled={mountArchiveMutation.isPending}
+            startIcon={<HardDrive size={18} />}
+          >
+            {mountArchiveMutation.isPending ? 'Mounting...' : 'Mount'}
+          </Button>
         </DialogActions>
       </Dialog>
 

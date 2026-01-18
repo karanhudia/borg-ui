@@ -99,6 +99,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   // File explorer states
   const [showPathExplorer, setShowPathExplorer] = useState(false)
   const [showSourceExplorer, setShowSourceExplorer] = useState(false)
+  const [showRemoteSourceExplorer, setShowRemoteSourceExplorer] = useState(false)
   const [showExcludeExplorer, setShowExcludeExplorer] = useState(false)
 
   // Reset to first step when dialog opens
@@ -354,7 +355,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     if (activeStep === 1 && repositoryMode === 'full' && mode !== 'import') {
       // Data source step
       if (dataSource === 'remote' && !sourceSshConnectionId) return false
-      if (dataSource === 'local' && sourceDirs.length === 0) return false
+      if (sourceDirs.length === 0) return false // Required for both local and remote
       return true
     }
     if (
@@ -690,68 +691,82 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               first.
             </Alert>
           ) : (
-            <FormControl fullWidth>
-              <InputLabel>Select Remote Machine</InputLabel>
-              <Select
-                value={sourceSshConnectionId === '' ? '' : String(sourceSshConnectionId)}
-                label="Select Remote Machine"
-                onChange={(e) => {
-                  const value = e.target.value
-                  if (value) {
-                    handleSourceSshConnectionSelect(Number(value))
-                  }
-                }}
-                sx={{
-                  '& .MuiSelect-select': {
-                    py: '16.5px',
-                    display: 'flex',
-                    alignItems: 'center',
-                  },
-                }}
-              >
-                {sshConnections
-                  .filter((conn) => {
-                    // If repository is on a remote client, only show that same client
-                    if (repositoryLocation === 'ssh' && repoSshConnectionId) {
-                      return conn.id === repoSshConnectionId
+            <>
+              <FormControl fullWidth>
+                <InputLabel>Select Remote Machine</InputLabel>
+                <Select
+                  value={sourceSshConnectionId === '' ? '' : String(sourceSshConnectionId)}
+                  label="Select Remote Machine"
+                  onChange={(e) => {
+                    const value = e.target.value
+                    if (value) {
+                      handleSourceSshConnectionSelect(Number(value))
                     }
-                    return true
-                  })
-                  .map((conn) => (
-                    <MenuItem key={conn.id} value={String(conn.id)}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                        <Laptop size={16} />
-                        <Box sx={{ flex: 1 }}>
-                          <Typography variant="body2">
-                            {conn.username}@{conn.host}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Port {conn.port}
-                            {conn.mount_point && ` • ${conn.mount_point}`}
-                          </Typography>
+                  }}
+                  sx={{
+                    '& .MuiSelect-select': {
+                      py: '16.5px',
+                      display: 'flex',
+                      alignItems: 'center',
+                    },
+                  }}
+                >
+                  {sshConnections
+                    .filter((conn) => {
+                      // If repository is on a remote client, only show that same client
+                      if (repositoryLocation === 'ssh' && repoSshConnectionId) {
+                        return conn.id === repoSshConnectionId
+                      }
+                      return true
+                    })
+                    .map((conn) => (
+                      <MenuItem key={conn.id} value={String(conn.id)}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                          <Laptop size={16} />
+                          <Box sx={{ flex: 1 }}>
+                            <Typography variant="body2">
+                              {conn.username}@{conn.host}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              Port {conn.port}
+                              {conn.mount_point && ` • ${conn.mount_point}`}
+                            </Typography>
+                          </Box>
+                          {conn.status === 'connected' && (
+                            <Box
+                              sx={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: '50%',
+                                bgcolor: 'success.main',
+                              }}
+                              title="Connected"
+                            />
+                          )}
                         </Box>
-                        {conn.status === 'connected' && (
-                          <Box
-                            sx={{
-                              width: 8,
-                              height: 8,
-                              borderRadius: '50%',
-                              bgcolor: 'success.main',
-                            }}
-                            title="Connected"
-                          />
-                        )}
-                      </Box>
-                    </MenuItem>
-                  ))}
-              </Select>
-            </FormControl>
+                      </MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
+
+              {sourceSshConnectionId && (
+                <Box>
+                  <SourceDirectoriesInput
+                    directories={sourceDirs}
+                    onChange={setSourceDirs}
+                    onBrowseClick={() => setShowRemoteSourceExplorer(true)}
+                  />
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                    Browse remote directories or enter full paths manually (e.g., /home/user/documents, /var/www)
+                  </Typography>
+                </Box>
+              )}
+            </>
           )}
 
           <Alert severity="info">
             <Typography variant="body2">
-              <strong>Note:</strong> The Borg UI server will mount the remote machine's filesystem
-              and perform the backup. Data will be pulled from the remote machine to the repository.
+              <strong>Note:</strong> The Borg UI server will SSH into the remote machine to browse and back up the selected directories. Ensure the SSH connection is properly configured with the necessary permissions.
             </Typography>
           </Alert>
         </>
@@ -1081,6 +1096,33 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         connectionType="local"
         selectMode="directories"
       />
+
+      {showRemoteSourceExplorer && sourceSshConnectionId && (() => {
+        const conn = sshConnections.find((c) => c.id === sourceSshConnectionId)
+        const config = conn ? {
+          ssh_key_id: conn.ssh_key_id,
+          host: conn.host,
+          username: conn.username,
+          port: conn.port,
+        } : undefined
+
+        return (
+          <FileExplorerDialog
+            open={true}
+            onClose={() => setShowRemoteSourceExplorer(false)}
+            onSelect={(paths) => {
+              setSourceDirs([...sourceDirs, ...paths])
+              setShowRemoteSourceExplorer(false)
+            }}
+            title="Select Source Directories (Remote)"
+            initialPath="/"
+            multiSelect={true}
+            connectionType="ssh"
+            sshConfig={config}
+            selectMode="directories"
+          />
+        )
+      })()}
 
       <FileExplorerDialog
         open={showExcludeExplorer}

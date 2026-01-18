@@ -479,6 +479,10 @@ export default function Repositories() {
     navigate('/archives', { state: { repositoryId: repository.id } })
   }
 
+  const handleViewMounts = (repository: Repository) => {
+    navigate('/settings/mounts', { state: { repositoryId: repository.id } })
+  }
+
   const handlePruneDryRun = () => {
     if (pruningRepository) {
       pruneRepositoryMutation.mutate({
@@ -1028,6 +1032,7 @@ export default function Repositories() {
               onDelete={() => handleDeleteRepository(repository)}
               onBackupNow={() => handleBackupNow(repository)}
               onViewArchives={() => handleViewArchives(repository)}
+              onViewMounts={() => handleViewMounts(repository)}
               getCompressionLabel={getCompressionLabel}
               isAdmin={user?.is_admin || false}
               onJobCompleted={handleJobCompleted}
