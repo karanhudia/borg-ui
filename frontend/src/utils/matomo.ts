@@ -52,6 +52,17 @@ export const initMatomo = (): void => {
   window._paq = window._paq || []
   const _paq = window._paq
 
+  // CRITICAL PRIVACY: Use fake domain to mask real hostname
+  // Matomo captures URLs from HTTP headers, so we override with a consistent fake domain
+  _paq.push([
+    'setCustomUrl',
+    'https://app.borgui' + window.location.pathname + window.location.search,
+  ])
+
+  // CRITICAL PRIVACY: Disable cookies and user tracking
+  _paq.push(['disableCookies'])
+  _paq.push(['setDoNotTrack', true])
+
   // Configure Matomo
   _paq.push(['enableLinkTracking'])
   _paq.push(['setTrackerUrl', `${config.url}/matomo.php`])
@@ -125,6 +136,11 @@ export const trackPageView = (customTitle?: string): void => {
   if (!canTrack()) return
 
   window._paq = window._paq || []
+
+  // CRITICAL PRIVACY: Use fake domain to mask real hostname
+  const maskedUrl = 'https://app.borgui' + window.location.pathname + window.location.search
+  window._paq.push(['setCustomUrl', maskedUrl])
+
   if (customTitle) {
     window._paq.push(['setDocumentTitle', customTitle])
   }
@@ -198,6 +214,26 @@ export const resetUserId = (): void => {
  */
 export const resetOptOutCache = async (): Promise<void> => {
   await loadUserPreference()
+}
+
+/**
+ * Generate anonymous hash for entity names (repositories, connections, etc.)
+ * Creates a consistent 8-character identifier that doesn't reveal the actual name
+ * but allows tracking distinct entities across sessions.
+ *
+ * Example: "my-backup-repo" → "a3f2b1c8"
+ */
+export const anonymizeEntityName = (name: string): string => {
+  if (!name) return ''
+
+  // Simple hash function (djb2 algorithm)
+  let hash = 5381
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 33) ^ name.charCodeAt(i)
+  }
+
+  // Convert to 8-character hex string
+  return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
 // Pre-defined event categories for Borg UI

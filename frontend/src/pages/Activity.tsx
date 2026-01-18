@@ -17,6 +17,7 @@ import {
 } from '@mui/material'
 import { History, RefreshCw, Info } from 'lucide-react'
 import { activityAPI } from '../services/api'
+import { useMatomo } from '../hooks/useMatomo'
 import BackupJobsTable from '../components/BackupJobsTable'
 import { TerminalLogViewer } from '../components/TerminalLogViewer'
 import StatusBadge from '../components/StatusBadge'
@@ -40,6 +41,7 @@ interface ActivityItem {
 }
 
 const Activity: React.FC = () => {
+  const { track, EventCategory, EventAction } = useMatomo()
   const [selectedJob, setSelectedJob] = useState<ActivityItem | null>(null)
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -83,6 +85,7 @@ const Activity: React.FC = () => {
 
   const handleViewLogs = (job: ActivityItem) => {
     setSelectedJob(job)
+    track(EventCategory.NAVIGATION, EventAction.VIEW, 'logs')
   }
 
   const handleCloseLogs = () => {
@@ -91,6 +94,17 @@ const Activity: React.FC = () => {
 
   const handleDownloadLogs = (job: ActivityItem) => {
     activityAPI.downloadLogs(job.type, job.id)
+    track(EventCategory.NAVIGATION, EventAction.DOWNLOAD, 'logs')
+  }
+
+  const handleTypeFilterChange = (value: string) => {
+    setTypeFilter(value)
+    track(EventCategory.NAVIGATION, EventAction.FILTER, `type:${value}`)
+  }
+
+  const handleStatusFilterChange = (value: string) => {
+    setStatusFilter(value)
+    track(EventCategory.NAVIGATION, EventAction.FILTER, `status:${value}`)
   }
 
   // Just return all activities without grouping
@@ -122,7 +136,11 @@ const Activity: React.FC = () => {
         <Box sx={{ display: 'flex', gap: 2 }}>
           <FormControl size="small" sx={{ minWidth: 150 }}>
             <InputLabel>Type</InputLabel>
-            <Select value={typeFilter} label="Type" onChange={(e) => setTypeFilter(e.target.value)}>
+            <Select
+              value={typeFilter}
+              label="Type"
+              onChange={(e) => handleTypeFilterChange(e.target.value)}
+            >
               <MenuItem value="all">All Types</MenuItem>
               <MenuItem value="backup">Backup</MenuItem>
               <MenuItem value="restore">Restore</MenuItem>
@@ -138,7 +156,7 @@ const Activity: React.FC = () => {
             <Select
               value={statusFilter}
               label="Status"
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => handleStatusFilterChange(e.target.value)}
             >
               <MenuItem value="all">All Status</MenuItem>
               <MenuItem value="completed">Completed</MenuItem>

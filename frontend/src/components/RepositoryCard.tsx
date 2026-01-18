@@ -280,7 +280,7 @@ export default function RepositoryCard({
                 size="small"
                 startIcon={checkJob ? <Refresh className="animate-spin" /> : <CheckCircleIcon />}
                 onClick={() => {
-                  trackMaintenance(EventAction.START, `Check - ${repository.name}`)
+                  trackMaintenance(EventAction.START, 'Check', repository.name)
                   onCheck()
                 }}
                 disabled={isMaintenanceRunning}
@@ -294,7 +294,7 @@ export default function RepositoryCard({
                 size="small"
                 startIcon={compactJob ? <Refresh className="animate-spin" /> : <Refresh />}
                 onClick={() => {
-                  trackMaintenance(EventAction.START, `Compact - ${repository.name}`)
+                  trackMaintenance(EventAction.START, 'Compact', repository.name)
                   onCompact()
                 }}
                 disabled={isMaintenanceRunning}
@@ -308,7 +308,7 @@ export default function RepositoryCard({
                 size="small"
                 startIcon={pruneJob ? <Refresh className="animate-spin" /> : <Delete />}
                 onClick={() => {
-                  trackMaintenance(EventAction.START, `Prune - ${repository.name}`)
+                  trackMaintenance(EventAction.START, 'Prune', repository.name)
                   onPrune()
                 }}
                 disabled={isMaintenanceRunning}
@@ -323,7 +323,7 @@ export default function RepositoryCard({
                   size="small"
                   startIcon={<PlayArrow />}
                   onClick={() => {
-                    trackBackup(EventAction.START, repository.name)
+                    trackBackup(EventAction.START, undefined, repository.name)
                     onBackupNow()
                   }}
                   disabled={isMaintenanceRunning}
