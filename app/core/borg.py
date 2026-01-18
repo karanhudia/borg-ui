@@ -112,6 +112,162 @@ class BorgInterface:
                 "success": False
             }
 
+    async def _execute_command_streaming(self, cmd: List[str], max_lines: int = 1_000_000,
+                                        timeout: int = 3600, cwd: str = None, env: dict = None) -> Dict:
+        """Execute a command with line-by-line streaming and size limits
+
+        This prevents OOM by counting lines as they arrive and terminating early if limits are exceeded.
+        Designed for commands that produce large outputs (like borg list on archives with millions of files).
+
+        Args:
+            cmd: Command to execute
+            max_lines: Maximum number of output lines before termination (default: 1 million)
+            timeout: Command timeout in seconds
+            cwd: Working directory
+            env: Environment variables
+
+        Returns:
+            Dict with return_code, stdout (joined lines), stderr, success, and line_count_exceeded flag
+        """
+        logger.info("Executing command with streaming",
+                   command=" ".join(cmd),
+                   max_lines=max_lines,
+                   cwd=cwd)
+
+        # Set up environment with SSH options for remote repositories
+        exec_env = os.environ.copy()
+        exec_env["BORG_LOCK_WAIT"] = "20"
+        exec_env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
+
+        ssh_opts = [
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "UserKnownHostsFile=/dev/null",
+            "-o", "LogLevel=ERROR"
+        ]
+        exec_env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+
+        # Merge any additional environment variables
+        if env:
+            exec_env.update(env)
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=cwd,
+                env=exec_env
+            )
+
+            # Stream stdout line by line with limit enforcement
+            stdout_lines = []
+            line_count = 0
+            line_count_exceeded = False
+            start_time = asyncio.get_event_loop().time()
+
+            try:
+                async for line in process.stdout:
+                    # Check timeout
+                    if asyncio.get_event_loop().time() - start_time > timeout:
+                        logger.error("Command timed out during streaming",
+                                   command=" ".join(cmd),
+                                   lines_read=line_count)
+                        process.kill()
+                        await process.wait()
+                        return {
+                            "return_code": -1,
+                            "stdout": "\n".join(stdout_lines),
+                            "stderr": f"Command timed out after {timeout} seconds (read {line_count:,} lines)",
+                            "success": False,
+                            "line_count_exceeded": False,
+                            "lines_read": line_count
+                        }
+
+                    line_count += 1
+
+                    # Check if we've exceeded the line limit
+                    if line_count > max_lines:
+                        logger.error("Line limit exceeded, terminating command",
+                                   command=" ".join(cmd),
+                                   line_count=line_count,
+                                   max_lines=max_lines)
+                        line_count_exceeded = True
+                        # Kill the process to prevent further memory consumption
+                        process.kill()
+                        await process.wait()
+                        break
+
+                    # Decode and store line (keep in memory only up to limit)
+                    stdout_lines.append(line.decode('utf-8', errors='replace').rstrip('\n'))
+
+                    # Log progress every 100k lines
+                    if line_count % 100_000 == 0:
+                        logger.info("Streaming progress",
+                                   command=" ".join(cmd),
+                                   lines_read=line_count)
+
+            except Exception as e:
+                logger.error("Error during streaming", command=" ".join(cmd), error=str(e))
+                process.kill()
+                await process.wait()
+                raise
+
+            # Read stderr (should be small for list commands)
+            stderr_data = await process.stderr.read()
+            stderr = stderr_data.decode('utf-8', errors='replace') if stderr_data else ""
+
+            # Wait for process to complete (if not already killed)
+            if process.returncode is None:
+                await process.wait()
+
+            result = {
+                "return_code": process.returncode,
+                "stdout": "\n".join(stdout_lines),
+                "stderr": stderr,
+                "success": process.returncode == 0 and not line_count_exceeded,
+                "line_count_exceeded": line_count_exceeded,
+                "lines_read": line_count
+            }
+
+            if result["success"]:
+                logger.info("Command executed successfully with streaming",
+                           command=" ".join(cmd),
+                           lines_read=line_count)
+            else:
+                if line_count_exceeded:
+                    logger.warning("Command terminated due to line limit",
+                                 command=" ".join(cmd),
+                                 lines_read=line_count,
+                                 max_lines=max_lines)
+                else:
+                    logger.error("Command failed",
+                               command=" ".join(cmd),
+                               return_code=process.returncode,
+                               stderr=stderr[:500])  # Limit stderr logging
+
+            return result
+
+        except asyncio.TimeoutError:
+            logger.error("Command timed out", command=" ".join(cmd), timeout=timeout)
+            return {
+                "return_code": -1,
+                "stdout": "",
+                "stderr": f"Command timed out after {timeout} seconds",
+                "success": False,
+                "line_count_exceeded": False,
+                "lines_read": 0
+            }
+        except Exception as e:
+            logger.error("Command execution failed", command=" ".join(cmd), error=str(e))
+            return {
+                "return_code": -1,
+                "stdout": "",
+                "stderr": str(e),
+                "success": False,
+                "line_count_exceeded": False,
+                "lines_read": 0
+            }
+
     async def break_lock(self, repository: str, remote_path: str = None, passphrase: str = None) -> Dict:
         """Break a stale lock on a repository and its cache"""
         logger.warning("Breaking stale lock", repository=repository)
@@ -259,11 +415,24 @@ class BorgInterface:
 
         return await self._execute_command(cmd, env=env if env else None)
 
-    async def list_archive_contents(self, repository: str, archive: str, path: str = "", remote_path: str = None, passphrase: str = None) -> Dict:
-        """List contents of an archive
+    async def list_archive_contents(self, repository: str, archive: str, path: str = "",
+                                   remote_path: str = None, passphrase: str = None,
+                                   max_lines: int = 1_000_000) -> Dict:
+        """List contents of an archive with streaming to prevent OOM
 
         Note: borg list doesn't support path filtering as an argument,
         so we always fetch all items and filter them in the caller.
+
+        Args:
+            repository: Repository path
+            archive: Archive name
+            path: Path filter (applied in caller, not by borg)
+            remote_path: Remote borg executable path
+            passphrase: Repository passphrase
+            max_lines: Maximum number of files to list before terminating (default: 1 million)
+
+        Returns:
+            Dict with stdout, stderr, success, and line_count_exceeded flag
         """
         cmd = [self.borg_cmd, "list"]
         if remote_path:
@@ -275,7 +444,8 @@ class BorgInterface:
         if passphrase:
             env["BORG_PASSPHRASE"] = passphrase
 
-        return await self._execute_command(cmd, env=env if env else None)
+        # Use streaming execution to prevent OOM on large archives
+        return await self._execute_command_streaming(cmd, max_lines=max_lines, env=env if env else None)
 
     async def extract_archive(self, repository: str, archive: str, paths: List[str],
                             destination: str, dry_run: bool = False, remote_path: str = None, passphrase: str = None) -> Dict:

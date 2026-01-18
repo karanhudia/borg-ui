@@ -197,6 +197,7 @@ class RepositoryCreate(BaseModel):
     continue_on_hook_failure: Optional[bool] = False  # Continue backup if pre-hook fails
     mode: str = "full"  # full: backups + observability, observe: observability-only
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create (e.g., "--stats --list")
+    source_connection_id: Optional[int] = None  # SSH connection ID for remote data source (pull-based backups)
 
 class RepositoryImport(BaseModel):
     name: str
@@ -219,6 +220,7 @@ class RepositoryImport(BaseModel):
     continue_on_hook_failure: Optional[bool] = False  # Continue backup if pre-hook fails
     mode: str = "full"  # full: backups + observability, observe: observability-only
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create (e.g., "--stats --list")
+    source_connection_id: Optional[int] = None  # SSH connection ID for remote data source (pull-based backups)
 
 class RepositoryUpdate(BaseModel):
     name: Optional[str] = None
@@ -235,6 +237,7 @@ class RepositoryUpdate(BaseModel):
     continue_on_hook_failure: Optional[bool] = None
     mode: Optional[str] = None  # full: backups + observability, observe: observability-only
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create
+    source_connection_id: Optional[int] = None  # SSH connection ID for remote data source
 
 class RepositoryInfo(BaseModel):
     id: int
@@ -512,7 +515,8 @@ async def create_repository(
             post_hook_timeout=repo_data.post_hook_timeout,
             continue_on_hook_failure=repo_data.continue_on_hook_failure,
             mode=repo_data.mode,
-            custom_flags=repo_data.custom_flags
+            custom_flags=repo_data.custom_flags,
+            source_ssh_connection_id=repo_data.source_connection_id
         )
 
         db.add(repository)
@@ -711,7 +715,8 @@ async def import_repository(
             post_hook_timeout=repo_data.post_hook_timeout,
             continue_on_hook_failure=repo_data.continue_on_hook_failure,
             mode=repo_data.mode,
-            custom_flags=repo_data.custom_flags
+            custom_flags=repo_data.custom_flags,
+            source_ssh_connection_id=repo_data.source_connection_id
         )
 
         db.add(repository)
@@ -947,6 +952,9 @@ async def update_repository(
 
         if repo_data.custom_flags is not None:
             repository.custom_flags = repo_data.custom_flags
+
+        if repo_data.source_connection_id is not None:
+            repository.source_ssh_connection_id = repo_data.source_connection_id
 
         repository.updated_at = datetime.utcnow()
         db.commit()

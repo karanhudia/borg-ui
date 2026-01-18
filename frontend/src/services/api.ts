@@ -180,7 +180,13 @@ export const settingsAPI = {
   getCacheStats: () => api.get('/settings/cache/stats'),
   clearCache: (repositoryId?: number) =>
     api.post('/settings/cache/clear', null, { params: { repository_id: repositoryId } }),
-  updateCacheSettings: (ttlMinutes: number, maxSizeMb: number, redisUrl?: string) => {
+  updateCacheSettings: (
+    ttlMinutes: number,
+    maxSizeMb: number,
+    redisUrl?: string,
+    browseMaxItems?: number,
+    browseMaxMemoryMb?: number
+  ) => {
     const params: any = {
       cache_ttl_minutes: ttlMinutes,
       cache_max_size_mb: maxSizeMb,
@@ -188,6 +194,13 @@ export const settingsAPI = {
     // Only include redis_url if it's provided
     if (redisUrl !== undefined) {
       params.redis_url = redisUrl
+    }
+    // Only include browse limits if provided
+    if (browseMaxItems !== undefined) {
+      params.browse_max_items = browseMaxItems
+    }
+    if (browseMaxMemoryMb !== undefined) {
+      params.browse_max_memory_mb = browseMaxMemoryMb
     }
     return api.put('/settings/cache/settings', null, { params })
   },
@@ -370,6 +383,22 @@ export const scriptsAPI = {
 
   // Delete a script
   delete: (scriptId: number) => api.delete(`/scripts/${scriptId}`),
+}
+
+export const mountsAPI = {
+  // Mount a Borg repository or archive
+  mountBorgArchive: (data: { repository_id: number; archive_name?: string; mount_point?: string }) =>
+    api.post('/mounts/borg', data),
+
+  // Unmount a mounted archive
+  unmountBorgArchive: (mountId: string, force: boolean = false) =>
+    api.post(`/mounts/borg/unmount/${mountId}`, {}, { params: { force } }),
+
+  // List all active mounts
+  listMounts: () => api.get('/mounts'),
+
+  // Get specific mount info
+  getMountInfo: (mountId: string) => api.get(`/mounts/${mountId}`),
 }
 
 export default api

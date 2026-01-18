@@ -46,6 +46,8 @@ const CacheManagementTab: React.FC = () => {
   const [ttlMinutes, setTtlMinutes] = useState(120)
   const [maxSizeMb, setMaxSizeMb] = useState(2048)
   const [redisUrl, setRedisUrl] = useState('')
+  const [browseMaxItems, setBrowseMaxItems] = useState(1_000_000)
+  const [browseMaxMemoryMb, setBrowseMaxMemoryMb] = useState(1024)
   const [hasChanges, setHasChanges] = useState(false)
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
   const [testingConnection, setTestingConnection] = useState(false)
@@ -68,6 +70,8 @@ const CacheManagementTab: React.FC = () => {
       setTtlMinutes(stats.cache_ttl_minutes || 120)
       setMaxSizeMb(stats.cache_max_size_mb || 2048)
       setRedisUrl((stats as any).redis_url || '')
+      setBrowseMaxItems((stats as any).browse_max_items || 1_000_000)
+      setBrowseMaxMemoryMb((stats as any).browse_max_memory_mb || 1024)
       setHasChanges(false)
     }
   }, [stats])
@@ -78,15 +82,23 @@ const CacheManagementTab: React.FC = () => {
       const changed =
         ttlMinutes !== (stats.cache_ttl_minutes || 120) ||
         maxSizeMb !== (stats.cache_max_size_mb || 2048) ||
-        redisUrl !== ((stats as any).redis_url || '')
+        redisUrl !== ((stats as any).redis_url || '') ||
+        browseMaxItems !== ((stats as any).browse_max_items || 1_000_000) ||
+        browseMaxMemoryMb !== ((stats as any).browse_max_memory_mb || 1024)
       setHasChanges(changed)
     }
-  }, [ttlMinutes, maxSizeMb, redisUrl, stats])
+  }, [ttlMinutes, maxSizeMb, redisUrl, browseMaxItems, browseMaxMemoryMb, stats])
 
   // Save settings mutation
   const saveSettingsMutation = useMutation({
     mutationFn: async () => {
-      return await settingsAPI.updateCacheSettings(ttlMinutes, maxSizeMb, redisUrl)
+      return await settingsAPI.updateCacheSettings(
+        ttlMinutes,
+        maxSizeMb,
+        redisUrl,
+        browseMaxItems,
+        browseMaxMemoryMb
+      )
     },
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['cache-stats'] })
@@ -406,6 +418,60 @@ const CacheManagementTab: React.FC = () => {
               <Alert severity="info">
                 <strong>Note:</strong> TTL changes only affect new cache entries. Existing entries
                 keep their original TTL until they expire.
+              </Alert>
+            </Stack>
+          </CardContent>
+        </Card>
+
+        {/* Browse Limits Configuration Card */}
+        <Card>
+          <CardContent>
+            <Stack spacing={3}>
+              <Typography variant="h6">Archive Browsing Limits</Typography>
+              <Typography variant="body2" color="text.secondary">
+                These limits prevent out-of-memory errors when browsing archives with millions of
+                files. The borg process is terminated early if limits are exceeded.
+              </Typography>
+              <Divider />
+
+              <Box
+                sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}
+              >
+                <TextField
+                  label="Max Items to Load"
+                  type="number"
+                  fullWidth
+                  value={browseMaxItems}
+                  onChange={(e) => setBrowseMaxItems(Number(e.target.value))}
+                  inputProps={{ min: 100_000, max: 50_000_000, step: 100_000 }}
+                  helperText={`Maximum number of files to list. Range: 100k to 50M. Current: ${(browseMaxItems / 1_000_000).toFixed(1)}M files`}
+                />
+
+                <TextField
+                  label="Max Memory (MB)"
+                  type="number"
+                  fullWidth
+                  value={browseMaxMemoryMb}
+                  onChange={(e) => setBrowseMaxMemoryMb(Number(e.target.value))}
+                  inputProps={{ min: 100, max: 16384, step: 128 }}
+                  helperText={`Maximum memory for browsing. Range: 100 MB to 16 GB. Current: ${(browseMaxMemoryMb / 1024).toFixed(2)} GB`}
+                />
+              </Box>
+
+              <Alert severity="warning" icon={<AlertTriangle size={20} />}>
+                <strong>Warning:</strong> Increasing these limits significantly can cause
+                out-of-memory errors and crash the server. Only increase if you have sufficient RAM
+                and need to browse very large archives.
+              </Alert>
+
+              <Alert severity="info">
+                <strong>Default recommendations:</strong>
+                <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
+                  <li>1M items ≈ 200MB RAM (default, safe for most systems)</li>
+                  <li>5M items ≈ 1GB RAM (requires at least 4GB total RAM)</li>
+                  <li>10M items ≈ 2GB RAM (requires at least 8GB total RAM)</li>
+                </ul>
+                For archives exceeding these limits, use command-line tools or <code>borg mount</code>.
               </Alert>
             </Stack>
           </CardContent>

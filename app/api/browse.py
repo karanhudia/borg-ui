@@ -47,22 +47,39 @@ async def browse_archive_contents(
                        archive=archive_name,
                        items_count=len(all_items))
         else:
-            # If not in cache, fetch from borg
+            # If not in cache, fetch from borg with streaming (prevents OOM)
+            # Pass max_items as max_lines to ensure borg process is killed if limit exceeded
             result = await borg.list_archive_contents(
                 repository.path,
                 archive_name,
                 path="",  # Always fetch all items
                 remote_path=repository.remote_path,
-                passphrase=repository.passphrase
+                passphrase=repository.passphrase,
+                max_lines=max_items  # Kill borg process if this limit is exceeded
             )
 
-            # Parse all items with memory safety checks
+            # Check if line limit was exceeded (borg process was killed to prevent OOM)
+            if result.get("line_count_exceeded"):
+                lines_read = result.get("lines_read", 0)
+                logger.error("Archive too large for safe browsing - terminated early",
+                           archive=archive_name,
+                           lines_read=lines_read,
+                           max_allowed=max_items)
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Archive is too large to browse (>{lines_read:,} items). "
+                           f"Maximum supported: {max_items:,} items. "
+                           f"You can increase this limit in Settings > Cache Management, "
+                           f"or use command-line tools for very large archives."
+                )
+
+            # Parse all items
             all_items = []
             if result.get("stdout"):
                 lines = result["stdout"].strip().split("\n")
                 total_lines = len(lines)
 
-                # Memory safety check: Estimate memory usage before loading
+                # Memory safety check: Estimate memory usage
                 estimated_memory_mb = (total_lines * ITEM_SIZE_ESTIMATE) / (1024 * 1024)
 
                 logger.info("Fetching archive contents",
@@ -70,20 +87,8 @@ async def browse_archive_contents(
                            total_lines=total_lines,
                            estimated_memory_mb=round(estimated_memory_mb, 2))
 
-                # Check if archive is too large to safely load
-                if total_lines > max_items:
-                    logger.error("Archive too large for safe browsing",
-                               archive=archive_name,
-                               total_lines=total_lines,
-                               max_allowed=max_items)
-                    raise HTTPException(
-                        status_code=413,
-                        detail=f"Archive is too large to browse ({total_lines:,} items). "
-                               f"Maximum supported: {max_items:,} items. "
-                               f"You can increase this limit in Settings > Cache Management, "
-                               f"or use command-line tools for very large archives."
-                    )
-
+                # Secondary check: Verify memory estimate is within bounds
+                # (This should rarely trigger now that streaming enforces line limits)
                 if estimated_memory_mb > max_memory_mb:
                     logger.error("Estimated memory usage too high",
                                archive=archive_name,
@@ -97,7 +102,7 @@ async def browse_archive_contents(
                                f"or use command-line tools for very large archives."
                     )
 
-                # Process items in chunks to avoid large temporary lists
+                # Process items
                 for line in lines:
                     if line:
                         try:

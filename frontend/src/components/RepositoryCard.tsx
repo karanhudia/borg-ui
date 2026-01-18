@@ -7,6 +7,7 @@ import {
   Delete,
   PlayArrow,
   FolderOpen,
+  Storage,
 } from '@mui/icons-material'
 import { useMaintenanceJobs } from '../hooks/useMaintenanceJobs'
 import { formatDateShort, formatDateTimeFull, formatElapsedTime } from '../utils/dateUtils'
@@ -42,6 +43,7 @@ interface RepositoryCardProps {
   onDelete: () => void
   onBackupNow: () => void
   onViewArchives: () => void
+  onViewMounts: () => void
   getCompressionLabel: (compression: string) => string
   isAdmin: boolean
   onJobCompleted?: (repositoryId: number) => void
@@ -58,6 +60,7 @@ export default function RepositoryCard({
   onDelete,
   onBackupNow,
   onViewArchives,
+  onViewMounts,
   getCompressionLabel,
   isAdmin,
   onJobCompleted,
@@ -325,6 +328,16 @@ export default function RepositoryCard({
                 sx={{ textTransform: 'none' }}
               >
                 View Archives
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<Storage />}
+                onClick={onViewMounts}
+                disabled={isMaintenanceRunning}
+                sx={{ textTransform: 'none' }}
+              >
+                View Mounts
               </Button>
               <Button
                 variant="outlined"

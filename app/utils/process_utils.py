@@ -266,3 +266,118 @@ def cleanup_orphaned_jobs(db: Session):
     db.commit()
 
     logger.info("Orphaned job cleanup completed")
+
+
+def cleanup_orphaned_mounts():
+    """
+    Cleanup stale FUSE mounts on container startup
+
+    This function detects and cleans up orphaned SSHFS and Borg mounts
+    that may have been left behind from container restarts or crashes.
+
+    Should be called during application startup.
+    """
+    logger.info("Checking for orphaned mounts...")
+
+    try:
+        # Get list of active mounts
+        result = subprocess.run(
+            ["mount"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+
+        if result.returncode != 0:
+            logger.warning("Failed to list mounts", returncode=result.returncode)
+            return
+
+        orphaned_count = 0
+
+        for line in result.stdout.split('\n'):
+            # Look for borg_ui mount points
+            # Patterns: sshfs_mount_, /mounts/borg_, etc.
+            if 'sshfs_mount_' in line or '/mounts/borg_' in line:
+                # Extract mount point from mount output
+                # Format: "source on /mount/point type fuse.sshfs (options)"
+                parts = line.split()
+                if len(parts) >= 3:
+                    # Find the "on" keyword and get the next part
+                    try:
+                        on_index = parts.index('on')
+                        if on_index + 1 < len(parts):
+                            mount_point = parts[on_index + 1]
+
+                            logger.info("Found orphaned mount", mount_point=mount_point)
+                            orphaned_count += 1
+
+                            # Attempt cleanup with fusermount
+                            try:
+                                cleanup_result = subprocess.run(
+                                    ["fusermount", "-uz", mount_point],
+                                    capture_output=True,
+                                    text=True,
+                                    timeout=10
+                                )
+
+                                if cleanup_result.returncode == 0:
+                                    logger.info("Successfully unmounted orphaned mount",
+                                              mount_point=mount_point)
+
+                                    # Try to remove the directory if it's empty
+                                    try:
+                                        if os.path.exists(mount_point):
+                                            # Check if it's in a temp directory
+                                            if 'sshfs_mount_' in mount_point or 'borg_backup_root_' in mount_point:
+                                                # Remove parent temp directory
+                                                import shutil
+                                                parent_dir = os.path.dirname(mount_point)
+                                                if os.path.exists(parent_dir):
+                                                    shutil.rmtree(parent_dir, ignore_errors=True)
+                                                    logger.debug("Removed orphaned temp directory",
+                                                               temp_dir=parent_dir)
+                                    except Exception as e:
+                                        logger.debug("Could not remove mount directory",
+                                                   mount_point=mount_point,
+                                                   error=str(e))
+                                else:
+                                    logger.warning("Failed to unmount orphaned mount",
+                                                 mount_point=mount_point,
+                                                 stderr=cleanup_result.stderr)
+                            except subprocess.TimeoutExpired:
+                                logger.warning("Timeout unmounting orphaned mount",
+                                             mount_point=mount_point)
+                            except FileNotFoundError:
+                                # fusermount not found, try umount on macOS
+                                try:
+                                    cleanup_result = subprocess.run(
+                                        ["umount", "-f", mount_point],
+                                        capture_output=True,
+                                        text=True,
+                                        timeout=10
+                                    )
+                                    if cleanup_result.returncode == 0:
+                                        logger.info("Successfully unmounted orphaned mount (umount)",
+                                                  mount_point=mount_point)
+                                except Exception as e:
+                                    logger.warning("Failed to unmount with umount",
+                                                 mount_point=mount_point,
+                                                 error=str(e))
+                            except Exception as e:
+                                logger.error("Error unmounting orphaned mount",
+                                           mount_point=mount_point,
+                                           error=str(e))
+                    except (ValueError, IndexError):
+                        # "on" not found or invalid format
+                        continue
+
+        if orphaned_count > 0:
+            logger.info("Orphaned mount cleanup completed",
+                       cleaned_up_count=orphaned_count)
+        else:
+            logger.info("No orphaned mounts found")
+
+    except subprocess.TimeoutExpired:
+        logger.error("Timeout while listing mounts")
+    except Exception as e:
+        logger.error("Failed orphan mount cleanup", error=str(e))

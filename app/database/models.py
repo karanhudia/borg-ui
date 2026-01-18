@@ -69,6 +69,9 @@ class Repository(Base):
     # Custom flags for borg create command (advanced users)
     custom_flags = Column(Text, nullable=True)  # Custom command-line flags for borg create (e.g., "--stats --progress")
 
+    # Data source location (for pull-based backups)
+    source_ssh_connection_id = Column(Integer, ForeignKey("ssh_connections.id"), nullable=True)  # SSH connection for remote data source
+
     # Scheduled checks
     check_cron_expression = Column(String, nullable=True)  # NULL = disabled, cron expression for schedule
     last_scheduled_check = Column(DateTime, nullable=True)  # Last scheduled check execution time
