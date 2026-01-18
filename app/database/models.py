@@ -17,6 +17,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
     must_change_password = Column(Boolean, default=False)  # Force password change on next login
+    analytics_enabled = Column(Boolean, default=True)  # Allow users to opt-out of analytics tracking
     last_login = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)

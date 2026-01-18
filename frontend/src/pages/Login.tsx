@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form'
 import { toast } from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth.tsx'
 import { Shield } from 'lucide-react'
+import { useMatomo } from '../hooks/useMatomo'
 
 interface LoginForm {
   username: string
@@ -14,6 +15,7 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
+  const { trackAuth, EventAction } = useMatomo()
 
   const {
     register,
@@ -25,6 +27,9 @@ export default function Login() {
     setIsLoading(true)
     try {
       const mustChangePassword = await login(data.username, data.password)
+
+      // Track successful login
+      trackAuth(EventAction.LOGIN)
 
       if (mustChangePassword) {
         toast.success('Login successful! Please change your password.')

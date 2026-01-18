@@ -41,6 +41,7 @@ import LockErrorDialog from '../components/LockErrorDialog'
 import BackupJobsTable from '../components/BackupJobsTable'
 import StatusBadge from '../components/StatusBadge'
 import { TerminalLogViewer } from '../components/TerminalLogViewer'
+import { useMatomo } from '../hooks/useMatomo'
 
 interface BackupJob {
   id: string
@@ -79,6 +80,7 @@ const Backup: React.FC = () => {
   const [selectedJob, setSelectedJob] = useState<BackupJob | null>(null)
   const queryClient = useQueryClient()
   const location = useLocation()
+  const { trackBackup, EventAction } = useMatomo()
 
   // Handle incoming navigation state (from "Backup Now" button)
   useEffect(() => {
@@ -114,6 +116,7 @@ const Backup: React.FC = () => {
     onSuccess: () => {
       toast.success('Backup started successfully!')
       queryClient.invalidateQueries({ queryKey: ['backup-status-manual'] })
+      trackBackup(EventAction.START, selectedRepoData?.name || 'unknown')
     },
     onError: (error: any) => {
       toast.error(`Failed to start backup: ${error.response?.data?.detail || error.message}`)
@@ -126,6 +129,7 @@ const Backup: React.FC = () => {
     onSuccess: () => {
       toast.success('Backup cancelled successfully!')
       queryClient.invalidateQueries({ queryKey: ['backup-status-manual'] })
+      trackBackup(EventAction.STOP, 'manual')
     },
     onError: (error: any) => {
       toast.error(`Failed to cancel backup: ${error.response?.data?.detail || error.message}`)
@@ -149,6 +153,7 @@ const Backup: React.FC = () => {
   // Handle view logs
   const handleViewLogs = (job: BackupJob) => {
     setSelectedJob(job)
+    trackBackup(EventAction.VIEW, 'logs')
   }
 
   // Handle close logs dialog
@@ -161,6 +166,7 @@ const Backup: React.FC = () => {
     try {
       backupAPI.downloadLogs(job.id)
       toast.success('Downloading logs...')
+      trackBackup(EventAction.DOWNLOAD, 'logs')
     } catch (error) {
       toast.error('Failed to download logs')
     }

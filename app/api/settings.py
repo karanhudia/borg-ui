@@ -40,6 +40,9 @@ class PasswordChange(BaseModel):
 class PasswordReset(BaseModel):
     new_password: str
 
+class UserPreferencesUpdate(BaseModel):
+    analytics_enabled: Optional[bool] = None
+
 class SystemSettingsUpdate(BaseModel):
     backup_timeout: Optional[int] = None
     max_concurrent_backups: Optional[int] = None
@@ -523,6 +526,40 @@ async def update_profile(
     except Exception as e:
         logger.error("Failed to update profile", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to update profile: {str(e)}")
+
+@router.get("/preferences")
+async def get_preferences(current_user: User = Depends(get_current_user)):
+    """Get current user's preferences"""
+    return {
+        "success": True,
+        "preferences": {
+            "analytics_enabled": current_user.analytics_enabled if hasattr(current_user, 'analytics_enabled') else True
+        }
+    }
+
+@router.put("/preferences")
+async def update_preferences(
+    preferences: UserPreferencesUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update current user's preferences"""
+    try:
+        if preferences.analytics_enabled is not None:
+            current_user.analytics_enabled = preferences.analytics_enabled
+
+        current_user.updated_at = datetime.utcnow()
+        db.commit()
+
+        logger.info("User preferences updated", username=current_user.username, analytics_enabled=preferences.analytics_enabled)
+
+        return {
+            "success": True,
+            "message": "Preferences updated successfully"
+        }
+    except Exception as e:
+        logger.error("Failed to update preferences", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to update preferences: {str(e)}")
 
 @router.post("/system/cleanup")
 async def cleanup_system(

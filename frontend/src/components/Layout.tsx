@@ -46,6 +46,7 @@ import {
   Server,
   Zap,
   HardDrive,
+  Sliders,
 } from 'lucide-react'
 import api from '../services/api'
 
@@ -93,6 +94,7 @@ const navigationWithKeys: NavigationItem[] = [
     subItems: [
       { name: 'Account', href: '/settings/account', icon: User },
       { name: 'Appearance', href: '/settings/appearance', icon: Palette },
+      { name: 'Preferences', href: '/settings/preferences', icon: Sliders },
       { name: 'Notifications', href: '/settings/notifications', icon: Bell },
       { name: 'Beta', href: '/settings/beta', icon: Zap },
       { name: 'Cache', href: '/settings/cache', icon: Server },

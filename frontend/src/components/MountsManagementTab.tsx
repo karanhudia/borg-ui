@@ -179,8 +179,9 @@ export default function MountsManagementTab() {
       {/* Info Alert */}
       <Alert severity="info" sx={{ mb: 3 }} icon={<AlertCircle size={20} />}>
         <Typography variant="body2">
-          <strong>Note:</strong> Mounted archives appear as read-only filesystems in your file manager.
-          Access them at the mount point path. Mounts are automatically cleaned up on container restart.
+          <strong>Note:</strong> Mounted archives appear as read-only filesystems in your file
+          manager. Access them at the mount point path. Mounts are automatically cleaned up on
+          container restart.
         </Typography>
       </Alert>
 

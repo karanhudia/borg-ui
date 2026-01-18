@@ -12,6 +12,7 @@ import {
 import { useMaintenanceJobs } from '../hooks/useMaintenanceJobs'
 import { formatDateShort, formatDateTimeFull, formatElapsedTime } from '../utils/dateUtils'
 import { useQueryClient } from '@tanstack/react-query'
+import { useMatomo } from '../hooks/useMatomo'
 
 interface Repository {
   id: number
@@ -66,6 +67,7 @@ export default function RepositoryCard({
   onJobCompleted,
 }: RepositoryCardProps) {
   const queryClient = useQueryClient()
+  const { trackRepository, trackBackup, trackMaintenance, trackArchive, EventAction } = useMatomo()
 
   // Use maintenance jobs hook - always poll to handle page refreshes
   const { hasRunningJobs, checkJob, compactJob, pruneJob } = useMaintenanceJobs(
@@ -267,7 +269,10 @@ export default function RepositoryCard({
                 variant="outlined"
                 size="small"
                 startIcon={<Info />}
-                onClick={onViewInfo}
+                onClick={() => {
+                  trackRepository(EventAction.VIEW, repository.name)
+                  onViewInfo()
+                }}
                 disabled={isMaintenanceRunning}
                 sx={{ textTransform: 'none' }}
               >
@@ -277,7 +282,10 @@ export default function RepositoryCard({
                 variant="outlined"
                 size="small"
                 startIcon={checkJob ? <Refresh className="animate-spin" /> : <CheckCircleIcon />}
-                onClick={onCheck}
+                onClick={() => {
+                  trackMaintenance(EventAction.START, `Check - ${repository.name}`)
+                  onCheck()
+                }}
                 disabled={isMaintenanceRunning}
                 sx={{ textTransform: 'none' }}
                 color={checkJob ? 'primary' : 'inherit'}
@@ -288,7 +296,10 @@ export default function RepositoryCard({
                 variant="outlined"
                 size="small"
                 startIcon={compactJob ? <Refresh className="animate-spin" /> : <Refresh />}
-                onClick={onCompact}
+                onClick={() => {
+                  trackMaintenance(EventAction.START, `Compact - ${repository.name}`)
+                  onCompact()
+                }}
                 disabled={isMaintenanceRunning}
                 color={compactJob ? 'primary' : 'warning'}
                 sx={{ textTransform: 'none' }}
@@ -299,7 +310,10 @@ export default function RepositoryCard({
                 variant="outlined"
                 size="small"
                 startIcon={pruneJob ? <Refresh className="animate-spin" /> : <Delete />}
-                onClick={onPrune}
+                onClick={() => {
+                  trackMaintenance(EventAction.START, `Prune - ${repository.name}`)
+                  onPrune()
+                }}
                 disabled={isMaintenanceRunning}
                 color={pruneJob ? 'primary' : 'secondary'}
                 sx={{ textTransform: 'none' }}
@@ -311,7 +325,10 @@ export default function RepositoryCard({
                   variant="outlined"
                   size="small"
                   startIcon={<PlayArrow />}
-                  onClick={onBackupNow}
+                  onClick={() => {
+                    trackBackup(EventAction.START, repository.name)
+                    onBackupNow()
+                  }}
                   disabled={isMaintenanceRunning}
                   color="success"
                   sx={{ textTransform: 'none' }}
@@ -323,7 +340,10 @@ export default function RepositoryCard({
                 variant="outlined"
                 size="small"
                 startIcon={<FolderOpen />}
-                onClick={onViewArchives}
+                onClick={() => {
+                  trackArchive(EventAction.VIEW, repository.name)
+                  onViewArchives()
+                }}
                 disabled={isMaintenanceRunning}
                 sx={{ textTransform: 'none' }}
               >
@@ -333,7 +353,10 @@ export default function RepositoryCard({
                 variant="outlined"
                 size="small"
                 startIcon={<Storage />}
-                onClick={onViewMounts}
+                onClick={() => {
+                  trackRepository(EventAction.VIEW, `Mounts - ${repository.name}`)
+                  onViewMounts()
+                }}
                 disabled={isMaintenanceRunning}
                 sx={{ textTransform: 'none' }}
               >
@@ -343,7 +366,10 @@ export default function RepositoryCard({
                 variant="outlined"
                 size="small"
                 startIcon={<Delete />}
-                onClick={onDelete}
+                onClick={() => {
+                  trackRepository(EventAction.DELETE, repository.name)
+                  onDelete()
+                }}
                 color="error"
                 sx={{ textTransform: 'none' }}
               >

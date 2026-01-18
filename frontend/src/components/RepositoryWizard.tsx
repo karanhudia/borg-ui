@@ -756,8 +756,13 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
                     onChange={setSourceDirs}
                     onBrowseClick={() => setShowRemoteSourceExplorer(true)}
                   />
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                    Browse remote directories or enter full paths manually (e.g., /home/user/documents, /var/www)
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ mt: 0.5, display: 'block' }}
+                  >
+                    Browse remote directories or enter full paths manually (e.g.,
+                    /home/user/documents, /var/www)
                   </Typography>
                 </Box>
               )}
@@ -766,7 +771,9 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
 
           <Alert severity="info">
             <Typography variant="body2">
-              <strong>Note:</strong> The Borg UI server will SSH into the remote machine to browse and back up the selected directories. Ensure the SSH connection is properly configured with the necessary permissions.
+              <strong>Note:</strong> The Borg UI server will SSH into the remote machine to browse
+              and back up the selected directories. Ensure the SSH connection is properly configured
+              with the necessary permissions.
             </Typography>
           </Alert>
         </>
@@ -1097,32 +1104,36 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         selectMode="directories"
       />
 
-      {showRemoteSourceExplorer && sourceSshConnectionId && (() => {
-        const conn = sshConnections.find((c) => c.id === sourceSshConnectionId)
-        const config = conn ? {
-          ssh_key_id: conn.ssh_key_id,
-          host: conn.host,
-          username: conn.username,
-          port: conn.port,
-        } : undefined
+      {showRemoteSourceExplorer &&
+        sourceSshConnectionId &&
+        (() => {
+          const conn = sshConnections.find((c) => c.id === sourceSshConnectionId)
+          const config = conn
+            ? {
+                ssh_key_id: conn.ssh_key_id,
+                host: conn.host,
+                username: conn.username,
+                port: conn.port,
+              }
+            : undefined
 
-        return (
-          <FileExplorerDialog
-            open={true}
-            onClose={() => setShowRemoteSourceExplorer(false)}
-            onSelect={(paths) => {
-              setSourceDirs([...sourceDirs, ...paths])
-              setShowRemoteSourceExplorer(false)
-            }}
-            title="Select Source Directories (Remote)"
-            initialPath="/"
-            multiSelect={true}
-            connectionType="ssh"
-            sshConfig={config}
-            selectMode="directories"
-          />
-        )
-      })()}
+          return (
+            <FileExplorerDialog
+              open={true}
+              onClose={() => setShowRemoteSourceExplorer(false)}
+              onSelect={(paths) => {
+                setSourceDirs([...sourceDirs, ...paths])
+                setShowRemoteSourceExplorer(false)
+              }}
+              title="Select Source Directories (Remote)"
+              initialPath="/"
+              multiSelect={true}
+              connectionType="ssh"
+              sshConfig={config}
+              selectMode="directories"
+            />
+          )
+        })()}
 
       <FileExplorerDialog
         open={showExcludeExplorer}

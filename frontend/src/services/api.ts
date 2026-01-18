@@ -169,6 +169,10 @@ export const settingsAPI = {
   updateProfile: (profileData: any) => api.put('/settings/profile', profileData),
   changePassword: (passwordData: any) => api.post('/settings/change-password', passwordData),
 
+  // User preferences
+  getPreferences: () => api.get('/settings/preferences'),
+  updatePreferences: (preferences: any) => api.put('/settings/preferences', preferences),
+
   // System maintenance
   cleanupSystem: () => api.post('/settings/system/cleanup'),
 
@@ -387,8 +391,11 @@ export const scriptsAPI = {
 
 export const mountsAPI = {
   // Mount a Borg repository or archive
-  mountBorgArchive: (data: { repository_id: number; archive_name?: string; mount_point?: string }) =>
-    api.post('/mounts/borg', data),
+  mountBorgArchive: (data: {
+    repository_id: number
+    archive_name?: string
+    mount_point?: string
+  }) => api.post('/mounts/borg', data),
 
   // Unmount a mounted archive
   unmountBorgArchive: (mountId: string, force: boolean = false) =>
