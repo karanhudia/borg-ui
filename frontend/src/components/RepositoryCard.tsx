@@ -44,7 +44,6 @@ interface RepositoryCardProps {
   onDelete: () => void
   onBackupNow: () => void
   onViewArchives: () => void
-  onViewMounts: () => void
   getCompressionLabel: (compression: string) => string
   isAdmin: boolean
   onJobCompleted?: (repositoryId: number) => void
@@ -61,7 +60,6 @@ export default function RepositoryCard({
   onDelete,
   onBackupNow,
   onViewArchives,
-  onViewMounts,
   getCompressionLabel,
   isAdmin,
   onJobCompleted,
@@ -348,19 +346,6 @@ export default function RepositoryCard({
                 sx={{ textTransform: 'none' }}
               >
                 View Archives
-              </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<Storage />}
-                onClick={() => {
-                  trackRepository(EventAction.VIEW, `Mounts - ${repository.name}`)
-                  onViewMounts()
-                }}
-                disabled={isMaintenanceRunning}
-                sx={{ textTransform: 'none' }}
-              >
-                View Mounts
               </Button>
               <Button
                 variant="outlined"
