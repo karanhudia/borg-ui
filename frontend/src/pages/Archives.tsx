@@ -39,6 +39,7 @@ import { archivesAPI, repositoriesAPI, browseAPI, mountsAPI } from '../services/
 import { toast } from 'react-hot-toast'
 import LockErrorDialog from '../components/LockErrorDialog'
 import { formatDate, formatDateCompact, formatBytes as formatBytesUtil } from '../utils/dateUtils'
+import { useMatomo } from '../hooks/useMatomo'
 
 interface Repository {
   id: number
@@ -70,6 +71,7 @@ const Archives: React.FC = () => {
   const queryClient = useQueryClient()
   const location = useLocation()
   const navigate = useNavigate()
+  const { trackArchive, EventAction } = useMatomo()
 
   // Get repositories list
   const { data: repositoriesData, isLoading: loadingRepositories } = useQuery({
@@ -146,6 +148,7 @@ const Archives: React.FC = () => {
         queryClient.invalidateQueries({ queryKey: ['repository-archives', selectedRepositoryId] })
       }, 2000)
       setShowDeleteConfirm(null)
+      trackArchive(EventAction.DELETE, selectedRepository?.name || 'unknown')
     },
     onError: (error: any) => {
       toast.error(`Failed to delete archive: ${error.response?.data?.detail || error.message}`)
@@ -180,6 +183,7 @@ const Archives: React.FC = () => {
           },
         }
       )
+      trackArchive(EventAction.MOUNT, selectedRepository?.name || 'unknown')
     },
     onError: (error: any) => {
       toast.error(`Failed to mount archive: ${error.response?.data?.detail || error.message}`)
@@ -294,6 +298,7 @@ const Archives: React.FC = () => {
   const handleViewArchive = (archive: Archive) => {
     setViewArchive(archive)
     setCurrentPath('/')
+    trackArchive(EventAction.VIEW, selectedRepository?.name || 'unknown')
   }
 
   const handleRestoreArchive = (archive: Archive) => {

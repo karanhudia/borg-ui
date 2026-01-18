@@ -471,7 +471,8 @@ const CacheManagementTab: React.FC = () => {
                   <li>5M items ≈ 1GB RAM (requires at least 4GB total RAM)</li>
                   <li>10M items ≈ 2GB RAM (requires at least 8GB total RAM)</li>
                 </ul>
-                For archives exceeding these limits, use command-line tools or <code>borg mount</code>.
+                For archives exceeding these limits, use command-line tools or{' '}
+                <code>borg mount</code>.
               </Alert>
             </Stack>
           </CardContent>

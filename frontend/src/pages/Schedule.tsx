@@ -47,6 +47,7 @@ import { scheduleAPI, repositoriesAPI, backupAPI, scriptsAPI } from '../services
 import { toast } from 'react-hot-toast'
 import RepositoryCell from '../components/RepositoryCell'
 import MultiRepositorySelector from '../components/MultiRepositorySelector'
+import { useMatomo } from '../hooks/useMatomo'
 import {
   formatDate,
   formatRelativeTime,
@@ -125,6 +126,7 @@ const Schedule: React.FC = () => {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const location = useLocation()
+  const { track, EventCategory, EventAction } = useMatomo()
 
   // Determine current tab from URL
   const getCurrentTab = () => {
@@ -236,6 +238,7 @@ const Schedule: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
       setShowCreateModal(false)
       resetCreateForm()
+      track(EventCategory.BACKUP, EventAction.CREATE, 'schedule')
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to create scheduled job')
@@ -251,6 +254,7 @@ const Schedule: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
       setEditingJob(null)
+      track(EventCategory.BACKUP, EventAction.EDIT, 'schedule')
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to update scheduled job')
@@ -265,6 +269,7 @@ const Schedule: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
       setDeleteConfirmJob(null)
+      track(EventCategory.BACKUP, EventAction.DELETE, 'schedule')
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to delete scheduled job')
@@ -278,6 +283,7 @@ const Schedule: React.FC = () => {
       toast.success('Job status updated')
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
+      track(EventCategory.BACKUP, EventAction.EDIT, 'schedule-toggle')
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to toggle job')
@@ -292,6 +298,7 @@ const Schedule: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['backup-status'] })
       queryClient.invalidateQueries({ queryKey: ['backup-jobs-scheduled'] })
+      track(EventCategory.BACKUP, EventAction.START, 'schedule-manual-run')
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to run job')

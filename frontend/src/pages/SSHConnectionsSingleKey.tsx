@@ -37,6 +37,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import RemoteMachineCard from '../components/RemoteMachineCard'
+import { useMatomo } from '../hooks/useMatomo'
 
 interface StorageInfo {
   total: number
@@ -68,6 +69,7 @@ interface SSHConnection {
 
 export default function SSHConnectionsSingleKey() {
   const queryClient = useQueryClient()
+  const { track, EventCategory, EventAction } = useMatomo()
 
   // State
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false)
@@ -179,6 +181,7 @@ export default function SSHConnectionsSingleKey() {
         default_path: '',
         mount_point: '',
       })
+      track(EventCategory.SSH, EventAction.CREATE, 'connection')
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to deploy SSH key')
@@ -231,6 +234,7 @@ export default function SSHConnectionsSingleKey() {
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
       setDeleteConnectionDialogOpen(false)
       setSelectedConnection(null)
+      track(EventCategory.SSH, EventAction.DELETE, 'connection')
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to delete connection')
@@ -257,6 +261,7 @@ export default function SSHConnectionsSingleKey() {
         toast.error(response.data.error || 'Connection test failed')
       }
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
+      track(EventCategory.SSH, EventAction.TEST, 'connection')
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to test connection')

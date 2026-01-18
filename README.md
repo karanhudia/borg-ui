@@ -45,6 +45,25 @@ A modern web interface for [Borg Backup](https://borgbackup.readthedocs.io/). Ze
 
 ---
 
+## Privacy & Analytics
+
+Borg UI collects **anonymous usage statistics** to help us improve the product. We believe in **full transparency**:
+
+- **[View our analytics dashboard publicly](https://analytics.nullcodeai.dev/)** - See exactly what we collect in real-time
+- **Opt-out anytime** - Go to Settings → Preferences to disable
+- **Self-hosted Matomo** - No third-party services, data stays with us
+- **No sensitive data** - We never collect passwords, keys, backup data, or file paths
+
+**We collect:** Page views, feature usage, browser/device info, navigation patterns
+
+**We DON'T collect:** Passwords, encryption keys, backup data, file paths, personal information
+
+Don't like what we're tracking? [Open an issue](https://github.com/karanhudia/borg-ui/issues) and we'll consider adjusting our practices.
+
+Read our full [Privacy Policy](PRIVACY.md) for details. No hidden tracking, no selling data, just transparent analytics to build a better product.
+
+---
+
 ## Quick Start
 
 ### Docker Compose (Recommended)

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth.tsx'
 import Layout from './components/Layout'
@@ -12,9 +13,16 @@ import Repositories from './pages/Repositories'
 import SSHConnectionsSingleKey from './pages/SSHConnectionsSingleKey'
 import Activity from './pages/Activity'
 import Settings from './pages/Settings'
+import { MatomoTracker } from './components/MatomoTracker'
+import { loadUserPreference } from './utils/matomo'
 
 function App() {
   const { isAuthenticated, isLoading } = useAuth()
+
+  // Load user analytics preference on mount
+  useEffect(() => {
+    loadUserPreference()
+  }, [])
 
   if (isLoading) {
     return (
@@ -26,15 +34,19 @@ function App() {
 
   if (!isAuthenticated) {
     return (
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
+      <>
+        <MatomoTracker />
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </>
     )
   }
 
   return (
     <Layout>
+      <MatomoTracker />
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />

@@ -9,6 +9,10 @@ import { AppProvider } from './context/AppContext'
 import { ThemeProvider } from './context/ThemeContext'
 import App from './App.tsx'
 import './index.css'
+import { initMatomo } from './utils/matomo'
+
+// Initialize Matomo analytics
+initMatomo()
 
 const queryClient = new QueryClient({
   defaultOptions: {
