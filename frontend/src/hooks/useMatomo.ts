@@ -1,10 +1,19 @@
 import { useCallback } from 'react'
 import { useLocation } from 'react-router-dom'
-import { trackEvent, trackPageView, EventCategory, EventAction } from '../utils/matomo'
+import {
+  trackEvent,
+  trackPageView,
+  EventCategory,
+  EventAction,
+  anonymizeEntityName,
+} from '../utils/matomo'
 
 /**
  * Custom hook for Matomo tracking
  * Provides easy-to-use tracking functions for components
+ *
+ * Entity names (repos, connections, etc.) are automatically hashed for privacy.
+ * Example: "my-backup-repo" → "a3f2b1c8"
  */
 export const useMatomo = () => {
   const location = useLocation()
@@ -22,37 +31,52 @@ export const useMatomo = () => {
     trackEvent(category, action, name, value)
   }, [])
 
-  // Repository-specific tracking
-  const trackRepository = useCallback((action: string, repositoryName?: string) => {
-    trackEvent(EventCategory.REPOSITORY, action, repositoryName)
+  // Repository-specific tracking with anonymous entity hash
+  const trackRepository = useCallback((action: string, entityName?: string) => {
+    const hash = entityName ? anonymizeEntityName(entityName) : undefined
+    trackEvent(EventCategory.REPOSITORY, action, hash)
   }, [])
 
-  // Backup tracking
-  const trackBackup = useCallback((action: string, repositoryName?: string) => {
-    trackEvent(EventCategory.BACKUP, action, repositoryName)
+  // Backup tracking - descriptor for type (e.g., 'logs'), entityName for repo
+  const trackBackup = useCallback((action: string, descriptor?: string, entityName?: string) => {
+    const label = entityName
+      ? descriptor
+        ? `${descriptor} [${anonymizeEntityName(entityName)}]`
+        : anonymizeEntityName(entityName)
+      : descriptor
+    trackEvent(EventCategory.BACKUP, action, label)
   }, [])
 
-  // Archive tracking
-  const trackArchive = useCallback((action: string, archiveName?: string) => {
-    trackEvent(EventCategory.ARCHIVE, action, archiveName)
+  // Archive tracking with anonymous entity hash
+  const trackArchive = useCallback((action: string, entityName?: string) => {
+    const hash = entityName ? anonymizeEntityName(entityName) : undefined
+    trackEvent(EventCategory.ARCHIVE, action, hash)
   }, [])
 
-  // Mount tracking
-  const trackMount = useCallback((action: string, mountPoint?: string) => {
-    trackEvent(EventCategory.MOUNT, action, mountPoint)
+  // Mount tracking with anonymous entity hash
+  const trackMount = useCallback((action: string, entityName?: string) => {
+    const hash = entityName ? anonymizeEntityName(entityName) : undefined
+    trackEvent(EventCategory.MOUNT, action, hash)
   }, [])
 
-  // Maintenance tracking
-  const trackMaintenance = useCallback((action: string, operationType?: string) => {
-    trackEvent(EventCategory.MAINTENANCE, action, operationType)
+  // Maintenance tracking - operationType required, entityName for repo hash
+  const trackMaintenance = useCallback(
+    (action: string, operationType: string, entityName?: string) => {
+      const label = entityName
+        ? `${operationType} [${anonymizeEntityName(entityName)}]`
+        : operationType
+      trackEvent(EventCategory.MAINTENANCE, action, label)
+    },
+    []
+  )
+
+  // SSH connection tracking with anonymous entity hash
+  const trackSSH = useCallback((action: string, entityName?: string) => {
+    const hash = entityName ? anonymizeEntityName(entityName) : undefined
+    trackEvent(EventCategory.SSH, action, hash)
   }, [])
 
-  // SSH connection tracking
-  const trackSSH = useCallback((action: string, connectionName?: string) => {
-    trackEvent(EventCategory.SSH, action, connectionName)
-  }, [])
-
-  // Settings tracking
+  // Settings tracking (setting names are safe, no hashing needed)
   const trackSettings = useCallback((action: string, settingName?: string) => {
     trackEvent(EventCategory.SETTINGS, action, settingName)
   }, [])

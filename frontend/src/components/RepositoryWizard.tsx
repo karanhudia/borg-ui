@@ -33,6 +33,7 @@ import ExcludePatternInput from './ExcludePatternInput'
 import FileExplorerDialog from './FileExplorerDialog'
 import AdvancedRepositoryOptions from './AdvancedRepositoryOptions'
 import { sshKeysAPI } from '../services/api'
+import { useMatomo } from '../hooks/useMatomo'
 
 interface RepositoryWizardProps {
   open: boolean
@@ -54,6 +55,7 @@ interface SSHConnection {
 }
 
 const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: RepositoryWizardProps) => {
+  const { track, trackRepository, EventCategory, EventAction } = useMatomo()
   const [activeStep, setActiveStep] = useState(0)
 
   // Form state
@@ -342,6 +344,17 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     if (dataSource === 'remote' && sourceSshConnectionId) {
       data.source_connection_id = sourceSshConnectionId
     }
+
+    // Track wizard usage - separate event to identify new wizard vs old form
+    track(EventCategory.REPOSITORY, EventAction.CREATE, `wizard-${mode}`)
+    trackRepository(
+      mode === 'create'
+        ? EventAction.CREATE
+        : mode === 'import'
+          ? EventAction.UPLOAD
+          : EventAction.EDIT,
+      name
+    )
 
     onSubmit(data)
   }

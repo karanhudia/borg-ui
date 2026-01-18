@@ -116,7 +116,7 @@ const Backup: React.FC = () => {
     onSuccess: () => {
       toast.success('Backup started successfully!')
       queryClient.invalidateQueries({ queryKey: ['backup-status-manual'] })
-      trackBackup(EventAction.START, selectedRepoData?.name || 'unknown')
+      trackBackup(EventAction.START, undefined, selectedRepoData?.name)
     },
     onError: (error: any) => {
       toast.error(`Failed to start backup: ${error.response?.data?.detail || error.message}`)
@@ -135,6 +135,15 @@ const Backup: React.FC = () => {
       toast.error(`Failed to cancel backup: ${error.response?.data?.detail || error.message}`)
     },
   })
+
+  // Handle repository selection
+  const handleRepositoryChange = (repoPath: string) => {
+    setSelectedRepository(repoPath)
+    const repo = repositoriesData?.data?.repositories?.find((r: any) => r.path === repoPath)
+    if (repo) {
+      trackBackup(EventAction.FILTER, undefined, repo.name)
+    }
+  }
 
   // Handle start backup
   const handleStartBackup = () => {
@@ -256,7 +265,7 @@ const Backup: React.FC = () => {
                 labelId="repository-select-label"
                 id="repository-select"
                 value={selectedRepository}
-                onChange={(e) => setSelectedRepository(e.target.value)}
+                onChange={(e) => handleRepositoryChange(e.target.value)}
                 label="Repository"
                 disabled={loadingRepositories}
                 sx={{ height: { xs: 48, sm: 56 } }}

@@ -148,7 +148,7 @@ const Archives: React.FC = () => {
         queryClient.invalidateQueries({ queryKey: ['repository-archives', selectedRepositoryId] })
       }, 2000)
       setShowDeleteConfirm(null)
-      trackArchive(EventAction.DELETE, selectedRepository?.name || 'unknown')
+      trackArchive(EventAction.DELETE, selectedRepository?.name)
     },
     onError: (error: any) => {
       toast.error(`Failed to delete archive: ${error.response?.data?.detail || error.message}`)
@@ -183,7 +183,7 @@ const Archives: React.FC = () => {
           },
         }
       )
-      trackArchive(EventAction.MOUNT, selectedRepository?.name || 'unknown')
+      trackArchive(EventAction.MOUNT, selectedRepository?.name)
     },
     onError: (error: any) => {
       toast.error(`Failed to mount archive: ${error.response?.data?.detail || error.message}`)
@@ -195,6 +195,10 @@ const Archives: React.FC = () => {
     setSelectedRepositoryId(repositoryId)
     const repo = repositories.find((r: Repository) => r.id === repositoryId)
     setSelectedRepository(repo || null)
+    // Track archive listing (selecting a repo to filter/list its archives)
+    if (repo) {
+      trackArchive(EventAction.FILTER, repo.name)
+    }
   }
 
   // Handle archive deletion
@@ -298,7 +302,7 @@ const Archives: React.FC = () => {
   const handleViewArchive = (archive: Archive) => {
     setViewArchive(archive)
     setCurrentPath('/')
-    trackArchive(EventAction.VIEW, selectedRepository?.name || 'unknown')
+    trackArchive(EventAction.VIEW, selectedRepository?.name)
   }
 
   const handleRestoreArchive = (archive: Archive) => {

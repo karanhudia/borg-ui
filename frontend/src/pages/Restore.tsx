@@ -32,6 +32,7 @@ import {
 } from 'lucide-react'
 import { restoreAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
+import { useMatomo } from '../hooks/useMatomo'
 import { formatDate, formatBytes as formatBytesUtil, formatTimeRange } from '../utils/dateUtils'
 import RepositoryInfo from '../components/RepositoryInfo'
 import PathSelectorField from '../components/PathSelectorField'
@@ -73,6 +74,7 @@ interface RestoreJob {
 }
 
 const Restore: React.FC = () => {
+  const { trackArchive, EventAction } = useMatomo()
   const [selectedRepository, setSelectedRepository] = useState<string>('')
   const [selectedRepoData, setSelectedRepoData] = useState<Repository | null>(null)
   const [restoreArchive, setRestoreArchive] = useState<Archive | null>(null)
@@ -182,6 +184,8 @@ const Restore: React.FC = () => {
     }) => restoreAPI.startRestore(repository, archive, paths, destination),
     onSuccess: () => {
       toast.success('Restore job started!')
+      // Track restore started
+      trackArchive(EventAction.START, selectedRepoData?.name)
 
       setRestoreArchive(null)
       setDestination('')
@@ -200,6 +204,10 @@ const Restore: React.FC = () => {
     setSelectedRepository(repoPath)
     const repo = repositories.find((r: Repository) => r.path === repoPath)
     setSelectedRepoData(repo || null)
+    // Track archive listing (selecting a repo to filter/list its archives for restore)
+    if (repo) {
+      trackArchive(EventAction.FILTER, repo.name)
+    }
   }
 
   // Handle restore
@@ -229,6 +237,8 @@ const Restore: React.FC = () => {
     setRestoreArchive(archive)
     setSelectedPaths([]) // Reset paths
     setShowBrowser(true)
+    // Track viewing archive for restore
+    trackArchive(EventAction.VIEW, selectedRepoData?.name)
   }
 
   // Get repositories from API response
@@ -783,7 +793,13 @@ const Restore: React.FC = () => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setRestoreArchive(null)} disabled={restoreMutation.isPending}>
+          <Button
+            onClick={() => {
+              trackArchive(EventAction.STOP, selectedRepoData?.name)
+              setRestoreArchive(null)
+            }}
+            disabled={restoreMutation.isPending}
+          >
             Cancel
           </Button>
           <Button

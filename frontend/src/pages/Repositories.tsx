@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
+import { useMatomo } from '../hooks/useMatomo'
 import {
   Box,
   Card,
@@ -85,6 +86,7 @@ export default function Repositories() {
   const queryClient = useQueryClient()
   const appState = useAppState()
   const navigate = useNavigate()
+  const { track, trackRepository, trackMaintenance, EventCategory, EventAction } = useMatomo()
   const [showRepositoryModal, setShowRepositoryModal] = useState(false)
   const [repositoryModalMode, setRepositoryModalMode] = useState<'create' | 'import'>('create')
   const [newlyCreatedRepositoryId, setNewlyCreatedRepositoryId] = useState<number | null>(null)
@@ -189,6 +191,7 @@ export default function Repositories() {
       appState.refetch()
       // Close modal after successful creation
       closeRepositoryModal()
+      trackRepository(EventAction.CREATE, response?.data?.repository?.name)
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to create repository')
@@ -233,6 +236,7 @@ export default function Repositories() {
       appState.refetch()
       // Close modal after successful import
       closeRepositoryModal()
+      trackRepository(EventAction.UPLOAD, response?.data?.repository?.name)
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to import repository')
@@ -248,6 +252,7 @@ export default function Repositories() {
       // Invalidate AppContext query to update tab enablement
       queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
       appState.refetch()
+      trackRepository(EventAction.EDIT, editingRepository?.name)
       setEditingRepository(null)
     },
     onError: (error: any) => {
@@ -274,6 +279,7 @@ export default function Repositories() {
       repositoriesAPI.checkRepository(repositoryId, maxDuration),
     onSuccess: (_response: any, variables: { repositoryId: number; maxDuration: number }) => {
       toast.success('Check operation started')
+      trackMaintenance(EventAction.START, 'Check', checkingRepository?.name)
       setCheckingRepository(null) // Close dialog
       // Add repository to polling set
       setRepositoriesWithJobs((prev) => new Set(prev).add(variables.repositoryId))
@@ -296,6 +302,7 @@ export default function Repositories() {
     mutationFn: repositoriesAPI.compactRepository,
     onSuccess: (_response: any, repositoryId: number) => {
       toast.success('Compact operation started')
+      trackMaintenance(EventAction.START, 'Compact', compactingRepository?.name)
       setCompactingRepository(null) // Close dialog
       // Add repository to polling set
       setRepositoriesWithJobs((prev) => new Set(prev).add(repositoryId))
@@ -323,6 +330,7 @@ export default function Repositories() {
         toast.success('Dry run completed - review results below')
       } else {
         toast.success('Repository pruned successfully!')
+        trackMaintenance(EventAction.START, 'Prune', pruningRepository?.name)
         queryClient.invalidateQueries({ queryKey: ['repositories'] })
         queryClient.invalidateQueries({ queryKey: ['repository-archives', pruningRepository?.id] })
       }
@@ -401,6 +409,8 @@ export default function Repositories() {
   // Event handlers
   const handleSubmitRepository = (e: React.FormEvent) => {
     e.preventDefault()
+    // Track old form usage to distinguish from new wizard
+    track(EventCategory.REPOSITORY, EventAction.CREATE, `form-${repositoryModalMode}`)
     if (repositoryModalMode === 'create') {
       createRepositoryMutation.mutate(repositoryForm)
     } else {
@@ -411,6 +421,8 @@ export default function Repositories() {
   const handleUpdateRepository = (e: React.FormEvent) => {
     e.preventDefault()
     if (editingRepository) {
+      // Track old form usage to distinguish from new wizard
+      track(EventCategory.REPOSITORY, EventAction.EDIT, 'form-edit')
       updateRepositoryMutation.mutate({
         id: editingRepository.id,
         data: editForm,
