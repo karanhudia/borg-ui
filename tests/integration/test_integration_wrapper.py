@@ -8,6 +8,7 @@ import sys
 import os
 
 
+@pytest.mark.skip(reason="Integration test requires running server with test credentials - run manually with test_app.py")
 @pytest.mark.integration
 @pytest.mark.requires_ui
 @pytest.mark.requires_borg
