@@ -14,7 +14,7 @@ import {
 import { BarChart3, Info } from 'lucide-react'
 import { settingsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
-import { resetOptOutCache } from '../utils/matomo'
+import { resetOptOutCache, trackOptOut } from '../utils/matomo'
 
 interface Preferences {
   analytics_enabled: boolean
@@ -61,6 +61,10 @@ export default function PreferencesTab() {
   })
 
   const handleAnalyticsToggle = (checked: boolean) => {
+    // Track opt-out event BEFORE saving (so we know how many users opt out)
+    if (!checked) {
+      trackOptOut()
+    }
     setAnalyticsEnabled(checked)
     updatePreferencesMutation.mutate({ analytics_enabled: checked })
   }
