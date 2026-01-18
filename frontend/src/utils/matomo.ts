@@ -92,7 +92,7 @@ let preferenceLoaded = false
  */
 export const loadUserPreference = async (): Promise<void> => {
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('access_token')
     if (!token) {
       userOptedOut = false // Not logged in, allow tracking
       preferenceLoaded = true
@@ -214,6 +214,17 @@ export const resetUserId = (): void => {
  */
 export const resetOptOutCache = async (): Promise<void> => {
   await loadUserPreference()
+}
+
+/**
+ * Track analytics opt-out event (bypasses canTrack to send this final event)
+ * Call this BEFORE saving the preference so we can track how many users opt out
+ */
+export const trackOptOut = (): void => {
+  const config = getMatomoConfig()
+  if (!config.enabled || !window._paq) return
+
+  window._paq.push(['trackEvent', 'Settings', 'OptOut', 'analytics'])
 }
 
 /**
