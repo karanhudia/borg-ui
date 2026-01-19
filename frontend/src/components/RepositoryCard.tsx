@@ -9,7 +9,12 @@ import {
   FolderOpen,
 } from '@mui/icons-material'
 import { useMaintenanceJobs } from '../hooks/useMaintenanceJobs'
-import { formatDateShort, formatDateTimeFull, formatElapsedTime } from '../utils/dateUtils'
+import {
+  formatDateShort,
+  formatDateTimeFull,
+  formatElapsedTime,
+  parseBytes,
+} from '../utils/dateUtils'
 import { useQueryClient } from '@tanstack/react-query'
 import { useMatomo } from '../hooks/useMatomo'
 
@@ -267,7 +272,11 @@ export default function RepositoryCard({
                 size="small"
                 startIcon={<Info />}
                 onClick={() => {
-                  trackRepository(EventAction.VIEW, repository.name)
+                  trackRepository(
+                    EventAction.VIEW,
+                    repository.name,
+                    parseBytes(repository.total_size)
+                  )
                   onViewInfo()
                 }}
                 disabled={isMaintenanceRunning}
@@ -323,7 +332,12 @@ export default function RepositoryCard({
                   size="small"
                   startIcon={<PlayArrow />}
                   onClick={() => {
-                    trackBackup(EventAction.START, undefined, repository.name)
+                    trackBackup(
+                      EventAction.START,
+                      undefined,
+                      repository.name,
+                      parseBytes(repository.total_size)
+                    )
                     onBackupNow()
                   }}
                   disabled={isMaintenanceRunning}
@@ -338,7 +352,7 @@ export default function RepositoryCard({
                 size="small"
                 startIcon={<FolderOpen />}
                 onClick={() => {
-                  trackArchive(EventAction.VIEW, repository.name)
+                  trackArchive(EventAction.VIEW, repository.name, parseBytes(repository.total_size))
                   onViewArchives()
                 }}
                 disabled={isMaintenanceRunning}
@@ -351,7 +365,11 @@ export default function RepositoryCard({
                 size="small"
                 startIcon={<Delete />}
                 onClick={() => {
-                  trackRepository(EventAction.DELETE, repository.name)
+                  trackRepository(
+                    EventAction.DELETE,
+                    repository.name,
+                    parseBytes(repository.total_size)
+                  )
                   onDelete()
                 }}
                 color="error"

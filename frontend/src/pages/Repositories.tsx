@@ -40,7 +40,7 @@ import {
 import { repositoriesAPI, sshKeysAPI, settingsAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { useAppState } from '../context/AppContext'
-import { formatDateShort, formatBytes } from '../utils/dateUtils'
+import { formatDateShort, formatBytes, parseBytes } from '../utils/dateUtils'
 import { generateBorgCreateCommand } from '../utils/borgUtils'
 import FileExplorerDialog from '../components/FileExplorerDialog'
 import { FolderOpen } from '@mui/icons-material'
@@ -252,7 +252,11 @@ export default function Repositories() {
       // Invalidate AppContext query to update tab enablement
       queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
       appState.refetch()
-      trackRepository(EventAction.EDIT, editingRepository?.name)
+      trackRepository(
+        EventAction.EDIT,
+        editingRepository?.name,
+        parseBytes(editingRepository?.total_size)
+      )
       setEditingRepository(null)
     },
     onError: (error: any) => {
