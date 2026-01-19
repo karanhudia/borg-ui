@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth.tsx'
 import { useTabEnablement } from '../context/AppContext'
+import { setAppVersion } from '../utils/matomo'
 import {
   Box,
   Drawer,
@@ -134,6 +135,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       try {
         const response = await api.get('/system/info')
         setSystemInfo(response.data)
+        // Set version for analytics tracking
+        if (response.data.app_version) {
+          setAppVersion(response.data.app_version)
+        }
       } catch (error) {
         console.error('Failed to fetch system info:', error)
       }
