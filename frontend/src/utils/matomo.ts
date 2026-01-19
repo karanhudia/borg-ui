@@ -190,6 +190,18 @@ export const setCustomDimension = (dimensionId: number, value: string): void => 
 }
 
 /**
+ * Set app version as custom dimension 1
+ * Should be called once when app version is known (e.g., after fetching system info)
+ * Note: Custom dimension 1 must be configured in Matomo admin as "Visit" scope
+ */
+export const setAppVersion = (version: string): void => {
+  const config = getMatomoConfig()
+  if (!config.enabled || !window._paq) return
+
+  window._paq.push(['setCustomDimension', 1, version])
+}
+
+/**
  * Set user ID for tracking authenticated users
  */
 export const setUserId = (userId: string): void => {
