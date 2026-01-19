@@ -32,25 +32,31 @@ export const useMatomo = () => {
   }, [])
 
   // Repository-specific tracking with anonymous entity hash
-  const trackRepository = useCallback((action: string, entityName?: string) => {
+  // sizeBytes: optional size in bytes (e.g., repo total size)
+  const trackRepository = useCallback((action: string, entityName?: string, sizeBytes?: number) => {
     const hash = entityName ? anonymizeEntityName(entityName) : undefined
-    trackEvent(EventCategory.REPOSITORY, action, hash)
+    trackEvent(EventCategory.REPOSITORY, action, hash, sizeBytes)
   }, [])
 
   // Backup tracking - descriptor for type (e.g., 'logs'), entityName for repo
-  const trackBackup = useCallback((action: string, descriptor?: string, entityName?: string) => {
-    const label = entityName
-      ? descriptor
-        ? `${descriptor} [${anonymizeEntityName(entityName)}]`
-        : anonymizeEntityName(entityName)
-      : descriptor
-    trackEvent(EventCategory.BACKUP, action, label)
-  }, [])
+  // sizeBytes: optional size in bytes (e.g., backup original_size or deduplicated_size)
+  const trackBackup = useCallback(
+    (action: string, descriptor?: string, entityName?: string, sizeBytes?: number) => {
+      const label = entityName
+        ? descriptor
+          ? `${descriptor} [${anonymizeEntityName(entityName)}]`
+          : anonymizeEntityName(entityName)
+        : descriptor
+      trackEvent(EventCategory.BACKUP, action, label, sizeBytes)
+    },
+    []
+  )
 
   // Archive tracking with anonymous entity hash
-  const trackArchive = useCallback((action: string, entityName?: string) => {
+  // sizeBytes: optional size in bytes (e.g., archive size)
+  const trackArchive = useCallback((action: string, entityName?: string, sizeBytes?: number) => {
     const hash = entityName ? anonymizeEntityName(entityName) : undefined
-    trackEvent(EventCategory.ARCHIVE, action, hash)
+    trackEvent(EventCategory.ARCHIVE, action, hash, sizeBytes)
   }, [])
 
   // Mount tracking with anonymous entity hash

@@ -35,6 +35,7 @@ import {
   formatTimeRange,
   formatBytes as formatBytesUtil,
   formatDurationSeconds,
+  parseBytes,
 } from '../utils/dateUtils'
 import { generateBorgCreateCommand } from '../utils/borgUtils'
 import LockErrorDialog from '../components/LockErrorDialog'
@@ -116,7 +117,12 @@ const Backup: React.FC = () => {
     onSuccess: () => {
       toast.success('Backup started successfully!')
       queryClient.invalidateQueries({ queryKey: ['backup-status-manual'] })
-      trackBackup(EventAction.START, undefined, selectedRepoData?.name)
+      trackBackup(
+        EventAction.START,
+        undefined,
+        selectedRepoData?.name,
+        parseBytes(selectedRepoData?.total_size)
+      )
     },
     onError: (error: any) => {
       toast.error(`Failed to start backup: ${error.response?.data?.detail || error.message}`)

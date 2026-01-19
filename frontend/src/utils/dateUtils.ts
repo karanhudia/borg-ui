@@ -170,6 +170,36 @@ export const formatBytes = (bytes: number | null | undefined): string => {
 }
 
 /**
+ * Parse a human-readable size string back to bytes
+ * Example: "1.50 GB" -> 1610612736
+ * Handles formats like "1.5 GB", "1.5GB", "1,024 MB", etc.
+ */
+export const parseBytes = (sizeString: string | null | undefined): number | undefined => {
+  if (!sizeString) return undefined
+
+  const k = 1024
+  const sizes: Record<string, number> = {
+    B: 0,
+    KB: 1,
+    MB: 2,
+    GB: 3,
+    TB: 4,
+    PB: 5,
+  }
+
+  // Match number (with optional decimals and commas) followed by unit
+  const match = sizeString.trim().match(/^([\d,.]+)\s*(B|KB|MB|GB|TB|PB)$/i)
+  if (!match) return undefined
+
+  const value = parseFloat(match[1].replace(/,/g, ''))
+  const unit = match[2].toUpperCase()
+
+  if (isNaN(value) || !(unit in sizes)) return undefined
+
+  return Math.round(value * Math.pow(k, sizes[unit]))
+}
+
+/**
  * Convert a cron expression from local time to UTC
  * Example: "0 2 * * *" (2 AM IST) -> "30 20 * * *" (8:30 PM UTC previous day)
  */
