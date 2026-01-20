@@ -72,6 +72,7 @@ See [Installation Guide](installation) for other methods and security best pract
 
 - **[API Documentation](http://localhost:8081/api/docs)** - Interactive Swagger UI (after installation)
 - **[System Specification](SPECIFICATION)** - Architecture and technical details
+- **[Development Guide](development)** - Setting up a development environment with hot reload
 
 ---
 

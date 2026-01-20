@@ -123,4 +123,4 @@ coverage.json
 .hypothesis/
 .pytest_cache/
 junit.xml
-test-results/
+test-results/.local-data/
