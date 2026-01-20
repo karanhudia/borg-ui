@@ -216,13 +216,35 @@ volumes:
 
 For developers who want to contribute:
 
+### Quick Start (Docker - No Hot Reload)
+
 ```bash
 git clone https://github.com/karanhudia/borg-ui.git
 cd borg-ui
 docker compose up -d --build
 ```
 
-See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for guidelines.
+### Development with Hot Reload
+
+For active development with automatic code reloading.
+
+**Prerequisites:** Python 3.11+, Node.js 20.19+, Redis (or Docker for Redis only)
+
+```bash
+# Run everything with one command (starts Redis, backend, and frontend)
+./scripts/dev.sh
+
+# Or run frontend and backend separately:
+./scripts/backend-dev.sh  # Terminal 1: Backend on :8081
+cd frontend && npm run dev  # Terminal 2: Frontend on :7879
+```
+
+- Frontend: http://localhost:7879 (Vite HMR)
+- Backend: http://localhost:8081 (Uvicorn reload)
+
+See [Development Guide](https://karanhudia.github.io/borg-ui/development) for detailed setup.
+
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for contribution guidelines.
 
 ---
 
