@@ -24,7 +24,6 @@ import {
   Clock,
   Server,
   TrendingUp,
-  Wrench,
   Database,
   Cpu,
   MemoryStick,
@@ -183,6 +182,19 @@ export default function DashboardNew() {
     }
     return <Clock size={18} color="#ff9800" />
   }
+
+  // Adaptive limits based on content - balance both cards
+  const hasUpcoming = overview.upcoming_tasks.length > 0
+  const hasMaintenanceAlerts = overview.maintenance_alerts.length > 0
+  const unhealthyRepos = overview.repository_health.filter(
+    (r) => r.health_status === 'critical' || r.health_status === 'warning'
+  )
+
+  // Calculate limits to keep cards balanced in height
+  // Only reduce repo count if there are many upcoming tasks (3+)
+  const repoLimit = overview.upcoming_tasks.length >= 3 && hasMaintenanceAlerts ? 2 : 3
+  const taskLimit = hasMaintenanceAlerts ? 2 : 3
+  const alertLimit = hasUpcoming ? 2 : 3
 
   return (
     <Box>
@@ -591,92 +603,83 @@ export default function DashboardNew() {
 
             <Stack spacing={1}>
               {/* Show only critical and warning repos - compact list */}
-              {overview.repository_health
-                .filter((r) => r.health_status === 'critical' || r.health_status === 'warning')
-                .slice(0, 3)
-                .map((repo) => (
-                  <Box
-                    key={repo.id}
-                    sx={{
-                      p: 1.5,
-                      borderRadius: 1,
+              {unhealthyRepos.slice(0, repoLimit).map((repo) => (
+                <Box
+                  key={repo.id}
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 1,
+                    bgcolor:
+                      repo.health_status === 'critical'
+                        ? 'rgba(211, 47, 47, 0.04)'
+                        : 'rgba(237, 108, 2, 0.04)',
+                    border: '1px solid',
+                    borderColor:
+                      repo.health_status === 'critical'
+                        ? 'rgba(211, 47, 47, 0.15)'
+                        : 'rgba(237, 108, 2, 0.15)',
+                    '&:hover': {
                       bgcolor:
                         repo.health_status === 'critical'
-                          ? 'rgba(211, 47, 47, 0.04)'
-                          : 'rgba(237, 108, 2, 0.04)',
-                      border: '1px solid',
-                      borderColor:
-                        repo.health_status === 'critical'
-                          ? 'rgba(211, 47, 47, 0.15)'
-                          : 'rgba(237, 108, 2, 0.15)',
-                      '&:hover': {
-                        bgcolor:
-                          repo.health_status === 'critical'
-                            ? 'rgba(211, 47, 47, 0.08)'
-                            : 'rgba(237, 108, 2, 0.08)',
-                        cursor: 'pointer',
-                      },
-                    }}
-                    onClick={() => navigate(`/repositories`)}
+                          ? 'rgba(211, 47, 47, 0.08)'
+                          : 'rgba(237, 108, 2, 0.08)',
+                      cursor: 'pointer',
+                    },
+                  }}
+                  onClick={() => navigate(`/repositories`)}
+                >
+                  <Stack
+                    direction="row"
+                    spacing={2}
+                    alignItems="center"
+                    justifyContent="space-between"
                   >
-                    <Stack
-                      direction="row"
-                      spacing={2}
-                      alignItems="center"
-                      justifyContent="space-between"
-                    >
-                      <Stack direction="row" spacing={2} alignItems="center" sx={{ flex: 1 }}>
-                        {getStatusIcon(repo.health_status)}
-                        <Box sx={{ flex: 1 }}>
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <Typography variant="body2" fontWeight={600}>
-                              {repo.name}
-                            </Typography>
-                            <Chip
-                              label={repo.type.toUpperCase()}
-                              size="small"
-                              sx={{ height: 18, fontSize: '0.65rem' }}
-                            />
-                          </Stack>
-                          <Typography variant="caption" color="text.secondary">
-                            {repo.warnings[0] || 'Needs attention'} • {repo.archive_count} archives
-                            • {repo.total_size}
+                    <Stack direction="row" spacing={2} alignItems="center" sx={{ flex: 1 }}>
+                      {getStatusIcon(repo.health_status)}
+                      <Box sx={{ flex: 1 }}>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Typography variant="body2" fontWeight={600}>
+                            {repo.name}
                           </Typography>
-                        </Box>
-                      </Stack>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ whiteSpace: 'nowrap' }}
-                      >
-                        {repo.last_backup
-                          ? formatDistanceToNow(new Date(repo.last_backup), { addSuffix: true })
-                          : 'Never backed up'}
-                      </Typography>
+                          <Chip
+                            label={repo.type.toUpperCase()}
+                            size="small"
+                            sx={{ height: 18, fontSize: '0.65rem' }}
+                          />
+                        </Stack>
+                        <Typography variant="caption" color="text.secondary">
+                          {repo.warnings[0] || 'Needs attention'} • {repo.archive_count} archives •{' '}
+                          {repo.total_size}
+                        </Typography>
+                      </Box>
                     </Stack>
-                  </Box>
-                ))}
-
-              {overview.repository_health.filter(
-                (r) => r.health_status === 'critical' || r.health_status === 'warning'
-              ).length === 0 && (
-                <Box sx={{ textAlign: 'center', py: 2 }}>
-                  <CheckCircle size={32} color="#4caf50" style={{ marginBottom: 8 }} />
-                  <Typography variant="body2" color="text.secondary">
-                    All repositories are healthy!
-                  </Typography>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ whiteSpace: 'nowrap' }}
+                    >
+                      {repo.last_backup
+                        ? formatDistanceToNow(new Date(repo.last_backup), { addSuffix: true })
+                        : 'Never backed up'}
+                    </Typography>
+                  </Stack>
                 </Box>
+              ))}
+
+              {overview.repository_health.length > 0 && unhealthyRepos.length === 0 && (
+                <Alert severity="success" sx={{ mt: 1 }}>
+                  All repositories are healthy!
+                </Alert>
               )}
 
-              {overview.repository_health.length > 3 && (
+              {unhealthyRepos.length > repoLimit && (
                 <Button
                   variant="text"
                   size="small"
-                  endIcon={<ArrowRight size={16} />}
                   onClick={() => navigate('/repositories')}
-                  sx={{ alignSelf: 'flex-start', mt: 1 }}
+                  sx={{ alignSelf: 'center', mt: 0.5, color: 'text.secondary' }}
                 >
-                  View all {overview.repository_health.length} repositories
+                  +{unhealthyRepos.length - repoLimit} more issues
                 </Button>
               )}
 
@@ -702,67 +705,87 @@ export default function DashboardNew() {
             {/* Upcoming Schedules */}
             {overview.upcoming_tasks.length > 0 && (
               <Box sx={{ mb: 3 }}>
-                <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                <Typography
+                  variant="overline"
+                  color="text.secondary"
+                  sx={{ display: 'block', mb: 1.5, letterSpacing: 1 }}
+                >
                   Next 24 hours
                 </Typography>
                 <Stack spacing={1}>
-                  {overview.upcoming_tasks.slice(0, 3).map((task) => (
-                    <Box key={task.id} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Calendar size={14} />
-                      <Typography variant="body2">{task.name}</Typography>
+                  {overview.upcoming_tasks.slice(0, taskLimit).map((task) => (
+                    <Box key={task.id} sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Calendar size={16} color="#2196f3" />
+                      <Typography variant="body2" fontWeight={500}>
+                        {task.name}
+                      </Typography>
                     </Box>
                   ))}
+                  {overview.upcoming_tasks.length > taskLimit && (
+                    <Button
+                      variant="text"
+                      size="small"
+                      onClick={() => navigate('/schedule')}
+                      sx={{ alignSelf: 'flex-start', p: 0, minWidth: 0, color: 'text.secondary' }}
+                    >
+                      +{overview.upcoming_tasks.length - taskLimit} more scheduled
+                    </Button>
+                  )}
                 </Stack>
               </Box>
             )}
 
-            {/* Maintenance Alerts */}
-            <Box>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                <Wrench size={16} />
-                <Typography variant="subtitle2" fontWeight={600}>
+            {/* Maintenance Alerts - only show when there are alerts or repositories exist */}
+            {(overview.maintenance_alerts.length > 0 || overview.repository_health.length > 0) && (
+              <Box>
+                <Typography
+                  variant="overline"
+                  color="text.secondary"
+                  sx={{ display: 'block', mb: 1.5, letterSpacing: 1 }}
+                >
                   Maintenance Needed
                 </Typography>
-              </Stack>
 
-              {overview.maintenance_alerts.length === 0 ? (
-                <Alert severity="success" sx={{ mt: 1 }}>
-                  All systems healthy!
-                </Alert>
-              ) : (
-                <Stack spacing={1}>
-                  {overview.maintenance_alerts.slice(0, 3).map((alert, idx) => (
-                    <Alert
-                      key={idx}
-                      severity={alert.severity as any}
-                      sx={{ py: 0.5, '& .MuiAlert-message': { py: 0.5 } }}
-                      action={
-                        <IconButton size="small" onClick={() => navigate('/repositories')}>
-                          <ArrowRight size={16} />
-                        </IconButton>
-                      }
-                    >
-                      <Typography variant="caption" fontWeight={600}>
-                        {alert.repository}
-                      </Typography>
-                      <Typography variant="caption" display="block">
-                        {alert.message}
-                      </Typography>
-                    </Alert>
-                  ))}
+                {overview.maintenance_alerts.length === 0 ? (
+                  <Alert severity="success" sx={{ mt: 1 }}>
+                    All systems healthy!
+                  </Alert>
+                ) : (
+                  <Stack spacing={1}>
+                    {overview.maintenance_alerts.slice(0, alertLimit).map((alert, idx) => (
+                      <Alert
+                        key={idx}
+                        severity={alert.severity as any}
+                        sx={{ py: 0.5, '& .MuiAlert-message': { py: 0.5 } }}
+                        action={
+                          <IconButton size="small" onClick={() => navigate('/repositories')}>
+                            <ArrowRight size={16} />
+                          </IconButton>
+                        }
+                      >
+                        <Typography variant="caption" fontWeight={600}>
+                          {alert.repository}
+                        </Typography>
+                        <Typography variant="caption" display="block">
+                          {alert.message}
+                        </Typography>
+                      </Alert>
+                    ))}
 
-                  {overview.maintenance_alerts.length > 3 && (
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ textAlign: 'center' }}
-                    >
-                      +{overview.maintenance_alerts.length - 3} more alerts
-                    </Typography>
-                  )}
-                </Stack>
-              )}
-            </Box>
+                    {overview.maintenance_alerts.length > alertLimit && (
+                      <Button
+                        variant="text"
+                        size="small"
+                        onClick={() => navigate('/repositories')}
+                        sx={{ alignSelf: 'center', color: 'text.secondary' }}
+                      >
+                        +{overview.maintenance_alerts.length - alertLimit} more alerts
+                      </Button>
+                    )}
+                  </Stack>
+                )}
+              </Box>
+            )}
           </CardContent>
         </Card>
       </Box>
