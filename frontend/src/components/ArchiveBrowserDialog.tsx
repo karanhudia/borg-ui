@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { Link as RouterLink } from 'react-router-dom'
 import {
   Dialog,
   DialogTitle,
@@ -16,6 +17,7 @@ import {
   Link,
   CircularProgress,
   Alert,
+  AlertTitle,
   Chip,
   Stack,
   IconButton,
@@ -53,6 +55,7 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
   const [items, setItems] = useState<ArchiveItem[]>([])
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
+  const [isSizeLimitError, setIsSizeLimitError] = useState<boolean>(false)
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set(initialSelectedPaths))
 
   // Fetch archive contents for current path
@@ -62,13 +65,16 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
     const fetchContents = async () => {
       setLoading(true)
       setError(null)
+      setIsSizeLimitError(false)
 
       try {
         const response = await restoreAPI.getArchiveContents(repositoryId, archiveName, currentPath)
         setItems(response.data.items || [])
       } catch (err: any) {
         const errorMsg = err.response?.data?.detail || 'Failed to load archive contents'
+        const statusCode = err.response?.status
         setError(errorMsg)
+        setIsSizeLimitError(statusCode === 413)
         toast.error(errorMsg)
       } finally {
         setLoading(false)
@@ -289,7 +295,24 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
               <CircularProgress />
             </Box>
           ) : error ? (
-            <Alert severity="error">{error}</Alert>
+            <Alert severity="error">
+              {isSizeLimitError ? (
+                <>
+                  <AlertTitle>Archive Too Large</AlertTitle>
+                  This archive contains too many files to browse safely in the UI.
+                  <Box sx={{ mt: 1 }}>
+                    You can increase the limit in{' '}
+                    <Link component={RouterLink} to="/settings/system" onClick={onClose}>
+                      Settings &gt; System
+                    </Link>
+                    , or use command-line tools like <code>borg mount</code> for very large
+                    archives.
+                  </Box>
+                </>
+              ) : (
+                error
+              )}
+            </Alert>
           ) : items.length === 0 ? (
             <Alert severity="info">This directory is empty</Alert>
           ) : (
