@@ -54,6 +54,24 @@ const SystemSettingsTab: React.FC = () => {
     }
   }, [browseMaxItems, browseMaxMemoryMb, stats])
 
+  // Validation
+  const MIN_FILES = 100_000
+  const MAX_FILES = 50_000_000
+  const MIN_MEMORY = 100
+  const MAX_MEMORY = 16384
+
+  const getValidationError = (): string | null => {
+    if (browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES) {
+      return `Max files must be between ${MIN_FILES.toLocaleString()} and ${MAX_FILES.toLocaleString()}`
+    }
+    if (browseMaxMemoryMb < MIN_MEMORY || browseMaxMemoryMb > MAX_MEMORY) {
+      return `Max memory must be between ${MIN_MEMORY} MB and ${MAX_MEMORY} MB`
+    }
+    return null
+  }
+
+  const validationError = getValidationError()
+
   // Save settings mutation
   const saveSettingsMutation = useMutation({
     mutationFn: async () => {
@@ -71,11 +89,23 @@ const SystemSettingsTab: React.FC = () => {
       setHasChanges(false)
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to save settings')
+      // Handle Pydantic validation errors (array format) or standard errors
+      const data = error.response?.data
+      let errorMsg = 'Failed to save settings'
+      if (Array.isArray(data)) {
+        errorMsg = data.map((e: any) => e.msg).join(', ')
+      } else if (data?.detail) {
+        errorMsg = data.detail
+      }
+      toast.error(errorMsg)
     },
   })
 
   const handleSaveSettings = () => {
+    if (validationError) {
+      toast.error(validationError)
+      return
+    }
     saveSettingsMutation.mutate()
   }
 
@@ -106,7 +136,7 @@ const SystemSettingsTab: React.FC = () => {
               saveSettingsMutation.isPending ? <CircularProgress size={16} /> : <Save size={16} />
             }
             onClick={handleSaveSettings}
-            disabled={!hasChanges || saveSettingsMutation.isPending}
+            disabled={!hasChanges || saveSettingsMutation.isPending || !!validationError}
           >
             {saveSettingsMutation.isPending ? 'Saving...' : 'Save Settings'}
           </Button>
@@ -135,8 +165,13 @@ const SystemSettingsTab: React.FC = () => {
                   fullWidth
                   value={browseMaxItems}
                   onChange={(e) => setBrowseMaxItems(Number(e.target.value))}
-                  inputProps={{ min: 100_000, max: 50_000_000, step: 100_000 }}
-                  helperText={`Maximum number of files to list when browsing. Range: 100k to 50M. Current: ${(browseMaxItems / 1_000_000).toFixed(1)}M files`}
+                  inputProps={{ min: MIN_FILES, max: MAX_FILES, step: 100_000 }}
+                  error={browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES}
+                  helperText={
+                    browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES
+                      ? `Must be between ${MIN_FILES.toLocaleString()} and ${MAX_FILES.toLocaleString()}`
+                      : `Maximum files when browsing. Current: ${(browseMaxItems / 1_000_000).toFixed(1)}M files`
+                  }
                 />
 
                 <TextField
@@ -145,8 +180,13 @@ const SystemSettingsTab: React.FC = () => {
                   fullWidth
                   value={browseMaxMemoryMb}
                   onChange={(e) => setBrowseMaxMemoryMb(Number(e.target.value))}
-                  inputProps={{ min: 100, max: 16384, step: 128 }}
-                  helperText={`Maximum memory for archive browsing. Range: 100 MB to 16 GB. Current: ${(browseMaxMemoryMb / 1024).toFixed(2)} GB`}
+                  inputProps={{ min: MIN_MEMORY, max: MAX_MEMORY, step: 128 }}
+                  error={browseMaxMemoryMb < MIN_MEMORY || browseMaxMemoryMb > MAX_MEMORY}
+                  helperText={
+                    browseMaxMemoryMb < MIN_MEMORY || browseMaxMemoryMb > MAX_MEMORY
+                      ? `Must be between ${MIN_MEMORY} MB and ${MAX_MEMORY} MB`
+                      : `Maximum memory for browsing. Current: ${(browseMaxMemoryMb / 1024).toFixed(2)} GB`
+                  }
                 />
               </Box>
 
