@@ -28,6 +28,45 @@ class BackupService:
         self.log_buffers = {}  # Track in-memory log buffers by job_id (for running jobs)
         self.ssh_mounts = {}  # Track SSH mount IDs by job_id: {job_id: [mount_id, ...]}
 
+    def _get_operation_timeouts(self, db: Session = None) -> dict:
+        """
+        Get operation timeouts from database settings, with fallback to config values.
+        UI settings take priority over environment variables.
+
+        Returns:
+            dict with keys: info_timeout, list_timeout, init_timeout, backup_timeout
+        """
+        timeouts = {
+            "info_timeout": settings.borg_info_timeout,
+            "list_timeout": settings.borg_list_timeout,
+            "backup_timeout": settings.backup_timeout,
+        }
+
+        try:
+            # Use provided session or create one
+            close_session = False
+            if db is None:
+                db = SessionLocal()
+                close_session = True
+
+            try:
+                system_settings = db.query(SystemSettings).first()
+                if system_settings:
+                    # Override with DB values if they exist
+                    if system_settings.info_timeout:
+                        timeouts["info_timeout"] = system_settings.info_timeout
+                    if system_settings.list_timeout:
+                        timeouts["list_timeout"] = system_settings.list_timeout
+                    if system_settings.backup_timeout:
+                        timeouts["backup_timeout"] = system_settings.backup_timeout
+            finally:
+                if close_session:
+                    db.close()
+        except Exception as e:
+            logger.warning("Failed to get timeouts from DB, using config defaults", error=str(e))
+
+        return timeouts
+
     async def _run_hook(self, script: str, hook_name: str, timeout: int, job_id: int) -> dict:
         """
         Run a pre or post backup hook script using the shared script executor.
@@ -249,6 +288,9 @@ class BackupService:
                 logger.warning("Job not found for stats update", job_id=job_id)
                 return
 
+            # Get timeouts from DB settings (with fallback to config)
+            timeouts = self._get_operation_timeouts(db)
+
             # Get specific archive info using borg info --json
             archive_path = f"{repository_path}::{archive_name}"
             info_cmd = ["borg", "info", "--json", archive_path]
@@ -258,7 +300,7 @@ class BackupService:
                 stderr=asyncio.subprocess.PIPE,
                 env=env
             )
-            info_stdout, info_stderr = await asyncio.wait_for(info_process.communicate(), timeout=settings.borg_info_timeout)
+            info_stdout, info_stderr = await asyncio.wait_for(info_process.communicate(), timeout=timeouts["info_timeout"])
 
             if info_process.returncode == 0:
                 try:
@@ -303,6 +345,9 @@ class BackupService:
                 logger.warning("Repository record not found for stats update", repository=repository_path)
                 return
 
+            # Get timeouts from DB settings (with fallback to config)
+            timeouts = self._get_operation_timeouts(db)
+
             # Get archive count using borg list --json
             list_cmd = ["borg", "list", "--json", repository_path]
             list_process = await asyncio.create_subprocess_exec(
@@ -311,7 +356,7 @@ class BackupService:
                 stderr=asyncio.subprocess.PIPE,
                 env=env
             )
-            list_stdout, list_stderr = await asyncio.wait_for(list_process.communicate(), timeout=settings.borg_list_timeout)
+            list_stdout, list_stderr = await asyncio.wait_for(list_process.communicate(), timeout=timeouts["list_timeout"])
 
             if list_process.returncode == 0:
                 try:
@@ -330,7 +375,7 @@ class BackupService:
                 stderr=asyncio.subprocess.PIPE,
                 env=env
             )
-            info_stdout, info_stderr = await asyncio.wait_for(info_process.communicate(), timeout=settings.borg_info_timeout)
+            info_stdout, info_stderr = await asyncio.wait_for(info_process.communicate(), timeout=timeouts["info_timeout"])
 
             if info_process.returncode == 0:
                 try:

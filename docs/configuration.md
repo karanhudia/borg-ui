@@ -337,7 +337,28 @@ For repositories with:
 - Hundreds of archives
 - Long cache build times on first access
 
-You can increase operation timeouts via environment variables:
+You can configure operation timeouts via **two methods**:
+
+##### Method 1: Web UI (Recommended)
+
+Go to **Settings → System** to configure timeouts with a user-friendly interface:
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| Mount Timeout | Time to wait for archive mounts | 120s (2 min) |
+| Info Timeout | Borg info operations (verification, stats) | 600s (10 min) |
+| List Timeout | Listing archives and files | 600s (10 min) |
+| Init Timeout | Creating new repositories | 300s (5 min) |
+| Backup/Restore Timeout | Backup and restore operations | 3600s (1 hour) |
+
+**Advantages of UI configuration:**
+- No container restart required
+- Changes take effect immediately
+- Easier to adjust on-the-fly
+
+##### Method 2: Environment Variables
+
+Set timeouts via Docker environment variables:
 
 ```yaml
 environment:
@@ -349,25 +370,39 @@ environment:
   - SCRIPT_TIMEOUT=300          # 5 min for hooks (default: 120 = 2 min)
 ```
 
-**Timeout Usage:**
+##### Priority Order
+
+The system checks settings in the following order:
+
+| Priority | Source | Notes |
+|----------|--------|-------|
+| 1 (Highest) | UI Settings (Settings → System) | Stored in database, persists across restarts |
+| 2 | Environment Variables | Used if no UI setting is configured |
+| 3 | Built-in Defaults | Used if neither UI nor env vars are set |
+
+**How it works:** If you set a timeout in the UI, that value is used. If you haven't configured a UI setting for a particular timeout, the environment variable is used. Both approaches are valid - use whichever fits your workflow better.
+
+**Timeout Usage Reference:**
 
 | Operation | When Used | Default | Recommended for Large Repos |
 |-----------|-----------|---------|------------------------------|
-| `BORG_INFO_TIMEOUT` | Repository verification, stats, import | 10 min | 1-4 hours (based on cache build time) |
-| `BORG_LIST_TIMEOUT` | Listing archives/files, restore browser | 10 min | 30-60 min |
-| `BORG_INIT_TIMEOUT` | Creating new repositories | 5 min | 10-15 min |
-| `BORG_EXTRACT_TIMEOUT` | Restore operations | 1 hour | 2-4 hours |
-| `SCRIPT_TIMEOUT` | Pre/post backup scripts | 2 min | 5-10 min |
+| Mount | Mounting archives for browsing | 2 min | 5-10 min (10TB+ repos) |
+| Info | Repository verification, stats, import | 10 min | 1-4 hours (based on cache build time) |
+| List | Listing archives/files, restore browser | 10 min | 30-60 min |
+| Init | Creating new repositories | 5 min | 10-15 min |
+| Backup/Restore | Backup and restore operations | 1 hour | 2-4 hours |
 
-**Example for very large repository:**
-```yaml
-environment:
-  - BORG_INFO_TIMEOUT=7200    # 2 hours for initial cache build
-  - BORG_LIST_TIMEOUT=3600    # 1 hour for listing operations
-```
+**Example for very large repository (via UI):**
+1. Go to **Settings → System**
+2. Under "Operation Timeouts", set:
+   - Mount Timeout: 600 (10 minutes)
+   - Info Timeout: 7200 (2 hours)
+   - List Timeout: 3600 (1 hour)
+3. Click **Save Settings**
 
 **Symptoms you need higher timeouts:**
 - "Repository verification timed out" during import
+- "Mount timeout" errors when browsing archives
 - Operations fail with timeout errors in logs
 - Large operations (info/list) succeed when run manually but fail in UI
 

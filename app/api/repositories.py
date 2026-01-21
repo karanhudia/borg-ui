@@ -8,8 +8,8 @@ import subprocess
 import asyncio
 import json
 
-from app.database.database import get_db
-from app.database.models import User, Repository, CheckJob, CompactJob, PruneJob
+from app.database.database import get_db, SessionLocal
+from app.database.models import User, Repository, CheckJob, CompactJob, PruneJob, SystemSettings
 from app.core.security import get_current_user
 from app.core.borg import BorgInterface
 from app.config import settings
@@ -74,6 +74,49 @@ def setup_borg_env(base_env=None, passphrase=None, ssh_opts=None):
 
     return env
 
+# Helper function to get operation timeouts from DB settings (with fallback to config)
+def get_operation_timeouts(db: Session = None) -> dict:
+    """
+    Get operation timeouts from database settings, with fallback to config values.
+    UI settings take priority over environment variables.
+
+    Returns:
+        dict with keys: info_timeout, list_timeout, init_timeout, backup_timeout
+    """
+    timeouts = {
+        "info_timeout": settings.borg_info_timeout,
+        "list_timeout": settings.borg_list_timeout,
+        "init_timeout": settings.borg_init_timeout,
+        "backup_timeout": settings.backup_timeout,
+    }
+
+    try:
+        # Use provided session or create one
+        close_session = False
+        if db is None:
+            db = SessionLocal()
+            close_session = True
+
+        try:
+            system_settings = db.query(SystemSettings).first()
+            if system_settings:
+                # Override with DB values if they exist
+                if system_settings.info_timeout:
+                    timeouts["info_timeout"] = system_settings.info_timeout
+                if system_settings.list_timeout:
+                    timeouts["list_timeout"] = system_settings.list_timeout
+                if system_settings.init_timeout:
+                    timeouts["init_timeout"] = system_settings.init_timeout
+                if system_settings.backup_timeout:
+                    timeouts["backup_timeout"] = system_settings.backup_timeout
+        finally:
+            if close_session:
+                db.close()
+    except Exception as e:
+        logger.warning("Failed to get timeouts from DB, using config defaults", error=str(e))
+
+    return timeouts
+
 # Helper function to update repository archive count
 async def update_repository_stats(repository: Repository, db: Session) -> bool:
     """
@@ -115,6 +158,9 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
             ssh_opts=get_standard_ssh_opts()
         )
 
+        # Get timeouts from DB settings (with fallback to config)
+        timeouts = get_operation_timeouts(db)
+
         try:
             process = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -122,7 +168,7 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
                 stderr=asyncio.subprocess.PIPE,
                 env=env
             )
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=settings.borg_info_timeout)
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeouts["info_timeout"])
 
             if process.returncode == 0:
                 info_data = json.loads(stdout.decode())
@@ -1409,8 +1455,11 @@ async def verify_existing_repository(path: str, passphrase: str = None, ssh_key_
         # Add repository path
         cmd.append(path)
 
+        # Get timeouts from DB settings (with fallback to config)
+        timeouts = get_operation_timeouts()
+
         # Execute command
-        logger.info("Executing borg info command", command=" ".join(cmd), timeout=settings.borg_info_timeout)
+        logger.info("Executing borg info command", command=" ".join(cmd), timeout=timeouts["info_timeout"])
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
@@ -1418,7 +1467,7 @@ async def verify_existing_repository(path: str, passphrase: str = None, ssh_key_
             env=env
         )
 
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=settings.borg_info_timeout)
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeouts["info_timeout"])
         stdout_str = stdout.decode() if stdout else ""
         stderr_str = stderr.decode() if stderr else ""
 
@@ -1566,8 +1615,11 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
         cmd.append(path)
         logger.info("Full borg init command prepared", command=" ".join(cmd), path=path)
 
+        # Get timeouts from DB settings (with fallback to config)
+        timeouts = get_operation_timeouts()
+
         # Execute command
-        logger.info("Executing borg init command...", timeout=settings.borg_init_timeout)
+        logger.info("Executing borg init command...", timeout=timeouts["init_timeout"])
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
@@ -1575,7 +1627,7 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
             env=env
         )
 
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=settings.borg_init_timeout)
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeouts["init_timeout"])
         stdout_str = stdout.decode() if stdout else ""
         stderr_str = stderr.decode() if stderr else ""
 
@@ -1661,6 +1713,9 @@ async def list_repository_archives(
                 ssh_opts=ssh_opts
             )
 
+            # Get timeouts from DB settings (with fallback to config)
+            timeouts = get_operation_timeouts(db)
+
             # Execute command with increased timeout to match BORG_LOCK_WAIT
             process = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -1670,7 +1725,7 @@ async def list_repository_archives(
             )
 
             # Use configurable timeout to allow for large repositories and slow SSH connections
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=settings.borg_list_timeout)
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeouts["list_timeout"])
 
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
@@ -1769,6 +1824,9 @@ async def get_repository_info(
                 ssh_opts=ssh_opts
             )
 
+            # Get timeouts from DB settings (with fallback to config)
+            timeouts = get_operation_timeouts(db)
+
             # Execute command with increased timeout to match BORG_LOCK_WAIT
             process = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -1778,7 +1836,7 @@ async def get_repository_info(
             )
 
             # Use configurable timeout to allow for large repositories and slow SSH connections
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=settings.borg_list_timeout)
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeouts["info_timeout"])
 
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
@@ -1928,6 +1986,9 @@ async def get_archive_info(
             ssh_opts=ssh_opts
         )
 
+        # Get timeouts from DB settings (with fallback to config)
+        timeouts = get_operation_timeouts(db)
+
         # Execute command with increased timeout to match BORG_LOCK_WAIT
         process = await asyncio.create_subprocess_exec(
             *cmd,
@@ -1936,7 +1997,7 @@ async def get_archive_info(
             env=env
         )
 
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=settings.borg_info_timeout)
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeouts["info_timeout"])
 
         if process.returncode != 0:
             error_msg = stderr.decode() if stderr else "Unknown error"
@@ -1979,7 +2040,7 @@ async def get_archive_info(
                     stderr=asyncio.subprocess.PIPE,
                     env=list_env
                 )
-                list_stdout, list_stderr = await asyncio.wait_for(list_process.communicate(), timeout=settings.borg_list_timeout)
+                list_stdout, list_stderr = await asyncio.wait_for(list_process.communicate(), timeout=timeouts["list_timeout"])
 
                 if list_process.returncode == 0:
                     # Parse JSON-lines output
@@ -2076,6 +2137,9 @@ async def list_archive_files(
             ssh_opts=ssh_opts
         )
 
+        # Get timeouts from DB settings (with fallback to config)
+        timeouts = get_operation_timeouts(db)
+
         # Execute command
         process = await asyncio.create_subprocess_exec(
             *cmd,
@@ -2084,7 +2148,7 @@ async def list_archive_files(
             env=env
         )
 
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=settings.borg_list_timeout)
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeouts["list_timeout"])
 
         if process.returncode != 0:
             error_msg = stderr.decode() if stderr else "Unknown error"

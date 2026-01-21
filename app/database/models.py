@@ -344,7 +344,7 @@ class SystemSettings(Base):
     id = Column(Integer, primary_key=True, index=True)
     # Operation timeouts (in seconds)
     backup_timeout = Column(Integer, default=3600)  # Default 1 hour for backup/restore
-    mount_timeout = Column(Integer, default=120)  # Default 2 minutes for borg mount (large repos may need more)
+    mount_timeout = Column(Integer, default=120)  # Default 2 minutes for borg mount
     info_timeout = Column(Integer, default=600)  # Default 10 minutes for borg info
     list_timeout = Column(Integer, default=600)  # Default 10 minutes for borg list
     init_timeout = Column(Integer, default=300)  # Default 5 minutes for borg init
