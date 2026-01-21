@@ -18,6 +18,40 @@ router = APIRouter(tags=["settings"])
 # Initialize Borg interface
 borg = BorgInterface()
 
+# Default timeout values (built-in)
+DEFAULT_TIMEOUTS = {
+    "mount_timeout": 120,
+    "info_timeout": 600,
+    "list_timeout": 600,
+    "init_timeout": 300,
+    "backup_timeout": 3600,
+}
+
+def get_effective_timeout(db_value, env_value, default_value):
+    """
+    Get the effective timeout value and its source.
+    Priority: DB (if different from default) > Env > Default
+
+    Returns: (value, source) where source is:
+    - "saved" if using DB value that differs from default
+    - "env" if using env var that differs from default
+    - None if value equals default
+    """
+    # If DB value equals default, treat as not set (allow env to override)
+    if db_value == default_value:
+        db_value = None
+
+    # Determine effective value and source
+    if db_value is not None:
+        # DB has a non-default value
+        return (db_value, "saved")
+    elif env_value != default_value:
+        # Env var differs from default
+        return (env_value, "env")
+    else:
+        # Use default
+        return (default_value, None)
+
 # Pydantic models for request/response
 from pydantic import BaseModel
 
@@ -73,13 +107,9 @@ async def get_system_settings(
         # Get settings from database or use defaults
         settings = db.query(SystemSettings).first()
         if not settings:
-            # Create default settings
+            # Create default settings - but NOT timeout values
+            # Timeout values stay NULL so env vars can be used as fallback
             settings = SystemSettings(
-                backup_timeout=3600,
-                mount_timeout=120,
-                info_timeout=600,
-                list_timeout=600,
-                init_timeout=300,
                 max_concurrent_backups=2,
                 log_retention_days=30,
                 email_notifications=False,
@@ -119,15 +149,50 @@ async def get_system_settings(
                 "files_by_type": {}
             }
 
+        # Calculate effective timeout values and their sources
+        mount_timeout, mount_source = get_effective_timeout(
+            settings.mount_timeout,
+            app_settings.borg_mount_timeout,
+            DEFAULT_TIMEOUTS["mount_timeout"]
+        )
+        info_timeout, info_source = get_effective_timeout(
+            settings.info_timeout,
+            app_settings.borg_info_timeout,
+            DEFAULT_TIMEOUTS["info_timeout"]
+        )
+        list_timeout, list_source = get_effective_timeout(
+            settings.list_timeout,
+            app_settings.borg_list_timeout,
+            DEFAULT_TIMEOUTS["list_timeout"]
+        )
+        init_timeout, init_source = get_effective_timeout(
+            settings.init_timeout,
+            app_settings.borg_init_timeout,
+            DEFAULT_TIMEOUTS["init_timeout"]
+        )
+        backup_timeout, backup_source = get_effective_timeout(
+            settings.backup_timeout,
+            app_settings.backup_timeout,
+            DEFAULT_TIMEOUTS["backup_timeout"]
+        )
+
         return {
             "success": True,
             "settings": {
-                # Operation timeouts
-                "backup_timeout": settings.backup_timeout,
-                "mount_timeout": settings.mount_timeout or 120,
-                "info_timeout": settings.info_timeout or 600,
-                "list_timeout": settings.list_timeout or 600,
-                "init_timeout": settings.init_timeout or 300,
+                # Operation timeouts (effective values)
+                "backup_timeout": backup_timeout,
+                "mount_timeout": mount_timeout,
+                "info_timeout": info_timeout,
+                "list_timeout": list_timeout,
+                "init_timeout": init_timeout,
+                # Timeout sources: "saved" (from DB), "env" (from env var), or null (default)
+                "timeout_sources": {
+                    "backup_timeout": backup_source,
+                    "mount_timeout": mount_source,
+                    "info_timeout": info_source,
+                    "list_timeout": list_source,
+                    "init_timeout": init_source,
+                },
                 # Other settings
                 "max_concurrent_backups": settings.max_concurrent_backups,
                 "log_retention_days": settings.log_retention_days,
@@ -195,17 +260,33 @@ async def update_system_settings(
             db.add(settings)
 
         # Update settings
-        # Operation timeouts
-        if settings_update.backup_timeout is not None:
-            settings.backup_timeout = settings_update.backup_timeout
+        # Operation timeouts - save NULL if value equals default OR env value (so env/default can be used)
+        # This ensures "from env" shows correctly when value matches env var
         if settings_update.mount_timeout is not None:
-            settings.mount_timeout = settings_update.mount_timeout
+            if settings_update.mount_timeout in (DEFAULT_TIMEOUTS["mount_timeout"], app_settings.borg_mount_timeout):
+                settings.mount_timeout = None
+            else:
+                settings.mount_timeout = settings_update.mount_timeout
         if settings_update.info_timeout is not None:
-            settings.info_timeout = settings_update.info_timeout
+            if settings_update.info_timeout in (DEFAULT_TIMEOUTS["info_timeout"], app_settings.borg_info_timeout):
+                settings.info_timeout = None
+            else:
+                settings.info_timeout = settings_update.info_timeout
         if settings_update.list_timeout is not None:
-            settings.list_timeout = settings_update.list_timeout
+            if settings_update.list_timeout in (DEFAULT_TIMEOUTS["list_timeout"], app_settings.borg_list_timeout):
+                settings.list_timeout = None
+            else:
+                settings.list_timeout = settings_update.list_timeout
         if settings_update.init_timeout is not None:
-            settings.init_timeout = settings_update.init_timeout
+            if settings_update.init_timeout in (DEFAULT_TIMEOUTS["init_timeout"], app_settings.borg_init_timeout):
+                settings.init_timeout = None
+            else:
+                settings.init_timeout = settings_update.init_timeout
+        if settings_update.backup_timeout is not None:
+            if settings_update.backup_timeout in (DEFAULT_TIMEOUTS["backup_timeout"], app_settings.backup_timeout):
+                settings.backup_timeout = None
+            else:
+                settings.backup_timeout = settings_update.backup_timeout
         # Other settings
         if settings_update.max_concurrent_backups is not None:
             settings.max_concurrent_backups = settings_update.max_concurrent_backups

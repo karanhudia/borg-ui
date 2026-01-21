@@ -85,6 +85,7 @@ class Settings(BaseSettings):
 
     # Borg operation timeouts (in seconds)
     # These can be increased for very large repositories (e.g., 830TB with 166 min cache build)
+    borg_mount_timeout: int = 120     # 2 minutes - for borg mount operations (archive browsing)
     borg_info_timeout: int = 600      # 10 minutes - for borg info operations (repo verification, stats)
     borg_list_timeout: int = 600      # 10 minutes - for borg list operations (archives, files)
     borg_init_timeout: int = 300      # 5 minutes - for borg init operations (new repo creation)

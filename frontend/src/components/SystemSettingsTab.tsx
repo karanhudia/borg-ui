@@ -52,6 +52,30 @@ const SystemSettingsTab: React.FC = () => {
 
   const cacheStats = cacheData as any
   const systemSettings = systemData?.settings
+  const timeoutSources = systemData?.settings?.timeout_sources as Record<string, string | null> | undefined
+
+  // Helper to render source label with color
+  const renderSourceLabel = (source: string | null | undefined) => {
+    if (source === 'saved') {
+      return (
+        <Typography component="span" sx={{ color: 'success.main', fontSize: '0.7rem', fontWeight: 500 }}>
+          {' '}[customized]
+        </Typography>
+      )
+    }
+    if (source === 'env') {
+      return (
+        <Typography component="span" sx={{ color: 'warning.main', fontSize: '0.7rem', fontWeight: 500 }}>
+          {' '}[from env]
+        </Typography>
+      )
+    }
+    return (
+      <Typography component="span" sx={{ color: 'info.main', fontSize: '0.7rem', fontWeight: 500 }}>
+        {' '}[default]
+      </Typography>
+    )
+  }
 
   // Initialize form values from fetched settings
   useEffect(() => {
@@ -268,7 +292,7 @@ const SystemSettingsTab: React.FC = () => {
                   onChange={(e) => setMountTimeout(Number(e.target.value))}
                   inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 10 }}
                   error={mountTimeout < MIN_TIMEOUT || mountTimeout > MAX_TIMEOUT}
-                  helperText={`For mounting archives. Current: ${formatTimeout(mountTimeout)}`}
+                  helperText={<>For mounting archives. {formatTimeout(mountTimeout)}{renderSourceLabel(timeoutSources?.mount_timeout)}</>}
                 />
 
                 <TextField
@@ -279,7 +303,7 @@ const SystemSettingsTab: React.FC = () => {
                   onChange={(e) => setInfoTimeout(Number(e.target.value))}
                   inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
                   error={infoTimeout < MIN_TIMEOUT || infoTimeout > MAX_TIMEOUT}
-                  helperText={`For borg info commands. Current: ${formatTimeout(infoTimeout)}`}
+                  helperText={<>For borg info commands. {formatTimeout(infoTimeout)}{renderSourceLabel(timeoutSources?.info_timeout)}</>}
                 />
 
                 <TextField
@@ -290,7 +314,7 @@ const SystemSettingsTab: React.FC = () => {
                   onChange={(e) => setListTimeout(Number(e.target.value))}
                   inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
                   error={listTimeout < MIN_TIMEOUT || listTimeout > MAX_TIMEOUT}
-                  helperText={`For listing archives. Current: ${formatTimeout(listTimeout)}`}
+                  helperText={<>For listing archives. {formatTimeout(listTimeout)}{renderSourceLabel(timeoutSources?.list_timeout)}</>}
                 />
 
                 <TextField
@@ -301,7 +325,7 @@ const SystemSettingsTab: React.FC = () => {
                   onChange={(e) => setInitTimeout(Number(e.target.value))}
                   inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
                   error={initTimeout < MIN_TIMEOUT || initTimeout > MAX_TIMEOUT}
-                  helperText={`For repository init. Current: ${formatTimeout(initTimeout)}`}
+                  helperText={<>For repository init. {formatTimeout(initTimeout)}{renderSourceLabel(timeoutSources?.init_timeout)}</>}
                 />
 
                 <TextField
@@ -312,18 +336,9 @@ const SystemSettingsTab: React.FC = () => {
                   onChange={(e) => setBackupTimeout(Number(e.target.value))}
                   inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 300 }}
                   error={backupTimeout < MIN_TIMEOUT || backupTimeout > MAX_TIMEOUT}
-                  helperText={`For backup/restore. Current: ${formatTimeout(backupTimeout)}`}
+                  helperText={<>For backup/restore. {formatTimeout(backupTimeout)}{renderSourceLabel(timeoutSources?.backup_timeout)}</>}
                 />
               </Box>
-
-              <Alert severity="info">
-                <strong>Large Repository Recommendations:</strong>
-                <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
-                  <li>Mount: 300-600s for 10TB+ repos (cache build on first access)</li>
-                  <li>Info/List: 1800-7200s for repos with hundreds of archives</li>
-                  <li>Backup: 7200-14400s for multi-terabyte backups</li>
-                </ul>
-              </Alert>
             </Stack>
           </CardContent>
         </Card>
@@ -380,17 +395,6 @@ const SystemSettingsTab: React.FC = () => {
                 <strong>Warning:</strong> Increasing these limits significantly can cause
                 out-of-memory errors and crash the server. Only increase if you have sufficient RAM
                 and need to browse very large archives.
-              </Alert>
-
-              <Alert severity="info">
-                <strong>Recommendations based on available RAM:</strong>
-                <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
-                  <li>1M items ≈ 200MB RAM (default, safe for most systems)</li>
-                  <li>5M items ≈ 1GB RAM (requires at least 4GB total RAM)</li>
-                  <li>10M items ≈ 2GB RAM (requires at least 8GB total RAM)</li>
-                </ul>
-                For archives exceeding these limits, use command-line tools or{' '}
-                <code>borg mount</code>.
               </Alert>
             </Stack>
           </CardContent>

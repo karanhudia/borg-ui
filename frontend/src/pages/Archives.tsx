@@ -186,7 +186,23 @@ const Archives: React.FC = () => {
       trackArchive(EventAction.MOUNT, selectedRepository?.name)
     },
     onError: (error: any) => {
-      toast.error(`Failed to mount archive: ${error.response?.data?.detail || error.message}`)
+      const errorDetail = error.response?.data?.detail || error.message
+      const isMountTimeout = errorDetail.toLowerCase().includes('mount timeout')
+
+      if (isMountTimeout) {
+        toast.error(
+          `Mount timeout: Large repositories may need more time to mount. ` +
+            `Go to Settings > System to increase the Mount Timeout value.`,
+          {
+            duration: 10000,
+            style: {
+              maxWidth: '500px',
+            },
+          }
+        )
+      } else {
+        toast.error(`Failed to mount archive: ${errorDetail}`)
+      }
     },
   })
 
