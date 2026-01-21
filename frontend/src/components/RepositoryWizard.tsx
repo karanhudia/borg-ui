@@ -11,6 +11,8 @@ import {
   Button,
   TextField,
   FormControl,
+  FormControlLabel,
+  Checkbox,
   InputLabel,
   Select,
   MenuItem,
@@ -94,6 +96,9 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   const [preHookTimeout, setPreHookTimeout] = useState(300)
   const [postHookTimeout, setPostHookTimeout] = useState(300)
   const [continueOnHookFailure, setContinueOnHookFailure] = useState(false)
+
+  // Read-only storage access
+  const [bypassLock, setBypassLock] = useState(false)
 
   // Data from API
   const [sshConnections, setSshConnections] = useState<SSHConnection[]>([])
@@ -235,6 +240,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     setPreHookTimeout(repository.pre_hook_timeout || 300)
     setPostHookTimeout(repository.post_hook_timeout || 300)
     setContinueOnHookFailure(repository.continue_on_hook_failure || false)
+    setBypassLock(repository.bypass_lock || false)
   }
 
   const resetForm = () => {
@@ -263,6 +269,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     setPreHookTimeout(300)
     setPostHookTimeout(300)
     setContinueOnHookFailure(false)
+    setBypassLock(false)
     setSelectedKeyfile(null)
   }
 
@@ -330,6 +337,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       pre_hook_timeout: preHookTimeout,
       post_hook_timeout: postHookTimeout,
       continue_on_hook_failure: continueOnHookFailure,
+      bypass_lock: bypassLock,
     }
 
     if (repositoryType === 'ssh') {
@@ -465,6 +473,23 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
           Observability-only repositories can browse and restore existing archives but cannot create
           new backups.
         </Alert>
+      )}
+
+      {/* Read-only storage access option for observe mode */}
+      {repositoryMode === 'observe' && (
+        <FormControlLabel
+          control={
+            <Checkbox checked={bypassLock} onChange={(e) => setBypassLock(e.target.checked)} />
+          }
+          label={
+            <Box>
+              <Typography variant="body2">Read-only storage access</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Enable if the storage is read-only or locked by another process (adds --bypass-lock)
+              </Typography>
+            </Box>
+          }
+        />
       )}
 
       {/* Location Selection Cards */}

@@ -128,18 +128,40 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
         list_result = await borg.list_archives(
             repository.path,
             remote_path=repository.remote_path,
-            passphrase=repository.passphrase
+            passphrase=repository.passphrase,
+            bypass_lock=repository.bypass_lock
         )
 
         archive_count = 0
         total_size = None
+        last_backup_time = None
 
         if list_result.get("success"):
             try:
                 archives_data = json.loads(list_result.get("stdout", "{}"))
                 if isinstance(archives_data, dict):
+                    archives = archives_data.get("archives", [])
                     # Get archive count
-                    archive_count = len(archives_data.get("archives", []))
+                    archive_count = len(archives)
+
+                    # Get the most recent archive's timestamp for last_backup
+                    if archives:
+                        # Archives are typically sorted by time, but let's find the most recent
+                        most_recent = max(archives, key=lambda a: a.get("time", "") or a.get("start", ""))
+                        archive_time = most_recent.get("time") or most_recent.get("start")
+                        if archive_time:
+                            # Parse ISO format timestamp (e.g., "2024-01-15T10:30:00.000000")
+                            try:
+                                # Handle various timestamp formats from borg
+                                if "." in archive_time:
+                                    last_backup_time = datetime.fromisoformat(archive_time.replace("Z", "+00:00").split("+")[0])
+                                else:
+                                    last_backup_time = datetime.fromisoformat(archive_time.replace("Z", ""))
+                            except ValueError as te:
+                                logger.warning("Failed to parse archive timestamp",
+                                             repository=repository.name,
+                                             timestamp=archive_time,
+                                             error=str(te))
             except json.JSONDecodeError as e:
                 logger.error("Failed to parse archive list JSON",
                            repository=repository.name,
@@ -151,6 +173,8 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
         cmd = ["borg", "info"]
         if repository.remote_path:
             cmd.extend(["--remote-path", repository.remote_path])
+        if repository.bypass_lock:
+            cmd.append("--bypass-lock")
         cmd.extend([repository.path, "--json"])
 
         env = setup_borg_env(
@@ -185,9 +209,12 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
         # Update repository
         old_count = repository.archive_count
         old_size = repository.total_size
+        old_last_backup = repository.last_backup
         repository.archive_count = archive_count
         if total_size:
             repository.total_size = total_size
+        if last_backup_time:
+            repository.last_backup = last_backup_time
 
         db.commit()
         logger.info("Updated repository stats",
@@ -195,7 +222,9 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
                   archive_count_old=old_count,
                   archive_count_new=archive_count,
                   size_old=old_size,
-                  size_new=total_size)
+                  size_new=total_size,
+                  last_backup_old=old_last_backup,
+                  last_backup_new=last_backup_time)
         return True
 
     except Exception as e:
@@ -242,6 +271,7 @@ class RepositoryCreate(BaseModel):
     post_hook_timeout: Optional[int] = 300  # Post-backup hook timeout in seconds
     continue_on_hook_failure: Optional[bool] = False  # Continue backup if pre-hook fails
     mode: str = "full"  # full: backups + observability, observe: observability-only
+    bypass_lock: bool = False  # Use --bypass-lock for read-only storage access (observe-only repos)
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create (e.g., "--stats --list")
     source_connection_id: Optional[int] = None  # SSH connection ID for remote data source (pull-based backups)
 
@@ -265,6 +295,7 @@ class RepositoryImport(BaseModel):
     post_hook_timeout: Optional[int] = 300  # Post-backup hook timeout in seconds
     continue_on_hook_failure: Optional[bool] = False  # Continue backup if pre-hook fails
     mode: str = "full"  # full: backups + observability, observe: observability-only
+    bypass_lock: bool = False  # Use --bypass-lock for read-only storage access (observe-only repos)
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create (e.g., "--stats --list")
     source_connection_id: Optional[int] = None  # SSH connection ID for remote data source (pull-based backups)
 
@@ -282,6 +313,7 @@ class RepositoryUpdate(BaseModel):
     post_hook_timeout: Optional[int] = None
     continue_on_hook_failure: Optional[bool] = None
     mode: Optional[str] = None  # full: backups + observability, observe: observability-only
+    bypass_lock: Optional[bool] = None  # Use --bypass-lock for read-only storage access
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create
     source_connection_id: Optional[int] = None  # SSH connection ID for remote data source
 
@@ -355,6 +387,7 @@ async def get_repositories(
                 "post_hook_timeout": repo.post_hook_timeout,
                 "continue_on_hook_failure": repo.continue_on_hook_failure,
                 "mode": repo.mode or "full",  # Default to "full" for backward compatibility
+                "bypass_lock": repo.bypass_lock or False,
                 "custom_flags": repo.custom_flags,
                 "has_running_maintenance": has_check or has_compact or has_prune
             })
@@ -561,6 +594,7 @@ async def create_repository(
             post_hook_timeout=repo_data.post_hook_timeout,
             continue_on_hook_failure=repo_data.continue_on_hook_failure,
             mode=repo_data.mode,
+            bypass_lock=repo_data.bypass_lock,
             custom_flags=repo_data.custom_flags,
             source_ssh_connection_id=repo_data.source_connection_id
         )
@@ -761,6 +795,7 @@ async def import_repository(
             post_hook_timeout=repo_data.post_hook_timeout,
             continue_on_hook_failure=repo_data.continue_on_hook_failure,
             mode=repo_data.mode,
+            bypass_lock=repo_data.bypass_lock,
             custom_flags=repo_data.custom_flags,
             source_ssh_connection_id=repo_data.source_connection_id
         )
@@ -893,8 +928,8 @@ async def get_repository(
             raise HTTPException(status_code=404, detail="Repository not found")
         
         # Get repository statistics
-        stats = await get_repository_stats(repository.path)
-        
+        stats = await get_repository_stats(repository.path, bypass_lock=repository.bypass_lock)
+
         return {
             "success": True,
             "repository": {
@@ -996,6 +1031,9 @@ async def update_repository(
             if repo_data.mode == "observe":
                 logger.info("Repository switched to observability-only mode", repo_id=repo_id)
 
+        if repo_data.bypass_lock is not None:
+            repository.bypass_lock = repo_data.bypass_lock
+
         if repo_data.custom_flags is not None:
             repository.custom_flags = repo_data.custom_flags
 
@@ -1033,7 +1071,7 @@ async def delete_repository(
             raise HTTPException(status_code=404, detail="Repository not found")
         
         # Check if repository has archives
-        archives_result = await borg.list_archives(repository.path, remote_path=repository.remote_path)
+        archives_result = await borg.list_archives(repository.path, remote_path=repository.remote_path, bypass_lock=repository.bypass_lock)
         if archives_result["success"]:
             try:
                 archives_data = archives_result["stdout"]
@@ -1299,8 +1337,8 @@ async def get_repository_statistics(
             raise HTTPException(status_code=404, detail="Repository not found")
         
         # Get detailed statistics
-        stats = await get_repository_stats(repository.path)
-        
+        stats = await get_repository_stats(repository.path, bypass_lock=repository.bypass_lock)
+
         return {
             "success": True,
             "stats": stats
@@ -1704,6 +1742,10 @@ async def list_repository_archives(
             if repository.remote_path:
                 cmd.extend(["--remote-path", repository.remote_path])
 
+            # Add --bypass-lock for read-only storage access
+            if repository.bypass_lock:
+                cmd.append("--bypass-lock")
+
             cmd.extend(["--json", repository.path])
 
             # Set up environment with proper lock configuration
@@ -1814,6 +1856,10 @@ async def get_repository_info(
             # Add remote-path if specified
             if repository.remote_path:
                 cmd.extend(["--remote-path", repository.remote_path])
+
+            # Add --bypass-lock for read-only storage access
+            if repository.bypass_lock:
+                cmd.append("--bypass-lock")
 
             cmd.extend(["--json", repository.path])
 
@@ -1973,6 +2019,10 @@ async def get_archive_info(
         if repository.remote_path:
             cmd.extend(["--remote-path", repository.remote_path])
 
+        # Add --bypass-lock for read-only storage access
+        if repository.bypass_lock:
+            cmd.append("--bypass-lock")
+
         cmd.extend(["--json", archive_path])
 
         # Set up environment with proper lock configuration
@@ -2021,6 +2071,8 @@ async def get_archive_info(
             list_cmd = ["borg", "list"]
             if repository.remote_path:
                 list_cmd.extend(["--remote-path", repository.remote_path])
+            if repository.bypass_lock:
+                list_cmd.append("--bypass-lock")
             list_cmd.extend(["--json-lines", archive_path])
 
             # Use same environment setup
@@ -2123,6 +2175,10 @@ async def list_archive_files(
         if repository.remote_path:
             cmd.extend(["--remote-path", repository.remote_path])
 
+        # Add --bypass-lock for read-only storage access
+        if repository.bypass_lock:
+            cmd.append("--bypass-lock")
+
         # Use --json-lines for file listing
         cmd.extend(["--json-lines", archive_path])
 
@@ -2195,11 +2251,15 @@ async def list_archive_files(
         logger.error("Failed to list archive files", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to list archive files: {str(e)}")
 
-async def get_repository_stats(path: str) -> Dict[str, Any]:
+async def get_repository_stats(path: str, bypass_lock: bool = False) -> Dict[str, Any]:
     """Get repository statistics"""
     try:
         # Get repository info
-        info_result = await borg._execute_command(["borg", "info", path])
+        cmd = ["borg", "info"]
+        if bypass_lock:
+            cmd.append("--bypass-lock")
+        cmd.append(path)
+        info_result = await borg._execute_command(cmd)
 
         if not info_result["success"]:
             return {
@@ -2219,7 +2279,7 @@ async def get_repository_stats(path: str) -> Dict[str, Any]:
         }
 
         # Try to get archive count
-        archives_result = await borg.list_archives(path)
+        archives_result = await borg.list_archives(path, bypass_lock=bypass_lock)
         if archives_result["success"]:
             try:
                 archives_data = archives_result["stdout"]

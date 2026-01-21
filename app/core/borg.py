@@ -389,11 +389,13 @@ class BorgInterface:
 
         return await self._execute_command(cmd, timeout=settings.backup_timeout, env=env if env else None)
     
-    async def list_archives(self, repository: str, remote_path: str = None, passphrase: str = None) -> Dict:
+    async def list_archives(self, repository: str, remote_path: str = None, passphrase: str = None, bypass_lock: bool = False) -> Dict:
         """List archives in repository"""
         cmd = [self.borg_cmd, "list"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
+        if bypass_lock:
+            cmd.append("--bypass-lock")
         cmd.extend([repository, "--json"])
 
         env = {}

@@ -373,6 +373,7 @@ export default function Repositories() {
     continue_on_hook_failure: false,
     mode: 'full' as 'full' | 'observe',
     custom_flags: '',
+    bypass_lock: false,
   })
 
   const [newSourceDir, setNewSourceDir] = useState('')
@@ -403,6 +404,7 @@ export default function Repositories() {
     continue_on_hook_failure: false,
     mode: 'full' as 'full' | 'observe',
     custom_flags: '',
+    bypass_lock: false,
   })
 
   const [editNewSourceDir, setEditNewSourceDir] = useState('')
@@ -544,6 +546,7 @@ export default function Repositories() {
       continue_on_hook_failure: false,
       mode: 'full',
       custom_flags: '',
+      bypass_lock: false,
     })
     setNewSourceDir('')
     setNewExcludePattern('')
@@ -623,6 +626,7 @@ export default function Repositories() {
       continue_on_hook_failure: (repository as any).continue_on_hook_failure || false,
       mode: repository.mode || 'full',
       custom_flags: repository.custom_flags || '',
+      bypass_lock: (repository as any).bypass_lock || false,
     })
     setEditNewSourceDir('')
     setEditNewExcludePattern('')
@@ -1144,47 +1148,70 @@ export default function Repositories() {
                 fullWidth
               />
 
-              {/* Repository Mode Selector - Moved to top for clarity */}
-              <FormControl fullWidth>
-                <InputLabel>Repository Mode</InputLabel>
-                <Select
-                  value={repositoryForm.mode}
-                  label="Repository Mode"
-                  onChange={(e) =>
-                    setRepositoryForm({
-                      ...repositoryForm,
-                      mode: e.target.value as 'full' | 'observe',
-                    })
-                  }
-                >
-                  <MenuItem value="full">
-                    <Box>
-                      <Typography variant="body2" fontWeight={600}>
-                        Full Repository
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Create backups and browse existing archives
-                      </Typography>
-                    </Box>
-                  </MenuItem>
-                  <MenuItem value="observe">
-                    <Box>
-                      <Typography variant="body2" fontWeight={600}>
-                        Observability Only
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Browse and restore existing archives only (no backups)
-                      </Typography>
-                    </Box>
-                  </MenuItem>
-                </Select>
-              </FormControl>
+              {/* Repository Mode Selector - Only for import */}
+              {repositoryModalMode === 'import' && (
+                <FormControl fullWidth>
+                  <InputLabel>Repository Mode</InputLabel>
+                  <Select
+                    value={repositoryForm.mode}
+                    label="Repository Mode"
+                    onChange={(e) =>
+                      setRepositoryForm({
+                        ...repositoryForm,
+                        mode: e.target.value as 'full' | 'observe',
+                      })
+                    }
+                  >
+                    <MenuItem value="full">
+                      <Box>
+                        <Typography variant="body2" fontWeight={600}>
+                          Full Repository
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Create backups and browse existing archives
+                        </Typography>
+                      </Box>
+                    </MenuItem>
+                    <MenuItem value="observe">
+                      <Box>
+                        <Typography variant="body2" fontWeight={600}>
+                          Observability Only
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Browse and restore existing archives only (no backups)
+                        </Typography>
+                      </Box>
+                    </MenuItem>
+                  </Select>
+                </FormControl>
+              )}
 
               {repositoryForm.mode === 'observe' && (
-                <Alert severity="info">
-                  Observability-only repositories can browse and restore existing archives but
-                  cannot create new backups or be used in scheduled jobs.
-                </Alert>
+                <>
+                  <Alert severity="info">
+                    Observability-only repositories can browse and restore existing archives but
+                    cannot create new backups or be used in scheduled jobs.
+                  </Alert>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={repositoryForm.bypass_lock}
+                        onChange={(e) =>
+                          setRepositoryForm({ ...repositoryForm, bypass_lock: e.target.checked })
+                        }
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Typography variant="body2">Read-only storage access</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Enable if the storage is read-only or locked by another process (adds
+                          --bypass-lock)
+                        </Typography>
+                      </Box>
+                    }
+                  />
+                </>
               )}
 
               <TextField
@@ -1828,10 +1855,31 @@ export default function Repositories() {
               </FormControl>
 
               {editForm.mode === 'observe' && (
-                <Alert severity="info">
-                  Observability-only repositories can browse and restore existing archives but
-                  cannot create new backups or be used in scheduled jobs.
-                </Alert>
+                <>
+                  <Alert severity="info">
+                    Observability-only repositories can browse and restore existing archives but
+                    cannot create new backups or be used in scheduled jobs.
+                  </Alert>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={editForm.bypass_lock}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, bypass_lock: e.target.checked })
+                        }
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Typography variant="body2">Read-only storage access</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Enable if the storage is read-only or locked by another process (adds
+                          --bypass-lock)
+                        </Typography>
+                      </Box>
+                    }
+                  />
+                </>
               )}
 
               {/* Compression Settings - Only show for full repositories */}

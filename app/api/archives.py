@@ -38,7 +38,8 @@ async def list_archives(
         result = await borg.list_archives(
             repository,
             remote_path=repo.remote_path,
-            passphrase=repo.passphrase
+            passphrase=repo.passphrase,
+            bypass_lock=repo.bypass_lock
         )
         if not result["success"]:
             raise HTTPException(
