@@ -241,22 +241,31 @@ async def get_dashboard_overview(
         # Get all repositories
         repositories = db.query(Repository).all()
 
+        # Separate full-mode repos (for health/maintenance) from observe-only repos
+        full_mode_repos = [r for r in repositories if r.mode != "observe"]
+        observe_only_repos = [r for r in repositories if r.mode == "observe"]
+
         # Get all schedules
         schedules = db.query(ScheduledJob).all()
 
         # Get SSH connections
         ssh_connections = db.query(SSHConnection).all()
 
-        # Calculate repository health
+        # Calculate repository health (only for full-mode repos that do backups)
         repo_health = []
         total_size_bytes = 0
         total_archives = 0
 
+        # Include all repos for size/archive totals
         for repo in repositories:
-            # Parse size
             size_bytes = parse_size_to_bytes(repo.total_size)
             total_size_bytes += size_bytes
             total_archives += repo.archive_count or 0
+
+        # But only show health status for full-mode repos (observe-only repos don't do backups)
+        for repo in full_mode_repos:
+            # Parse size for this repo
+            size_bytes = parse_size_to_bytes(repo.total_size)
 
             # Determine health status
             health_status = "healthy"
@@ -398,11 +407,11 @@ async def get_dashboard_overview(
                 "next_run": serialize_datetime(schedule.next_run) if schedule.next_run else "Not scheduled",
             })
 
-        # Get maintenance alerts
+        # Get maintenance alerts (only for full-mode repos - observe-only repos don't need maintenance)
         maintenance_alerts = []
 
         # Check repos needing maintenance
-        for repo in repositories:
+        for repo in full_mode_repos:
             if repo.last_check:
                 days_since_check = (now - repo.last_check).days
                 if days_since_check > 30:
