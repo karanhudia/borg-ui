@@ -77,6 +77,9 @@ class Repository(Base):
     notify_on_check_success = Column(Boolean, default=False, nullable=False)  # Per-repository override
     notify_on_check_failure = Column(Boolean, default=True, nullable=False)  # Per-repository override
 
+    # Remote backup support (pull-based backups)
+    source_ssh_connection_id = Column(Integer, ForeignKey("ssh_connections.id"), nullable=True)  # For pull-based backups
+
     # Relationships
     ssh_key = relationship("SSHKey", back_populates="repositories")
 
