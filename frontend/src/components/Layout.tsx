@@ -103,6 +103,7 @@ const navigationWithKeys: NavigationItem[] = [
       { name: 'Appearance', href: '/settings/appearance', icon: Palette },
       { name: 'Preferences', href: '/settings/preferences', icon: Sliders },
       { name: 'Notifications', href: '/settings/notifications', icon: Bell },
+      { name: 'System', href: '/settings/system', icon: Sliders },
       { name: 'Beta', href: '/settings/beta', icon: Zap },
       { name: 'Cache', href: '/settings/cache', icon: Server },
       { name: 'Logs', href: '/settings/logs', icon: FileText },
