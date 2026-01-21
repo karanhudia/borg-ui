@@ -497,58 +497,79 @@ class MountService:
                     pid=process.pid
                 )
 
-                # Wait a bit for the mount to initialize
+                # Wait for the mount to initialize with retries
+                # Large repositories (10TB+) can take 30-60+ seconds to mount
                 # In foreground mode, borg mount will continue running
-                await asyncio.sleep(3)
+                max_wait_seconds = 120  # Total max wait time
+                check_interval = 5  # Check every 5 seconds
+                total_waited = 0
+                mount_verified = False
 
-                # Check if process is still running (it should be for successful mount)
-                if process.returncode is not None:
-                    # Process exited - this means mount failed
-                    try:
-                        stderr = await asyncio.wait_for(
-                            process.stderr.read(),
-                            timeout=1
+                while total_waited < max_wait_seconds:
+                    await asyncio.sleep(check_interval)
+                    total_waited += check_interval
+
+                    # Check if process is still running (it should be for successful mount)
+                    if process.returncode is not None:
+                        # Process exited - this means mount failed
+                        try:
+                            stderr = await asyncio.wait_for(
+                                process.stderr.read(),
+                                timeout=1
+                            )
+                            error_msg = stderr.decode() if stderr else "Unknown error"
+                        except:
+                            error_msg = "Unknown error"
+
+                        logger.error(
+                            "Borg mount process exited unexpectedly",
+                            mount_id=mount_id,
+                            returncode=process.returncode,
+                            error=error_msg,
+                            waited_seconds=total_waited
                         )
-                        error_msg = stderr.decode() if stderr else "Unknown error"
-                    except:
-                        error_msg = "Unknown error"
+                        raise Exception(f"Borg mount failed: {error_msg}")
 
-                    logger.error(
-                        "Borg mount process exited unexpectedly",
+                    logger.info(
+                        "Process still running, checking mount status",
                         mount_id=mount_id,
-                        returncode=process.returncode,
-                        error=error_msg
+                        pid=process.pid,
+                        waited_seconds=total_waited
                     )
-                    raise Exception(f"Borg mount failed: {error_msg}")
 
-                logger.info(
-                    "Process still running after 3 seconds",
-                    mount_id=mount_id,
-                    pid=process.pid
-                )
+                    # Verify mount is active
+                    mount_check = subprocess.run(
+                        ["mount"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
 
-                # Verify mount is active
-                mount_check = subprocess.run(
-                    ["mount"],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
+                    if mount_point in mount_check.stdout:
+                        mount_verified = True
+                        logger.info(
+                            "Mount verified successfully",
+                            mount_id=mount_id,
+                            mount_point=mount_point,
+                            waited_seconds=total_waited
+                        )
+                        break
+                    else:
+                        logger.info(
+                            "Mount point not yet in mount list, waiting...",
+                            mount_id=mount_id,
+                            mount_point=mount_point,
+                            waited_seconds=total_waited,
+                            max_wait=max_wait_seconds
+                        )
 
-                logger.info(
-                    "Checking mount list",
-                    mount_id=mount_id,
-                    mount_point=mount_point,
-                    mount_list_contains=mount_point in mount_check.stdout
-                )
-
-                if mount_point not in mount_check.stdout:
-                    # Log mount output for debugging
+                if not mount_verified:
+                    # Timeout reached - mount didn't complete in time
                     logger.error(
-                        "Mount point not found in mount list",
+                        "Mount timeout - mount point not found after max wait",
                         mount_id=mount_id,
                         mount_point=mount_point,
-                        mount_output_sample=mount_check.stdout[:500]
+                        waited_seconds=total_waited
                     )
                     # Kill the process
                     try:
@@ -556,13 +577,7 @@ class MountService:
                         await process.wait()
                     except:
                         pass
-                    raise Exception(f"Failed to verify mount at {mount_point}")
-
-                logger.info(
-                    "Mount verified successfully",
-                    mount_id=mount_id,
-                    pid=process.pid
-                )
+                    raise Exception(f"Mount timeout: mount point not ready after {max_wait_seconds} seconds. Large repositories may need more time.")
 
                 # Track mount
                 self.active_mounts[mount_id] = MountInfo(
