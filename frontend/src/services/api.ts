@@ -155,6 +155,7 @@ export const settingsAPI = {
   // System settings
   getSystemSettings: () => api.get('/settings/system'),
   updateSystemSettings: (settings: any) => api.put('/settings/system', settings),
+  refreshAllStats: () => api.post('/settings/refresh-stats'),
 
   // User management
   getUsers: () => api.get('/settings/users'),

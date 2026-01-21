@@ -194,6 +194,11 @@ async def startup_event():
     asyncio.create_task(check_scheduler.start())
     logger.info("Check scheduler started")
 
+    # Start stats refresh scheduler (background task)
+    from app.services.stats_refresh_scheduler import stats_refresh_scheduler
+    asyncio.create_task(stats_refresh_scheduler.start())
+    logger.info("Stats refresh scheduler started")
+
     logger.info("Borg Web UI started successfully")
 
 @app.on_event("shutdown")

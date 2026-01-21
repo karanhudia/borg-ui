@@ -67,6 +67,7 @@ class Repository(Base):
 
     # Repository mode (for observability-only repos)
     mode = Column(String, default="full")  # full: backups + observability, observe: observability-only
+    bypass_lock = Column(Boolean, default=False)  # Use --bypass-lock for read-only storage access (observe-only repos)
 
     # Custom flags for borg create command (advanced users)
     custom_flags = Column(Text, nullable=True)  # Custom command-line flags for borg create (e.g., "--stats --progress")
@@ -359,6 +360,8 @@ class SystemSettings(Base):
     redis_url = Column(String, nullable=True)  # External Redis URL (e.g., redis://host:6379/0)
     browse_max_items = Column(Integer, default=1_000_000)  # Maximum items to load when browsing archives
     browse_max_memory_mb = Column(Integer, default=1024)  # Maximum memory (MB) for archive browsing
+    stats_refresh_interval_minutes = Column(Integer, default=60)  # How often to refresh repository stats (0 = disabled)
+    last_stats_refresh = Column(DateTime, nullable=True)  # Last time stats were refreshed
     email_notifications = Column(Boolean, default=False)
     webhook_url = Column(String, nullable=True)
     auto_cleanup = Column(Boolean, default=False)

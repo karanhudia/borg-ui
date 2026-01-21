@@ -96,6 +96,7 @@ class SystemSettingsUpdate(BaseModel):
     auto_cleanup: Optional[bool] = None
     cleanup_retention_days: Optional[int] = None
     use_new_wizard: Optional[bool] = None
+    stats_refresh_interval_minutes: Optional[int] = None  # How often to refresh repository stats (0 = disabled)
 
 @router.get("/system")
 async def get_system_settings(
@@ -204,6 +205,8 @@ async def get_system_settings(
                 "auto_cleanup": settings.auto_cleanup,
                 "cleanup_retention_days": settings.cleanup_retention_days,
                 "use_new_wizard": settings.use_new_wizard,
+                "stats_refresh_interval_minutes": settings.stats_refresh_interval_minutes if settings.stats_refresh_interval_minutes is not None else 60,
+                "last_stats_refresh": settings.last_stats_refresh.isoformat() if settings.last_stats_refresh else None,
                 "borg_version": borg.get_version(),
                 "app_version": "1.36.1"
             },
@@ -308,6 +311,8 @@ async def update_system_settings(
             settings.cleanup_retention_days = settings_update.cleanup_retention_days
         if settings_update.use_new_wizard is not None:
             settings.use_new_wizard = settings_update.use_new_wizard
+        if settings_update.stats_refresh_interval_minutes is not None:
+            settings.stats_refresh_interval_minutes = settings_update.stats_refresh_interval_minutes
 
         settings.updated_at = datetime.utcnow()
         db.commit()
@@ -328,6 +333,90 @@ async def update_system_settings(
     except Exception as e:
         logger.error("Failed to update system settings", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to update system settings: {str(e)}")
+
+async def _run_stats_refresh_background(repo_ids: list, username: str):
+    """Background task to refresh stats for all repositories"""
+    from app.api.repositories import update_repository_stats
+    from app.database.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        success_count = 0
+        error_count = 0
+
+        for repo_id in repo_ids:
+            repo = db.query(Repository).filter(Repository.id == repo_id).first()
+            if not repo:
+                continue
+            try:
+                result = await update_repository_stats(repo, db)
+                if result:
+                    success_count += 1
+                else:
+                    error_count += 1
+            except Exception as e:
+                logger.error("Error refreshing stats for repository",
+                           repo_id=repo.id,
+                           repo_name=repo.name,
+                           error=str(e))
+                error_count += 1
+
+        # Update last_stats_refresh timestamp
+        settings = db.query(SystemSettings).first()
+        if settings:
+            settings.last_stats_refresh = datetime.utcnow()
+            db.commit()
+
+        logger.info("Background stats refresh completed",
+                   user=username,
+                   success=success_count,
+                   errors=error_count)
+    except Exception as e:
+        logger.error("Background stats refresh failed", error=str(e))
+    finally:
+        db.close()
+
+
+@router.post("/refresh-stats")
+async def refresh_all_stats(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Manually trigger a refresh of all repository statistics.
+    Runs in the background and returns immediately.
+    Check last_stats_refresh timestamp to know when it completed.
+    """
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        import asyncio
+
+        logger.info("Manual stats refresh triggered", user=current_user.username)
+
+        # Get all repository IDs
+        repos = db.query(Repository).all()
+        repo_ids = [r.id for r in repos]
+
+        if not repo_ids:
+            return {
+                "success": True,
+                "message": "No repositories to refresh",
+                "repository_count": 0
+            }
+
+        # Start background task
+        asyncio.create_task(_run_stats_refresh_background(repo_ids, current_user.username))
+
+        return {
+            "success": True,
+            "message": f"Stats refresh started for {len(repo_ids)} repositories. Check back shortly.",
+            "repository_count": len(repo_ids)
+        }
+    except Exception as e:
+        logger.error("Failed to start stats refresh", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to start stats refresh: {str(e)}")
 
 @router.get("/users")
 async def get_users(

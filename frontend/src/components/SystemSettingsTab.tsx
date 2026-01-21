@@ -12,7 +12,7 @@ import {
   Divider,
   CircularProgress,
 } from '@mui/material'
-import { Save, AlertTriangle, Settings, Clock } from 'lucide-react'
+import { Save, AlertTriangle, Settings, Clock, RefreshCw } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { settingsAPI } from '../services/api'
 
@@ -29,6 +29,10 @@ const SystemSettingsTab: React.FC = () => {
   const [listTimeout, setListTimeout] = useState(600)
   const [initTimeout, setInitTimeout] = useState(300)
   const [backupTimeout, setBackupTimeout] = useState(3600)
+
+  // Local state for stats refresh
+  const [statsRefreshInterval, setStatsRefreshInterval] = useState(60)
+  const [isRefreshingStats, setIsRefreshingStats] = useState(false)
 
   const [hasChanges, setHasChanges] = useState(false)
 
@@ -52,27 +56,38 @@ const SystemSettingsTab: React.FC = () => {
 
   const cacheStats = cacheData as any
   const systemSettings = systemData?.settings
-  const timeoutSources = systemData?.settings?.timeout_sources as Record<string, string | null> | undefined
+  const timeoutSources = systemData?.settings?.timeout_sources as
+    | Record<string, string | null>
+    | undefined
 
   // Helper to render source label with color
   const renderSourceLabel = (source: string | null | undefined) => {
     if (source === 'saved') {
       return (
-        <Typography component="span" sx={{ color: 'success.main', fontSize: '0.7rem', fontWeight: 500 }}>
-          {' '}[customized]
+        <Typography
+          component="span"
+          sx={{ color: 'success.main', fontSize: '0.7rem', fontWeight: 500 }}
+        >
+          {' '}
+          [customized]
         </Typography>
       )
     }
     if (source === 'env') {
       return (
-        <Typography component="span" sx={{ color: 'warning.main', fontSize: '0.7rem', fontWeight: 500 }}>
-          {' '}[from env]
+        <Typography
+          component="span"
+          sx={{ color: 'warning.main', fontSize: '0.7rem', fontWeight: 500 }}
+        >
+          {' '}
+          [from env]
         </Typography>
       )
     }
     return (
       <Typography component="span" sx={{ color: 'info.main', fontSize: '0.7rem', fontWeight: 500 }}>
-        {' '}[default]
+        {' '}
+        [default]
       </Typography>
     )
   }
@@ -92,6 +107,7 @@ const SystemSettingsTab: React.FC = () => {
       setListTimeout(systemSettings.list_timeout || 600)
       setInitTimeout(systemSettings.init_timeout || 300)
       setBackupTimeout(systemSettings.backup_timeout || 3600)
+      setStatsRefreshInterval(systemSettings.stats_refresh_interval_minutes ?? 60)
       setHasChanges(false)
     }
   }, [systemSettings])
@@ -110,7 +126,10 @@ const SystemSettingsTab: React.FC = () => {
         initTimeout !== (systemSettings.init_timeout || 300) ||
         backupTimeout !== (systemSettings.backup_timeout || 3600)
 
-      setHasChanges(browseChanged || timeoutChanged)
+      const statsRefreshChanged =
+        statsRefreshInterval !== (systemSettings.stats_refresh_interval_minutes ?? 60)
+
+      setHasChanges(browseChanged || timeoutChanged || statsRefreshChanged)
     }
   }, [
     browseMaxItems,
@@ -120,6 +139,7 @@ const SystemSettingsTab: React.FC = () => {
     listTimeout,
     initTimeout,
     backupTimeout,
+    statsRefreshInterval,
     cacheStats,
     systemSettings,
   ])
@@ -131,6 +151,7 @@ const SystemSettingsTab: React.FC = () => {
   const MAX_MEMORY = 16384
   const MIN_TIMEOUT = 10
   const MAX_TIMEOUT = 86400 // 24 hours
+  const MAX_STATS_REFRESH = 1440 // 24 hours in minutes
 
   const getValidationError = (): string | null => {
     if (browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES) {
@@ -142,6 +163,9 @@ const SystemSettingsTab: React.FC = () => {
     const timeouts = [mountTimeout, infoTimeout, listTimeout, initTimeout, backupTimeout]
     if (timeouts.some((t) => t < MIN_TIMEOUT || t > MAX_TIMEOUT)) {
       return `Timeouts must be between ${MIN_TIMEOUT} seconds and ${MAX_TIMEOUT} seconds (24 hours)`
+    }
+    if (statsRefreshInterval < 0 || statsRefreshInterval > MAX_STATS_REFRESH) {
+      return `Stats refresh interval must be between 0 and ${MAX_STATS_REFRESH} minutes (0 = disabled)`
     }
     return null
   }
@@ -174,7 +198,7 @@ const SystemSettingsTab: React.FC = () => {
     },
   })
 
-  // Save timeouts mutation
+  // Save timeouts and system settings mutation
   const saveTimeoutsMutation = useMutation({
     mutationFn: async () => {
       return await settingsAPI.updateSystemSettings({
@@ -183,6 +207,7 @@ const SystemSettingsTab: React.FC = () => {
         list_timeout: listTimeout,
         init_timeout: initTimeout,
         backup_timeout: backupTimeout,
+        stats_refresh_interval_minutes: statsRefreshInterval,
       })
     },
     onSuccess: () => {
@@ -227,6 +252,44 @@ const SystemSettingsTab: React.FC = () => {
       return `${minutes.toFixed(0)} minute${minutes !== 1 ? 's' : ''}`
     }
     return `${seconds} second${seconds !== 1 ? 's' : ''}`
+  }
+
+  // Handler for manual stats refresh
+  const handleRefreshStats = async () => {
+    setIsRefreshingStats(true)
+    try {
+      const response = await settingsAPI.refreshAllStats()
+      const data = response.data
+      toast.success(data.message || 'Stats refresh started')
+
+      // Poll for completion by checking last_stats_refresh
+      const startTime = Date.now()
+      const maxWaitTime = 5 * 60 * 1000 // 5 minutes max polling
+      const pollInterval = setInterval(async () => {
+        if (Date.now() - startTime > maxWaitTime) {
+          clearInterval(pollInterval)
+          setIsRefreshingStats(false)
+          return
+        }
+
+        try {
+          const settingsResponse = await settingsAPI.getSystemSettings()
+          const newLastRefresh = settingsResponse.data?.settings?.last_stats_refresh
+          if (newLastRefresh && new Date(newLastRefresh) > new Date(startTime)) {
+            clearInterval(pollInterval)
+            setIsRefreshingStats(false)
+            toast.success('Stats refresh completed')
+            queryClient.invalidateQueries({ queryKey: ['repositories'] })
+            queryClient.invalidateQueries({ queryKey: ['systemSettings'] })
+          }
+        } catch {
+          // Ignore polling errors
+        }
+      }, 3000) // Poll every 3 seconds
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to start stats refresh')
+      setIsRefreshingStats(false)
+    }
   }
 
   const isLoading = cacheLoading || systemLoading
@@ -292,7 +355,12 @@ const SystemSettingsTab: React.FC = () => {
                   onChange={(e) => setMountTimeout(Number(e.target.value))}
                   inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 10 }}
                   error={mountTimeout < MIN_TIMEOUT || mountTimeout > MAX_TIMEOUT}
-                  helperText={<>For mounting archives. {formatTimeout(mountTimeout)}{renderSourceLabel(timeoutSources?.mount_timeout)}</>}
+                  helperText={
+                    <>
+                      For mounting archives. {formatTimeout(mountTimeout)}
+                      {renderSourceLabel(timeoutSources?.mount_timeout)}
+                    </>
+                  }
                 />
 
                 <TextField
@@ -303,7 +371,12 @@ const SystemSettingsTab: React.FC = () => {
                   onChange={(e) => setInfoTimeout(Number(e.target.value))}
                   inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
                   error={infoTimeout < MIN_TIMEOUT || infoTimeout > MAX_TIMEOUT}
-                  helperText={<>For borg info commands. {formatTimeout(infoTimeout)}{renderSourceLabel(timeoutSources?.info_timeout)}</>}
+                  helperText={
+                    <>
+                      For borg info commands. {formatTimeout(infoTimeout)}
+                      {renderSourceLabel(timeoutSources?.info_timeout)}
+                    </>
+                  }
                 />
 
                 <TextField
@@ -314,7 +387,12 @@ const SystemSettingsTab: React.FC = () => {
                   onChange={(e) => setListTimeout(Number(e.target.value))}
                   inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
                   error={listTimeout < MIN_TIMEOUT || listTimeout > MAX_TIMEOUT}
-                  helperText={<>For listing archives. {formatTimeout(listTimeout)}{renderSourceLabel(timeoutSources?.list_timeout)}</>}
+                  helperText={
+                    <>
+                      For listing archives. {formatTimeout(listTimeout)}
+                      {renderSourceLabel(timeoutSources?.list_timeout)}
+                    </>
+                  }
                 />
 
                 <TextField
@@ -325,7 +403,12 @@ const SystemSettingsTab: React.FC = () => {
                   onChange={(e) => setInitTimeout(Number(e.target.value))}
                   inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
                   error={initTimeout < MIN_TIMEOUT || initTimeout > MAX_TIMEOUT}
-                  helperText={<>For repository init. {formatTimeout(initTimeout)}{renderSourceLabel(timeoutSources?.init_timeout)}</>}
+                  helperText={
+                    <>
+                      For repository init. {formatTimeout(initTimeout)}
+                      {renderSourceLabel(timeoutSources?.init_timeout)}
+                    </>
+                  }
                 />
 
                 <TextField
@@ -336,9 +419,73 @@ const SystemSettingsTab: React.FC = () => {
                   onChange={(e) => setBackupTimeout(Number(e.target.value))}
                   inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 300 }}
                   error={backupTimeout < MIN_TIMEOUT || backupTimeout > MAX_TIMEOUT}
-                  helperText={<>For backup/restore. {formatTimeout(backupTimeout)}{renderSourceLabel(timeoutSources?.backup_timeout)}</>}
+                  helperText={
+                    <>
+                      For backup/restore. {formatTimeout(backupTimeout)}
+                      {renderSourceLabel(timeoutSources?.backup_timeout)}
+                    </>
+                  }
                 />
               </Box>
+            </Stack>
+          </CardContent>
+        </Card>
+
+        {/* Repository Monitoring Card */}
+        <Card>
+          <CardContent>
+            <Stack spacing={3}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <RefreshCw size={24} />
+                <Typography variant="h6">Repository Monitoring</Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                Configure automatic refresh of repository statistics. This keeps dashboard data
+                up-to-date, especially useful for observe-only repositories where backups are
+                managed externally.
+              </Typography>
+              <Divider />
+
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                <TextField
+                  label="Stats Refresh Interval (minutes)"
+                  type="number"
+                  value={statsRefreshInterval}
+                  onChange={(e) => setStatsRefreshInterval(Number(e.target.value))}
+                  inputProps={{ min: 0, max: MAX_STATS_REFRESH, step: 15 }}
+                  error={statsRefreshInterval < 0 || statsRefreshInterval > MAX_STATS_REFRESH}
+                  helperText={
+                    statsRefreshInterval === 0
+                      ? 'Automatic stats refresh is disabled'
+                      : statsRefreshInterval < 0 || statsRefreshInterval > MAX_STATS_REFRESH
+                        ? `Must be between 0 and ${MAX_STATS_REFRESH} minutes`
+                        : `Repository stats (archive count, size, last backup) will be refreshed every ${statsRefreshInterval} minutes`
+                  }
+                  sx={{ width: 300 }}
+                />
+                <Button
+                  variant="outlined"
+                  onClick={handleRefreshStats}
+                  disabled={isRefreshingStats}
+                  startIcon={
+                    isRefreshingStats ? <CircularProgress size={16} /> : <RefreshCw size={16} />
+                  }
+                  sx={{ height: 40 }}
+                >
+                  {isRefreshingStats ? 'Refreshing...' : 'Refresh Now'}
+                </Button>
+              </Box>
+
+              {systemSettings?.last_stats_refresh && (
+                <Typography variant="body2" color="text.secondary">
+                  Last refreshed: {new Date(systemSettings.last_stats_refresh).toLocaleString()}
+                </Typography>
+              )}
+
+              <Alert severity="info">
+                Set to 0 to disable automatic refresh. The scheduler refreshes stats for all
+                repositories, including observe-only ones where backups happen externally.
+              </Alert>
             </Stack>
           </CardContent>
         </Card>
