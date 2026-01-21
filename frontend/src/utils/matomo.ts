@@ -84,6 +84,7 @@ export const initMatomo = (): void => {
 
 // Cache opt-out status and loading state
 let userOptedOut: boolean | null = null
+let consentGiven: boolean | null = null
 let preferenceLoaded = false
 
 /**
@@ -95,6 +96,7 @@ export const loadUserPreference = async (): Promise<void> => {
     const token = localStorage.getItem('access_token')
     if (!token) {
       userOptedOut = false // Not logged in, allow tracking
+      consentGiven = false
       preferenceLoaded = true
       return
     }
@@ -106,14 +108,31 @@ export const loadUserPreference = async (): Promise<void> => {
     if (response.ok) {
       const data = await response.json()
       userOptedOut = !data.preferences?.analytics_enabled
+      consentGiven = data.preferences?.analytics_consent_given ?? false
     } else {
       userOptedOut = false // Default to enabled if API fails
+      consentGiven = false
     }
   } catch (error) {
     userOptedOut = false // Default to enabled on error
+    consentGiven = false
   }
 
   preferenceLoaded = true
+}
+
+/**
+ * Check if user has given consent (for showing banner)
+ */
+export const hasConsentBeenGiven = (): boolean | null => {
+  return consentGiven
+}
+
+/**
+ * Check if preferences have been loaded
+ */
+export const arePreferencesLoaded = (): boolean => {
+  return preferenceLoaded
 }
 
 /**
@@ -237,6 +256,17 @@ export const trackOptOut = (): void => {
   if (!config.enabled || !window._paq) return
 
   window._paq.push(['trackEvent', 'Settings', 'OptOut', 'analytics'])
+}
+
+/**
+ * Track consent banner response (bypasses canTrack since this is the final event before potential opt-out)
+ * @param accepted - true if user accepted analytics, false if declined
+ */
+export const trackConsentResponse = (accepted: boolean): void => {
+  const config = getMatomoConfig()
+  if (!config.enabled || !window._paq) return
+
+  window._paq.push(['trackEvent', 'Consent', accepted ? 'Accept' : 'Decline', 'analytics_banner'])
 }
 
 /**

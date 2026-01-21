@@ -2,7 +2,13 @@ import React, { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth.tsx'
 import { useTabEnablement } from '../context/AppContext'
-import { setAppVersion } from '../utils/matomo'
+import {
+  setAppVersion,
+  hasConsentBeenGiven,
+  arePreferencesLoaded,
+  loadUserPreference,
+} from '../utils/matomo'
+import AnalyticsConsentBanner from './AnalyticsConsentBanner'
 import {
   Box,
   Drawer,
@@ -118,9 +124,25 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
   const [settingsExpanded, setSettingsExpanded] = useState(false)
+  const [showConsentBanner, setShowConsentBanner] = useState(false)
   const location = useLocation()
   const { user, logout } = useAuth()
   const { tabEnablement, getTabDisabledReason } = useTabEnablement()
+
+  // Check if we need to show analytics consent banner
+  useEffect(() => {
+    const checkConsent = async () => {
+      // Load preferences if not already loaded
+      if (!arePreferencesLoaded()) {
+        await loadUserPreference()
+      }
+      // Show banner if consent not given yet
+      if (hasConsentBeenGiven() === false) {
+        setShowConsentBanner(true)
+      }
+    }
+    checkConsent()
+  }, [])
 
   // Auto-expand settings if we're on a settings page
   useEffect(() => {
@@ -514,6 +536,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           {children}
         </Container>
       </Box>
+
+      {/* Analytics Consent Banner */}
+      {showConsentBanner && (
+        <AnalyticsConsentBanner onConsentGiven={() => setShowConsentBanner(false)} />
+      )}
     </Box>
   )
 }

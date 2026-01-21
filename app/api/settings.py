@@ -42,6 +42,7 @@ class PasswordReset(BaseModel):
 
 class UserPreferencesUpdate(BaseModel):
     analytics_enabled: Optional[bool] = None
+    analytics_consent_given: Optional[bool] = None
 
 class SystemSettingsUpdate(BaseModel):
     backup_timeout: Optional[int] = None
@@ -80,7 +81,7 @@ async def get_system_settings(
             db.add(settings)
             db.commit()
             db.refresh(settings)
-        
+
         # Get log storage statistics
         from app.services.log_manager import log_manager
         try:
@@ -140,7 +141,7 @@ async def update_system_settings(
     """Update system settings (admin only)"""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     try:
         # Validate log management settings
         warnings = []
@@ -229,7 +230,7 @@ async def get_users(
     """Get all users (admin only)"""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     try:
         users = db.query(User).all()
         return {
@@ -260,18 +261,18 @@ async def create_user(
     """Create a new user (admin only)"""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     try:
         # Check if username already exists
         existing_user = db.query(User).filter(User.username == user_data.username).first()
         if existing_user:
             raise HTTPException(status_code=400, detail="Username already exists")
-        
+
         # Check if email already exists
         existing_email = db.query(User).filter(User.email == user_data.email).first()
         if existing_email:
             raise HTTPException(status_code=400, detail="Email already exists")
-        
+
         # Create new user
         hashed_password = get_password_hash(user_data.password)
         new_user = User(
@@ -281,13 +282,13 @@ async def create_user(
             is_active=True,
             is_admin=user_data.is_admin
         )
-        
+
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
-        
+
         logger.info("User created", username=user_data.username, created_by=current_user.username)
-        
+
         return {
             "success": True,
             "message": "User created successfully",
@@ -315,12 +316,12 @@ async def update_user(
     """Update user (admin only)"""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     try:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        
+
         # Update user fields
         if user_data.username is not None:
             # Check if username already exists
@@ -331,7 +332,7 @@ async def update_user(
             if existing_user:
                 raise HTTPException(status_code=400, detail="Username already exists")
             user.username = user_data.username
-        
+
         if user_data.email is not None:
             # Check if email already exists
             existing_email = db.query(User).filter(
@@ -341,18 +342,18 @@ async def update_user(
             if existing_email:
                 raise HTTPException(status_code=400, detail="Email already exists")
             user.email = user_data.email
-        
+
         if user_data.is_active is not None:
             user.is_active = user_data.is_active
-        
+
         if user_data.is_admin is not None:
             user.is_admin = user_data.is_admin
-        
+
         user.updated_at = datetime.utcnow()
         db.commit()
-        
+
         logger.info("User updated", user_id=user_id, updated_by=current_user.username)
-        
+
         return {
             "success": True,
             "message": "User updated successfully"
@@ -372,27 +373,27 @@ async def delete_user(
     """Delete user (admin only)"""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     try:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        
+
         # Prevent deleting the last admin user
         if user.is_admin:
             admin_count = db.query(User).filter(User.is_admin == True).count()
             if admin_count <= 1:
                 raise HTTPException(status_code=400, detail="Cannot delete the last admin user")
-        
+
         # Prevent deleting yourself
         if user.id == current_user.id:
             raise HTTPException(status_code=400, detail="Cannot delete your own account")
-        
+
         db.delete(user)
         db.commit()
-        
+
         logger.info("User deleted", user_id=user_id, deleted_by=current_user.username)
-        
+
         return {
             "success": True,
             "message": "User deleted successfully"
@@ -423,7 +424,7 @@ async def reset_user_password(
         user.password_hash = hashed_password
         user.updated_at = datetime.utcnow()
         db.commit()
-        
+
         logger.info("User password reset", user_id=user_id, reset_by=current_user.username)
 
         return {
@@ -447,16 +448,16 @@ async def change_password(
         # Verify current password
         if not verify_password(password_data.current_password, current_user.password_hash):
             raise HTTPException(status_code=400, detail="Current password is incorrect")
-        
+
         # Update password
         hashed_password = get_password_hash(password_data.new_password)
         current_user.password_hash = hashed_password
         current_user.must_change_password = False  # Clear the flag after password change
         current_user.updated_at = datetime.utcnow()
         db.commit()
-        
+
         logger.info("Password changed", username=current_user.username)
-        
+
         return {
             "success": True,
             "message": "Password changed successfully"
@@ -501,7 +502,7 @@ async def update_profile(
             if existing_user:
                 raise HTTPException(status_code=400, detail="Username already exists")
             current_user.username = profile_data.username
-        
+
         if profile_data.email is not None:
             # Check if email already exists
             existing_email = db.query(User).filter(
@@ -511,12 +512,12 @@ async def update_profile(
             if existing_email:
                 raise HTTPException(status_code=400, detail="Email already exists")
             current_user.email = profile_data.email
-        
+
         current_user.updated_at = datetime.utcnow()
         db.commit()
-        
+
         logger.info("Profile updated", username=current_user.username)
-        
+
         return {
             "success": True,
             "message": "Profile updated successfully"
@@ -533,7 +534,8 @@ async def get_preferences(current_user: User = Depends(get_current_user)):
     return {
         "success": True,
         "preferences": {
-            "analytics_enabled": current_user.analytics_enabled if hasattr(current_user, 'analytics_enabled') else True
+            "analytics_enabled": current_user.analytics_enabled if hasattr(current_user, 'analytics_enabled') else True,
+            "analytics_consent_given": current_user.analytics_consent_given if hasattr(current_user, 'analytics_consent_given') else False
         }
     }
 
@@ -547,11 +549,15 @@ async def update_preferences(
     try:
         if preferences.analytics_enabled is not None:
             current_user.analytics_enabled = preferences.analytics_enabled
+        if preferences.analytics_consent_given is not None:
+            current_user.analytics_consent_given = preferences.analytics_consent_given
 
         current_user.updated_at = datetime.utcnow()
         db.commit()
 
-        logger.info("User preferences updated", username=current_user.username, analytics_enabled=preferences.analytics_enabled)
+        logger.info("User preferences updated", username=current_user.username,
+                   analytics_enabled=preferences.analytics_enabled,
+                   analytics_consent_given=preferences.analytics_consent_given)
 
         return {
             "success": True,
@@ -569,7 +575,7 @@ async def cleanup_system(
     """Run system cleanup (admin only)"""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     try:
         # Get system settings
         settings = db.query(SystemSettings).first()
@@ -587,21 +593,21 @@ async def cleanup_system(
             db.add(settings)
             db.commit()
             db.refresh(settings)
-        
+
         # Perform cleanup tasks (placeholder implementation)
         cleanup_results = {
             "logs_cleaned": 0,
             "old_backups_removed": 0,
             "temp_files_cleaned": 0
         }
-        
+
         # TODO: Implement actual cleanup logic
         # - Clean old logs based on log_retention_days
         # - Remove old backup archives based on cleanup_retention_days
         # - Clean temporary files
-        
+
         logger.info("System cleanup completed", user=current_user.username, results=cleanup_results)
-        
+
         return {
             "success": True,
             "message": "System cleanup completed successfully",
@@ -999,4 +1005,3 @@ async def update_cache_settings(
                     error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to update cache settings: {str(e)}")
 
- 
