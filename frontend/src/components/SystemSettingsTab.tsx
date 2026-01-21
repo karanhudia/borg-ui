@@ -130,7 +130,7 @@ const SystemSettingsTab: React.FC = () => {
                 sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}
               >
                 <TextField
-                  label="Max Items to Load"
+                  label="Max Files to Load"
                   type="number"
                   fullWidth
                   value={browseMaxItems}

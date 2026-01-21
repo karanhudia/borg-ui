@@ -67,9 +67,9 @@ async def browse_archive_contents(
                            max_allowed=max_items)
                 raise HTTPException(
                     status_code=413,
-                    detail=f"Archive is too large to browse (>{lines_read:,} items). "
-                           f"Maximum supported: {max_items:,} items. "
-                           f"You can increase this limit in Settings > Cache Management, "
+                    detail=f"Archive is too large to browse (>{lines_read:,} files). "
+                           f"Maximum supported: {max_items:,} files. "
+                           f"You can increase this limit in Settings > System, "
                            f"or use command-line tools for very large archives."
                 )
 
@@ -98,7 +98,7 @@ async def browse_archive_contents(
                         status_code=413,
                         detail=f"Archive estimated to require {estimated_memory_mb:.0f}MB memory. "
                                f"Maximum allowed: {max_memory_mb}MB. "
-                               f"You can increase this limit in Settings > Cache Management, "
+                               f"You can increase this limit in Settings > System, "
                                f"or use command-line tools for very large archives."
                     )
 
