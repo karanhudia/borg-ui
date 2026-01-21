@@ -5,7 +5,6 @@ import { useTabEnablement } from '../context/AppContext'
 import {
   setAppVersion,
   hasConsentBeenGiven,
-  arePreferencesLoaded,
   loadUserPreference,
 } from '../utils/matomo'
 import AnalyticsConsentBanner from './AnalyticsConsentBanner'
@@ -148,10 +147,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // Check if we need to show analytics consent banner
   useEffect(() => {
     const checkConsent = async () => {
-      // Load preferences if not already loaded
-      if (!arePreferencesLoaded()) {
-        await loadUserPreference()
-      }
+      // Always load preferences when Layout mounts (user is authenticated at this point)
+      // This ensures we get fresh data after login, not stale data from before auth
+      await loadUserPreference()
       // Show banner if consent not given yet
       if (hasConsentBeenGiven() === false) {
         setShowConsentBanner(true)
