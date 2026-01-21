@@ -79,39 +79,54 @@ interface NavigationItem {
   }>
 }
 
-// Map navigation items to tab enablement keys
-const navigationWithKeys: NavigationItem[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: Home, key: 'dashboard' as const },
+// Navigation sections with headings
+interface NavigationSection {
+  heading: string
+  items: NavigationItem[]
+}
+
+const navigationSections: NavigationSection[] = [
   {
-    name: 'Remote Machines',
-    href: '/ssh-connections',
-    icon: Computer,
-    key: 'connections' as const,
+    heading: 'MAIN',
+    items: [
+      { name: 'Dashboard', href: '/dashboard', icon: Home, key: 'dashboard' as const },
+      {
+        name: 'Remote Machines',
+        href: '/ssh-connections',
+        icon: Computer,
+        key: 'connections' as const,
+      },
+      { name: 'Repositories', href: '/repositories', icon: Database, key: 'repositories' as const },
+      { name: 'Backup', href: '/backup', icon: FileText, key: 'backups' as const },
+      { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },
+      { name: 'Restore', href: '/restore', icon: Download, key: 'restore' as const },
+      { name: 'Schedule', href: '/schedule', icon: Clock, key: 'schedule' as const },
+      { name: 'Activity', href: '/activity', icon: History, key: 'dashboard' as const },
+    ],
   },
-  { name: 'Repositories', href: '/repositories', icon: Database, key: 'repositories' as const },
-  { name: 'Backup', href: '/backup', icon: FileText, key: 'backups' as const },
-  { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },
-  { name: 'Restore', href: '/restore', icon: Download, key: 'restore' as const },
-  { name: 'Schedule', href: '/schedule', icon: Clock, key: 'schedule' as const },
-  { name: 'Activity', href: '/activity', icon: History, key: 'dashboard' as const },
   {
-    name: 'Settings',
-    icon: SettingsIcon,
-    key: 'dashboard' as const,
-    subItems: [
-      { name: 'Account', href: '/settings/account', icon: User },
-      { name: 'Appearance', href: '/settings/appearance', icon: Palette },
-      { name: 'Preferences', href: '/settings/preferences', icon: Sliders },
-      { name: 'Notifications', href: '/settings/notifications', icon: Bell },
-      { name: 'System', href: '/settings/system', icon: Sliders },
-      { name: 'Beta', href: '/settings/beta', icon: Zap },
-      { name: 'Cache', href: '/settings/cache', icon: Server },
-      { name: 'Logs', href: '/settings/logs', icon: FileText },
-      { name: 'Mounts', href: '/settings/mounts', icon: HardDrive },
-      { name: 'Packages', href: '/settings/packages', icon: Package },
-      { name: 'Scripts', href: '/settings/scripts', icon: FileCode },
-      { name: 'Export/Import', href: '/settings/export', icon: DownloadIcon },
-      { name: 'Users', href: '/settings/users', icon: Users },
+    heading: 'OTHER',
+    items: [
+      {
+        name: 'Settings',
+        icon: SettingsIcon,
+        key: 'dashboard' as const,
+        subItems: [
+          { name: 'Account', href: '/settings/account', icon: User },
+          { name: 'Appearance', href: '/settings/appearance', icon: Palette },
+          { name: 'Preferences', href: '/settings/preferences', icon: Sliders },
+          { name: 'Notifications', href: '/settings/notifications', icon: Bell },
+          { name: 'System', href: '/settings/system', icon: Sliders },
+          { name: 'Beta', href: '/settings/beta', icon: Zap },
+          { name: 'Cache', href: '/settings/cache', icon: Server },
+          { name: 'Logs', href: '/settings/logs', icon: FileText },
+          { name: 'Mounts', href: '/settings/mounts', icon: HardDrive },
+          { name: 'Packages', href: '/settings/packages', icon: Package },
+          { name: 'Scripts', href: '/settings/scripts', icon: FileCode },
+          { name: 'Export/Import', href: '/settings/export', icon: DownloadIcon },
+          { name: 'Users', href: '/settings/users', icon: Users },
+        ],
+      },
     ],
   },
 ]
@@ -175,12 +190,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const handleNavClick = (
     e: React.MouseEvent<HTMLDivElement>,
-    item: (typeof navigationWithKeys)[0]
+    item: NavigationItem
   ) => {
     const isEnabled = tabEnablement[item.key]
     if (!isEnabled) {
       e.preventDefault()
-      // Optionally, you could show a toast here
       return false
     }
   }
@@ -233,162 +247,184 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </Box>
         </Toolbar>
         <Divider />
-        <List sx={{ pt: 0 }}>
-          {navigationWithKeys.map((item) => {
-            const isEnabled = tabEnablement[item.key]
-            const disabledReason = getTabDisabledReason(item.key)
-            const Icon = item.icon
+        {navigationSections.map((section, sectionIndex) => (
+          <React.Fragment key={section.heading}>
+            {/* Section Heading */}
+            <Typography
+              variant="caption"
+              sx={{
+                px: 2,
+                pt: sectionIndex === 0 ? 2 : 2.5,
+                pb: 1,
+                display: 'block',
+                color: 'text.secondary',
+                fontWeight: 600,
+                fontSize: '0.7rem',
+                letterSpacing: '0.5px',
+              }}
+            >
+              {section.heading}
+            </Typography>
+            <List sx={{ pt: 0, pb: 0 }}>
+              {section.items.map((item) => {
+                const isEnabled = tabEnablement[item.key]
+                const disabledReason = getTabDisabledReason(item.key)
+                const Icon = item.icon
 
-            // Handle items with sub-items (Settings)
-            if (item.subItems) {
-              const isAnySubItemActive = item.subItems.some((subItem) =>
-                location.pathname.startsWith(subItem.href)
-              )
+                // Handle items with sub-items (Settings)
+                if (item.subItems) {
+                  const isAnySubItemActive = item.subItems.some((subItem) =>
+                    location.pathname.startsWith(subItem.href)
+                  )
 
-              return (
-                <React.Fragment key={item.name}>
-                  <ListItem disablePadding>
-                    <ListItemButton
-                      onClick={() => setSettingsExpanded(!settingsExpanded)}
-                      sx={{
-                        px: 2,
+                  return (
+                    <React.Fragment key={item.name}>
+                      <ListItem disablePadding>
+                        <ListItemButton
+                          onClick={() => setSettingsExpanded(!settingsExpanded)}
+                          sx={{
+                            pl: 3.5,
+                            pr: 2,
+                            '&:hover': {
+                              backgroundColor: 'action.hover',
+                            },
+                          }}
+                        >
+                          <ListItemIcon
+                            sx={{
+                              color: isAnySubItemActive ? 'primary.main' : 'text.secondary',
+                              minWidth: 40,
+                            }}
+                          >
+                            <Icon size={20} />
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={item.name}
+                            primaryTypographyProps={{
+                              fontSize: '0.875rem',
+                              fontWeight: isAnySubItemActive ? 600 : 400,
+                              color: isAnySubItemActive ? 'primary.main' : 'inherit',
+                            }}
+                          />
+                          {settingsExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                        </ListItemButton>
+                      </ListItem>
+
+                      {/* Sub-items with smooth animation */}
+                      <Collapse in={settingsExpanded} timeout="auto" unmountOnExit>
+                        <List component="div" disablePadding>
+                          {item.subItems.map((subItem) => {
+                            const isActive = location.pathname.startsWith(subItem.href)
+                            const SubIcon = subItem.icon
+
+                            return (
+                              <ListItem key={subItem.name} disablePadding>
+                                <ListItemButton
+                                  component={Link}
+                                  to={subItem.href}
+                                  selected={isActive}
+                                  sx={{
+                                    pl: 3.5,
+                                    pr: 2,
+                                    '&.Mui-selected': {
+                                      backgroundColor: 'primary.main',
+                                      color: 'white',
+                                      '&:hover': {
+                                        backgroundColor: 'primary.dark',
+                                      },
+                                      '& .MuiListItemIcon-root': {
+                                        color: 'white',
+                                      },
+                                    },
+                                    '&:hover': {
+                                      backgroundColor: isActive ? 'primary.main' : 'action.hover',
+                                    },
+                                  }}
+                                >
+                                  <ListItemIcon
+                                    sx={{ color: isActive ? 'white' : 'text.secondary', minWidth: 40 }}
+                                  >
+                                    <SubIcon size={20} />
+                                  </ListItemIcon>
+                                  <ListItemText
+                                    primary={subItem.name}
+                                    primaryTypographyProps={{
+                                      fontSize: '0.875rem',
+                                      fontWeight: isActive ? 600 : 400,
+                                      color: isActive ? 'white' : 'inherit',
+                                    }}
+                                  />
+                                </ListItemButton>
+                              </ListItem>
+                            )
+                          })}
+                        </List>
+                      </Collapse>
+                    </React.Fragment>
+                  )
+                }
+
+                // Regular items without sub-items
+                const isActive = Boolean(
+                  item.href &&
+                    (location.pathname === item.href || location.pathname.startsWith(item.href + '/'))
+                )
+
+                const listItemButton = (
+                  <ListItemButton
+                    component={isEnabled && item.href ? Link : 'div'}
+                    to={isEnabled && item.href ? item.href : undefined}
+                    selected={isActive}
+                    disabled={!isEnabled}
+                    onClick={(e: React.MouseEvent<HTMLDivElement>) => handleNavClick(e, item)}
+                    sx={{
+                      pl: 3.5,
+                      pr: 2,
+                      '&.Mui-selected': {
+                        backgroundColor: 'primary.main',
+                        color: 'white',
                         '&:hover': {
-                          backgroundColor: 'action.hover',
+                          backgroundColor: 'primary.dark',
                         },
+                        '& .MuiListItemIcon-root': {
+                          color: 'white',
+                        },
+                      },
+                      '&.Mui-disabled': {
+                        opacity: 0.5,
+                        cursor: 'not-allowed',
+                      },
+                    }}
+                  >
+                    <ListItemIcon sx={{ color: isActive ? 'white' : 'text.secondary', minWidth: 40 }}>
+                      {isEnabled ? <Icon size={20} /> : <Lock size={20} />}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={item.name}
+                      primaryTypographyProps={{
+                        fontSize: '0.875rem',
+                        fontWeight: isActive ? 600 : 400,
+                        color: isActive ? 'white' : isEnabled ? 'inherit' : 'text.disabled',
                       }}
-                    >
-                      <ListItemIcon
-                        sx={{
-                          color: isAnySubItemActive ? 'primary.main' : 'text.secondary',
-                          minWidth: 40,
-                        }}
-                      >
-                        <Icon size={20} />
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={item.name}
-                        primaryTypographyProps={{
-                          fontSize: '0.875rem',
-                          fontWeight: isAnySubItemActive ? 600 : 400,
-                          color: isAnySubItemActive ? 'primary.main' : 'inherit',
-                        }}
-                      />
-                      {settingsExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                    </ListItemButton>
+                    />
+                  </ListItemButton>
+                )
+
+                return (
+                  <ListItem key={item.name} disablePadding>
+                    {!isEnabled && disabledReason ? (
+                      <Tooltip title={disabledReason} arrow placement="right">
+                        <Box sx={{ width: '100%' }}>{listItemButton}</Box>
+                      </Tooltip>
+                    ) : (
+                      listItemButton
+                    )}
                   </ListItem>
-
-                  {/* Sub-items with smooth animation and subtle visual indicator */}
-                  <Collapse in={settingsExpanded} timeout="auto" unmountOnExit>
-                    <List component="div" disablePadding>
-                      {item.subItems.map((subItem) => {
-                        const isActive = location.pathname.startsWith(subItem.href)
-                        const SubIcon = subItem.icon
-
-                        return (
-                          <ListItem key={subItem.name} disablePadding>
-                            <ListItemButton
-                              component={Link}
-                              to={subItem.href}
-                              selected={isActive}
-                              sx={{
-                                px: 2,
-                                backgroundColor: 'action.hover',
-                                '&.Mui-selected': {
-                                  backgroundColor: 'primary.main',
-                                  color: 'white',
-                                  '&:hover': {
-                                    backgroundColor: 'primary.dark',
-                                  },
-                                  '& .MuiListItemIcon-root': {
-                                    color: 'white',
-                                  },
-                                },
-                                '&:hover': {
-                                  backgroundColor: isActive ? 'primary.main' : 'action.selected',
-                                },
-                              }}
-                            >
-                              <ListItemIcon
-                                sx={{ color: isActive ? 'white' : 'text.secondary', minWidth: 40 }}
-                              >
-                                <SubIcon size={20} />
-                              </ListItemIcon>
-                              <ListItemText
-                                primary={subItem.name}
-                                primaryTypographyProps={{
-                                  fontSize: '0.8125rem',
-                                  fontWeight: isActive ? 600 : 400,
-                                  color: isActive ? 'white' : 'inherit',
-                                }}
-                              />
-                            </ListItemButton>
-                          </ListItem>
-                        )
-                      })}
-                    </List>
-                  </Collapse>
-                </React.Fragment>
-              )
-            }
-
-            // Regular items without sub-items
-            const isActive = Boolean(
-              item.href &&
-                (location.pathname === item.href || location.pathname.startsWith(item.href + '/'))
-            )
-
-            const listItemButton = (
-              <ListItemButton
-                component={isEnabled && item.href ? Link : 'div'}
-                to={isEnabled && item.href ? item.href : undefined}
-                selected={isActive}
-                disabled={!isEnabled}
-                onClick={(e: React.MouseEvent<HTMLDivElement>) => handleNavClick(e, item)}
-                sx={{
-                  px: 2,
-                  '&.Mui-selected': {
-                    backgroundColor: 'primary.main',
-                    color: 'white',
-                    '&:hover': {
-                      backgroundColor: 'primary.dark',
-                    },
-                    '& .MuiListItemIcon-root': {
-                      color: 'white',
-                    },
-                  },
-                  '&.Mui-disabled': {
-                    opacity: 0.5,
-                    cursor: 'not-allowed',
-                  },
-                }}
-              >
-                <ListItemIcon sx={{ color: isActive ? 'white' : 'text.secondary', minWidth: 40 }}>
-                  {isEnabled ? <Icon size={20} /> : <Lock size={20} />}
-                </ListItemIcon>
-                <ListItemText
-                  primary={item.name}
-                  primaryTypographyProps={{
-                    fontSize: '0.875rem',
-                    fontWeight: isActive ? 600 : 400,
-                    color: isActive ? 'white' : isEnabled ? 'inherit' : 'text.disabled',
-                  }}
-                />
-              </ListItemButton>
-            )
-
-            return (
-              <ListItem key={item.name} disablePadding>
-                {!isEnabled && disabledReason ? (
-                  <Tooltip title={disabledReason} arrow placement="right">
-                    <Box sx={{ width: '100%' }}>{listItemButton}</Box>
-                  </Tooltip>
-                ) : (
-                  listItemButton
-                )}
-              </ListItem>
-            )
-          })}
-        </List>
+                )
+              })}
+            </List>
+          </React.Fragment>
+        ))}
       </Box>
 
       {/* System Info at bottom */}
