@@ -12,20 +12,28 @@ import {
   Divider,
   CircularProgress,
 } from '@mui/material'
-import { Save, AlertTriangle, Settings } from 'lucide-react'
+import { Save, AlertTriangle, Settings, Clock } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { settingsAPI } from '../services/api'
 
 const SystemSettingsTab: React.FC = () => {
   const queryClient = useQueryClient()
 
-  // Local state for form values
+  // Local state for browse limits
   const [browseMaxItems, setBrowseMaxItems] = useState(1_000_000)
   const [browseMaxMemoryMb, setBrowseMaxMemoryMb] = useState(1024)
+
+  // Local state for operation timeouts (in seconds)
+  const [mountTimeout, setMountTimeout] = useState(120)
+  const [infoTimeout, setInfoTimeout] = useState(600)
+  const [listTimeout, setListTimeout] = useState(600)
+  const [initTimeout, setInitTimeout] = useState(300)
+  const [backupTimeout, setBackupTimeout] = useState(3600)
+
   const [hasChanges, setHasChanges] = useState(false)
 
   // Fetch cache stats (which includes browse limits)
-  const { data: cacheData, isLoading } = useQuery({
+  const { data: cacheData, isLoading: cacheLoading } = useQuery({
     queryKey: ['cache-stats'],
     queryFn: async () => {
       const response = await settingsAPI.getCacheStats()
@@ -33,32 +41,72 @@ const SystemSettingsTab: React.FC = () => {
     },
   })
 
-  const stats = cacheData as any
+  // Fetch system settings (which includes timeouts)
+  const { data: systemData, isLoading: systemLoading } = useQuery({
+    queryKey: ['systemSettings'],
+    queryFn: async () => {
+      const response = await settingsAPI.getSystemSettings()
+      return response.data
+    },
+  })
+
+  const cacheStats = cacheData as any
+  const systemSettings = systemData?.settings
 
   // Initialize form values from fetched settings
   useEffect(() => {
-    if (stats) {
-      setBrowseMaxItems(stats.browse_max_items || 1_000_000)
-      setBrowseMaxMemoryMb(stats.browse_max_memory_mb || 1024)
+    if (cacheStats) {
+      setBrowseMaxItems(cacheStats.browse_max_items || 1_000_000)
+      setBrowseMaxMemoryMb(cacheStats.browse_max_memory_mb || 1024)
+    }
+  }, [cacheStats])
+
+  useEffect(() => {
+    if (systemSettings) {
+      setMountTimeout(systemSettings.mount_timeout || 120)
+      setInfoTimeout(systemSettings.info_timeout || 600)
+      setListTimeout(systemSettings.list_timeout || 600)
+      setInitTimeout(systemSettings.init_timeout || 300)
+      setBackupTimeout(systemSettings.backup_timeout || 3600)
       setHasChanges(false)
     }
-  }, [stats])
+  }, [systemSettings])
 
   // Track form changes
   useEffect(() => {
-    if (stats) {
-      const changed =
-        browseMaxItems !== (stats.browse_max_items || 1_000_000) ||
-        browseMaxMemoryMb !== (stats.browse_max_memory_mb || 1024)
-      setHasChanges(changed)
-    }
-  }, [browseMaxItems, browseMaxMemoryMb, stats])
+    if (cacheStats && systemSettings) {
+      const browseChanged =
+        browseMaxItems !== (cacheStats.browse_max_items || 1_000_000) ||
+        browseMaxMemoryMb !== (cacheStats.browse_max_memory_mb || 1024)
 
-  // Validation
+      const timeoutChanged =
+        mountTimeout !== (systemSettings.mount_timeout || 120) ||
+        infoTimeout !== (systemSettings.info_timeout || 600) ||
+        listTimeout !== (systemSettings.list_timeout || 600) ||
+        initTimeout !== (systemSettings.init_timeout || 300) ||
+        backupTimeout !== (systemSettings.backup_timeout || 3600)
+
+      setHasChanges(browseChanged || timeoutChanged)
+    }
+  }, [
+    browseMaxItems,
+    browseMaxMemoryMb,
+    mountTimeout,
+    infoTimeout,
+    listTimeout,
+    initTimeout,
+    backupTimeout,
+    cacheStats,
+    systemSettings,
+  ])
+
+  // Validation constants
   const MIN_FILES = 100_000
   const MAX_FILES = 50_000_000
   const MIN_MEMORY = 100
   const MAX_MEMORY = 16384
+  const MIN_TIMEOUT = 10
+  const MAX_TIMEOUT = 86400 // 24 hours
 
   const getValidationError = (): string | null => {
     if (browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES) {
@@ -67,47 +115,98 @@ const SystemSettingsTab: React.FC = () => {
     if (browseMaxMemoryMb < MIN_MEMORY || browseMaxMemoryMb > MAX_MEMORY) {
       return `Max memory must be between ${MIN_MEMORY} MB and ${MAX_MEMORY} MB`
     }
+    const timeouts = [mountTimeout, infoTimeout, listTimeout, initTimeout, backupTimeout]
+    if (timeouts.some((t) => t < MIN_TIMEOUT || t > MAX_TIMEOUT)) {
+      return `Timeouts must be between ${MIN_TIMEOUT} seconds and ${MAX_TIMEOUT} seconds (24 hours)`
+    }
     return null
   }
 
   const validationError = getValidationError()
 
-  // Save settings mutation
-  const saveSettingsMutation = useMutation({
+  // Save browse limits mutation
+  const saveBrowseLimitsMutation = useMutation({
     mutationFn: async () => {
       return await settingsAPI.updateCacheSettings(
-        stats?.cache_ttl_minutes || 120, // Keep existing TTL
-        stats?.cache_max_size_mb || 2048, // Keep existing max size
-        (stats as any)?.redis_url || '', // Keep existing Redis URL
+        cacheStats?.cache_ttl_minutes || 120,
+        cacheStats?.cache_max_size_mb || 2048,
+        (cacheStats as any)?.redis_url || '',
         browseMaxItems,
         browseMaxMemoryMb
       )
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cache-stats'] })
-      toast.success('Browse limits saved successfully')
-      setHasChanges(false)
     },
     onError: (error: any) => {
-      // Handle Pydantic validation errors (array format) or standard errors
       const data = error.response?.data
-      let errorMsg = 'Failed to save settings'
+      let errorMsg = 'Failed to save browse limits'
       if (Array.isArray(data)) {
         errorMsg = data.map((e: any) => e.msg).join(', ')
       } else if (data?.detail) {
         errorMsg = data.detail
       }
-      toast.error(errorMsg)
+      throw new Error(errorMsg)
     },
   })
 
-  const handleSaveSettings = () => {
+  // Save timeouts mutation
+  const saveTimeoutsMutation = useMutation({
+    mutationFn: async () => {
+      return await settingsAPI.updateSystemSettings({
+        mount_timeout: mountTimeout,
+        info_timeout: infoTimeout,
+        list_timeout: listTimeout,
+        init_timeout: initTimeout,
+        backup_timeout: backupTimeout,
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['systemSettings'] })
+    },
+    onError: (error: any) => {
+      const data = error.response?.data
+      let errorMsg = 'Failed to save timeout settings'
+      if (Array.isArray(data)) {
+        errorMsg = data.map((e: any) => e.msg).join(', ')
+      } else if (data?.detail) {
+        errorMsg = data.detail
+      }
+      throw new Error(errorMsg)
+    },
+  })
+
+  const handleSaveSettings = async () => {
     if (validationError) {
       toast.error(validationError)
       return
     }
-    saveSettingsMutation.mutate()
+
+    try {
+      await Promise.all([
+        saveBrowseLimitsMutation.mutateAsync(),
+        saveTimeoutsMutation.mutateAsync(),
+      ])
+      toast.success('System settings saved successfully')
+      setHasChanges(false)
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to save settings')
+    }
   }
+
+  const formatTimeout = (seconds: number): string => {
+    if (seconds >= 3600) {
+      const hours = seconds / 3600
+      return `${hours.toFixed(1)} hour${hours !== 1 ? 's' : ''}`
+    } else if (seconds >= 60) {
+      const minutes = seconds / 60
+      return `${minutes.toFixed(0)} minute${minutes !== 1 ? 's' : ''}`
+    }
+    return `${seconds} second${seconds !== 1 ? 's' : ''}`
+  }
+
+  const isLoading = cacheLoading || systemLoading
+  const isSaving = saveBrowseLimitsMutation.isPending || saveTimeoutsMutation.isPending
 
   if (isLoading) {
     return (
@@ -127,20 +226,107 @@ const SystemSettingsTab: React.FC = () => {
               System Settings
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Configure system-wide settings and resource limits
+              Configure system-wide settings, resource limits, and operation timeouts
             </Typography>
           </Box>
           <Button
             variant="contained"
-            startIcon={
-              saveSettingsMutation.isPending ? <CircularProgress size={16} /> : <Save size={16} />
-            }
+            startIcon={isSaving ? <CircularProgress size={16} /> : <Save size={16} />}
             onClick={handleSaveSettings}
-            disabled={!hasChanges || saveSettingsMutation.isPending || !!validationError}
+            disabled={!hasChanges || isSaving || !!validationError}
           >
-            {saveSettingsMutation.isPending ? 'Saving...' : 'Save Settings'}
+            {isSaving ? 'Saving...' : 'Save Settings'}
           </Button>
         </Box>
+
+        {/* Operation Timeouts Card */}
+        <Card>
+          <CardContent>
+            <Stack spacing={3}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Clock size={24} />
+                <Typography variant="h6">Operation Timeouts</Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                Configure timeouts for various borg operations. Increase these for very large
+                repositories (multi-terabyte, hundreds of archives) that may take longer to process.
+              </Typography>
+              <Divider />
+
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' },
+                  gap: 3,
+                }}
+              >
+                <TextField
+                  label="Mount Timeout (seconds)"
+                  type="number"
+                  fullWidth
+                  value={mountTimeout}
+                  onChange={(e) => setMountTimeout(Number(e.target.value))}
+                  inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 10 }}
+                  error={mountTimeout < MIN_TIMEOUT || mountTimeout > MAX_TIMEOUT}
+                  helperText={`For mounting archives. Current: ${formatTimeout(mountTimeout)}`}
+                />
+
+                <TextField
+                  label="Info Timeout (seconds)"
+                  type="number"
+                  fullWidth
+                  value={infoTimeout}
+                  onChange={(e) => setInfoTimeout(Number(e.target.value))}
+                  inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
+                  error={infoTimeout < MIN_TIMEOUT || infoTimeout > MAX_TIMEOUT}
+                  helperText={`For borg info commands. Current: ${formatTimeout(infoTimeout)}`}
+                />
+
+                <TextField
+                  label="List Timeout (seconds)"
+                  type="number"
+                  fullWidth
+                  value={listTimeout}
+                  onChange={(e) => setListTimeout(Number(e.target.value))}
+                  inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
+                  error={listTimeout < MIN_TIMEOUT || listTimeout > MAX_TIMEOUT}
+                  helperText={`For listing archives. Current: ${formatTimeout(listTimeout)}`}
+                />
+
+                <TextField
+                  label="Init Timeout (seconds)"
+                  type="number"
+                  fullWidth
+                  value={initTimeout}
+                  onChange={(e) => setInitTimeout(Number(e.target.value))}
+                  inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
+                  error={initTimeout < MIN_TIMEOUT || initTimeout > MAX_TIMEOUT}
+                  helperText={`For repository init. Current: ${formatTimeout(initTimeout)}`}
+                />
+
+                <TextField
+                  label="Backup/Restore Timeout (seconds)"
+                  type="number"
+                  fullWidth
+                  value={backupTimeout}
+                  onChange={(e) => setBackupTimeout(Number(e.target.value))}
+                  inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 300 }}
+                  error={backupTimeout < MIN_TIMEOUT || backupTimeout > MAX_TIMEOUT}
+                  helperText={`For backup/restore. Current: ${formatTimeout(backupTimeout)}`}
+                />
+              </Box>
+
+              <Alert severity="info">
+                <strong>Large Repository Recommendations:</strong>
+                <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
+                  <li>Mount: 300-600s for 10TB+ repos (cache build on first access)</li>
+                  <li>Info/List: 1800-7200s for repos with hundreds of archives</li>
+                  <li>Backup: 7200-14400s for multi-terabyte backups</li>
+                </ul>
+              </Alert>
+            </Stack>
+          </CardContent>
+        </Card>
 
         {/* Archive Browsing Limits Card */}
         <Card>
