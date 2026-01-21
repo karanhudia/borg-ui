@@ -45,7 +45,13 @@ class UserPreferencesUpdate(BaseModel):
     analytics_consent_given: Optional[bool] = None
 
 class SystemSettingsUpdate(BaseModel):
+    # Operation timeouts (in seconds)
     backup_timeout: Optional[int] = None
+    mount_timeout: Optional[int] = None
+    info_timeout: Optional[int] = None
+    list_timeout: Optional[int] = None
+    init_timeout: Optional[int] = None
+
     max_concurrent_backups: Optional[int] = None
     log_retention_days: Optional[int] = None
     log_save_policy: Optional[str] = None
@@ -70,6 +76,10 @@ async def get_system_settings(
             # Create default settings
             settings = SystemSettings(
                 backup_timeout=3600,
+                mount_timeout=120,
+                info_timeout=600,
+                list_timeout=600,
+                init_timeout=300,
                 max_concurrent_backups=2,
                 log_retention_days=30,
                 email_notifications=False,
@@ -112,7 +122,13 @@ async def get_system_settings(
         return {
             "success": True,
             "settings": {
+                # Operation timeouts
                 "backup_timeout": settings.backup_timeout,
+                "mount_timeout": settings.mount_timeout or 120,
+                "info_timeout": settings.info_timeout or 600,
+                "list_timeout": settings.list_timeout or 600,
+                "init_timeout": settings.init_timeout or 300,
+                # Other settings
                 "max_concurrent_backups": settings.max_concurrent_backups,
                 "log_retention_days": settings.log_retention_days,
                 "log_save_policy": settings.log_save_policy,
@@ -179,8 +195,18 @@ async def update_system_settings(
             db.add(settings)
 
         # Update settings
+        # Operation timeouts
         if settings_update.backup_timeout is not None:
             settings.backup_timeout = settings_update.backup_timeout
+        if settings_update.mount_timeout is not None:
+            settings.mount_timeout = settings_update.mount_timeout
+        if settings_update.info_timeout is not None:
+            settings.info_timeout = settings_update.info_timeout
+        if settings_update.list_timeout is not None:
+            settings.list_timeout = settings_update.list_timeout
+        if settings_update.init_timeout is not None:
+            settings.init_timeout = settings_update.init_timeout
+        # Other settings
         if settings_update.max_concurrent_backups is not None:
             settings.max_concurrent_backups = settings_update.max_concurrent_backups
         if settings_update.log_retention_days is not None:

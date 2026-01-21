@@ -342,7 +342,13 @@ class SystemSettings(Base):
     __tablename__ = "system_settings"
 
     id = Column(Integer, primary_key=True, index=True)
-    backup_timeout = Column(Integer, default=3600)  # Default 1 hour in seconds
+    # Operation timeouts (in seconds)
+    backup_timeout = Column(Integer, default=3600)  # Default 1 hour for backup/restore
+    mount_timeout = Column(Integer, default=120)  # Default 2 minutes for borg mount (large repos may need more)
+    info_timeout = Column(Integer, default=600)  # Default 10 minutes for borg info
+    list_timeout = Column(Integer, default=600)  # Default 10 minutes for borg list
+    init_timeout = Column(Integer, default=300)  # Default 5 minutes for borg init
+
     max_concurrent_backups = Column(Integer, default=1)
     log_retention_days = Column(Integer, default=30)
     log_save_policy = Column(String, default="failed_and_warnings")  # Options: "failed_only", "failed_and_warnings", "all_jobs"

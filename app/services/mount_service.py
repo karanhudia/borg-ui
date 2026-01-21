@@ -25,7 +25,7 @@ from cryptography.fernet import Fernet
 
 from app.config import settings
 from app.database.database import SessionLocal
-from app.database.models import SSHConnection, SSHKey, Repository
+from app.database.models import SSHConnection, SSHKey, Repository, SystemSettings
 
 logger = structlog.get_logger()
 
@@ -322,6 +322,10 @@ class MountService:
             if not repository:
                 raise Exception(f"Repository {repository_id} not found")
 
+            # Get system settings for mount timeout
+            system_settings = db.query(SystemSettings).first()
+            mount_timeout = system_settings.mount_timeout if system_settings and system_settings.mount_timeout else 120
+
             # Create or validate mount point
             if mount_point:
                 # If mount_point doesn't start with /, it's just a name - prepend /data/mounts/
@@ -500,7 +504,7 @@ class MountService:
                 # Wait for the mount to initialize with retries
                 # Large repositories (10TB+) can take 30-60+ seconds to mount
                 # In foreground mode, borg mount will continue running
-                max_wait_seconds = 120  # Total max wait time
+                max_wait_seconds = mount_timeout  # From system settings (default 120 seconds)
                 check_interval = 5  # Check every 5 seconds
                 total_waited = 0
                 mount_verified = False
