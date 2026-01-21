@@ -7,6 +7,7 @@ import {
   EventAction,
   anonymizeEntityName,
 } from '../utils/matomo'
+import { formatBytes } from '../utils/dateUtils'
 
 /**
  * Custom hook for Matomo tracking
@@ -32,31 +33,36 @@ export const useMatomo = () => {
   }, [])
 
   // Repository-specific tracking with anonymous entity hash
-  // sizeBytes: optional size in bytes (e.g., repo total size)
+  // sizeBytes: optional size in bytes (e.g., repo total size) - formatted in label
   const trackRepository = useCallback((action: string, entityName?: string, sizeBytes?: number) => {
     const hash = entityName ? anonymizeEntityName(entityName) : undefined
-    trackEvent(EventCategory.REPOSITORY, action, hash, sizeBytes)
+    const label = hash && sizeBytes ? `${hash} [${formatBytes(sizeBytes)}]` : hash
+    trackEvent(EventCategory.REPOSITORY, action, label)
   }, [])
 
   // Backup tracking - descriptor for type (e.g., 'logs'), entityName for repo
-  // sizeBytes: optional size in bytes (e.g., backup original_size or deduplicated_size)
+  // sizeBytes: optional size in bytes (e.g., backup original_size or deduplicated_size) - formatted in label
   const trackBackup = useCallback(
     (action: string, descriptor?: string, entityName?: string, sizeBytes?: number) => {
-      const label = entityName
+      let label = entityName
         ? descriptor
           ? `${descriptor} [${anonymizeEntityName(entityName)}]`
           : anonymizeEntityName(entityName)
         : descriptor
-      trackEvent(EventCategory.BACKUP, action, label, sizeBytes)
+      if (label && sizeBytes) {
+        label = `${label} [${formatBytes(sizeBytes)}]`
+      }
+      trackEvent(EventCategory.BACKUP, action, label)
     },
     []
   )
 
   // Archive tracking with anonymous entity hash
-  // sizeBytes: optional size in bytes (e.g., archive size)
+  // sizeBytes: optional size in bytes (e.g., archive size) - formatted in label
   const trackArchive = useCallback((action: string, entityName?: string, sizeBytes?: number) => {
     const hash = entityName ? anonymizeEntityName(entityName) : undefined
-    trackEvent(EventCategory.ARCHIVE, action, hash, sizeBytes)
+    const label = hash && sizeBytes ? `${hash} [${formatBytes(sizeBytes)}]` : hash
+    trackEvent(EventCategory.ARCHIVE, action, label)
   }, [])
 
   // Mount tracking with anonymous entity hash
