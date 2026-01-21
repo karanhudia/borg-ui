@@ -34,6 +34,7 @@ import ExportImportTab from '../components/ExportImportTab'
 import LogManagementTab from '../components/LogManagementTab'
 import CacheManagementTab from '../components/CacheManagementTab'
 import MountsManagementTab from '../components/MountsManagementTab'
+import SystemSettingsTab from '../components/SystemSettingsTab'
 import Scripts from './Scripts'
 import Activity from './Activity'
 import { formatDateShort } from '../utils/dateUtils'
@@ -61,6 +62,7 @@ const Settings: React.FC = () => {
     if (user?.is_admin) {
       return [
         ...baseTabs,
+        'system',
         'beta',
         'cache',
         'logs',
@@ -496,8 +498,11 @@ const Settings: React.FC = () => {
       {/* Notifications Tab */}
       {activeTab === 3 && <NotificationsTab />}
 
+      {/* System Settings Tab - Admin Only */}
+      {activeTab === 4 && user?.is_admin && <SystemSettingsTab />}
+
       {/* Beta Features Tab - Admin Only */}
-      {activeTab === 4 && user?.is_admin && (
+      {activeTab === 5 && user?.is_admin && (
         <Box>
           <Box>
             <Typography variant="h6" fontWeight={600} gutterBottom>
@@ -539,25 +544,25 @@ const Settings: React.FC = () => {
       )}
 
       {/* Cache Management Tab - Admin Only */}
-      {activeTab === 5 && user?.is_admin && <CacheManagementTab />}
+      {activeTab === 6 && user?.is_admin && <CacheManagementTab />}
 
       {/* Log Management Tab - Admin Only */}
-      {activeTab === 6 && user?.is_admin && <LogManagementTab />}
+      {activeTab === 7 && user?.is_admin && <LogManagementTab />}
 
       {/* Mounts Management Tab */}
-      {activeTab === (user?.is_admin ? 7 : 4) && <MountsManagementTab />}
+      {activeTab === (user?.is_admin ? 8 : 4) && <MountsManagementTab />}
 
       {/* System Packages Tab - Admin Only */}
-      {activeTab === 8 && user?.is_admin && <PackagesTab />}
+      {activeTab === 9 && user?.is_admin && <PackagesTab />}
 
       {/* Scripts Tab */}
-      {activeTab === (user?.is_admin ? 9 : 5) && <Scripts />}
+      {activeTab === (user?.is_admin ? 10 : 5) && <Scripts />}
 
       {/* Export/Import Tab */}
-      {activeTab === (user?.is_admin ? 10 : 6) && <ExportImportTab />}
+      {activeTab === (user?.is_admin ? 11 : 6) && <ExportImportTab />}
 
       {/* User Management Tab - Admin Only */}
-      {activeTab === 11 && user?.is_admin && (
+      {activeTab === 12 && user?.is_admin && (
         <Box>
           <Box
             sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}
@@ -587,7 +592,7 @@ const Settings: React.FC = () => {
       )}
 
       {/* Activity Tab */}
-      {activeTab === (user?.is_admin ? 12 : 7) && <Activity />}
+      {activeTab === (user?.is_admin ? 13 : 7) && <Activity />}
 
       {/* Create/Edit User Modal */}
       <Dialog
