@@ -17,8 +17,6 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
     must_change_password = Column(Boolean, default=False)  # Force password change on next login
-    analytics_enabled = Column(Boolean, default=True)  # User's analytics preference
-    analytics_consent_given = Column(Boolean, default=False)  # Whether user has responded to consent banner
     last_login = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
@@ -49,7 +47,6 @@ class Repository(Base):
     port = Column(Integer, default=22)  # SSH port
     username = Column(String, nullable=True)  # SSH username
     ssh_key_id = Column(Integer, ForeignKey("ssh_keys.id"), nullable=True)  # Associated SSH key
-    connection_id = Column(Integer, ForeignKey("ssh_connections.id"), nullable=True)  # Associated SSH connection (preferred over host/port/username)
     remote_path = Column(String, nullable=True)  # Path to borg binary on remote server (e.g., /usr/local/bin/borg)
 
     # New fields for authentication status
@@ -71,9 +68,6 @@ class Repository(Base):
 
     # Custom flags for borg create command (advanced users)
     custom_flags = Column(Text, nullable=True)  # Custom command-line flags for borg create (e.g., "--stats --progress")
-
-    # Data source location (for pull-based backups)
-    source_ssh_connection_id = Column(Integer, ForeignKey("ssh_connections.id"), nullable=True)  # SSH connection for remote data source
 
     # Scheduled checks
     check_cron_expression = Column(String, nullable=True)  # NULL = disabled, cron expression for schedule
@@ -103,13 +97,13 @@ class SSHKey(Base):
 
     # Relationships
     repositories = relationship("Repository", back_populates="ssh_key")
-    connections = relationship("SSHConnection", back_populates="ssh_key")
+    connections = relationship("SSHConnection", back_populates="ssh_key", cascade="all, delete-orphan")
 
 class SSHConnection(Base):
     __tablename__ = "ssh_connections"
 
     id = Column(Integer, primary_key=True, index=True)
-    ssh_key_id = Column(Integer, ForeignKey("ssh_keys.id"), nullable=True)
+    ssh_key_id = Column(Integer, ForeignKey("ssh_keys.id"))
     host = Column(String)
     username = Column(String)
     port = Column(Integer, default=22)
@@ -126,12 +120,6 @@ class SSHConnection(Base):
     storage_available = Column(BigInteger, nullable=True)  # Available storage in bytes
     storage_percent_used = Column(Float, nullable=True)  # Percentage of storage used
     last_storage_check = Column(DateTime, nullable=True)  # Last time storage was checked
-
-    # Remote backup source configuration
-    is_backup_source = Column(Boolean, default=False)  # Mark this connection as a backup source
-    borg_binary_path = Column(String, default="/usr/bin/borg")  # Path to borg on remote host
-    borg_version = Column(String, nullable=True)  # Detected borg version
-    last_borg_check = Column(DateTime, nullable=True)  # Last time borg was verified
 
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
@@ -181,11 +169,11 @@ class BackupJob(Base):
     # Maintenance status tracking
     maintenance_status = Column(String, nullable=True)  # null, "running_prune", "prune_completed", "prune_failed", "running_compact", "compact_completed", "compact_failed", "maintenance_completed"
 
-    # Remote backup execution
-    execution_mode = Column(String, default="local")  # "local" or "remote_ssh"
-    source_ssh_connection_id = Column(Integer, ForeignKey("ssh_connections.id"), nullable=True)  # SSH connection for remote execution
+    # Remote backup support (migration 044)
+    execution_mode = Column(String, default="local", nullable=False)  # 'local' or 'remote'
+    source_ssh_connection_id = Column(Integer, ForeignKey("ssh_connections.id"), nullable=True)  # For remote execution
     remote_process_pid = Column(Integer, nullable=True)  # PID on remote host
-    remote_hostname = Column(String, nullable=True)  # Remote hostname for reference
+    remote_hostname = Column(String, nullable=True)  # Hostname where backup is running
 
     created_at = Column(DateTime, default=utc_now)
 
@@ -241,9 +229,9 @@ class ScheduledJob(Base):
     last_prune = Column(DateTime, nullable=True)  # Last prune execution time
     last_compact = Column(DateTime, nullable=True)  # Last compact execution time
 
-    # Remote backup execution
-    execution_mode = Column(String, default="local")  # "local" or "remote_ssh"
-    source_ssh_connection_id = Column(Integer, ForeignKey("ssh_connections.id"), nullable=True)  # SSH connection for remote execution
+    # Remote backup support (migration 044)
+    execution_mode = Column(String, default="local", nullable=False)  # 'local' or 'remote'
+    source_ssh_connection_id = Column(Integer, ForeignKey("ssh_connections.id"), nullable=True)  # For remote execution
 
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, nullable=True)
@@ -274,9 +262,7 @@ class CheckJob(Base):
     progress = Column(Integer, default=0)  # 0-100 percentage
     progress_message = Column(String, nullable=True)  # Current progress message (e.g., "Checking segments 25%")
     error_message = Column(Text, nullable=True)
-    logs = Column(Text, nullable=True)  # Deprecated: kept for backwards compatibility, use log_file_path instead
-    log_file_path = Column(String, nullable=True)  # Path to log file on disk
-    has_logs = Column(Boolean, default=False)  # Flag indicating if logs are available
+    logs = Column(Text, nullable=True)  # Full logs (stored after completion)
     max_duration = Column(Integer, nullable=True)  # Maximum duration in seconds (for partial checks)
     process_pid = Column(Integer, nullable=True)  # Container PID for orphan detection
     process_start_time = Column(BigInteger, nullable=True)  # Process start time in jiffies for PID uniqueness
@@ -325,16 +311,12 @@ class DeleteArchiveJob(Base):
     id = Column(Integer, primary_key=True, index=True)
     repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=False)
     repository_path = Column(String, nullable=True)  # Captured at job creation for display even if repo is deleted
-    archive_name = Column(String, nullable=False)  # Name of the archive being deleted
+    archive_name = Column(String, nullable=False)  # Archive to delete
     status = Column(String, default="pending")  # pending, running, completed, failed, cancelled
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
-    progress = Column(Integer, default=0)  # 0-100 percentage
-    progress_message = Column(String, nullable=True)  # Current progress message
     error_message = Column(Text, nullable=True)
-    logs = Column(Text, nullable=True)  # Deprecated: kept for backwards compatibility, use log_file_path instead
-    log_file_path = Column(String, nullable=True)  # Path to log file on disk
-    has_logs = Column(Boolean, default=False)  # Flag indicating if logs are available
+    logs = Column(Text, nullable=True)
     process_pid = Column(Integer, nullable=True)  # Container PID for orphan detection
     process_start_time = Column(BigInteger, nullable=True)  # Process start time in jiffies for PID uniqueness
     created_at = Column(DateTime, default=utc_now)
@@ -343,13 +325,7 @@ class SystemSettings(Base):
     __tablename__ = "system_settings"
 
     id = Column(Integer, primary_key=True, index=True)
-    # Operation timeouts (in seconds)
-    backup_timeout = Column(Integer, default=3600)  # Default 1 hour for backup/restore
-    mount_timeout = Column(Integer, default=120)  # Default 2 minutes for borg mount
-    info_timeout = Column(Integer, default=600)  # Default 10 minutes for borg info
-    list_timeout = Column(Integer, default=600)  # Default 10 minutes for borg list
-    init_timeout = Column(Integer, default=300)  # Default 5 minutes for borg init
-
+    backup_timeout = Column(Integer, default=3600)  # Default 1 hour in seconds
     max_concurrent_backups = Column(Integer, default=1)
     log_retention_days = Column(Integer, default=30)
     log_save_policy = Column(String, default="failed_and_warnings")  # Options: "failed_only", "failed_and_warnings", "all_jobs"
@@ -366,10 +342,6 @@ class SystemSettings(Base):
     webhook_url = Column(String, nullable=True)
     auto_cleanup = Column(Boolean, default=False)
     cleanup_retention_days = Column(Integer, default=90)
-
-    # Beta features
-    use_new_wizard = Column(Boolean, default=False, nullable=False)  # Enable new repository wizard (beta)
-
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 

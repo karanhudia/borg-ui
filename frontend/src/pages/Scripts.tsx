@@ -82,6 +82,7 @@ export default function Scripts() {
   const [testingScript, setTestingScript] = useState(false)
   const [testingScriptData, setTestingScriptData] = useState<Script | null>(null)
   const [testParameterValues, setTestParameterValues] = useState<Record<string, string>>({})
+  const [detectedParameters, setDetectedParameters] = useState<ScriptParameter[]>([])
 
   // Form state
   const [formData, setFormData] = useState({
@@ -101,10 +102,11 @@ export default function Scripts() {
   const fetchScripts = async () => {
     try {
       const response = await api.get('/scripts')
-      setScripts(response.data)
-    } catch (error) {
-      console.error('Failed to fetch scripts:', error)
+      setScripts(Array.isArray(response.data) ? response.data : [])
+    } catch {
+      
       toast.error('Failed to load scripts')
+      setScripts([])
     } finally {
       setLoading(false)
     }
@@ -112,15 +114,16 @@ export default function Scripts() {
 
   const handleCreate = () => {
     setEditingScript(null)
+    const defaultContent = '#!/bin/bash\n\necho "Script started"\n\n# Your script here\n\necho "Script completed"'
     setFormData({
       name: '',
       description: '',
-      content:
-        '#!/bin/bash\n\necho "Script started"\n\n# Your script here\n\necho "Script completed"',
+      content: defaultContent,
       timeout: 300,
       run_on: 'always',
       category: 'custom',
     })
+    setDetectedParameters(parseParameters(defaultContent))
     setDialogOpen(true)
   }
 
@@ -137,6 +140,7 @@ export default function Scripts() {
         run_on: detail.run_on,
         category: detail.category,
       })
+      setDetectedParameters(detail.parameters || [])
       setDialogOpen(true)
     } catch (error) {
       console.error('Failed to fetch script details:', error)
@@ -144,15 +148,69 @@ export default function Scripts() {
     }
   }
 
+  // Parse parameters from script content
+  const parseParameters = (content: string): ScriptParameter[] => {
+    const pattern = /\$\{([A-Z_][A-Z0-9_]*)(?::-([^}]*))?\}/g
+    const matches = [...content.matchAll(pattern)]
+    const paramsMap = new Map<string, ScriptParameter>()
+
+    matches.forEach(([, name, defaultValue]) => {
+      if (!paramsMap.has(name)) {
+        paramsMap.set(name, {
+          name,
+          type: 'text', // Default to text, user can mark as secret with checkbox
+          default: defaultValue?.trim() || '',
+          description: name.toLowerCase().replace(/_/g, ' '),
+          required: !defaultValue,
+        })
+      }
+    })
+
+    return Array.from(paramsMap.values())
+  }
+
+  // Update detected parameters when content changes
+  const handleContentChange = (content: string) => {
+    setFormData({ ...formData, content })
+    const params = parseParameters(content)
+    
+    // Merge with existing parameters to preserve user's secret selections
+    const mergedParams = params.map(newParam => {
+      const existing = detectedParameters.find(p => p.name === newParam.name)
+      if (existing) {
+        // Keep user's type selection if they changed it
+        return { ...newParam, type: existing.type }
+      }
+      return newParam
+    })
+    
+    setDetectedParameters(mergedParams)
+  }
+
+  const handleParameterTypeToggle = (paramName: string) => {
+    setDetectedParameters(prev =>
+      prev.map(param =>
+        param.name === paramName
+          ? { ...param, type: param.type === 'password' ? 'text' : 'password' }
+          : param
+      )
+    )
+  }
+
   const handleSave = async () => {
     try {
+      const dataToSave = {
+        ...formData,
+        parameters: detectedParameters,
+      }
+
       if (editingScript) {
         // Update existing script
-        await api.put(`/scripts/${editingScript.id}`, formData)
+        await api.put(`/scripts/${editingScript.id}`, dataToSave)
         toast.success('Script updated successfully')
       } else {
         // Create new script
-        await api.post('/scripts', formData)
+        await api.post('/scripts', dataToSave)
         toast.success('Script created successfully')
       }
       setDialogOpen(false)
@@ -431,11 +489,75 @@ export default function Scripts() {
             <CodeEditor
               label="Script Content"
               value={formData.content}
-              onChange={(value) => setFormData({ ...formData, content: value })}
+              onChange={handleContentChange}
               height="300px"
               language="shell"
-              helperText="Bash script that will be executed as a hook"
+              helperText="Use \${PARAM_NAME} or \${PARAM_NAME:-default} for parameters"
             />
+
+            {/* Parameter Configuration */}
+            {detectedParameters.length > 0 && (
+              <Box>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                  Script Parameters
+                </Typography>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Check the box for parameters that contain sensitive data (passwords, tokens, API keys) to encrypt them.
+                </Alert>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {detectedParameters.map((param) => (
+                      <Box
+                        key={param.name}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          p: 1.5,
+                          borderRadius: 1,
+                          backgroundColor: param.type === 'password' ? 'rgba(255, 152, 0, 0.08)' : 'transparent',
+                          border: '1px solid',
+                          borderColor: param.type === 'password' ? 'warning.light' : 'divider',
+                        }}
+                      >
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
+                            {param.name}
+                          </Typography>
+                          <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
+                            {param.default && (
+                              <Typography variant="caption" color="text.secondary">
+                                Default: {param.default}
+                              </Typography>
+                            )}
+                            {param.required && (
+                              <Chip
+                                label="Required"
+                                size="small"
+                                color="error"
+                                variant="outlined"
+                                sx={{ height: 18, fontSize: '0.65rem' }}
+                              />
+                            )}
+                          </Box>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body2" color="text.secondary" sx={{ mr: 1 }}>
+                            Treat as secret
+                          </Typography>
+                          <input
+                            type="checkbox"
+                            checked={param.type === 'password'}
+                            onChange={() => handleParameterTypeToggle(param.name)}
+                            style={{ width: 18, height: 18, cursor: 'pointer' }}
+                          />
+                        </Box>
+                      </Box>
+                    ))}
+                  </Box>
+                </Paper>
+              </Box>
+            )}
 
             {editingScript && editingScript.usage_count > 0 && (
               <Alert severity="info">

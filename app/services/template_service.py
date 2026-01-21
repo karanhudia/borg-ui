@@ -92,7 +92,7 @@ def render_script_template(
     if system_vars:
         param_lookup.update(system_vars)
     
-    # Render template by replacing {{PARAM}} and {{PARAM:default}}
+    # Render template by replacing ${PARAM} and ${PARAM:-default}
     def replace_placeholder(match):
         param_name = match.group(1)
         default_in_template = match.group(2) if match.lastindex >= 2 else None
@@ -106,8 +106,8 @@ def render_script_template(
         # The caller should handle shell escaping if needed
         return value
     
-    # Pattern matches: {{WORD}} or {{WORD:anything}}
-    pattern = r'\{\{([A-Z_][A-Z0-9_]*)(?::([^}]*))?\}\}'
+    # Pattern matches: ${WORD} or ${WORD:-anything}
+    pattern = r'\$\{([A-Z_][A-Z0-9_]*)(?::-([^}]*))?\}'
     rendered_content = re.sub(pattern, replace_placeholder, script_content)
     
     logger.info(

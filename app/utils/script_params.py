@@ -1,7 +1,7 @@
 """
 Script parameter parsing and validation utilities.
 
-Parses script content for {{PARAM}} and {{PARAM:default}} syntax.
+Parses script content for ${PARAM} and ${PARAM:-default} syntax.
 Detects parameter types based on naming conventions.
 """
 
@@ -28,7 +28,7 @@ PASSWORD_SUFFIXES = [
 
 def parse_script_parameters(script_content: str) -> List[Dict[str, Any]]:
     """
-    Parse script content for parameter placeholders in {{PARAM}} or {{PARAM:default}} syntax.
+    Parse script content for parameter placeholders in ${PARAM} or ${PARAM:-default} syntax.
     
     Args:
         script_content: The script content to parse
@@ -48,10 +48,17 @@ def parse_script_parameters(script_content: str) -> List[Dict[str, Any]]:
     if not script_content:
         return []
     
-    # Find all {{PARAM}} and {{PARAM:default}} patterns
-    # Pattern matches: {{WORD}} or {{WORD:anything}}
-    pattern = r'\{\{([A-Z_][A-Z0-9_]*?)(?::([^}]*))?\}\}'
+    # Find all ${PARAM} and ${PARAM:-default} patterns
+    # Pattern matches: ${WORD} or ${WORD:-anything}
+    pattern = r'\$\{([A-Z_][A-Z0-9_]*)(?::-([^}]*))?\}'
     matches = re.findall(pattern, script_content)
+    
+    logger.debug(
+        "Searching for parameters in script",
+        content_length=len(script_content),
+        pattern=pattern,
+        raw_matches=matches
+    )
     
     # Use dict to deduplicate and merge defaults
     params_dict = {}

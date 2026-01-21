@@ -33,6 +33,7 @@ class ScriptCreate(BaseModel):
     timeout: int = 300
     run_on: str = "always"  # 'success', 'failure', 'always', 'warning'
     category: str = "custom"  # 'custom', 'template'
+    parameters: Optional[List[dict]] = None  # User-configured parameter definitions
 
 class ScriptUpdate(BaseModel):
     name: Optional[str] = None
@@ -40,6 +41,7 @@ class ScriptUpdate(BaseModel):
     content: Optional[str] = None
     timeout: Optional[int] = None
     run_on: Optional[str] = None
+    parameters: Optional[List[dict]] = None  # User-configured parameter definitions
 
 class ScriptResponse(BaseModel):
     id: int
@@ -264,8 +266,23 @@ async def create_script(
         logger.error("Failed to write script file", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to write script file: {str(e)}")
 
-    # Parse parameters from script content
-    parameters = parse_script_parameters(script_data.content)
+    # Use user-provided parameters if available, otherwise parse from content
+    if script_data.parameters:
+        parameters = script_data.parameters
+        logger.info(
+            "Using user-provided parameters",
+            param_count=len(parameters),
+            parameters=parameters
+        )
+    else:
+        # Fallback to auto-parsing (for backward compatibility)
+        parameters = parse_script_parameters(script_data.content)
+        logger.info(
+            "Auto-parsed parameters (no user config provided)",
+            param_count=len(parameters),
+            parameters=parameters
+        )
+    
     parameters_json = json.dumps(parameters) if parameters else None
 
     # Create database record
@@ -286,8 +303,18 @@ async def create_script(
     db.commit()
     db.refresh(script)
 
-    logger.info("Script created", script_id=script.id, name=script.name, user_id=current_user.id)
+    logger.info(
+        "Script created",
+        script_id=script.id,
+        name=script.name,
+        user_id=current_user.id,
+        param_count=len(parameters),
+        stored_params=script.parameters
+    )
 
+    # Parse from database to ensure consistency
+    response_parameters = json.loads(script.parameters) if script.parameters else None
+    
     return ScriptResponse(
         id=script.id,
         name=script.name,
@@ -300,7 +327,7 @@ async def create_script(
         is_template=False,
         created_at=script.created_at,
         updated_at=script.updated_at,
-        parameters=parameters if parameters else None
+        parameters=response_parameters
     )
 
 @router.put("/scripts/{script_id}", response_model=ScriptResponse)
@@ -350,12 +377,37 @@ async def update_script(
             write_script_file(file_path, script_data.content)
             logger.info("Script file updated", script_id=script_id, path=str(file_path))
             
-            # Re-parse parameters when content changes
-            parameters = parse_script_parameters(script_data.content)
+            # Use user-provided parameters if available, otherwise re-parse
+            if script_data.parameters is not None:
+                parameters = script_data.parameters
+                logger.info(
+                    "Using user-provided parameters for updated script",
+                    script_id=script_id,
+                    param_count=len(parameters),
+                    parameters=parameters
+                )
+            else:
+                # Re-parse parameters when content changes (backward compatibility)
+                parameters = parse_script_parameters(script_data.content)
+                logger.info(
+                    "Auto-parsed parameters for updated script",
+                    script_id=script_id,
+                    param_count=len(parameters),
+                    parameters=parameters
+                )
+            
             script.parameters = json.dumps(parameters) if parameters else None
         except Exception as e:
             logger.error("Failed to update script file", script_id=script_id, error=str(e))
             raise HTTPException(status_code=500, detail=f"Failed to update script file: {str(e)}")
+    elif script_data.parameters is not None:
+        # Update parameters without changing content
+        script.parameters = json.dumps(script_data.parameters) if script_data.parameters else None
+        logger.info(
+            "Updated parameters without content change",
+            script_id=script_id,
+            param_count=len(script_data.parameters)
+        )
 
     script.updated_at = datetime.utcnow()
     db.commit()
@@ -445,10 +497,13 @@ async def test_script(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to read script file: {str(e)}")
 
-    # Render template with parameters if provided
+    # Prepare environment variables with parameters and system vars
+    import os
+    script_env = os.environ.copy()
+    
     if script.parameters and test_data.parameter_values:
         try:
-            from app.services.template_service import render_script_template, get_system_variables
+            from app.services.template_service import get_system_variables
             
             # Parse parameter definitions
             parameters = json.loads(script.parameters)
@@ -461,29 +516,34 @@ async def test_script(
                 hook_type="pre-backup"
             )
             
-            # Render template with test values (don't encrypt - these are plain test values)
-            content = render_script_template(
-                content,
-                parameters,
-                test_data.parameter_values,
-                decrypt_passwords=False,  # Test values aren't encrypted
-                system_vars=system_vars
-            )
+            # Add system variables to environment
+            script_env.update(system_vars)
             
-            logger.info("Rendered test script with parameters",
+            # Add user-provided test parameter values to environment
+            # Test values aren't encrypted, so use them directly
+            for param in parameters:
+                param_name = param['name']
+                if param_name in test_data.parameter_values:
+                    script_env[param_name] = test_data.parameter_values[param_name]
+                elif 'default' in param and param['default']:
+                    script_env[param_name] = param['default']
+            
+            logger.info("Prepared test script environment",
                        script_id=script_id,
-                       param_count=len(parameters))
+                       param_count=len(parameters),
+                       env_vars=len(script_env))
         except Exception as e:
-            logger.error("Failed to render test script template", script_id=script_id, error=str(e))
-            raise HTTPException(status_code=400, detail=f"Failed to render script template: {str(e)}")
+            logger.error("Failed to prepare test script environment", script_id=script_id, error=str(e))
+            raise HTTPException(status_code=400, detail=f"Failed to prepare script environment: {str(e)}")
 
-    # Execute script
+    # Execute script with environment
     test_timeout = test_data.timeout or script.timeout
     try:
         result = await execute_script(
             script=content,
             timeout=float(test_timeout),
-            context=f"test:{script.name}"
+            context=f"test:{script.name}",
+            env=script_env if (script.parameters and test_data.parameter_values) else None
         )
 
         return {
