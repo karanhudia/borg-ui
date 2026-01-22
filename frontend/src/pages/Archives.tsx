@@ -917,7 +917,7 @@ const Archives: React.FC = () => {
             </Stack>
           ) : (
             <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
-              <AlertCircle size={48} style={{ marginBottom: 16 }} />
+              <AlertCircle size={48} style={{ display: 'block', margin: '0 auto 16px auto' }} />
               <Typography variant="body1" color="text.secondary">
                 No archive information available
               </Typography>

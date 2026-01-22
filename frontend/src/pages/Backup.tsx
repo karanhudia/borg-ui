@@ -13,22 +13,15 @@ import {
   InputLabel,
   CircularProgress,
   Stack,
-  Chip,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableRow,
   Paper,
   Alert,
-  Divider,
   alpha,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
 } from '@mui/material'
-import { Play, Square, Clock, Folder, Database, Info, RefreshCw, AlertCircle } from 'lucide-react'
+import { Play, Square, Clock, Database, Info, RefreshCw } from 'lucide-react'
 import { backupAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import {
@@ -363,185 +356,31 @@ const Backup: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Backup Context Card */}
+      {/* Command Preview Card */}
       {selectedRepoData && (
         <Card sx={{ mb: 3, bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04) }}>
           <CardContent>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
               <Info size={20} color="#1976d2" />
               <Typography variant="h6" fontWeight={600}>
-                Backup Overview
-              </Typography>
-            </Stack>
-
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Here's what will be backed up and the current backup status
-            </Typography>
-
-            {/* Command Preview */}
-            <Alert severity="info" sx={{ mb: 3 }}>
-              <Typography variant="subtitle2" gutterBottom>
                 Command Preview
               </Typography>
-              <Box
-                sx={{
-                  bgcolor: 'grey.900',
-                  color: 'grey.100',
-                  p: 1.5,
-                  borderRadius: 1,
-                  fontFamily: 'monospace',
-                  fontSize: '0.875rem',
-                  overflow: 'auto',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-all',
-                }}
-              >
-                {getBorgBackupCommand()}
-              </Box>
-            </Alert>
-
-            <Stack spacing={3}>
-              {/* Source Directories */}
-              <Box>
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  alignItems="center"
-                  sx={{ mb: 1.5, color: 'text.secondary' }}
-                >
-                  <Folder size={18} />
-                  <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
-                    Source Directories
-                  </Typography>
-                </Stack>
-                {selectedRepoData.source_directories &&
-                selectedRepoData.source_directories.length > 0 ? (
-                  <Stack spacing={1} sx={{ pl: 3.5 }}>
-                    {selectedRepoData.source_directories.map((dir: string, index: number) => (
-                      <Chip
-                        key={index}
-                        label={dir}
-                        size="small"
-                        icon={<Folder size={14} />}
-                        sx={{ justifyContent: 'flex-start', maxWidth: 'fit-content' }}
-                      />
-                    ))}
-                  </Stack>
-                ) : (
-                  <Alert severity="warning" sx={{ ml: 3.5 }}>
-                    No source directories configured for this repository
-                  </Alert>
-                )}
-              </Box>
-
-              {/* Exclude Patterns */}
-              {selectedRepoData.exclude_patterns &&
-                selectedRepoData.exclude_patterns.length > 0 && (
-                  <>
-                    <Divider />
-                    <Box>
-                      <Stack
-                        direction="row"
-                        spacing={1}
-                        alignItems="center"
-                        sx={{ mb: 1.5, color: 'text.secondary' }}
-                      >
-                        <AlertCircle size={18} />
-                        <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
-                          Exclude Patterns
-                        </Typography>
-                      </Stack>
-                      <Stack spacing={1} sx={{ pl: 3.5 }}>
-                        {selectedRepoData.exclude_patterns.map((pattern: string, index: number) => (
-                          <Chip
-                            key={index}
-                            label={pattern}
-                            size="small"
-                            color="warning"
-                            sx={{ justifyContent: 'flex-start', maxWidth: 'fit-content' }}
-                          />
-                        ))}
-                      </Stack>
-                    </Box>
-                  </>
-                )}
-
-              <Divider />
-
-              {/* Repository Info */}
-              <Box>
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  alignItems="center"
-                  sx={{ mb: 1.5, color: 'text.secondary' }}
-                >
-                  <Database size={18} />
-                  <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
-                    Backup Destination
-                  </Typography>
-                </Stack>
-                <TableContainer sx={{ pl: 3.5 }}>
-                  <Table size="small">
-                    <TableBody>
-                      <TableRow>
-                        <TableCell
-                          sx={{
-                            fontWeight: 500,
-                            color: 'text.secondary',
-                            width: '30%',
-                            border: 'none',
-                            py: 0.5,
-                          }}
-                        >
-                          Repository Name
-                        </TableCell>
-                        <TableCell sx={{ border: 'none', py: 0.5 }}>
-                          {selectedRepoData.name}
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell
-                          sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}
-                        >
-                          Path
-                        </TableCell>
-                        <TableCell
-                          sx={{
-                            border: 'none',
-                            py: 0.5,
-                            fontFamily: 'monospace',
-                            fontSize: '0.875rem',
-                          }}
-                        >
-                          {selectedRepoData.path}
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell
-                          sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}
-                        >
-                          Encryption
-                        </TableCell>
-                        <TableCell sx={{ border: 'none', py: 0.5 }}>
-                          {selectedRepoData.encryption || 'Unknown'}
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell
-                          sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}
-                        >
-                          Compression
-                        </TableCell>
-                        <TableCell sx={{ border: 'none', py: 0.5 }}>
-                          {selectedRepoData.compression || 'lz4'}
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Box>
             </Stack>
+            <Box
+              sx={{
+                bgcolor: 'grey.900',
+                color: 'grey.100',
+                p: 1.5,
+                borderRadius: 1,
+                fontFamily: 'monospace',
+                fontSize: '0.875rem',
+                overflow: 'auto',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-all',
+              }}
+            >
+              {getBorgBackupCommand()}
+            </Box>
           </CardContent>
         </Card>
       )}
