@@ -5,6 +5,7 @@
 [![GitHub Actions](https://github.com/karanhudia/borg-ui/workflows/Build%20and%20Publish%20Docker%20Images/badge.svg)](https://github.com/karanhudia/borg-ui/actions)
 [![Tests](https://github.com/karanhudia/borg-ui/workflows/Tests/badge.svg)](https://github.com/karanhudia/borg-ui/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/karanhudia/borg-ui/branch/main/graph/badge.svg)](https://codecov.io/gh/karanhudia/borg-ui)
+[![Discord](https://img.shields.io/discord/1331215029498732686?color=5865F2&logo=discord&logoColor=white&label=Discord)](https://discord.gg/afjM9vMj)
 
 A modern web interface for [Borg Backup](https://borgbackup.readthedocs.io/). Zero-configuration deployment - just run and go.
 
@@ -206,6 +207,7 @@ volumes:
 
 ## Support
 
+- **Discord**: [Join our community](https://discord.gg/afjM9vMj) - Get help, share your setup, suggest features
 - **Documentation**: [Full Documentation](https://karanhudia.github.io/borg-ui)
 - **Bug Reports**: [GitHub Issues](https://github.com/karanhudia/borg-ui/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/karanhudia/borg-ui/discussions)
