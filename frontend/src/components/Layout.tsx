@@ -2,11 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth.tsx'
 import { useTabEnablement } from '../context/AppContext'
-import {
-  setAppVersion,
-  hasConsentBeenGiven,
-  loadUserPreference,
-} from '../utils/matomo'
+import { setAppVersion, hasConsentBeenGiven, loadUserPreference } from '../utils/matomo'
 import AnalyticsConsentBanner from './AnalyticsConsentBanner'
 import {
   Box,
@@ -186,10 +182,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     setMobileOpen(!mobileOpen)
   }
 
-  const handleNavClick = (
-    e: React.MouseEvent<HTMLDivElement>,
-    item: NavigationItem
-  ) => {
+  const handleNavClick = (e: React.MouseEvent<HTMLDivElement>, item: NavigationItem) => {
     const isEnabled = tabEnablement[item.key]
     if (!isEnabled) {
       e.preventDefault()
@@ -304,7 +297,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                               color: isAnySubItemActive ? 'primary.main' : 'inherit',
                             }}
                           />
-                          {settingsExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                          {settingsExpanded ? (
+                            <ChevronDown size={16} />
+                          ) : (
+                            <ChevronRight size={16} />
+                          )}
                         </ListItemButton>
                       </ListItem>
 
@@ -340,7 +337,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                                   }}
                                 >
                                   <ListItemIcon
-                                    sx={{ color: isActive ? 'white' : 'text.secondary', minWidth: 40 }}
+                                    sx={{
+                                      color: isActive ? 'white' : 'text.secondary',
+                                      minWidth: 40,
+                                    }}
                                   >
                                     <SubIcon size={20} />
                                   </ListItemIcon>
@@ -365,7 +365,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 // Regular items without sub-items
                 const isActive = Boolean(
                   item.href &&
-                    (location.pathname === item.href || location.pathname.startsWith(item.href + '/'))
+                    (location.pathname === item.href ||
+                      location.pathname.startsWith(item.href + '/'))
                 )
 
                 const listItemButton = (
@@ -394,7 +395,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       },
                     }}
                   >
-                    <ListItemIcon sx={{ color: isActive ? 'white' : 'text.secondary', minWidth: 40 }}>
+                    <ListItemIcon
+                      sx={{ color: isActive ? 'white' : 'text.secondary', minWidth: 40 }}
+                    >
                       {isEnabled ? <Icon size={20} /> : <Lock size={20} />}
                     </ListItemIcon>
                     <ListItemText
