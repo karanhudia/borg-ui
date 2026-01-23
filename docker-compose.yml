@@ -44,7 +44,6 @@ services:
       # Default mounts entire root filesystem (development/testing only)
       - ${LOCAL_STORAGE_PATH:-/}:/local:rw
 
-      - ./backups:/backups:rw # Example for local backups (development/testing only)
       # Production examples (replace the line above):
       # - /home/yourusername:/local:rw
       # - /var/www:/local/www:ro
