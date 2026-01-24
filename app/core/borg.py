@@ -35,7 +35,7 @@ class BorgInterface:
         except (subprocess.TimeoutExpired, FileNotFoundError) as e:
             logger.error("Borg not available", error=str(e))
             raise RuntimeError(f"Borg not available: {str(e)}")
-    
+
     async def _execute_command(self, cmd: List[str], timeout: int = 3600, cwd: str = None, env: dict = None) -> Dict:
         """Execute a command with real-time output capture"""
         logger.info("Executing command", command=" ".join(cmd), cwd=cwd)
@@ -72,29 +72,29 @@ class BorgInterface:
                 cwd=cwd,
                 env=exec_env
             )
-            
+
             stdout, stderr = await asyncio.wait_for(
-                process.communicate(), 
+                process.communicate(),
                 timeout=timeout
             )
-            
+
             result = {
                 "return_code": process.returncode,
                 "stdout": stdout.decode() if stdout else "",
                 "stderr": stderr.decode() if stderr else "",
                 "success": process.returncode == 0
             }
-            
+
             if result["success"]:
                 logger.info("Command executed successfully", command=" ".join(cmd))
             else:
-                logger.error("Command failed", 
-                           command=" ".join(cmd), 
+                logger.error("Command failed",
+                           command=" ".join(cmd),
                            return_code=process.returncode,
                            stderr=result["stderr"])
-            
+
             return result
-            
+
         except asyncio.TimeoutError:
             logger.error("Command timed out", command=" ".join(cmd), timeout=timeout)
             return {
@@ -388,7 +388,7 @@ class BorgInterface:
             env["BORG_PASSPHRASE"] = passphrase
 
         return await self._execute_command(cmd, timeout=settings.backup_timeout, env=env if env else None)
-    
+
     async def list_archives(self, repository: str, remote_path: str = None, passphrase: str = None, bypass_lock: bool = False) -> Dict:
         """List archives in repository"""
         cmd = [self.borg_cmd, "list"]
@@ -404,11 +404,13 @@ class BorgInterface:
 
         return await self._execute_command(cmd, env=env if env else None)
 
-    async def info_archive(self, repository: str, archive: str, remote_path: str = None, passphrase: str = None) -> Dict:
+    async def info_archive(self, repository: str, archive: str, remote_path: str = None, passphrase: str = None, bypass_lock: bool = False) -> Dict:
         """Get information about a specific archive"""
         cmd = [self.borg_cmd, "info"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
+        if bypass_lock:
+            cmd.append("--bypass-lock")
         cmd.extend([f"{repository}::{archive}", "--json"])
 
         env = {}
@@ -419,7 +421,7 @@ class BorgInterface:
 
     async def list_archive_contents(self, repository: str, archive: str, path: str = "",
                                    remote_path: str = None, passphrase: str = None,
-                                   max_lines: int = 1_000_000) -> Dict:
+                                   max_lines: int = 1_000_000, bypass_lock: bool = False) -> Dict:
         """List contents of an archive with streaming to prevent OOM
 
         Note: borg list doesn't support path filtering as an argument,
@@ -432,6 +434,7 @@ class BorgInterface:
             remote_path: Remote borg executable path
             passphrase: Repository passphrase
             max_lines: Maximum number of files to list before terminating (default: 1 million)
+            bypass_lock: Use --bypass-lock for read-only storage access
 
         Returns:
             Dict with stdout, stderr, success, and line_count_exceeded flag
@@ -439,6 +442,8 @@ class BorgInterface:
         cmd = [self.borg_cmd, "list"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
+        if bypass_lock:
+            cmd.append("--bypass-lock")
         cmd.extend([f"{repository}::{archive}", "--json-lines"])
         # Note: path parameter is not passed to borg, filtering happens in the API layer
 
@@ -569,8 +574,8 @@ class BorgInterface:
             env["BORG_PASSPHRASE"] = passphrase
 
         return await self._execute_command(cmd, env=env if env else None)
-    
-    
+
+
     async def get_repository_info(self, repository_path: str, remote_path: str = None) -> Dict:
         """Get detailed information about a specific repository"""
         try:
@@ -580,7 +585,7 @@ class BorgInterface:
                 cmd.extend(["--remote-path", remote_path])
             cmd.extend([repository_path, "--json"])
             result = await self._execute_command(cmd, timeout=60)
-            
+
             if not result["success"]:
                 return {
                     "success": False,
@@ -592,15 +597,15 @@ class BorgInterface:
                     "integrity_check": False,
                     "disk_usage": 0
                 }
-            
+
             # Parse JSON output
             try:
                 info_data = json.loads(result["stdout"])
                 archives = info_data.get("archives", [])
-                
+
                 # Calculate total size
                 total_size = sum(archive.get("stats", {}).get("size", 0) for archive in archives)
-                
+
                 # Get compression ratio (average)
                 compression_ratios = []
                 for archive in archives:
@@ -608,16 +613,16 @@ class BorgInterface:
                     if stats.get("size") and stats.get("csize"):
                         ratio = stats["csize"] / stats["size"]
                         compression_ratios.append(ratio)
-                
+
                 avg_compression_ratio = sum(compression_ratios) / len(compression_ratios) if compression_ratios else 0
-                
+
                 # Get last backup time
                 last_backup = None
                 if archives:
                     latest_archive = max(archives, key=lambda x: x.get("time", 0))
                     # Convert Unix timestamp to timezone-aware UTC datetime, then to ISO format
                     last_backup = datetime.fromtimestamp(latest_archive["time"], tz=timezone.utc).isoformat()
-                
+
                 # Check disk usage
                 disk_usage = 0
                 try:
@@ -626,7 +631,7 @@ class BorgInterface:
                     disk_usage = disk.percent
                 except:
                     pass
-                
+
                 return {
                     "success": True,
                     "last_backup": last_backup,
@@ -636,7 +641,7 @@ class BorgInterface:
                     "integrity_check": True,  # If we can read the repo, it's likely intact
                     "disk_usage": disk_usage
                 }
-                
+
             except json.JSONDecodeError as e:
                 logger.error("Failed to parse repository info JSON", error=str(e))
                 return {
@@ -649,7 +654,7 @@ class BorgInterface:
                     "integrity_check": False,
                     "disk_usage": 0
                 }
-                
+
         except Exception as e:
             logger.error("Failed to get repository info", repository=repository_path, error=str(e))
             return {
@@ -663,7 +668,7 @@ class BorgInterface:
                 "disk_usage": 0
             }
 
-    
+
     def get_version(self) -> str:
         """Get Borg version"""
         try:
@@ -706,4 +711,4 @@ class BorgInterface:
             return {"success": False, "error": str(e)}
 
 # Global instance
-borg = BorgInterface() 
+borg = BorgInterface()

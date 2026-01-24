@@ -80,7 +80,8 @@ async def get_archive_info(
             repository,
             archive_id,
             remote_path=repo.remote_path,
-            passphrase=repo.passphrase
+            passphrase=repo.passphrase,
+            bypass_lock=repo.bypass_lock
         )
         if not result["success"]:
             raise HTTPException(
@@ -129,7 +130,8 @@ async def get_archive_info(
                     repository,
                     archive_id,
                     remote_path=repo.remote_path,
-                    passphrase=repo.passphrase
+                    passphrase=repo.passphrase,
+                    bypass_lock=repo.bypass_lock
                 )
                 if list_result["success"]:
                     try:
@@ -200,7 +202,8 @@ async def get_archive_contents(
             archive_id,
             path,
             remote_path=repo.remote_path,
-            passphrase=repo.passphrase
+            passphrase=repo.passphrase,
+            bypass_lock=repo.bypass_lock
         )
         if not result["success"]:
             raise HTTPException(
