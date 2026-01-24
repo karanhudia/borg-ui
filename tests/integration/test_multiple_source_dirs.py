@@ -21,7 +21,12 @@ import os
 import tempfile
 import shutil
 from pathlib import Path
-from test_helpers import DockerPathHelper
+
+# Handle both pytest (relative import) and direct script execution (absolute import)
+try:
+    from .test_helpers import DockerPathHelper
+except ImportError:
+    from test_helpers import DockerPathHelper
 
 class Colors:
     GREEN = '\033[92m'

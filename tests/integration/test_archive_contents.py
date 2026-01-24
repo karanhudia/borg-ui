@@ -19,7 +19,12 @@ import os
 import argparse
 from typing import List, Dict, Set, Any
 import requests
-from test_helpers import DockerPathHelper
+
+# Handle both pytest (relative import) and direct script execution (absolute import)
+try:
+    from .test_helpers import DockerPathHelper
+except ImportError:
+    from test_helpers import DockerPathHelper
 
 class Colors:
     """Terminal colors for pretty output"""
