@@ -37,24 +37,10 @@ import {
 } from 'lucide-react'
 import { archivesAPI, repositoriesAPI, browseAPI, mountsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
+import { Archive, Repository } from '../types'
 import LockErrorDialog from '../components/LockErrorDialog'
 import { formatDate, formatDateCompact, formatBytes as formatBytesUtil } from '../utils/dateUtils'
 import { useMatomo } from '../hooks/useMatomo'
-
-interface Repository {
-  id: number
-  name: string
-  path: string
-  has_running_maintenance?: boolean
-}
-
-interface Archive {
-  id: string
-  archive: string
-  name: string
-  start: string
-  time: string
-}
 
 const Archives: React.FC = () => {
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(null)

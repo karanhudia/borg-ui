@@ -37,24 +37,9 @@ import { formatDate, formatBytes as formatBytesUtil, formatTimeRange } from '../
 import RepositoryInfo from '../components/RepositoryInfo'
 import PathSelectorField from '../components/PathSelectorField'
 import LockErrorDialog from '../components/LockErrorDialog'
+import { Archive, Repository } from '../types'
 import ArchiveBrowserDialog from '../components/ArchiveBrowserDialog'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
-
-interface Repository {
-  id: number
-  name: string
-  path: string
-  repository_type: 'local' | 'ssh'
-  has_running_maintenance?: boolean
-}
-
-interface Archive {
-  id: string
-  archive: string
-  name: string
-  start: string
-  time: string
-}
 
 interface RestoreJob {
   id: number
@@ -64,8 +49,8 @@ interface RestoreJob {
   status: string
   started_at?: string
   completed_at?: string
-  progress: number
-  error_message?: string
+  progress?: number
+  error?: string
   progress_details?: {
     nfiles: number
     current_file: string

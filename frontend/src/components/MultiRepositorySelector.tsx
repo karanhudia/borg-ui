@@ -1,12 +1,7 @@
 import React from 'react'
 import { Autocomplete, TextField, Box, Typography, Stack, IconButton, Tooltip } from '@mui/material'
 import { HardDrive, ChevronUp, ChevronDown, X } from 'lucide-react'
-
-export interface Repository {
-  id: number
-  name: string
-  path: string
-}
+import { Repository } from '../types'
 
 interface MultiRepositorySelectorProps {
   repositories: Repository[]
