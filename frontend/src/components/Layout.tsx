@@ -295,24 +295,26 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <Divider />
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         {navigationSections.map((section: any, sectionIndex: number) => (
-          <React.Fragment key={section.heading}>
+          <React.Fragment key={section.heading || section.segment}>
             {/* Section Heading */}
-            <Typography
-              variant="caption"
-              sx={{
-                px: 2,
-                pt: sectionIndex === 0 ? 1.25 : 2,
-                pb: 0.5,
-                display: 'block',
-                color: 'text.secondary',
-                fontWeight: 700,
-                fontSize: '0.625rem',
-                letterSpacing: '0.8px',
-                textTransform: 'uppercase',
-              }}
-            >
-              {section.heading}
-            </Typography>
+            {section.heading && (
+              <Typography
+                variant="caption"
+                sx={{
+                  px: 2,
+                  pt: sectionIndex === 0 ? 1.25 : 2,
+                  pb: 0.5,
+                  display: 'block',
+                  color: 'text.secondary',
+                  fontWeight: 700,
+                  fontSize: '0.625rem',
+                  letterSpacing: '0.8px',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {section.heading}
+              </Typography>
+            )}
             <List sx={{ pt: 0, pb: 0, '& .MuiListItem-root': { mb: 0.125 } }}>
               {section.items.map((item: NavigationItem) => {
                 const isEnabled = tabEnablement[item.key]
