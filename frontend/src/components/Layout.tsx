@@ -85,6 +85,12 @@ const navigationSections: NavigationSection[] = [
     heading: 'MAIN',
     items: [
       { name: 'Dashboard', href: '/dashboard', icon: Home, key: 'dashboard' as const },
+      { name: 'Activity', href: '/activity', icon: History, key: 'dashboard' as const },
+    ],
+  },
+  {
+    heading: 'BACKUP',
+    items: [
       {
         name: 'Remote Machines',
         href: '/ssh-connections',
@@ -96,30 +102,50 @@ const navigationSections: NavigationSection[] = [
       { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },
       { name: 'Restore', href: '/restore', icon: Download, key: 'restore' as const },
       { name: 'Schedule', href: '/schedule', icon: Clock, key: 'schedule' as const },
-      { name: 'Activity', href: '/activity', icon: History, key: 'dashboard' as const },
     ],
   },
   {
-    heading: 'OTHER',
+    heading: 'SETTINGS',
     items: [
       {
-        name: 'Settings',
-        icon: SettingsIcon,
+        name: 'Personal',
+        icon: User,
         key: 'dashboard' as const,
         subItems: [
           { name: 'Account', href: '/settings/account', icon: User },
           { name: 'Appearance', href: '/settings/appearance', icon: Palette },
-          { name: 'Preferences', href: '/settings/preferences', icon: Sliders },
           { name: 'Notifications', href: '/settings/notifications', icon: Bell },
-          { name: 'System', href: '/settings/system', icon: Sliders },
-          { name: 'Beta', href: '/settings/beta', icon: Zap },
+          { name: 'Preferences', href: '/settings/preferences', icon: Sliders },
+        ],
+      },
+      {
+        name: 'System',
+        icon: SettingsIcon,
+        key: 'dashboard' as const,
+        subItems: [
+          { name: 'System', href: '/settings/system', icon: SettingsIcon },
           { name: 'Cache', href: '/settings/cache', icon: Server },
           { name: 'Logs', href: '/settings/logs', icon: FileText },
-          { name: 'Mounts', href: '/settings/mounts', icon: HardDrive },
           { name: 'Packages', href: '/settings/packages', icon: Package },
+        ],
+      },
+      {
+        name: 'Management',
+        icon: HardDrive,
+        key: 'dashboard' as const,
+        subItems: [
+          { name: 'Mounts', href: '/settings/mounts', icon: HardDrive },
           { name: 'Scripts', href: '/settings/scripts', icon: FileCode },
-          { name: 'Export/Import', href: '/settings/export', icon: DownloadIcon },
           { name: 'Users', href: '/settings/users', icon: Users },
+          { name: 'Export/Import', href: '/settings/export', icon: DownloadIcon },
+        ],
+      },
+      {
+        name: 'Advanced',
+        icon: Zap,
+        key: 'dashboard' as const,
+        subItems: [
+          { name: 'Beta', href: '/settings/beta', icon: Zap },
         ],
       },
     ],
@@ -134,8 +160,8 @@ interface SystemInfo {
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
-  const [settingsExpanded, setSettingsExpanded] = useState(false)
   const [showConsentBanner, setShowConsentBanner] = useState(false)
+  const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({})
   const location = useLocation()
   const { user, logout } = useAuth()
   const { tabEnablement, getTabDisabledReason } = useTabEnablement()
@@ -154,10 +180,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     checkConsent()
   }, [])
 
-  // Auto-expand settings if we're on a settings page
+  // Auto-expand menus based on current route
   useEffect(() => {
     if (location.pathname.startsWith('/settings')) {
-      setSettingsExpanded(true)
+      // Determine which settings submenu should be expanded
+      const path = location.pathname
+      if (path.includes('/account') || path.includes('/appearance') || path.includes('/notifications') || path.includes('/preferences')) {
+        setExpandedMenus(prev => ({ ...prev, 'Personal': true }))
+      } else if (path.includes('/system') || path.includes('/cache') || path.includes('/logs') || path.includes('/packages')) {
+        setExpandedMenus(prev => ({ ...prev, 'System': true }))
+      } else if (path.includes('/mounts') || path.includes('/scripts') || path.includes('/users') || path.includes('/export')) {
+        setExpandedMenus(prev => ({ ...prev, 'Management': true }))
+      } else if (path.includes('/beta')) {
+        setExpandedMenus(prev => ({ ...prev, 'Advanced': true }))
+      }
     }
   }, [location.pathname])
 
@@ -177,6 +213,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     }
     fetchSystemInfo()
   }, [])
+
+  const toggleMenu = (menuName: string) => {
+    setExpandedMenus(prev => ({
+      ...prev,
+      [menuName]: !prev[menuName]
+    }))
+  }
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen)
@@ -245,37 +288,41 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               variant="caption"
               sx={{
                 px: 2,
-                pt: sectionIndex === 0 ? 2 : 2.5,
-                pb: 1,
+                pt: sectionIndex === 0 ? 1.5 : 2.5,
+                pb: 0.5,
                 display: 'block',
                 color: 'text.secondary',
-                fontWeight: 600,
-                fontSize: '0.7rem',
-                letterSpacing: '0.5px',
+                fontWeight: 700,
+                fontSize: '0.6875rem',
+                letterSpacing: '0.8px',
+                textTransform: 'uppercase',
               }}
             >
               {section.heading}
             </Typography>
-            <List sx={{ pt: 0, pb: 0 }}>
+            <List sx={{ pt: 0, pb: 0, '& .MuiListItem-root': { mb: 0.25 } }}>
               {section.items.map((item) => {
                 const isEnabled = tabEnablement[item.key]
                 const disabledReason = getTabDisabledReason(item.key)
                 const Icon = item.icon
 
-                // Handle items with sub-items (Settings)
+                // Handle items with sub-items (dropdowns)
                 if (item.subItems) {
                   const isAnySubItemActive = item.subItems.some((subItem) =>
                     location.pathname.startsWith(subItem.href)
                   )
+                  const isExpanded = expandedMenus[item.name] || false
 
                   return (
                     <React.Fragment key={item.name}>
                       <ListItem disablePadding>
                         <ListItemButton
-                          onClick={() => setSettingsExpanded(!settingsExpanded)}
+                          onClick={() => toggleMenu(item.name)}
                           sx={{
-                            pl: 3.5,
-                            pr: 2,
+                            pl: 2,
+                            pr: 1.5,
+                            py: 1,
+                            minHeight: 40,
                             '&:hover': {
                               backgroundColor: 'action.hover',
                             },
@@ -284,7 +331,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                           <ListItemIcon
                             sx={{
                               color: isAnySubItemActive ? 'primary.main' : 'text.secondary',
-                              minWidth: 40,
+                              minWidth: 32,
                             }}
                           >
                             <Icon size={20} />
@@ -297,7 +344,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                               color: isAnySubItemActive ? 'primary.main' : 'inherit',
                             }}
                           />
-                          {settingsExpanded ? (
+                          {isExpanded ? (
                             <ChevronDown size={16} />
                           ) : (
                             <ChevronRight size={16} />
@@ -305,9 +352,25 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                         </ListItemButton>
                       </ListItem>
 
-                      {/* Sub-items with smooth animation */}
-                      <Collapse in={settingsExpanded} timeout="auto" unmountOnExit>
-                        <List component="div" disablePadding>
+                      {/* Sub-items with smooth animation and vertical line */}
+                      <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                        <List
+                          component="div"
+                          disablePadding
+                          sx={{
+                            position: 'relative',
+                            '&::before': {
+                              content: '""',
+                              position: 'absolute',
+                              left: '24px',
+                              top: 0,
+                              bottom: 0,
+                              width: '1px',
+                              backgroundColor: 'divider',
+                              opacity: 0.5,
+                            },
+                          }}
+                        >
                           {item.subItems.map((subItem) => {
                             const isActive = location.pathname.startsWith(subItem.href)
                             const SubIcon = subItem.icon
@@ -319,8 +382,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                                   to={subItem.href}
                                   selected={isActive}
                                   sx={{
-                                    pl: 3.5,
-                                    pr: 2,
+                                    pl: 6,
+                                    pr: 1.5,
+                                    py: 0.75,
+                                    minHeight: 36,
                                     '&.Mui-selected': {
                                       backgroundColor: 'primary.main',
                                       color: 'white',
@@ -339,16 +404,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                                   <ListItemIcon
                                     sx={{
                                       color: isActive ? 'white' : 'text.secondary',
-                                      minWidth: 40,
+                                      minWidth: 28,
                                     }}
                                   >
-                                    <SubIcon size={20} />
+                                    <SubIcon size={18} />
                                   </ListItemIcon>
                                   <ListItemText
                                     primary={subItem.name}
                                     primaryTypographyProps={{
                                       fontSize: '0.875rem',
-                                      fontWeight: isActive ? 600 : 400,
+                                      fontWeight: isActive ? 500 : 400,
                                       color: isActive ? 'white' : 'inherit',
                                     }}
                                   />
@@ -377,8 +442,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     disabled={!isEnabled}
                     onClick={(e: React.MouseEvent<HTMLDivElement>) => handleNavClick(e, item)}
                     sx={{
-                      pl: 3.5,
-                      pr: 2,
+                      pl: 2,
+                      pr: 1.5,
+                      py: 1,
+                      minHeight: 40,
                       '&.Mui-selected': {
                         backgroundColor: 'primary.main',
                         color: 'white',
@@ -396,7 +463,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     }}
                   >
                     <ListItemIcon
-                      sx={{ color: isActive ? 'white' : 'text.secondary', minWidth: 40 }}
+                      sx={{ color: isActive ? 'white' : 'text.secondary', minWidth: 32 }}
                     >
                       {isEnabled ? <Icon size={20} /> : <Lock size={20} />}
                     </ListItemIcon>
