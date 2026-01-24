@@ -340,12 +340,20 @@ export default function Scripts() {
                       <Edit size={18} />
                     </IconButton>
                   </Tooltip>
-                  <Tooltip title={script.is_template ? 'Cannot delete templates' : 'Delete Script'}>
+                  <Tooltip
+                    title={
+                      script.is_template
+                        ? 'Cannot delete templates'
+                        : script.usage_count > 0
+                        ? 'Script is used by repositories (will clean up orphaned associations automatically)'
+                        : 'Delete Script'
+                    }
+                  >
                     <span>
                       <IconButton
                         size="small"
                         onClick={() => handleDelete(script)}
-                        disabled={script.is_template || script.usage_count > 0}
+                        disabled={script.is_template}
                         color="error"
                       >
                         <Trash2 size={18} />
