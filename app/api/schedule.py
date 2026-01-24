@@ -638,6 +638,107 @@ async def toggle_scheduled_job(
         logger.error("Failed to toggle scheduled job", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to toggle scheduled job: {str(e)}")
 
+@router.post("/{job_id}/duplicate")
+async def duplicate_scheduled_job(
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Duplicate a scheduled job with a new name"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        # Get the original job
+        original_job = db.query(ScheduledJob).filter(ScheduledJob.id == job_id).first()
+        if not original_job:
+            raise HTTPException(status_code=404, detail="Scheduled job not found")
+
+        # Generate a unique name for the copy
+        base_name = f"Copy of {original_job.name}"
+        new_name = base_name
+        counter = 1
+
+        while db.query(ScheduledJob).filter(ScheduledJob.name == new_name).first():
+            counter += 1
+            new_name = f"{base_name} ({counter})"
+
+        # Calculate next run time from cron expression
+        try:
+            cron = croniter.croniter(original_job.cron_expression, datetime.now(timezone.utc))
+            next_run = cron.get_next(datetime)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid cron expression: {str(e)}")
+
+        # Create the duplicate job
+        duplicated_job = ScheduledJob(
+            name=new_name,
+            cron_expression=original_job.cron_expression,
+            repository=original_job.repository,
+            repository_id=original_job.repository_id,
+            enabled=False,  # Disable by default
+            next_run=next_run,
+            description=original_job.description,
+            archive_name_template=original_job.archive_name_template,
+            run_repository_scripts=original_job.run_repository_scripts,
+            pre_backup_script_id=original_job.pre_backup_script_id,
+            post_backup_script_id=original_job.post_backup_script_id,
+            run_prune_after=original_job.run_prune_after,
+            run_compact_after=original_job.run_compact_after,
+            prune_keep_hourly=original_job.prune_keep_hourly,
+            prune_keep_daily=original_job.prune_keep_daily,
+            prune_keep_weekly=original_job.prune_keep_weekly,
+            prune_keep_monthly=original_job.prune_keep_monthly,
+            prune_keep_quarterly=original_job.prune_keep_quarterly,
+            prune_keep_yearly=original_job.prune_keep_yearly
+        )
+
+        db.add(duplicated_job)
+        db.commit()
+        db.refresh(duplicated_job)
+
+        # Copy multi-repo associations if they exist
+        original_repo_links = db.query(ScheduledJobRepository)\
+            .filter_by(scheduled_job_id=job_id)\
+            .order_by(ScheduledJobRepository.execution_order)\
+            .all()
+
+        if original_repo_links:
+            for link in original_repo_links:
+                new_link = ScheduledJobRepository(
+                    scheduled_job_id=duplicated_job.id,
+                    repository_id=link.repository_id,
+                    execution_order=link.execution_order
+                )
+                db.add(new_link)
+            db.commit()
+            logger.info("Duplicated multi-repo associations",
+                       original_job_id=job_id,
+                       new_job_id=duplicated_job.id,
+                       repo_count=len(original_repo_links))
+
+        logger.info("Scheduled job duplicated",
+                   original_job_id=job_id,
+                   new_job_id=duplicated_job.id,
+                   new_name=new_name,
+                   user=current_user.username)
+
+        return {
+            "success": True,
+            "message": "Scheduled job duplicated successfully",
+            "job": {
+                "id": duplicated_job.id,
+                "name": duplicated_job.name,
+                "enabled": duplicated_job.enabled,
+                "cron_expression": duplicated_job.cron_expression
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to duplicate scheduled job", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to duplicate scheduled job: {str(e)}")
+
 @router.post("/{job_id}/run-now")
 async def run_scheduled_job_now(
     job_id: int,

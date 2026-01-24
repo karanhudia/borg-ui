@@ -42,6 +42,7 @@ import {
   Calendar,
   RefreshCw,
   X,
+  Copy,
 } from 'lucide-react'
 import { scheduleAPI, repositoriesAPI, backupAPI, scriptsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
@@ -305,6 +306,20 @@ const Schedule: React.FC = () => {
     },
   })
 
+  // Duplicate job mutation
+  const duplicateJobMutation = useMutation({
+    mutationFn: scheduleAPI.duplicateScheduledJob,
+    onSuccess: () => {
+      toast.success('Scheduled job duplicated successfully')
+      queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
+      queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
+      track(EventCategory.BACKUP, EventAction.CREATE, 'schedule-duplicate')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to duplicate job')
+    },
+  })
+
   // Cancel backup job mutation
   const cancelBackupMutation = useMutation({
     mutationFn: (jobId: string) => backupAPI.cancelJob(jobId),
@@ -447,6 +462,10 @@ const Schedule: React.FC = () => {
     if (window.confirm(`Run "${job.name}" now?`)) {
       runJobNowMutation.mutate(job.id)
     }
+  }
+
+  const handleDuplicateJob = (job: ScheduledJob) => {
+    duplicateJobMutation.mutate(job.id)
   }
 
   const openCreateModal = () => {
@@ -830,6 +849,14 @@ const Schedule: React.FC = () => {
       onClick: (job) => openEditModal(job),
       color: 'default',
       tooltip: 'Edit',
+    },
+    {
+      icon: <Copy size={16} />,
+      label: 'Duplicate',
+      onClick: (job) => handleDuplicateJob(job),
+      color: 'default',
+      disabled: () => duplicateJobMutation.isPending,
+      tooltip: 'Duplicate',
     },
     {
       icon: <Trash2 size={16} />,
