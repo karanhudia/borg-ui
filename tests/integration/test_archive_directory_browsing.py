@@ -286,10 +286,11 @@ class ArchiveBrowsingTester:
             self.log(f"✗ Failed to init borg repo: {e.stderr.decode()}", "ERROR")
             return None, None
 
-        # Create archive
+        # Create archive (backup contents of source_dir, not source_dir itself)
+        # Use -C to change directory before creating archive
         try:
             subprocess.run(
-                ["borg", "create", f"{repo_dir}::test-archive", source_dir],
+                ["borg", "create", "-C", source_dir, f"{repo_dir}::test-archive", "."],
                 capture_output=True,
                 check=True,
                 env={**os.environ, "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK": "yes"}
@@ -397,24 +398,21 @@ class ArchiveBrowsingTester:
             self.log("\n" + "="*70, "INFO")
             self.log("TEST 2: Photos Directory Level", "INFO")
             self.log("="*70, "INFO")
-            photos_path = os.path.join(source_dir, "Photos").replace(source_dir + "/", "")
-            if not self.test_directory_level(repo_id, repo_path, "test-archive", photos_path, expected_min_dirs=2):
+            if not self.test_directory_level(repo_id, repo_path, "test-archive", "Photos", expected_min_dirs=2):
                 all_tests_passed = False
 
             # Test Photos/2023 level (should show January, February)
             self.log("\n" + "="*70, "INFO")
             self.log("TEST 3: Photos/2023 Directory Level", "INFO")
             self.log("="*70, "INFO")
-            photos_2023_path = os.path.join(source_dir, "Photos/2023").replace(source_dir + "/", "")
-            if not self.test_directory_level(repo_id, repo_path, "test-archive", photos_2023_path, expected_min_dirs=2):
+            if not self.test_directory_level(repo_id, repo_path, "test-archive", "Photos/2023", expected_min_dirs=2):
                 all_tests_passed = False
 
             # Test Documents level (should show Work, Personal)
             self.log("\n" + "="*70, "INFO")
             self.log("TEST 4: Documents Directory Level", "INFO")
             self.log("="*70, "INFO")
-            docs_path = os.path.join(source_dir, "Documents").replace(source_dir + "/", "")
-            if not self.test_directory_level(repo_id, repo_path, "test-archive", docs_path, expected_min_dirs=2):
+            if not self.test_directory_level(repo_id, repo_path, "test-archive", "Documents", expected_min_dirs=2):
                 all_tests_passed = False
 
             # Test response size
