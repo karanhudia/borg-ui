@@ -72,6 +72,10 @@ describe('FileExplorerDialog', () => {
         },
       ],
     },
+    status: 200,
+    statusText: 'OK',
+    headers: {},
+    config: {} as any,
   }
 
   beforeEach(() => {
@@ -312,8 +316,6 @@ describe('FileExplorerDialog', () => {
     })
 
     it('enables Select button when item is selected', async () => {
-      const user = userEvent.setup()
-
       renderWithProviders(
         <FileExplorerDialog open={true} onClose={mockOnClose} onSelect={mockOnSelect} />
       )

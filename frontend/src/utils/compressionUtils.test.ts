@@ -8,7 +8,6 @@ import { describe, it, expect } from 'vitest'
 import {
   buildCompressionString,
   parseCompressionString,
-  CompressionOptions,
 } from './compressionUtils'
 
 describe('compressionUtils - Round-Trip Conversion', () => {
