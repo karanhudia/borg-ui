@@ -43,12 +43,20 @@ class TestBackupCreationIntegration:
         assert response.status_code in [200, 201, 202]
         job_id = response.json()["job_id"]
         
-        # Explicitly execute the backup service logic
-        await backup_service.execute_backup(job_id, str(repo_path), test_db)
-        
-        # Verify job status in DB (or via API)
-        job_response = test_client.get(f"/api/backup/status/{job_id}", headers=admin_headers)
-        job_data = job_response.json()
+        # Wait for background task to complete (polling)
+        import asyncio
+        max_retries = 20
+        for _ in range(max_retries):
+            # Check status
+            job_response = test_client.get(f"/api/backup/status/{job_id}", headers=admin_headers)
+            job_data = job_response.json()
+            
+            if job_data["status"] in ["completed", "completed_with_warnings", "failed"]:
+                break
+                
+            # Allow background task to progress
+            await asyncio.sleep(0.2)
+            
         assert job_data["status"] == "completed"
         
         # Verify archive exists
