@@ -28,6 +28,7 @@ export default function AnalyticsConsentBanner({ onConsentGiven }: AnalyticsCons
 
       onConsentGiven()
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to save analytics preference:', error)
       // Still close banner even if save fails
       onConsentGiven()

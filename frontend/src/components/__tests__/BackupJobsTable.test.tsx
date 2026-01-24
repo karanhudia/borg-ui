@@ -3,9 +3,10 @@ import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../../test/test-utils'
 import BackupJobsTable from '../BackupJobsTable'
+import { MockBackupJob, MockRepository } from '../../test/factories'
 
 describe('BackupJobsTable', () => {
-  const mockJobs = [
+  const mockJobs: MockBackupJob[] = [
     {
       id: 1,
       repository: '/backup/repo1',
@@ -40,10 +41,37 @@ describe('BackupJobsTable', () => {
     },
   ]
 
-  const mockRepositories = [
-    { id: 1, name: 'Repo 1', path: '/backup/repo1' },
-    { id: 2, name: 'Repo 2', path: '/backup/repo2' },
-    { id: 3, name: 'Repo 3', path: '/backup/repo3' },
+  const mockRepositories: MockRepository[] = [
+    {
+      id: 1,
+      name: 'Repo 1',
+      path: '/backup/repo1',
+      mode: 'full',
+      encryption: 'none',
+      compression: 'lz4',
+      source_directories: [],
+      exclude_patterns: [],
+    },
+    {
+      id: 2,
+      name: 'Repo 2',
+      path: '/backup/repo2',
+      mode: 'full',
+      encryption: 'none',
+      compression: 'lz4',
+      source_directories: [],
+      exclude_patterns: [],
+    },
+    {
+      id: 3,
+      name: 'Repo 3',
+      path: '/backup/repo3',
+      mode: 'full',
+      encryption: 'none',
+      compression: 'lz4',
+      source_directories: [],
+      exclude_patterns: [],
+    },
   ]
 
   const mockCallbacks = {
