@@ -125,8 +125,8 @@ describe('API Response Interceptor - 401 Handling', () => {
 
     try {
       await api.get('/repositories/')
-    } catch (error) {
-      // Error is expected
+    } catch {
+      // Expected
     }
 
     // Should redirect to login
@@ -167,7 +167,7 @@ describe('API Response Interceptor - 401 Handling', () => {
 
     try {
       await api.get('/dashboard/status')
-    } catch (error) {
+    } catch {
       // Expected
     }
 
@@ -268,7 +268,7 @@ describe('API Response Interceptor - Edge Cases', () => {
 
     try {
       await api.get('/repositories/')
-    } catch (error) {
+    } catch {
       // Expected
     }
 
@@ -299,7 +299,7 @@ describe('API Response Interceptor - Edge Cases', () => {
 
       try {
         await api.get(endpoint)
-      } catch (error) {
+      } catch {
         // Expected
       }
 
