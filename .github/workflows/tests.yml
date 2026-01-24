@@ -208,14 +208,20 @@ jobs:
       - name: Run archive contents tests
         run: |
           python3 tests/integration/test_archive_contents.py --url http://localhost:8082
+        env:
+          BORG_UI_CONTAINER: false  # Backend runs directly in CI, not in Docker
 
       - name: Run multiple source directories test
         run: |
           python3 tests/integration/test_multiple_source_dirs.py --url http://localhost:8082
+        env:
+          BORG_UI_CONTAINER: false
 
       - name: Run archive browsing test
         run: |
           python3 tests/integration/test_archive_directory_browsing.py --url http://localhost:8082
+        env:
+          BORG_UI_CONTAINER: false
 
       - name: Stop Borg UI
         if: always()
