@@ -21,6 +21,7 @@ import os
 import tempfile
 import shutil
 from pathlib import Path
+from test_helpers import DockerPathHelper
 
 class Colors:
     GREEN = '\033[92m'
@@ -36,6 +37,7 @@ class MultipleSourceDirTester:
         self.session = requests.Session()
         self.auth_token = None
         self.test_dir = None
+        self.path_helper = DockerPathHelper(base_url)
 
     def log(self, message, level="INFO"):
         colors = {
@@ -107,19 +109,25 @@ class MultipleSourceDirTester:
                 "Content-Type": "application/json"
             }
 
+            # Convert paths for Docker backend if needed
+            container_repo_path = self.path_helper.to_container_path(self.repo_path)
+            container_source1 = self.path_helper.to_container_path(self.source1)
+            container_source2 = self.path_helper.to_container_path(self.source2)
+
             repo_data = {
                 "name": "test-multi-source",
-                "path": self.repo_path,
+                "path": container_repo_path,
                 "encryption": "none",
                 "compression": "lz4",
                 "repository_type": "local",
-                "source_directories": [self.source1, self.source2],  # TWO DIRECTORIES
+                "source_directories": [container_source1, container_source2],  # TWO DIRECTORIES
                 "exclude_patterns": []
             }
 
             self.log(f"\n📤 Creating repository with 2 source directories:", "INFO")
-            self.log(f"  1. {self.source1}", "INFO")
-            self.log(f"  2. {self.source2}", "INFO")
+            self.log(f"  1. Host: {self.source1} -> Container: {container_source1}", "INFO")
+            self.log(f"  2. Host: {self.source2} -> Container: {container_source2}", "INFO")
+            self.log(f"  Repo: Host: {self.repo_path} -> Container: {container_repo_path}", "INFO")
 
             response = self.session.post(
                 f"{self.base_url}/api/repositories/",
@@ -329,6 +337,10 @@ class MultipleSourceDirTester:
         self.log(f"\n{'='*70}", "INFO")
         self.log(f"TEST: Multiple Source Directories Bug", "INFO")
         self.log(f"{'='*70}\n", "INFO")
+
+        # Log environment detection
+        self.path_helper.log_environment(lambda msg: self.log(msg, "INFO"))
+        self.log("", "INFO")
 
         try:
             # Setup

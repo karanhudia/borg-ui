@@ -19,6 +19,7 @@ import os
 import argparse
 from typing import List, Dict, Set, Any
 import requests
+from test_helpers import DockerPathHelper
 
 class Colors:
     """Terminal colors for pretty output"""
@@ -38,24 +39,10 @@ class ArchiveContentsTester:
         self.session = requests.Session()
         self.auth_token = None
         self.test_results = []
-
-        # Determine if backend server is running in Docker container
-        # Port-based detection: 8081/8082 = Docker, 8000 = local dev
-        # Can be overridden with container_mode or BORG_UI_CONTAINER env var
-        is_container_port = base_url.endswith(":8081") or base_url.endswith(":8082")
-        env_container_mode = os.environ.get('BORG_UI_CONTAINER', '').lower() in ('true', '1', 'yes')
-
-        # Use /local prefix if:
-        # 1. Explicitly set via container_mode parameter, OR
-        # 2. Explicitly set via BORG_UI_CONTAINER env var, OR
-        # 3. Port suggests Docker AND not explicitly disabled
-        self.use_local_prefix = (
-            container_mode or
-            env_container_mode or
-            (is_container_port and os.environ.get('BORG_UI_CONTAINER', '').lower() not in ('false', '0', 'no'))
-        )
-        # For Docker container: paths need /local prefix
-        self.use_local_prefix = True
+        
+        # Initialize path helper
+        self.path_helper = DockerPathHelper(base_url, container_mode)
+        self.use_local_prefix = self.path_helper.use_local_prefix
 
     def log(self, message: str, level: str = "INFO"):
         """Log a message with color"""
@@ -67,13 +54,6 @@ class ArchiveContentsTester:
         }
         color = colors.get(level, "")
         print(f"{color}{message}{Colors.END}")
-
-    def to_container_path(self, host_path: str) -> str:
-        """Convert host path to container path if running in container mode"""
-        if self.container_mode:
-            # In Docker, host root (/) is mounted at /local
-            return f"/local{host_path}"
-        return host_path
 
     def authenticate(self) -> bool:
         """Authenticate with Borg UI"""
@@ -143,7 +123,7 @@ class ArchiveContentsTester:
                 else:
                     self.log(f"⚠️  Failed to delete repository: {repo_name}", "WARNING")
 
-    def get_borg_archive_contents(self, repo_path: str, archive: str, path: str = "") -> Set[str]:
+    def get_borg_archive_contents(self, repo_path: str, archive: str, path: str = "", passphrase: str = None) -> Set[str]:
         """
         Get archive contents using borg command line
         Returns set of immediate children at the given path
@@ -153,11 +133,16 @@ class ArchiveContentsTester:
             if path:
                 cmd.append(path)
 
+            env = os.environ.copy()
+            if passphrase:
+                env["BORG_PASSPHRASE"] = passphrase
+
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=30,
+                env=env
             )
 
             if result.returncode != 0:
@@ -244,7 +229,7 @@ class ArchiveContentsTester:
             }
 
             # Convert path for Docker container (add /local prefix)
-            container_path = f"/local{path}" if self.use_local_prefix else path
+            container_path = self.path_helper.to_container_path(path)
 
             repo_data = {
                 "name": name,
@@ -294,7 +279,7 @@ class ArchiveContentsTester:
             self.log(f"❌ Error adding repository: {e}", "ERROR")
             return None
 
-    def test_archive_browsing(self, repo_id: int, repo_path: str, archive: str, test_paths: List[str] = None):
+    def test_archive_browsing(self, repo_id: int, repo_path: str, archive: str, test_paths: List[str] = None, passphrase: str = None):
         """
         Test archive browsing by comparing borg output with UI output
         """
@@ -312,7 +297,7 @@ class ArchiveContentsTester:
             self.log(f"\n📂 Testing path: {path_display}", "INFO")
 
             # Get expected contents from borg
-            borg_items = self.get_borg_archive_contents(repo_path, archive, path)
+            borg_items = self.get_borg_archive_contents(repo_path, archive, path, passphrase)
             self.log(f"  Borg found: {len(borg_items)} items", "INFO")
 
             # Get actual contents from UI
@@ -378,16 +363,7 @@ class ArchiveContentsTester:
             return False
 
         # Show path mapping info based on detected mode
-        if self.use_local_prefix:
-            self.log(f"ℹ️  Docker backend detected (paths will use /local prefix)", "INFO")
-            self.log(f"   Host path: {self.repo_dir}", "INFO")
-            self.log(f"   Container path: /local{self.repo_dir}", "INFO")
-            self.log(f"   Server URL: {self.base_url}", "INFO")
-        else:
-            self.log(f"ℹ️  Local backend detected (direct filesystem access)", "INFO")
-            self.log(f"   Test path: {self.repo_dir}", "INFO")
-            self.log(f"   Server URL: {self.base_url}", "INFO")
-            self.log(f"   Tip: Set BORG_UI_CONTAINER=false to override Docker detection", "INFO")
+        self.path_helper.log_environment(lambda msg: self.log(msg, "INFO"))
 
         # Authenticate
         if not self.authenticate():
@@ -453,7 +429,8 @@ class ArchiveContentsTester:
                     repo_id,
                     repo_config['path'],
                     archive_config['name'],
-                    archive_config.get('test_paths', [""])
+                    archive_config.get('test_paths', [""]),
+                    passphrase=repo_config.get('passphrase')
                 )
                 if not passed:
                     all_tests_passed = False
