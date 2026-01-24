@@ -312,6 +312,7 @@ export const scheduleAPI = {
   deleteScheduledJob: (id: number) => api.delete(`/schedule/${id}`),
   toggleScheduledJob: (id: number) => api.post(`/schedule/${id}/toggle`),
   runScheduledJobNow: (id: number) => api.post(`/schedule/${id}/run-now`),
+  duplicateScheduledJob: (id: number) => api.post(`/schedule/${id}/duplicate`),
   validateCronExpression: (data: any) => api.post('/schedule/validate-cron', data),
   getCronPresets: () => api.get('/schedule/cron-presets'),
   getUpcomingJobs: (hours?: number) => api.get('/schedule/upcoming-jobs', { params: { hours } }),
