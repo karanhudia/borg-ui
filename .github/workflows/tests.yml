@@ -199,20 +199,23 @@ jobs:
         env:
           TEST_BASE_URL: http://localhost:8082
 
+      - name: Run pytest integration tests
+        run: |
+          pytest tests/integration/ -v -m "integration and requires_borg"
+        env:
+          TEST_BASE_URL: http://localhost:8082
+
       - name: Run archive contents tests
         run: |
           python3 tests/integration/test_archive_contents.py --url http://localhost:8082
-        continue-on-error: true
 
       - name: Run multiple source directories test
         run: |
           python3 tests/integration/test_multiple_source_dirs.py --url http://localhost:8082
-        continue-on-error: true
 
       - name: Run archive browsing test
         run: |
           python3 tests/integration/test_archive_directory_browsing.py --url http://localhost:8082
-        continue-on-error: true
 
       - name: Stop Borg UI
         if: always()
@@ -265,6 +268,25 @@ jobs:
         run: |
           cd frontend
           npm run lint || true
+
+      - name: Run frontend unit tests
+        run: |
+          cd frontend
+          npm test -- --run
+
+      - name: Run frontend tests with coverage
+        run: |
+          cd frontend
+          npm run test:coverage
+
+      - name: Upload frontend coverage
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./frontend/coverage/coverage-final.json
+          flags: frontend
+          name: frontend-coverage
+          fail_ci_if_error: false
 
       - name: Build frontend
         run: |
