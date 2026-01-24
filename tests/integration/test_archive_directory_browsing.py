@@ -324,7 +324,12 @@ class ArchiveBrowsingTester:
                 json={
                     "name": "test-browsing",
                     "path": container_path,
-                    "encryption": "none"
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "repository_type": "local",
+                    "source_directories": [],
+                    "exclude_patterns": [],
+                    "mode": "observe"  # Observe mode since we're importing existing repo
                 },
                 timeout=30
             )
