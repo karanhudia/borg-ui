@@ -15,7 +15,15 @@ import requests
 import subprocess
 import json
 import os
+import tempfile
+import shutil
 from typing import Set, List
+
+# Handle both pytest (relative import) and direct script execution (absolute import)
+try:
+    from .test_helpers import DockerPathHelper
+except ImportError:
+    from test_helpers import DockerPathHelper
 
 class Colors:
     GREEN = '\033[92m'
@@ -30,6 +38,8 @@ class ArchiveBrowsingTester:
         self.session = requests.Session()
         self.auth_token = None
         self.test_results = []
+        self.test_dir = None
+        self.path_helper = DockerPathHelper(base_url)
 
     def log(self, message: str, level: str = "INFO"):
         colors = {
@@ -239,32 +249,181 @@ class ArchiveBrowsingTester:
             self.log(f"✗ Error checking response size: {e}", "ERROR")
             return False
 
+    def create_test_environment(self):
+        """Create test repository with deep nested structure"""
+        self.test_dir = tempfile.mkdtemp(prefix="borg-test-browsing-")
+        repo_dir = os.path.join(self.test_dir, "repo")
+        source_dir = os.path.join(self.test_dir, "source")
+
+        self.log("📁 Creating test environment with nested directories...", "INFO")
+
+        # Create deep nested structure to test browsing
+        # Photos/2023/January, Photos/2023/February, Photos/2024/January, Photos/2024/February
+        os.makedirs(os.path.join(source_dir, "Photos/2023/January"))
+        os.makedirs(os.path.join(source_dir, "Photos/2023/February"))
+        os.makedirs(os.path.join(source_dir, "Photos/2024/January"))
+        os.makedirs(os.path.join(source_dir, "Photos/2024/February"))
+
+        # Documents/Work/Projects, Documents/Personal
+        os.makedirs(os.path.join(source_dir, "Documents/Work/Projects"))
+        os.makedirs(os.path.join(source_dir, "Documents/Personal"))
+
+        # Create some files
+        with open(os.path.join(source_dir, "Photos/2023/January/photo1.jpg"), "w") as f:
+            f.write("photo data")
+        with open(os.path.join(source_dir, "Documents/Work/Projects/report.txt"), "w") as f:
+            f.write("report")
+
+        # Initialize borg repository
+        try:
+            subprocess.run(
+                ["borg", "init", "--encryption", "none", repo_dir],
+                capture_output=True,
+                check=True,
+                env={**os.environ, "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK": "yes"}
+            )
+        except subprocess.CalledProcessError as e:
+            self.log(f"✗ Failed to init borg repo: {e.stderr.decode()}", "ERROR")
+            return None, None
+
+        # Create archive
+        try:
+            subprocess.run(
+                ["borg", "create", f"{repo_dir}::test-archive", source_dir],
+                capture_output=True,
+                check=True,
+                env={**os.environ, "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK": "yes"}
+            )
+        except subprocess.CalledProcessError as e:
+            self.log(f"✗ Failed to create archive: {e.stderr.decode()}", "ERROR")
+            return None, None
+
+        self.log(f"✓ Created test repository at {repo_dir}", "SUCCESS")
+        return repo_dir, source_dir
+
+    def cleanup(self):
+        """Clean up test environment"""
+        if self.test_dir and os.path.exists(self.test_dir):
+            shutil.rmtree(self.test_dir)
+            self.log("✓ Cleaned up test environment", "SUCCESS")
+
+    def add_repository_to_ui(self, repo_path: str) -> int:
+        """Add repository to Borg UI and return repo ID"""
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.auth_token}",
+                "Content-Type": "application/json"
+            }
+
+            # Convert path for Docker if needed
+            container_path = self.path_helper.to_container_path(repo_path)
+
+            response = self.session.post(
+                f"{self.base_url}/api/repositories/",
+                headers=headers,
+                json={
+                    "name": "test-browsing",
+                    "path": container_path,
+                    "encryption": "none"
+                },
+                timeout=30
+            )
+
+            if response.status_code == 200:
+                repo_id = response.json().get("repository", {}).get("id")
+                self.log(f"✓ Added repository to UI with ID: {repo_id}", "SUCCESS")
+                return repo_id
+            else:
+                self.log(f"✗ Failed to add repository: {response.status_code} - {response.text}", "ERROR")
+                return None
+
+        except Exception as e:
+            self.log(f"✗ Error adding repository: {e}", "ERROR")
+            return None
+
+    def delete_repository_from_ui(self, repo_id: int):
+        """Delete repository from UI"""
+        try:
+            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            self.session.delete(
+                f"{self.base_url}/api/repositories/{repo_id}",
+                headers=headers,
+                timeout=10
+            )
+        except Exception:
+            pass  # Ignore cleanup errors
+
     def run_tests(self, test_repo_path: str = None):
         """Run all tests"""
         self.log(f"\n{'='*70}", "INFO")
         self.log("🧪 Archive Directory Browsing Test Suite", "INFO")
         self.log(f"{'='*70}\n", "INFO")
 
+        # Log environment detection
+        self.path_helper.log_environment(lambda msg: self.log(msg, "INFO"))
+        self.log("", "INFO")
+
         # Authenticate
         if not self.authenticate():
             return False
 
-        # Use test repository or find one
-        if test_repo_path:
-            repo_path = test_repo_path
-            # For testing, we'll need to add this repo to the UI first
-            # For now, skip this test if no repo specified
-            self.log("⚠ Test requires pre-configured repository", "WARNING")
-            return True
-
-        # Test with existing repository (require manual setup)
-        self.log("This test requires a repository with archives to be configured.", "INFO")
-        self.log("Please ensure you have:", "INFO")
-        self.log("  1. A repository added to Borg UI", "INFO")
-        self.log("  2. An archive with nested directory structure", "INFO")
-        self.log("", "INFO")
-
+        repo_id = None
         all_tests_passed = True
+
+        try:
+            # Create test environment
+            repo_path, source_dir = self.create_test_environment()
+            if not repo_path:
+                return False
+
+            # Add repository to UI
+            repo_id = self.add_repository_to_ui(repo_path)
+            if not repo_id:
+                return False
+
+            # Test root level (should show Photos, Documents)
+            self.log("\n" + "="*70, "INFO")
+            self.log("TEST 1: Root Level Directory Browsing", "INFO")
+            self.log("="*70, "INFO")
+            if not self.test_directory_level(repo_id, repo_path, "test-archive", "", expected_min_dirs=2):
+                all_tests_passed = False
+
+            # Test Photos level (should show 2023, 2024)
+            self.log("\n" + "="*70, "INFO")
+            self.log("TEST 2: Photos Directory Level", "INFO")
+            self.log("="*70, "INFO")
+            photos_path = os.path.join(source_dir, "Photos").replace(source_dir + "/", "")
+            if not self.test_directory_level(repo_id, repo_path, "test-archive", photos_path, expected_min_dirs=2):
+                all_tests_passed = False
+
+            # Test Photos/2023 level (should show January, February)
+            self.log("\n" + "="*70, "INFO")
+            self.log("TEST 3: Photos/2023 Directory Level", "INFO")
+            self.log("="*70, "INFO")
+            photos_2023_path = os.path.join(source_dir, "Photos/2023").replace(source_dir + "/", "")
+            if not self.test_directory_level(repo_id, repo_path, "test-archive", photos_2023_path, expected_min_dirs=2):
+                all_tests_passed = False
+
+            # Test Documents level (should show Work, Personal)
+            self.log("\n" + "="*70, "INFO")
+            self.log("TEST 4: Documents Directory Level", "INFO")
+            self.log("="*70, "INFO")
+            docs_path = os.path.join(source_dir, "Documents").replace(source_dir + "/", "")
+            if not self.test_directory_level(repo_id, repo_path, "test-archive", docs_path, expected_min_dirs=2):
+                all_tests_passed = False
+
+            # Test response size
+            self.log("\n" + "="*70, "INFO")
+            self.log("TEST 5: Response Size Check", "INFO")
+            self.log("="*70, "INFO")
+            if not self.test_response_size(repo_id, "test-archive", ""):
+                all_tests_passed = False
+
+        finally:
+            # Cleanup
+            if repo_id:
+                self.delete_repository_from_ui(repo_id)
+            self.cleanup()
 
         # Summary
         self.log(f"\n{'='*70}", "INFO")
@@ -285,14 +444,15 @@ class ArchiveBrowsingTester:
 
             self.log(f"\n🎯 Result: {passed}/{total} tests passed", "INFO")
         else:
-            self.log("No tests were run. Please configure a repository first.", "WARNING")
+            self.log("No tests were run.", "ERROR")
+            return False
 
-        if all_tests_passed:
-            self.log("\n✓ Archive browsing works correctly!", "SUCCESS")
+        if all_tests_passed and passed == total:
+            self.log("\n✓ All archive browsing tests passed!", "SUCCESS")
         else:
             self.log("\n⚠ Some tests failed. See details above.", "ERROR")
 
-        return all_tests_passed
+        return all_tests_passed and passed == total
 
 def main():
     import argparse
