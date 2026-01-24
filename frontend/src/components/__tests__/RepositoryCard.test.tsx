@@ -397,7 +397,7 @@ describe('RepositoryCard', () => {
       await user.click(screen.getByRole('button', { name: /Info/i }))
       expect(mockCallbacks.onViewInfo).toHaveBeenCalledTimes(1)
       expect(mockMatomoTracking.trackRepository).toHaveBeenCalledWith(
-        'view',
+        'View',
         'Test Repository',
         expect.any(Number)
       )
@@ -418,7 +418,7 @@ describe('RepositoryCard', () => {
       await user.click(screen.getByRole('button', { name: /Check/i }))
       expect(mockCallbacks.onCheck).toHaveBeenCalledTimes(1)
       expect(mockMatomoTracking.trackMaintenance).toHaveBeenCalledWith(
-        'start',
+        'Start',
         'Check',
         'Test Repository'
       )
@@ -439,7 +439,7 @@ describe('RepositoryCard', () => {
       await user.click(screen.getByRole('button', { name: /Compact/i }))
       expect(mockCallbacks.onCompact).toHaveBeenCalledTimes(1)
       expect(mockMatomoTracking.trackMaintenance).toHaveBeenCalledWith(
-        'start',
+        'Start',
         'Compact',
         'Test Repository'
       )
@@ -460,7 +460,7 @@ describe('RepositoryCard', () => {
       await user.click(screen.getByRole('button', { name: /Prune/i }))
       expect(mockCallbacks.onPrune).toHaveBeenCalledTimes(1)
       expect(mockMatomoTracking.trackMaintenance).toHaveBeenCalledWith(
-        'start',
+        'Start',
         'Prune',
         'Test Repository'
       )
@@ -481,7 +481,7 @@ describe('RepositoryCard', () => {
       await user.click(screen.getByRole('button', { name: /Backup Now/i }))
       expect(mockCallbacks.onBackupNow).toHaveBeenCalledTimes(1)
       expect(mockMatomoTracking.trackBackup).toHaveBeenCalledWith(
-        'start',
+        'Start',
         undefined,
         'Test Repository',
         expect.any(Number)
@@ -503,7 +503,7 @@ describe('RepositoryCard', () => {
       await user.click(screen.getByRole('button', { name: /View Archives/i }))
       expect(mockCallbacks.onViewArchives).toHaveBeenCalledTimes(1)
       expect(mockMatomoTracking.trackArchive).toHaveBeenCalledWith(
-        'view',
+        'View',
         'Test Repository',
         expect.any(Number)
       )
@@ -526,7 +526,7 @@ describe('RepositoryCard', () => {
       await user.click(deleteButtons[deleteButtons.length - 1])
       expect(mockCallbacks.onDelete).toHaveBeenCalledTimes(1)
       expect(mockMatomoTracking.trackRepository).toHaveBeenCalledWith(
-        'delete',
+        'Delete',
         'Test Repository',
         expect.any(Number)
       )
