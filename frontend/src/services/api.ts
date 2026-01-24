@@ -328,7 +328,8 @@ export const sshKeysAPI = {
 
   // Connection management
   deploySSHKey: (id: number, data: ApiData) => api.post(`/ssh-keys/${id}/deploy`, data),
-  testSSHConnection: (id: number, data: ApiData) => api.post(`/ssh-keys/${id}/test-connection`, data),
+  testSSHConnection: (id: number, data: ApiData) =>
+    api.post(`/ssh-keys/${id}/test-connection`, data),
   testExistingConnection: (connectionId: number) =>
     api.post(`/ssh-keys/connections/${connectionId}/test`),
   getSSHConnections: () => api.get('/ssh-keys/connections'),

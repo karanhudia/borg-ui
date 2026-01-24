@@ -423,7 +423,7 @@ const Settings: React.FC = () => {
                     }
                     helperText={
                       changePasswordForm.confirm_password !== '' &&
-                        changePasswordForm.new_password !== changePasswordForm.confirm_password
+                      changePasswordForm.new_password !== changePasswordForm.confirm_password
                         ? 'Passwords do not match'
                         : ''
                     }

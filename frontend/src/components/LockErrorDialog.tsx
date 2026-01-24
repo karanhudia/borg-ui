@@ -35,7 +35,7 @@ export default function LockErrorDialog({
     if (
       !window.confirm(
         'Are you CERTAIN no backup or operation is currently running on this repository? ' +
-        'Breaking the lock while an operation is running can corrupt your repository!'
+          'Breaking the lock while an operation is running can corrupt your repository!'
       )
     ) {
       return
@@ -48,8 +48,8 @@ export default function LockErrorDialog({
       onLockBroken?.()
       onClose()
     } catch (
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    error: any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      error: any
     ) {
       toast.error(error.response?.data?.detail || 'Failed to break lock')
     } finally {

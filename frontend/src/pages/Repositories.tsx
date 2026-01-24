@@ -2392,7 +2392,7 @@ export default function Repositories() {
 
               {/* Storage Statistics */}
               {repositoryInfo.data.info?.cache?.stats &&
-                repositoryInfo.data.info.cache.stats.unique_size > 0 ? (
+              repositoryInfo.data.info.cache.stats.unique_size > 0 ? (
                 <>
                   <Typography variant="h6" fontWeight={600} sx={{ mt: 1 }}>
                     Storage Statistics
@@ -2786,11 +2786,11 @@ export default function Repositories() {
         sshConfig={
           repositoryForm.repository_type !== 'local' && repositoryForm.ssh_key_id
             ? {
-              ssh_key_id: repositoryForm.ssh_key_id,
-              host: repositoryForm.host,
-              username: repositoryForm.username,
-              port: repositoryForm.port,
-            }
+                ssh_key_id: repositoryForm.ssh_key_id,
+                host: repositoryForm.host,
+                username: repositoryForm.username,
+                port: repositoryForm.port,
+              }
             : undefined
         }
         selectMode="both"
@@ -2877,11 +2877,11 @@ export default function Repositories() {
         sshConfig={
           repositoryForm.repository_type !== 'local' && repositoryForm.ssh_key_id
             ? {
-              ssh_key_id: repositoryForm.ssh_key_id,
-              host: repositoryForm.host,
-              username: repositoryForm.username,
-              port: repositoryForm.port,
-            }
+                ssh_key_id: repositoryForm.ssh_key_id,
+                host: repositoryForm.host,
+                username: repositoryForm.username,
+                port: repositoryForm.port,
+              }
             : undefined
         }
         selectMode="both"

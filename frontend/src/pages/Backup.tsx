@@ -318,16 +318,18 @@ const Backup: React.FC = () => {
             </Button>
           </Stack>
 
-          {// eslint-disable-next-line @typescript-eslint/no-explicit-any
+          {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             repositoriesData?.data?.repositories?.some((repo: any) => repo.mode === 'observe') &&
-            !loadingRepositories && (
-              <Alert severity="info" sx={{ mt: 2 }}>
-                <Typography variant="body2">
-                  Some repositories are hidden because they are configured for observability only.
-                  To create backups, switch them to full mode in Repository settings.
-                </Typography>
-              </Alert>
-            )}
+              !loadingRepositories && (
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  <Typography variant="body2">
+                    Some repositories are hidden because they are configured for observability only.
+                    To create backups, switch them to full mode in Repository settings.
+                  </Typography>
+                </Alert>
+              )
+          }
 
           {repositoriesData?.data?.repositories?.length === 0 && !loadingRepositories && (
             <Alert severity="warning" sx={{ mt: 2 }}>
@@ -513,7 +515,7 @@ const Backup: React.FC = () => {
                       </Typography>
                       <Typography variant="body2" fontWeight={500}>
                         {job.progress_details?.compressed_size !== undefined &&
-                          job.progress_details?.compressed_size !== null
+                        job.progress_details?.compressed_size !== null
                           ? formatBytesUtil(job.progress_details.compressed_size)
                           : 'N/A'}
                       </Typography>
@@ -524,7 +526,7 @@ const Backup: React.FC = () => {
                       </Typography>
                       <Typography variant="body2" fontWeight={500} color="success.main">
                         {job.progress_details?.deduplicated_size !== undefined &&
-                          job.progress_details?.deduplicated_size !== null
+                        job.progress_details?.deduplicated_size !== null
                           ? formatBytesUtil(job.progress_details.deduplicated_size)
                           : 'N/A'}
                       </Typography>

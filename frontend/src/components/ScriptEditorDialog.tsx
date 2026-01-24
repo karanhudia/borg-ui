@@ -54,8 +54,6 @@ export default function ScriptEditorDialog({
     execution_time: number
   } | null>(null)
 
-
-
   const handleTestRun = async () => {
     if (!value || value.trim() === '') {
       return

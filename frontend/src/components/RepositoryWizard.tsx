@@ -301,8 +301,6 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     }
   }, [mode, repository, sshConnections, repoSshConnectionId, repositoryLocation])
 
-
-
   const getSteps = () => {
     if (mode === 'import') {
       return ['Repository Location', 'Security', 'Review']
@@ -1119,16 +1117,16 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         sshConfig={
           repositoryLocation === 'ssh' && repoSshConnectionId
             ? (() => {
-              const conn = sshConnections.find((c) => c.id === repoSshConnectionId)
-              return conn
-                ? {
-                  ssh_key_id: conn.ssh_key_id,
-                  host: conn.host,
-                  username: conn.username,
-                  port: conn.port,
-                }
-                : undefined
-            })()
+                const conn = sshConnections.find((c) => c.id === repoSshConnectionId)
+                return conn
+                  ? {
+                      ssh_key_id: conn.ssh_key_id,
+                      host: conn.host,
+                      username: conn.username,
+                      port: conn.port,
+                    }
+                  : undefined
+              })()
             : undefined
         }
         selectMode="directories"
@@ -1153,11 +1151,11 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
           const conn = sshConnections.find((c) => c.id === sourceSshConnectionId)
           const config = conn
             ? {
-              ssh_key_id: conn.ssh_key_id,
-              host: conn.host,
-              username: conn.username,
-              port: conn.port,
-            }
+                ssh_key_id: conn.ssh_key_id,
+                host: conn.host,
+                username: conn.username,
+                port: conn.port,
+              }
             : undefined
 
           return (

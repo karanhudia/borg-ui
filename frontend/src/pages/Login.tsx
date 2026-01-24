@@ -72,10 +72,11 @@ export default function Login() {
                 name="username"
                 type="text"
                 autoComplete="username"
-                className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${errors.username
+                className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${
+                  errors.username
                     ? 'border-danger-300 dark:border-danger-600'
                     : 'border-gray-300 dark:border-gray-600'
-                  } placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-[#27272a] rounded-t-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm`}
+                } placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-[#27272a] rounded-t-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm`}
                 placeholder="Username"
               />
               {errors.username && (
@@ -92,10 +93,11 @@ export default function Login() {
                 name="password"
                 type="password"
                 autoComplete="current-password"
-                className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${errors.password
+                className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${
+                  errors.password
                     ? 'border-danger-300 dark:border-danger-600'
                     : 'border-gray-300 dark:border-gray-600'
-                  } placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-[#27272a] rounded-b-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm`}
+                } placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-[#27272a] rounded-b-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm`}
                 placeholder="Password"
               />
               {errors.password && (
