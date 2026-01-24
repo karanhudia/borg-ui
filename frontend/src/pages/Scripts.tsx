@@ -345,8 +345,8 @@ export default function Scripts() {
                       script.is_template
                         ? 'Cannot delete templates'
                         : script.usage_count > 0
-                        ? 'Script is used by repositories (will clean up orphaned associations automatically)'
-                        : 'Delete Script'
+                          ? 'Script is used by repositories (will clean up orphaned associations automatically)'
+                          : 'Delete Script'
                     }
                   >
                     <span>
