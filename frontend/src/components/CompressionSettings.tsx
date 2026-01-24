@@ -12,92 +12,12 @@ import {
   Alert,
   Stack,
 } from '@mui/material'
+import { buildCompressionString, parseCompressionString } from '../utils/compressionUtils'
 
 interface CompressionSettingsProps {
   value: string // The full compression string (e.g., "auto,lz4,6")
   onChange: (compressionString: string) => void
   disabled?: boolean
-}
-
-// Utility functions
-const buildCompressionString = (
-  algorithm: string,
-  level: string,
-  autoDetect: boolean,
-  obfuscate: string
-): string => {
-  let parts: string[] = []
-
-  // Add obfuscate prefix if specified
-  if (obfuscate) {
-    parts.push('obfuscate', obfuscate)
-  }
-
-  // Add auto prefix if enabled (but not if algorithm is already 'auto')
-  if (autoDetect && algorithm !== 'auto') {
-    parts.push('auto')
-  }
-
-  // Add algorithm (unless it's 'none')
-  if (algorithm !== 'none') {
-    if (algorithm === 'auto') {
-      parts.push('auto', 'lz4') // Default to lz4 as fallback
-    } else {
-      parts.push(algorithm)
-      if (level) {
-        parts.push(level)
-      }
-    }
-  } else {
-    parts.push('none')
-  }
-
-  return parts.join(',')
-}
-
-const parseCompressionString = (
-  compression: string
-): {
-  algorithm: string
-  level: string
-  autoDetect: boolean
-  obfuscate: string
-} => {
-  const parts = compression.split(',')
-  let algorithm = 'lz4'
-  let level = ''
-  let autoDetect = false
-  let obfuscate = ''
-
-  let i = 0
-
-  // Check for obfuscate
-  if (parts[i] === 'obfuscate') {
-    i++
-    if (i < parts.length) {
-      obfuscate = parts[i]
-      i++
-    }
-  }
-
-  // Check for auto
-  if (parts[i] === 'auto') {
-    autoDetect = true
-    i++
-  }
-
-  // Get algorithm
-  if (i < parts.length) {
-    algorithm = parts[i]
-    i++
-  }
-
-  // Get level (if not 'auto' algorithm and there's another part)
-  if (algorithm !== 'auto' && i < parts.length) {
-    level = parts[i]
-  }
-
-  return { algorithm, level, autoDetect, obfuscate }
 }
 
 export default function CompressionSettings({
