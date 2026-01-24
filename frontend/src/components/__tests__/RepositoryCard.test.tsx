@@ -64,12 +64,35 @@ describe('RepositoryCard', () => {
     trackSSH: vi.fn(),
     trackSettings: vi.fn(),
     trackAuth: vi.fn(),
-    EventCategory: {},
+    EventCategory: {
+      REPOSITORY: 'Repository',
+      BACKUP: 'Backup',
+      ARCHIVE: 'Archive',
+      MOUNT: 'Mount',
+      MAINTENANCE: 'Maintenance',
+      SSH: 'SSH Connection',
+      SETTINGS: 'Settings',
+      AUTH: 'Authentication',
+      NAVIGATION: 'Navigation',
+    } as const,
     EventAction: {
-      VIEW: 'view',
-      START: 'start',
-      DELETE: 'delete',
-    },
+      CREATE: 'Create',
+      EDIT: 'Edit',
+      DELETE: 'Delete',
+      VIEW: 'View',
+      START: 'Start',
+      STOP: 'Stop',
+      MOUNT: 'Mount',
+      UNMOUNT: 'Unmount',
+      DOWNLOAD: 'Download',
+      UPLOAD: 'Upload',
+      TEST: 'Test',
+      LOGIN: 'Login',
+      LOGOUT: 'Logout',
+      SEARCH: 'Search',
+      FILTER: 'Filter',
+      EXPORT: 'Export',
+    } as const,
   }
 
   const mockMaintenanceJobs = {
@@ -617,7 +640,7 @@ describe('RepositoryCard', () => {
 
     it('calls onJobCompleted and invalidates queries when jobs complete', async () => {
       // Start with running jobs
-      const { rerender, queryClient } = renderWithProviders(
+      const { rerender } = renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={true}
