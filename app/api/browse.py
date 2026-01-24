@@ -55,7 +55,8 @@ async def browse_archive_contents(
                 path="",  # Always fetch all items
                 remote_path=repository.remote_path,
                 passphrase=repository.passphrase,
-                max_lines=max_items  # Kill borg process if this limit is exceeded
+                max_lines=max_items,  # Kill borg process if this limit is exceeded
+                bypass_lock=repository.bypass_lock
             )
 
             # Check if line limit was exceeded (borg process was killed to prevent OOM)

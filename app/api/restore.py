@@ -168,7 +168,8 @@ async def get_archive_contents(
                 archive_name,
                 path="",  # Always fetch all items for caching
                 remote_path=repository.remote_path,
-                passphrase=repository.passphrase
+                passphrase=repository.passphrase,
+                bypass_lock=repository.bypass_lock
             )
 
             # Parse all items
@@ -447,4 +448,4 @@ async def cancel_restore(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to cancel restore"
-        ) 
+        )

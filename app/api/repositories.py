@@ -477,17 +477,17 @@ async def create_repository(
             repo_path = f"ssh://{repo_data.username}@{repo_data.host}:{repo_data.port}/{repo_path.lstrip('/')}"
         else:
             raise HTTPException(status_code=400, detail="Invalid repository type. Must be 'local', 'ssh', or 'sftp'")
-        
+
         # Check if repository name already exists
         existing_repo = db.query(Repository).filter(Repository.name == repo_data.name).first()
         if existing_repo:
             raise HTTPException(status_code=400, detail="Repository name already exists")
-        
+
         # Check if repository path already exists
         existing_path = db.query(Repository).filter(Repository.path == repo_path).first()
         if existing_path:
             raise HTTPException(status_code=400, detail="Repository path already exists")
-        
+
         # Create repository directory if local (but not if using /local mount)
         if repo_data.repository_type == "local":
             # Skip directory creation if path is within /local mount (host filesystem)
@@ -549,7 +549,7 @@ async def create_repository(
                         detail=f"Parent directory is not writable: {parent_dir}. "
                                f"On your host machine, run: sudo chown -R $(whoami) {parent_dir.replace('/local', '')}"
                     )
-        
+
         # Initialize Borg repository
         init_result = await initialize_borg_repository(
             repo_path,
@@ -733,7 +733,8 @@ async def import_repository(
             repo_path,
             repo_data.passphrase,
             repo_data.ssh_key_id if repo_data.repository_type in ["ssh", "sftp"] else None,
-            repo_data.remote_path
+            repo_data.remote_path,
+            repo_data.bypass_lock
         )
 
         if not verify_result["success"]:
@@ -926,7 +927,7 @@ async def get_repository(
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
             raise HTTPException(status_code=404, detail="Repository not found")
-        
+
         # Get repository statistics
         stats = await get_repository_stats(repository.path, bypass_lock=repository.bypass_lock)
 
@@ -962,12 +963,12 @@ async def update_repository(
     """Update repository"""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     try:
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
             raise HTTPException(status_code=404, detail="Repository not found")
-        
+
         # Update fields
         if repo_data.name is not None:
             # Check if name already exists
@@ -978,7 +979,7 @@ async def update_repository(
             if existing_repo:
                 raise HTTPException(status_code=400, detail="Repository name already exists")
             repository.name = repo_data.name
-        
+
         if repo_data.path is not None:
             # Check if path already exists
             existing_path = db.query(Repository).filter(
@@ -988,7 +989,7 @@ async def update_repository(
             if existing_path:
                 raise HTTPException(status_code=400, detail="Repository path already exists")
             repository.path = repo_data.path
-        
+
         if repo_data.compression is not None:
             repository.compression = repo_data.compression
 
@@ -1042,9 +1043,9 @@ async def update_repository(
 
         repository.updated_at = datetime.utcnow()
         db.commit()
-        
+
         logger.info("Repository updated", repo_id=repo_id, user=current_user.username)
-        
+
         return {
             "success": True,
             "message": "Repository updated successfully"
@@ -1064,12 +1065,12 @@ async def delete_repository(
     """Delete repository (admin only)"""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     try:
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
             raise HTTPException(status_code=404, detail="Repository not found")
-        
+
         # Check if repository has archives
         archives_result = await borg.list_archives(repository.path, remote_path=repository.remote_path, bypass_lock=repository.bypass_lock)
         if archives_result["success"]:
@@ -1077,18 +1078,18 @@ async def delete_repository(
                 archives_data = archives_result["stdout"]
                 if archives_data and len(archives_data) > 0:
                     raise HTTPException(
-                        status_code=400, 
+                        status_code=400,
                         detail="Cannot delete repository with existing archives. Please delete all archives first."
                     )
             except:
                 pass
-        
+
         # Delete repository from database
         db.delete(repository)
         db.commit()
-        
+
         logger.info("Repository deleted", repo_id=repo_id, user=current_user.username)
-        
+
         return {
             "success": True,
             "message": "Repository deleted successfully"
@@ -1335,7 +1336,7 @@ async def get_repository_statistics(
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
             raise HTTPException(status_code=404, detail="Repository not found")
-        
+
         # Get detailed statistics
         stats = await get_repository_stats(repository.path, bypass_lock=repository.bypass_lock)
 
@@ -1436,14 +1437,18 @@ async def check_remote_borg_installation(host: str, username: str, port: int, ss
             except Exception as e:
                 logger.warning("Failed to clean up temp SSH key", error=str(e))
 
-async def verify_existing_repository(path: str, passphrase: str = None, ssh_key_id: int = None, remote_path: str = None) -> Dict[str, Any]:
+async def verify_existing_repository(path: str, passphrase: str = None, ssh_key_id: int = None, remote_path: str = None, bypass_lock: bool = False) -> Dict[str, Any]:
     """Verify an existing Borg repository by running borg info"""
     temp_key_file = None
     try:
-        logger.info("Verifying existing repository", path=path, has_passphrase=bool(passphrase))
+        logger.info("Verifying existing repository", path=path, has_passphrase=bool(passphrase), bypass_lock=bypass_lock)
 
         # Build borg info command
         cmd = ["borg", "info", "--json"]
+
+        # Add bypass-lock if specified (for read-only repositories)
+        if bypass_lock:
+            cmd.append("--bypass-lock")
 
         # Add remote-path if specified
         if remote_path:
