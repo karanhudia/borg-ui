@@ -48,7 +48,8 @@ import {
 import { notificationsAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { formatDate } from '../utils/dateUtils'
-import MultiRepositorySelector, { Repository } from './MultiRepositorySelector'
+import { Repository } from '../types'
+import MultiRepositorySelector from './MultiRepositorySelector'
 
 interface NotificationSetting {
   id: number

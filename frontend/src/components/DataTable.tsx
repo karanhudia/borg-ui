@@ -204,7 +204,7 @@ export default function DataTable<T>({
                   }}
                 >
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  {column.render ? column.render(row) : (row as Record<string, unknown>)[column.id]}
+                  {column.render ? column.render(row) : ((row as Record<string, unknown>)[column.id] as React.ReactNode)}
                 </TableCell>
               ))}
               {actions && actions.length > 0 && (

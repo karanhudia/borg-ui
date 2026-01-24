@@ -10,40 +10,17 @@ import {
   CircularProgress,
   Stack,
   LinearProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
 } from '@mui/material'
 import { Activity, MemoryStick, Cpu, Clock, CheckCircle, HardDrive } from 'lucide-react'
 import BackupJobsTable from '../components/BackupJobsTable'
 import StatusBadge from '../components/StatusBadge'
 import { TerminalLogViewer } from '../components/TerminalLogViewer'
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material'
-
-interface SystemMetrics {
-  cpu_usage: number
-  memory_total: number
-  memory_available: number
-  memory_usage: number
-  disk_total: number
-  disk_free: number
-  disk_usage: number
-}
-
-interface BackupJob {
-  id: string | number
-  repository: string
-  status: string
-  progress?: number
-  started_at?: string
-  completed_at?: string
-  triggered_by?: string // 'manual' or 'schedule'
-  schedule_id?: number | null
-  has_logs?: boolean
-  error_message?: string
-}
-
-interface DashboardStatus {
-  system_metrics?: SystemMetrics
-  recent_jobs?: BackupJob[]
-}
+import { BackupJob, DashboardStatus } from '../types'
 
 export default function Dashboard() {
   const [selectedJob, setSelectedJob] = React.useState<BackupJob | null>(null)

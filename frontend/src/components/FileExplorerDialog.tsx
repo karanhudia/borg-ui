@@ -105,26 +105,6 @@ export default function FileExplorerDialog({
   const theme = useTheme()
   const fullScreen = useMediaQuery(theme.breakpoints.down('md'))
 
-  useEffect(() => {
-    if (open) {
-      // Reset to initial state when dialog opens
-      setCurrentPath(initialPath)
-      setActiveConnectionType(connectionType)
-      setActiveSshConfig(sshConfig)
-      setSelectedPaths([])
-      setSearchTerm('')
-      setError(null)
-
-      // Load the initial directory
-      loadDirectory(initialPath)
-
-      // Load SSH connections to show mount points
-      if (connectionType === 'local') {
-        loadSSHConnections()
-      }
-    }
-  }, [open, initialPath, connectionType, sshConfig, loadDirectory])
-
   const loadSSHConnections = async () => {
     try {
       const response = await sshKeysAPI.getSSHConnections()
@@ -182,6 +162,24 @@ export default function FileExplorerDialog({
     },
     [activeConnectionType, activeSshConfig]
   )
+
+  // Initial load
+  useEffect(() => {
+    if (open) {
+      if (initialPath) {
+        // Use provided configuration for initial load
+        loadDirectory(initialPath, connectionType, sshConfig)
+      } else {
+        // Load default/root path
+        loadDirectory('', connectionType, sshConfig)
+      }
+
+      // Load SSH connections to show mount points
+      if (connectionType === 'local') {
+        loadSSHConnections()
+      }
+    }
+  }, [open, initialPath, connectionType, sshConfig, loadDirectory])
 
   const handleItemClick = (item: FileSystemItem) => {
     if (item.is_mount_point && item.ssh_connection) {

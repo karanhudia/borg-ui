@@ -69,10 +69,7 @@ export default function RepositoryScriptsTab({
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [selectedScriptId, setSelectedScriptId] = useState<number | ''>('')
 
-  useEffect(() => {
-    fetchAssignedScripts()
-    fetchAvailableScripts()
-  }, [fetchAssignedScripts, fetchAvailableScripts])
+
 
   const fetchAssignedScripts = React.useCallback(async () => {
     try {
@@ -105,6 +102,11 @@ export default function RepositoryScriptsTab({
       console.error('Failed to fetch available scripts:', error)
     }
   }, [])
+
+  useEffect(() => {
+    fetchAssignedScripts()
+    fetchAvailableScripts()
+  }, [fetchAssignedScripts, fetchAvailableScripts])
 
   const handleAddScript = async (assignmentData: AssignmentData) => {
     if (!selectedScriptId) return

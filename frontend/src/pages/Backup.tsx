@@ -32,38 +32,11 @@ import {
 } from '../utils/dateUtils'
 import { generateBorgCreateCommand } from '../utils/borgUtils'
 import LockErrorDialog from '../components/LockErrorDialog'
+import { BackupJob } from '../types'
 import BackupJobsTable from '../components/BackupJobsTable'
 import StatusBadge from '../components/StatusBadge'
 import { TerminalLogViewer } from '../components/TerminalLogViewer'
 import { useMatomo } from '../hooks/useMatomo'
-
-interface BackupJob {
-  id: string
-  repository: string
-  status: 'running' | 'completed' | 'completed_with_warnings' | 'failed' | 'cancelled'
-  started_at: string
-  completed_at?: string
-  progress?: number
-  total_files?: number
-  processed_files?: number
-  total_size?: string
-  processed_size?: string
-  error_message?: string
-  has_logs?: boolean // Indicates if logs are available for this job
-  triggered_by?: string // 'manual' or 'schedule'
-  schedule_id?: number | null
-  progress_details?: {
-    original_size: number
-    compressed_size: number
-    deduplicated_size: number
-    nfiles: number
-    current_file: string
-    progress_percent: number
-    backup_speed: number
-    total_expected_size: number
-    estimated_time_remaining: number
-  }
-}
 
 const Backup: React.FC = () => {
   const [selectedRepository, setSelectedRepository] = useState<string>('')
@@ -436,7 +409,7 @@ const Backup: React.FC = () => {
                       color="error"
                       size="small"
                       startIcon={<Square size={16} />}
-                      onClick={() => handleCancelBackup(job.id)}
+                      onClick={() => handleCancelBackup(String(job.id))}
                       disabled={cancelBackupMutation.isPending}
                     >
                       Cancel
@@ -626,10 +599,10 @@ const Backup: React.FC = () => {
               downloadLogs: true,
             }}
             onViewLogs={handleViewLogs}
-            onCancelJob={(job) => handleCancelBackup(job.id)}
+            onCancelJob={(job) => handleCancelBackup(String(job.id))}
             onBreakLock={handleBreakLock}
             onDownloadLogs={handleDownloadLogs}
-            getRowKey={(job) => job.id}
+            getRowKey={(job) => String(job.id)}
             headerBgColor="background.default"
             enableHover={true}
             emptyState={{
