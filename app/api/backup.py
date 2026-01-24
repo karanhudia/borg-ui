@@ -47,7 +47,7 @@ async def start_backup(
             backup_service.execute_backup(
                 backup_job.id,
                 backup_request.repository,
-                db
+                None  # Create new session for background task
             )
         )
 

@@ -1143,7 +1143,7 @@ async def check_repository(
             check_service.execute_check(
                 check_job.id,
                 repo_id,
-                db
+                None  # Create new session for background task
             )
         )
 
@@ -1203,7 +1203,7 @@ async def compact_repository(
             compact_service.execute_compact(
                 compact_job.id,
                 repo_id,
-                db
+                None  # Create new session for background task
             )
         )
 

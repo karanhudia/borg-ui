@@ -271,7 +271,7 @@ async def delete_archive(
                 delete_job.id,
                 repo.id,
                 archive_id,
-                db
+                None  # Create new session for background task
             )
         )
 
