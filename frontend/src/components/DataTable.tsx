@@ -186,8 +186,8 @@ export default function DataTable<T>({
                 }),
                 ...(enablePointer &&
                   onRowClick && {
-                    cursor: 'pointer',
-                  }),
+                  cursor: 'pointer',
+                }),
                 '&:last-child td': {
                   borderBottom: 0,
                 },
@@ -203,7 +203,7 @@ export default function DataTable<T>({
                     minWidth: column.minWidth,
                   }}
                 >
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+
                   {column.render
                     ? column.render(row)
                     : ((row as Record<string, unknown>)[column.id] as React.ReactNode)}
