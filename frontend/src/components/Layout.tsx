@@ -144,9 +144,7 @@ const navigationSections: NavigationSection[] = [
         name: 'Advanced',
         icon: Zap,
         key: 'dashboard' as const,
-        subItems: [
-          { name: 'Beta', href: '/settings/beta', icon: Zap },
-        ],
+        subItems: [{ name: 'Beta', href: '/settings/beta', icon: Zap }],
       },
     ],
   },
@@ -185,14 +183,29 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     if (location.pathname.startsWith('/settings')) {
       // Determine which settings submenu should be expanded
       const path = location.pathname
-      if (path.includes('/account') || path.includes('/appearance') || path.includes('/notifications') || path.includes('/preferences')) {
-        setExpandedMenus(prev => ({ ...prev, 'Personal': true }))
-      } else if (path.includes('/system') || path.includes('/cache') || path.includes('/logs') || path.includes('/packages')) {
-        setExpandedMenus(prev => ({ ...prev, 'System': true }))
-      } else if (path.includes('/mounts') || path.includes('/scripts') || path.includes('/users') || path.includes('/export')) {
-        setExpandedMenus(prev => ({ ...prev, 'Management': true }))
+      if (
+        path.includes('/account') ||
+        path.includes('/appearance') ||
+        path.includes('/notifications') ||
+        path.includes('/preferences')
+      ) {
+        setExpandedMenus((prev) => ({ ...prev, Personal: true }))
+      } else if (
+        path.includes('/system') ||
+        path.includes('/cache') ||
+        path.includes('/logs') ||
+        path.includes('/packages')
+      ) {
+        setExpandedMenus((prev) => ({ ...prev, System: true }))
+      } else if (
+        path.includes('/mounts') ||
+        path.includes('/scripts') ||
+        path.includes('/users') ||
+        path.includes('/export')
+      ) {
+        setExpandedMenus((prev) => ({ ...prev, Management: true }))
       } else if (path.includes('/beta')) {
-        setExpandedMenus(prev => ({ ...prev, 'Advanced': true }))
+        setExpandedMenus((prev) => ({ ...prev, Advanced: true }))
       }
     }
   }, [location.pathname])
@@ -215,9 +228,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }, [])
 
   const toggleMenu = (menuName: string) => {
-    setExpandedMenus(prev => ({
+    setExpandedMenus((prev) => ({
       ...prev,
-      [menuName]: !prev[menuName]
+      [menuName]: !prev[menuName],
     }))
   }
 
@@ -344,11 +357,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                               color: isAnySubItemActive ? 'primary.main' : 'inherit',
                             }}
                           />
-                          {isExpanded ? (
-                            <ChevronDown size={16} />
-                          ) : (
-                            <ChevronRight size={16} />
-                          )}
+                          {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                         </ListItemButton>
                       </ListItem>
 
