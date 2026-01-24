@@ -287,12 +287,13 @@ class ArchiveBrowsingTester:
             return None, None
 
         # Create archive (backup contents of source_dir, not source_dir itself)
-        # Use -C to change directory before creating archive
+        # Change to source_dir and backup relative paths so they appear at root level
         try:
             subprocess.run(
-                ["borg", "create", "-C", source_dir, f"{repo_dir}::test-archive", "."],
+                ["borg", "create", f"{repo_dir}::test-archive", "Photos", "Documents"],
                 capture_output=True,
                 check=True,
+                cwd=source_dir,  # Run from source_dir so paths are relative
                 env={**os.environ, "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK": "yes"}
             )
         except subprocess.CalledProcessError as e:
