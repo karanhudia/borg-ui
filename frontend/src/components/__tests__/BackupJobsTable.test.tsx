@@ -158,12 +158,48 @@ describe('BackupJobsTable', () => {
 
     it('displays type for all job types correctly', () => {
       const allTypesJobs = [
-        { id: 1, repository: '/test', type: 'backup', status: 'completed', started_at: '2024-01-20T10:00:00Z' },
-        { id: 2, repository: '/test', type: 'restore', status: 'completed', started_at: '2024-01-20T10:00:00Z' },
-        { id: 3, repository: '/test', type: 'check', status: 'completed', started_at: '2024-01-20T10:00:00Z' },
-        { id: 4, repository: '/test', type: 'compact', status: 'completed', started_at: '2024-01-20T10:00:00Z' },
-        { id: 5, repository: '/test', type: 'prune', status: 'completed', started_at: '2024-01-20T10:00:00Z' },
-        { id: 6, repository: '/test', type: 'package', status: 'completed', started_at: '2024-01-20T10:00:00Z' },
+        {
+          id: 1,
+          repository: '/test',
+          type: 'backup',
+          status: 'completed',
+          started_at: '2024-01-20T10:00:00Z',
+        },
+        {
+          id: 2,
+          repository: '/test',
+          type: 'restore',
+          status: 'completed',
+          started_at: '2024-01-20T10:00:00Z',
+        },
+        {
+          id: 3,
+          repository: '/test',
+          type: 'check',
+          status: 'completed',
+          started_at: '2024-01-20T10:00:00Z',
+        },
+        {
+          id: 4,
+          repository: '/test',
+          type: 'compact',
+          status: 'completed',
+          started_at: '2024-01-20T10:00:00Z',
+        },
+        {
+          id: 5,
+          repository: '/test',
+          type: 'prune',
+          status: 'completed',
+          started_at: '2024-01-20T10:00:00Z',
+        },
+        {
+          id: 6,
+          repository: '/test',
+          type: 'package',
+          status: 'completed',
+          started_at: '2024-01-20T10:00:00Z',
+        },
       ]
 
       renderWithProviders(<BackupJobsTable jobs={allTypesJobs} showTypeColumn={true} />)

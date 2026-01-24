@@ -60,11 +60,7 @@ interface CustomRenderOptions extends Omit<RenderOptions, 'wrapper'> {
  */
 export function renderWithProviders(
   ui: ReactElement,
-  {
-    queryClient,
-    initialRoute = '/',
-    ...renderOptions
-  }: CustomRenderOptions = {}
+  { queryClient, initialRoute = '/', ...renderOptions }: CustomRenderOptions = {}
 ) {
   // Set initial route if provided
   if (initialRoute !== '/') {
