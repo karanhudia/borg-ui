@@ -82,7 +82,7 @@ export default function PathSelectorField({
           }
         }}
         title={`Select ${selectMode === 'directories' ? 'Directory' : selectMode === 'files' ? 'File' : 'Path'}`}
-        initialPath="/"
+        initialPath={value || '/'}
         multiSelect={multiSelect}
         connectionType={connectionType}
         sshConfig={sshConfig}

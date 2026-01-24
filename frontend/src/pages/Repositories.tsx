@@ -50,6 +50,7 @@ import CompactWarningDialog from '../components/CompactWarningDialog'
 import RepositoryCard from '../components/RepositoryCard'
 import AdvancedRepositoryOptions from '../components/AdvancedRepositoryOptions'
 import RepositoryWizard from '../components/RepositoryWizard'
+import PathSelectorField from '../components/PathSelectorField'
 
 interface Repository {
   id: number
@@ -1813,12 +1814,14 @@ export default function Repositories() {
                 fullWidth
               />
 
-              <TextField
+              <PathSelectorField
                 label="Path"
                 value={editForm.path}
-                onChange={(e) => setEditForm({ ...editForm, path: e.target.value })}
+                onChange={(value) => setEditForm({ ...editForm, path: value })}
+                placeholder="/path/to/repository"
                 required
-                fullWidth
+                selectMode="directories"
+                size="medium"
               />
 
               {/* Repository Mode */}
