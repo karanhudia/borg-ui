@@ -118,9 +118,14 @@ class RestoreService:
                     *cmd,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
+                    stdin=asyncio.subprocess.PIPE,  # Pipe stdin so we can close it
                     cwd=destination,
                     env=env
                 )
+                
+                # Close stdin immediately to prevent hanging on prompts
+                if process.stdin:
+                    process.stdin.close()
 
                 # Track this process so it can be cancelled
                 self.running_processes[job_id] = process

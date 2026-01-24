@@ -9,7 +9,6 @@ from sqlalchemy.pool import StaticPool
 from app.database.database import Base
 from app.database.models import User, Repository
 
-
 @pytest.fixture(scope="function")
 def db_engine():
     """Create an in-memory SQLite database engine for testing"""
@@ -26,7 +25,7 @@ def db_engine():
 
 @pytest.fixture(scope="function")
 def db_session(db_engine):
-    """Create a new database session for a test"""
+    """Create a new database session for a test with rollback"""
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=db_engine)
     session = TestingSessionLocal()
 
@@ -36,6 +35,18 @@ def db_session(db_engine):
         session.rollback()
         session.close()
 
+@pytest.fixture(scope="function")
+def db_session_commit(db_engine):
+    """Create a new database session that commits changes (for background task tests)"""
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=db_engine)
+    session = TestingSessionLocal()
+
+    try:
+        yield session
+    finally:
+        # We don't rollback here because we want the background task to see the changes
+        # But we do close the session
+        session.close()
 
 @pytest.fixture
 def sample_user(db_session: Session):
@@ -61,6 +72,7 @@ def sample_repository(db_session: Session):
         name="Test Repository",
         path="/tmp/test-repo",
         encryption="repokey",
+        passphrase="testpassword",  # Added passphrase
         compression="lz4",
         repository_type="local",
         source_directories=json.dumps(["/home/user/documents"]),
@@ -81,6 +93,7 @@ def multiple_repositories(db_session: Session):
             name=f"Repo {i}",
             path=f"/tmp/repo-{i}",
             encryption="none" if i % 2 == 0 else "repokey",
+            passphrase="testpassword" if i % 2 != 0 else None,  # Added passphrase for encrypted repos
             compression="lz4",
             repository_type="local",
             source_directories=json.dumps([f"/home/user/repo{i}"]),

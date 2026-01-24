@@ -14,6 +14,8 @@ os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="borg-test-data-")
 os.environ["DATABASE_URL"] = f"sqlite:///{os.environ['DATA_DIR']}/test.db"
 os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
 os.environ["ENVIRONMENT"] = "test"
+os.environ["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+os.environ["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
 
 # Add parent directory to path so we can import from app/
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
