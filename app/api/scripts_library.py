@@ -558,10 +558,10 @@ async def assign_script_to_repository(
 
     db.add(repo_script)
 
-    # Update script usage count
-    script.usage_count = db.query(RepositoryScript).filter(
+    # Update script usage count (count unique repositories, not total associations)
+    script.usage_count = db.query(RepositoryScript.repository_id).filter(
         RepositoryScript.script_id == assignment.script_id
-    ).count() + 1
+    ).distinct().count()
     script.last_used_at = datetime.utcnow()
 
     db.commit()
@@ -642,12 +642,12 @@ async def remove_script_from_repository(
     # Delete assignment
     db.delete(repo_script)
 
-    # Update script usage count
+    # Update script usage count (count unique repositories, not total associations)
     script = db.query(Script).filter(Script.id == script_id).first()
     if script:
-        script.usage_count = db.query(RepositoryScript).filter(
+        script.usage_count = db.query(RepositoryScript.repository_id).filter(
             RepositoryScript.script_id == script_id
-        ).count()
+        ).distinct().count()
 
     db.commit()
 
