@@ -170,7 +170,7 @@ const Activity: React.FC = () => {
 
       {/* Activity List */}
       {isLoading ? (
-        <BackupJobsTable
+        <BackupJobsTable<ActivityItem>
           jobs={[]}
           showTypeColumn={true}
           showTriggerColumn={true}
@@ -186,7 +186,7 @@ const Activity: React.FC = () => {
           enableHover={true}
         />
       ) : (
-        <BackupJobsTable
+        <BackupJobsTable<ActivityItem>
           jobs={processedActivities.individual}
           showTypeColumn={true}
           showTriggerColumn={true}

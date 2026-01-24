@@ -613,7 +613,7 @@ const Backup: React.FC = () => {
               downloadLogs: true,
             }}
             onViewLogs={handleViewLogs}
-            onCancelJob={handleCancelBackup}
+            onCancelJob={(job) => handleCancelBackup(job.id)}
             onBreakLock={handleBreakLock}
             onDownloadLogs={handleDownloadLogs}
             getRowKey={(job) => job.id}

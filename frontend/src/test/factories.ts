@@ -33,7 +33,7 @@ export interface MockSSHConnection {
 
 export interface MockBackupJob {
   id: number
-  repository_id: number
+  repository_id?: number
   status: 'pending' | 'running' | 'completed' | 'failed'
   progress?: number
   progress_message?: string
@@ -41,6 +41,13 @@ export interface MockBackupJob {
   completed_at?: string
   error_message?: string
   archive_name?: string
+  repository?: string
+  repository_path?: string
+  type?: 'backup' | 'restore' | 'check' | 'compact' | 'prune' | 'package'
+  has_logs?: boolean
+  triggered_by?: 'manual' | 'schedule'
+  schedule_id?: number
+  package_name?: string
 }
 
 export interface MockMaintenanceJob {
