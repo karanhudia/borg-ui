@@ -20,7 +20,7 @@ A modern web interface for [Borg Backup](https://borgbackup.readthedocs.io/). Ze
 
 ## Screenshots
 
-<img width="800" alt="dashboard" src="https://github.com/user-attachments/assets/8c876ee3-e3e2-43af-b36a-cef74b03560c" />
+<img width="800" alt="dashboard" src="https://github.com/user-attachments/assets/3e9c7ae6-1507-4fe1-8f8b-8231a458bca0" />
 
 <img width="800" alt="backup-live-progress" src="https://github.com/user-attachments/assets/550e396e-ec36-4737-9821-899c99265f64" />
 
