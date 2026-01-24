@@ -160,7 +160,9 @@ describe('FileExplorerDialog', () => {
     })
 
     it('shows loading state while fetching', async () => {
-      const slowResolve = new Promise((resolve) => setTimeout(() => resolve(mockDirectoryResponse), 100))
+      const slowResolve = new Promise((resolve) =>
+        setTimeout(() => resolve(mockDirectoryResponse), 100)
+      )
       vi.mocked(api.get).mockReturnValue(slowResolve as any)
 
       renderWithProviders(
@@ -861,10 +863,7 @@ describe('FileExplorerDialog', () => {
       const selectButton = screen.getAllByRole('button', { name: /Select \(2\)/i })[0]
       await user.click(selectButton)
 
-      expect(mockOnSelect).toHaveBeenCalledWith([
-        '/home/user/Documents',
-        '/home/user/backup-repo',
-      ])
+      expect(mockOnSelect).toHaveBeenCalledWith(['/home/user/Documents', '/home/user/backup-repo'])
       expect(mockOnClose).toHaveBeenCalled()
     })
   })

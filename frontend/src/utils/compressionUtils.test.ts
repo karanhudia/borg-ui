@@ -5,10 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import {
-  buildCompressionString,
-  parseCompressionString,
-} from './compressionUtils'
+import { buildCompressionString, parseCompressionString } from './compressionUtils'
 
 describe('compressionUtils - Round-Trip Conversion', () => {
   it('parsing and rebuilding is identity operation for common formats', () => {

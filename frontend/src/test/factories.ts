@@ -109,9 +109,7 @@ export const mockMaintenanceJob = (
   ...overrides,
 })
 
-export const mockSSHRepository = (
-  overrides: Partial<MockRepository> = {}
-): MockRepository => ({
+export const mockSSHRepository = (overrides: Partial<MockRepository> = {}): MockRepository => ({
   ...mockRepository(),
   path: 'ssh://user@example.com:22/backups/test',
   repoSshConnectionId: 1,

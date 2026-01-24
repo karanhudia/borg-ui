@@ -56,9 +56,7 @@ export const renderWithProviders = (
   return {
     user: userEvent.setup(),
     ...render(ui, {
-      wrapper: ({ children }) => (
-        <AllProviders queryClient={queryClient}>{children}</AllProviders>
-      ),
+      wrapper: ({ children }) => <AllProviders queryClient={queryClient}>{children}</AllProviders>,
       ...renderOptions,
     }),
   }
@@ -141,11 +139,7 @@ export const mockLockError = (lockPath: string) =>
 /**
  * Create a mock file for testing file inputs
  */
-export const createMockFile = (
-  name: string,
-  content: string,
-  type = 'text/plain'
-): File => {
+export const createMockFile = (name: string, content: string, type = 'text/plain'): File => {
   const blob = new Blob([content], { type })
   return new File([blob], name, { type })
 }
