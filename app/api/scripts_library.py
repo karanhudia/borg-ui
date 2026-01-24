@@ -402,11 +402,26 @@ async def delete_script(
         logger.info("Cleaned up orphaned script associations during delete check", script_id=script_id, count=len(orphaned_ids))
 
     if len(valid_repo_scripts) > 0:
-        repo_names = [rs.repository.name for rs in valid_repo_scripts]
+        # Group associations by repository to show hook types
+        repo_hooks = {}
+        for rs in valid_repo_scripts:
+            repo_name = rs.repository.name
+            if repo_name not in repo_hooks:
+                repo_hooks[repo_name] = []
+            repo_hooks[repo_name].append(rs.hook_type)
 
+        # Build detailed message
+        repo_details = []
+        for repo_name, hook_types in repo_hooks.items():
+            if len(hook_types) > 1:
+                repo_details.append(f"{repo_name} ({', '.join(hook_types)})")
+            else:
+                repo_details.append(f"{repo_name} ({hook_types[0]})")
+
+        places_text = "place" if len(valid_repo_scripts) == 1 else "places"
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot delete script: it is used by {len(valid_repo_scripts)} repository(ies): {', '.join(repo_names)}"
+            detail=f"Cannot delete script: it is used in {len(valid_repo_scripts)} {places_text}: {', '.join(repo_details)}"
         )
 
     # Delete script file
@@ -557,11 +572,12 @@ async def assign_script_to_repository(
     )
 
     db.add(repo_script)
+    db.flush()  # Flush to ensure the new assignment is visible to the count query
 
-    # Update script usage count (count unique repositories, not total associations)
-    script.usage_count = db.query(RepositoryScript.repository_id).filter(
+    # Update script usage count (count total associations/places used)
+    script.usage_count = db.query(RepositoryScript).filter(
         RepositoryScript.script_id == assignment.script_id
-    ).distinct().count()
+    ).count()
     script.last_used_at = datetime.utcnow()
 
     db.commit()
@@ -641,13 +657,14 @@ async def remove_script_from_repository(
 
     # Delete assignment
     db.delete(repo_script)
+    db.flush()  # Flush to ensure the delete is visible to the count query
 
-    # Update script usage count (count unique repositories, not total associations)
+    # Update script usage count (count total associations/places used)
     script = db.query(Script).filter(Script.id == script_id).first()
     if script:
-        script.usage_count = db.query(RepositoryScript.repository_id).filter(
+        script.usage_count = db.query(RepositoryScript).filter(
             RepositoryScript.script_id == script_id
-        ).distinct().count()
+        ).count()
 
     db.commit()
 
