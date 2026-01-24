@@ -1084,6 +1084,18 @@ async def delete_repository(
             except:
                 pass
 
+        # Manually clean up script associations (in case CASCADE doesn't work)
+        from app.database.models import RepositoryScript
+        script_associations = db.query(RepositoryScript).filter(
+            RepositoryScript.repository_id == repo_id
+        ).all()
+
+        if script_associations:
+            association_count = len(script_associations)
+            for assoc in script_associations:
+                db.delete(assoc)
+            logger.info("Cleaned up script associations", repo_id=repo_id, count=association_count)
+
         # Delete repository from database
         db.delete(repository)
         db.commit()

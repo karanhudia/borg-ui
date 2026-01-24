@@ -655,3 +655,45 @@ async def remove_script_from_repository(
                 repo_script_id=repo_script_id,
                 repository_id=repository_id,
                 script_id=script_id)
+
+
+@router.post("/scripts/cleanup-orphans")
+async def cleanup_orphaned_script_associations(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Clean up orphaned script associations (admin only)
+
+    This removes RepositoryScript entries that reference deleted repositories.
+    Useful for fixing database inconsistencies."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    # Find all script associations
+    all_repo_scripts = db.query(RepositoryScript).options(
+        joinedload(RepositoryScript.repository)
+    ).all()
+
+    # Filter out orphaned associations
+    orphaned_ids = []
+    for rs in all_repo_scripts:
+        if rs.repository is None:
+            orphaned_ids.append(rs.id)
+
+    # Delete orphaned associations
+    if orphaned_ids:
+        db.query(RepositoryScript).filter(RepositoryScript.id.in_(orphaned_ids)).delete(synchronize_session=False)
+        db.commit()
+        logger.info("Cleaned up orphaned script associations", count=len(orphaned_ids), user=current_user.username)
+
+        return {
+            "success": True,
+            "cleaned_up": len(orphaned_ids),
+            "message": f"Cleaned up {len(orphaned_ids)} orphaned script association(s)"
+        }
+
+    return {
+        "success": True,
+        "cleaned_up": 0,
+        "message": "No orphaned script associations found"
+    }
