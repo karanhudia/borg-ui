@@ -101,6 +101,7 @@ Thumbs.db
 *.temp
 temp/
 tmp/
+test_*.sh
 
 # Backup files
 *.bak
@@ -125,4 +126,4 @@ coverage.json
 .pytest_cache/
 junit.xml
 test-results/
-.local-data/.local-data/
+.local-data/
