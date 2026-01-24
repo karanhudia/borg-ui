@@ -201,11 +201,15 @@ class MultipleSourceDirTester:
     def run_backup(self, repo_id):
         """Trigger a backup and return job ID"""
         try:
-            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            headers = {
+                "Authorization": f"Bearer {self.auth_token}",
+                "Content-Type": "application/json"
+            }
 
             response = self.session.post(
-                f"{self.base_url}/api/backup/start/{repo_id}",
+                f"{self.base_url}/api/backup/start",
                 headers=headers,
+                json={"repository": str(repo_id)},
                 timeout=10
             )
 
