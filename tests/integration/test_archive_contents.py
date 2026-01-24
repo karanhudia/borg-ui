@@ -39,8 +39,13 @@ class ArchiveContentsTester:
         self.auth_token = None
         self.test_results = []
         # For Docker container: paths need /local prefix
-        # Auto-detect: if port is 8081 or 8082, likely Docker; if 8000, likely local dev
-        self.use_local_prefix = container_mode or (base_url.endswith(":8081") or base_url.endswith(":8082"))
+        # Auto-detect: Check if running in CI (GitHub Actions) or explicit container_mode
+        is_ci = os.environ.get('CI') == 'true' or os.environ.get('GITHUB_ACTIONS') == 'true'
+        # In CI, server runs directly (no Docker), so no /local prefix
+        # In Docker (ports 8081/8082 without CI), use /local prefix
+        self.use_local_prefix = container_mode or (
+            not is_ci and (base_url.endswith(":8081") or base_url.endswith(":8082"))
+        )
         # For Docker container: paths need /local prefix
         self.use_local_prefix = True
 
@@ -364,12 +369,19 @@ class ArchiveContentsTester:
             self.log("Please run: ./tests/setup_test_env.sh first", "ERROR")
             return False
 
-        # Show path mapping info for Docker
-        if self.use_local_prefix:
+        # Show path mapping info
+        is_ci = os.environ.get('CI') == 'true' or os.environ.get('GITHUB_ACTIONS') == 'true'
+        if is_ci:
+            self.log(f"ℹ️  CI mode detected (direct filesystem access)", "INFO")
+            self.log(f"   Test path: {self.repo_dir}", "INFO")
+        elif self.use_local_prefix:
             self.log(f"ℹ️  Docker mode detected (paths will use /local prefix)", "INFO")
             self.log(f"   Host path: {self.repo_dir}", "INFO")
             self.log(f"   Container path: /local{self.repo_dir}", "INFO")
             self.log(f"   Ensure your docker-compose.yml mounts / as /local", "INFO")
+        else:
+            self.log(f"ℹ️  Local dev mode (direct filesystem access)", "INFO")
+            self.log(f"   Test path: {self.repo_dir}", "INFO")
 
         # Authenticate
         if not self.authenticate():

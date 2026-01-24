@@ -110,7 +110,7 @@ jobs:
   test-integration:
     name: Integration Tests
     runs-on: ubuntu-latest
-    needs: test-backend
+    # Run in parallel with backend tests (no dependency)
 
     services:
       redis:
