@@ -37,6 +37,8 @@ class ArchiveContentsTester:
         self.session = requests.Session()
         self.auth_token = None
         self.test_results = []
+        # For Docker container: paths need /local prefix
+        self.use_local_prefix = True
 
     def log(self, message: str, level: str = "INFO"):
         """Log a message with color"""
@@ -70,6 +72,52 @@ class ArchiveContentsTester:
         except Exception as e:
             self.log(f"❌ Authentication error: {e}", "ERROR")
             return False
+
+    def get_existing_repositories(self) -> list:
+        """Get list of existing repositories"""
+        try:
+            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            response = self.session.get(
+                f"{self.base_url}/api/repositories/",
+                headers=headers,
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("repositories", [])
+            return []
+        except Exception as e:
+            self.log(f"⚠️  Error getting repositories: {e}", "WARNING")
+            return []
+
+    def delete_repository(self, repo_id: int) -> bool:
+        """Delete a repository by ID"""
+        try:
+            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            response = self.session.delete(
+                f"{self.base_url}/api/repositories/{repo_id}",
+                headers=headers,
+                timeout=10
+            )
+
+            return response.status_code in [200, 204]
+        except Exception as e:
+            self.log(f"⚠️  Error deleting repository: {e}", "WARNING")
+            return False
+
+    def cleanup_test_repositories(self, test_names: list):
+        """Delete any existing repositories with test names"""
+        existing_repos = self.get_existing_repositories()
+
+        for repo in existing_repos:
+            if repo.get("name") in test_names:
+                repo_id = repo.get("id")
+                repo_name = repo.get("name")
+                if self.delete_repository(repo_id):
+                    self.log(f"🧹 Cleaned up existing repository: {repo_name}", "INFO")
+                else:
+                    self.log(f"⚠️  Failed to delete repository: {repo_name}", "WARNING")
 
     def get_borg_archive_contents(self, repo_path: str, archive: str, path: str = "") -> Set[str]:
         """
@@ -171,9 +219,12 @@ class ArchiveContentsTester:
                 "Content-Type": "application/json"
             }
 
+            # Convert path for Docker container (add /local prefix)
+            container_path = f"/local{path}" if self.use_local_prefix else path
+
             repo_data = {
                 "name": name,
-                "path": path,
+                "path": container_path,
                 "encryption": "none" if not passphrase else "repokey",
                 "compression": "lz4",
                 "repository_type": "local",
@@ -297,7 +348,7 @@ class ArchiveContentsTester:
         if not self.authenticate():
             return False
 
-        # Test repositories
+        # Test repositories configuration
         test_configs = [
             {
                 "name": "Test Repo 1 (Unencrypted)",
@@ -326,6 +377,11 @@ class ArchiveContentsTester:
                 ]
             }
         ]
+
+        # Clean up any existing test repositories
+        test_names = [config["name"] for config in test_configs]
+        self.log("\n🧹 Cleaning up existing test repositories...", "INFO")
+        self.cleanup_test_repositories(test_names)
 
         all_tests_passed = True
 
