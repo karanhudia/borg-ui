@@ -12,6 +12,8 @@ import {
   Box,
   Typography,
   CircularProgress,
+  SxProps,
+  Theme,
 } from '@mui/material'
 
 export interface Column<T> {
@@ -67,7 +69,7 @@ export interface DataTableProps<T> {
   maxHeight?: string | number
 
   // Additional features
-  sx?: any
+  sx?: SxProps<Theme>
 }
 
 export default function DataTable<T>({
@@ -184,8 +186,8 @@ export default function DataTable<T>({
                 }),
                 ...(enablePointer &&
                   onRowClick && {
-                    cursor: 'pointer',
-                  }),
+                  cursor: 'pointer',
+                }),
                 '&:last-child td': {
                   borderBottom: 0,
                 },
@@ -201,7 +203,10 @@ export default function DataTable<T>({
                     minWidth: column.minWidth,
                   }}
                 >
-                  {column.render ? column.render(row) : (row as any)[column.id]}
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {column.render
+                    ? column.render(row)
+                    : ((row as Record<string, unknown>)[column.id] as React.ReactNode)}
                 </TableCell>
               ))}
               {actions && actions.length > 0 && (
@@ -228,6 +233,7 @@ export default function DataTable<T>({
                                 action.onClick(row)
                               }}
                               disabled={isDisabled}
+                              aria-label={tooltipText}
                             >
                               {action.icon}
                             </IconButton>

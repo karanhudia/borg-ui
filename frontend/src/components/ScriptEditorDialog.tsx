@@ -67,6 +67,7 @@ export default function ScriptEditorDialog({
         script: value,
       })
       setTestResult(response.data)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       setTestResult({
         success: false,

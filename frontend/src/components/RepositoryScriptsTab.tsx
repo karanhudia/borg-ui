@@ -77,19 +77,18 @@ export default function RepositoryScriptsTab({
     script: RepositoryScript | null
   }>({ open: false, script: null })
 
-  useEffect(() => {
-    fetchAssignedScripts()
-    fetchAvailableScripts()
-  }, [repositoryId, hookType])
-
-  const fetchAssignedScripts = async () => {
+  const fetchAssignedScripts = React.useCallback(async () => {
     try {
       const response = await api.get(`/repositories/${repositoryId}/scripts`)
       const scriptsData =
         hookType === 'pre-backup' ? response.data.pre_backup : response.data.post_backup
       console.log(
         'Fetched scripts:',
-        scriptsData?.map((s: any) => ({ id: s.id, name: s.script_name, order: s.execution_order }))
+        scriptsData?.map((s: RepositoryScript) => ({
+          id: s.id,
+          name: s.script_name,
+          order: s.execution_order,
+        }))
       )
       setScripts(scriptsData || [])
       onScriptsChange?.(scriptsData && scriptsData.length > 0)
@@ -99,16 +98,21 @@ export default function RepositoryScriptsTab({
     } finally {
       setLoading(false)
     }
-  }
+  }, [repositoryId, hookType, onScriptsChange])
 
-  const fetchAvailableScripts = async () => {
+  const fetchAvailableScripts = React.useCallback(async () => {
     try {
       const response = await api.get('/scripts')
       setAvailableScripts(response.data)
     } catch (error) {
       console.error('Failed to fetch available scripts:', error)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    fetchAssignedScripts()
+    fetchAvailableScripts()
+  }, [fetchAssignedScripts, fetchAvailableScripts])
 
   const handleAddScript = async (assignmentData: AssignmentData) => {
     if (!selectedScriptId) return
@@ -135,6 +139,8 @@ export default function RepositoryScriptsTab({
       setAddDialogOpen(false)
       setSelectedScriptId('')
       if (onUpdate) onUpdate()
+      if (onUpdate) onUpdate()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Failed to assign script:', error)
       toast.error(error.response?.data?.detail || 'Failed to assign script')
@@ -149,6 +155,8 @@ export default function RepositoryScriptsTab({
       toast.success('Script removed successfully')
       fetchAssignedScripts()
       if (onUpdate) onUpdate()
+      if (onUpdate) onUpdate()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Failed to remove script:', error)
       toast.error(error.response?.data?.detail || 'Failed to remove script')
@@ -190,8 +198,10 @@ export default function RepositoryScriptsTab({
   // Expose function to parent to open dialog - MUST be before any conditional returns (Rules of Hooks)
   React.useLayoutEffect(() => {
     const key = `openScriptDialog_${repositoryId}_${hookType}`
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(window as any)[key] = () => setAddDialogOpen(true)
     return () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any)[key]
     }
   }, [repositoryId, hookType])
@@ -282,7 +292,14 @@ export default function RepositoryScriptsTab({
                 <Chip
                   label={effectiveRunOn}
                   size="small"
-                  color={getRunOnColor(effectiveRunOn) as any}
+                  color={
+                    getRunOnColor(effectiveRunOn) as
+                      | 'success'
+                      | 'error'
+                      | 'warning'
+                      | 'info'
+                      | 'default'
+                  }
                   sx={{ height: 20, fontSize: '0.7rem' }}
                 />
               )}

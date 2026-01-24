@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, Tuple
 from sqlalchemy.orm import Session
 
-from app.database.models import Repository, ScheduledJob, SSHKey, SSHConnection
+from app.database.models import Repository, ScheduledJob, ScheduledJobRepository, SSHKey, SSHConnection
 
 
 class BorgmaticExportService:
@@ -245,10 +245,40 @@ class BorgmaticExportService:
         return repository.path
 
     def _get_scheduled_job_for_repository(self, repository: Repository) -> Optional[ScheduledJob]:
-        """Get scheduled job associated with repository."""
-        return self.db.query(ScheduledJob).filter(
+        """Get scheduled job associated with repository.
+
+        Checks for scheduled jobs in three formats:
+        1. Legacy: by repository path (ScheduledJob.repository)
+        2. Single-repo by ID: by repository_id (ScheduledJob.repository_id)
+        3. Multi-repo: via junction table (ScheduledJobRepository)
+        """
+        # Check legacy format (by path)
+        job = self.db.query(ScheduledJob).filter(
             ScheduledJob.repository == repository.path
         ).first()
+
+        if job:
+            return job
+
+        # Check single-repo by ID format
+        job = self.db.query(ScheduledJob).filter(
+            ScheduledJob.repository_id == repository.id
+        ).first()
+
+        if job:
+            return job
+
+        # Check multi-repo format (via junction table)
+        job_link = self.db.query(ScheduledJobRepository).filter(
+            ScheduledJobRepository.repository_id == repository.id
+        ).first()
+
+        if job_link:
+            return self.db.query(ScheduledJob).filter(
+                ScheduledJob.id == job_link.scheduled_job_id
+            ).first()
+
+        return None
 
     def _merge_configs_to_borgmatic(
         self,

@@ -188,6 +188,22 @@ async def get_script(
         RepositoryScript.script_id == script_id
     ).options(joinedload(RepositoryScript.repository)).all()
 
+    # Filter out orphaned associations (where repository was deleted)
+    # and clean them up from the database
+    valid_repo_scripts = []
+    orphaned_ids = []
+    for rs in repo_scripts:
+        if rs.repository is not None:
+            valid_repo_scripts.append(rs)
+        else:
+            orphaned_ids.append(rs.id)
+
+    # Clean up orphaned associations
+    if orphaned_ids:
+        db.query(RepositoryScript).filter(RepositoryScript.id.in_(orphaned_ids)).delete(synchronize_session=False)
+        db.commit()
+        logger.info("Cleaned up orphaned script associations", script_id=script_id, count=len(orphaned_ids))
+
     repositories = [
         {
             "id": rs.repository_id,
@@ -195,7 +211,7 @@ async def get_script(
             "hook_type": rs.hook_type,
             "enabled": rs.enabled
         }
-        for rs in repo_scripts
+        for rs in valid_repo_scripts
     ]
 
     # Get recent executions
@@ -445,22 +461,32 @@ async def delete_script(
     if script.is_template:
         raise HTTPException(status_code=400, detail="Cannot delete template scripts")
 
-    # Check if script is in use
-    usage_count = db.query(RepositoryScript).filter(
+    # Check if script is in use (only count associations with existing repositories)
+    repo_scripts = db.query(RepositoryScript).filter(
         RepositoryScript.script_id == script_id
-    ).count()
+    ).options(joinedload(RepositoryScript.repository)).all()
 
-    if usage_count > 0:
-        # Get repository names
-        repo_scripts = db.query(RepositoryScript).filter(
-            RepositoryScript.script_id == script_id
-        ).options(joinedload(RepositoryScript.repository)).all()
+    # Filter out orphaned associations and clean them up
+    valid_repo_scripts = []
+    orphaned_ids = []
+    for rs in repo_scripts:
+        if rs.repository is not None:
+            valid_repo_scripts.append(rs)
+        else:
+            orphaned_ids.append(rs.id)
 
-        repo_names = [rs.repository.name for rs in repo_scripts]
+    # Clean up orphaned associations
+    if orphaned_ids:
+        db.query(RepositoryScript).filter(RepositoryScript.id.in_(orphaned_ids)).delete(synchronize_session=False)
+        db.commit()
+        logger.info("Cleaned up orphaned script associations during delete check", script_id=script_id, count=len(orphaned_ids))
+
+    if len(valid_repo_scripts) > 0:
+        repo_names = [rs.repository.name for rs in valid_repo_scripts]
 
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot delete script: it is used by {usage_count} repository(ies): {', '.join(repo_names)}"
+            detail=f"Cannot delete script: it is used by {len(valid_repo_scripts)} repository(ies): {', '.join(repo_names)}"
         )
 
     # Delete script file

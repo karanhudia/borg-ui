@@ -474,6 +474,10 @@ class MountService:
                 # We need to handle the daemonization ourselves to properly track the mount
                 cmd.extend(["-f"])  # Run in foreground
 
+                # Add bypass-lock for read-only storage access (observe-only repos)
+                if repository.bypass_lock:
+                    cmd.append("--bypass-lock")
+
                 # Log command for debugging
                 logger.info(
                     "Executing borg mount command",

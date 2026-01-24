@@ -22,6 +22,12 @@ import tempfile
 import shutil
 from pathlib import Path
 
+# Handle both pytest (relative import) and direct script execution (absolute import)
+try:
+    from .test_helpers import DockerPathHelper
+except ImportError:
+    from test_helpers import DockerPathHelper
+
 class Colors:
     GREEN = '\033[92m'
     RED = '\033[91m'
@@ -36,6 +42,7 @@ class MultipleSourceDirTester:
         self.session = requests.Session()
         self.auth_token = None
         self.test_dir = None
+        self.path_helper = DockerPathHelper(base_url)
 
     def log(self, message, level="INFO"):
         colors = {
@@ -100,26 +107,36 @@ class MultipleSourceDirTester:
             return False
 
     def create_repository_with_two_sources(self):
-        """Create repository with 2 source directories"""
+        """Create repository with 2 source directories
+
+        Returns:
+            Tuple of (repo_id, repo_path) or (None, None) on failure
+        """
         try:
             headers = {
                 "Authorization": f"Bearer {self.auth_token}",
                 "Content-Type": "application/json"
             }
 
+            # Convert paths for Docker backend if needed
+            container_repo_path = self.path_helper.to_container_path(self.repo_path)
+            container_source1 = self.path_helper.to_container_path(self.source1)
+            container_source2 = self.path_helper.to_container_path(self.source2)
+
             repo_data = {
                 "name": "test-multi-source",
-                "path": self.repo_path,
+                "path": container_repo_path,
                 "encryption": "none",
                 "compression": "lz4",
                 "repository_type": "local",
-                "source_directories": [self.source1, self.source2],  # TWO DIRECTORIES
+                "source_directories": [container_source1, container_source2],  # TWO DIRECTORIES
                 "exclude_patterns": []
             }
 
             self.log(f"\n📤 Creating repository with 2 source directories:", "INFO")
-            self.log(f"  1. {self.source1}", "INFO")
-            self.log(f"  2. {self.source2}", "INFO")
+            self.log(f"  1. Host: {self.source1} -> Container: {container_source1}", "INFO")
+            self.log(f"  2. Host: {self.source2} -> Container: {container_source2}", "INFO")
+            self.log(f"  Repo: Host: {self.repo_path} -> Container: {container_repo_path}", "INFO")
 
             response = self.session.post(
                 f"{self.base_url}/api/repositories/",
@@ -132,15 +149,15 @@ class MultipleSourceDirTester:
                 result = response.json()
                 repo_id = result.get("repository", {}).get("id")
                 self.log(f"✓ Repository created with ID: {repo_id}", "SUCCESS")
-                return repo_id
+                return (repo_id, container_repo_path)
             else:
                 self.log(f"✗ Repository creation failed: {response.status_code}", "ERROR")
                 self.log(f"  Response: {response.text}", "ERROR")
-                return None
+                return (None, None)
 
         except Exception as e:
             self.log(f"✗ Error creating repository: {e}", "ERROR")
-            return None
+            return (None, None)
 
     def verify_repository_config(self, repo_id):
         """Verify repository has both source directories stored"""
@@ -185,14 +202,22 @@ class MultipleSourceDirTester:
             self.log(f"✗ Error verifying config: {e}", "ERROR")
             return False
 
-    def run_backup(self, repo_id):
-        """Trigger a backup and return job ID"""
+    def run_backup(self, repo_path):
+        """Trigger a backup and return job ID
+
+        Args:
+            repo_path: Repository path (not ID)
+        """
         try:
-            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            headers = {
+                "Authorization": f"Bearer {self.auth_token}",
+                "Content-Type": "application/json"
+            }
 
             response = self.session.post(
-                f"{self.base_url}/api/backup/start/{repo_id}",
+                f"{self.base_url}/api/backup/start",
                 headers=headers,
+                json={"repository": repo_path},
                 timeout=10
             )
 
@@ -330,6 +355,10 @@ class MultipleSourceDirTester:
         self.log(f"TEST: Multiple Source Directories Bug", "INFO")
         self.log(f"{'='*70}\n", "INFO")
 
+        # Log environment detection
+        self.path_helper.log_environment(lambda msg: self.log(msg, "INFO"))
+        self.log("", "INFO")
+
         try:
             # Setup
             self.setup_test_environment()
@@ -339,7 +368,7 @@ class MultipleSourceDirTester:
                 return False
 
             # Create repository with 2 sources
-            repo_id = self.create_repository_with_two_sources()
+            repo_id, repo_path = self.create_repository_with_two_sources()
             if not repo_id:
                 return False
 
@@ -348,8 +377,8 @@ class MultipleSourceDirTester:
                 self.log(f"\n⚠️  CONFIG BUG: Both directories not stored in database!", "ERROR")
                 return False
 
-            # Run backup
-            job_id = self.run_backup(repo_id)
+            # Run backup (pass path, not ID)
+            job_id = self.run_backup(repo_path)
             if not job_id:
                 return False
 

@@ -29,6 +29,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import api from '../services/api'
+import React from 'react'
 import { toast } from 'react-hot-toast'
 import DataTable, { Column, ActionButton } from './DataTable'
 import { formatDateShort } from '../utils/dateUtils'
@@ -132,8 +133,9 @@ export default function PackagesTab() {
       setShowCreateDialog(false)
       setPackageForm({ name: '', install_command: '', description: '' })
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to add package')
+      toast.error(error.response?.data?.detail || 'Failed to upgrade package')
     },
   })
 
@@ -149,8 +151,9 @@ export default function PackagesTab() {
       setJobStatus(null) // Reset job status
       queryClient.invalidateQueries({ queryKey: ['packages'] })
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to install package')
+      toast.error(error.response?.data?.detail || 'Failed to fix broken dependencies')
     },
   })
 
@@ -165,8 +168,9 @@ export default function PackagesTab() {
       queryClient.invalidateQueries({ queryKey: ['packages'] })
       setDeleteConfirmPackage(null)
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to delete package')
+      toast.error(error.response?.data?.detail || 'Failed to remove package')
     },
   })
 
@@ -182,6 +186,7 @@ export default function PackagesTab() {
       setJobStatus(null) // Reset job status
       queryClient.invalidateQueries({ queryKey: ['packages'] })
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to reinstall package')
     },

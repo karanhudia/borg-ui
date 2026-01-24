@@ -48,7 +48,8 @@ import {
 import { notificationsAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { formatDate } from '../utils/dateUtils'
-import MultiRepositorySelector, { Repository } from './MultiRepositorySelector'
+import { Repository } from '../types'
+import MultiRepositorySelector from './MultiRepositorySelector'
 
 interface NotificationSetting {
   id: number
@@ -122,6 +123,7 @@ const NotificationsTab: React.FC = () => {
       setShowDialog(false)
       resetForm()
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to add notification service')
     },
@@ -129,6 +131,7 @@ const NotificationsTab: React.FC = () => {
 
   // Update notification
   const updateMutation = useMutation({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: ({ id, data }: { id: number; data: any }) => notificationsAPI.update(id, data),
     onSuccess: () => {
       toast.success('Notification service updated successfully')
@@ -137,6 +140,7 @@ const NotificationsTab: React.FC = () => {
       setEditingNotification(null)
       resetForm()
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to update notification service')
     },
@@ -150,6 +154,7 @@ const NotificationsTab: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       setDeleteConfirm(null)
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to delete notification service')
     },
@@ -166,6 +171,7 @@ const NotificationsTab: React.FC = () => {
       }
       setTesting(null)
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to test notification')
       setTesting(null)

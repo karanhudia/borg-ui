@@ -20,6 +20,12 @@ import argparse
 from typing import List, Dict, Set, Any
 import requests
 
+# Handle both pytest (relative import) and direct script execution (absolute import)
+try:
+    from .test_helpers import DockerPathHelper
+except ImportError:
+    from test_helpers import DockerPathHelper
+
 class Colors:
     """Terminal colors for pretty output"""
     GREEN = '\033[92m'
@@ -30,13 +36,18 @@ class Colors:
     END = '\033[0m'
 
 class ArchiveContentsTester:
-    def __init__(self, test_dir: str, base_url: str = "http://localhost:8081"):
+    def __init__(self, test_dir: str, base_url: str = "http://localhost:8081", container_mode: bool = False):
         self.test_dir = test_dir
         self.base_url = base_url
         self.repo_dir = os.path.join(test_dir, "repositories")
+        self.container_mode = container_mode
         self.session = requests.Session()
         self.auth_token = None
         self.test_results = []
+        
+        # Initialize path helper
+        self.path_helper = DockerPathHelper(base_url, container_mode)
+        self.use_local_prefix = self.path_helper.use_local_prefix
 
     def log(self, message: str, level: str = "INFO"):
         """Log a message with color"""
@@ -71,7 +82,53 @@ class ArchiveContentsTester:
             self.log(f"❌ Authentication error: {e}", "ERROR")
             return False
 
-    def get_borg_archive_contents(self, repo_path: str, archive: str, path: str = "") -> Set[str]:
+    def get_existing_repositories(self) -> list:
+        """Get list of existing repositories"""
+        try:
+            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            response = self.session.get(
+                f"{self.base_url}/api/repositories/",
+                headers=headers,
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("repositories", [])
+            return []
+        except Exception as e:
+            self.log(f"⚠️  Error getting repositories: {e}", "WARNING")
+            return []
+
+    def delete_repository(self, repo_id: int) -> bool:
+        """Delete a repository by ID"""
+        try:
+            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            response = self.session.delete(
+                f"{self.base_url}/api/repositories/{repo_id}",
+                headers=headers,
+                timeout=10
+            )
+
+            return response.status_code in [200, 204]
+        except Exception as e:
+            self.log(f"⚠️  Error deleting repository: {e}", "WARNING")
+            return False
+
+    def cleanup_test_repositories(self, test_names: list):
+        """Delete any existing repositories with test names"""
+        existing_repos = self.get_existing_repositories()
+
+        for repo in existing_repos:
+            if repo.get("name") in test_names:
+                repo_id = repo.get("id")
+                repo_name = repo.get("name")
+                if self.delete_repository(repo_id):
+                    self.log(f"🧹 Cleaned up existing repository: {repo_name}", "INFO")
+                else:
+                    self.log(f"⚠️  Failed to delete repository: {repo_name}", "WARNING")
+
+    def get_borg_archive_contents(self, repo_path: str, archive: str, path: str = "", passphrase: str = None) -> Set[str]:
         """
         Get archive contents using borg command line
         Returns set of immediate children at the given path
@@ -81,11 +138,16 @@ class ArchiveContentsTester:
             if path:
                 cmd.append(path)
 
+            env = os.environ.copy()
+            if passphrase:
+                env["BORG_PASSPHRASE"] = passphrase
+
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=30,
+                env=env
             )
 
             if result.returncode != 0:
@@ -171,12 +233,18 @@ class ArchiveContentsTester:
                 "Content-Type": "application/json"
             }
 
+            # Convert path for Docker container (add /local prefix)
+            container_path = self.path_helper.to_container_path(path)
+
             repo_data = {
                 "name": name,
-                "path": path,
+                "path": container_path,
                 "encryption": "none" if not passphrase else "repokey",
                 "compression": "lz4",
                 "repository_type": "local",
+                "source_directories": [],
+                "exclude_patterns": [],
+                "mode": "observe"  # Observe mode since we're importing existing repo
             }
 
             if passphrase:
@@ -195,14 +263,28 @@ class ArchiveContentsTester:
                 self.log(f"✅ Added repository '{name}' with ID {repo_id}", "SUCCESS")
                 return repo_id
             else:
+                try:
+                    error_detail = response.json().get("detail", response.text)
+                except:
+                    error_detail = response.text
                 self.log(f"❌ Failed to add repository: {response.status_code}", "ERROR")
+                self.log(f"   Error details: {error_detail}", "ERROR")
+
+                # Provide helpful hints for common issues
+                if "Permission denied" in str(error_detail) and self.use_local_prefix:
+                    self.log("", "INFO")
+                    self.log("💡 Docker permission issue detected. Try:", "WARNING")
+                    self.log(f"   1. Check container user ID: docker exec borg-web-ui id", "WARNING")
+                    self.log(f"   2. Fix permissions: sudo chown -R $(id -u):$(id -g) /tmp/borg-ui-tests", "WARNING")
+                    self.log(f"   3. Or set PUID/PGID in docker-compose: PUID=$(id -u) PGID=$(id -g)", "WARNING")
+
                 return None
 
         except Exception as e:
             self.log(f"❌ Error adding repository: {e}", "ERROR")
             return None
 
-    def test_archive_browsing(self, repo_id: int, repo_path: str, archive: str, test_paths: List[str] = None):
+    def test_archive_browsing(self, repo_id: int, repo_path: str, archive: str, test_paths: List[str] = None, passphrase: str = None):
         """
         Test archive browsing by comparing borg output with UI output
         """
@@ -220,7 +302,7 @@ class ArchiveContentsTester:
             self.log(f"\n📂 Testing path: {path_display}", "INFO")
 
             # Get expected contents from borg
-            borg_items = self.get_borg_archive_contents(repo_path, archive, path)
+            borg_items = self.get_borg_archive_contents(repo_path, archive, path, passphrase)
             self.log(f"  Borg found: {len(borg_items)} items", "INFO")
 
             # Get actual contents from UI
@@ -285,11 +367,14 @@ class ArchiveContentsTester:
             self.log("Please run: ./tests/setup_test_env.sh first", "ERROR")
             return False
 
+        # Show path mapping info based on detected mode
+        self.path_helper.log_environment(lambda msg: self.log(msg, "INFO"))
+
         # Authenticate
         if not self.authenticate():
             return False
 
-        # Test repositories
+        # Test repositories configuration
         test_configs = [
             {
                 "name": "Test Repo 1 (Unencrypted)",
@@ -319,6 +404,11 @@ class ArchiveContentsTester:
             }
         ]
 
+        # Clean up any existing test repositories
+        test_names = [config["name"] for config in test_configs]
+        self.log("\n🧹 Cleaning up existing test repositories...", "INFO")
+        self.cleanup_test_repositories(test_names)
+
         all_tests_passed = True
 
         for repo_config in test_configs:
@@ -344,7 +434,8 @@ class ArchiveContentsTester:
                     repo_id,
                     repo_config['path'],
                     archive_config['name'],
-                    archive_config.get('test_paths', [""])
+                    archive_config.get('test_paths', [""]),
+                    passphrase=repo_config.get('passphrase')
                 )
                 if not passed:
                     all_tests_passed = False

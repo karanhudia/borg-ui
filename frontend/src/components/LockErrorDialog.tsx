@@ -47,7 +47,10 @@ export default function LockErrorDialog({
       toast.success('Lock removed successfully! You can now retry your operation.')
       onLockBroken?.()
       onClose()
-    } catch (error: any) {
+    } catch (
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      error: any
+    ) {
       toast.error(error.response?.data?.detail || 'Failed to break lock')
     } finally {
       setBreaking(false)

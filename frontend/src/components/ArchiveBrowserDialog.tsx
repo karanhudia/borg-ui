@@ -70,9 +70,10 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
       try {
         const response = await restoreAPI.getArchiveContents(repositoryId, archiveName, currentPath)
         setItems(response.data.items || [])
-      } catch (err: any) {
-        const errorMsg = err.response?.data?.detail || 'Failed to load archive contents'
-        const statusCode = err.response?.status
+      } catch (err: unknown) {
+        const error = err as { response?: { data?: { detail?: string }; status?: number } }
+        const errorMsg = error.response?.data?.detail || 'Failed to load archive contents'
+        const statusCode = error.response?.status
         setError(errorMsg)
         setIsSizeLimitError(statusCode === 413)
         toast.error(errorMsg)

@@ -82,6 +82,7 @@ interface DashboardOverview {
     failed: number
     total: number
   }>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   upcoming_tasks: Array<any>
   maintenance_alerts: Array<{
     type: string
@@ -755,6 +756,7 @@ export default function DashboardNew() {
                     {overview.maintenance_alerts.slice(0, alertLimit).map((alert, idx) => (
                       <Alert
                         key={idx}
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         severity={alert.severity as any}
                         sx={{ py: 0.5, '& .MuiAlert-message': { py: 0.5 } }}
                         action={

@@ -101,6 +101,7 @@ Thumbs.db
 *.temp
 temp/
 tmp/
+test_*.sh
 
 # Backup files
 *.bak
@@ -115,6 +116,7 @@ backups/
 .coverage
 .coverage.*
 htmlcov/
+coverage/
 coverage.xml
 coverage.json
 .tox/
@@ -123,4 +125,5 @@ coverage.json
 .hypothesis/
 .pytest_cache/
 junit.xml
-test-results/.local-data/
+test-results/
+.local-data/

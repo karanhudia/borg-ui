@@ -215,9 +215,14 @@ export default function Scripts() {
       }
       setDialogOpen(false)
       fetchScripts()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Failed to save script:', error)
-      toast.error(error.response?.data?.detail || 'Failed to save script')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const onError = (error: any) => {
+        toast.error(error.response?.data?.detail || 'Failed to save script')
+      }
+      onError(error)
     }
   }
 
@@ -230,9 +235,14 @@ export default function Scripts() {
       await api.delete(`/scripts/${script.id}`)
       toast.success('Script deleted successfully')
       fetchScripts()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Failed to delete script:', error)
-      toast.error(error.response?.data?.detail || 'Failed to delete script')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const onError = (error: any) => {
+        toast.error(error.response?.data?.detail || 'Failed to delete script')
+      }
+      onError(error)
     }
   }
 
@@ -255,6 +265,7 @@ export default function Scripts() {
         timeout: undefined,
       })
       setTestResult(response.data)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Failed to test script:', error)
       setTestResult({
@@ -377,6 +388,7 @@ export default function Scripts() {
                   <Chip
                     label={script.category}
                     size="small"
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     color={getCategoryColor(script.category) as any}
                   />
                 </TableCell>
@@ -384,6 +396,7 @@ export default function Scripts() {
                   <Chip
                     label={script.run_on}
                     size="small"
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     color={getRunOnColor(script.run_on) as any}
                   />
                 </TableCell>

@@ -42,6 +42,7 @@ import {
   Calendar,
   RefreshCw,
   X,
+  Copy,
 } from 'lucide-react'
 import { scheduleAPI, repositoriesAPI, backupAPI, scriptsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
@@ -129,11 +130,11 @@ const Schedule: React.FC = () => {
   const { track, EventCategory, EventAction } = useMatomo()
 
   // Determine current tab from URL
-  const getCurrentTab = () => {
+  const getCurrentTab = React.useCallback(() => {
     if (location.pathname === '/schedule/checks') return 1
     if (location.pathname === '/schedule/backups') return 0
     return 0 // default to backups
-  }
+  }, [location.pathname])
 
   const [currentTab, setCurrentTab] = useState(getCurrentTab())
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -173,7 +174,7 @@ const Schedule: React.FC = () => {
   // Sync tab with URL changes
   useEffect(() => {
     setCurrentTab(getCurrentTab())
-  }, [location.pathname])
+  }, [getCurrentTab])
 
   // Save filter state to localStorage whenever it changes
   useEffect(() => {
@@ -240,6 +241,7 @@ const Schedule: React.FC = () => {
       resetCreateForm()
       track(EventCategory.BACKUP, EventAction.CREATE, 'schedule')
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to create scheduled job')
     },
@@ -247,6 +249,7 @@ const Schedule: React.FC = () => {
 
   // Update job mutation
   const updateJobMutation = useMutation({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: ({ id, data }: { id: number; data: any }) =>
       scheduleAPI.updateScheduledJob(id, data),
     onSuccess: () => {
@@ -256,6 +259,7 @@ const Schedule: React.FC = () => {
       setEditingJob(null)
       track(EventCategory.BACKUP, EventAction.EDIT, 'schedule')
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to update scheduled job')
     },
@@ -271,6 +275,7 @@ const Schedule: React.FC = () => {
       setDeleteConfirmJob(null)
       track(EventCategory.BACKUP, EventAction.DELETE, 'schedule')
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to delete scheduled job')
     },
@@ -285,6 +290,7 @@ const Schedule: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
       track(EventCategory.BACKUP, EventAction.EDIT, 'schedule-toggle')
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to toggle job')
     },
@@ -300,8 +306,24 @@ const Schedule: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['backup-jobs-scheduled'] })
       track(EventCategory.BACKUP, EventAction.START, 'schedule-manual-run')
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to run job')
+    },
+  })
+
+  // Duplicate job mutation
+  const duplicateJobMutation = useMutation({
+    mutationFn: scheduleAPI.duplicateScheduledJob,
+    onSuccess: () => {
+      toast.success('Scheduled job duplicated successfully')
+      queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
+      queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
+      track(EventCategory.BACKUP, EventAction.CREATE, 'schedule-duplicate')
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to duplicate job')
     },
   })
 
@@ -312,6 +334,7 @@ const Schedule: React.FC = () => {
       toast.success('Backup cancelled successfully')
       queryClient.invalidateQueries({ queryKey: ['backup-jobs-scheduled'] })
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to cancel backup')
     },
@@ -449,6 +472,10 @@ const Schedule: React.FC = () => {
     }
   }
 
+  const handleDuplicateJob = (job: ScheduledJob) => {
+    duplicateJobMutation.mutate(job.id)
+  }
+
   const openCreateModal = () => {
     resetCreateForm()
     setShowCreateModal(true)
@@ -469,7 +496,7 @@ const Schedule: React.FC = () => {
       repository_ids = [job.repository_id]
     } else if (job.repository) {
       // Legacy format: repository path (string) - need to find ID
-      const repo = repositories?.find((r: any) => r.path === job.repository)
+      const repo = repositories?.find((r: Repository) => r.path === job.repository)
       if (repo) {
         repository_ids = [repo.id]
       }
@@ -501,6 +528,7 @@ const Schedule: React.FC = () => {
     setShowCronBuilder(true)
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const applyCronPreset = (preset: any) => {
     if (editingJob) {
       setEditForm({ ...editForm, cron_expression: preset.expression })
@@ -528,7 +556,7 @@ const Schedule: React.FC = () => {
   }
 
   const getRepositoryName = (path: string) => {
-    const repo = repositories?.find((r: any) => r.path === path)
+    const repo = repositories?.find((r: Repository) => r.path === path)
     return repo?.name || path
   }
 
@@ -657,7 +685,8 @@ const Schedule: React.FC = () => {
       render: (job) => {
         // Handle multi-repo schedules
         if (job.repository_ids && job.repository_ids.length > 0) {
-          const repos = repositories?.filter((r: any) => job.repository_ids?.includes(r.id)) || []
+          const repos =
+            repositories?.filter((r: Repository) => job.repository_ids?.includes(r.id)) || []
           if (repos.length === 0) {
             return (
               <Typography variant="caption" color="text.secondary">
@@ -667,6 +696,7 @@ const Schedule: React.FC = () => {
           }
           return (
             <Box>
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
               {repos.slice(0, 2).map((repo: any) => (
                 <RepositoryCell
                   key={repo.id}
@@ -693,7 +723,7 @@ const Schedule: React.FC = () => {
         }
         // Handle single-repo schedules (new format with repository_id)
         if (job.repository_id) {
-          const repo = repositories?.find((r: any) => r.id === job.repository_id)
+          const repo = repositories?.find((r: Repository) => r.id === job.repository_id)
           if (repo) {
             return <RepositoryCell repositoryName={repo.name} repositoryPath={repo.path} />
           }
@@ -830,6 +860,14 @@ const Schedule: React.FC = () => {
       onClick: (job) => openEditModal(job),
       color: 'default',
       tooltip: 'Edit',
+    },
+    {
+      icon: <Copy size={16} />,
+      label: 'Duplicate',
+      onClick: (job) => handleDuplicateJob(job),
+      color: 'default',
+      disabled: () => duplicateJobMutation.isPending,
+      tooltip: 'Duplicate',
     },
     {
       icon: <Trash2 size={16} />,
@@ -1124,6 +1162,7 @@ const Schedule: React.FC = () => {
                   </Typography>
                 </Stack>
                 <Stack spacing={1.5}>
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   {upcomingJobs.slice(0, 5).map((job: any) => (
                     <Box
                       key={job.id}
@@ -1144,7 +1183,8 @@ const Schedule: React.FC = () => {
                           {job.repository_ids && job.repository_ids.length > 0
                             ? `${job.repository_ids.length} repositories`
                             : job.repository_id
-                              ? repositories.find((r: any) => r.id === job.repository_id)?.name ||
+                              ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                repositories.find((r: any) => r.id === job.repository_id)?.name ||
                                 'Unknown'
                               : getRepositoryName(job.repository)}
                         </Typography>
@@ -1445,6 +1485,7 @@ const Schedule: React.FC = () => {
                         <MenuItem value="">
                           <em>None</em>
                         </MenuItem>
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                         {scriptsData?.data?.map((script: any) => (
                           <MenuItem key={script.id} value={script.id}>
                             {script.name}
@@ -1471,6 +1512,7 @@ const Schedule: React.FC = () => {
                         <MenuItem value="">
                           <em>None</em>
                         </MenuItem>
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                         {scriptsData?.data?.map((script: any) => (
                           <MenuItem key={script.id} value={script.id}>
                             {script.name}
@@ -1804,6 +1846,7 @@ const Schedule: React.FC = () => {
                         <MenuItem value="">
                           <em>None</em>
                         </MenuItem>
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                         {scriptsData?.data?.map((script: any) => (
                           <MenuItem key={script.id} value={script.id}>
                             {script.name}
@@ -1830,6 +1873,7 @@ const Schedule: React.FC = () => {
                         <MenuItem value="">
                           <em>None</em>
                         </MenuItem>
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                         {scriptsData?.data?.map((script: any) => (
                           <MenuItem key={script.id} value={script.id}>
                             {script.name}
@@ -2023,6 +2067,7 @@ const Schedule: React.FC = () => {
             Select a preset schedule for your backup job
           </Typography>
           <Stack spacing={1} sx={{ mt: 2 }}>
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {presetsData?.data?.presets?.map((preset: any) => (
               <Paper
                 key={preset.expression}

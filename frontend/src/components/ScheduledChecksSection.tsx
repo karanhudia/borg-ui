@@ -48,6 +48,7 @@ export interface ScheduledChecksSectionRef {
   openAddDialog: () => void
 }
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref) => {
   const queryClient = useQueryClient()
   const [showDialog, setShowDialog] = useState(false)
@@ -67,6 +68,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
 
   // Fetch scheduled checks for all repositories
   const { data: scheduledChecks, isLoading } = useQuery({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     queryKey: ['scheduled-checks', repositories.map((r: any) => r.id)],
     queryFn: async () => {
       const checks: ScheduledCheck[] = []
@@ -76,7 +78,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
           if (response.data.enabled) {
             checks.push(response.data)
           }
-        } catch (err) {
+        } catch {
           // Skip repos without check schedules
         }
       }
@@ -87,6 +89,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
 
   // Update check schedule mutation
   const updateMutation = useMutation({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: async ({ repoId, data }: { repoId: number; data: any }) => {
       return await repositoriesAPI.updateCheckSchedule(repoId, data)
     },
@@ -97,6 +100,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
       setShowDialog(false)
       setSelectedRepositoryId(null)
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to update check schedule')
     },
@@ -110,8 +114,9 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
     onSuccess: () => {
       toast.success('Check started')
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to start check')
+      toast.error(error.response?.data?.detail || 'Failed to update checks')
     },
   })
 
@@ -308,6 +313,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
                     </Typography>
                   </MenuItem>
                 ) : (
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   repositories.map((repo: any) => (
                     <MenuItem key={repo.id} value={repo.id} sx={{ fontSize: '1rem' }}>
                       <Box>

@@ -1,12 +1,7 @@
 import React from 'react'
 import { Autocomplete, TextField, Box, Typography, Stack, IconButton, Tooltip } from '@mui/material'
 import { HardDrive, ChevronUp, ChevronDown, X } from 'lucide-react'
-
-export interface Repository {
-  id: number
-  name: string
-  path: string
-}
+import { Repository } from '../types'
 
 interface MultiRepositorySelectorProps {
   repositories: Repository[]
@@ -52,7 +47,8 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
 
   // Filter repositories if needed
   const availableRepos = filterMode
-    ? safeRepositories.filter((repo: any) => repo.mode !== filterMode)
+    ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      safeRepositories.filter((repo: any) => repo.mode !== filterMode)
     : safeRepositories
 
   // Get selected repositories in order
@@ -60,7 +56,6 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
     .map((id) => availableRepos.find((r) => r.id === id))
     .filter(Boolean) as Repository[]
 
-  // Handle reordering
   const handleMoveUp = (index: number) => {
     if (index === 0) return
     const newIds = [...selectedIds]

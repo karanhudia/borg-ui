@@ -37,24 +37,10 @@ import {
 } from 'lucide-react'
 import { archivesAPI, repositoriesAPI, browseAPI, mountsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
+import { Archive, Repository } from '../types'
 import LockErrorDialog from '../components/LockErrorDialog'
 import { formatDate, formatDateCompact, formatBytes as formatBytesUtil } from '../utils/dateUtils'
 import { useMatomo } from '../hooks/useMatomo'
-
-interface Repository {
-  id: number
-  name: string
-  path: string
-  has_running_maintenance?: boolean
-}
-
-interface Archive {
-  id: string
-  archive: string
-  name: string
-  start: string
-  time: string
-}
 
 const Archives: React.FC = () => {
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(null)
@@ -93,6 +79,7 @@ const Archives: React.FC = () => {
 
   // Handle archives error
   React.useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (archivesError && (archivesError as any)?.response?.status === 423 && selectedRepositoryId) {
       setLockError({
         repositoryId: selectedRepositoryId,
@@ -115,6 +102,7 @@ const Archives: React.FC = () => {
 
   // Handle repo info error
   React.useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (repoInfoError && (repoInfoError as any)?.response?.status === 423 && selectedRepositoryId) {
       setLockError({
         repositoryId: selectedRepositoryId,
@@ -150,6 +138,7 @@ const Archives: React.FC = () => {
       setShowDeleteConfirm(null)
       trackArchive(EventAction.DELETE, selectedRepository?.name)
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(`Failed to delete archive: ${error.response?.data?.detail || error.message}`)
     },
@@ -185,6 +174,7 @@ const Archives: React.FC = () => {
       )
       trackArchive(EventAction.MOUNT, selectedRepository?.name)
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       const errorDetail = error.response?.data?.detail || error.message
       const isMountTimeout = errorDetail.toLowerCase().includes('mount timeout')
@@ -246,11 +236,17 @@ const Archives: React.FC = () => {
   }
 
   // Get repositories from API response
-  const repositories = repositoriesData?.data?.repositories || []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, react-hooks/preserve-manual-memoization
+  const repositories = React.useMemo(
+    () => (repositoriesData as any)?.repositories || [],
+    [repositoriesData]
+  )
 
   // Handle incoming navigation state (from "View Archives" button)
   useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (location.state && (location.state as any).repositoryId && repositories.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const repositoryId = (location.state as any).repositoryId
       setSelectedRepositoryId(repositoryId)
       const repo = repositories.find((r: Repository) => r.id === repositoryId)
@@ -270,9 +266,12 @@ const Archives: React.FC = () => {
     if (!archiveContents?.data?.items) return { folders: [], files: [] }
 
     const items = archiveContents.data.items
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const folders: any[] = []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const files: any[] = []
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     items.forEach((item: any) => {
       if (item.type === 'directory') {
         folders.push({
@@ -917,7 +916,7 @@ const Archives: React.FC = () => {
             </Stack>
           ) : (
             <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
-              <AlertCircle size={48} style={{ marginBottom: 16 }} />
+              <AlertCircle size={48} style={{ display: 'block', margin: '0 auto 16px auto' }} />
               <Typography variant="body1" color="text.secondary">
                 No archive information available
               </Typography>

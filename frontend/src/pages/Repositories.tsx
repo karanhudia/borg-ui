@@ -37,10 +37,11 @@ import {
   Inventory,
   FileUpload,
 } from '@mui/icons-material'
-import { repositoriesAPI, sshKeysAPI, settingsAPI } from '../services/api'
+import { repositoriesAPI, sshKeysAPI, settingsAPI, RepositoryData } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { useAppState } from '../context/AppContext'
 import { formatDateShort, formatBytes, parseBytes } from '../utils/dateUtils'
+import { AxiosResponse } from 'axios'
 import { generateBorgCreateCommand } from '../utils/borgUtils'
 import FileExplorerDialog from '../components/FileExplorerDialog'
 import { FolderOpen } from '@mui/icons-material'
@@ -50,6 +51,7 @@ import CompactWarningDialog from '../components/CompactWarningDialog'
 import RepositoryCard from '../components/RepositoryCard'
 import AdvancedRepositoryOptions from '../components/AdvancedRepositoryOptions'
 import RepositoryWizard from '../components/RepositoryWizard'
+import PathSelectorField from '../components/PathSelectorField'
 
 interface Repository {
   id: number
@@ -69,6 +71,14 @@ interface Repository {
   mode: 'full' | 'observe' // full: backups + observability, observe: observability-only
   custom_flags?: string | null // Custom command-line flags for borg create
   has_running_maintenance?: boolean
+  remote_path?: string
+  pre_backup_script?: string
+  post_backup_script?: string
+  hook_timeout?: number
+  pre_hook_timeout?: number
+  post_hook_timeout?: number
+  continue_on_hook_failure?: boolean
+  bypass_lock?: boolean
 }
 
 interface SSHConnection {
@@ -109,6 +119,7 @@ export default function Repositories() {
     keep_quarterly: 0,
     keep_yearly: 1,
   })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [pruneResults, setPruneResults] = useState<any>(null)
   const [lockError, setLockError] = useState<{
     repositoryId: number
@@ -119,17 +130,20 @@ export default function Repositories() {
   const [repositoriesWithJobs, setRepositoriesWithJobs] = useState<Set<number>>(new Set())
 
   // Queries
-  const { data: repositoriesData, isLoading } = useQuery({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: repositoriesData, isLoading } = useQuery<AxiosResponse<any>>({
     queryKey: ['repositories'],
     queryFn: repositoriesAPI.getRepositories,
   })
 
-  const { data: connectionsData } = useQuery({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: connectionsData } = useQuery<AxiosResponse<any>>({
     queryKey: ['ssh-connections'],
     queryFn: sshKeysAPI.getSSHConnections,
   })
 
-  const { data: systemSettingsData } = useQuery({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: systemSettingsData } = useQuery<AxiosResponse<any>>({
     queryKey: ['systemSettings'],
     queryFn: settingsAPI.getSystemSettings,
   })
@@ -139,7 +153,8 @@ export default function Repositories() {
     data: repositoryInfo,
     isLoading: loadingInfo,
     error: infoError,
-  } = useQuery<any>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } = useQuery<AxiosResponse<{ info: any }>>({
     queryKey: ['repository-info', viewingInfoRepository?.id],
     queryFn: () => repositoriesAPI.getRepositoryInfo(viewingInfoRepository!.id),
     enabled: !!viewingInfoRepository,
@@ -148,6 +163,7 @@ export default function Repositories() {
 
   // Handle repository info error
   React.useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (infoError && (infoError as any)?.response?.status === 423 && viewingInfoRepository) {
       setLockError({
         repositoryId: viewingInfoRepository.id,
@@ -174,6 +190,7 @@ export default function Repositories() {
   // Mutations
   const createRepositoryMutation = useMutation({
     mutationFn: repositoriesAPI.createRepository,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSuccess: (response: any) => {
       // Check if repository already existed
       const alreadyExisted = response?.data?.already_existed || false
@@ -193,6 +210,7 @@ export default function Repositories() {
       closeRepositoryModal()
       trackRepository(EventAction.CREATE, response?.data?.repository?.name)
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to create repository')
     },
@@ -200,6 +218,7 @@ export default function Repositories() {
 
   const importRepositoryMutation = useMutation({
     mutationFn: repositoriesAPI.importRepository,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSuccess: async (response: any) => {
       const message = response?.data?.message || 'Repository imported successfully'
       const archiveCount = response?.data?.repository?.archive_count || 0
@@ -218,6 +237,7 @@ export default function Repositories() {
               duration: 5000,
             }
           )
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
           toast.error(
             error.response?.data?.detail || 'Repository imported but keyfile upload failed'
@@ -238,12 +258,14 @@ export default function Repositories() {
       closeRepositoryModal()
       trackRepository(EventAction.UPLOAD, response?.data?.repository?.name)
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to import repository')
     },
   })
 
   const updateRepositoryMutation = useMutation({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: ({ id, data }: { id: number; data: any }) =>
       repositoriesAPI.updateRepository(id, data),
     onSuccess: () => {
@@ -259,6 +281,7 @@ export default function Repositories() {
       )
       setEditingRepository(null)
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to update repository')
     },
@@ -273,6 +296,7 @@ export default function Repositories() {
       queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
       appState.refetch()
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to delete repository')
     },
@@ -281,6 +305,7 @@ export default function Repositories() {
   const checkRepositoryMutation = useMutation({
     mutationFn: ({ repositoryId, maxDuration }: { repositoryId: number; maxDuration: number }) =>
       repositoriesAPI.checkRepository(repositoryId, maxDuration),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSuccess: (_response: any, variables: { repositoryId: number; maxDuration: number }) => {
       toast.success('Check operation started')
       trackMaintenance(EventAction.START, 'Check', checkingRepository?.name)
@@ -290,6 +315,7 @@ export default function Repositories() {
       // Immediately refetch running jobs to show progress
       queryClient.invalidateQueries({ queryKey: ['running-jobs', variables.repositoryId] })
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       const detail = error.response?.data?.detail || 'Failed to start check'
       // Handle concurrent operation error (409)
@@ -304,6 +330,7 @@ export default function Repositories() {
 
   const compactRepositoryMutation = useMutation({
     mutationFn: repositoriesAPI.compactRepository,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSuccess: (_response: any, repositoryId: number) => {
       toast.success('Compact operation started')
       trackMaintenance(EventAction.START, 'Compact', compactingRepository?.name)
@@ -313,6 +340,7 @@ export default function Repositories() {
       // Immediately refetch running jobs to show progress
       queryClient.invalidateQueries({ queryKey: ['running-jobs', repositoryId] })
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       const detail = error.response?.data?.detail || 'Failed to start compact'
       // Handle concurrent operation error (409)
@@ -326,8 +354,10 @@ export default function Repositories() {
   })
 
   const pruneRepositoryMutation = useMutation({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: ({ id, data }: { id: number; data: any }) =>
       repositoriesAPI.pruneRepository(id, data),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSuccess: (response: any) => {
       setPruneResults(response.data)
       if (response.data.dry_run) {
@@ -339,6 +369,7 @@ export default function Repositories() {
         queryClient.invalidateQueries({ queryKey: ['repository-archives', pruningRepository?.id] })
       }
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to prune repository')
       setPruneResults(null)
@@ -570,7 +601,7 @@ export default function Repositories() {
     setWizardRepository(null)
   }
 
-  const handleWizardSubmit = async (data: any) => {
+  const handleWizardSubmit = async (data: RepositoryData) => {
     try {
       if (wizardMode === 'edit' && wizardRepository) {
         // Edit existing repository
@@ -587,6 +618,8 @@ export default function Repositories() {
       }
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
       closeWizard()
+      closeWizard()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       toast.error(error.response?.data?.detail || `Failed to ${wizardMode} repository`)
     }
@@ -617,16 +650,16 @@ export default function Repositories() {
       compressionObfuscate: parsed.obfuscate,
       source_directories: repository.source_directories || [],
       exclude_patterns: repository.exclude_patterns || [],
-      remote_path: (repository as any).remote_path || '',
-      pre_backup_script: (repository as any).pre_backup_script || '',
-      post_backup_script: (repository as any).post_backup_script || '',
-      hook_timeout: (repository as any).hook_timeout || 300,
-      pre_hook_timeout: (repository as any).pre_hook_timeout || 300,
-      post_hook_timeout: (repository as any).post_hook_timeout || 300,
-      continue_on_hook_failure: (repository as any).continue_on_hook_failure || false,
+      remote_path: repository.remote_path || '',
+      pre_backup_script: repository.pre_backup_script || '',
+      post_backup_script: repository.post_backup_script || '',
+      hook_timeout: repository.hook_timeout || 300,
+      pre_hook_timeout: repository.pre_hook_timeout || 300,
+      post_hook_timeout: repository.post_hook_timeout || 300,
+      continue_on_hook_failure: repository.continue_on_hook_failure || false,
       mode: repository.mode || 'full',
       custom_flags: repository.custom_flags || '',
-      bypass_lock: (repository as any).bypass_lock || false,
+      bypass_lock: repository.bypass_lock || false,
     })
     setEditNewSourceDir('')
     setEditNewExcludePattern('')
@@ -1813,12 +1846,14 @@ export default function Repositories() {
                 fullWidth
               />
 
-              <TextField
+              <PathSelectorField
                 label="Path"
                 value={editForm.path}
-                onChange={(e) => setEditForm({ ...editForm, path: e.target.value })}
+                onChange={(value) => setEditForm({ ...editForm, path: value })}
+                placeholder="/path/to/repository"
                 required
-                fullWidth
+                selectMode="directories"
+                size="medium"
               />
 
               {/* Repository Mode */}

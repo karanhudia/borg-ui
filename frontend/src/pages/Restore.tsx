@@ -37,24 +37,9 @@ import { formatDate, formatBytes as formatBytesUtil, formatTimeRange } from '../
 import RepositoryInfo from '../components/RepositoryInfo'
 import PathSelectorField from '../components/PathSelectorField'
 import LockErrorDialog from '../components/LockErrorDialog'
+import { Archive, Repository } from '../types'
 import ArchiveBrowserDialog from '../components/ArchiveBrowserDialog'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
-
-interface Repository {
-  id: number
-  name: string
-  path: string
-  repository_type: 'local' | 'ssh'
-  has_running_maintenance?: boolean
-}
-
-interface Archive {
-  id: string
-  archive: string
-  name: string
-  start: string
-  time: string
-}
 
 interface RestoreJob {
   id: number
@@ -64,8 +49,8 @@ interface RestoreJob {
   status: string
   started_at?: string
   completed_at?: string
-  progress: number
-  error_message?: string
+  progress?: number
+  error?: string
   progress_details?: {
     nfiles: number
     current_file: string
@@ -108,6 +93,7 @@ const Restore: React.FC = () => {
 
   // Handle archives error
   React.useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (archivesError && (archivesError as any)?.response?.status === 423 && selectedRepoData) {
       setLockError({
         repositoryId: selectedRepoData.id,
@@ -126,6 +112,7 @@ const Restore: React.FC = () => {
 
   // Handle repo info error
   React.useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (repoInfoError && (repoInfoError as any)?.response?.status === 423 && selectedRepoData) {
       setLockError({
         repositoryId: selectedRepoData.id,
@@ -150,6 +137,7 @@ const Restore: React.FC = () => {
   React.useEffect(() => {
     if (
       archiveInfoError &&
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (archiveInfoError as any)?.response?.status === 423 &&
       selectedRepoData
     ) {
@@ -161,6 +149,7 @@ const Restore: React.FC = () => {
   }, [archiveInfoError, selectedRepoData])
 
   // Get restore jobs with polling
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: restoreJobsData } = useQuery<any>({
     queryKey: ['restore-jobs'],
     queryFn: restoreAPI.getRestoreJobs,
@@ -194,6 +183,7 @@ const Restore: React.FC = () => {
       // Refetch in background (don't await - let polling handle it)
       queryClient.refetchQueries({ queryKey: ['restore-jobs'] })
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(`Failed to start restore: ${error.response?.data?.detail || error.message}`)
     },
@@ -233,16 +223,30 @@ const Restore: React.FC = () => {
   }
 
   // Open archive browser when restore archive is set
-  const handleRestoreArchiveClick = (archive: Archive) => {
-    setRestoreArchive(archive)
-    setSelectedPaths([]) // Reset paths
-    setShowBrowser(true)
-    // Track viewing archive for restore
-    trackArchive(EventAction.VIEW, selectedRepoData?.name)
-  }
+  const handleRestoreArchiveClick = React.useCallback(
+    (archive: Archive) => {
+      setRestoreArchive(archive)
+      setSelectedPaths([]) // Reset paths
+      setShowBrowser(true)
+      // Track viewing archive for restore
+      trackArchive(EventAction.VIEW, selectedRepoData?.name)
+    },
+    [
+      setRestoreArchive,
+      setSelectedPaths,
+      setShowBrowser,
+      trackArchive,
+      selectedRepoData,
+      EventAction,
+    ]
+  )
 
   // Get repositories from API response
-  const repositories = repositoriesData?.data?.repositories || []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, react-hooks/preserve-manual-memoization
+  const repositories = React.useMemo(
+    () => (repositoriesData as any)?.repositories || [],
+    [repositoriesData]
+  )
   const archivesList = (archives?.data?.archives || []).sort((a: Archive, b: Archive) => {
     return new Date(b.start).getTime() - new Date(a.start).getTime()
   })
@@ -250,6 +254,7 @@ const Restore: React.FC = () => {
   // Handle incoming navigation state (from "Restore" button in Archives)
   useEffect(() => {
     if (location.state && repositories.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const state = location.state as any
       if (state.repositoryPath && state.repositoryId) {
         // Set repository
@@ -266,6 +271,7 @@ const Restore: React.FC = () => {
   // Handle archive selection when archives are loaded
   useEffect(() => {
     if (location.state && archivesList.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const state = location.state as any
       if (state.archiveName && selectedRepoData) {
         const archive = archivesList.find((a: Archive) => a.name === state.archiveName)
@@ -275,7 +281,7 @@ const Restore: React.FC = () => {
         }
       }
     }
-  }, [archivesList, location.state, selectedRepoData])
+  }, [archivesList, location.state, selectedRepoData, handleRestoreArchiveClick])
 
   // Get archive statistics
   const archiveStats = useMemo(() => {

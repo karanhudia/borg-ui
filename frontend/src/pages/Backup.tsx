@@ -13,22 +13,15 @@ import {
   InputLabel,
   CircularProgress,
   Stack,
-  Chip,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableRow,
   Paper,
   Alert,
-  Divider,
   alpha,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
 } from '@mui/material'
-import { Play, Square, Clock, Folder, Database, Info, RefreshCw, AlertCircle } from 'lucide-react'
+import { Play, Square, Clock, Database, Info, RefreshCw } from 'lucide-react'
 import { backupAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import {
@@ -39,38 +32,11 @@ import {
 } from '../utils/dateUtils'
 import { generateBorgCreateCommand } from '../utils/borgUtils'
 import LockErrorDialog from '../components/LockErrorDialog'
+import { BackupJob } from '../types'
 import BackupJobsTable from '../components/BackupJobsTable'
 import StatusBadge from '../components/StatusBadge'
 import { TerminalLogViewer } from '../components/TerminalLogViewer'
 import { useMatomo } from '../hooks/useMatomo'
-
-interface BackupJob {
-  id: string
-  repository: string
-  status: 'running' | 'completed' | 'completed_with_warnings' | 'failed' | 'cancelled'
-  started_at: string
-  completed_at?: string
-  progress?: number
-  total_files?: number
-  processed_files?: number
-  total_size?: string
-  processed_size?: string
-  error_message?: string
-  has_logs?: boolean // Indicates if logs are available for this job
-  triggered_by?: string // 'manual' or 'schedule'
-  schedule_id?: number | null
-  progress_details?: {
-    original_size: number
-    compressed_size: number
-    deduplicated_size: number
-    nfiles: number
-    current_file: string
-    progress_percent: number
-    backup_speed: number
-    total_expected_size: number
-    estimated_time_remaining: number
-  }
-}
 
 const Backup: React.FC = () => {
   const [selectedRepository, setSelectedRepository] = useState<string>('')
@@ -85,7 +51,9 @@ const Backup: React.FC = () => {
 
   // Handle incoming navigation state (from "Backup Now" button)
   useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (location.state && (location.state as any).repositoryPath) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setSelectedRepository((location.state as any).repositoryPath)
       // Reset scroll position to top
       window.scrollTo(0, 0)
@@ -108,6 +76,7 @@ const Backup: React.FC = () => {
   // Get selected repository details
   const selectedRepoData = useMemo(() => {
     if (!selectedRepository || !repositoriesData?.data?.repositories) return null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return repositoriesData.data.repositories.find((repo: any) => repo.path === selectedRepository)
   }, [selectedRepository, repositoriesData])
 
@@ -124,6 +93,7 @@ const Backup: React.FC = () => {
         parseBytes(selectedRepoData?.total_size)
       )
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(`Failed to start backup: ${error.response?.data?.detail || error.message}`)
     },
@@ -137,6 +107,7 @@ const Backup: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['backup-status-manual'] })
       trackBackup(EventAction.STOP, 'manual')
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(`Failed to cancel backup: ${error.response?.data?.detail || error.message}`)
     },
@@ -145,6 +116,7 @@ const Backup: React.FC = () => {
   // Handle repository selection
   const handleRepositoryChange = (repoPath: string) => {
     setSelectedRepository(repoPath)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const repo = repositoriesData?.data?.repositories?.find((r: any) => r.path === repoPath)
     if (repo) {
       trackBackup(EventAction.FILTER, undefined, repo.name)
@@ -177,12 +149,14 @@ const Backup: React.FC = () => {
   }
 
   // Handle download logs
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleDownloadLogs = (job: any) => {
     try {
       backupAPI.downloadLogs(job.id)
       toast.success('Downloading logs...')
       trackBackup(EventAction.DOWNLOAD, 'logs')
-    } catch (error) {
+    } catch {
+      // Error handled by mutation
       toast.error('Failed to download logs')
     }
   }
@@ -216,6 +190,7 @@ const Backup: React.FC = () => {
   // Handle break lock action
   const handleBreakLock = async (job: BackupJob) => {
     const repoPath = job.error_message?.match(/LOCK_ERROR::(.+)/)?.[1].split('\n')[0]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const repo = repositoriesData?.data?.repositories?.find((r: any) => r.path === repoPath)
     if (!repo) return
 
@@ -228,6 +203,7 @@ const Backup: React.FC = () => {
         await repositoriesAPI.breakLock(repo.id)
         toast.success('Lock removed successfully! You can now start a new backup.')
         queryClient.invalidateQueries({ queryKey: ['backup-status'] })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (error: any) {
         toast.error(error.response?.data?.detail || 'Failed to break lock')
       }
@@ -280,7 +256,9 @@ const Backup: React.FC = () => {
                   {loadingRepositories ? 'Loading repositories...' : 'Select a repository...'}
                 </MenuItem>
                 {repositoriesData?.data?.repositories
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   ?.filter((repo: any) => repo.mode !== 'observe')
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   .map((repo: any) => (
                     <MenuItem
                       key={repo.id}
@@ -340,15 +318,18 @@ const Backup: React.FC = () => {
             </Button>
           </Stack>
 
-          {repositoriesData?.data?.repositories?.some((repo: any) => repo.mode === 'observe') &&
-            !loadingRepositories && (
-              <Alert severity="info" sx={{ mt: 2 }}>
-                <Typography variant="body2">
-                  Some repositories are hidden because they are configured for observability only.
-                  To create backups, switch them to full mode in Repository settings.
-                </Typography>
-              </Alert>
-            )}
+          {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            repositoriesData?.data?.repositories?.some((repo: any) => repo.mode === 'observe') &&
+              !loadingRepositories && (
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  <Typography variant="body2">
+                    Some repositories are hidden because they are configured for observability only.
+                    To create backups, switch them to full mode in Repository settings.
+                  </Typography>
+                </Alert>
+              )
+          }
 
           {repositoriesData?.data?.repositories?.length === 0 && !loadingRepositories && (
             <Alert severity="warning" sx={{ mt: 2 }}>
@@ -363,185 +344,31 @@ const Backup: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Backup Context Card */}
+      {/* Command Preview Card */}
       {selectedRepoData && (
         <Card sx={{ mb: 3, bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04) }}>
           <CardContent>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
               <Info size={20} color="#1976d2" />
               <Typography variant="h6" fontWeight={600}>
-                Backup Overview
-              </Typography>
-            </Stack>
-
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Here's what will be backed up and the current backup status
-            </Typography>
-
-            {/* Command Preview */}
-            <Alert severity="info" sx={{ mb: 3 }}>
-              <Typography variant="subtitle2" gutterBottom>
                 Command Preview
               </Typography>
-              <Box
-                sx={{
-                  bgcolor: 'grey.900',
-                  color: 'grey.100',
-                  p: 1.5,
-                  borderRadius: 1,
-                  fontFamily: 'monospace',
-                  fontSize: '0.875rem',
-                  overflow: 'auto',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-all',
-                }}
-              >
-                {getBorgBackupCommand()}
-              </Box>
-            </Alert>
-
-            <Stack spacing={3}>
-              {/* Source Directories */}
-              <Box>
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  alignItems="center"
-                  sx={{ mb: 1.5, color: 'text.secondary' }}
-                >
-                  <Folder size={18} />
-                  <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
-                    Source Directories
-                  </Typography>
-                </Stack>
-                {selectedRepoData.source_directories &&
-                selectedRepoData.source_directories.length > 0 ? (
-                  <Stack spacing={1} sx={{ pl: 3.5 }}>
-                    {selectedRepoData.source_directories.map((dir: string, index: number) => (
-                      <Chip
-                        key={index}
-                        label={dir}
-                        size="small"
-                        icon={<Folder size={14} />}
-                        sx={{ justifyContent: 'flex-start', maxWidth: 'fit-content' }}
-                      />
-                    ))}
-                  </Stack>
-                ) : (
-                  <Alert severity="warning" sx={{ ml: 3.5 }}>
-                    No source directories configured for this repository
-                  </Alert>
-                )}
-              </Box>
-
-              {/* Exclude Patterns */}
-              {selectedRepoData.exclude_patterns &&
-                selectedRepoData.exclude_patterns.length > 0 && (
-                  <>
-                    <Divider />
-                    <Box>
-                      <Stack
-                        direction="row"
-                        spacing={1}
-                        alignItems="center"
-                        sx={{ mb: 1.5, color: 'text.secondary' }}
-                      >
-                        <AlertCircle size={18} />
-                        <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
-                          Exclude Patterns
-                        </Typography>
-                      </Stack>
-                      <Stack spacing={1} sx={{ pl: 3.5 }}>
-                        {selectedRepoData.exclude_patterns.map((pattern: string, index: number) => (
-                          <Chip
-                            key={index}
-                            label={pattern}
-                            size="small"
-                            color="warning"
-                            sx={{ justifyContent: 'flex-start', maxWidth: 'fit-content' }}
-                          />
-                        ))}
-                      </Stack>
-                    </Box>
-                  </>
-                )}
-
-              <Divider />
-
-              {/* Repository Info */}
-              <Box>
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  alignItems="center"
-                  sx={{ mb: 1.5, color: 'text.secondary' }}
-                >
-                  <Database size={18} />
-                  <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
-                    Backup Destination
-                  </Typography>
-                </Stack>
-                <TableContainer sx={{ pl: 3.5 }}>
-                  <Table size="small">
-                    <TableBody>
-                      <TableRow>
-                        <TableCell
-                          sx={{
-                            fontWeight: 500,
-                            color: 'text.secondary',
-                            width: '30%',
-                            border: 'none',
-                            py: 0.5,
-                          }}
-                        >
-                          Repository Name
-                        </TableCell>
-                        <TableCell sx={{ border: 'none', py: 0.5 }}>
-                          {selectedRepoData.name}
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell
-                          sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}
-                        >
-                          Path
-                        </TableCell>
-                        <TableCell
-                          sx={{
-                            border: 'none',
-                            py: 0.5,
-                            fontFamily: 'monospace',
-                            fontSize: '0.875rem',
-                          }}
-                        >
-                          {selectedRepoData.path}
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell
-                          sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}
-                        >
-                          Encryption
-                        </TableCell>
-                        <TableCell sx={{ border: 'none', py: 0.5 }}>
-                          {selectedRepoData.encryption || 'Unknown'}
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell
-                          sx={{ fontWeight: 500, color: 'text.secondary', border: 'none', py: 0.5 }}
-                        >
-                          Compression
-                        </TableCell>
-                        <TableCell sx={{ border: 'none', py: 0.5 }}>
-                          {selectedRepoData.compression || 'lz4'}
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Box>
             </Stack>
+            <Box
+              sx={{
+                bgcolor: 'grey.900',
+                color: 'grey.100',
+                p: 1.5,
+                borderRadius: 1,
+                fontFamily: 'monospace',
+                fontSize: '0.875rem',
+                overflow: 'auto',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-all',
+              }}
+            >
+              {getBorgBackupCommand()}
+            </Box>
           </CardContent>
         </Card>
       )}
@@ -584,7 +411,7 @@ const Backup: React.FC = () => {
                       color="error"
                       size="small"
                       startIcon={<Square size={16} />}
-                      onClick={() => handleCancelBackup(job.id)}
+                      onClick={() => handleCancelBackup(String(job.id))}
                       disabled={cancelBackupMutation.isPending}
                     >
                       Cancel
@@ -774,10 +601,10 @@ const Backup: React.FC = () => {
               downloadLogs: true,
             }}
             onViewLogs={handleViewLogs}
-            onCancelJob={handleCancelBackup}
+            onCancelJob={(job) => handleCancelBackup(String(job.id))}
             onBreakLock={handleBreakLock}
             onDownloadLogs={handleDownloadLogs}
-            getRowKey={(job) => job.id}
+            getRowKey={(job) => String(job.id)}
             headerBgColor="background.default"
             enableHover={true}
             emptyState={{

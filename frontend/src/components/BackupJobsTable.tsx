@@ -5,23 +5,26 @@ import DataTable, { Column, ActionButton } from './DataTable'
 import StatusBadge from './StatusBadge'
 import RepositoryCell from './RepositoryCell'
 import { formatDate, formatTimeRange } from '../utils/dateUtils'
+import { Job, Repository } from '../types/jobs'
 
-interface BackupJobsTableProps {
+interface EmptyState {
+  icon?: React.ReactNode
+  title?: string
+  description?: string
+}
+
+interface BackupJobsTableProps<T extends Job = Job> {
   // Data
-  jobs: any[]
+  jobs: T[]
 
   // Display options
   showTypeColumn?: boolean
   showTriggerColumn?: boolean
-  repositories?: any[]
+  repositories?: Repository[]
 
   // State
   loading?: boolean
-  emptyState?: {
-    icon?: React.ReactNode
-    title?: string
-    description?: string
-  }
+  emptyState?: EmptyState
 
   // Actions configuration
   actions?: {
@@ -34,17 +37,17 @@ interface BackupJobsTableProps {
   }
 
   // Callbacks
-  onViewLogs?: (job: any) => void
-  onDownloadLogs?: (job: any) => void
-  onErrorDetails?: (job: any) => void
-  onCancelJob?: (job: any) => void
-  onBreakLock?: (job: any) => void
-  onRunNow?: (job: any) => void
+  onViewLogs?: (job: T) => void
+  onDownloadLogs?: (job: T) => void
+  onErrorDetails?: (job: T) => void
+  onCancelJob?: (job: T) => void | Promise<void>
+  onBreakLock?: (job: T) => void | Promise<void>
+  onRunNow?: (job: T) => void
 
   // Table styling
   headerBgColor?: string
   enableHover?: boolean
-  getRowKey?: (job: any) => string
+  getRowKey?: (job: T) => string | number
 }
 
 const getTypeLabel = (type: string): string => {
@@ -87,7 +90,7 @@ const getTypeColor = (
   }
 }
 
-export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
+export const BackupJobsTable = <T extends Job = Job>({
   jobs,
   showTypeColumn = false,
   showTriggerColumn = false,
@@ -104,15 +107,15 @@ export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
   headerBgColor = 'background.default',
   enableHover = true,
   getRowKey,
-}) => {
+}: BackupJobsTableProps<T>) => {
   // Build columns array based on options
-  const columns: Column<any>[] = [
+  const columns: Column<T>[] = [
     {
       id: 'id',
       label: 'Job ID',
       align: 'left',
       width: '80px',
-      render: (job: any) => (
+      render: (job: T) => (
         <Typography variant="body2" fontWeight={600} color="primary">
           #{job.id}
         </Typography>
@@ -124,7 +127,7 @@ export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
       align: 'left',
       minWidth: '200px',
       width: '25%',
-      render: (job: any) => {
+      render: (job: T) => {
         // Handle Activity items with different repository field names
         if (job.type && job.type === 'package') {
           const displayName = job.archive_name || job.package_name || '-'
@@ -143,7 +146,7 @@ export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
         }
 
         // Standard backup job handling
-        const repo = repositories?.find((r: any) => r.path === job.repository)
+        const repo = repositories?.find((r) => r.path === job.repository)
         return (
           <RepositoryCell
             repositoryName={repo?.name || job.repository}
@@ -161,8 +164,12 @@ export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
             label: 'Type',
             align: 'left' as const,
             width: '140px',
-            render: (job: any) => (
-              <Chip label={getTypeLabel(job.type)} color={getTypeColor(job.type)} size="small" />
+            render: (job: T) => (
+              <Chip
+                label={getTypeLabel(job.type || '')}
+                color={getTypeColor(job.type || '')}
+                size="small"
+              />
             ),
           },
         ]
@@ -175,7 +182,7 @@ export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
             label: 'Trigger',
             align: 'center' as const,
             width: '90px',
-            render: (job: any) => {
+            render: (job: T) => {
               const isScheduled = job.triggered_by === 'schedule'
               return (
                 <Tooltip
@@ -201,14 +208,14 @@ export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
       label: 'Status',
       align: 'left',
       width: '100px',
-      render: (job: any) => <StatusBadge status={job.status} />,
+      render: (job: T) => <StatusBadge status={job.status} />,
     },
     {
       id: 'started_at',
       label: 'Started',
       align: 'left',
       width: '180px',
-      render: (job: any) => (
+      render: (job: T) => (
         <Typography variant="body2" color="text.secondary">
           {job.started_at ? formatDate(job.started_at) : '-'}
         </Typography>
@@ -219,7 +226,7 @@ export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
       label: 'Duration',
       align: 'left',
       width: '110px',
-      render: (job: any) => (
+      render: (job: T) => (
         <Typography variant="body2" color="text.secondary">
           {formatTimeRange(job.started_at, job.completed_at, job.status)}
         </Typography>
@@ -228,7 +235,7 @@ export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
   ]
 
   // Build actions array
-  const actionButtons: ActionButton<any>[] = []
+  const actionButtons: ActionButton<T>[] = []
 
   if (actions.viewLogs !== false && onViewLogs) {
     actionButtons.push({
@@ -296,7 +303,7 @@ export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
   }
 
   // Build default emptyState
-  const defaultEmptyState: any = {
+  const defaultEmptyState: EmptyState = {
     icon: (
       <Box sx={{ color: 'text.disabled' }}>
         <Clock size={48} />
@@ -306,20 +313,24 @@ export const BackupJobsTable: React.FC<BackupJobsTableProps> = ({
     description: 'No backup jobs to display',
   }
 
-  const finalEmptyState = emptyState
+  const finalEmptyState: { icon: React.ReactNode; title: string; description?: string } = emptyState
     ? {
-        icon: emptyState.icon || defaultEmptyState.icon,
-        title: emptyState.title || defaultEmptyState.title,
+        icon: emptyState.icon || defaultEmptyState.icon!,
+        title: emptyState.title || defaultEmptyState.title!,
         description: emptyState.description || defaultEmptyState.description,
       }
-    : defaultEmptyState
+    : {
+        icon: defaultEmptyState.icon!,
+        title: defaultEmptyState.title!,
+        description: defaultEmptyState.description,
+      }
 
   return (
     <DataTable
       data={jobs}
       columns={columns}
       actions={actionButtons}
-      getRowKey={getRowKey || ((job: any) => String(job.id))}
+      getRowKey={getRowKey || ((job: T) => String((job as Job).id))}
       loading={loading}
       headerBgColor={headerBgColor}
       enableHover={enableHover}
