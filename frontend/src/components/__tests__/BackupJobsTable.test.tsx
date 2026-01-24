@@ -263,175 +263,169 @@ describe('BackupJobsTable', () => {
     })
   })
 
-  describe('Actions', () => {
-    it('shows View Logs action when enabled', () => {
-      renderWithProviders(
-        <BackupJobsTable
-          jobs={mockJobs}
-          actions={{ viewLogs: true }}
-          onViewLogs={mockCallbacks.onViewLogs}
-        />
-      )
+  it('shows View Logs action when enabled', () => {
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={mockJobs}
+        actions={{ viewLogs: true }}
+        onViewLogs={mockCallbacks.onViewLogs}
+      />
+    )
 
-      // Query by aria-label from tooltip
-      const viewButtons = screen.getAllByLabelText('View Logs')
-      expect(viewButtons.length).toBeGreaterThan(0)
-    })
+    // Query by role to match the specific button
+    const viewButtons = screen.getAllByRole('button', { name: 'View Logs' })
+    expect(viewButtons.length).toBeGreaterThan(0)
+  })
 
-    it('calls onViewLogs when View Logs is clicked', async () => {
-      const user = userEvent.setup()
+  it('calls onViewLogs when View Logs is clicked', async () => {
+    const user = userEvent.setup()
 
-      renderWithProviders(
-        <BackupJobsTable
-          jobs={mockJobs}
-          actions={{ viewLogs: true }}
-          onViewLogs={mockCallbacks.onViewLogs}
-        />
-      )
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={mockJobs}
+        actions={{ viewLogs: true }}
+        onViewLogs={mockCallbacks.onViewLogs}
+      />
+    )
 
-      // The aria-label is on the span, need to find the button inside
-      const viewButtonContainer = screen.getAllByLabelText('View Logs')[0]
-      const viewButton = viewButtonContainer.querySelector('button')
-      expect(viewButton).toBeInTheDocument()
+    // The aria-label is on the button
+    const viewButton = screen.getAllByRole('button', { name: 'View Logs' })[0]
+    expect(viewButton).toBeInTheDocument()
 
-      if (viewButton) {
-        await user.click(viewButton)
-        expect(mockCallbacks.onViewLogs).toHaveBeenCalledWith(mockJobs[0])
-      }
-    })
+    if (viewButton) {
+      await user.click(viewButton)
+      expect(mockCallbacks.onViewLogs).toHaveBeenCalledWith(mockJobs[0])
+    }
+  })
 
-    it('shows Download Logs only for jobs with logs', () => {
-      renderWithProviders(
-        <BackupJobsTable
-          jobs={mockJobs}
-          actions={{ downloadLogs: true }}
-          onDownloadLogs={mockCallbacks.onDownloadLogs}
-        />
-      )
+  it('shows Download Logs only for jobs with logs', () => {
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={mockJobs}
+        actions={{ downloadLogs: true }}
+        onDownloadLogs={mockCallbacks.onDownloadLogs}
+      />
+    )
 
-      // Only job 1 has has_logs: true
-      const downloadButtons = screen.getAllByLabelText('Download Logs')
-      expect(downloadButtons.length).toBe(1)
-    })
+    // Only job 1 has has_logs: true
+    const downloadButtons = screen.getAllByRole('button', { name: 'Download Logs' })
+    expect(downloadButtons.length).toBe(1)
+  })
 
-    it('shows Error Details only for failed jobs with error message', () => {
-      renderWithProviders(
-        <BackupJobsTable
-          jobs={mockJobs}
-          actions={{ errorInfo: true }}
-          onErrorDetails={mockCallbacks.onErrorDetails}
-        />
-      )
+  it('shows Error Details only for failed jobs with error message', () => {
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={mockJobs}
+        actions={{ errorInfo: true }}
+        onErrorDetails={mockCallbacks.onErrorDetails}
+      />
+    )
 
-      // Only job 3 has status: 'failed' and error_message
-      const errorButtons = screen.getAllByLabelText('View Error')
-      expect(errorButtons.length).toBe(1)
-    })
+    // Only job 3 has status: 'failed' and error_message
+    const errorButtons = screen.getAllByRole('button', { name: 'View Error' })
+    expect(errorButtons.length).toBe(1)
+  })
 
-    it('calls onErrorDetails when Error Details is clicked', async () => {
-      const user = userEvent.setup()
+  it('calls onErrorDetails when Error Details is clicked', async () => {
+    const user = userEvent.setup()
 
-      renderWithProviders(
-        <BackupJobsTable
-          jobs={mockJobs}
-          actions={{ errorInfo: true }}
-          onErrorDetails={mockCallbacks.onErrorDetails}
-        />
-      )
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={mockJobs}
+        actions={{ errorInfo: true }}
+        onErrorDetails={mockCallbacks.onErrorDetails}
+      />
+    )
 
-      const errorButtonContainer = screen.getByLabelText('View Error')
-      const errorButton = errorButtonContainer.querySelector('button')
-      expect(errorButton).toBeInTheDocument()
+    const errorButton = screen.getByRole('button', { name: 'View Error' })
+    expect(errorButton).toBeInTheDocument()
 
-      if (errorButton) {
-        await user.click(errorButton)
-        expect(mockCallbacks.onErrorDetails).toHaveBeenCalledWith(mockJobs[2])
-      }
-    })
+    if (errorButton) {
+      await user.click(errorButton)
+      expect(mockCallbacks.onErrorDetails).toHaveBeenCalledWith(mockJobs[2])
+    }
+  })
 
-    it('shows Cancel only for running jobs', () => {
-      renderWithProviders(
-        <BackupJobsTable
-          jobs={mockJobs}
-          actions={{ cancel: true }}
-          onCancelJob={mockCallbacks.onCancelJob}
-        />
-      )
+  it('shows Cancel only for running jobs', () => {
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={mockJobs}
+        actions={{ cancel: true }}
+        onCancelJob={mockCallbacks.onCancelJob}
+      />
+    )
 
-      // Only job 2 has status: 'running'
-      const cancelButtons = screen.getAllByLabelText('Cancel Backup')
-      expect(cancelButtons.length).toBe(1)
-    })
+    // Only job 2 has status: 'running'
+    const cancelButtons = screen.getAllByRole('button', { name: 'Cancel Backup' })
+    expect(cancelButtons.length).toBe(1)
+  })
 
-    it('calls onCancelJob when Cancel is clicked', async () => {
-      const user = userEvent.setup()
+  it('calls onCancelJob when Cancel is clicked', async () => {
+    const user = userEvent.setup()
 
-      renderWithProviders(
-        <BackupJobsTable
-          jobs={mockJobs}
-          actions={{ cancel: true }}
-          onCancelJob={mockCallbacks.onCancelJob}
-        />
-      )
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={mockJobs}
+        actions={{ cancel: true }}
+        onCancelJob={mockCallbacks.onCancelJob}
+      />
+    )
 
-      const cancelButtonContainer = screen.getByLabelText('Cancel Backup')
-      const cancelButton = cancelButtonContainer.querySelector('button')
-      expect(cancelButton).toBeInTheDocument()
+    const cancelButton = screen.getByRole('button', { name: 'Cancel Backup' })
+    expect(cancelButton).toBeInTheDocument()
 
-      if (cancelButton) {
-        await user.click(cancelButton)
-        expect(mockCallbacks.onCancelJob).toHaveBeenCalledWith(mockJobs[1])
-      }
-    })
+    if (cancelButton) {
+      await user.click(cancelButton)
+      expect(mockCallbacks.onCancelJob).toHaveBeenCalledWith(mockJobs[1])
+    }
+  })
 
-    it('shows Break Lock only for running jobs', () => {
-      renderWithProviders(
-        <BackupJobsTable
-          jobs={mockJobs}
-          actions={{ breakLock: true }}
-          onBreakLock={mockCallbacks.onBreakLock}
-        />
-      )
+  it('shows Break Lock only for running jobs', () => {
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={mockJobs}
+        actions={{ breakLock: true }}
+        onBreakLock={mockCallbacks.onBreakLock}
+      />
+    )
 
-      // Only job 2 has status: 'running'
-      const breakLockButtons = screen.getAllByLabelText('Break Lock')
-      expect(breakLockButtons.length).toBe(1)
-    })
+    // Only job 2 has status: 'running'
+    const breakLockButtons = screen.getAllByRole('button', { name: 'Break Lock' })
+    expect(breakLockButtons.length).toBe(1)
+  })
 
-    it('shows Run Now only for non-running jobs', () => {
-      renderWithProviders(
-        <BackupJobsTable
-          jobs={mockJobs}
-          actions={{ runNow: true }}
-          onRunNow={mockCallbacks.onRunNow}
-        />
-      )
+  it('shows Run Now only for non-running jobs', () => {
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={mockJobs}
+        actions={{ runNow: true }}
+        onRunNow={mockCallbacks.onRunNow}
+      />
+    )
 
-      // Jobs 1 and 3 are not running
-      const runNowButtons = screen.getAllByLabelText('Run Now')
-      expect(runNowButtons.length).toBe(2)
-    })
+    // Jobs 1 and 3 are not running
+    const runNowButtons = screen.getAllByRole('button', { name: 'Run Now' })
+    expect(runNowButtons.length).toBe(2)
+  })
 
-    it('calls onRunNow when Run Now is clicked', async () => {
-      const user = userEvent.setup()
+  it('calls onRunNow when Run Now is clicked', async () => {
+    const user = userEvent.setup()
 
-      renderWithProviders(
-        <BackupJobsTable
-          jobs={mockJobs}
-          actions={{ runNow: true }}
-          onRunNow={mockCallbacks.onRunNow}
-        />
-      )
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={mockJobs}
+        actions={{ runNow: true }}
+        onRunNow={mockCallbacks.onRunNow}
+      />
+    )
 
-      const runNowButtonContainer = screen.getAllByLabelText('Run Now')[0]
-      const runNowButton = runNowButtonContainer.querySelector('button')
-      expect(runNowButton).toBeInTheDocument()
+    const runNowButton = screen.getAllByRole('button', { name: 'Run Now' })[0]
+    expect(runNowButton).toBeInTheDocument()
 
-      if (runNowButton) {
-        await user.click(runNowButton)
-        expect(mockCallbacks.onRunNow).toHaveBeenCalledWith(mockJobs[0])
-      }
-    })
+    if (runNowButton) {
+      await user.click(runNowButton)
+      expect(mockCallbacks.onRunNow).toHaveBeenCalledWith(mockJobs[0])
+    }
   })
 
   describe('Repository Display', () => {
