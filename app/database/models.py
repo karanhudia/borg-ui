@@ -49,7 +49,7 @@ class Repository(Base):
     port = Column(Integer, default=22)  # SSH port
     username = Column(String, nullable=True)  # SSH username
     ssh_key_id = Column(Integer, ForeignKey("ssh_keys.id"), nullable=True)  # Associated SSH key
-    connection_id = Column(Integer, ForeignKey("ssh_connections.id"), nullable=True) # Associated SSH connection (preferred over host/port/username)
+    connection_id = Column(Integer, ForeignKey("ssh_connections.id"), nullable=True)  # Associated SSH connection (preferred over host/port/username)
     remote_path = Column(String, nullable=True)  # Path to borg binary on remote server (e.g., /usr/local/bin/borg)
 
     # New fields for authentication status
@@ -132,6 +132,7 @@ class SSHConnection(Base):
     borg_binary_path = Column(String, default="/usr/bin/borg")  # Path to borg on remote host
     borg_version = Column(String, nullable=True)  # Detected borg version
     last_borg_check = Column(DateTime, nullable=True)  # Last time borg was verified
+    
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
