@@ -65,7 +65,7 @@ def test_db():
     application.dependency_overrides[get_db] = override_get_db
     
     # PATCHING SERVICES: Ensure background tasks use the same engine/session factory
-    from unittest.mock import patch
+    from unittest.mock import patch, AsyncMock
     
     # We patch the SessionLocal imported in these modules to use our TestingSessionLocal
     # This ensures background tasks (which create their own sessions) connect to the same DB file
@@ -73,6 +73,9 @@ def test_db():
         patch("app.services.backup_service.SessionLocal", TestingSessionLocal),
         patch("app.services.restore_service.SessionLocal", TestingSessionLocal),
         patch("app.services.check_service.SessionLocal", TestingSessionLocal),
+        # Prevent startup event from creating users or running migrations (conflicts with fixtures)
+        patch("app.main.create_first_user", new_callable=AsyncMock),
+        patch("app.database.migrations.run_migrations", new_callable=lambda: lambda: None),
     ]
     
     for p in patches:
@@ -95,7 +98,9 @@ def test_client(test_db):
     """Create a test client for API testing"""
     # Import app here to avoid initialization on module load
     from app.main import app
-    return TestClient(app)
+    # Use context manager to trigger startup/shutdown events
+    with TestClient(app) as client:
+        yield client
 
 
 @pytest.fixture
