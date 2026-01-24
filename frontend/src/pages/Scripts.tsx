@@ -321,7 +321,7 @@ export default function Scripts() {
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2">
-                    {script.usage_count} {script.usage_count === 1 ? 'repo' : 'repos'}
+                    {script.usage_count} {script.usage_count === 1 ? 'place used' : 'places used'}
                   </Typography>
                 </TableCell>
                 <TableCell align="right">
@@ -345,7 +345,7 @@ export default function Scripts() {
                       script.is_template
                         ? 'Cannot delete templates'
                         : script.usage_count > 0
-                          ? 'Script is used by repositories (will clean up orphaned associations automatically)'
+                          ? `Script is used in ${script.usage_count} ${script.usage_count === 1 ? 'place' : 'places'}`
                           : 'Delete Script'
                     }
                   >
@@ -431,9 +431,9 @@ export default function Scripts() {
 
             {editingScript && editingScript.usage_count > 0 && (
               <Alert severity="info">
-                This script is used by {editingScript.usage_count}{' '}
-                {editingScript.usage_count === 1 ? 'repository' : 'repositories'}. Changes will
-                affect all assignments.
+                This script is used in {editingScript.usage_count}{' '}
+                {editingScript.usage_count === 1 ? 'place' : 'places'}. Changes will affect all
+                assignments.
               </Alert>
             )}
           </Box>
