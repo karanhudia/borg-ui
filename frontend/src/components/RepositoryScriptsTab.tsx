@@ -155,7 +155,6 @@ export default function RepositoryScriptsTab({
       toast.success('Script removed successfully')
       fetchAssignedScripts()
       if (onUpdate) onUpdate()
-      if (onUpdate) onUpdate()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Failed to remove script:', error)
@@ -163,7 +162,10 @@ export default function RepositoryScriptsTab({
     }
   }
 
-  const handleUpdateParameters = async (scriptAssignmentId: number, parameterValues: Record<string, string>) => {
+  const handleUpdateParameters = async (
+    scriptAssignmentId: number,
+    parameterValues: Record<string, string>
+  ) => {
     try {
       await api.put(`/repositories/${repositoryId}/scripts/${scriptAssignmentId}`, {
         parameter_values: parameterValues,
@@ -172,6 +174,7 @@ export default function RepositoryScriptsTab({
       fetchAssignedScripts()
       setEditParametersDialog({ open: false, script: null })
       if (onUpdate) onUpdate()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Failed to update parameters:', error)
       toast.error(error.response?.data?.detail || 'Failed to update parameters')
@@ -180,18 +183,18 @@ export default function RepositoryScriptsTab({
 
   const areParametersOutOfSync = (script: RepositoryScript): boolean => {
     if (!script.parameters || script.parameters.length === 0) return false
-    
+
     const paramValues = script.parameter_values || {}
     const scriptParams = script.parameters
-    
+
     // Check if all required parameters have values
-    const missingRequired = scriptParams.some(p => p.required && !paramValues[p.name])
+    const missingRequired = scriptParams.some((p) => p.required && !paramValues[p.name])
     if (missingRequired) return true
-    
+
     // Check if stored values have parameters that no longer exist in script
-    const currentParamNames = new Set(scriptParams.map(p => p.name))
-    const hasOrphanedParams = Object.keys(paramValues).some(key => !currentParamNames.has(key))
-    
+    const currentParamNames = new Set(scriptParams.map((p) => p.name))
+    const hasOrphanedParams = Object.keys(paramValues).some((key) => !currentParamNames.has(key))
+
     return hasOrphanedParams
   }
 
@@ -383,7 +386,9 @@ export default function RepositoryScriptsTab({
           open={editParametersDialog.open}
           onClose={() => setEditParametersDialog({ open: false, script: null })}
           script={editParametersDialog.script}
-          onSubmit={(paramValues) => handleUpdateParameters(editParametersDialog.script!.id, paramValues)}
+          onSubmit={(paramValues) =>
+            handleUpdateParameters(editParametersDialog.script!.id, paramValues)
+          }
         />
       )}
     </Box>
@@ -428,7 +433,9 @@ function RepositoryScriptDialog({
 
   // Check if selected script has parameters
   const hasParameters =
-    selectedScript?.parameters && Array.isArray(selectedScript.parameters) && selectedScript.parameters.length > 0
+    selectedScript?.parameters &&
+    Array.isArray(selectedScript.parameters) &&
+    selectedScript.parameters.length > 0
 
   // Reset local state when dialog opens/closes
   useEffect(() => {

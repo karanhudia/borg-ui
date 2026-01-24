@@ -104,7 +104,6 @@ export default function Scripts() {
       const response = await api.get('/scripts')
       setScripts(Array.isArray(response.data) ? response.data : [])
     } catch {
-      
       toast.error('Failed to load scripts')
       setScripts([])
     } finally {
@@ -114,7 +113,8 @@ export default function Scripts() {
 
   const handleCreate = () => {
     setEditingScript(null)
-    const defaultContent = '#!/bin/bash\n\necho "Script started"\n\n# Your script here\n\necho "Script completed"'
+    const defaultContent =
+      '#!/bin/bash\n\necho "Script started"\n\n# Your script here\n\necho "Script completed"'
     setFormData({
       name: '',
       description: '',
@@ -173,23 +173,23 @@ export default function Scripts() {
   const handleContentChange = (content: string) => {
     setFormData({ ...formData, content })
     const params = parseParameters(content)
-    
+
     // Merge with existing parameters to preserve user's secret selections
-    const mergedParams = params.map(newParam => {
-      const existing = detectedParameters.find(p => p.name === newParam.name)
+    const mergedParams = params.map((newParam) => {
+      const existing = detectedParameters.find((p) => p.name === newParam.name)
       if (existing) {
         // Keep user's type selection if they changed it
         return { ...newParam, type: existing.type }
       }
       return newParam
     })
-    
+
     setDetectedParameters(mergedParams)
   }
 
   const handleParameterTypeToggle = (paramName: string) => {
-    setDetectedParameters(prev =>
-      prev.map(param =>
+    setDetectedParameters((prev) =>
+      prev.map((param) =>
         param.name === paramName
           ? { ...param, type: param.type === 'password' ? 'text' : 'password' }
           : param
@@ -515,7 +515,8 @@ export default function Scripts() {
                   Script Parameters
                 </Typography>
                 <Alert severity="info" sx={{ mb: 2 }}>
-                  Check the box for parameters that contain sensitive data (passwords, tokens, API keys) to encrypt them.
+                  Check the box for parameters that contain sensitive data (passwords, tokens, API
+                  keys) to encrypt them.
                 </Alert>
                 <Paper variant="outlined" sx={{ p: 2 }}>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -528,13 +529,17 @@ export default function Scripts() {
                           justifyContent: 'space-between',
                           p: 1.5,
                           borderRadius: 1,
-                          backgroundColor: param.type === 'password' ? 'rgba(255, 152, 0, 0.08)' : 'transparent',
+                          backgroundColor:
+                            param.type === 'password' ? 'rgba(255, 152, 0, 0.08)' : 'transparent',
                           border: '1px solid',
                           borderColor: param.type === 'password' ? 'warning.light' : 'divider',
                         }}
                       >
                         <Box sx={{ flex: 1 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
+                          <Typography
+                            variant="body2"
+                            sx={{ fontWeight: 600, fontFamily: 'monospace' }}
+                          >
                             {param.name}
                           </Typography>
                           <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>

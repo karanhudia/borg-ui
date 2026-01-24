@@ -74,7 +74,10 @@ export default function ScriptParameterInputs({
           <Box key={param.name}>
             <TextField
               fullWidth
-              label={param.name.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())}
+              label={param.name
+                .replace(/_/g, ' ')
+                .toLowerCase()
+                .replace(/\b\w/g, (c) => c.toUpperCase())}
               type={isPassword && !shouldShow ? 'password' : 'text'}
               value={currentValue}
               onChange={(e) => handleChange(param.name, e.target.value)}
@@ -84,11 +87,7 @@ export default function ScriptParameterInputs({
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    {isPassword ? (
-                      <Lock size={18} color="#666" />
-                    ) : (
-                      <Type size={18} color="#666" />
-                    )}
+                    {isPassword ? <Lock size={18} color="#666" /> : <Type size={18} color="#666" />}
                   </InputAdornment>
                 ),
                 endAdornment: isPassword ? (

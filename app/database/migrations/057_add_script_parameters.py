@@ -1,5 +1,5 @@
 """
-Migration 042: Add Script Parameters Support
+Migration 057: Add Script Parameters Support
 
 This migration adds parameter support to scripts and repository_scripts:
 - Script.parameters: JSON array of parameter definitions
@@ -12,7 +12,7 @@ from sqlalchemy import text
 
 def upgrade(db):
     """Add script parameter columns"""
-    print("Running migration 042: Add Script Parameters Support")
+    print("Running migration 057: Add Script Parameters Support")
 
     try:
         # Check if columns already exist
@@ -43,17 +43,17 @@ def upgrade(db):
             print("⊘ parameter_values column already exists in repository_scripts table")
 
         db.commit()
-        print("✓ Migration 042 completed successfully")
+        print("✓ Migration 057 completed successfully")
 
     except Exception as e:
-        print(f"✗ Migration 042 failed: {str(e)}")
+        print(f"✗ Migration 057 failed: {str(e)}")
         db.rollback()
         raise
 
 
 def downgrade(db):
     """Remove script parameter columns"""
-    print("Running downgrade for migration 042: Remove Script Parameters Support")
+    print("Running downgrade for migration 057: Remove Script Parameters Support")
 
     try:
         # SQLite doesn't support DROP COLUMN directly in older versions
@@ -62,6 +62,6 @@ def downgrade(db):
         print("  To remove these columns, you would need to recreate the tables")
         
     except Exception as e:
-        print(f"✗ Downgrade 042 failed: {str(e)}")
+        print(f"✗ Downgrade 057 failed: {str(e)}")
         db.rollback()
         raise
