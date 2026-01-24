@@ -186,8 +186,8 @@ export default function DataTable<T>({
                 }),
                 ...(enablePointer &&
                   onRowClick && {
-                  cursor: 'pointer',
-                }),
+                    cursor: 'pointer',
+                  }),
                 '&:last-child td': {
                   borderBottom: 0,
                 },
