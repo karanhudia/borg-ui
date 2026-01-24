@@ -301,19 +301,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               variant="caption"
               sx={{
                 px: 2,
-                pt: sectionIndex === 0 ? 1.5 : 2.5,
+                pt: sectionIndex === 0 ? 1.25 : 2,
                 pb: 0.5,
                 display: 'block',
                 color: 'text.secondary',
                 fontWeight: 700,
-                fontSize: '0.6875rem',
+                fontSize: '0.625rem',
                 letterSpacing: '0.8px',
                 textTransform: 'uppercase',
               }}
             >
               {section.heading}
             </Typography>
-            <List sx={{ pt: 0, pb: 0, '& .MuiListItem-root': { mb: 0.25 } }}>
+            <List sx={{ pt: 0, pb: 0, '& .MuiListItem-root': { mb: 0.125 } }}>
               {section.items.map((item) => {
                 const isEnabled = tabEnablement[item.key]
                 const disabledReason = getTabDisabledReason(item.key)
@@ -334,8 +334,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                           sx={{
                             pl: 2,
                             pr: 1.5,
-                            py: 1,
-                            minHeight: 40,
+                            py: 0.625,
+                            minHeight: 36,
                             '&:hover': {
                               backgroundColor: 'action.hover',
                             },
@@ -347,17 +347,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                               minWidth: 32,
                             }}
                           >
-                            <Icon size={20} />
+                            <Icon size={18} />
                           </ListItemIcon>
                           <ListItemText
                             primary={item.name}
                             primaryTypographyProps={{
-                              fontSize: '0.875rem',
+                              fontSize: '0.8125rem',
                               fontWeight: isAnySubItemActive ? 600 : 400,
                               color: isAnySubItemActive ? 'primary.main' : 'inherit',
                             }}
                           />
-                          {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                         </ListItemButton>
                       </ListItem>
 
@@ -393,8 +393,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                                   sx={{
                                     pl: 6,
                                     pr: 1.5,
-                                    py: 0.75,
-                                    minHeight: 36,
+                                    py: 0.5,
+                                    minHeight: 32,
                                     '&.Mui-selected': {
                                       backgroundColor: 'primary.main',
                                       color: 'white',
@@ -416,12 +416,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                                       minWidth: 28,
                                     }}
                                   >
-                                    <SubIcon size={18} />
+                                    <SubIcon size={16} />
                                   </ListItemIcon>
                                   <ListItemText
                                     primary={subItem.name}
                                     primaryTypographyProps={{
-                                      fontSize: '0.875rem',
+                                      fontSize: '0.8125rem',
                                       fontWeight: isActive ? 500 : 400,
                                       color: isActive ? 'white' : 'inherit',
                                     }}
@@ -453,8 +453,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     sx={{
                       pl: 2,
                       pr: 1.5,
-                      py: 1,
-                      minHeight: 40,
+                      py: 0.625,
+                      minHeight: 36,
                       '&.Mui-selected': {
                         backgroundColor: 'primary.main',
                         color: 'white',
@@ -474,12 +474,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     <ListItemIcon
                       sx={{ color: isActive ? 'white' : 'text.secondary', minWidth: 32 }}
                     >
-                      {isEnabled ? <Icon size={20} /> : <Lock size={20} />}
+                      {isEnabled ? <Icon size={18} /> : <Lock size={18} />}
                     </ListItemIcon>
                     <ListItemText
                       primary={item.name}
                       primaryTypographyProps={{
-                        fontSize: '0.875rem',
+                        fontSize: '0.8125rem',
                         fontWeight: isActive ? 600 : 400,
                         color: isActive ? 'white' : isEnabled ? 'inherit' : 'text.disabled',
                       }}
