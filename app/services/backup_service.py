@@ -966,8 +966,11 @@ class BackupService:
             archive_name: Optional custom archive name (if None, will use default manual-backup naming)
         """
 
-        # Create a new database session for this background task
-        db = SessionLocal()
+        # Use provided session or create a new one
+        close_db = False
+        if db is None:
+            db = SessionLocal()
+            close_db = True
         temp_key_file = None  # Track SSH key file for cleanup
 
         try:
