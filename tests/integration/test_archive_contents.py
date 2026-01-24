@@ -198,7 +198,12 @@ class ArchiveContentsTester:
                 self.log(f"✅ Added repository '{name}' with ID {repo_id}", "SUCCESS")
                 return repo_id
             else:
+                try:
+                    error_detail = response.json().get("detail", response.text)
+                except:
+                    error_detail = response.text
                 self.log(f"❌ Failed to add repository: {response.status_code}", "ERROR")
+                self.log(f"   Error details: {error_detail}", "ERROR")
                 return None
 
         except Exception as e:
