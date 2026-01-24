@@ -223,17 +223,30 @@ const Restore: React.FC = () => {
   }
 
   // Open archive browser when restore archive is set
-  const handleRestoreArchiveClick = React.useCallback((archive: Archive) => {
-    setRestoreArchive(archive)
-    setSelectedPaths([]) // Reset paths
-    setShowBrowser(true)
-    // Track viewing archive for restore
-    trackArchive(EventAction.VIEW, selectedRepoData?.name)
-  }, [setRestoreArchive, setSelectedPaths, setShowBrowser, trackArchive, selectedRepoData, EventAction])
+  const handleRestoreArchiveClick = React.useCallback(
+    (archive: Archive) => {
+      setRestoreArchive(archive)
+      setSelectedPaths([]) // Reset paths
+      setShowBrowser(true)
+      // Track viewing archive for restore
+      trackArchive(EventAction.VIEW, selectedRepoData?.name)
+    },
+    [
+      setRestoreArchive,
+      setSelectedPaths,
+      setShowBrowser,
+      trackArchive,
+      selectedRepoData,
+      EventAction,
+    ]
+  )
 
   // Get repositories from API response
   // eslint-disable-next-line @typescript-eslint/no-explicit-any, react-hooks/preserve-manual-memoization
-  const repositories = React.useMemo(() => (repositoriesData as any)?.repositories || [], [repositoriesData])
+  const repositories = React.useMemo(
+    () => (repositoriesData as any)?.repositories || [],
+    [repositoriesData]
+  )
   const archivesList = (archives?.data?.archives || []).sort((a: Archive, b: Archive) => {
     return new Date(b.start).getTime() - new Date(a.start).getTime()
   })

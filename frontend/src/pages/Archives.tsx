@@ -182,7 +182,7 @@ const Archives: React.FC = () => {
       if (isMountTimeout) {
         toast.error(
           `Mount timeout: Large repositories may need more time to mount. ` +
-          `Go to Settings > System to increase the Mount Timeout value.`,
+            `Go to Settings > System to increase the Mount Timeout value.`,
           {
             duration: 10000,
             style: {
@@ -237,7 +237,10 @@ const Archives: React.FC = () => {
 
   // Get repositories from API response
   // eslint-disable-next-line @typescript-eslint/no-explicit-any, react-hooks/preserve-manual-memoization
-  const repositories = React.useMemo(() => (repositoriesData as any)?.repositories || [], [repositoriesData])
+  const repositories = React.useMemo(
+    () => (repositoriesData as any)?.repositories || [],
+    [repositoriesData]
+  )
 
   // Handle incoming navigation state (from "View Archives" button)
   useEffect(() => {

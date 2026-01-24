@@ -47,7 +47,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     hasRepositories: false,
     hasArchives: false,
     isLoading: true,
-    refetch: () => { },
+    refetch: () => {},
   })
 
   // Check for SSH keys - only run when authenticated
@@ -155,13 +155,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       schedule: appState.hasRepositories, // Only requires repositories for scheduling
       settings: true,
     }
-  }, [
-    appState.hasRepositories,
-    fetchedSSH,
-    fetchedRepos,
-    authLoading,
-    isAuthenticated,
-  ])
+  }, [appState.hasRepositories, fetchedSSH, fetchedRepos, authLoading, isAuthenticated])
 
   // Get reason why a tab is disabled
   const getTabDisabledReason = useCallback(

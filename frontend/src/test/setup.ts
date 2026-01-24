@@ -27,22 +27,22 @@ Object.defineProperty(window, 'matchMedia', {
 
 // Mock IntersectionObserver
 globalThis.IntersectionObserver = class IntersectionObserver {
-  constructor() { }
-  disconnect() { }
-  observe() { }
+  constructor() {}
+  disconnect() {}
+  observe() {}
   takeRecords() {
     return []
   }
-  unobserve() { }
+  unobserve() {}
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } as any
 
 // Mock ResizeObserver
 globalThis.ResizeObserver = class ResizeObserver {
-  constructor() { }
-  disconnect() { }
-  observe() { }
-  unobserve() { }
+  constructor() {}
+  disconnect() {}
+  observe() {}
+  unobserve() {}
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } as any
 

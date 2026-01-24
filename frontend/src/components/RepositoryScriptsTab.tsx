@@ -69,8 +69,6 @@ export default function RepositoryScriptsTab({
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [selectedScriptId, setSelectedScriptId] = useState<number | ''>('')
 
-
-
   const fetchAssignedScripts = React.useCallback(async () => {
     try {
       const response = await api.get(`/repositories/${repositoryId}/scripts`)
@@ -159,8 +157,8 @@ export default function RepositoryScriptsTab({
   // Expose function to parent to open dialog - MUST be before any conditional returns (Rules of Hooks)
   React.useLayoutEffect(() => {
     const key = `openScriptDialog_${repositoryId}_${hookType}`
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ; (window as any)[key] = () => setAddDialogOpen(true)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(window as any)[key] = () => setAddDialogOpen(true)
     return () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any)[key]
@@ -233,11 +231,11 @@ export default function RepositoryScriptsTab({
                   size="small"
                   color={
                     getRunOnColor(effectiveRunOn) as
-                    | 'success'
-                    | 'error'
-                    | 'warning'
-                    | 'info'
-                    | 'default'
+                      | 'success'
+                      | 'error'
+                      | 'warning'
+                      | 'info'
+                      | 'default'
                   }
                   sx={{ height: 20, fontSize: '0.7rem' }}
                 />

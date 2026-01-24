@@ -61,13 +61,13 @@ interface NavigationItem {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   icon: React.ComponentType<any>
   key:
-  | 'dashboard'
-  | 'connections'
-  | 'repositories'
-  | 'backups'
-  | 'archives'
-  | 'restore'
-  | 'schedule'
+    | 'dashboard'
+    | 'connections'
+    | 'repositories'
+    | 'backups'
+    | 'archives'
+    | 'restore'
+    | 'schedule'
   subItems?: Array<{
     name: string
     href: string
@@ -77,7 +77,6 @@ interface NavigationItem {
 }
 
 // Navigation sections with headings
-
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const navigationSections: any[] = [
@@ -440,8 +439,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 // Regular items without sub-items
                 const isActive = Boolean(
                   item.href &&
-                  (location.pathname === item.href ||
-                    location.pathname.startsWith(item.href + '/'))
+                    (location.pathname === item.href ||
+                      location.pathname.startsWith(item.href + '/'))
                 )
 
                 const listItemButton = (

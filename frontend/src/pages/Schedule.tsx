@@ -685,7 +685,8 @@ const Schedule: React.FC = () => {
       render: (job) => {
         // Handle multi-repo schedules
         if (job.repository_ids && job.repository_ids.length > 0) {
-          const repos = repositories?.filter((r: Repository) => job.repository_ids?.includes(r.id)) || []
+          const repos =
+            repositories?.filter((r: Repository) => job.repository_ids?.includes(r.id)) || []
           if (repos.length === 0) {
             return (
               <Typography variant="caption" color="text.secondary">
@@ -1093,7 +1094,7 @@ const Schedule: React.FC = () => {
                           </Typography>
                           <Typography variant="body2" fontWeight={500}>
                             {job.progress_details?.compressed_size !== undefined &&
-                              job.progress_details?.compressed_size !== null
+                            job.progress_details?.compressed_size !== null
                               ? formatBytesUtil(job.progress_details.compressed_size)
                               : 'N/A'}
                           </Typography>
@@ -1104,7 +1105,7 @@ const Schedule: React.FC = () => {
                           </Typography>
                           <Typography variant="body2" fontWeight={500} color="success.main">
                             {job.progress_details?.deduplicated_size !== undefined &&
-                              job.progress_details?.deduplicated_size !== null
+                            job.progress_details?.deduplicated_size !== null
                               ? formatBytesUtil(job.progress_details.deduplicated_size)
                               : 'N/A'}
                           </Typography>
@@ -1182,9 +1183,9 @@ const Schedule: React.FC = () => {
                           {job.repository_ids && job.repository_ids.length > 0
                             ? `${job.repository_ids.length} repositories`
                             : job.repository_id
-                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                              ? repositories.find((r: any) => r.id === job.repository_id)?.name ||
-                              'Unknown'
+                              ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                repositories.find((r: any) => r.id === job.repository_id)?.name ||
+                                'Unknown'
                               : getRepositoryName(job.repository)}
                         </Typography>
                       </Box>
