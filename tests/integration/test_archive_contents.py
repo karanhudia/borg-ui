@@ -30,13 +30,17 @@ class Colors:
     END = '\033[0m'
 
 class ArchiveContentsTester:
-    def __init__(self, test_dir: str, base_url: str = "http://localhost:8081"):
+    def __init__(self, test_dir: str, base_url: str = "http://localhost:8081", container_mode: bool = False):
         self.test_dir = test_dir
         self.base_url = base_url
         self.repo_dir = os.path.join(test_dir, "repositories")
+        self.container_mode = container_mode
         self.session = requests.Session()
         self.auth_token = None
         self.test_results = []
+        # For Docker container: paths need /local prefix
+        # Auto-detect: if port is 8081 or 8082, likely Docker; if 8000, likely local dev
+        self.use_local_prefix = container_mode or (base_url.endswith(":8081") or base_url.endswith(":8082"))
         # For Docker container: paths need /local prefix
         self.use_local_prefix = True
 
@@ -50,6 +54,13 @@ class ArchiveContentsTester:
         }
         color = colors.get(level, "")
         print(f"{color}{message}{Colors.END}")
+
+    def to_container_path(self, host_path: str) -> str:
+        """Convert host path to container path if running in container mode"""
+        if self.container_mode:
+            # In Docker, host root (/) is mounted at /local
+            return f"/local{host_path}"
+        return host_path
 
     def authenticate(self) -> bool:
         """Authenticate with Borg UI"""
@@ -255,6 +266,15 @@ class ArchiveContentsTester:
                     error_detail = response.text
                 self.log(f"❌ Failed to add repository: {response.status_code}", "ERROR")
                 self.log(f"   Error details: {error_detail}", "ERROR")
+
+                # Provide helpful hints for common issues
+                if "Permission denied" in str(error_detail) and self.use_local_prefix:
+                    self.log("", "INFO")
+                    self.log("💡 Docker permission issue detected. Try:", "WARNING")
+                    self.log(f"   1. Check container user ID: docker exec borg-web-ui id", "WARNING")
+                    self.log(f"   2. Fix permissions: sudo chown -R $(id -u):$(id -g) /tmp/borg-ui-tests", "WARNING")
+                    self.log(f"   3. Or set PUID/PGID in docker-compose: PUID=$(id -u) PGID=$(id -g)", "WARNING")
+
                 return None
 
         except Exception as e:
@@ -343,6 +363,13 @@ class ArchiveContentsTester:
             self.log(f"❌ Test directory not found: {self.repo_dir}", "ERROR")
             self.log("Please run: ./tests/setup_test_env.sh first", "ERROR")
             return False
+
+        # Show path mapping info for Docker
+        if self.use_local_prefix:
+            self.log(f"ℹ️  Docker mode detected (paths will use /local prefix)", "INFO")
+            self.log(f"   Host path: {self.repo_dir}", "INFO")
+            self.log(f"   Container path: /local{self.repo_dir}", "INFO")
+            self.log(f"   Ensure your docker-compose.yml mounts / as /local", "INFO")
 
         # Authenticate
         if not self.authenticate():
