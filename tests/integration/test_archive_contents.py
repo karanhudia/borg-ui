@@ -177,6 +177,9 @@ class ArchiveContentsTester:
                 "encryption": "none" if not passphrase else "repokey",
                 "compression": "lz4",
                 "repository_type": "local",
+                "source_directories": [],
+                "exclude_patterns": [],
+                "mode": "observe"  # Observe mode since we're importing existing repo
             }
 
             if passphrase:
