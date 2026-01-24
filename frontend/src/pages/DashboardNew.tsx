@@ -82,6 +82,7 @@ interface DashboardOverview {
     failed: number
     total: number
   }>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   upcoming_tasks: Array<any>
   maintenance_alerts: Array<{
     type: string
@@ -480,7 +481,7 @@ export default function DashboardNew() {
                   <Typography variant="body2" fontWeight={600}>
                     {formatBytes(
                       overview.system_metrics.memory_total -
-                        overview.system_metrics.memory_available
+                      overview.system_metrics.memory_available
                     )}{' '}
                     / {formatBytes(overview.system_metrics.memory_total)} GB
                   </Typography>
@@ -554,37 +555,37 @@ export default function DashboardNew() {
               <Stack direction="row" spacing={1}>
                 {overview.repository_health.filter((r) => r.health_status === 'critical').length >
                   0 && (
-                  <Chip
-                    icon={<XCircle size={14} />}
-                    label={
-                      overview.repository_health.filter((r) => r.health_status === 'critical')
-                        .length
-                    }
-                    size="small"
-                    sx={{
-                      height: 24,
-                      bgcolor: 'rgba(211, 47, 47, 0.08)',
-                      color: 'error.dark',
-                      border: '1px solid rgba(211, 47, 47, 0.2)',
-                    }}
-                  />
-                )}
+                    <Chip
+                      icon={<XCircle size={14} />}
+                      label={
+                        overview.repository_health.filter((r) => r.health_status === 'critical')
+                          .length
+                      }
+                      size="small"
+                      sx={{
+                        height: 24,
+                        bgcolor: 'rgba(211, 47, 47, 0.08)',
+                        color: 'error.dark',
+                        border: '1px solid rgba(211, 47, 47, 0.2)',
+                      }}
+                    />
+                  )}
                 {overview.repository_health.filter((r) => r.health_status === 'warning').length >
                   0 && (
-                  <Chip
-                    icon={<AlertTriangle size={14} />}
-                    label={
-                      overview.repository_health.filter((r) => r.health_status === 'warning').length
-                    }
-                    size="small"
-                    sx={{
-                      height: 24,
-                      bgcolor: 'rgba(237, 108, 2, 0.08)',
-                      color: 'warning.dark',
-                      border: '1px solid rgba(237, 108, 2, 0.2)',
-                    }}
-                  />
-                )}
+                    <Chip
+                      icon={<AlertTriangle size={14} />}
+                      label={
+                        overview.repository_health.filter((r) => r.health_status === 'warning').length
+                      }
+                      size="small"
+                      sx={{
+                        height: 24,
+                        bgcolor: 'rgba(237, 108, 2, 0.08)',
+                        color: 'warning.dark',
+                        border: '1px solid rgba(237, 108, 2, 0.2)',
+                      }}
+                    />
+                  )}
                 <Chip
                   icon={<CheckCircle size={14} />}
                   label={
@@ -755,6 +756,7 @@ export default function DashboardNew() {
                     {overview.maintenance_alerts.slice(0, alertLimit).map((alert, idx) => (
                       <Alert
                         key={idx}
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         severity={alert.severity as any}
                         sx={{ py: 0.5, '& .MuiAlert-message': { py: 0.5 } }}
                         action={

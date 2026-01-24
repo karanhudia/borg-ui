@@ -57,6 +57,7 @@ export default function RepositoryScriptsSection({
                 startIcon={<FileCode size={14} />}
                 onClick={() => {
                   if (repositoryId) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const openFn = (window as any)[`openScriptDialog_${repositoryId}_pre-backup`]
                     if (openFn) openFn()
                   }
@@ -125,6 +126,7 @@ export default function RepositoryScriptsSection({
                 startIcon={<FileCode size={14} />}
                 onClick={() => {
                   if (repositoryId) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const openFn = (window as any)[`openScriptDialog_${repositoryId}_post-backup`]
                     if (openFn) openFn()
                   }

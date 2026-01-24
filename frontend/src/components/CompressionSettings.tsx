@@ -35,7 +35,7 @@ export default function CompressionSettings({
   useEffect(() => {
     const newCompression = buildCompressionString(algorithm, level, autoDetect, obfuscate)
     onChange(newCompression)
-  }, [algorithm, level, autoDetect, obfuscate])
+  }, [algorithm, level, autoDetect, obfuscate, onChange])
 
   // Sync with external changes
   useEffect(() => {

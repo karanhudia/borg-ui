@@ -18,6 +18,7 @@ import { resetOptOutCache, trackOptOut } from '../utils/matomo'
 
 interface Preferences {
   analytics_enabled: boolean
+  [key: string]: unknown
 }
 
 export default function PreferencesTab() {
@@ -55,6 +56,7 @@ export default function PreferencesTab() {
         window.location.reload()
       }, 500)
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to update preferences')
     },

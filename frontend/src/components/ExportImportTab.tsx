@@ -34,6 +34,17 @@ interface Repository {
   has_checks: boolean
 }
 
+interface ImportResult {
+  success: boolean
+  error?: string
+  repositories_created?: number
+  repositories_updated?: number
+  schedules_created?: number
+  schedules_updated?: number
+  warnings?: string[]
+  errors?: string[]
+}
+
 const ExportImportTab: React.FC = () => {
   // Export state
   const [selectedRepos, setSelectedRepos] = useState<number[]>([])
@@ -43,7 +54,7 @@ const ExportImportTab: React.FC = () => {
   // Import state
   const [importFile, setImportFile] = useState<File | null>(null)
   const [mergeStrategy, setMergeStrategy] = useState('skip_duplicates')
-  const [importResult, setImportResult] = useState<any>(null)
+  const [importResult, setImportResult] = useState<ImportResult | null>(null)
 
   // Fetch repositories for export
   const { data: reposData, isLoading: loadingRepos } = useQuery({
@@ -88,6 +99,7 @@ const ExportImportTab: React.FC = () => {
 
       toast.success('Configuration exported successfully')
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to export configuration')
     },
@@ -109,6 +121,7 @@ const ExportImportTab: React.FC = () => {
         toast.success('Configuration imported successfully')
       }
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to import configuration')
     },

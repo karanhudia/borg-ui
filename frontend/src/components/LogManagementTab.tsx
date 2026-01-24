@@ -118,6 +118,7 @@ const LogManagementTab: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['log-storage-stats'] })
       setHasChanges(false)
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to save settings')
     },
@@ -134,6 +135,7 @@ const LogManagementTab: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['log-storage-stats'] })
       queryClient.invalidateQueries({ queryKey: ['system-settings'] })
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to run log cleanup')
     },

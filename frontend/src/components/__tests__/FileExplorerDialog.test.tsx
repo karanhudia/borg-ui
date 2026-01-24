@@ -75,6 +75,7 @@ describe('FileExplorerDialog', () => {
     status: 200,
     statusText: 'OK',
     headers: {},
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     config: {} as any,
   }
 
@@ -163,6 +164,7 @@ describe('FileExplorerDialog', () => {
       const slowResolve = new Promise((resolve) =>
         setTimeout(() => resolve(mockDirectoryResponse), 100)
       )
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       vi.mocked(api.get).mockReturnValue(slowResolve as any)
 
       renderWithProviders(

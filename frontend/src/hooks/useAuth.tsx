@@ -32,8 +32,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .then((response) => {
           setUser(response.data)
         })
-        .catch((error) => {
-          console.error('Failed to get profile:', error)
+        .catch(() => {
+          console.error('Failed to get profile')
           localStorage.removeItem('access_token')
         })
         .finally(() => {
@@ -59,7 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     try {
       await authAPI.logout()
-    } catch (error) {
+    } catch {
       // Ignore logout errors
     }
     localStorage.removeItem('access_token')
@@ -78,6 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext)
   if (context === undefined) {

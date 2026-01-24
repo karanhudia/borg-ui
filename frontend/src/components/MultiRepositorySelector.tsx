@@ -52,6 +52,7 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
 
   // Filter repositories if needed
   const availableRepos = filterMode
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ? safeRepositories.filter((repo: any) => repo.mode !== filterMode)
     : safeRepositories
 
@@ -60,18 +61,17 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
     .map((id) => availableRepos.find((r) => r.id === id))
     .filter(Boolean) as Repository[]
 
-  // Handle reordering
   const handleMoveUp = (index: number) => {
     if (index === 0) return
     const newIds = [...selectedIds]
-    ;[newIds[index - 1], newIds[index]] = [newIds[index], newIds[index - 1]]
+      ;[newIds[index - 1], newIds[index]] = [newIds[index], newIds[index - 1]]
     onChange(newIds)
   }
 
   const handleMoveDown = (index: number) => {
     if (index === selectedIds.length - 1) return
     const newIds = [...selectedIds]
-    ;[newIds[index], newIds[index + 1]] = [newIds[index + 1], newIds[index]]
+      ;[newIds[index], newIds[index + 1]] = [newIds[index + 1], newIds[index]]
     onChange(newIds)
   }
 

@@ -27,21 +27,23 @@ Object.defineProperty(window, 'matchMedia', {
 
 // Mock IntersectionObserver
 globalThis.IntersectionObserver = class IntersectionObserver {
-  constructor() {}
-  disconnect() {}
-  observe() {}
+  constructor() { }
+  disconnect() { }
+  observe() { }
   takeRecords() {
     return []
   }
-  unobserve() {}
+  unobserve() { }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } as any
 
 // Mock ResizeObserver
 globalThis.ResizeObserver = class ResizeObserver {
-  constructor() {}
-  disconnect() {}
-  observe() {}
-  unobserve() {}
+  constructor() { }
+  disconnect() { }
+  observe() { }
+  unobserve() { }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } as any
 
 // Mock scrollIntoView
@@ -50,6 +52,7 @@ Element.prototype.scrollIntoView = vi.fn()
 // Suppress console errors during tests (but fail tests that throw)
 const originalError = console.error
 beforeAll(() => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   console.error = (...args: any[]) => {
     // Only suppress React Testing Library's specific warnings
     if (

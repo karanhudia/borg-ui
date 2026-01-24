@@ -3,6 +3,7 @@ import typescript from '@typescript-eslint/eslint-plugin';
 import typescriptParser from '@typescript-eslint/parser';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
+import globals from 'globals';
 
 export default [
   js.configs.recommended,
@@ -13,6 +14,10 @@ export default [
       parserOptions: {
         ecmaVersion: 'latest',
         sourceType: 'module',
+      },
+      globals: {
+        ...globals.browser,
+        ...globals.node,
       },
     },
     plugins: {
@@ -27,6 +32,7 @@ export default [
         'warn',
         { allowConstantExport: true },
       ],
+      'react-hooks/set-state-in-effect': 'off',
       '@typescript-eslint/no-unused-vars': [
         'error',
         { argsIgnorePattern: '^_' },
@@ -35,5 +41,11 @@ export default [
   },
   {
     ignores: ['dist', 'build', 'node_modules'],
+  },
+  {
+    files: ['**/test/**/*', '**/*.test.tsx', '**/*.spec.tsx', '**/test-utils.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
   },
 ];

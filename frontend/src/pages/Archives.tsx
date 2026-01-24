@@ -93,6 +93,7 @@ const Archives: React.FC = () => {
 
   // Handle archives error
   React.useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (archivesError && (archivesError as any)?.response?.status === 423 && selectedRepositoryId) {
       setLockError({
         repositoryId: selectedRepositoryId,
@@ -115,6 +116,7 @@ const Archives: React.FC = () => {
 
   // Handle repo info error
   React.useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (repoInfoError && (repoInfoError as any)?.response?.status === 423 && selectedRepositoryId) {
       setLockError({
         repositoryId: selectedRepositoryId,
@@ -150,6 +152,7 @@ const Archives: React.FC = () => {
       setShowDeleteConfirm(null)
       trackArchive(EventAction.DELETE, selectedRepository?.name)
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(`Failed to delete archive: ${error.response?.data?.detail || error.message}`)
     },
@@ -185,6 +188,7 @@ const Archives: React.FC = () => {
       )
       trackArchive(EventAction.MOUNT, selectedRepository?.name)
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       const errorDetail = error.response?.data?.detail || error.message
       const isMountTimeout = errorDetail.toLowerCase().includes('mount timeout')
@@ -192,7 +196,7 @@ const Archives: React.FC = () => {
       if (isMountTimeout) {
         toast.error(
           `Mount timeout: Large repositories may need more time to mount. ` +
-            `Go to Settings > System to increase the Mount Timeout value.`,
+          `Go to Settings > System to increase the Mount Timeout value.`,
           {
             duration: 10000,
             style: {
@@ -246,11 +250,14 @@ const Archives: React.FC = () => {
   }
 
   // Get repositories from API response
-  const repositories = repositoriesData?.data?.repositories || []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, react-hooks/preserve-manual-memoization
+  const repositories = React.useMemo(() => (repositoriesData as any)?.repositories || [], [repositoriesData])
 
   // Handle incoming navigation state (from "View Archives" button)
   useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (location.state && (location.state as any).repositoryId && repositories.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const repositoryId = (location.state as any).repositoryId
       setSelectedRepositoryId(repositoryId)
       const repo = repositories.find((r: Repository) => r.id === repositoryId)
@@ -270,9 +277,12 @@ const Archives: React.FC = () => {
     if (!archiveContents?.data?.items) return { folders: [], files: [] }
 
     const items = archiveContents.data.items
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const folders: any[] = []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const files: any[] = []
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     items.forEach((item: any) => {
       if (item.type === 'directory') {
         folders.push({

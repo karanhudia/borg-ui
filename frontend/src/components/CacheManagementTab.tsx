@@ -37,6 +37,7 @@ interface CacheStats {
   max_size_mb?: number
   connection_type?: string
   connection_info?: string
+  redis_url?: string
 }
 
 const CacheManagementTab: React.FC = () => {
@@ -67,7 +68,7 @@ const CacheManagementTab: React.FC = () => {
     if (stats) {
       setTtlMinutes(stats.cache_ttl_minutes || 120)
       setMaxSizeMb(stats.cache_max_size_mb || 2048)
-      setRedisUrl((stats as any).redis_url || '')
+      setRedisUrl(stats.redis_url || '')
       setHasChanges(false)
     }
   }, [stats])
@@ -78,7 +79,7 @@ const CacheManagementTab: React.FC = () => {
       const changed =
         ttlMinutes !== (stats.cache_ttl_minutes || 120) ||
         maxSizeMb !== (stats.cache_max_size_mb || 2048) ||
-        redisUrl !== ((stats as any).redis_url || '')
+        redisUrl !== (stats.redis_url || '')
       setHasChanges(changed)
     }
   }, [ttlMinutes, maxSizeMb, redisUrl, stats])
@@ -94,6 +95,7 @@ const CacheManagementTab: React.FC = () => {
       toast.success(message, { duration: 5000 })
       setHasChanges(false)
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to save cache settings')
     },
@@ -110,6 +112,7 @@ const CacheManagementTab: React.FC = () => {
       toast.success(`Cache cleared successfully (${clearedCount} entries removed)`)
       setClearDialogOpen(false)
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to clear cache')
       setClearDialogOpen(false)
@@ -149,6 +152,7 @@ const CacheManagementTab: React.FC = () => {
           duration: 5000,
         })
       }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       const errorMsg = error.response?.data?.detail || 'Connection test failed'
       toast.error(errorMsg, { duration: 5000 })
