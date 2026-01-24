@@ -47,7 +47,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     hasRepositories: false,
     hasArchives: false,
     isLoading: true,
-    refetch: () => {},
+    refetch: () => { },
   })
 
   // Check for SSH keys - only run when authenticated
@@ -63,7 +63,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const response = await sshKeysAPI.getSSHKeys()
         // Extract ssh_keys array from response
         return response.data?.ssh_keys || []
-      } catch (error) {
+      } catch {
         return []
       }
     },
@@ -86,7 +86,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const response = await repositoriesAPI.getRepositories()
         // Extract repositories array from response
         return response.data?.repositories || []
-      } catch (error) {
+      } catch {
         return []
       }
     },
@@ -98,13 +98,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Check for archives - use archive_count from repositories data instead of making API calls
   // This avoids lock errors when a repository is under maintenance
-  const archiveCheck = useMemo(() => {
+  const hasArchives = useMemo(() => {
     if (!repositories || repositories.length === 0) {
-      return { hasArchives: false }
+      return false
     }
     // Check if any repository has archives
-    const hasArchives = repositories.some((repo: any) => repo.archive_count > 0)
-    return { hasArchives }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return repositories.some((repo: any) => repo.archive_count > 0)
   }, [repositories])
 
   // Update app state based on queries
@@ -114,14 +114,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setAppState({
       hasSSHKey: !!(sshKeys && sshKeys.length > 0),
       hasRepositories: !!(repositories && repositories.length > 0),
-      hasArchives: !!archiveCheck?.hasArchives,
+      hasArchives: !!hasArchives,
       isLoading,
       refetch: () => {
         refetchSSH()
         refetchRepos()
       },
     })
-  }, [sshKeys, repositories, archiveCheck, loadingSSH, loadingRepos])
+  }, [sshKeys, repositories, hasArchives, loadingSSH, loadingRepos, refetchSSH, refetchRepos])
 
   // Calculate tab enablement based on app state
   // Simplified: Only need SSH key + repositories for all features
@@ -156,9 +156,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       settings: true,
     }
   }, [
-    appState.hasSSHKey,
     appState.hasRepositories,
-    appState.hasArchives,
     fetchedSSH,
     fetchedRepos,
     authLoading,
@@ -185,7 +183,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           return null
       }
     },
-    [tabEnablement, appState.hasRepositories, appState.hasArchives]
+    [tabEnablement, appState.hasRepositories]
   )
 
   const value: AppContextValue = {
@@ -197,6 +195,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAppContext = () => {
   const context = useContext(AppContext)
   if (context === undefined) {
@@ -206,12 +205,14 @@ export const useAppContext = () => {
 }
 
 // Convenience hook for just the app state
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAppState = () => {
   const { appState } = useAppContext()
   return appState
 }
 
 // Convenience hook for tab enablement
+// eslint-disable-next-line react-refresh/only-export-components
 export const useTabEnablement = () => {
   const { tabEnablement, getTabDisabledReason } = useAppContext()
   return { tabEnablement, getTabDisabledReason }

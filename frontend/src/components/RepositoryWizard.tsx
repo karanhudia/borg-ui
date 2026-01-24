@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -41,7 +41,9 @@ interface RepositoryWizardProps {
   open: boolean
   onClose: () => void
   mode: 'create' | 'edit' | 'import'
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   repository?: any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onSubmit: (data: any) => void
 }
 
@@ -109,75 +111,6 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   const [showRemoteSourceExplorer, setShowRemoteSourceExplorer] = useState(false)
   const [showExcludeExplorer, setShowExcludeExplorer] = useState(false)
 
-  // Reset to first step when dialog opens
-  useEffect(() => {
-    if (open) {
-      setActiveStep(0)
-    }
-  }, [open, mode, repository?.id])
-
-  // Load SSH connections
-  useEffect(() => {
-    if (open) {
-      loadSshData()
-      if (mode === 'edit' && repository) {
-        populateEditData()
-      } else {
-        resetForm()
-      }
-    }
-  }, [open, mode, repository])
-
-  // Auto-select SSH connection for edit mode (after SSH connections load)
-  useEffect(() => {
-    if (mode === 'edit' && repository && sshConnections.length > 0) {
-      // Only auto-select if not already selected and repository location is SSH
-      if (!repoSshConnectionId && repositoryLocation === 'ssh') {
-        // Parse SSH URL to extract host/username/port
-        let repoHost = repository.host || ''
-        let repoUsername = repository.username || ''
-        let repoPort = repository.port || 22
-
-        // If path is SSH URL format, parse it
-        if (repository.path && repository.path.startsWith('ssh://')) {
-          const sshUrlMatch = repository.path.match(/^ssh:\/\/([^@]+)@([^:\/]+):?(\d+)?(.*)$/)
-          if (sshUrlMatch) {
-            repoUsername = sshUrlMatch[1]
-            repoHost = sshUrlMatch[2]
-            repoPort = sshUrlMatch[3] ? parseInt(sshUrlMatch[3]) : 22
-          }
-        }
-
-        console.log('=== SSH Connection Auto-Matching ===')
-        console.log('Repository:', repository.name)
-        console.log('Looking for:', { host: repoHost, username: repoUsername, port: repoPort })
-        console.log(
-          'Available connections:',
-          sshConnections.map((c) => ({
-            id: c.id,
-            mount: c.mount_point,
-            host: c.host,
-            username: c.username,
-            port: c.port,
-          }))
-        )
-
-        // Match by host, username, and port
-        const matchingConnection = sshConnections.find(
-          (conn) =>
-            conn.host === repoHost && conn.username === repoUsername && conn.port === repoPort
-        )
-
-        if (matchingConnection) {
-          console.log('✓ Matched:', matchingConnection.mount_point || matchingConnection.host)
-          setRepoSshConnectionId(matchingConnection.id)
-        } else {
-          console.warn('✗ No match found')
-        }
-      }
-    }
-  }, [mode, repository, sshConnections, repoSshConnectionId, repositoryLocation])
-
   const loadSshData = async () => {
     try {
       const connectionsRes = await sshKeysAPI.getSSHConnections()
@@ -189,7 +122,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     }
   }
 
-  const populateEditData = () => {
+  const populateEditData = React.useCallback(() => {
     if (!repository) return
     setName(repository.name || '')
     setRepositoryMode(repository.mode || 'full')
@@ -202,7 +135,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     // Parse SSH URL format: ssh://user@host:port/path or ssh://user@host/path
     if (repoPath.startsWith('ssh://')) {
       // Try with port first: ssh://user@host:port/path
-      let sshUrlMatch = repoPath.match(/^ssh:\/\/([^@]+)@([^:\/]+):(\d+)(.*)$/)
+      let sshUrlMatch = repoPath.match(/^ssh:\/\/([^@]+)@([^:/]+):(\d+)(.*)$/)
       if (sshUrlMatch) {
         repoUsername = sshUrlMatch[1]
         repoHost = sshUrlMatch[2]
@@ -210,7 +143,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         repoPath = sshUrlMatch[4]
       } else {
         // Try without port (default 22): ssh://user@host/path
-        sshUrlMatch = repoPath.match(/^ssh:\/\/([^@]+)@([^\/]+)(.*)$/)
+        sshUrlMatch = repoPath.match(/^ssh:\/\/([^@]+)@([^/]+)(.*)$/)
         if (sshUrlMatch) {
           repoUsername = sshUrlMatch[1]
           repoHost = sshUrlMatch[2]
@@ -241,7 +174,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     setPostHookTimeout(repository.post_hook_timeout || 300)
     setContinueOnHookFailure(repository.continue_on_hook_failure || false)
     setBypassLock(repository.bypass_lock || false)
-  }
+  }, [repository])
 
   const resetForm = () => {
     setActiveStep(0)
@@ -299,6 +232,77 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     }
   }
 
+  // Reset to first step when dialog opens
+  useEffect(() => {
+    if (open) {
+      setActiveStep(0)
+    }
+  }, [open, mode, repository?.id])
+
+  // Load SSH connections
+  useEffect(() => {
+    if (open) {
+      loadSshData()
+      if (mode === 'edit' && repository) {
+        populateEditData()
+      } else {
+        resetForm()
+      }
+    }
+  }, [open, mode, repository, populateEditData])
+
+  // Auto-select SSH connection for edit mode (after SSH connections load)
+  useEffect(() => {
+    if (mode === 'edit' && repository && sshConnections.length > 0) {
+      // Only auto-select if not already selected and repository location is SSH
+      if (!repoSshConnectionId && repositoryLocation === 'ssh') {
+        // Parse SSH URL to extract host/username/port
+        let repoHost = repository.host || ''
+        let repoUsername = repository.username || ''
+        let repoPort = repository.port || 22
+
+        // If path is SSH URL format, parse it
+        if (repository.path && repository.path.startsWith('ssh://')) {
+          const sshUrlMatch = repository.path.match(/^ssh:\/\/([^@]+)@([^:/]+):?(\d+)?(.*)$/)
+          if (sshUrlMatch) {
+            repoUsername = sshUrlMatch[1]
+            repoHost = sshUrlMatch[2]
+            repoPort = sshUrlMatch[3] ? parseInt(sshUrlMatch[3]) : 22
+          }
+        }
+
+        console.log('=== SSH Connection Auto-Matching ===')
+        console.log('Repository:', repository.name)
+        console.log('Looking for:', { host: repoHost, username: repoUsername, port: repoPort })
+        console.log(
+          'Available connections:',
+          sshConnections.map((c) => ({
+            id: c.id,
+            mount: c.mount_point,
+            host: c.host,
+            username: c.username,
+            port: c.port,
+          }))
+        )
+
+        // Match by host, username, and port
+        const matchingConnection = sshConnections.find(
+          (conn) =>
+            conn.host === repoHost && conn.username === repoUsername && conn.port === repoPort
+        )
+
+        if (matchingConnection) {
+          console.log('✓ Matched:', matchingConnection.mount_point || matchingConnection.host)
+          setRepoSshConnectionId(matchingConnection.id)
+        } else {
+          console.warn('✗ No match found')
+        }
+      }
+    }
+  }, [mode, repository, sshConnections, repoSshConnectionId, repositoryLocation])
+
+
+
   const getSteps = () => {
     if (mode === 'import') {
       return ['Repository Location', 'Security', 'Review']
@@ -320,6 +324,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   }
 
   const handleSubmit = () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data: any = {
       name,
       mode: repositoryMode,
@@ -1114,16 +1119,16 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         sshConfig={
           repositoryLocation === 'ssh' && repoSshConnectionId
             ? (() => {
-                const conn = sshConnections.find((c) => c.id === repoSshConnectionId)
-                return conn
-                  ? {
-                      ssh_key_id: conn.ssh_key_id,
-                      host: conn.host,
-                      username: conn.username,
-                      port: conn.port,
-                    }
-                  : undefined
-              })()
+              const conn = sshConnections.find((c) => c.id === repoSshConnectionId)
+              return conn
+                ? {
+                  ssh_key_id: conn.ssh_key_id,
+                  host: conn.host,
+                  username: conn.username,
+                  port: conn.port,
+                }
+                : undefined
+            })()
             : undefined
         }
         selectMode="directories"
@@ -1148,11 +1153,11 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
           const conn = sshConnections.find((c) => c.id === sourceSshConnectionId)
           const config = conn
             ? {
-                ssh_key_id: conn.ssh_key_id,
-                host: conn.host,
-                username: conn.username,
-                port: conn.port,
-              }
+              ssh_key_id: conn.ssh_key_id,
+              host: conn.host,
+              username: conn.username,
+              port: conn.port,
+            }
             : undefined
 
           return (

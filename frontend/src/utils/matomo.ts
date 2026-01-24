@@ -8,7 +8,7 @@
  */
 
 interface MatomoWindow extends Window {
-  _paq?: any[]
+  _paq?: (string | number | boolean | undefined)[][]
 }
 
 declare const window: MatomoWindow
@@ -113,7 +113,7 @@ export const loadUserPreference = async (): Promise<void> => {
       userOptedOut = false // Default to enabled if API fails
       consentGiven = false
     }
-  } catch (error) {
+  } catch {
     userOptedOut = false // Default to enabled on error
     consentGiven = false
   }

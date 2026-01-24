@@ -36,12 +36,20 @@ const SystemSettingsTab: React.FC = () => {
 
   const [hasChanges, setHasChanges] = useState(false)
 
+  interface CacheStats {
+    browse_max_items?: number
+    browse_max_memory_mb?: number
+    cache_ttl_minutes?: number
+    cache_max_size_mb?: number
+    redis_url?: string
+  }
+
   // Fetch cache stats (which includes browse limits)
   const { data: cacheData, isLoading: cacheLoading } = useQuery({
     queryKey: ['cache-stats'],
     queryFn: async () => {
       const response = await settingsAPI.getCacheStats()
-      return response.data
+      return response.data as CacheStats
     },
   })
 
@@ -54,7 +62,7 @@ const SystemSettingsTab: React.FC = () => {
     },
   })
 
-  const cacheStats = cacheData as any
+  const cacheStats = cacheData
   const systemSettings = systemData?.settings
   const timeoutSources = systemData?.settings?.timeout_sources as
     | Record<string, string | null>
@@ -178,7 +186,7 @@ const SystemSettingsTab: React.FC = () => {
       return await settingsAPI.updateCacheSettings(
         cacheStats?.cache_ttl_minutes || 120,
         cacheStats?.cache_max_size_mb || 2048,
-        (cacheStats as any)?.redis_url || '',
+        cacheStats?.redis_url || '',
         browseMaxItems,
         browseMaxMemoryMb
       )
@@ -186,10 +194,12 @@ const SystemSettingsTab: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cache-stats'] })
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       const data = error.response?.data
       let errorMsg = 'Failed to save browse limits'
       if (Array.isArray(data)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         errorMsg = data.map((e: any) => e.msg).join(', ')
       } else if (data?.detail) {
         errorMsg = data.detail
@@ -213,10 +223,12 @@ const SystemSettingsTab: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['systemSettings'] })
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       const data = error.response?.data
       let errorMsg = 'Failed to save timeout settings'
       if (Array.isArray(data)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         errorMsg = data.map((e: any) => e.msg).join(', ')
       } else if (data?.detail) {
         errorMsg = data.detail
@@ -238,6 +250,7 @@ const SystemSettingsTab: React.FC = () => {
       ])
       toast.success('System settings saved successfully')
       setHasChanges(false)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       toast.error(error.message || 'Failed to save settings')
     }
@@ -286,6 +299,7 @@ const SystemSettingsTab: React.FC = () => {
           // Ignore polling errors
         }
       }, 3000) // Poll every 3 seconds
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Failed to start stats refresh')
       setIsRefreshingStats(false)

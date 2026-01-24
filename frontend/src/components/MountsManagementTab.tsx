@@ -47,8 +47,9 @@ export default function MountsManagementTab() {
       toast.success('Archive unmounted successfully')
       queryClient.invalidateQueries({ queryKey: ['mounts'] })
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(`Failed to unmount: ${error.response?.data?.detail || error.message}`)
+      toast.error(error.response?.data?.detail || 'Failed to unmount path')
     },
   })
 

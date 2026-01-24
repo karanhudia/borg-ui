@@ -54,7 +54,7 @@ const Activity: React.FC = () => {
   } = useQuery({
     queryKey: ['activity', typeFilter, statusFilter],
     queryFn: async () => {
-      const params: any = { limit: 50 }
+      const params: Record<string, unknown> = { limit: 50 }
       if (typeFilter !== 'all') params.job_type = typeFilter
       if (statusFilter !== 'all') params.status = statusFilter
 

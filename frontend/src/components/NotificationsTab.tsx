@@ -122,6 +122,7 @@ const NotificationsTab: React.FC = () => {
       setShowDialog(false)
       resetForm()
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to add notification service')
     },
@@ -129,6 +130,7 @@ const NotificationsTab: React.FC = () => {
 
   // Update notification
   const updateMutation = useMutation({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: ({ id, data }: { id: number; data: any }) => notificationsAPI.update(id, data),
     onSuccess: () => {
       toast.success('Notification service updated successfully')
@@ -137,6 +139,7 @@ const NotificationsTab: React.FC = () => {
       setEditingNotification(null)
       resetForm()
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to update notification service')
     },
@@ -150,6 +153,7 @@ const NotificationsTab: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       setDeleteConfirm(null)
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to delete notification service')
     },
@@ -166,6 +170,7 @@ const NotificationsTab: React.FC = () => {
       }
       setTesting(null)
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to test notification')
       setTesting(null)
@@ -489,9 +494,8 @@ const NotificationsTab: React.FC = () => {
                         <Chip label="All Repositories" size="small" variant="outlined" />
                       ) : notification.repositories.length > 0 ? (
                         <Chip
-                          label={`${notification.repositories.length} ${
-                            notification.repositories.length === 1 ? 'Repository' : 'Repositories'
-                          }`}
+                          label={`${notification.repositories.length} ${notification.repositories.length === 1 ? 'Repository' : 'Repositories'
+                            }`}
                           size="small"
                           color="primary"
                           variant="outlined"

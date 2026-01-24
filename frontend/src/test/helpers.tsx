@@ -120,7 +120,7 @@ export const waitForCondition = async (
 /**
  * Mock axios error response
  */
-export const mockAxiosError = (status: number, data: any) => ({
+export const mockAxiosError = (status: number, data: unknown) => ({
   response: {
     status,
     data,

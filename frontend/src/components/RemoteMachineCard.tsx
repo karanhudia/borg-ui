@@ -27,6 +27,7 @@ import {
   Network,
   Key,
 } from 'lucide-react'
+import React from 'react'
 
 interface StorageInfo {
   total: number

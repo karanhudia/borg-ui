@@ -78,7 +78,9 @@ const Backup: React.FC = () => {
 
   // Handle incoming navigation state (from "Backup Now" button)
   useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (location.state && (location.state as any).repositoryPath) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setSelectedRepository((location.state as any).repositoryPath)
       // Reset scroll position to top
       window.scrollTo(0, 0)
@@ -101,6 +103,7 @@ const Backup: React.FC = () => {
   // Get selected repository details
   const selectedRepoData = useMemo(() => {
     if (!selectedRepository || !repositoriesData?.data?.repositories) return null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return repositoriesData.data.repositories.find((repo: any) => repo.path === selectedRepository)
   }, [selectedRepository, repositoriesData])
 
@@ -117,6 +120,7 @@ const Backup: React.FC = () => {
         parseBytes(selectedRepoData?.total_size)
       )
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(`Failed to start backup: ${error.response?.data?.detail || error.message}`)
     },
@@ -130,6 +134,7 @@ const Backup: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['backup-status-manual'] })
       trackBackup(EventAction.STOP, 'manual')
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(`Failed to cancel backup: ${error.response?.data?.detail || error.message}`)
     },
@@ -138,6 +143,7 @@ const Backup: React.FC = () => {
   // Handle repository selection
   const handleRepositoryChange = (repoPath: string) => {
     setSelectedRepository(repoPath)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const repo = repositoriesData?.data?.repositories?.find((r: any) => r.path === repoPath)
     if (repo) {
       trackBackup(EventAction.FILTER, undefined, repo.name)
@@ -170,12 +176,14 @@ const Backup: React.FC = () => {
   }
 
   // Handle download logs
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleDownloadLogs = (job: any) => {
     try {
       backupAPI.downloadLogs(job.id)
       toast.success('Downloading logs...')
       trackBackup(EventAction.DOWNLOAD, 'logs')
-    } catch (error) {
+    } catch {
+      // Error handled by mutation
       toast.error('Failed to download logs')
     }
   }
@@ -209,6 +217,7 @@ const Backup: React.FC = () => {
   // Handle break lock action
   const handleBreakLock = async (job: BackupJob) => {
     const repoPath = job.error_message?.match(/LOCK_ERROR::(.+)/)?.[1].split('\n')[0]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const repo = repositoriesData?.data?.repositories?.find((r: any) => r.path === repoPath)
     if (!repo) return
 
@@ -221,6 +230,7 @@ const Backup: React.FC = () => {
         await repositoriesAPI.breakLock(repo.id)
         toast.success('Lock removed successfully! You can now start a new backup.')
         queryClient.invalidateQueries({ queryKey: ['backup-status'] })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (error: any) {
         toast.error(error.response?.data?.detail || 'Failed to break lock')
       }
@@ -273,7 +283,9 @@ const Backup: React.FC = () => {
                   {loadingRepositories ? 'Loading repositories...' : 'Select a repository...'}
                 </MenuItem>
                 {repositoriesData?.data?.repositories
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   ?.filter((repo: any) => repo.mode !== 'observe')
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   .map((repo: any) => (
                     <MenuItem
                       key={repo.id}
@@ -333,7 +345,8 @@ const Backup: React.FC = () => {
             </Button>
           </Stack>
 
-          {repositoriesData?.data?.repositories?.some((repo: any) => repo.mode === 'observe') &&
+          {// eslint-disable-next-line @typescript-eslint/no-explicit-any
+            repositoriesData?.data?.repositories?.some((repo: any) => repo.mode === 'observe') &&
             !loadingRepositories && (
               <Alert severity="info" sx={{ mt: 2 }}>
                 <Typography variant="body2">
@@ -527,7 +540,7 @@ const Backup: React.FC = () => {
                       </Typography>
                       <Typography variant="body2" fontWeight={500}>
                         {job.progress_details?.compressed_size !== undefined &&
-                        job.progress_details?.compressed_size !== null
+                          job.progress_details?.compressed_size !== null
                           ? formatBytesUtil(job.progress_details.compressed_size)
                           : 'N/A'}
                       </Typography>
@@ -538,7 +551,7 @@ const Backup: React.FC = () => {
                       </Typography>
                       <Typography variant="body2" fontWeight={500} color="success.main">
                         {job.progress_details?.deduplicated_size !== undefined &&
-                        job.progress_details?.deduplicated_size !== null
+                          job.progress_details?.deduplicated_size !== null
                           ? formatBytesUtil(job.progress_details.deduplicated_size)
                           : 'N/A'}
                       </Typography>

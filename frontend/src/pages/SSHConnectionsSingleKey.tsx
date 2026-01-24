@@ -144,12 +144,15 @@ export default function SSHConnectionsSingleKey() {
       setGenerateDialogOpen(false)
       track(EventCategory.SSH, EventAction.CREATE, 'key')
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
+      console.error('Failed to generate SSH key:', error)
       toast.error(error.response?.data?.detail || 'Failed to generate SSH key')
     },
   })
 
   const importKeyMutation = useMutation({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: (data: any) => sshKeysAPI.importSSHKey(data),
     onSuccess: () => {
       toast.success('System SSH key imported successfully!')
@@ -163,12 +166,15 @@ export default function SSHConnectionsSingleKey() {
       })
       track(EventCategory.SSH, EventAction.UPLOAD, 'key')
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
+      console.error('Failed to import SSH key:', error)
       toast.error(error.response?.data?.detail || 'Failed to import SSH key')
     },
   })
 
   const deployKeyMutation = useMutation({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: (data: { keyId: number; connectionData: any }) =>
       sshKeysAPI.deploySSHKey(data.keyId, data.connectionData),
     onSuccess: () => {
@@ -185,12 +191,15 @@ export default function SSHConnectionsSingleKey() {
       })
       track(EventCategory.SSH, EventAction.CREATE, 'connection')
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
+      console.error('Failed to deploy SSH key:', error)
       toast.error(error.response?.data?.detail || 'Failed to deploy SSH key')
     },
   })
 
   const testConnectionMutation = useMutation({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: (data: { keyId: number; connectionData: any }) =>
       sshKeysAPI.testSSHConnection(data.keyId, data.connectionData),
     onSuccess: (response) => {
@@ -202,12 +211,15 @@ export default function SSHConnectionsSingleKey() {
       }
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
+      console.error('Failed to test connection:', error)
       toast.error(error.response?.data?.detail || 'Connection test failed')
     },
   })
 
   const updateConnectionMutation = useMutation({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: (data: { connectionId: number; connectionData: any }) =>
       sshKeysAPI.updateSSHConnection(data.connectionId, data.connectionData),
     onSuccess: async (_response, variables) => {
@@ -220,13 +232,16 @@ export default function SSHConnectionsSingleKey() {
       try {
         await sshKeysAPI.testExistingConnection(variables.connectionId)
         queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (error: any) {
         // Test failure is already shown in the connection status
         console.error('Failed to test connection:', error)
         queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
       }
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
+      console.error('Failed to update connection:', error)
       toast.error(error.response?.data?.detail || 'Failed to update connection')
     },
   })
@@ -240,7 +255,9 @@ export default function SSHConnectionsSingleKey() {
       setSelectedConnection(null)
       track(EventCategory.SSH, EventAction.DELETE, 'connection')
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
+      console.error('Failed to delete connection:', error)
       toast.error(error.response?.data?.detail || 'Failed to delete connection')
     },
   })
@@ -252,7 +269,9 @@ export default function SSHConnectionsSingleKey() {
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
       track(EventCategory.SSH, EventAction.VIEW, 'storage')
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
+      console.error('Failed to refresh storage:', error)
       toast.error(error.response?.data?.detail || 'Failed to refresh storage')
     },
   })
@@ -268,7 +287,9 @@ export default function SSHConnectionsSingleKey() {
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
       track(EventCategory.SSH, EventAction.TEST, 'connection')
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
+      console.error('Failed to test connection:', error)
       toast.error(error.response?.data?.detail || 'Failed to test connection')
     },
   })
@@ -282,7 +303,9 @@ export default function SSHConnectionsSingleKey() {
       setDeleteKeyDialogOpen(false)
       track(EventCategory.SSH, EventAction.DELETE, 'key')
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
+      console.error('Failed to delete SSH key:', error)
       toast.error(error.response?.data?.detail || 'Failed to delete SSH key')
     },
   })
@@ -301,7 +324,9 @@ export default function SSHConnectionsSingleKey() {
         toast.error(response.data.error || 'Failed to deploy SSH key')
       }
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
+      console.error('Failed to redeploy SSH key:', error)
       toast.error(error.response?.data?.detail || 'Failed to deploy SSH key')
     },
   })
@@ -325,6 +350,7 @@ export default function SSHConnectionsSingleKey() {
         }, 2000)
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connections?.length])
 
   // Handlers

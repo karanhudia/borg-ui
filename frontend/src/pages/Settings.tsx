@@ -57,7 +57,7 @@ const Settings: React.FC = () => {
   const { tab } = useParams<{ tab?: string }>()
 
   // Get tab order based on user role
-  const getTabOrder = () => {
+  const getTabOrder = React.useCallback(() => {
     const baseTabs = ['account', 'appearance', 'preferences', 'notifications']
     if (user?.is_admin) {
       return [
@@ -75,22 +75,25 @@ const Settings: React.FC = () => {
       ]
     }
     return [...baseTabs, 'mounts', 'scripts', 'export', 'activity']
-  }
+  }, [user?.is_admin])
 
   // Determine active tab from URL or default to 'account'
-  const getTabIndexFromPath = (tabPath?: string): number => {
-    if (!tabPath) return 0
-    const tabOrder = getTabOrder()
-    const index = tabOrder.indexOf(tabPath)
-    return index >= 0 ? index : 0
-  }
+  const getTabIndexFromPath = React.useCallback(
+    (tabPath?: string): number => {
+      if (!tabPath) return 0
+      const tabOrder = getTabOrder()
+      const index = tabOrder.indexOf(tabPath)
+      return index >= 0 ? index : 0
+    },
+    [getTabOrder]
+  )
 
   const [activeTab, setActiveTab] = useState(getTabIndexFromPath(tab))
 
   // Update active tab when URL changes
   useEffect(() => {
     setActiveTab(getTabIndexFromPath(tab))
-  }, [tab])
+  }, [tab, getTabIndexFromPath])
   const [showCreateUser, setShowCreateUser] = useState(false)
   const [editingUser, setEditingUser] = useState<UserType | null>(null)
   const [showPasswordModal, setShowPasswordModal] = useState(false)
@@ -110,6 +113,7 @@ const Settings: React.FC = () => {
       toast.success('Password changed successfully')
       setChangePasswordForm({ current_password: '', new_password: '', confirm_password: '' })
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to change password')
     },
@@ -129,12 +133,14 @@ const Settings: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       setShowCreateUser(false)
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to create user')
     },
   })
 
   const updateUserMutation = useMutation({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: ({ userId, userData }: { userId: number; userData: any }) =>
       settingsAPI.updateUser(userId, userData),
     onSuccess: () => {
@@ -142,6 +148,7 @@ const Settings: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       setEditingUser(null)
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to update user')
     },
@@ -154,6 +161,7 @@ const Settings: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       setDeleteConfirmUser(null)
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to delete user')
     },
@@ -167,6 +175,7 @@ const Settings: React.FC = () => {
       setShowPasswordModal(false)
       setSelectedUserId(null)
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to reset password')
     },
@@ -187,6 +196,7 @@ const Settings: React.FC = () => {
       toast.success('Settings updated successfully')
       queryClient.invalidateQueries({ queryKey: ['systemSettings'] })
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to update settings')
     },
@@ -413,7 +423,7 @@ const Settings: React.FC = () => {
                     }
                     helperText={
                       changePasswordForm.confirm_password !== '' &&
-                      changePasswordForm.new_password !== changePasswordForm.confirm_password
+                        changePasswordForm.new_password !== changePasswordForm.confirm_password
                         ? 'Passwords do not match'
                         : ''
                     }
@@ -471,6 +481,7 @@ const Settings: React.FC = () => {
                   <FormControl sx={{ minWidth: 120 }} size="small">
                     <Select
                       value={mode}
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       onChange={(e) => setTheme(e.target.value as any)}
                       displayEmpty
                       inputProps={{ 'aria-label': 'Theme mode' }}

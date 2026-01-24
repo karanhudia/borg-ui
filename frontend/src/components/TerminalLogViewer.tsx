@@ -29,7 +29,8 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
   onFetchLogs,
 }) => {
   const [logs, setLogs] = useState<LogLine[]>([])
-  const [isLoading, setIsLoading] = useState(false)
+  const logsRef = useRef<LogLine[]>([])
+  const isLoadingRef = useRef(false)
   const logContainerRef = useRef<HTMLDivElement>(null)
   const [autoScroll, setAutoScroll] = useState(true)
   const [totalLines, setTotalLines] = useState(0)
@@ -37,29 +38,34 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
   // Fetch logs on mount and poll while running
   useEffect(() => {
     const fetchLogs = async () => {
-      if (isLoading) return
+      if (isLoadingRef.current) return
 
-      setIsLoading(true)
+      isLoadingRef.current = true
       try {
         // For running jobs, always fetch from offset 0 (backend returns tail)
         // For completed jobs, fetch next chunk based on current logs length
-        const offset = status === 'running' ? 0 : logs.length
+        const offset = status === 'running' ? 0 : logsRef.current.length
         const result = await onFetchLogs(offset)
 
         if (result.lines.length > 0) {
           if (status === 'running') {
             // For running jobs, replace logs entirely (backend sends tail)
             setLogs(result.lines)
+            logsRef.current = result.lines
           } else {
             // For completed jobs, append new lines
-            setLogs((prev) => [...prev, ...result.lines])
+            setLogs((prev) => {
+              const newLogs = [...prev, ...result.lines]
+              logsRef.current = newLogs
+              return newLogs
+            })
           }
         }
         setTotalLines(result.total_lines)
       } catch (error) {
         console.error('Failed to fetch logs:', error)
       } finally {
-        setIsLoading(false)
+        isLoadingRef.current = false
       }
     }
 
@@ -71,7 +77,7 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
       const interval = setInterval(fetchLogs, 2000)
       return () => clearInterval(interval)
     }
-  }, [status])
+  }, [status, onFetchLogs])
 
   // Auto-scroll to bottom when new logs arrive
   useEffect(() => {

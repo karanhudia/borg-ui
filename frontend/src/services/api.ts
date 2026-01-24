@@ -32,6 +32,46 @@ api.interceptors.response.use(
   }
 )
 
+export interface RepositoryData {
+  name?: string
+  path?: string
+  encryption?: string
+  compression?: string
+  source_directories?: string[]
+  exclude_patterns?: string[]
+  repository_type?: string
+  host?: string
+  port?: number
+  username?: string
+  ssh_key_id?: number | null
+  connection_id?: number | null
+  remote_path?: string
+  pre_backup_script?: string
+  post_backup_script?: string
+  hook_timeout?: number
+  pre_hook_timeout?: number
+  post_hook_timeout?: number
+  continue_on_hook_failure?: boolean
+  mode?: 'full' | 'observe'
+  custom_flags?: string
+  bypass_lock?: boolean
+  // Allow other properties for flexibility
+  [key: string]: unknown
+}
+
+export interface SystemSettings {
+  mount_timeout?: number
+  info_timeout?: number
+  list_timeout?: number
+  init_timeout?: number
+  backup_timeout?: number
+  stats_refresh_interval_minutes?: number
+  [key: string]: unknown
+}
+
+// Generic type for object data
+type ApiData = Record<string, unknown>
+
 export const authAPI = {
   login: (username: string, password: string) =>
     api.post(
@@ -154,25 +194,25 @@ export const restoreAPI = {
 export const settingsAPI = {
   // System settings
   getSystemSettings: () => api.get('/settings/system'),
-  updateSystemSettings: (settings: any) => api.put('/settings/system', settings),
+  updateSystemSettings: (settings: SystemSettings) => api.put('/settings/system', settings),
   refreshAllStats: () => api.post('/settings/refresh-stats'),
 
   // User management
   getUsers: () => api.get('/settings/users'),
-  createUser: (userData: any) => api.post('/settings/users', userData),
-  updateUser: (userId: number, userData: any) => api.put(`/settings/users/${userId}`, userData),
+  createUser: (userData: ApiData) => api.post('/settings/users', userData),
+  updateUser: (userId: number, userData: ApiData) => api.put(`/settings/users/${userId}`, userData),
   deleteUser: (userId: number) => api.delete(`/settings/users/${userId}`),
   resetUserPassword: (userId: number, newPassword: string) =>
     api.post(`/settings/users/${userId}/reset-password`, { new_password: newPassword }),
 
   // Profile management
   getProfile: () => api.get('/settings/profile'),
-  updateProfile: (profileData: any) => api.put('/settings/profile', profileData),
-  changePassword: (passwordData: any) => api.post('/settings/change-password', passwordData),
+  updateProfile: (profileData: ApiData) => api.put('/settings/profile', profileData),
+  changePassword: (passwordData: ApiData) => api.post('/settings/change-password', passwordData),
 
   // User preferences
   getPreferences: () => api.get('/settings/preferences'),
-  updatePreferences: (preferences: any) => api.put('/settings/preferences', preferences),
+  updatePreferences: (preferences: ApiData) => api.put('/settings/preferences', preferences),
 
   // System maintenance
   cleanupSystem: () => api.post('/settings/system/cleanup'),
@@ -192,7 +232,7 @@ export const settingsAPI = {
     browseMaxItems?: number,
     browseMaxMemoryMb?: number
   ) => {
-    const params: any = {
+    const params: Record<string, string | number> = {
       cache_ttl_minutes: ttlMinutes,
       cache_max_size_mb: maxSizeMb,
     }
@@ -223,15 +263,15 @@ export const eventsAPI = {
 // Repositories API
 export const repositoriesAPI = {
   getRepositories: () => api.get('/repositories/'),
-  createRepository: (data: any) => api.post('/repositories/', data),
-  importRepository: (data: any) => api.post('/repositories/import', data),
+  createRepository: (data: RepositoryData) => api.post('/repositories/', data),
+  importRepository: (data: RepositoryData) => api.post('/repositories/import', data),
   getRepository: (id: number) => api.get(`/repositories/${id}`),
-  updateRepository: (id: number, data: any) => api.put(`/repositories/${id}`, data),
+  updateRepository: (id: number, data: RepositoryData) => api.put(`/repositories/${id}`, data),
   deleteRepository: (id: number) => api.delete(`/repositories/${id}`),
   checkRepository: (id: number, maxDuration: number = 3600) =>
     api.post(`/repositories/${id}/check`, { max_duration: maxDuration }),
   compactRepository: (id: number) => api.post(`/repositories/${id}/compact`),
-  pruneRepository: (id: number, data: any) => api.post(`/repositories/${id}/prune`, data),
+  pruneRepository: (id: number, data: ApiData) => api.post(`/repositories/${id}/prune`, data),
   breakLock: (id: number) => api.post(`/repositories/${id}/break-lock`),
   getRepositoryStats: (id: number) => api.get(`/repositories/${id}/stats`),
   listRepositoryArchives: (id: number) => api.get(`/repositories/${id}/archives`),
@@ -259,10 +299,10 @@ export const repositoriesAPI = {
     }),
   // Check schedule management
   getCheckSchedule: (id: number) => api.get(`/repositories/${id}/check-schedule`),
-  updateCheckSchedule: (id: number, data: any) =>
+  updateCheckSchedule: (id: number, data: ApiData) =>
     api.put(`/repositories/${id}/check-schedule`, data),
   list: () => api.get('/repositories/'),
-  startCheck: (id: number, data: any) => api.post(`/repositories/${id}/check`, data),
+  startCheck: (id: number, data: ApiData) => api.post(`/repositories/${id}/check`, data),
   // Keyfile management
   uploadKeyfile: (id: number, formData: FormData) =>
     api.post(`/repositories/${id}/keyfile`, formData, {
@@ -276,23 +316,23 @@ export const repositoriesAPI = {
 export const sshKeysAPI = {
   // Single-key system
   getSystemKey: () => api.get('/ssh-keys/system-key'),
-  generateSSHKey: (data: any) => api.post('/ssh-keys/generate', data),
+  generateSSHKey: (data: ApiData) => api.post('/ssh-keys/generate', data),
 
   // Legacy multi-key endpoints (deprecated)
   getSSHKeys: () => api.get('/ssh-keys'),
-  createSSHKey: (data: any) => api.post('/ssh-keys', data),
-  quickSetup: (data: any) => api.post('/ssh-keys/quick-setup', data),
+  createSSHKey: (data: ApiData) => api.post('/ssh-keys', data),
+  quickSetup: (data: ApiData) => api.post('/ssh-keys/quick-setup', data),
   getSSHKey: (id: number) => api.get(`/ssh-keys/${id}`),
-  updateSSHKey: (id: number, data: any) => api.put(`/ssh-keys/${id}`, data),
+  updateSSHKey: (id: number, data: ApiData) => api.put(`/ssh-keys/${id}`, data),
   deleteSSHKey: (id: number) => api.delete(`/ssh-keys/${id}`),
 
   // Connection management
-  deploySSHKey: (id: number, data: any) => api.post(`/ssh-keys/${id}/deploy`, data),
-  testSSHConnection: (id: number, data: any) => api.post(`/ssh-keys/${id}/test-connection`, data),
+  deploySSHKey: (id: number, data: ApiData) => api.post(`/ssh-keys/${id}/deploy`, data),
+  testSSHConnection: (id: number, data: ApiData) => api.post(`/ssh-keys/${id}/test-connection`, data),
   testExistingConnection: (connectionId: number) =>
     api.post(`/ssh-keys/connections/${connectionId}/test`),
   getSSHConnections: () => api.get('/ssh-keys/connections'),
-  updateSSHConnection: (connectionId: number, data: any) =>
+  updateSSHConnection: (connectionId: number, data: ApiData) =>
     api.put(`/ssh-keys/connections/${connectionId}`, data),
   deleteSSHConnection: (connectionId: number) =>
     api.delete(`/ssh-keys/connections/${connectionId}`),
@@ -300,20 +340,20 @@ export const sshKeysAPI = {
     api.post(`/ssh-keys/connections/${connectionId}/refresh-storage`),
   redeployKeyToConnection: (connectionId: number, password: string) =>
     api.post(`/ssh-keys/connections/${connectionId}/redeploy`, { password }),
-  importSSHKey: (data: any) => api.post('/ssh-keys/import', data),
+  importSSHKey: (data: ApiData) => api.post('/ssh-keys/import', data),
 }
 
 // Schedule API
 export const scheduleAPI = {
   getScheduledJobs: () => api.get('/schedule/'),
-  createScheduledJob: (data: any) => api.post('/schedule/', data),
+  createScheduledJob: (data: ApiData) => api.post('/schedule/', data),
   getScheduledJob: (id: number) => api.get(`/schedule/${id}`),
-  updateScheduledJob: (id: number, data: any) => api.put(`/schedule/${id}`, data),
+  updateScheduledJob: (id: number, data: ApiData) => api.put(`/schedule/${id}`, data),
   deleteScheduledJob: (id: number) => api.delete(`/schedule/${id}`),
   toggleScheduledJob: (id: number) => api.post(`/schedule/${id}/toggle`),
   runScheduledJobNow: (id: number) => api.post(`/schedule/${id}/run-now`),
   duplicateScheduledJob: (id: number) => api.post(`/schedule/${id}/duplicate`),
-  validateCronExpression: (data: any) => api.post('/schedule/validate-cron', data),
+  validateCronExpression: (data: ApiData) => api.post('/schedule/validate-cron', data),
   getCronPresets: () => api.get('/schedule/cron-presets'),
   getUpcomingJobs: (hours?: number) => api.get('/schedule/upcoming-jobs', { params: { hours } }),
 }
@@ -321,14 +361,14 @@ export const scheduleAPI = {
 export const notificationsAPI = {
   list: () => api.get('/notifications'),
   get: (id: number) => api.get(`/notifications/${id}`),
-  create: (data: any) => api.post('/notifications', data),
-  update: (id: number, data: any) => api.put(`/notifications/${id}`, data),
+  create: (data: ApiData) => api.post('/notifications', data),
+  update: (id: number, data: ApiData) => api.put(`/notifications/${id}`, data),
   delete: (id: number) => api.delete(`/notifications/${id}`),
   test: (serviceUrl: string) => api.post('/notifications/test', { service_url: serviceUrl }),
 }
 
 export const activityAPI = {
-  list: (params?: any) => api.get('/activity/recent', { params }),
+  list: (params?: ApiData) => api.get('/activity/recent', { params }),
   getLogs: (jobType: string, jobId: number, offset: number = 0) =>
     api.get(`/activity/${jobType}/${jobId}/logs`, { params: { offset } }),
   downloadLogs: (jobType: string, jobId: number) => {
@@ -382,10 +422,10 @@ export const scriptsAPI = {
   get: (scriptId: number) => api.get(`/scripts/${scriptId}`),
 
   // Create a new script
-  create: (data: any) => api.post('/scripts', data),
+  create: (data: ApiData) => api.post('/scripts', data),
 
   // Update a script
-  update: (scriptId: number, data: any) => api.put(`/scripts/${scriptId}`, data),
+  update: (scriptId: number, data: ApiData) => api.put(`/scripts/${scriptId}`, data),
 
   // Delete a script
   delete: (scriptId: number) => api.delete(`/scripts/${scriptId}`),

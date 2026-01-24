@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -52,6 +52,13 @@ interface SSHConnection {
   status: string
 }
 
+interface SSHNetworkConfig {
+  ssh_key_id: number
+  host: string
+  username: string
+  port: number
+}
+
 interface FileExplorerDialogProps {
   open: boolean
   onClose: () => void
@@ -60,12 +67,7 @@ interface FileExplorerDialogProps {
   initialPath?: string
   multiSelect?: boolean
   connectionType?: 'local' | 'ssh'
-  sshConfig?: {
-    ssh_key_id: number
-    host: string
-    username: string
-    port: number
-  }
+  sshConfig?: SSHNetworkConfig
   selectMode?: 'directories' | 'files' | 'both'
 }
 
@@ -121,7 +123,7 @@ export default function FileExplorerDialog({
         loadSSHConnections()
       }
     }
-  }, [open, initialPath, connectionType, sshConfig])
+  }, [open, initialPath, connectionType, sshConfig, loadDirectory])
 
   const loadSSHConnections = async () => {
     try {
@@ -136,45 +138,50 @@ export default function FileExplorerDialog({
     }
   }
 
-  const loadDirectory = async (path: string, conn?: 'local' | 'ssh', config?: any) => {
-    setLoading(true)
-    setError(null)
+  const loadDirectory = React.useCallback(
+    async (path: string, conn?: 'local' | 'ssh', config?: SSHNetworkConfig) => {
+      setLoading(true)
+      setError(null)
 
-    // Update state if new connection params provided
-    if (conn !== undefined) {
-      setActiveConnectionType(conn)
-    }
-    if (config !== undefined) {
-      setActiveSshConfig(config)
-    }
-
-    const useConnectionType = conn !== undefined ? conn : activeConnectionType
-    const useSshConfig = config !== undefined ? config : activeSshConfig
-
-    try {
-      const params: any = {
-        path,
-        connection_type: useConnectionType,
+      // Update state if new connection params provided
+      if (conn !== undefined) {
+        setActiveConnectionType(conn)
+      }
+      if (config !== undefined) {
+        setActiveSshConfig(config)
       }
 
-      if (useConnectionType === 'ssh' && useSshConfig) {
-        params.ssh_key_id = useSshConfig.ssh_key_id
-        params.host = useSshConfig.host
-        params.username = useSshConfig.username
-        params.port = useSshConfig.port
-      }
+      const useConnectionType = conn !== undefined ? conn : activeConnectionType
+      const useSshConfig = config !== undefined ? config : activeSshConfig
 
-      const response = await api.get('/filesystem/browse', { params })
-      setItems(response.data.items || [])
-      setCurrentPath(response.data.current_path)
-      setIsInsideLocalMount(response.data.is_inside_local_mount || false)
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load directory')
-      setItems([])
-    } finally {
-      setLoading(false)
-    }
-  }
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const params: any = {
+          path,
+          connection_type: useConnectionType,
+        }
+
+        if (useConnectionType === 'ssh' && useSshConfig) {
+          params.ssh_key_id = useSshConfig.ssh_key_id
+          params.host = useSshConfig.host
+          params.username = useSshConfig.username
+          params.port = useSshConfig.port
+        }
+
+        const response = await api.get('/filesystem/browse', { params })
+        setItems(response.data.items || [])
+        setCurrentPath(response.data.current_path)
+        setIsInsideLocalMount(response.data.is_inside_local_mount || false)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } catch (err: any) {
+        setError(err.response?.data?.detail || 'Failed to load directory')
+        setItems([])
+      } finally {
+        setLoading(false)
+      }
+    },
+    [activeConnectionType, activeSshConfig]
+  )
 
   const handleItemClick = (item: FileSystemItem) => {
     if (item.is_mount_point && item.ssh_connection) {
@@ -252,6 +259,7 @@ export default function FileExplorerDialog({
 
     setCreatingFolder(true)
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const params: any = {
         path: currentPath,
         folder_name: newFolderName.trim(),
@@ -274,6 +282,9 @@ export default function FileExplorerDialog({
       setShowCreateFolder(false)
       setNewFolderName('')
       setError(null)
+      setNewFolderName('')
+      setError(null)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error('Failed to create folder:', err)
       const errorMessage = err.response?.data?.detail || err.message || 'Failed to create folder'
