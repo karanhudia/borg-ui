@@ -38,13 +38,21 @@ class ArchiveContentsTester:
         self.session = requests.Session()
         self.auth_token = None
         self.test_results = []
-        # For Docker container: paths need /local prefix
-        # Auto-detect: Check if running in CI (GitHub Actions) or explicit container_mode
-        is_ci = os.environ.get('CI') == 'true' or os.environ.get('GITHUB_ACTIONS') == 'true'
-        # In CI, server runs directly (no Docker), so no /local prefix
-        # In Docker (ports 8081/8082 without CI), use /local prefix
-        self.use_local_prefix = container_mode or (
-            not is_ci and (base_url.endswith(":8081") or base_url.endswith(":8082"))
+
+        # Determine if backend server is running in Docker container
+        # Port-based detection: 8081/8082 = Docker, 8000 = local dev
+        # Can be overridden with container_mode or BORG_UI_CONTAINER env var
+        is_container_port = base_url.endswith(":8081") or base_url.endswith(":8082")
+        env_container_mode = os.environ.get('BORG_UI_CONTAINER', '').lower() in ('true', '1', 'yes')
+
+        # Use /local prefix if:
+        # 1. Explicitly set via container_mode parameter, OR
+        # 2. Explicitly set via BORG_UI_CONTAINER env var, OR
+        # 3. Port suggests Docker AND not explicitly disabled
+        self.use_local_prefix = (
+            container_mode or
+            env_container_mode or
+            (is_container_port and os.environ.get('BORG_UI_CONTAINER', '').lower() not in ('false', '0', 'no'))
         )
         # For Docker container: paths need /local prefix
         self.use_local_prefix = True
@@ -369,19 +377,17 @@ class ArchiveContentsTester:
             self.log("Please run: ./tests/setup_test_env.sh first", "ERROR")
             return False
 
-        # Show path mapping info
-        is_ci = os.environ.get('CI') == 'true' or os.environ.get('GITHUB_ACTIONS') == 'true'
-        if is_ci:
-            self.log(f"ℹ️  CI mode detected (direct filesystem access)", "INFO")
-            self.log(f"   Test path: {self.repo_dir}", "INFO")
-        elif self.use_local_prefix:
-            self.log(f"ℹ️  Docker mode detected (paths will use /local prefix)", "INFO")
+        # Show path mapping info based on detected mode
+        if self.use_local_prefix:
+            self.log(f"ℹ️  Docker backend detected (paths will use /local prefix)", "INFO")
             self.log(f"   Host path: {self.repo_dir}", "INFO")
             self.log(f"   Container path: /local{self.repo_dir}", "INFO")
-            self.log(f"   Ensure your docker-compose.yml mounts / as /local", "INFO")
+            self.log(f"   Server URL: {self.base_url}", "INFO")
         else:
-            self.log(f"ℹ️  Local dev mode (direct filesystem access)", "INFO")
+            self.log(f"ℹ️  Local backend detected (direct filesystem access)", "INFO")
             self.log(f"   Test path: {self.repo_dir}", "INFO")
+            self.log(f"   Server URL: {self.base_url}", "INFO")
+            self.log(f"   Tip: Set BORG_UI_CONTAINER=false to override Docker detection", "INFO")
 
         # Authenticate
         if not self.authenticate():
