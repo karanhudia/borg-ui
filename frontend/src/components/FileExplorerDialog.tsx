@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -87,6 +87,7 @@ export default function FileExplorerDialog({
   const [selectedPaths, setSelectedPaths] = useState<string[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [sshConnections, setSshConnections] = useState<SSHConnection[]>([])
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   // Track current browsing mode (can switch from local to ssh when clicking mount points)
   const [activeConnectionType, setActiveConnectionType] = useState(connectionType)
@@ -186,8 +187,14 @@ export default function FileExplorerDialog({
       }
       const startPath = item.ssh_connection.default_path || '/'
       loadDirectory(startPath, 'ssh', sshCfg)
+      // Clear search and focus input
+      setSearchTerm('')
+      setTimeout(() => searchInputRef.current?.focus(), 100)
     } else if (item.is_directory) {
       loadDirectory(item.path)
+      // Clear search and focus input
+      setSearchTerm('')
+      setTimeout(() => searchInputRef.current?.focus(), 100)
     }
   }
 
@@ -416,6 +423,7 @@ export default function FileExplorerDialog({
               placeholder="Search..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              inputRef={searchInputRef}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
