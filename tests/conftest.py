@@ -28,16 +28,7 @@ pytest_plugins = [
 ]
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """
-    Create an instance of the default event loop for the session.
-    Fixes 'RuntimeError: Event loop is closed' when using async fixtures/subprocesses.
-    """
-    import asyncio
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+
 
 
 def pytest_configure(config):
