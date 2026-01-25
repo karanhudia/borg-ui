@@ -14,15 +14,21 @@ import SSHConnectionsSingleKey from './pages/SSHConnectionsSingleKey'
 import Activity from './pages/Activity'
 import Settings from './pages/Settings'
 import { MatomoTracker } from './components/MatomoTracker'
-import { loadUserPreference } from './utils/matomo'
+import { loadUserPreference, initMatomoIfEnabled } from './utils/matomo'
 
 function App() {
   const { isAuthenticated, isLoading } = useAuth()
 
-  // Load user analytics preference on mount
+  // Load user analytics preference on mount and after login, then conditionally initialize Matomo
   useEffect(() => {
-    loadUserPreference()
-  }, [])
+    const initAnalytics = async () => {
+      await loadUserPreference()
+      // Only initialize Matomo if user has NOT opted out
+      // If opted out, no scripts are loaded, no network requests made
+      initMatomoIfEnabled()
+    }
+    initAnalytics()
+  }, [isAuthenticated]) // Re-run when user logs in/out
 
   if (isLoading) {
     return (
