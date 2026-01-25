@@ -39,14 +39,18 @@ export const getMatomoConfig = (): MatomoConfig => {
   }
 }
 
+// Track if Matomo has been initialized (script loaded)
+let matomoInitialized = false
+
 /**
- * Initialize Matomo tracking
- * Loads Matomo script immediately, checks user preferences on each track call
+ * Initialize Matomo tracking - ONLY if user has not opted out
+ * Should be called after user preferences are loaded
+ * @internal - Use initMatomoIfEnabled instead for proper preference checking
  */
-export const initMatomo = (): void => {
+const initMatomoScript = (): void => {
   const config = getMatomoConfig()
 
-  if (!config.enabled) return
+  if (!config.enabled || matomoInitialized) return
 
   // Initialize _paq array immediately
   window._paq = window._paq || []
@@ -68,11 +72,7 @@ export const initMatomo = (): void => {
   _paq.push(['setTrackerUrl', `${config.url}/matomo.php`])
   _paq.push(['setSiteId', config.siteId])
 
-  // CRITICAL: Anonymize IP addresses - mask last 2 bytes (e.g. 192.168.xxx.xxx becomes 192.168.0.0)
-  _paq.push(['setDoNotTrack', true])
-  _paq.push(['disableCookies'])
-
-  // Note: Full IP anonymization must also be configured server-side in Matomo:
+  // Note: IP anonymization must also be configured server-side in Matomo:
   // Settings → Privacy → Anonymize Visitor IP addresses → Mask 2 bytes
 
   // Load Matomo script
@@ -80,6 +80,21 @@ export const initMatomo = (): void => {
   script.async = true
   script.src = `${config.url}/matomo.js`
   document.head.appendChild(script)
+
+  matomoInitialized = true
+}
+
+/**
+ * Initialize Matomo ONLY if user has enabled analytics
+ * Call this after loadUserPreference() has completed
+ *
+ * PRIVACY: If user has opted out, this does NOTHING - no scripts loaded, no requests made
+ */
+export const initMatomoIfEnabled = (): void => {
+  // Only initialize if user has NOT opted out and script not already loaded
+  if (!userOptedOut && preferenceLoaded && !matomoInitialized) {
+    initMatomoScript()
+  }
 }
 
 // Cache opt-out status and loading state
@@ -95,7 +110,10 @@ export const loadUserPreference = async (): Promise<void> => {
   try {
     const token = localStorage.getItem('access_token')
     if (!token) {
-      userOptedOut = false // Not logged in, allow tracking
+      // PRIVACY FIRST: No tracking on login page
+      // User's opt-out preference is stored server-side (requires auth to fetch)
+      // Default to NO tracking until user logs in and we can verify their preference
+      userOptedOut = true
       consentGiven = false
       preferenceLoaded = true
       return
@@ -110,11 +128,13 @@ export const loadUserPreference = async (): Promise<void> => {
       userOptedOut = !data.preferences?.analytics_enabled
       consentGiven = data.preferences?.analytics_consent_given ?? false
     } else {
-      userOptedOut = false // Default to enabled if API fails
+      // PRIVACY FIRST: If API fails, default to NO tracking
+      userOptedOut = true
       consentGiven = false
     }
   } catch {
-    userOptedOut = false // Default to enabled on error
+    // PRIVACY FIRST: On error, default to NO tracking
+    userOptedOut = true
     consentGiven = false
   }
 
@@ -242,29 +262,41 @@ export const resetUserId = (): void => {
 
 /**
  * Reset opt-out cache and reload preference (call this when user changes analytics preference)
+ * If user re-enables analytics, this will initialize Matomo
  */
 export const resetOptOutCache = async (): Promise<void> => {
   await loadUserPreference()
+  // If user re-enabled analytics, initialize Matomo now
+  initMatomoIfEnabled()
 }
 
 /**
- * Track analytics opt-out event (bypasses canTrack to send this final event)
- * Call this BEFORE saving the preference so we can track how many users opt out
+ * Track analytics opt-out event
+ * ONLY sends event if Matomo is already initialized (user was tracking before opting out)
+ * Call this BEFORE saving the preference
+ *
+ * PRIVACY: Does NOT initialize Matomo if not already loaded
+ * If user opts out before Matomo loads, no tracking occurs at all
  */
 export const trackOptOut = (): void => {
-  const config = getMatomoConfig()
-  if (!config.enabled || !window._paq) return
+  // Only track if Matomo is already initialized
+  // Do NOT initialize Matomo just to send this event
+  if (!matomoInitialized || !window._paq) return
 
   window._paq.push(['trackEvent', 'Settings', 'OptOut', 'analytics'])
 }
 
 /**
- * Track consent banner response (bypasses canTrack since this is the final event before potential opt-out)
+ * Track consent banner response
+ * ONLY sends event if Matomo is already initialized
  * @param accepted - true if user accepted analytics, false if declined
+ *
+ * PRIVACY: Does NOT initialize Matomo if not already loaded
  */
 export const trackConsentResponse = (accepted: boolean): void => {
-  const config = getMatomoConfig()
-  if (!config.enabled || !window._paq) return
+  // Only track if Matomo is already initialized
+  // Do NOT initialize Matomo just to send this event
+  if (!matomoInitialized || !window._paq) return
 
   window._paq.push(['trackEvent', 'Consent', accepted ? 'Accept' : 'Decline', 'analytics_banner'])
 }

@@ -9,10 +9,9 @@ import { AppProvider } from './context/AppContext'
 import { ThemeProvider } from './context/ThemeContext'
 import App from './App.tsx'
 import './index.css'
-import { initMatomo } from './utils/matomo'
 
-// Initialize Matomo analytics
-initMatomo()
+// NOTE: Matomo initialization is deferred until user preferences are loaded
+// See AppContext.tsx for conditional initialization based on analytics_enabled preference
 
 const queryClient = new QueryClient({
   defaultOptions: {
