@@ -200,7 +200,9 @@ describe('CommandPreview', () => {
 
       expect(screen.getByText(/Temporarily mounts remote directory via SSHFS/)).toBeInTheDocument()
       expect(screen.getByText(/Runs from mount directory with relative paths/)).toBeInTheDocument()
-      expect(screen.getByText(/Unmounts remote directory after backup completes/)).toBeInTheDocument()
+      expect(
+        screen.getByText(/Unmounts remote directory after backup completes/)
+      ).toBeInTheDocument()
     })
   })
 
