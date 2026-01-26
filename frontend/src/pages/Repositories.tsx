@@ -2118,20 +2118,20 @@ export default function Repositories() {
                               )}
                               {dir}
                             </Typography>
-                          <IconButton
-                            size="small"
-                            onClick={() => {
-                              setEditForm({
-                                ...editForm,
-                                source_directories: editForm.source_directories.filter(
-                                  (_, i) => i !== index
-                                ),
-                              })
-                            }}
-                          >
-                            <Delete fontSize="small" />
-                          </IconButton>
-                        </Box>
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                setEditForm({
+                                  ...editForm,
+                                  source_directories: editForm.source_directories.filter(
+                                    (_, i) => i !== index
+                                  ),
+                                })
+                              }}
+                            >
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          </Box>
                         )
                       })}
                     </Stack>
