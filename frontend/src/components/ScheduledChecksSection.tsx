@@ -18,6 +18,7 @@ import {
   Stack,
   Alert,
   Button,
+  InputAdornment,
 } from '@mui/material'
 import { Edit, Trash2, Play, Shield } from 'lucide-react'
 import { repositoriesAPI } from '../services/api'
@@ -29,7 +30,7 @@ import {
   convertCronToLocal,
 } from '../utils/dateUtils'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
-import CronPickerField from './CronPickerField'
+import CronBuilderDialog from './CronBuilderDialog'
 
 interface ScheduledCheck {
   repository_id: number
@@ -334,13 +335,37 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
               </Select>
             </FormControl>
 
-            <CronPickerField
-              value={formData.cron_expression}
-              onChange={(value) => setFormData({ ...formData, cron_expression: value })}
+            <TextField
               label="Check Schedule"
-              required={true}
-              fullWidth={true}
+              value={formData.cron_expression}
+              onChange={(e) => setFormData({ ...formData, cron_expression: e.target.value })}
+              required
+              fullWidth
               size="medium"
+              placeholder="0 2 * * 0"
+              InputProps={{
+                sx: {
+                  fontFamily: 'monospace',
+                  fontSize: '1.1rem',
+                  letterSpacing: '0.1em',
+                },
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <CronBuilderDialog
+                      value={formData.cron_expression}
+                      onChange={(localCron) =>
+                        setFormData({ ...formData, cron_expression: localCron })
+                      }
+                      label="Check Schedule"
+                      helperText="When should this repository check run?"
+                      dialogTitle="Check Schedule Builder"
+                    />
+                  </InputAdornment>
+                ),
+              }}
+              InputLabelProps={{
+                sx: { fontSize: '1.1rem' },
+              }}
             />
 
             <TextField

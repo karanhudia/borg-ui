@@ -49,12 +49,19 @@ describe('convertCronToUTC - Critical Edge Cases', () => {
     expect(parts[2]).toBe('*') // day remains wildcard
   })
 
-  it('preserves non-numeric expressions unchanged', () => {
-    // Expressions with wildcards, ranges, or steps cannot be converted
+  it('preserves non-numeric expressions unchanged (except hourly intervals)', () => {
+    // Minute intervals are unchanged
     expect(convertCronToUTC('*/15 * * * *')).toBe('*/15 * * * *')
+
+    // Ranges are unchanged
     expect(convertCronToUTC('0 9-17 * * 1-5')).toBe('0 9-17 * * 1-5')
+
+    // Complex wildcards are unchanged
     expect(convertCronToUTC('*/6 */2 * * *')).toBe('*/6 */2 * * *')
-    expect(convertCronToUTC('0 */4 * * *')).toBe('0 */4 * * *')
+
+    // Hourly intervals ARE converted to specific hours (new behavior)
+    // UTC-5 timezone: 0,4,8,12,16,20 local → 5,9,13,17,21,1 UTC (wraps to next day)
+    expect(convertCronToUTC('0 */4 * * *')).toBe('0 1,5,9,13,17,21 * * *')
   })
 
   it('round-trip conversion is identity operation (UTC-5)', () => {
@@ -261,5 +268,196 @@ describe('formatDurationSeconds', () => {
     expect(formatDurationSeconds(30)).toBe('30 sec')
     expect(formatDurationSeconds(60)).toBe('1 min')
     expect(formatDurationSeconds(3600)).toBe('1 hour')
+  })
+})
+
+describe('convertCronToUTC - Hourly Intervals', () => {
+  beforeEach(() => {
+    // Mock timezone offset to UTC+5:30 (IST)
+    vi.spyOn(Date.prototype, 'getTimezoneOffset').mockReturnValue(-330)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('expands hourly intervals to specific UTC hours', () => {
+    // User enters: 0 */8 * * * (wants 12 AM, 8 AM, 4 PM IST)
+    // Should expand to specific UTC hours: 18:30, 2:30, 10:30
+    const result = convertCronToUTC('0 */8 * * *')
+    expect(result).toBe('30 2,10,18 * * *')
+  })
+
+  it('expands every 6 hours correctly', () => {
+    // 0, 6, 12, 18 IST → 18:30, 0:30, 6:30, 12:30 UTC → sorted: 0:30, 6:30, 12:30, 18:30
+    const result = convertCronToUTC('0 */6 * * *')
+    expect(result).toBe('30 0,6,12,18 * * *')
+  })
+})
+
+describe('convertCronToLocal - Hourly Intervals', () => {
+  beforeEach(() => {
+    // Mock timezone offset to UTC+5:30 (IST)
+    vi.spyOn(Date.prototype, 'getTimezoneOffset').mockReturnValue(-330)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('collapses specific UTC hours back to local interval', () => {
+    // Backend stored: 30 2,10,18 * * * (UTC)
+    // Should recognize as */8 pattern in local time
+    const result = convertCronToLocal('30 2,10,18 * * *')
+    expect(result).toBe('0 */8 * * *')
+  })
+
+  it('collapses every 6 hours correctly', () => {
+    const result = convertCronToLocal('30 0,6,12,18 * * *')
+    expect(result).toBe('0 */6 * * *')
+  })
+})
+
+describe('End-to-End User Experience Tests', () => {
+  beforeEach(() => {
+    // Mock timezone offset to UTC+5:30 (IST)
+    vi.spyOn(Date.prototype, 'getTimezoneOffset').mockReturnValue(-330)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  describe('Daily schedules', () => {
+    it('User enters "2 AM daily" → UI shows "2 AM" → Runs at 2 AM IST (8:30 PM UTC)', () => {
+      const userInput = '0 2 * * *' // What user enters in CronBuilder
+      const storedInDB = convertCronToUTC(userInput) // What gets saved to backend
+      const displayedInUI = convertCronToLocal(storedInDB) // What user sees when editing
+
+      expect(storedInDB).toBe('30 20 * * *') // Backend stores UTC
+      expect(displayedInUI).toBe('0 2 * * *') // User sees their local time
+      expect(displayedInUI).toBe(userInput) // Round-trip works!
+    })
+
+    it('User enters "2 PM daily" → UI shows "2 PM" → Runs at 2 PM IST (8:30 AM UTC)', () => {
+      const userInput = '0 14 * * *'
+      const storedInDB = convertCronToUTC(userInput)
+      const displayedInUI = convertCronToLocal(storedInDB)
+
+      expect(storedInDB).toBe('30 8 * * *')
+      expect(displayedInUI).toBe('0 14 * * *')
+      expect(displayedInUI).toBe(userInput)
+    })
+  })
+
+  describe('Hourly schedules', () => {
+    it('User enters "every 8 hours at :00" → UI shows "every 8 hours" → Runs at 12 AM, 8 AM, 4 PM IST', () => {
+      const userInput = '0 */8 * * *' // User wants clean times in IST
+      const storedInDB = convertCronToUTC(userInput) // Converts to specific UTC hours
+      const displayedInUI = convertCronToLocal(storedInDB) // User sees interval again
+
+      expect(storedInDB).toBe('30 2,10,18 * * *') // Backend: specific UTC hours
+      expect(displayedInUI).toBe('0 */8 * * *') // UI: collapses back to interval
+      expect(displayedInUI).toBe(userInput) // Round-trip works!
+
+      // Verify the actual run times in IST:
+      // 02:30 UTC → 08:00 IST (8 AM)
+      // 10:30 UTC → 16:00 IST (4 PM)
+      // 18:30 UTC → 00:00 IST (12 AM next day)
+    })
+
+    it('User enters "every 6 hours at :00" → Runs at 6 AM, 12 PM, 6 PM, 12 AM IST', () => {
+      const userInput = '0 */6 * * *'
+      const storedInDB = convertCronToUTC(userInput)
+      const displayedInUI = convertCronToLocal(storedInDB)
+
+      expect(storedInDB).toBe('30 0,6,12,18 * * *')
+      expect(displayedInUI).toBe('0 */6 * * *')
+      expect(displayedInUI).toBe(userInput)
+    })
+
+    it('User enters "every 12 hours at :00" → Runs at 12 AM, 12 PM IST', () => {
+      const userInput = '0 */12 * * *'
+      const storedInDB = convertCronToUTC(userInput)
+      const displayedInUI = convertCronToLocal(storedInDB)
+
+      expect(storedInDB).toBe('30 6,18 * * *') // 6:30, 18:30 UTC
+      expect(displayedInUI).toBe('0 */12 * * *')
+      expect(displayedInUI).toBe(userInput)
+
+      // 06:30 UTC → 12:00 PM IST
+      // 18:30 UTC → 00:00 AM IST (next day)
+    })
+  })
+
+  describe('Weekly schedules with day-of-week adjustments', () => {
+    it('User enters "Monday 2 AM" → UI shows "Monday 2 AM" → Runs Monday 2 AM IST (Sunday 8:30 PM UTC)', () => {
+      const userInput = '0 2 * * 1' // Monday in local time
+      const storedInDB = convertCronToUTC(userInput)
+      const displayedInUI = convertCronToLocal(storedInDB)
+
+      expect(storedInDB).toBe('30 20 * * 0') // Sunday in UTC (crosses day boundary)
+      expect(displayedInUI).toBe('0 2 * * 1') // Monday in local time
+      expect(displayedInUI).toBe(userInput)
+    })
+
+    it('User enters "Sunday 2 AM" → Runs Sunday 2 AM IST (Saturday 8:30 PM UTC)', () => {
+      const userInput = '0 2 * * 0' // Sunday
+      const storedInDB = convertCronToUTC(userInput)
+      const displayedInUI = convertCronToLocal(storedInDB)
+
+      expect(storedInDB).toBe('30 20 * * 6') // Saturday in UTC
+      expect(displayedInUI).toBe('0 2 * * 0')
+      expect(displayedInUI).toBe(userInput)
+    })
+
+    it('User enters "Friday 2 PM" → Runs Friday 2 PM IST (Friday 8:30 AM UTC, same day)', () => {
+      const userInput = '0 14 * * 5' // Friday afternoon
+      const storedInDB = convertCronToUTC(userInput)
+      const displayedInUI = convertCronToLocal(storedInDB)
+
+      expect(storedInDB).toBe('30 8 * * 5') // Same day, no boundary crossing
+      expect(displayedInUI).toBe('0 14 * * 5')
+      expect(displayedInUI).toBe(userInput)
+    })
+  })
+
+  describe('Monthly schedules', () => {
+    it('User enters "15th of month at 2 PM" → Runs on 15th at 2 PM IST (same day)', () => {
+      // Use afternoon time to avoid day boundary crossing
+      const userInput = '0 14 15 * *'
+      const storedInDB = convertCronToUTC(userInput)
+      const displayedInUI = convertCronToLocal(storedInDB)
+
+      expect(storedInDB).toBe('30 8 15 * *') // Same day in UTC
+      expect(displayedInUI).toBe('0 14 15 * *')
+      expect(displayedInUI).toBe(userInput)
+    })
+
+    // Note: Monthly schedules with early morning times that cross day boundaries
+    // are edge cases. For "1st at 2 AM IST" (which is 31st at 8:30 PM UTC),
+    // the day adjustment logic becomes complex. Users should prefer afternoon times
+    // for monthly schedules to avoid ambiguity.
+  })
+
+  describe('Edge cases', () => {
+    it('Minute intervals are not converted (run at same minute in UTC)', () => {
+      const userInput = '*/15 * * * *' // Every 15 minutes
+      const storedInDB = convertCronToUTC(userInput)
+      const displayedInUI = convertCronToLocal(storedInDB)
+
+      expect(storedInDB).toBe('*/15 * * * *') // Unchanged
+      expect(displayedInUI).toBe('*/15 * * * *')
+      expect(displayedInUI).toBe(userInput)
+    })
+
+    it('Complex expressions are not converted', () => {
+      const userInput = '0 9-17 * * 1-5' // Weekdays 9 AM to 5 PM
+      const storedInDB = convertCronToUTC(userInput)
+      const displayedInUI = convertCronToLocal(storedInDB)
+
+      expect(storedInDB).toBe(userInput) // Too complex to convert
+      expect(displayedInUI).toBe(userInput)
+    })
   })
 })
