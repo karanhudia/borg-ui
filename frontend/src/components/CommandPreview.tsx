@@ -1,3 +1,4 @@
+import React from 'react'
 import { Box, Typography, Paper } from '@mui/material'
 import { generateBorgCreateCommand } from '../utils/borgUtils'
 
