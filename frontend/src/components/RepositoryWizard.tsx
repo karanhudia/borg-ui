@@ -1098,7 +1098,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               ))}
             </Stepper>
 
-            <Box sx={{ minHeight: 500, maxHeight: 500, overflow: 'auto' }}>
+            <Box sx={{ minHeight: 500, maxHeight: 500, overflow: 'auto', pt: 1 }}>
               {renderStepContent()}
             </Box>
           </Box>
