@@ -389,7 +389,8 @@ async def get_repositories(
                 "mode": repo.mode or "full",  # Default to "full" for backward compatibility
                 "bypass_lock": repo.bypass_lock or False,
                 "custom_flags": repo.custom_flags,
-                "has_running_maintenance": has_check or has_compact or has_prune
+                "has_running_maintenance": has_check or has_compact or has_prune,
+                "source_ssh_connection_id": repo.source_ssh_connection_id
             })
 
         return {
@@ -944,6 +945,7 @@ async def get_repository(
                 "archive_count": repository.archive_count,
                 "created_at": format_datetime(repository.created_at),
                 "updated_at": format_datetime(repository.updated_at),
+                "source_ssh_connection_id": repository.source_ssh_connection_id,
                 "stats": stats
             }
         }

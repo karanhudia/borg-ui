@@ -174,6 +174,15 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     setPostHookTimeout(repository.post_hook_timeout || 300)
     setContinueOnHookFailure(repository.continue_on_hook_failure || false)
     setBypassLock(repository.bypass_lock || false)
+
+    // Set data source based on source_ssh_connection_id
+    if (repository.source_ssh_connection_id) {
+      setDataSource('remote')
+      setSourceSshConnectionId(repository.source_ssh_connection_id)
+    } else {
+      setDataSource('local')
+      setSourceSshConnectionId('')
+    }
   }, [repository])
 
   const resetForm = () => {
@@ -941,9 +950,23 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     </Box>
   )
 
+  // Get the selected source SSH connection for command preview
+  const getSourceSshConnection = () => {
+    if (dataSource !== 'remote' || !sourceSshConnectionId) return null
+    const connections = Array.isArray(sshConnections) ? sshConnections : []
+    const connId = typeof sourceSshConnectionId === 'string' ? parseInt(sourceSshConnectionId) : sourceSshConnectionId
+    const conn = connections.find((c) => c.id === connId)
+    if (!conn) return null
+    return {
+      username: conn.username,
+      host: conn.host,
+      port: conn.port,
+    }
+  }
+
   const renderReview = () => (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      {dataSource === 'local' && (
+      {(dataSource === 'local' || dataSource === 'remote') && repositoryMode === 'full' && (
         <CommandPreview
           mode={mode === 'create' ? 'create' : 'import'}
           repositoryPath={path}
@@ -958,6 +981,8 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
           customFlags={customFlags}
           remotePath={remotePath}
           repositoryMode={repositoryMode}
+          dataSource={dataSource}
+          sourceSshConnection={getSourceSshConnection()}
         />
       )}
 
@@ -1070,7 +1095,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               ))}
             </Stepper>
 
-            <Box sx={{ minHeight: 400 }}>{renderStepContent()}</Box>
+            <Box sx={{ minHeight: 500, maxHeight: 500, overflow: 'auto' }}>{renderStepContent()}</Box>
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>

@@ -850,18 +850,21 @@ class BackupService:
         except Exception as e:
             logger.error("Error unmounting SSH path", mount_point=mount_point, error=str(e), job_id=job_id)
 
-    async def _prepare_source_paths(self, source_paths: list[str], job_id: int) -> list[str]:
+    async def _prepare_source_paths(self, source_paths: list[str], job_id: int) -> tuple[list[str], list[str]]:
         """
         Prepare source paths for backup by mounting SSH URLs via SSHFS
         Uses the new mount_service with proper SSH key authentication.
 
-        Returns: list of processed paths (SSH URLs replaced with temp root directories)
+        Returns: tuple of (processed_paths, ssh_mount_roots)
+            - processed_paths: list of paths to backup (SSH URLs replaced with temp root directories)
+            - ssh_mount_roots: list of temp_root paths that are SSH mounts (for cwd handling)
         """
         from app.services.mount_service import mount_service
         from app.database.models import SSHConnection
 
         processed_paths = []
         mount_ids = []
+        ssh_mount_roots = []  # Track which paths are SSH mounts
 
         db = SessionLocal()
         try:
@@ -901,6 +904,7 @@ class BackupService:
 
                         processed_paths.append(temp_root)
                         mount_ids.append(mount_id)
+                        ssh_mount_roots.append(temp_root)  # Track this as SSH mount
 
                         logger.info(
                             "Mounted SSH path for backup",
@@ -926,7 +930,7 @@ class BackupService:
             if mount_ids:
                 self.ssh_mounts[job_id] = mount_ids
 
-            return processed_paths
+            return processed_paths, ssh_mount_roots
 
         finally:
             db.close()
@@ -1069,10 +1073,35 @@ class BackupService:
                         try:
                             source_dirs = json.loads(repo_record.source_directories)
                             if source_dirs and isinstance(source_dirs, list) and len(source_dirs) > 0:
-                                source_paths = source_dirs
-                                logger.info("Using source directories from repository",
-                                          repository=repository,
-                                          source_directories=source_paths)
+                                # Check if this is a remote source (pull-based backup)
+                                if repo_record.source_ssh_connection_id:
+                                    # Construct SSH URLs for remote sources
+                                    from app.database.models import SSHConnection
+                                    connection = db.query(SSHConnection).filter(
+                                        SSHConnection.id == repo_record.source_ssh_connection_id
+                                    ).first()
+
+                                    if connection:
+                                        # Convert plain paths to SSH URLs
+                                        source_paths = [
+                                            f"ssh://{connection.username}@{connection.host}:{connection.port}{path}"
+                                            for path in source_dirs
+                                        ]
+                                        logger.info("Using remote source directories (pull-based backup)",
+                                                  repository=repository,
+                                                  connection_id=connection.id,
+                                                  connection_host=connection.host,
+                                                  source_directories=source_paths)
+                                    else:
+                                        error_msg = f"SSH connection {repo_record.source_ssh_connection_id} not found for remote source"
+                                        logger.error(error_msg, repository=repository)
+                                        raise ValueError(error_msg)
+                                else:
+                                    # Local source paths
+                                    source_paths = source_dirs
+                                    logger.info("Using local source directories",
+                                              repository=repository,
+                                              source_directories=source_paths)
                             else:
                                 error_msg = "No source directories configured for this repository. Please add source directories in repository settings."
                                 logger.error(error_msg, repository=repository)
@@ -1221,7 +1250,7 @@ class BackupService:
 
             # Prepare source paths: mount SSH URLs via SSHFS
             logger.info("Preparing source paths (mounting SSH URLs if needed)", source_paths=source_paths, job_id=job_id)
-            processed_source_paths = await self._prepare_source_paths(source_paths, job_id)
+            processed_source_paths, ssh_mount_roots = await self._prepare_source_paths(source_paths, job_id)
             if not processed_source_paths:
                 logger.error("No valid source paths after processing (all SSH mounts failed?)", job_id=job_id)
                 job.status = "failed"
@@ -1229,7 +1258,7 @@ class BackupService:
                 job.completed_at = datetime.utcnow()
                 db.commit()
                 return
-            logger.info("Source paths prepared", original_count=len(source_paths), processed_count=len(processed_source_paths), job_id=job_id)
+            logger.info("Source paths prepared", original_count=len(source_paths), processed_count=len(processed_source_paths), ssh_mount_count=len(ssh_mount_roots), job_id=job_id)
 
             # Build command with source directories and exclude patterns
             cmd = [
@@ -1268,10 +1297,49 @@ class BackupService:
             # Add repository::archive
             cmd.append(f"{actual_repository_path}::{archive_name}")
 
-            # Add all source paths to the command (using processed paths with mounted SSH URLs)
-            cmd.extend(processed_source_paths)
+            # Determine if we should use cwd for cleaner archive paths
+            # When ALL paths are SSH mounts, we cd to each temp_root and backup "."
+            # This stores relative paths in the archive instead of ugly /tmp/sshfs_mount_xxx/ paths
+            backup_cwd = None
+            backup_paths = processed_source_paths
 
-            logger.info("Starting borg backup", job_id=job_id, repository=actual_repository_path, archive=archive_name, command=" ".join(cmd))
+            if ssh_mount_roots and len(ssh_mount_roots) == len(processed_source_paths):
+                # All paths are SSH mounts - use cwd for cleaner archive structure
+                if len(ssh_mount_roots) == 1:
+                    # Single SSH mount - cd to temp_root and backup the subdirectory name(s)
+                    # This avoids having a "." entry in the archive
+                    backup_cwd = ssh_mount_roots[0]
+                    # List the actual contents of the temp_root to backup (the mount subdirs)
+                    try:
+                        mount_contents = os.listdir(backup_cwd)
+                        # Filter out any hidden files that might exist
+                        backup_paths = [d for d in mount_contents if not d.startswith('.')]
+                        if not backup_paths:
+                            # Fallback to "." if no contents found (shouldn't happen)
+                            backup_paths = ["."]
+                    except Exception as e:
+                        logger.warning("Failed to list mount contents, using '.'",
+                                     error=str(e), cwd=backup_cwd, job_id=job_id)
+                        backup_paths = ["."]
+                    logger.info(
+                        "Using cwd for single SSH mount backup (cleaner archive paths)",
+                        cwd=backup_cwd,
+                        backup_paths=backup_paths,
+                        job_id=job_id
+                    )
+                else:
+                    # Multiple SSH mounts - can't use single cwd, but we can still use relative paths
+                    # For now, use absolute paths (could be improved later)
+                    logger.info(
+                        "Multiple SSH mounts - using absolute paths",
+                        mount_count=len(ssh_mount_roots),
+                        job_id=job_id
+                    )
+
+            # Add all source paths to the command
+            cmd.extend(backup_paths)
+
+            logger.info("Starting borg backup", job_id=job_id, repository=actual_repository_path, archive=archive_name, cwd=backup_cwd, command=" ".join(cmd))
 
             # Send backup start notification (size will be updated by background task)
             try:
@@ -1286,7 +1354,8 @@ class BackupService:
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,  # Merge stderr into stdout
-                env=env
+                env=env,
+                cwd=backup_cwd  # Use cwd for SSH mounts to get cleaner archive paths
             )
 
             # Track this process so it can be cancelled

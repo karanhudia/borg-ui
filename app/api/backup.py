@@ -8,7 +8,7 @@ from typing import List, Dict, Any
 from datetime import datetime, timezone
 
 from app.database.database import get_db
-from app.database.models import User, BackupJob
+from app.database.models import User, BackupJob, Repository
 from app.core.security import get_current_user
 from app.services.backup_service import backup_service
 from app.utils.datetime_utils import serialize_datetime
@@ -33,10 +33,16 @@ async def start_backup(
 ):
     """Start a manual backup operation"""
     try:
+        # Get repository record to copy remote source settings
+        repo_record = db.query(Repository).filter(
+            Repository.path == backup_request.repository
+        ).first()
+
         # Create backup job record
         backup_job = BackupJob(
             repository=backup_request.repository or "default",
-            status="pending"
+            status="pending",
+            source_ssh_connection_id=repo_record.source_ssh_connection_id if repo_record else None
         )
         db.add(backup_job)
         db.commit()
