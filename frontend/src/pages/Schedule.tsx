@@ -64,6 +64,7 @@ import ScheduledChecksSection, {
   ScheduledChecksSectionRef,
 } from '../components/ScheduledChecksSection'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
+import CronBuilderDialog from '../components/CronBuilderDialog'
 
 interface ScheduledJob {
   id: number
@@ -139,7 +140,6 @@ const Schedule: React.FC = () => {
   const [currentTab, setCurrentTab] = useState(getCurrentTab())
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingJob, setEditingJob] = useState<ScheduledJob | null>(null)
-  const [showCronBuilder, setShowCronBuilder] = useState(false)
   const [deleteConfirmJob, setDeleteConfirmJob] = useState<ScheduledJob | null>(null)
   const [selectedBackupJob, setSelectedBackupJob] = useState<BackupJob | null>(null)
   const scheduledChecksSectionRef = useRef<ScheduledChecksSectionRef>(null)
@@ -209,12 +209,6 @@ const Schedule: React.FC = () => {
     queryKey: ['backup-jobs-scheduled'],
     queryFn: backupAPI.getScheduledJobs,
     refetchInterval: 3000, // Refresh every 3 seconds
-  })
-
-  // Get cron presets
-  const { data: presetsData } = useQuery({
-    queryKey: ['cron-presets'],
-    queryFn: scheduleAPI.getCronPresets,
   })
 
   // Get scripts library
@@ -524,37 +518,6 @@ const Schedule: React.FC = () => {
     })
   }
 
-  const openCronBuilder = () => {
-    setShowCronBuilder(true)
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const applyCronPreset = (preset: any) => {
-    if (editingJob) {
-      setEditForm({ ...editForm, cron_expression: preset.expression })
-    } else {
-      setCreateForm({ ...createForm, cron_expression: preset.expression })
-    }
-    setShowCronBuilder(false)
-  }
-
-  const formatCronExpression = (expression: string) => {
-    const descriptions: { [key: string]: string } = {
-      '0 0 * * *': 'Daily at midnight',
-      '0 2 * * *': 'Daily at 2 AM',
-      '0 */6 * * *': 'Every 6 hours',
-      '0 * * * *': 'Every hour',
-      '*/15 * * * *': 'Every 15 minutes',
-      '*/5 * * * *': 'Every 5 minutes',
-      '* * * * *': 'Every minute',
-      '0 0 * * 0': 'Weekly on Sunday',
-      '0 0 1 * *': 'Monthly on 1st',
-      '0 9 * * 1-5': 'Weekdays at 9 AM',
-      '0 6 * * 0,6': 'Weekends at 6 AM',
-    }
-    return descriptions[expression] || expression
-  }
-
   const getRepositoryName = (path: string) => {
     const repo = repositories?.find((r: Repository) => r.path === path)
     return repo?.name || path
@@ -739,19 +702,18 @@ const Schedule: React.FC = () => {
       id: 'schedule',
       label: 'Schedule',
       width: '12%',
-      render: (job) => (
-        <>
+      render: (job) => {
+        const localCron = convertCronToLocal(job.cron_expression)
+        return (
           <Chip
-            label={formatCronExpression(convertCronToLocal(job.cron_expression))}
+            label={localCron}
             size="small"
             variant="outlined"
             color="primary"
+            sx={{ fontFamily: 'monospace' }}
           />
-          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-            {convertCronToLocal(job.cron_expression)}
-          </Typography>
-        </>
-      ),
+        )
+      },
     },
     {
       id: 'last_run',
@@ -1386,23 +1348,19 @@ const Schedule: React.FC = () => {
                     },
                     endAdornment: (
                       <InputAdornment position="end">
-                        <Tooltip title="Choose preset schedule" arrow>
-                          <IconButton onClick={openCronBuilder} edge="end">
-                            <Clock size={20} />
-                          </IconButton>
-                        </Tooltip>
+                        <CronBuilderDialog
+                          value={createForm.cron_expression}
+                          onChange={(localCron) =>
+                            setCreateForm({ ...createForm, cron_expression: localCron })
+                          }
+                          dialogTitle="Configure Schedule"
+                        />
                       </InputAdornment>
                     ),
                   }}
                   InputLabelProps={{
                     sx: { fontSize: '1.1rem' },
                   }}
-                  helperText={
-                    <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <CheckCircle size={14} style={{ color: '#2e7d32' }} />
-                      <span>{formatCronExpression(createForm.cron_expression)}</span>
-                    </Box>
-                  }
                 />
               </Box>
 
@@ -1748,23 +1706,19 @@ const Schedule: React.FC = () => {
                     },
                     endAdornment: (
                       <InputAdornment position="end">
-                        <Tooltip title="Choose preset schedule" arrow>
-                          <IconButton onClick={openCronBuilder} edge="end">
-                            <Clock size={20} />
-                          </IconButton>
-                        </Tooltip>
+                        <CronBuilderDialog
+                          value={editForm.cron_expression}
+                          onChange={(localCron) =>
+                            setEditForm({ ...editForm, cron_expression: localCron })
+                          }
+                          dialogTitle="Configure Schedule"
+                        />
                       </InputAdornment>
                     ),
                   }}
                   InputLabelProps={{
                     sx: { fontSize: '1.1rem' },
                   }}
-                  helperText={
-                    <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <CheckCircle size={14} style={{ color: '#2e7d32' }} />
-                      <span>{formatCronExpression(editForm.cron_expression)}</span>
-                    </Box>
-                  }
                 />
               </Box>
 
@@ -2052,60 +2006,6 @@ const Schedule: React.FC = () => {
             </Button>
           </DialogActions>
         </form>
-      </Dialog>
-
-      {/* Cron Builder Modal */}
-      <Dialog
-        open={showCronBuilder}
-        onClose={() => setShowCronBuilder(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Cron Expression Presets</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mt: 1 }}>
-            Select a preset schedule for your backup job
-          </Typography>
-          <Stack spacing={1} sx={{ mt: 2 }}>
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            {presetsData?.data?.presets?.map((preset: any) => (
-              <Paper
-                key={preset.expression}
-                sx={{
-                  p: 2,
-                  cursor: 'pointer',
-                  border: 1,
-                  borderColor: 'divider',
-                  '&:hover': {
-                    backgroundColor: 'action.hover',
-                    borderColor: 'primary.main',
-                  },
-                }}
-                onClick={() => applyCronPreset(preset)}
-              >
-                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                  <Box>
-                    <Typography variant="body2" fontWeight={500}>
-                      {preset.name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {preset.description}
-                    </Typography>
-                  </Box>
-                  <Chip
-                    label={preset.expression}
-                    size="small"
-                    variant="outlined"
-                    sx={{ fontFamily: 'monospace' }}
-                  />
-                </Stack>
-              </Paper>
-            ))}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowCronBuilder(false)}>Close</Button>
-        </DialogActions>
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
