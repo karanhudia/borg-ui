@@ -954,7 +954,10 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   const getSourceSshConnection = () => {
     if (dataSource !== 'remote' || !sourceSshConnectionId) return null
     const connections = Array.isArray(sshConnections) ? sshConnections : []
-    const connId = typeof sourceSshConnectionId === 'string' ? parseInt(sourceSshConnectionId) : sourceSshConnectionId
+    const connId =
+      typeof sourceSshConnectionId === 'string'
+        ? parseInt(sourceSshConnectionId)
+        : sourceSshConnectionId
     const conn = connections.find((c) => c.id === connId)
     if (!conn) return null
     return {
@@ -1095,7 +1098,9 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               ))}
             </Stepper>
 
-            <Box sx={{ minHeight: 500, maxHeight: 500, overflow: 'auto' }}>{renderStepContent()}</Box>
+            <Box sx={{ minHeight: 500, maxHeight: 500, overflow: 'auto' }}>
+              {renderStepContent()}
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>

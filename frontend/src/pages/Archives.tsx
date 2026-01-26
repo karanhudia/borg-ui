@@ -238,8 +238,7 @@ const Archives: React.FC = () => {
   // Get repositories from API response
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const repositories = React.useMemo(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    () => (repositoriesData as any)?.repositories || [],
+    () => repositoriesData?.data?.repositories || [],
     [repositoriesData]
   )
 

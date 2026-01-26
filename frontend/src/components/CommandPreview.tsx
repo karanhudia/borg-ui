@@ -75,13 +75,16 @@ export default function CommandPreview({
   const initCommand = `borg init --encryption ${encryption} ${remotePathFlag}${fullRepoPath}`
 
   // For remote source, show the directory name that will be backed up
-  const remoteSourceBasename = isRemoteSource && sourceDirs.length > 0
-    ? sourceDirs[0].split('/').filter(Boolean).pop() || 'source'
-    : 'source'
+  const remoteSourceBasename =
+    isRemoteSource && sourceDirs.length > 0
+      ? sourceDirs[0].split('/').filter(Boolean).pop() || 'source'
+      : 'source'
 
   const effectiveSourceDirs = isRemoteSource
     ? [remoteSourceBasename]
-    : sourceDirs.length > 0 ? sourceDirs : ['/path/to/source']
+    : sourceDirs.length > 0
+      ? sourceDirs
+      : ['/path/to/source']
 
   // Generate create command
   const createCommand = generateBorgCreateCommand({
@@ -105,7 +108,12 @@ export default function CommandPreview({
 
         {mode === 'create' && (
           <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" color="primary.main" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>
+            <Typography
+              variant="caption"
+              color="primary.main"
+              fontWeight={600}
+              sx={{ mb: 0.5, display: 'block' }}
+            >
               Step 1: Initialize Repository
             </Typography>
             <CommandBox>{initCommand}</CommandBox>
@@ -113,8 +121,15 @@ export default function CommandPreview({
         )}
 
         <Box sx={{ mb: 2 }}>
-          <Typography variant="caption" color="primary.main" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>
-            {mode === 'create' ? 'Step 2: Mount Remote Directory' : 'Step 1: Mount Remote Directory'}
+          <Typography
+            variant="caption"
+            color="primary.main"
+            fontWeight={600}
+            sx={{ mb: 0.5, display: 'block' }}
+          >
+            {mode === 'create'
+              ? 'Step 2: Mount Remote Directory'
+              : 'Step 1: Mount Remote Directory'}
           </Typography>
           <CommandBox>{sshfsMount}</CommandBox>
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
@@ -123,7 +138,12 @@ export default function CommandPreview({
         </Box>
 
         <Box sx={{ mb: 2 }}>
-          <Typography variant="caption" color="primary.main" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>
+          <Typography
+            variant="caption"
+            color="primary.main"
+            fontWeight={600}
+            sx={{ mb: 0.5, display: 'block' }}
+          >
             {mode === 'create' ? 'Step 3: Run Backup' : 'Step 2: Run Backup'}
           </Typography>
           <CommandBox>{createCommand}</CommandBox>
@@ -133,7 +153,12 @@ export default function CommandPreview({
         </Box>
 
         <Box>
-          <Typography variant="caption" color="primary.main" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>
+          <Typography
+            variant="caption"
+            color="primary.main"
+            fontWeight={600}
+            sx={{ mb: 0.5, display: 'block' }}
+          >
             {mode === 'create' ? 'Step 4: Cleanup' : 'Step 3: Cleanup'}
           </Typography>
           <CommandBox>fusermount -u /tmp/sshfs_mount/</CommandBox>
@@ -154,7 +179,12 @@ export default function CommandPreview({
 
       {mode === 'create' && (
         <Box sx={{ mb: 2 }}>
-          <Typography variant="caption" color="primary.main" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>
+          <Typography
+            variant="caption"
+            color="primary.main"
+            fontWeight={600}
+            sx={{ mb: 0.5, display: 'block' }}
+          >
             Step 1: Initialize Repository
           </Typography>
           <CommandBox>{initCommand}</CommandBox>
@@ -166,7 +196,12 @@ export default function CommandPreview({
 
       {repositoryMode === 'full' && (
         <Box>
-          <Typography variant="caption" color="primary.main" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>
+          <Typography
+            variant="caption"
+            color="primary.main"
+            fontWeight={600}
+            sx={{ mb: 0.5, display: 'block' }}
+          >
             {mode === 'create' ? 'Step 2: Run Backup' : 'Run Backup'}
           </Typography>
           <CommandBox>{createCommand}</CommandBox>
