@@ -1,5 +1,11 @@
-import { Box, Typography, Alert } from '@mui/material'
+import { Box, Typography, Paper } from '@mui/material'
 import { generateBorgCreateCommand } from '../utils/borgUtils'
+
+interface SourceSshConnection {
+  username: string
+  host: string
+  port: number
+}
 
 interface CommandPreviewProps {
   mode: 'create' | 'import'
@@ -15,7 +21,28 @@ interface CommandPreviewProps {
   customFlags?: string
   remotePath?: string
   repositoryMode?: 'full' | 'observe'
+  // Remote source props
+  dataSource?: 'local' | 'remote'
+  sourceSshConnection?: SourceSshConnection | null
 }
+
+const CommandBox = ({ children }: { children: React.ReactNode }) => (
+  <Box
+    sx={{
+      bgcolor: 'grey.900',
+      color: 'grey.100',
+      p: 1.5,
+      borderRadius: 1,
+      fontFamily: 'monospace',
+      fontSize: '0.8rem',
+      overflow: 'auto',
+      whiteSpace: 'pre-wrap',
+      wordBreak: 'break-all',
+    }}
+  >
+    {children}
+  </Box>
+)
 
 export default function CommandPreview({
   mode,
@@ -31,7 +58,11 @@ export default function CommandPreview({
   customFlags = '',
   remotePath = '',
   repositoryMode = 'full',
+  dataSource = 'local',
+  sourceSshConnection = null,
 }: CommandPreviewProps) {
+  const isRemoteSource = dataSource === 'remote' && sourceSshConnection
+
   // Build full repository path
   let fullRepoPath = repositoryPath || '/path/to/repository'
   if (repositoryType === 'ssh' && host && username) {
@@ -43,71 +74,109 @@ export default function CommandPreview({
   // Generate init command
   const initCommand = `borg init --encryption ${encryption} ${remotePathFlag}${fullRepoPath}`
 
+  // For remote source, show the directory name that will be backed up
+  const remoteSourceBasename = isRemoteSource && sourceDirs.length > 0
+    ? sourceDirs[0].split('/').filter(Boolean).pop() || 'source'
+    : 'source'
+
+  const effectiveSourceDirs = isRemoteSource
+    ? [remoteSourceBasename]
+    : sourceDirs.length > 0 ? sourceDirs : ['/path/to/source']
+
   // Generate create command
   const createCommand = generateBorgCreateCommand({
     repositoryPath: fullRepoPath,
     compression,
-    excludePatterns,
-    sourceDirs: sourceDirs.length > 0 ? sourceDirs : ['/path/to/source'],
+    excludePatterns: isRemoteSource ? [] : excludePatterns,
+    sourceDirs: effectiveSourceDirs,
     customFlags,
     remotePathFlag,
   })
 
+  // For remote source backup flow
+  if (isRemoteSource && repositoryMode === 'full') {
+    const sshfsMount = `sshfs ${sourceSshConnection.username}@${sourceSshConnection.host}:${sourceDirs[0] || '/path'} /tmp/sshfs_mount/ -p ${sourceSshConnection.port}`
+
+    return (
+      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+        <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
+          {mode === 'create' ? 'How backup will work:' : 'How backup works:'}
+        </Typography>
+
+        {mode === 'create' && (
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" color="primary.main" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>
+              Step 1: Initialize Repository
+            </Typography>
+            <CommandBox>{initCommand}</CommandBox>
+          </Box>
+        )}
+
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="caption" color="primary.main" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>
+            {mode === 'create' ? 'Step 2: Mount Remote Directory' : 'Step 1: Mount Remote Directory'}
+          </Typography>
+          <CommandBox>{sshfsMount}</CommandBox>
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+            Temporarily mounts remote directory via SSHFS
+          </Typography>
+        </Box>
+
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="caption" color="primary.main" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>
+            {mode === 'create' ? 'Step 3: Run Backup' : 'Step 2: Run Backup'}
+          </Typography>
+          <CommandBox>{createCommand}</CommandBox>
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+            Runs from mount directory with relative paths
+          </Typography>
+        </Box>
+
+        <Box>
+          <Typography variant="caption" color="primary.main" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>
+            {mode === 'create' ? 'Step 4: Cleanup' : 'Step 3: Cleanup'}
+          </Typography>
+          <CommandBox>fusermount -u /tmp/sshfs_mount/</CommandBox>
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+            Unmounts remote directory after backup completes
+          </Typography>
+        </Box>
+      </Paper>
+    )
+  }
+
+  // Standard local source flow
   return (
-    <Alert severity="info" sx={{ mb: 2 }}>
-      <Typography variant="subtitle2" gutterBottom>
-        {mode === 'create' ? 'Commands that will run:' : 'Backup Command Preview:'}
+    <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+      <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
+        {mode === 'create' ? 'How backup will work:' : 'How backup works:'}
       </Typography>
 
       {mode === 'create' && (
-        <>
-          <Typography variant="caption" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
-            1. Initialize Repository:
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="caption" color="primary.main" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>
+            Step 1: Initialize Repository
           </Typography>
-          <Box
-            sx={{
-              bgcolor: 'grey.900',
-              color: 'grey.100',
-              p: 1.5,
-              borderRadius: 1,
-              fontFamily: 'monospace',
-              fontSize: '0.875rem',
-              overflow: 'auto',
-              mb: 2,
-            }}
-          >
-            {initCommand}
-          </Box>
-        </>
+          <CommandBox>{initCommand}</CommandBox>
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+            Creates encrypted repository at the specified location
+          </Typography>
+        </Box>
       )}
 
       {repositoryMode === 'full' && (
-        <>
-          <Typography variant="caption" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
-            {mode === 'create' ? '2. Create Backup:' : 'Backup Command:'}
+        <Box>
+          <Typography variant="caption" color="primary.main" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>
+            {mode === 'create' ? 'Step 2: Run Backup' : 'Run Backup'}
           </Typography>
-          <Box
-            sx={{
-              bgcolor: 'grey.900',
-              color: 'grey.100',
-              p: 1.5,
-              borderRadius: 1,
-              fontFamily: 'monospace',
-              fontSize: '0.875rem',
-              overflow: 'auto',
-            }}
-          >
-            {createCommand}
-          </Box>
-        </>
+          <CommandBox>{createCommand}</CommandBox>
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+            {mode === 'create'
+              ? 'Backs up source directories to the repository'
+              : 'This command will be used for future backups'}
+          </Typography>
+        </Box>
       )}
-
-      {mode === 'import' && (
-        <Typography variant="body2" sx={{ mt: 1.5 }}>
-          This command will be used for future backups. The repository will be verified before
-          import.
-        </Typography>
-      )}
-    </Alert>
+    </Paper>
   )
 }

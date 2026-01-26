@@ -79,6 +79,7 @@ interface Repository {
   post_hook_timeout?: number
   continue_on_hook_failure?: boolean
   bypass_lock?: boolean
+  source_ssh_connection_id?: number | null // SSH connection ID for remote data source
 }
 
 interface SSHConnection {
@@ -2085,15 +2086,38 @@ export default function Repositories() {
                     sx={{ mb: 1.5 }}
                   >
                     Specify which directories to backup to this repository
+                    {editingRepository?.source_ssh_connection_id && (
+                      <Box component="span" sx={{ color: 'info.main', ml: 0.5 }}>
+                        (Remote Source)
+                      </Box>
+                    )}
                   </Typography>
 
                   {editForm.source_directories.length > 0 && (
                     <Stack spacing={0.5} sx={{ mb: 1.5 }}>
-                      {editForm.source_directories.map((dir, index) => (
-                        <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="body2" sx={{ fontFamily: 'monospace', flex: 1 }}>
-                            {dir}
-                          </Typography>
+                      {editForm.source_directories.map((dir, index) => {
+                        // Get SSH prefix if source is remote
+                        const sshPrefix = (() => {
+                          if (!editingRepository?.source_ssh_connection_id) return ''
+                          const connections = connectionsData?.data?.connections || []
+                          const conn = connections.find(
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            (c: any) => c.id === editingRepository.source_ssh_connection_id
+                          )
+                          if (!conn) return ''
+                          return `${conn.username}@${conn.host}:${conn.port || 22}:`
+                        })()
+
+                        return (
+                          <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="body2" sx={{ fontFamily: 'monospace', flex: 1 }}>
+                              {sshPrefix && (
+                                <Box component="span" sx={{ color: 'info.main' }}>
+                                  {sshPrefix}
+                                </Box>
+                              )}
+                              {dir}
+                            </Typography>
                           <IconButton
                             size="small"
                             onClick={() => {
@@ -2108,7 +2132,8 @@ export default function Repositories() {
                             <Delete fontSize="small" />
                           </IconButton>
                         </Box>
-                      ))}
+                        )
+                      })}
                     </Stack>
                   )}
 
