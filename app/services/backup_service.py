@@ -170,7 +170,8 @@ class BackupService:
 
             logger.info("Using inline script (legacy)",
                        repository_id=repo_record.id,
-                       hook_type=hook_type)
+                       hook_type=hook_type,
+                       backup_result=backup_result)
 
             # Execute inline script
             executor = ScriptLibraryExecutor(db)
@@ -181,8 +182,9 @@ class BackupService:
                 script_content=inline_script,
                 script_type=hook_type,
                 timeout=timeout,
-                repository_id=repo_record.id,
-                backup_job_id=job_id
+                repository=repo_record,
+                backup_job_id=job_id,
+                backup_result=backup_result
             )
 
             return {

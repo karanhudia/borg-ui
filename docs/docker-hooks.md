@@ -6,6 +6,7 @@ This guide explains how to use Docker container management in pre/post backup ho
 
 - [Why Stop Containers During Backup?](#why-stop-containers-during-backup)
 - [Quick Start](#quick-start)
+- [Environment Variables](#environment-variables)
 - [Security Considerations](#security-considerations)
 - [Example Scripts](#example-scripts)
 - [Troubleshooting](#troubleshooting)
@@ -56,6 +57,90 @@ In the Borg UI:
 2. Edit your repository
 3. Scroll to **Advanced Settings**
 4. Add your pre/post backup scripts
+
+## Environment Variables
+
+Borg UI passes useful context to your pre/post backup scripts via environment variables. These allow your scripts to react to backup status and access repository information.
+
+### Available Variables
+
+| Variable | Description | Available In |
+|----------|-------------|--------------|
+| `BORG_UI_BACKUP_STATUS` | Backup result: `success`, `failure`, or `warning` | Post-backup only |
+| `BORG_UI_REPOSITORY_NAME` | Name of the repository | Pre & Post |
+| `BORG_UI_REPOSITORY_PATH` | Path to the repository | Pre & Post |
+| `BORG_UI_REPOSITORY_ID` | Repository ID | Pre & Post |
+| `BORG_UI_HOOK_TYPE` | Hook type: `pre-backup` or `post-backup` | Pre & Post |
+| `BORG_UI_JOB_ID` | Backup job ID | Pre & Post |
+
+### Example: Conditional Actions Based on Backup Status
+
+**Post-backup script that sends different notifications based on result:**
+```bash
+#!/bin/bash
+
+echo "Backup completed with status: ${BORG_UI_BACKUP_STATUS}"
+echo "Repository: ${BORG_UI_REPOSITORY_NAME}"
+
+case "${BORG_UI_BACKUP_STATUS}" in
+  success)
+    echo "✓ Backup successful!"
+    # Send success notification
+    curl -X POST "https://your-webhook.com/notify" \
+      -d "message=Backup of ${BORG_UI_REPOSITORY_NAME} completed successfully"
+    ;;
+  failure)
+    echo "✗ Backup failed!"
+    # Send alert
+    curl -X POST "https://your-webhook.com/alert" \
+      -d "message=ALERT: Backup of ${BORG_UI_REPOSITORY_NAME} failed!"
+    ;;
+  warning)
+    echo "⚠ Backup completed with warnings"
+    # Log warning
+    curl -X POST "https://your-webhook.com/notify" \
+      -d "message=Backup of ${BORG_UI_REPOSITORY_NAME} completed with warnings"
+    ;;
+esac
+```
+
+### Example: Restart Containers Only on Success
+
+**Post-backup script that only restarts containers if backup succeeded:**
+```bash
+#!/bin/bash
+set -e
+
+CONTAINER_NAME="postgres-db"
+
+# Only restart if backup was successful
+if [ "${BORG_UI_BACKUP_STATUS}" = "success" ]; then
+    echo "[$(date)] Backup succeeded, restarting ${CONTAINER_NAME}..."
+    docker start "${CONTAINER_NAME}"
+    echo "[$(date)] ${CONTAINER_NAME} restarted"
+else
+    echo "[$(date)] Backup status: ${BORG_UI_BACKUP_STATUS}"
+    echo "[$(date)] Keeping ${CONTAINER_NAME} stopped for investigation"
+    # Send alert about failed backup
+    exit 0  # Don't fail the hook
+fi
+```
+
+### Example: Logging with Context
+
+```bash
+#!/bin/bash
+
+LOG_FILE="/var/log/borg-hooks.log"
+
+echo "[$(date)] Hook: ${BORG_UI_HOOK_TYPE}" >> "${LOG_FILE}"
+echo "[$(date)] Repository: ${BORG_UI_REPOSITORY_NAME} (ID: ${BORG_UI_REPOSITORY_ID})" >> "${LOG_FILE}"
+echo "[$(date)] Job ID: ${BORG_UI_JOB_ID}" >> "${LOG_FILE}"
+
+if [ "${BORG_UI_HOOK_TYPE}" = "post-backup" ]; then
+    echo "[$(date)] Status: ${BORG_UI_BACKUP_STATUS}" >> "${LOG_FILE}"
+fi
+```
 
 ## Security Considerations
 
