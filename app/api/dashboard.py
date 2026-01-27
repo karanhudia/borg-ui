@@ -272,7 +272,8 @@ async def get_dashboard_overview(
             health_color = "success"
             warnings = []
 
-            # Check last backup
+            # Check last backup - Repository Health is based solely on backup status
+            # Maintenance items (check, compact) are shown separately in maintenance_alerts
             if repo.last_backup:
                 days_since_backup = (now - repo.last_backup).days
                 if days_since_backup > 7:
@@ -287,28 +288,6 @@ async def get_dashboard_overview(
                 health_status = "critical"
                 health_color = "error"
                 warnings.append("Never backed up")
-
-            # Check last check
-            if repo.last_check:
-                days_since_check = (now - repo.last_check).days
-                if days_since_check > 30:
-                    if health_status == "healthy":
-                        health_status = "warning"
-                        health_color = "warning"
-                    warnings.append(f"Check overdue ({days_since_check}d ago)")
-            else:
-                if health_status == "healthy":
-                    health_status = "warning"
-                    health_color = "warning"
-                warnings.append("Never checked")
-
-            # Check last compact
-            if repo.last_compact:
-                days_since_compact = (now - repo.last_compact).days
-                if days_since_compact > 60:
-                    warnings.append(f"Compact recommended ({days_since_compact}d ago)")
-            else:
-                warnings.append("Never compacted")
 
             # Get associated schedule (check both single-repo and multi-repo schedules)
             repo_schedule = None

@@ -190,10 +190,11 @@ export default function DashboardNew() {
   const unhealthyRepos = overview.repository_health.filter(
     (r) => r.health_status === 'critical' || r.health_status === 'warning'
   )
+  const healthyRepos = overview.repository_health.filter((r) => r.health_status === 'healthy')
 
   // Calculate limits to keep cards balanced in height
-  // Only reduce repo count if there are many upcoming tasks (3+)
-  const repoLimit = overview.upcoming_tasks.length >= 3 && hasMaintenanceAlerts ? 2 : 3
+  // Show up to 4 repos total (unhealthy first, then healthy to fill)
+  const repoLimit = 4
   const taskLimit = hasMaintenanceAlerts ? 2 : 3
   const alertLimit = hasUpcoming ? 2 : 3
 
@@ -603,7 +604,7 @@ export default function DashboardNew() {
             </Stack>
 
             <Stack spacing={1}>
-              {/* Show only critical and warning repos - compact list */}
+              {/* Show unhealthy repos first (critical/warning) */}
               {unhealthyRepos.slice(0, repoLimit).map((repo) => (
                 <Box
                   key={repo.id}
@@ -667,20 +668,69 @@ export default function DashboardNew() {
                 </Box>
               ))}
 
-              {overview.repository_health.length > 0 && unhealthyRepos.length === 0 && (
-                <Alert severity="success" sx={{ mt: 1 }}>
-                  All repositories are healthy!
-                </Alert>
-              )}
+              {/* Fill remaining slots with healthy repos */}
+              {healthyRepos.slice(0, Math.max(0, repoLimit - unhealthyRepos.length)).map((repo) => (
+                <Box
+                  key={repo.id}
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 1,
+                    bgcolor: 'rgba(46, 125, 50, 0.04)',
+                    border: '1px solid',
+                    borderColor: 'rgba(46, 125, 50, 0.15)',
+                    '&:hover': {
+                      bgcolor: 'rgba(46, 125, 50, 0.08)',
+                      cursor: 'pointer',
+                    },
+                  }}
+                  onClick={() => navigate(`/repositories`)}
+                >
+                  <Stack
+                    direction="row"
+                    spacing={2}
+                    alignItems="center"
+                    justifyContent="space-between"
+                  >
+                    <Stack direction="row" spacing={2} alignItems="center" sx={{ flex: 1 }}>
+                      {getStatusIcon(repo.health_status)}
+                      <Box sx={{ flex: 1 }}>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Typography variant="body2" fontWeight={600}>
+                            {repo.name}
+                          </Typography>
+                          <Chip
+                            label={repo.type.toUpperCase()}
+                            size="small"
+                            sx={{ height: 18, fontSize: '0.65rem' }}
+                          />
+                        </Stack>
+                        <Typography variant="caption" color="text.secondary">
+                          Backups up to date • {repo.archive_count} archives • {repo.total_size}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ whiteSpace: 'nowrap' }}
+                    >
+                      {repo.last_backup
+                        ? formatDistanceToNow(new Date(repo.last_backup), { addSuffix: true })
+                        : 'Never backed up'}
+                    </Typography>
+                  </Stack>
+                </Box>
+              ))}
 
-              {unhealthyRepos.length > repoLimit && (
+              {/* Show more button if there are more repos than displayed */}
+              {overview.repository_health.length > repoLimit && (
                 <Button
                   variant="text"
                   size="small"
                   onClick={() => navigate('/repositories')}
                   sx={{ alignSelf: 'center', mt: 0.5, color: 'text.secondary' }}
                 >
-                  +{unhealthyRepos.length - repoLimit} more issues
+                  +{overview.repository_health.length - repoLimit} more repositories
                 </Button>
               )}
 

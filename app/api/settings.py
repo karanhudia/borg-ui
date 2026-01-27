@@ -11,6 +11,7 @@ from sqlalchemy import text
 from app.core.borg import BorgInterface
 from app.config import settings as app_settings
 from app.services.cache_service import archive_cache
+from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["settings"])
@@ -206,7 +207,7 @@ async def get_system_settings(
                 "cleanup_retention_days": settings.cleanup_retention_days,
                 "use_new_wizard": settings.use_new_wizard,
                 "stats_refresh_interval_minutes": settings.stats_refresh_interval_minutes if settings.stats_refresh_interval_minutes is not None else 60,
-                "last_stats_refresh": settings.last_stats_refresh.isoformat() if settings.last_stats_refresh else None,
+                "last_stats_refresh": serialize_datetime(settings.last_stats_refresh),
                 "borg_version": borg.get_version(),
                 "app_version": "1.36.1"
             },
