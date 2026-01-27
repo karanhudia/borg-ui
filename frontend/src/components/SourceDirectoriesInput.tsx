@@ -18,6 +18,7 @@ interface SourceDirectoriesInputProps {
   onChange: (directories: string[]) => void
   onBrowseClick?: () => void
   disabled?: boolean
+  required?: boolean
 }
 
 export default function SourceDirectoriesInput({
@@ -25,6 +26,7 @@ export default function SourceDirectoriesInput({
   onChange,
   onBrowseClick,
   disabled = false,
+  required = true,
 }: SourceDirectoriesInputProps) {
   const [newDir, setNewDir] = useState('')
 
@@ -49,16 +51,20 @@ export default function SourceDirectoriesInput({
   return (
     <Box>
       <Typography variant="subtitle2" gutterBottom>
-        Source Directories{' '}
-        <Box component="span" sx={{ color: 'error.main' }}>
-          *
-        </Box>
+        Source Directories
+        {required && (
+          <Box component="span" sx={{ color: 'error.main' }}>
+            {' '}
+            *
+          </Box>
+        )}
       </Typography>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-        Specify which directories to backup to this repository (at least one required)
+        Specify which directories to backup to this repository
+        {required ? ' (at least one required)' : ' (optional)'}
       </Typography>
 
-      {directories.length === 0 && (
+      {required && directories.length === 0 && (
         <Alert severity="warning" sx={{ mb: 1.5 }}>
           At least one source directory is required. Add the directories you want to backup.
         </Alert>
