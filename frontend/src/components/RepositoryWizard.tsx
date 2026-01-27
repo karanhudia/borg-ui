@@ -241,6 +241,122 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     }
   }
 
+  // Auto-detect and parse SSH connection details from path
+  // This handles the case where user selects "Local" but then browses to an SSH folder
+  const handlePathChange = (newPath: string) => {
+    if (newPath.startsWith('ssh://')) {
+      // Parse SSH URL: ssh://username@host:port/path or ssh://username@host/path
+      const matchWithPort = newPath.match(/^ssh:\/\/([^@]+)@([^:/]+):(\d+)(.*)$/)
+      const matchWithoutPort = newPath.match(/^ssh:\/\/([^@]+)@([^/]+)(.*)$/)
+
+      if (matchWithPort) {
+        const [, parsedUsername, parsedHost, parsedPort, remotePath] = matchWithPort
+
+        // Find matching SSH connection to get ssh_key_id
+        const matchingConnection = sshConnections.find(
+          (c) =>
+            c.username === parsedUsername &&
+            c.host === parsedHost &&
+            c.port === parseInt(parsedPort)
+        )
+
+        // Update all SSH-related state
+        setRepositoryLocation('ssh')
+        setRepositoryType('ssh')
+        setPath(remotePath || '/')
+        setHost(parsedHost)
+        setUsername(parsedUsername)
+        setPort(parsedPort)
+        if (matchingConnection) {
+          setRepoSshConnectionId(matchingConnection.id)
+          setSshKeyId(matchingConnection.ssh_key_id)
+        }
+        return
+      } else if (matchWithoutPort) {
+        const [, parsedUsername, parsedHost, remotePath] = matchWithoutPort
+
+        // Find matching SSH connection (default port 22)
+        const matchingConnection = sshConnections.find(
+          (c) => c.username === parsedUsername && c.host === parsedHost && c.port === 22
+        )
+
+        // Update all SSH-related state
+        setRepositoryLocation('ssh')
+        setRepositoryType('ssh')
+        setPath(remotePath || '/')
+        setHost(parsedHost)
+        setUsername(parsedUsername)
+        setPort('22')
+        if (matchingConnection) {
+          setRepoSshConnectionId(matchingConnection.id)
+          setSshKeyId(matchingConnection.ssh_key_id)
+        }
+        return
+      }
+    }
+
+    // Local path - just update the path
+    setPath(newPath)
+  }
+
+  // Auto-detect and handle SSH URLs in source directories
+  // This handles the case where user selects "Local" data source but browses to an SSH folder
+  const handleSourceDirsChange = (paths: string[]) => {
+    const processedPaths: string[] = []
+    let detectedSshConnection: (typeof sshConnections)[0] | null = null
+
+    for (const p of paths) {
+      if (p.startsWith('ssh://')) {
+        // Parse SSH URL: ssh://username@host:port/path or ssh://username@host/path
+        const matchWithPort = p.match(/^ssh:\/\/([^@]+)@([^:/]+):(\d+)(.*)$/)
+        const matchWithoutPort = p.match(/^ssh:\/\/([^@]+)@([^/]+)(.*)$/)
+
+        if (matchWithPort) {
+          const [, parsedUsername, parsedHost, parsedPort, remotePath] = matchWithPort
+
+          // Find matching SSH connection
+          if (!detectedSshConnection) {
+            detectedSshConnection =
+              sshConnections.find(
+                (c) =>
+                  c.username === parsedUsername &&
+                  c.host === parsedHost &&
+                  c.port === parseInt(parsedPort)
+              ) || null
+          }
+
+          processedPaths.push(remotePath || '/')
+        } else if (matchWithoutPort) {
+          const [, parsedUsername, parsedHost, remotePath] = matchWithoutPort
+
+          // Find matching SSH connection (default port 22)
+          if (!detectedSshConnection) {
+            detectedSshConnection =
+              sshConnections.find(
+                (c) => c.username === parsedUsername && c.host === parsedHost && c.port === 22
+              ) || null
+          }
+
+          processedPaths.push(remotePath || '/')
+        } else {
+          // Couldn't parse, add as-is
+          processedPaths.push(p)
+        }
+      } else {
+        // Local path
+        processedPaths.push(p)
+      }
+    }
+
+    // If we detected SSH paths, switch to remote data source
+    if (detectedSshConnection) {
+      setDataSource('remote')
+      setSourceSshConnectionId(detectedSshConnection.id)
+    }
+
+    setSourceDirs([...sourceDirs, ...processedPaths])
+  }
+
   // Reset to first step when dialog opens
   useEffect(() => {
     if (open) {
@@ -623,7 +739,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       <TextField
         label="Repository Path"
         value={path}
-        onChange={(e) => setPath(e.target.value)}
+        onChange={(e) => handlePathChange(e.target.value)}
         placeholder={repositoryLocation === 'local' ? '/backups/my-repo' : '/path/on/remote/server'}
         required
         fullWidth
@@ -647,184 +763,233 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     </Box>
   )
 
-  const renderDataSource = () => (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <Typography variant="subtitle2" gutterBottom>
-        Where is the data you want to back up?
-      </Typography>
+  const renderDataSource = () => {
+    // Determine if cards should be disabled based on already selected directories
+    const hasLocalDirs = sourceDirs.length > 0 && !sourceSshConnectionId
+    const hasRemoteDirs = !!sourceSshConnectionId
 
-      <Box sx={{ display: 'flex', gap: 2 }}>
-        <Card
-          variant="outlined"
-          sx={{
-            flex: 1,
-            border: dataSource === 'local' ? 2 : 1,
-            borderColor: dataSource === 'local' ? 'primary.main' : 'divider',
-          }}
-        >
-          <CardActionArea onClick={() => setDataSource('local')}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <HardDrive size={24} color={dataSource === 'local' ? '#1976d2' : '#666'} />
-                <Typography variant="h6">Borg UI Server</Typography>
-              </Box>
-              <Typography variant="body2" color="text.secondary">
-                Back up data from this server (local or mounted filesystems)
-              </Typography>
-            </CardContent>
-          </CardActionArea>
-        </Card>
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <Typography variant="subtitle2" gutterBottom>
+          Where is the data you want to back up?
+        </Typography>
 
-        <Card
-          variant="outlined"
-          sx={{
-            flex: 1,
-            border: dataSource === 'remote' ? 2 : 1,
-            borderColor: dataSource === 'remote' ? 'primary.main' : 'divider',
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
-          <CardActionArea
-            onClick={() => {
-              setDataSource('remote')
-              // If repository is on a remote client, auto-select the same client for data source
-              if (repositoryLocation === 'ssh' && repoSshConnectionId) {
-                handleSourceSshConnectionSelect(repoSshConnectionId)
-              }
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'stretch' }}>
+          <Card
+            variant="outlined"
+            sx={{
+              flex: 1,
+              border: dataSource === 'local' ? 2 : 1,
+              borderColor: dataSource === 'local' ? 'primary.main' : 'divider',
+              opacity: hasRemoteDirs ? 0.5 : 1,
+              display: 'flex',
             }}
-            sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}
           >
-            <CardContent sx={{ flex: 1 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Laptop size={24} color={dataSource === 'remote' ? '#1976d2' : '#666'} />
-                <Typography variant="h6">Remote Machine</Typography>
-              </Box>
-              <Typography variant="body2" color="text.secondary">
-                Back up data from a remote machine via SSH
-              </Typography>
-            </CardContent>
-          </CardActionArea>
-        </Card>
-      </Box>
-
-      {dataSource === 'local' && (
-        <SourceDirectoriesInput
-          directories={sourceDirs}
-          onChange={setSourceDirs}
-          onBrowseClick={() => setShowSourceExplorer(true)}
-          required={repositoryMode !== 'observe'}
-        />
-      )}
-
-      {dataSource === 'remote' && (
-        <>
-          {/* Show warning if repo is also on a remote client */}
-          {repositoryLocation === 'ssh' && repoSshConnectionId && (
-            <Alert severity="info">
-              <Typography variant="body2">
-                <strong>Note:</strong> You can only select the same remote machine that stores the
-                repository. Backing up from one remote client to another is not supported.
-              </Typography>
-            </Alert>
-          )}
-
-          {!Array.isArray(sshConnections) || sshConnections.length === 0 ? (
-            <Alert severity="warning">
-              No SSH connections configured. Please configure SSH connections in the SSH Keys page
-              first.
-            </Alert>
-          ) : (
-            <>
-              <FormControl fullWidth>
-                <InputLabel>Select Remote Machine</InputLabel>
-                <Select
-                  value={sourceSshConnectionId === '' ? '' : String(sourceSshConnectionId)}
-                  label="Select Remote Machine"
-                  onChange={(e) => {
-                    const value = e.target.value
-                    if (value) {
-                      handleSourceSshConnectionSelect(Number(value))
-                    }
-                  }}
-                  sx={{
-                    '& .MuiSelect-select': {
-                      py: '16.5px',
-                      display: 'flex',
-                      alignItems: 'center',
-                    },
-                  }}
-                >
-                  {sshConnections
-                    .filter((conn) => {
-                      // If repository is on a remote client, only show that same client
-                      if (repositoryLocation === 'ssh' && repoSshConnectionId) {
-                        return conn.id === repoSshConnectionId
-                      }
-                      return true
-                    })
-                    .map((conn) => (
-                      <MenuItem key={conn.id} value={String(conn.id)}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                          <Laptop size={16} />
-                          <Box sx={{ flex: 1 }}>
-                            <Typography variant="body2">
-                              {conn.username}@{conn.host}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              Port {conn.port}
-                              {conn.mount_point && ` • ${conn.mount_point}`}
-                            </Typography>
-                          </Box>
-                          {conn.status === 'connected' && (
-                            <Box
-                              sx={{
-                                width: 8,
-                                height: 8,
-                                borderRadius: '50%',
-                                bgcolor: 'success.main',
-                              }}
-                              title="Connected"
-                            />
-                          )}
-                        </Box>
-                      </MenuItem>
-                    ))}
-                </Select>
-              </FormControl>
-
-              {sourceSshConnectionId && (
-                <Box>
-                  <SourceDirectoriesInput
-                    directories={sourceDirs}
-                    onChange={setSourceDirs}
-                    onBrowseClick={() => setShowRemoteSourceExplorer(true)}
-                    required={repositoryMode !== 'observe'}
-                  />
+            <CardActionArea
+              onClick={() => setDataSource('local')}
+              disabled={hasRemoteDirs}
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'stretch',
+                height: '100%',
+              }}
+            >
+              <CardContent sx={{ flex: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <HardDrive size={24} color={dataSource === 'local' ? '#1976d2' : '#666'} />
+                  <Typography variant="h6">Borg UI Server</Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  Back up data from this server (local or mounted filesystems)
+                </Typography>
+                {hasRemoteDirs && (
                   <Typography
                     variant="caption"
-                    color="text.secondary"
-                    sx={{ mt: 0.5, display: 'block' }}
+                    color="warning.main"
+                    sx={{ mt: 1, display: 'block' }}
                   >
-                    Browse remote directories or enter full paths manually (e.g.,
-                    /home/user/documents, /var/www)
+                    Remove remote directories first to switch
                   </Typography>
-                </Box>
-              )}
-            </>
-          )}
+                )}
+              </CardContent>
+            </CardActionArea>
+          </Card>
 
-          <Alert severity="info">
-            <Typography variant="body2">
-              <strong>Note:</strong> The Borg UI server will SSH into the remote machine to browse
-              and back up the selected directories. Ensure the SSH connection is properly configured
-              with the necessary permissions.
-            </Typography>
-          </Alert>
-        </>
-      )}
-    </Box>
-  )
+          <Card
+            variant="outlined"
+            sx={{
+              flex: 1,
+              border: dataSource === 'remote' ? 2 : 1,
+              borderColor: dataSource === 'remote' ? 'primary.main' : 'divider',
+              opacity: hasLocalDirs ? 0.5 : 1,
+              display: 'flex',
+            }}
+          >
+            <CardActionArea
+              onClick={() => {
+                setDataSource('remote')
+                // If repository is on a remote client, auto-select the same client for data source
+                if (repositoryLocation === 'ssh' && repoSshConnectionId) {
+                  handleSourceSshConnectionSelect(repoSshConnectionId)
+                }
+              }}
+              disabled={hasLocalDirs}
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'stretch',
+                height: '100%',
+              }}
+            >
+              <CardContent sx={{ flex: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <Laptop size={24} color={dataSource === 'remote' ? '#1976d2' : '#666'} />
+                  <Typography variant="h6">Remote Machine</Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  Back up data from a remote machine via SSH
+                </Typography>
+                {hasLocalDirs && (
+                  <Typography
+                    variant="caption"
+                    color="warning.main"
+                    sx={{ mt: 1, display: 'block' }}
+                  >
+                    Remove local directories first to switch
+                  </Typography>
+                )}
+              </CardContent>
+            </CardActionArea>
+          </Card>
+        </Box>
+
+        {dataSource === 'local' && (
+          <SourceDirectoriesInput
+            directories={sourceDirs}
+            onChange={(newDirs) => {
+              setSourceDirs(newDirs)
+              // Clear source connection if all directories removed
+              if (newDirs.length === 0) {
+                setSourceSshConnectionId('')
+              }
+            }}
+            onBrowseClick={() => setShowSourceExplorer(true)}
+            required={repositoryMode !== 'observe'}
+          />
+        )}
+
+        {dataSource === 'remote' && (
+          <>
+            {/* Show warning if repo is also on a remote client */}
+            {repositoryLocation === 'ssh' && repoSshConnectionId && (
+              <Alert severity="info">
+                <Typography variant="body2">
+                  <strong>Note:</strong> You can only select the same remote machine that stores the
+                  repository. Backing up from one remote client to another is not supported.
+                </Typography>
+              </Alert>
+            )}
+
+            {!Array.isArray(sshConnections) || sshConnections.length === 0 ? (
+              <Alert severity="warning">
+                No SSH connections configured. Please configure SSH connections in the SSH Keys page
+                first.
+              </Alert>
+            ) : (
+              <>
+                <FormControl fullWidth>
+                  <InputLabel>Select Remote Machine</InputLabel>
+                  <Select
+                    value={sourceSshConnectionId === '' ? '' : String(sourceSshConnectionId)}
+                    label="Select Remote Machine"
+                    onChange={(e) => {
+                      const value = e.target.value
+                      if (value) {
+                        handleSourceSshConnectionSelect(Number(value))
+                      }
+                    }}
+                    sx={{
+                      '& .MuiSelect-select': {
+                        py: '16.5px',
+                        display: 'flex',
+                        alignItems: 'center',
+                      },
+                    }}
+                  >
+                    {sshConnections
+                      .filter((conn) => {
+                        // If repository is on a remote client, only show that same client
+                        if (repositoryLocation === 'ssh' && repoSshConnectionId) {
+                          return conn.id === repoSshConnectionId
+                        }
+                        return true
+                      })
+                      .map((conn) => (
+                        <MenuItem key={conn.id} value={String(conn.id)}>
+                          <Box
+                            sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}
+                          >
+                            <Laptop size={16} />
+                            <Box sx={{ flex: 1 }}>
+                              <Typography variant="body2">
+                                {conn.username}@{conn.host}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                Port {conn.port}
+                                {conn.mount_point && ` • ${conn.mount_point}`}
+                              </Typography>
+                            </Box>
+                            {conn.status === 'connected' && (
+                              <Box
+                                sx={{
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: '50%',
+                                  bgcolor: 'success.main',
+                                }}
+                                title="Connected"
+                              />
+                            )}
+                          </Box>
+                        </MenuItem>
+                      ))}
+                  </Select>
+                </FormControl>
+
+                {sourceSshConnectionId && (
+                  <Box>
+                    <SourceDirectoriesInput
+                      directories={sourceDirs}
+                      onChange={setSourceDirs}
+                      onBrowseClick={() => setShowRemoteSourceExplorer(true)}
+                      required={repositoryMode !== 'observe'}
+                    />
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ mt: 0.5, display: 'block' }}
+                    >
+                      Browse remote directories or enter full paths manually (e.g.,
+                      /home/user/documents, /var/www)
+                    </Typography>
+                  </Box>
+                )}
+              </>
+            )}
+
+            <Alert severity="info">
+              <Typography variant="body2">
+                <strong>Note:</strong> The Borg UI server will SSH into the remote machine to browse
+                and back up the selected directories. Ensure the SSH connection is properly
+                configured with the necessary permissions.
+              </Typography>
+            </Alert>
+          </>
+        )}
+      </Box>
+    )
+  }
 
   const renderSecurity = () => (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -1127,7 +1292,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         onClose={() => setShowPathExplorer(false)}
         onSelect={(paths) => {
           if (paths.length > 0) {
-            setPath(paths[0])
+            handlePathChange(paths[0])
           }
           setShowPathExplorer(false)
         }}
@@ -1161,13 +1326,23 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         open={showSourceExplorer}
         onClose={() => setShowSourceExplorer(false)}
         onSelect={(paths) => {
-          setSourceDirs([...sourceDirs, ...paths])
+          handleSourceDirsChange(paths)
+          setShowSourceExplorer(false)
         }}
-        title="Select Source Directories"
+        title={
+          sourceSshConnectionId && dataSource === 'local'
+            ? 'Select Source Directories (Remote Machine)'
+            : 'Select Source Directories'
+        }
         initialPath="/"
         multiSelect={true}
         connectionType="local"
         selectMode="directories"
+        showSshMountPoints={
+          // Hide SSH if: repo is SSH (prevent remote-to-remote) OR local dirs already selected (prevent mixing)
+          repositoryLocation !== 'ssh' && (!!sourceSshConnectionId || sourceDirs.length === 0)
+        }
+        allowedSshConnectionId={dataSource === 'local' ? sourceSshConnectionId || null : null}
       />
 
       {showRemoteSourceExplorer &&

@@ -1439,4 +1439,113 @@ describe('RepositoryWizard', () => {
       })
     })
   })
+
+  // ============================================================
+  // DATA SOURCE CARD DISABLING - Tests for preventing mixed local/remote
+  // ============================================================
+  describe('Data Source Card Mutual Exclusion', () => {
+    it('disables Remote Machine card when local directories are selected', async () => {
+      const user = userEvent.setup()
+      renderWizard('create')
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
+      })
+
+      // Step 1 - Fill required fields
+      await user.type(screen.getByLabelText(/Repository Name/i), 'Test Repo')
+      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      // Step 2 - Both cards should be enabled initially
+      await waitFor(() => {
+        expect(screen.getByText('Borg UI Server')).toBeInTheDocument()
+        expect(screen.getByText('Remote Machine')).toBeInTheDocument()
+      })
+
+      // Add a local source directory
+      const pathInput = screen.getByPlaceholderText('/home/user/documents')
+      await user.type(pathInput, '/home/user/data')
+      await user.click(screen.getByRole('button', { name: /Add/i }))
+
+      // Remote Machine card should now show the warning message
+      await waitFor(() => {
+        expect(screen.getByText('Remove local directories first to switch')).toBeInTheDocument()
+      })
+    })
+
+    it('both cards are clickable when no directories are selected', async () => {
+      const user = userEvent.setup()
+      renderWizard('create')
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
+      })
+
+      // Step 1 - Fill required fields
+      await user.type(screen.getByLabelText(/Repository Name/i), 'Test Repo')
+      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      // Step 2 - Both cards should be enabled and clickable
+      await waitFor(() => {
+        expect(screen.getByText('Borg UI Server')).toBeInTheDocument()
+        expect(screen.getByText('Remote Machine')).toBeInTheDocument()
+      })
+
+      // Neither warning message should be visible
+      expect(screen.queryByText('Remove local directories first to switch')).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('Remove remote directories first to switch')
+      ).not.toBeInTheDocument()
+    })
+
+    it('re-enables Remote card when local directories are removed', async () => {
+      const user = userEvent.setup()
+      renderWizard('create')
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
+      })
+
+      // Step 1 - Fill required fields
+      await user.type(screen.getByLabelText(/Repository Name/i), 'Test Repo')
+      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      // Step 2 - Add a local source directory
+      await waitFor(() => {
+        expect(screen.getByText('Borg UI Server')).toBeInTheDocument()
+      })
+
+      const pathInput = screen.getByPlaceholderText('/home/user/documents')
+      await user.type(pathInput, '/home/user/data')
+      await user.click(screen.getByRole('button', { name: /Add/i }))
+
+      // Verify Remote is disabled (warning shown)
+      await waitFor(() => {
+        expect(screen.getByText('Remove local directories first to switch')).toBeInTheDocument()
+      })
+
+      // Verify directory was added
+      expect(screen.getByText('/home/user/data')).toBeInTheDocument()
+
+      // Find and click delete button (IconButton with DeleteIcon)
+      const deleteButtons = screen.getAllByRole('button')
+      const deleteButton = deleteButtons.find((btn) =>
+        btn.querySelector('svg[data-testid="DeleteIcon"]')
+      )
+
+      if (deleteButton) {
+        await user.click(deleteButton)
+
+        // After removing, warning should disappear
+        await waitFor(() => {
+          expect(
+            screen.queryByText('Remove local directories first to switch')
+          ).not.toBeInTheDocument()
+        })
+      }
+    })
+  })
 })

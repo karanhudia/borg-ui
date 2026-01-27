@@ -69,6 +69,8 @@ interface FileExplorerDialogProps {
   connectionType?: 'local' | 'ssh'
   sshConfig?: SSHNetworkConfig
   selectMode?: 'directories' | 'files' | 'both'
+  showSshMountPoints?: boolean // Set to false to hide SSH mount points (e.g., when repo is SSH to prevent remote-to-remote)
+  allowedSshConnectionId?: number | null // Only show this SSH connection's mount point (used when source_connection_id is already set)
 }
 
 export default function FileExplorerDialog({
@@ -81,6 +83,8 @@ export default function FileExplorerDialog({
   connectionType = 'local',
   sshConfig,
   selectMode = 'directories',
+  showSshMountPoints = true,
+  allowedSshConnectionId = null,
 }: FileExplorerDialogProps) {
   const [currentPath, setCurrentPath] = useState(initialPath)
   const [items, setItems] = useState<FileSystemItem[]>([])
@@ -100,6 +104,9 @@ export default function FileExplorerDialog({
   const [showCreateFolder, setShowCreateFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [creatingFolder, setCreatingFolder] = useState(false)
+
+  // Track if initial load has been done to prevent re-triggering
+  const initialLoadDone = useRef(false)
 
   // Responsive dialog
   const theme = useTheme()
@@ -163,9 +170,14 @@ export default function FileExplorerDialog({
     [activeConnectionType, activeSshConfig]
   )
 
-  // Initial load
+  // Initial load - only runs once when dialog opens
   useEffect(() => {
-    if (open) {
+    if (open && !initialLoadDone.current) {
+      initialLoadDone.current = true
+      // Reset selection state when dialog opens
+      setSelectedPaths([])
+      setSearchTerm('')
+
       if (initialPath) {
         // Use provided configuration for initial load
         loadDirectory(initialPath, connectionType, sshConfig)
@@ -179,7 +191,12 @@ export default function FileExplorerDialog({
         loadSSHConnections()
       }
     }
-  }, [open, initialPath, connectionType, sshConfig, loadDirectory])
+    // Reset when dialog closes
+    if (!open) {
+      initialLoadDone.current = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialPath, connectionType, sshConfig])
 
   const handleItemClick = (item: FileSystemItem) => {
     if (item.is_mount_point && item.ssh_connection) {
@@ -324,8 +341,14 @@ export default function FileExplorerDialog({
 
   // Add mount points as virtual items at root level
   const getMountPointItems = (): FileSystemItem[] => {
-    if (currentPath !== '/' || activeConnectionType !== 'local') return []
-    return sshConnections.map((conn) => {
+    if (currentPath !== '/' || activeConnectionType !== 'local' || !showSshMountPoints) return []
+
+    // Filter connections based on allowedSshConnectionId
+    const filteredConnections = allowedSshConnectionId
+      ? sshConnections.filter((conn) => conn.id === allowedSshConnectionId)
+      : sshConnections
+
+    return filteredConnections.map((conn) => {
       // Use mount_point name if available, otherwise show full SSH URL
       const displayName =
         conn.mount_point && conn.mount_point.trim()
@@ -343,7 +366,12 @@ export default function FileExplorerDialog({
     })
   }
 
-  const allItems = [...getMountPointItems(), ...items]
+  // When allowedSshConnectionId is set and we're at root in local mode,
+  // hide local filesystem items - only show the SSH mount point
+  const shouldHideLocalItems =
+    allowedSshConnectionId && currentPath === '/' && activeConnectionType === 'local'
+
+  const allItems = [...getMountPointItems(), ...(shouldHideLocalItems ? [] : items)]
   const filteredItems = allItems.filter((item) =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
   )
