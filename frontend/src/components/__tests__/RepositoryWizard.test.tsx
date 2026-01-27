@@ -1415,4 +1415,28 @@ describe('RepositoryWizard', () => {
       expect(screen.getByRole('button', { name: 'Back' })).toBeDisabled()
     })
   })
+
+  // ============================================================
+  // REMOTE DATA SOURCE - Tests
+  // ============================================================
+  describe('Remote Data Source', () => {
+    it('shows Remote Machine option in data source step', async () => {
+      const user = userEvent.setup()
+      renderWizard('create')
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
+      })
+
+      // Step 1 - Fill required fields
+      await user.type(screen.getByLabelText(/Repository Name/i), 'Test Repo')
+      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      // Step 2 - Should show Remote Machine option
+      await waitFor(() => {
+        expect(screen.getByText('Remote Machine')).toBeInTheDocument()
+      })
+    })
+  })
 })
