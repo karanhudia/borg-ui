@@ -10,6 +10,8 @@ import {
   formatBytes,
   parseBytes,
   formatDurationSeconds,
+  formatDateTimeFull,
+  formatDateCompact,
 } from './dateUtils'
 
 describe('convertCronToUTC - Critical Edge Cases', () => {
@@ -459,5 +461,88 @@ describe('End-to-End User Experience Tests', () => {
       expect(storedInDB).toBe(userInput) // Too complex to convert
       expect(displayedInUI).toBe(userInput)
     })
+  })
+})
+
+describe('formatDateTimeFull', () => {
+  it('formats a valid ISO date string correctly', () => {
+    const result = formatDateTimeFull('2025-11-09T14:56:53Z')
+    // Note: date-fns formats to local timezone, but we append 'UTC' label
+    expect(result).toContain('2025')
+    expect(result).toContain('UTC')
+    // Should have time component
+    expect(result).toMatch(/\d{1,2}:\d{2}:\d{2}/)
+    // Should have AM or PM
+    expect(result).toMatch(/AM|PM/)
+  })
+
+  it('returns "Never" for null input', () => {
+    expect(formatDateTimeFull(null)).toBe('Never')
+  })
+
+  it('returns "Never" for undefined input', () => {
+    expect(formatDateTimeFull(undefined)).toBe('Never')
+  })
+
+  it('returns "Never" for empty string', () => {
+    expect(formatDateTimeFull('')).toBe('Never')
+  })
+
+  it('includes full month name', () => {
+    const result = formatDateTimeFull('2025-01-15T10:00:00Z')
+    // Should have a full month name
+    expect(result).toMatch(
+      /January|February|March|April|May|June|July|August|September|October|November|December/
+    )
+  })
+
+  it('formats time with seconds', () => {
+    const result = formatDateTimeFull('2025-06-15T12:30:45Z')
+    // Should include seconds in the time
+    expect(result).toMatch(/\d{1,2}:\d{2}:\d{2}/)
+  })
+})
+
+describe('formatDateCompact', () => {
+  it('formats a valid ISO date string to compact format', () => {
+    const result = formatDateCompact('2025-11-09T14:56:53Z')
+    expect(result).toContain('2025')
+    // Should have abbreviated month
+    expect(result).toMatch(/Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec/)
+  })
+
+  it('returns "Never" for null input', () => {
+    expect(formatDateCompact(null)).toBe('Never')
+  })
+
+  it('returns "Never" for undefined input', () => {
+    expect(formatDateCompact(undefined)).toBe('Never')
+  })
+
+  it('returns "Never" for empty string', () => {
+    expect(formatDateCompact('')).toBe('Never')
+  })
+
+  it('includes time with AM/PM', () => {
+    const result = formatDateCompact('2025-03-15T08:30:00Z')
+    // Should have time in format like "h:mm AM/PM"
+    expect(result).toMatch(/\d{1,2}:\d{2}/)
+    expect(result).toMatch(/AM|PM/)
+  })
+
+  it('includes abbreviated month name', () => {
+    const result = formatDateCompact('2025-07-20T18:45:00Z')
+    expect(result).toMatch(/Jul/)
+  })
+
+  it('includes day number', () => {
+    const result = formatDateCompact('2025-12-05T10:00:00Z')
+    // Should have a day number
+    expect(result).toMatch(/\d{1,2}/)
+  })
+
+  it('includes year', () => {
+    const result = formatDateCompact('2025-08-25T15:00:00Z')
+    expect(result).toContain('2025')
   })
 })
