@@ -80,6 +80,7 @@ interface Repository {
   continue_on_hook_failure?: boolean
   bypass_lock?: boolean
   source_ssh_connection_id?: number | null // SSH connection ID for remote data source
+  repository_type?: 'local' | 'ssh' | 'sftp'
 }
 
 interface SSHConnection {
@@ -395,7 +396,8 @@ export default function Repositories() {
     port: 22,
     username: '',
     ssh_key_id: null as number | null,
-    connection_id: null as number | null,
+    connection_id: null as number | null, // SSH connection for repository location
+    source_connection_id: null as number | null, // SSH connection for data source (remote-to-local)
     remote_path: '',
     pre_backup_script: '',
     post_backup_script: '',
@@ -437,6 +439,7 @@ export default function Repositories() {
     mode: 'full' as 'full' | 'observe',
     custom_flags: '',
     bypass_lock: false,
+    source_ssh_connection_id: null as number | null,
   })
 
   const [editNewSourceDir, setEditNewSourceDir] = useState('')
@@ -569,6 +572,7 @@ export default function Repositories() {
       username: '',
       ssh_key_id: null,
       connection_id: null,
+      source_connection_id: null,
       remote_path: '',
       pre_backup_script: '',
       post_backup_script: '',
@@ -661,6 +665,7 @@ export default function Repositories() {
       mode: repository.mode || 'full',
       custom_flags: repository.custom_flags || '',
       bypass_lock: repository.bypass_lock || false,
+      source_ssh_connection_id: repository.source_ssh_connection_id || null,
     })
     setEditNewSourceDir('')
     setEditNewExcludePattern('')
@@ -699,7 +704,7 @@ export default function Repositories() {
       // Parse SSH URL: ssh://username@host:port/path
       const match = newPath.match(/ssh:\/\/([^@]+)@([^:]+):(\d+)(.*)/)
       if (match) {
-        const [, username, host, port, remotePath] = match
+        const [, username, host, port] = match
 
         // Find matching SSH connection to get ssh_key_id
         const connections = connectionsData?.data?.connections || []
@@ -708,9 +713,10 @@ export default function Repositories() {
             c.username === username && c.host === host && c.port === parseInt(port)
         )
 
+        // Store full SSH URL in path for consistency with source_directories
         setRepositoryForm({
           ...repositoryForm,
-          path: remotePath || '/',
+          path: newPath,
           repository_type: 'ssh',
           username,
           host,
@@ -733,11 +739,12 @@ export default function Repositories() {
   const getBorgInitCommand = () => {
     let repoPath = repositoryForm.path || '/path/to/repository'
 
-    // Build full path for remote repository
+    // Build full path for remote repository (only if path doesn't already contain SSH URL)
     if (
       repositoryForm.repository_type === 'ssh' &&
       repositoryForm.host &&
-      repositoryForm.username
+      repositoryForm.username &&
+      !repoPath.startsWith('ssh://')
     ) {
       repoPath = `ssh://${repositoryForm.username}@${repositoryForm.host}:${repositoryForm.port}${repoPath.startsWith('/') ? '' : '/'}${repoPath}`
     } else if (repositoryForm.repository_type === 'local') {
@@ -760,11 +767,12 @@ export default function Repositories() {
   const getBorgCreateCommand = () => {
     let repoPath = repositoryForm.path || '/path/to/repository'
 
-    // Build full path for remote repository
+    // Build full path for remote repository (only if path doesn't already contain SSH URL)
     if (
       repositoryForm.repository_type === 'ssh' &&
       repositoryForm.host &&
-      repositoryForm.username
+      repositoryForm.username &&
+      !repoPath.startsWith('ssh://')
     ) {
       repoPath = `ssh://${repositoryForm.username}@${repositoryForm.host}:${repositoryForm.port}${repoPath.startsWith('/') ? '' : '/'}${repoPath}`
     } else if (repositoryForm.repository_type === 'local') {
@@ -1305,6 +1313,20 @@ export default function Repositories() {
                 </FormControl>
               )}
 
+              {/* Passphrase - shown when encryption is enabled */}
+              {repositoryForm.encryption !== 'none' && (
+                <TextField
+                  label="Passphrase"
+                  type="password"
+                  value={repositoryForm.passphrase}
+                  onChange={(e) =>
+                    setRepositoryForm({ ...repositoryForm, passphrase: e.target.value })
+                  }
+                  placeholder="Enter passphrase"
+                  fullWidth
+                />
+              )}
+
               {/* Compression Settings - Only for full repositories */}
               {repositoryForm.mode === 'full' && (
                 <Box>
@@ -1460,19 +1482,6 @@ export default function Repositories() {
                 </Box>
               )}
 
-              {repositoryForm.encryption !== 'none' && (
-                <TextField
-                  label="Passphrase"
-                  type="password"
-                  value={repositoryForm.passphrase}
-                  onChange={(e) =>
-                    setRepositoryForm({ ...repositoryForm, passphrase: e.target.value })
-                  }
-                  placeholder="Enter passphrase"
-                  fullWidth
-                />
-              )}
-
               {/* Keyfile Upload - Only shown during import mode */}
               {repositoryModalMode === 'import' && (
                 <Box>
@@ -1536,26 +1545,51 @@ export default function Repositories() {
 
                   {repositoryForm.source_directories.length > 0 && (
                     <Stack spacing={0.5} sx={{ mb: 1.5 }}>
-                      {repositoryForm.source_directories.map((dir, index) => (
-                        <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="body2" sx={{ fontFamily: 'monospace', flex: 1 }}>
-                            {dir}
-                          </Typography>
-                          <IconButton
-                            size="small"
-                            onClick={() => {
-                              setRepositoryForm({
-                                ...repositoryForm,
-                                source_directories: repositoryForm.source_directories.filter(
+                      {repositoryForm.source_directories.map((dir, index) => {
+                        // Get SSH prefix if source is remote
+                        const sshPrefix = (() => {
+                          if (!repositoryForm.source_connection_id) return ''
+                          const connections = connectionsData?.data?.connections || []
+                          const conn = connections.find(
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            (c: any) => c.id === repositoryForm.source_connection_id
+                          )
+                          if (!conn) return ''
+                          return `${conn.username}@${conn.host}:${conn.port || 22}:`
+                        })()
+
+                        return (
+                          <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="body2" sx={{ fontFamily: 'monospace', flex: 1 }}>
+                              {sshPrefix && (
+                                <Box component="span" sx={{ color: 'info.main' }}>
+                                  {sshPrefix}
+                                </Box>
+                              )}
+                              {dir}
+                            </Typography>
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                const newDirs = repositoryForm.source_directories.filter(
                                   (_, i) => i !== index
-                                ),
-                              })
-                            }}
-                          >
-                            <Delete fontSize="small" />
-                          </IconButton>
-                        </Box>
-                      ))}
+                                )
+                                setRepositoryForm({
+                                  ...repositoryForm,
+                                  source_directories: newDirs,
+                                  // Clear source_connection_id if no more directories
+                                  source_connection_id:
+                                    newDirs.length === 0
+                                      ? null
+                                      : repositoryForm.source_connection_id,
+                                })
+                              }}
+                            >
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          </Box>
+                        )
+                      })}
                     </Stack>
                   )}
 
@@ -1570,6 +1604,16 @@ export default function Repositories() {
                         if (e.key === 'Enter') {
                           e.preventDefault()
                           if (newSourceDir.trim()) {
+                            // Check if repo is SSH - prevent remote-to-remote backup
+                            const isRepoSsh =
+                              repositoryForm.repository_type === 'ssh' ||
+                              repositoryForm.path?.startsWith('ssh://')
+                            if (isRepoSsh && newSourceDir.trim().startsWith('ssh://')) {
+                              alert(
+                                'Remote-to-remote backup is not supported. You cannot backup from a remote machine to a remote repository.'
+                              )
+                              return
+                            }
                             setRepositoryForm({
                               ...repositoryForm,
                               source_directories: [
@@ -1601,6 +1645,16 @@ export default function Repositories() {
                       size="small"
                       onClick={() => {
                         if (newSourceDir.trim()) {
+                          // Check if repo is SSH - prevent remote-to-remote backup
+                          const isRepoSsh =
+                            repositoryForm.repository_type === 'ssh' ||
+                            repositoryForm.path?.startsWith('ssh://')
+                          if (isRepoSsh && newSourceDir.trim().startsWith('ssh://')) {
+                            alert(
+                              'Remote-to-remote backup is not supported. You cannot backup from a remote machine to a remote repository.'
+                            )
+                            return
+                          }
                           setRepositoryForm({
                             ...repositoryForm,
                             source_directories: [
@@ -2096,13 +2150,16 @@ export default function Repositories() {
                   {editForm.source_directories.length > 0 && (
                     <Stack spacing={0.5} sx={{ mb: 1.5 }}>
                       {editForm.source_directories.map((dir, index) => {
-                        // Get SSH prefix if source is remote
+                        // Get SSH prefix if source is remote (use editForm first, then fallback to editingRepository)
                         const sshPrefix = (() => {
-                          if (!editingRepository?.source_ssh_connection_id) return ''
+                          const connId =
+                            editForm.source_ssh_connection_id ||
+                            editingRepository?.source_ssh_connection_id
+                          if (!connId) return ''
                           const connections = connectionsData?.data?.connections || []
                           const conn = connections.find(
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            (c: any) => c.id === editingRepository.source_ssh_connection_id
+                            (c: any) => c.id === connId
                           )
                           if (!conn) return ''
                           return `${conn.username}@${conn.host}:${conn.port || 22}:`
@@ -2121,11 +2178,15 @@ export default function Repositories() {
                             <IconButton
                               size="small"
                               onClick={() => {
+                                const newDirs = editForm.source_directories.filter(
+                                  (_, i) => i !== index
+                                )
                                 setEditForm({
                                   ...editForm,
-                                  source_directories: editForm.source_directories.filter(
-                                    (_, i) => i !== index
-                                  ),
+                                  source_directories: newDirs,
+                                  // Clear source_ssh_connection_id if no more directories
+                                  source_ssh_connection_id:
+                                    newDirs.length === 0 ? null : editForm.source_ssh_connection_id,
                                 })
                               }}
                             >
@@ -2148,6 +2209,16 @@ export default function Repositories() {
                         if (e.key === 'Enter') {
                           e.preventDefault()
                           if (editNewSourceDir.trim()) {
+                            // Check if repo is SSH - prevent remote-to-remote backup
+                            const isRepoSsh =
+                              editingRepository?.repository_type === 'ssh' ||
+                              editForm.path?.startsWith('ssh://')
+                            if (isRepoSsh && editNewSourceDir.trim().startsWith('ssh://')) {
+                              alert(
+                                'Remote-to-remote backup is not supported. You cannot backup from a remote machine to a remote repository.'
+                              )
+                              return
+                            }
                             setEditForm({
                               ...editForm,
                               source_directories: [
@@ -2179,6 +2250,16 @@ export default function Repositories() {
                       size="small"
                       onClick={() => {
                         if (editNewSourceDir.trim()) {
+                          // Check if repo is SSH - prevent remote-to-remote backup
+                          const isRepoSsh =
+                            editingRepository?.repository_type === 'ssh' ||
+                            editForm.path?.startsWith('ssh://')
+                          if (isRepoSsh && editNewSourceDir.trim().startsWith('ssh://')) {
+                            alert(
+                              'Remote-to-remote backup is not supported. You cannot backup from a remote machine to a remote repository.'
+                            )
+                            return
+                          }
                           setEditForm({
                             ...editForm,
                             source_directories: [
@@ -2783,16 +2864,56 @@ export default function Repositories() {
         open={showSourceDirExplorer}
         onClose={() => setShowSourceDirExplorer(false)}
         onSelect={(paths) => {
+          // Check if any paths are SSH and extract connection info for remote-to-local
+          const sshPaths = paths.filter((p) => p.startsWith('ssh://'))
+          const connections = connectionsData?.data?.connections || []
+
+          if (sshPaths.length > 0 && sshPaths[0]) {
+            // Parse first SSH path to get connection info
+            const match = sshPaths[0].match(/ssh:\/\/([^@]+)@([^:]+):(\d+)(.*)/)
+            if (match) {
+              const [, username, host, port] = match
+              const matchingConnection = connections.find(
+                (c: SSHConnection) =>
+                  c.username === username && c.host === host && c.port === parseInt(port)
+              )
+              if (matchingConnection) {
+                // Strip SSH prefix from paths for storage
+                const strippedPaths = paths.map((p) => {
+                  const m = p.match(/ssh:\/\/[^@]+@[^:]+:\d+(.*)/)
+                  return m ? m[1] : p
+                })
+                setRepositoryForm({
+                  ...repositoryForm,
+                  source_directories: [...repositoryForm.source_directories, ...strippedPaths],
+                  source_connection_id: matchingConnection.id, // Set source connection for remote-to-local
+                })
+                return
+              }
+            }
+          }
+
           setRepositoryForm({
             ...repositoryForm,
             source_directories: [...repositoryForm.source_directories, ...paths],
           })
         }}
-        title="Select Source Directories (Local Machine)"
+        title={
+          repositoryForm.source_connection_id
+            ? 'Select Source Directories (Remote Machine)'
+            : 'Select Source Directories'
+        }
         initialPath="/"
         multiSelect={true}
         connectionType="local"
         selectMode="directories"
+        showSshMountPoints={
+          // Hide SSH if: repo is SSH (prevent remote-to-remote) OR local dirs already selected (prevent mixing)
+          repositoryForm.repository_type !== 'ssh' &&
+          !repositoryForm.path?.startsWith('ssh://') &&
+          (!!repositoryForm.source_connection_id || repositoryForm.source_directories.length === 0)
+        }
+        allowedSshConnectionId={repositoryForm.source_connection_id}
       />
 
       <FileExplorerDialog
@@ -2826,16 +2947,62 @@ export default function Repositories() {
         open={showEditSourceDirExplorer}
         onClose={() => setShowEditSourceDirExplorer(false)}
         onSelect={(paths) => {
+          // Check if any paths are SSH and extract connection info for remote-to-local
+          const sshPaths = paths.filter((p) => p.startsWith('ssh://'))
+          const connections = connectionsData?.data?.connections || []
+
+          if (sshPaths.length > 0 && sshPaths[0]) {
+            // Parse first SSH path to get connection info
+            const match = sshPaths[0].match(/ssh:\/\/([^@]+)@([^:]+):(\d+)(.*)/)
+            if (match) {
+              const [, username, host, port] = match
+              const matchingConnection = connections.find(
+                (c: SSHConnection) =>
+                  c.username === username && c.host === host && c.port === parseInt(port)
+              )
+              if (matchingConnection) {
+                // Strip SSH prefix from paths for storage
+                const strippedPaths = paths.map((p) => {
+                  const m = p.match(/ssh:\/\/[^@]+@[^:]+:\d+(.*)/)
+                  return m ? m[1] : p
+                })
+                setEditForm({
+                  ...editForm,
+                  source_directories: [...editForm.source_directories, ...strippedPaths],
+                  source_ssh_connection_id: matchingConnection.id, // Set source connection for remote-to-local
+                })
+                return
+              }
+            }
+          }
+
           setEditForm({
             ...editForm,
             source_directories: [...editForm.source_directories, ...paths],
           })
         }}
-        title="Select Source Directories (Local Machine)"
+        title={
+          editForm.source_ssh_connection_id || editingRepository?.source_ssh_connection_id
+            ? 'Select Source Directories (Remote Machine)'
+            : 'Select Source Directories'
+        }
         initialPath="/"
         multiSelect={true}
         connectionType="local"
         selectMode="directories"
+        showSshMountPoints={
+          // Hide SSH if: repo is SSH (prevent remote-to-remote) OR local dirs already selected (prevent mixing)
+          !(
+            editingRepository?.repository_type === 'ssh' ||
+            editingRepository?.path?.startsWith('ssh://')
+          ) &&
+          (!!editForm.source_ssh_connection_id ||
+            !!editingRepository?.source_ssh_connection_id ||
+            editForm.source_directories.length === 0)
+        }
+        allowedSshConnectionId={
+          editForm.source_ssh_connection_id || editingRepository?.source_ssh_connection_id || null
+        }
       />
 
       <FileExplorerDialog
@@ -2874,16 +3041,56 @@ export default function Repositories() {
         open={showImportSourceDirExplorer}
         onClose={() => setShowImportSourceDirExplorer(false)}
         onSelect={(paths) => {
+          // Check if any paths are SSH and extract connection info for remote-to-local
+          const sshPaths = paths.filter((p) => p.startsWith('ssh://'))
+          const connections = connectionsData?.data?.connections || []
+
+          if (sshPaths.length > 0 && sshPaths[0]) {
+            // Parse first SSH path to get connection info
+            const match = sshPaths[0].match(/ssh:\/\/([^@]+)@([^:]+):(\d+)(.*)/)
+            if (match) {
+              const [, username, host, port] = match
+              const matchingConnection = connections.find(
+                (c: SSHConnection) =>
+                  c.username === username && c.host === host && c.port === parseInt(port)
+              )
+              if (matchingConnection) {
+                // Strip SSH prefix from paths for storage
+                const strippedPaths = paths.map((p) => {
+                  const m = p.match(/ssh:\/\/[^@]+@[^:]+:\d+(.*)/)
+                  return m ? m[1] : p
+                })
+                setRepositoryForm({
+                  ...repositoryForm,
+                  source_directories: [...repositoryForm.source_directories, ...strippedPaths],
+                  source_connection_id: matchingConnection.id, // Set source connection for remote-to-local
+                })
+                return
+              }
+            }
+          }
+
           setRepositoryForm({
             ...repositoryForm,
             source_directories: [...repositoryForm.source_directories, ...paths],
           })
         }}
-        title="Select Source Directories (Local Machine)"
+        title={
+          repositoryForm.source_connection_id
+            ? 'Select Source Directories (Remote Machine)'
+            : 'Select Source Directories'
+        }
         initialPath="/"
         multiSelect={true}
         connectionType="local"
         selectMode="directories"
+        showSshMountPoints={
+          // Hide SSH if: repo is SSH (prevent remote-to-remote) OR local dirs already selected (prevent mixing)
+          repositoryForm.repository_type !== 'ssh' &&
+          !repositoryForm.path?.startsWith('ssh://') &&
+          (!!repositoryForm.source_connection_id || repositoryForm.source_directories.length === 0)
+        }
+        allowedSshConnectionId={repositoryForm.source_connection_id}
       />
 
       <FileExplorerDialog
