@@ -312,7 +312,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
 
   const getSteps = () => {
     if (mode === 'import') {
-      return ['Repository Location', 'Security', 'Review']
+      return ['Repository Location', 'Data Source', 'Security', 'Backup Configuration', 'Review']
     }
     if (repositoryMode === 'observe') {
       return ['Repository Location', 'Security', 'Review']
@@ -379,61 +379,54 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     onSubmit(data)
   }
 
+  // Use step names instead of indices for validation - cleaner and won't break when steps change
   const canProceed = () => {
-    if (activeStep === 0) {
-      if (!name.trim() || !path.trim()) return false
-      if (repositoryLocation === 'ssh' && !repoSshConnectionId) return false
-      return true
-    }
-    if (activeStep === 1 && repositoryMode === 'full' && mode !== 'import') {
-      // Data source step
-      if (dataSource === 'remote' && !sourceSshConnectionId) return false
-      if (sourceDirs.length === 0) return false // Required for both local and remote
-      return true
-    }
-    if (
-      activeStep === 2 ||
-      (activeStep === 1 && (repositoryMode === 'observe' || mode === 'import'))
-    ) {
-      // Security step
-      // In edit mode, passphrase is optional (keep existing if not changed)
-      if (mode === 'edit') {
+    const currentStep = steps[activeStep]
+
+    switch (currentStep) {
+      case 'Repository Location':
+        if (!name.trim() || !path.trim()) return false
+        if (repositoryLocation === 'ssh' && !repoSshConnectionId) return false
         return true
-      }
-      // In create/import mode, passphrase is required for encrypted repos
-      if (encryption !== 'none' && !passphrase.trim()) return false
-      return true
+
+      case 'Data Source':
+        if (dataSource === 'remote' && !sourceSshConnectionId) return false
+        // Source directories are optional in observe mode (no backups created)
+        if (repositoryMode !== 'observe' && sourceDirs.length === 0) return false
+        return true
+
+      case 'Security':
+        if (mode === 'edit') return true
+        if (encryption !== 'none' && !passphrase.trim()) return false
+        return true
+
+      case 'Backup Configuration':
+      case 'Review':
+        return true
+
+      default:
+        return true
     }
-    return true
   }
 
-  // Render step content
+  // Use step names instead of indices - cleaner and won't break when steps change
   const renderStepContent = () => {
-    if (activeStep === 0) {
-      return renderRepositoryLocation()
-    }
-    if (activeStep === 1) {
-      if (repositoryMode === 'full' && mode !== 'import') {
+    const currentStep = steps[activeStep]
+
+    switch (currentStep) {
+      case 'Repository Location':
+        return renderRepositoryLocation()
+      case 'Data Source':
         return renderDataSource()
-      }
-      return renderSecurity()
-    }
-    if (activeStep === 2) {
-      if (repositoryMode === 'full' && mode !== 'import') {
+      case 'Security':
         return renderSecurity()
-      }
-      return renderBackupConfiguration()
-    }
-    if (activeStep === 3) {
-      if (repositoryMode === 'full' && mode !== 'import') {
+      case 'Backup Configuration':
         return renderBackupConfiguration()
-      }
-      return renderReview()
+      case 'Review':
+        return renderReview()
+      default:
+        return null
     }
-    if (activeStep === 4) {
-      return renderReview()
-    }
-    return null
   }
 
   const renderRepositoryLocation = () => (
@@ -720,6 +713,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
           directories={sourceDirs}
           onChange={setSourceDirs}
           onBrowseClick={() => setShowSourceExplorer(true)}
+          required={repositoryMode !== 'observe'}
         />
       )}
 
@@ -805,6 +799,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
                     directories={sourceDirs}
                     onChange={setSourceDirs}
                     onBrowseClick={() => setShowRemoteSourceExplorer(true)}
+                    required={repositoryMode !== 'observe'}
                   />
                   <Typography
                     variant="caption"
