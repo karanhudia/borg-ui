@@ -51,6 +51,10 @@ class BorgInterface:
         # Mark this container's hostname as unique to avoid lock conflicts
         exec_env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
 
+        # Allow non-interactive access to unencrypted and relocated repositories
+        exec_env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+        exec_env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
+
         # Add SSH options to disable host key checking for remote repos
         # This allows automatic connection to new hosts without manual intervention
         ssh_opts = [
