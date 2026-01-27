@@ -59,6 +59,8 @@ def setup_borg_env(base_env=None, passphrase=None, ssh_opts=None):
 
     # Allow non-interactive access to unencrypted repositories
     env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+    # Allow access to repositories that have been relocated/moved
+    env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
 
     # Configure lock behavior to prevent timeout issues
     # Wait up to 180 seconds (3 minutes) for locks instead of default 1 second
@@ -1473,6 +1475,7 @@ async def verify_existing_repository(path: str, passphrase: str = None, ssh_key_
         if passphrase:
             env["BORG_PASSPHRASE"] = passphrase
         env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+        env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
 
         # Handle SSH key for remote repositories
         if ssh_key_id and path.startswith("ssh://"):
@@ -1622,6 +1625,7 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
             logger.info("Passphrase added to environment")
         # Allow non-interactive access to unencrypted repositories
         env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+        env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
 
         # Handle SSH key for remote repositories
         if ssh_key_id and path.startswith("ssh://"):
@@ -2099,6 +2103,7 @@ async def get_archive_info(
             if repository.passphrase:
                 list_env["BORG_PASSPHRASE"] = repository.passphrase
             list_env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+            list_env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
 
             # Add SSH options
             ssh_opts = get_standard_ssh_opts()

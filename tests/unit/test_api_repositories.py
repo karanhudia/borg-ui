@@ -794,3 +794,71 @@ class TestRepositoryCheckSchedule:
         )
 
         assert response.status_code == 404
+
+
+@pytest.mark.unit
+class TestBorgEnvironmentSetup:
+    """Test borg environment setup functions"""
+
+    def test_setup_borg_env_sets_relocated_repo_access(self):
+        """Test that setup_borg_env sets BORG_RELOCATED_REPO_ACCESS_IS_OK"""
+        from app.api.repositories import setup_borg_env
+
+        env = setup_borg_env()
+
+        assert "BORG_RELOCATED_REPO_ACCESS_IS_OK" in env
+        assert env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] == "yes"
+
+    def test_setup_borg_env_sets_unencrypted_repo_access(self):
+        """Test that setup_borg_env sets BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"""
+        from app.api.repositories import setup_borg_env
+
+        env = setup_borg_env()
+
+        assert "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK" in env
+        assert env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] == "yes"
+
+    def test_setup_borg_env_sets_passphrase(self):
+        """Test that setup_borg_env sets passphrase when provided"""
+        from app.api.repositories import setup_borg_env
+
+        env = setup_borg_env(passphrase="test-passphrase")
+
+        assert "BORG_PASSPHRASE" in env
+        assert env["BORG_PASSPHRASE"] == "test-passphrase"
+
+    def test_setup_borg_env_no_passphrase_when_not_provided(self):
+        """Test that setup_borg_env doesn't set passphrase when not provided"""
+        from app.api.repositories import setup_borg_env
+
+        env = setup_borg_env()
+
+        assert "BORG_PASSPHRASE" not in env
+
+    def test_setup_borg_env_sets_lock_wait(self):
+        """Test that setup_borg_env sets BORG_LOCK_WAIT"""
+        from app.api.repositories import setup_borg_env
+
+        env = setup_borg_env()
+
+        assert "BORG_LOCK_WAIT" in env
+        assert env["BORG_LOCK_WAIT"] == "180"
+
+    def test_setup_borg_env_sets_hostname_unique(self):
+        """Test that setup_borg_env sets BORG_HOSTNAME_IS_UNIQUE"""
+        from app.api.repositories import setup_borg_env
+
+        env = setup_borg_env()
+
+        assert "BORG_HOSTNAME_IS_UNIQUE" in env
+        assert env["BORG_HOSTNAME_IS_UNIQUE"] == "yes"
+
+    def test_setup_borg_env_sets_ssh_opts(self):
+        """Test that setup_borg_env sets BORG_RSH when ssh_opts provided"""
+        from app.api.repositories import setup_borg_env
+
+        ssh_opts = ["-o", "StrictHostKeyChecking=no"]
+        env = setup_borg_env(ssh_opts=ssh_opts)
+
+        assert "BORG_RSH" in env
+        assert "StrictHostKeyChecking=no" in env["BORG_RSH"]
