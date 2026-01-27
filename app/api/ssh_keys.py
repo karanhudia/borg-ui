@@ -29,10 +29,93 @@ def format_bytes(bytes_size: int) -> str:
         bytes_size /= 1024.0
     return f"{bytes_size:.2f} EB"
 
+async def _run_df_command(connection: SSHConnection, temp_key_file: str, check_path: str, use_locale: bool) -> Optional[Dict[str, Any]]:
+    """
+    Run df command and parse output.
+    Returns parsed storage info or None if command fails or output can't be parsed.
+    """
+    df_command = f"LC_ALL=C df -k {check_path}" if use_locale else f"df -k {check_path}"
+
+    df_cmd = [
+        "ssh",
+        "-i", temp_key_file,
+        "-o", "StrictHostKeyChecking=no",
+        "-o", "UserKnownHostsFile=/dev/null",
+        "-o", "LogLevel=ERROR",
+        "-o", "ConnectTimeout=10",
+        "-p", str(connection.port),
+        f"{connection.username}@{connection.host}",
+        df_command
+    ]
+
+    process = await asyncio.create_subprocess_exec(
+        *df_cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=15)
+
+    if process.returncode != 0:
+        return None
+
+    output = stdout.decode().strip()
+    if not output:
+        return None
+
+    # Parse df output - skip header line (works for any language)
+    # Format: Filesystem 1K-blocks Used Available Use% Mounted
+    # German: Dateisystem 1K-Blöcke Benutzt Verfügbar Verw% Eingehängt
+    lines = output.split('\n')
+    data_line = None
+
+    for line in lines:
+        if not line.strip():
+            continue
+        # Header line typically has non-numeric second column
+        parts = line.split()
+        if len(parts) >= 5:
+            # Try to parse second column as number - if it works, this is a data line
+            try:
+                int(parts[1])
+                data_line = line
+                break
+            except ValueError:
+                # This is likely a header line, skip it
+                continue
+
+    if not data_line:
+        return None
+
+    parts = data_line.split()
+    if len(parts) >= 5:
+        try:
+            total_kb = int(parts[1])
+            used_kb = int(parts[2])
+            available_kb = int(parts[3])
+            percent_str = parts[4].rstrip('%')
+
+            return {
+                "total": total_kb * 1024,  # Convert to bytes
+                "used": used_kb * 1024,
+                "available": available_kb * 1024,
+                "percent_used": float(percent_str),
+                "filesystem": parts[0],
+                "mount_point": parts[5] if len(parts) > 5 else check_path
+            }
+        except (ValueError, IndexError):
+            return None
+
+    return None
+
+
 async def collect_storage_info(connection: SSHConnection, ssh_key: SSHKey) -> Optional[Dict[str, Any]]:
     """
     Collect storage information for an SSH connection using df command.
     Returns dict with storage info or None if collection fails.
+
+    Tries with LC_ALL=C first for consistent English output, then falls back
+    to plain df for restricted shells (like Hetzner Storage Box) that don't
+    support environment variable assignment.
     """
     try:
         # Decrypt private key
@@ -51,95 +134,24 @@ async def collect_storage_info(connection: SSHConnection, ssh_key: SSHKey) -> Op
         os.chmod(temp_key_file, 0o600)
 
         try:
-            # Use default_path or root for df check
             check_path = connection.default_path or "/"
 
-            # Run df command on remote host with C locale to ensure English output
-            # This prevents parsing issues with non-English systems (e.g., German "Dateisystem")
-            df_cmd = [
-                "ssh",
-                "-i", temp_key_file,
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "LogLevel=ERROR",
-                "-o", "ConnectTimeout=10",
-                "-p", str(connection.port),
-                f"{connection.username}@{connection.host}",
-                f"LC_ALL=C df -k {check_path}"
-            ]
+            # Try with LC_ALL=C first (ensures English output on normal systems)
+            result = await _run_df_command(connection, temp_key_file, check_path, use_locale=True)
 
-            process = await asyncio.create_subprocess_exec(
-                *df_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=15)
+            if result:
+                return result
 
-            if process.returncode == 0:
-                # Parse df output
-                # Format: Filesystem 1K-blocks Used Available Use% Mounted
-                output = stdout.decode().strip()
+            # Fallback: try without locale prefix (for restricted shells like Hetzner)
+            # The parser handles non-English output by detecting numeric columns
+            result = await _run_df_command(connection, temp_key_file, check_path, use_locale=False)
 
-                if not output:
-                    logger.warning("Empty df output",
-                                 connection_id=connection.id,
-                                 path=check_path)
-                    return None
+            if result:
+                return result
 
-                # Split into lines and skip header line
-                lines = output.split('\n')
-                data_line = None
-
-                for line in lines:
-                    # Skip header line and empty lines
-                    if not line.strip() or 'Filesystem' in line or '1K-blocks' in line:
-                        continue
-                    data_line = line
-                    break
-
-                if not data_line:
-                    logger.warning("No data line found in df output",
-                                 connection_id=connection.id,
-                                 output=output)
-                    return None
-
-                parts = data_line.split()
-
-                if len(parts) >= 5:
-                    # Validate that we can parse the numeric values
-                    try:
-                        total_kb = int(parts[1])
-                        used_kb = int(parts[2])
-                        available_kb = int(parts[3])
-                        percent_str = parts[4].rstrip('%')
-
-                        return {
-                            "total": total_kb * 1024,  # Convert to bytes
-                            "used": used_kb * 1024,
-                            "available": available_kb * 1024,
-                            "percent_used": float(percent_str),
-                            "filesystem": parts[0],
-                            "mount_point": parts[5] if len(parts) > 5 else check_path
-                        }
-                    except (ValueError, IndexError) as e:
-                        logger.warning("Failed to parse df output",
-                                     connection_id=connection.id,
-                                     output=output,
-                                     data_line=data_line,
-                                     error=str(e))
-                        return None
-                else:
-                    logger.warning("Invalid df output format",
-                                 connection_id=connection.id,
-                                 output=output,
-                                 data_line=data_line,
-                                 parts_count=len(parts))
-                    return None
-            else:
-                logger.warning("Failed to get remote disk usage",
-                             connection_id=connection.id,
-                             error=stderr.decode())
-                return None
+            logger.warning("Failed to get remote disk usage",
+                         connection_id=connection.id)
+            return None
 
         finally:
             # Clean up temporary key file
