@@ -19,9 +19,10 @@ import {
   FormControlLabel,
   FormHelperText,
 } from '@mui/material'
-import { Trash2, FileCode, Clock } from 'lucide-react'
+import { Trash2, FileCode, Clock, AlertTriangle, Settings } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import api from '../services/api'
+import ScriptParameterInputs, { ScriptParameter } from './ScriptParameterInputs'
 
 interface Script {
   id: number
@@ -30,6 +31,7 @@ interface Script {
   timeout: number
   run_on: string
   category: string
+  parameters?: ScriptParameter[] | null
 }
 
 interface RepositoryScript {
@@ -44,6 +46,8 @@ interface RepositoryScript {
   continue_on_error: boolean | null
   default_timeout: number
   default_run_on: string
+  parameters?: ScriptParameter[] | null
+  parameter_values?: Record<string, string> | null
 }
 
 interface RepositoryScriptsTabProps {
@@ -68,6 +72,10 @@ export default function RepositoryScriptsTab({
   const [loading, setLoading] = useState(true)
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [selectedScriptId, setSelectedScriptId] = useState<number | ''>('')
+  const [editParametersDialog, setEditParametersDialog] = useState<{
+    open: boolean
+    script: RepositoryScript | null
+  }>({ open: false, script: null })
 
   const fetchAssignedScripts = React.useCallback(async () => {
     try {
@@ -123,6 +131,7 @@ export default function RepositoryScriptsTab({
         execution_order: nextOrder,
         enabled: true,
         continue_on_error: assignmentData.continue_on_error,
+        parameter_values: assignmentData.parameter_values,
       })
 
       toast.success('Script assigned successfully')
@@ -146,12 +155,47 @@ export default function RepositoryScriptsTab({
       toast.success('Script removed successfully')
       fetchAssignedScripts()
       if (onUpdate) onUpdate()
-      if (onUpdate) onUpdate()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Failed to remove script:', error)
       toast.error(error.response?.data?.detail || 'Failed to remove script')
     }
+  }
+
+  const handleUpdateParameters = async (
+    scriptAssignmentId: number,
+    parameterValues: Record<string, string>
+  ) => {
+    try {
+      await api.put(`/repositories/${repositoryId}/scripts/${scriptAssignmentId}`, {
+        parameter_values: parameterValues,
+      })
+      toast.success('Parameters updated successfully')
+      fetchAssignedScripts()
+      setEditParametersDialog({ open: false, script: null })
+      if (onUpdate) onUpdate()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (error: any) {
+      console.error('Failed to update parameters:', error)
+      toast.error(error.response?.data?.detail || 'Failed to update parameters')
+    }
+  }
+
+  const areParametersOutOfSync = (script: RepositoryScript): boolean => {
+    if (!script.parameters || script.parameters.length === 0) return false
+
+    const paramValues = script.parameter_values || {}
+    const scriptParams = script.parameters
+
+    // Check if all required parameters have values
+    const missingRequired = scriptParams.some((p) => p.required && !paramValues[p.name])
+    if (missingRequired) return true
+
+    // Check if stored values have parameters that no longer exist in script
+    const currentParamNames = new Set(scriptParams.map((p) => p.name))
+    const hasOrphanedParams = Object.keys(paramValues).some((key) => !currentParamNames.has(key))
+
+    return hasOrphanedParams
   }
 
   // Expose function to parent to open dialog - MUST be before any conditional returns (Rules of Hooks)
@@ -225,6 +269,28 @@ export default function RepositoryScriptsTab({
                 size="small"
                 sx={{ height: 20, fontSize: '0.7rem' }}
               />
+              {script.parameters && script.parameters.length > 0 && (
+                <Tooltip title={`${script.parameters.length} parameter(s) configured`}>
+                  <Chip
+                    label={`${script.parameters.length} param${script.parameters.length > 1 ? 's' : ''}`}
+                    size="small"
+                    color="info"
+                    variant="outlined"
+                    sx={{ height: 20, fontSize: '0.7rem' }}
+                  />
+                </Tooltip>
+              )}
+              {areParametersOutOfSync(script) && (
+                <Tooltip title="Parameters need attention - script definition has changed">
+                  <Chip
+                    icon={<AlertTriangle size={12} />}
+                    label="Out of Sync"
+                    size="small"
+                    color="warning"
+                    sx={{ height: 20, fontSize: '0.7rem' }}
+                  />
+                </Tooltip>
+              )}
               {!isPreBackup && (
                 <Chip
                   label={effectiveRunOn}
@@ -260,6 +326,18 @@ export default function RepositoryScriptsTab({
 
               {/* Actions */}
               <Box sx={{ display: 'flex', gap: 0.25, ml: 'auto' }}>
+                {script.parameters && script.parameters.length > 0 && (
+                  <Tooltip title="Configure Parameters">
+                    <IconButton
+                      size="small"
+                      onClick={() => setEditParametersDialog({ open: true, script })}
+                      color="primary"
+                      sx={{ p: 0.5 }}
+                    >
+                      <Settings size={16} />
+                    </IconButton>
+                  </Tooltip>
+                )}
                 <Tooltip title="Remove">
                   <IconButton
                     size="small"
@@ -301,6 +379,18 @@ export default function RepositoryScriptsTab({
         scriptsCount={scripts.length}
         hasInlineScript={hasInlineScript}
       />
+
+      {/* Edit Parameters Dialog */}
+      {editParametersDialog.script && (
+        <EditParametersDialog
+          open={editParametersDialog.open}
+          onClose={() => setEditParametersDialog({ open: false, script: null })}
+          script={editParametersDialog.script}
+          onSubmit={(paramValues) =>
+            handleUpdateParameters(editParametersDialog.script!.id, paramValues)
+          }
+        />
+      )}
     </Box>
   )
 }
@@ -308,6 +398,7 @@ export default function RepositoryScriptsTab({
 interface AssignmentData {
   script_id: number | ''
   continue_on_error: boolean
+  parameter_values?: Record<string, string>
 }
 
 interface RepositoryScriptDialogProps {
@@ -334,19 +425,38 @@ function RepositoryScriptDialog({
   hasInlineScript,
 }: RepositoryScriptDialogProps) {
   const [continueOnError, setContinueOnError] = useState(true)
+  const [parameterValues, setParameterValues] = useState<Record<string, string>>({})
   const isPreBackup = hookType === 'pre-backup'
+
+  // Get selected script details
+  const selectedScript = availableScripts.find((s) => s.id === selectedScriptId)
+
+  // Check if selected script has parameters
+  const hasParameters =
+    selectedScript?.parameters &&
+    Array.isArray(selectedScript.parameters) &&
+    selectedScript.parameters.length > 0
 
   // Reset local state when dialog opens/closes
   useEffect(() => {
     if (open) {
       setContinueOnError(true)
+      setParameterValues({})
     }
   }, [open])
+
+  // Debug: log selected script and parameters
+  useEffect(() => {
+    if (selectedScript) {
+      console.log('Selected script:', selectedScript.name, 'Parameters:', selectedScript.parameters)
+    }
+  }, [selectedScript])
 
   const handleSubmit = () => {
     onSubmit({
       script_id: selectedScriptId,
       continue_on_error: continueOnError,
+      parameter_values: parameterValues,
     })
   }
 
@@ -390,6 +500,17 @@ function RepositoryScriptDialog({
             </Select>
           </FormControl>
 
+          {/* Show parameters if selected script has them */}
+          {hasParameters && (
+            <Box sx={{ pt: 1 }}>
+              <ScriptParameterInputs
+                parameters={selectedScript.parameters!}
+                values={parameterValues}
+                onChange={setParameterValues}
+              />
+            </Box>
+          )}
+
           {isPreBackup && (
             <Box sx={{ ml: 1 }}>
               <FormControlLabel
@@ -412,6 +533,55 @@ function RepositoryScriptDialog({
         <Button onClick={onClose}>Cancel</Button>
         <Button onClick={handleSubmit} variant="contained" disabled={!selectedScriptId}>
           Assign Script
+        </Button>
+      </DialogActions>
+    </Dialog>
+  )
+}
+
+interface EditParametersDialogProps {
+  open: boolean
+  onClose: () => void
+  script: RepositoryScript
+  onSubmit: (paramValues: Record<string, string>) => void
+}
+
+function EditParametersDialog({ open, onClose, script, onSubmit }: EditParametersDialogProps) {
+  const [parameterValues, setParameterValues] = useState<Record<string, string>>({})
+
+  // Initialize parameter values when dialog opens
+  useEffect(() => {
+    if (open && script.parameter_values) {
+      setParameterValues({ ...script.parameter_values })
+    } else if (open) {
+      setParameterValues({})
+    }
+  }, [open, script])
+
+  const handleSubmit = () => {
+    onSubmit(parameterValues)
+  }
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Configure Script Parameters: {script.script_name}</DialogTitle>
+      <DialogContent>
+        <Box sx={{ pt: 2 }}>
+          {script.parameters && script.parameters.length > 0 ? (
+            <ScriptParameterInputs
+              parameters={script.parameters}
+              values={parameterValues}
+              onChange={setParameterValues}
+            />
+          ) : (
+            <Alert severity="info">This script has no parameters.</Alert>
+          )}
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={handleSubmit} variant="contained">
+          Save Parameters
         </Button>
       </DialogActions>
     </Dialog>

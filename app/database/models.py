@@ -18,7 +18,7 @@ class User(Base):
     is_admin = Column(Boolean, default=False)
     must_change_password = Column(Boolean, default=False)  # Force password change on next login
     analytics_enabled = Column(Boolean, default=True)  # User's analytics preference
-    analytics_consent_given = Column(Boolean, default=False)  # Whether user has responded to consent banner
+    analytics_consent_given = Column(Boolean, default=False) # Whether user has responded to consent banner
     last_login = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
@@ -132,7 +132,7 @@ class SSHConnection(Base):
     borg_binary_path = Column(String, default="/usr/bin/borg")  # Path to borg on remote host
     borg_version = Column(String, nullable=True)  # Detected borg version
     last_borg_check = Column(DateTime, nullable=True)  # Last time borg was verified
-
+    
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
@@ -344,6 +344,7 @@ class SystemSettings(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     # Operation timeouts (in seconds)
+    
     backup_timeout = Column(Integer, default=3600)  # Default 1 hour for backup/restore
     mount_timeout = Column(Integer, default=120)  # Default 2 minutes for borg mount
     info_timeout = Column(Integer, default=600)  # Default 10 minutes for borg info
@@ -369,7 +370,7 @@ class SystemSettings(Base):
 
     # Beta features
     use_new_wizard = Column(Boolean, default=False, nullable=False)  # Enable new repository wizard (beta)
-
+    
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
@@ -489,6 +490,9 @@ class Script(Base):
     usage_count = Column(Integer, default=0, nullable=False)  # How many repos use this?
     last_used_at = Column(DateTime, nullable=True)
 
+    # Script parameters
+    parameters = Column(Text, nullable=True)  # JSON array of parameter definitions: [{'name': 'PARAM', 'type': 'text'|'password', 'default': '', 'description': '', 'required': bool}]
+
     # Relationships
     repository_scripts = relationship("RepositoryScript", back_populates="script", cascade="all, delete-orphan")
     executions = relationship("ScriptExecution", back_populates="script", cascade="all, delete-orphan")
@@ -513,6 +517,9 @@ class RepositoryScript(Base):
     custom_timeout = Column(Integer, nullable=True)  # Override script's default timeout
     custom_run_on = Column(String(50), nullable=True)  # Override script's run_on condition
     continue_on_error = Column(Boolean, default=True)  # Override script's continue_on_error
+
+    # Script parameter values
+    parameter_values = Column(Text, nullable=True)  # JSON dict of parameter values: {'PARAM': 'value'}. Password-type values are encrypted.
 
     # Configuration
     created_at = Column(DateTime, default=utc_now, nullable=False)

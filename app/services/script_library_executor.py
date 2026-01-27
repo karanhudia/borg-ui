@@ -6,6 +6,7 @@ Handles execution of scripts from the script library, including:
 - Chaining multiple scripts in order
 - Checking run_on conditions
 - Recording executions in database
+- Rendering script templates with parameters
 """
 from typing import List, Dict, Optional, Literal
 from sqlalchemy.orm import Session, joinedload
@@ -13,9 +14,12 @@ from datetime import datetime
 from pathlib import Path
 import time
 import structlog
+import json
+import os
 
 from app.database.models import Script, RepositoryScript, ScriptExecution, Repository, BackupJob
 from app.services.script_executor import execute_script
+from app.services.template_service import get_system_variables
 from app.config import settings
 
 logger = structlog.get_logger()
@@ -209,10 +213,65 @@ class ScriptLibraryExecutor:
 
             script_content = file_path.read_text()
 
+            # Get repository info for system variables
+            repository = self.db.query(Repository).filter(Repository.id == repository_id).first()
+            
+            # Prepare environment variables with parameters
+            script_env = os.environ.copy()
+            
+            # Add system variables
+            system_vars = get_system_variables(
+                repository_id=repository_id,
+                repository_name=repository.name if repository else None,
+                repository_path=repository.path if repository else None,
+                hook_type=hook_type
+            )
+            script_env.update(system_vars)
+            
+            # Add script parameters as environment variables
+            if script.parameters:
+                try:
+                    # Parse parameter definitions
+                    parameters = json.loads(script.parameters)
+                    
+                    # Get parameter values (may be encrypted)
+                    parameter_values = json.loads(repo_script.parameter_values) if repo_script.parameter_values else {}
+                    
+                    # Decrypt password-type parameters and add to environment
+                    for param_def in parameters:
+                        param_name = param_def['name']
+                        param_type = param_def.get('type', 'text')
+                        default_value = param_def.get('default', '')
+                        
+                        # Get value from parameter_values or use default
+                        value = parameter_values.get(param_name, default_value) if parameter_values else default_value
+                        
+                        # Decrypt password-type parameters
+                        if param_type == 'password' and value:
+                            try:
+                                from app.core.security import decrypt_secret
+                                value = decrypt_secret(value)
+                                logger.debug("Decrypted password parameter for env", param_name=param_name)
+                            except Exception as e:
+                                logger.error("Failed to decrypt password parameter",
+                                           param_name=param_name, error=str(e))
+                                raise
+                        
+                        # Add to environment (bash will handle ${VAR:-default} syntax)
+                        script_env[param_name] = value or ''
+                    
+                    logger.info("Prepared script environment with parameters",
+                               script_id=script.id,
+                               param_count=len(parameters),
+                               password_params=[p['name'] for p in parameters if p.get('type') == 'password'])
+                except Exception as e:
+                    logger.error("Failed to prepare script parameters", script_id=script.id, error=str(e))
+                    raise
+
             # Get timeout (custom or default)
             timeout = repo_script.custom_timeout or script.timeout
 
-            # Execute script
+            # Execute script with parameters in environment
             logger.info("Executing script file",
                        script_id=script.id,
                        file_path=str(file_path),
@@ -221,6 +280,7 @@ class ScriptLibraryExecutor:
             exec_result = await execute_script(
                 script=script_content,
                 timeout=float(timeout),
+                env=script_env,  # Pass environment with parameters
                 context=f"repo:{repository_id}:script:{script.id}"
             )
 
