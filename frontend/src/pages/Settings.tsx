@@ -19,7 +19,6 @@ import {
   MenuItem,
   Select,
   FormControl,
-  Switch,
 } from '@mui/material'
 import { Users, Trash2, Plus, Edit, Key, AlertCircle, Moon, Sun } from 'lucide-react'
 import { settingsAPI } from '../services/api'
@@ -178,27 +177,6 @@ const Settings: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to reset password')
-    },
-  })
-
-  // System settings
-  const { data: systemSettingsData } = useQuery({
-    queryKey: ['systemSettings'],
-    queryFn: settingsAPI.getSystemSettings,
-    enabled: user?.is_admin === true,
-  })
-
-  const systemSettings = systemSettingsData?.data?.settings
-
-  const updateSystemSettingsMutation = useMutation({
-    mutationFn: settingsAPI.updateSystemSettings,
-    onSuccess: () => {
-      toast.success('Settings updated successfully')
-      queryClient.invalidateQueries({ queryKey: ['systemSettings'] })
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to update settings')
     },
   })
 
@@ -527,28 +505,10 @@ const Settings: React.FC = () => {
 
           <Card sx={{ maxWidth: 600 }}>
             <Box sx={{ p: 3 }}>
-              <Stack spacing={3}>
-                <Box
-                  sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                >
-                  <Box sx={{ flex: 1 }}>
-                    <Typography variant="subtitle1" fontWeight={500}>
-                      New Repository Wizard
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Modern step-by-step wizard for creating and editing repositories with improved
-                      UX and validation
-                    </Typography>
-                  </Box>
-                  <Switch
-                    checked={systemSettings?.use_new_wizard || false}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                      updateSystemSettingsMutation.mutate({ use_new_wizard: e.target.checked })
-                    }}
-                    disabled={updateSystemSettingsMutation.isPending}
-                  />
-                </Box>
-              </Stack>
+              <Typography variant="body2" color="text.secondary">
+                No new beta features available at the moment. Check back later for new experimental
+                features.
+              </Typography>
             </Box>
           </Card>
         </Box>

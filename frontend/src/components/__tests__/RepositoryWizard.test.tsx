@@ -136,15 +136,15 @@ describe('RepositoryWizard', () => {
         })
       })
 
-      it('shows all 5 steps in stepper', async () => {
+      it('shows all 5 steps in step indicator', async () => {
         renderWizard('create')
 
         await waitFor(() => {
-          expect(screen.getByText('Repository Location')).toBeInTheDocument()
+          expect(screen.getByText('Location')).toBeInTheDocument()
         })
-        expect(screen.getByText('Data Source')).toBeInTheDocument()
+        expect(screen.getByText('Source')).toBeInTheDocument()
         expect(screen.getByText('Security')).toBeInTheDocument()
-        expect(screen.getByText('Backup Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Config')).toBeInTheDocument()
         expect(screen.getByText('Review')).toBeInTheDocument()
       })
 
@@ -307,7 +307,7 @@ describe('RepositoryWizard', () => {
         expect(screen.getByText(/Where is the data you want to back up/i)).toBeInTheDocument()
       })
 
-      it('shows Borg UI Server and Remote Machine cards', async () => {
+      it('shows Borg UI Server and Remote Client cards', async () => {
         const user = userEvent.setup()
         renderWizard('create')
 
@@ -317,7 +317,7 @@ describe('RepositoryWizard', () => {
 
         await goToStep2(user)
 
-        expect(screen.getByText('Remote Machine')).toBeInTheDocument()
+        expect(screen.getByText('Remote Client')).toBeInTheDocument()
       })
 
       it('shows Source Directories section', async () => {
@@ -436,7 +436,7 @@ describe('RepositoryWizard', () => {
         // Step 3: Wait for Security step - look for Remote Path which is unique
         await waitFor(
           () => {
-            expect(screen.getByLabelText(/Remote Path/i)).toBeInTheDocument()
+            expect(screen.getByLabelText(/Remote Borg Path/i)).toBeInTheDocument()
           },
           { timeout: 5000 }
         )
@@ -480,7 +480,7 @@ describe('RepositoryWizard', () => {
 
         await goToStep3(user)
 
-        expect(screen.getByLabelText(/Remote Path/i)).toBeInTheDocument()
+        expect(screen.getByLabelText(/Remote Borg Path/i)).toBeInTheDocument()
       })
 
       it('Next button is disabled without passphrase when encryption is enabled', async () => {
@@ -541,7 +541,7 @@ describe('RepositoryWizard', () => {
         // Step 3
         await waitFor(
           () => {
-            expect(screen.getByLabelText(/Remote Path/i)).toBeInTheDocument()
+            expect(screen.getByLabelText(/Remote Borg Path/i)).toBeInTheDocument()
           },
           { timeout: 5000 }
         )
@@ -638,7 +638,7 @@ describe('RepositoryWizard', () => {
         // Step 3
         await waitFor(
           () => {
-            expect(screen.getByLabelText(/Remote Path/i)).toBeInTheDocument()
+            expect(screen.getByLabelText(/Remote Borg Path/i)).toBeInTheDocument()
           },
           { timeout: 5000 }
         )
@@ -1087,26 +1087,17 @@ describe('RepositoryWizard', () => {
         )
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
-        // Step 3 - Security
+        // Step 3 - Security (Note: In observe mode, there's no Config step)
         await waitFor(
           () => {
-            expect(screen.getByLabelText(/Remote Path/i)).toBeInTheDocument()
+            expect(screen.getByLabelText(/Remote Borg Path/i)).toBeInTheDocument()
           },
           { timeout: 5000 }
         )
         await user.type(screen.getByLabelText(/^Passphrase/i), 'observepass')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
-        // Step 4 - Backup Configuration
-        await waitFor(
-          () => {
-            expect(screen.getByTestId('compression-settings')).toBeInTheDocument()
-          },
-          { timeout: 5000 }
-        )
-        await user.click(screen.getByRole('button', { name: /Next/i }))
-
-        // Step 5 - Review and Submit
+        // Step 4 - Review and Submit (no Config step in observe mode)
         await waitFor(
           () => {
             expect(screen.getByRole('button', { name: /Import Repository/i })).toBeInTheDocument()
@@ -1159,26 +1150,17 @@ describe('RepositoryWizard', () => {
         await user.click(screen.getByRole('button', { name: /Add/i }))
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
-        // Step 3
+        // Step 3 - Security (Note: In observe mode, there's no Config step)
         await waitFor(
           () => {
-            expect(screen.getByLabelText(/Remote Path/i)).toBeInTheDocument()
+            expect(screen.getByLabelText(/Remote Borg Path/i)).toBeInTheDocument()
           },
           { timeout: 5000 }
         )
         await user.type(screen.getByLabelText(/^Passphrase/i), 'pass123')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
-        // Step 4
-        await waitFor(
-          () => {
-            expect(screen.getByTestId('compression-settings')).toBeInTheDocument()
-          },
-          { timeout: 5000 }
-        )
-        await user.click(screen.getByRole('button', { name: /Next/i }))
-
-        // Step 5
+        // Step 4 - Review and Submit (no Config step in observe mode)
         await waitFor(
           () => {
             expect(screen.getByRole('button', { name: /Import Repository/i })).toBeInTheDocument()
@@ -1262,7 +1244,7 @@ describe('RepositoryWizard', () => {
       await waitFor(
         () => {
           // In edit mode, look for Remote Path (Security step)
-          expect(screen.getByLabelText(/Remote Path/i)).toBeInTheDocument()
+          expect(screen.getByLabelText(/Remote Borg Path/i)).toBeInTheDocument()
         },
         { timeout: 5000 }
       )
@@ -1314,7 +1296,7 @@ describe('RepositoryWizard', () => {
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await waitFor(
         () => {
-          expect(screen.getByLabelText(/Remote Path/i)).toBeInTheDocument()
+          expect(screen.getByLabelText(/Remote Borg Path/i)).toBeInTheDocument()
         },
         { timeout: 5000 }
       )
@@ -1420,7 +1402,7 @@ describe('RepositoryWizard', () => {
   // REMOTE DATA SOURCE - Tests
   // ============================================================
   describe('Remote Data Source', () => {
-    it('shows Remote Machine option in data source step', async () => {
+    it('shows Remote Client option in data source step', async () => {
       const user = userEvent.setup()
       renderWizard('create')
 
@@ -1433,10 +1415,487 @@ describe('RepositoryWizard', () => {
       await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
-      // Step 2 - Should show Remote Machine option
+      // Step 2 - Should show Remote Client option
       await waitFor(() => {
-        expect(screen.getByText('Remote Machine')).toBeInTheDocument()
+        expect(screen.getByText('Remote Client')).toBeInTheDocument()
       })
+    })
+  })
+
+  // ============================================================
+  // REMOTE-TO-REMOTE BLOCKING - Tests for preventing remote repo + remote source
+  // ============================================================
+  describe('Remote-to-Remote Blocking', () => {
+    it('disables Remote Client data source when repository is on SSH', async () => {
+      const user = userEvent.setup()
+      renderWizard('create')
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
+      })
+
+      // Step 1 - Select Remote Client for repository
+      await user.type(screen.getByLabelText(/Repository Name/i), 'Remote Repo')
+
+      const remoteRepoCard = screen.getByText('Remote Client').closest('button')
+      await user.click(remoteRepoCard!)
+
+      // Select SSH connection
+      await waitFor(() => {
+        const sshLabels = screen.getAllByText('Select SSH Connection')
+        expect(sshLabels.length).toBeGreaterThanOrEqual(1)
+      })
+
+      // Click on the select to open dropdown
+      const selectButton = screen.getByRole('combobox')
+      await user.click(selectButton)
+
+      // Select first connection
+      const listbox = await screen.findByRole('listbox')
+      const connectionOption = within(listbox).getByText(/server1.example.com/i)
+      await user.click(connectionOption)
+
+      // Enter path
+      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      // Step 2 - Remote Client should be disabled
+      await waitFor(() => {
+        expect(screen.getByText(/Where is the data you want to back up/i)).toBeInTheDocument()
+      })
+
+      // Should show the explanation about why Remote Client is disabled
+      expect(screen.getByText(/Why is "Remote Client" disabled/i)).toBeInTheDocument()
+      expect(screen.getByText(/Remote-to-remote backups are not supported/i)).toBeInTheDocument()
+    })
+
+    it('Remote Client data source card shows ban icon when repository is remote', async () => {
+      const user = userEvent.setup()
+      renderWizard('create')
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
+      })
+
+      // Step 1 - Select Remote Client for repository
+      await user.type(screen.getByLabelText(/Repository Name/i), 'Remote Repo')
+
+      const remoteRepoCard = screen.getByText('Remote Client').closest('button')
+      await user.click(remoteRepoCard!)
+
+      // Select SSH connection
+      await waitFor(() => {
+        const sshLabels = screen.getAllByText('Select SSH Connection')
+        expect(sshLabels.length).toBeGreaterThanOrEqual(1)
+      })
+
+      const selectButton = screen.getByRole('combobox')
+      await user.click(selectButton)
+      const listbox = await screen.findByRole('listbox')
+      const connectionOption = within(listbox).getByText(/server1.example.com/i)
+      await user.click(connectionOption)
+
+      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      // Step 2 - The Remote Client card should be disabled
+      await waitFor(() => {
+        expect(screen.getByText(/Where is the data you want to back up/i)).toBeInTheDocument()
+      })
+
+      // The disabled card should show "Not available when repository is on a remote client"
+      expect(
+        screen.getByText(/Not available when repository is on a remote client/i)
+      ).toBeInTheDocument()
+    })
+
+    it('allows local data source when repository is on SSH', async () => {
+      const user = userEvent.setup()
+      renderWizard('create')
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
+      })
+
+      // Step 1 - Select Remote Client for repository
+      await user.type(screen.getByLabelText(/Repository Name/i), 'Remote Repo')
+
+      const remoteRepoCard = screen.getByText('Remote Client').closest('button')
+      await user.click(remoteRepoCard!)
+
+      // Select SSH connection
+      await waitFor(() => {
+        const sshLabels = screen.getAllByText('Select SSH Connection')
+        expect(sshLabels.length).toBeGreaterThanOrEqual(1)
+      })
+
+      const selectButton = screen.getByRole('combobox')
+      await user.click(selectButton)
+      const listbox = await screen.findByRole('listbox')
+      const connectionOption = within(listbox).getByText(/server1.example.com/i)
+      await user.click(connectionOption)
+
+      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      // Step 2 - Borg UI Server (local) should still be selectable
+      await waitFor(() => {
+        expect(screen.getByText(/Where is the data you want to back up/i)).toBeInTheDocument()
+      })
+
+      // Local source directories should be available
+      expect(screen.getByText('Source Directories')).toBeInTheDocument()
+
+      // Should be able to add local directories
+      const dirInput = screen.getByPlaceholderText('/home/user/documents')
+      await user.type(dirInput, '/local/data')
+      await user.click(screen.getByRole('button', { name: /Add/i }))
+
+      // Directory should be added
+      expect(screen.getByText('/local/data')).toBeInTheDocument()
+
+      // Next button should be enabled
+      expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled()
+    })
+  })
+
+  // ============================================================
+  // LOCAL-TO-REMOTE BACKUP - Repository on SSH, data from local
+  // ============================================================
+  describe('Local-to-Remote Backup Flow', () => {
+    it('completes full workflow with local source and remote repository', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('create')
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
+      })
+
+      // Step 1 - Select Remote Client for repository
+      await user.type(screen.getByLabelText(/Repository Name/i), 'Local to Remote Backup')
+
+      const remoteRepoCard = screen.getByText('Remote Client').closest('button')
+      await user.click(remoteRepoCard!)
+
+      // Select SSH connection
+      await waitFor(() => {
+        const sshLabels = screen.getAllByText('Select SSH Connection')
+        expect(sshLabels.length).toBeGreaterThanOrEqual(1)
+      })
+
+      const selectButton = screen.getByRole('combobox')
+      await user.click(selectButton)
+      const listbox = await screen.findByRole('listbox')
+      const connectionOption = within(listbox).getByText(/server1.example.com/i)
+      await user.click(connectionOption)
+
+      // Clear the default path and type our own
+      // The connection sets default_path of /backups, so we need to clear it first
+      const pathInput = screen.getByLabelText(/Repository Path/i)
+      await user.clear(pathInput)
+      await user.type(pathInput, '/offsite/repo')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      // Step 2 - Add local source directories
+      await waitFor(() => {
+        expect(screen.getByText('Source Directories')).toBeInTheDocument()
+      })
+
+      const dirInput = screen.getByPlaceholderText('/home/user/documents')
+      await user.type(dirInput, '/home/user/important')
+      await user.click(screen.getByRole('button', { name: /Add/i }))
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      // Step 3 - Security
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Remote Borg Path/i)).toBeInTheDocument()
+      })
+      await user.type(screen.getByLabelText(/^Passphrase/i), 'securepass')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      // Step 4 - Config
+      await waitFor(() => {
+        expect(screen.getByTestId('compression-settings')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      // Step 5 - Review and Submit
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Create Repository/i })).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Create Repository/i }))
+
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Local to Remote Backup',
+          path: '/offsite/repo',
+          repository_type: 'ssh',
+          host: 'server1.example.com',
+          username: 'backupuser',
+          source_directories: ['/home/user/important'],
+          passphrase: 'securepass',
+        })
+      )
+
+      // Verify connection_id is included
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          connection_id: 1,
+        })
+      )
+    })
+  })
+
+  // ============================================================
+  // REMOTE-TO-LOCAL BACKUP (SSHFS) - Repository local, data from remote
+  // ============================================================
+  describe('Remote-to-Local Backup Flow (SSHFS)', () => {
+    it('enables Remote Client data source when repository is local', async () => {
+      const user = userEvent.setup()
+      renderWizard('create')
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
+      })
+
+      // Step 1 - Keep local repository (default)
+      await user.type(screen.getByLabelText(/Repository Name/i), 'SSHFS Backup')
+      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/sshfs')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      // Step 2 - Remote Client should be available
+      await waitFor(() => {
+        expect(screen.getByText(/Where is the data you want to back up/i)).toBeInTheDocument()
+      })
+
+      // Should NOT show the remote-to-remote warning
+      expect(screen.queryByText(/Why is "Remote Client" disabled/i)).not.toBeInTheDocument()
+
+      // Click Remote Client card
+      const remoteSourceCard = screen.getByText('Remote Client').closest('button')
+      expect(remoteSourceCard).not.toBeDisabled()
+    })
+
+    it('shows SSH connection dropdown when Remote Client data source is selected', async () => {
+      const user = userEvent.setup()
+      renderWizard('create')
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
+      })
+
+      // Step 1 - Local repository
+      await user.type(screen.getByLabelText(/Repository Name/i), 'SSHFS Backup')
+      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/sshfs')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      // Step 2 - Select Remote Client for data source
+      await waitFor(() => {
+        expect(screen.getByText(/Where is the data you want to back up/i)).toBeInTheDocument()
+      })
+
+      const remoteSourceCard = screen.getByText('Remote Client').closest('button')
+      await user.click(remoteSourceCard!)
+
+      // Should show SSH connection dropdown for source
+      await waitFor(() => {
+        const clientLabels = screen.getAllByText('Select Remote Client')
+        expect(clientLabels.length).toBeGreaterThanOrEqual(1)
+      })
+    })
+
+    it('completes full workflow with remote source and local repository', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('create')
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
+      })
+
+      // Step 1 - Local repository
+      await user.type(screen.getByLabelText(/Repository Name/i), 'SSHFS Backup')
+      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/sshfs')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      // Step 2 - Select Remote Client for data source
+      await waitFor(() => {
+        expect(screen.getByText(/Where is the data you want to back up/i)).toBeInTheDocument()
+      })
+
+      const remoteSourceCard = screen.getByText('Remote Client').closest('button')
+      await user.click(remoteSourceCard!)
+
+      // Select SSH connection for source
+      await waitFor(() => {
+        const clientLabels = screen.getAllByText('Select Remote Client')
+        expect(clientLabels.length).toBeGreaterThanOrEqual(1)
+      })
+
+      const selectButton = screen.getByRole('combobox')
+      await user.click(selectButton)
+      const listbox = await screen.findByRole('listbox')
+      const connectionOption = within(listbox).getByText(/server1.example.com/i)
+      await user.click(connectionOption)
+
+      // Add remote source directory
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText('/home/user/documents')).toBeInTheDocument()
+      })
+
+      const dirInput = screen.getByPlaceholderText('/home/user/documents')
+      await user.type(dirInput, '/remote/data')
+      await user.click(screen.getByRole('button', { name: /Add/i }))
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      // Step 3 - Security
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Remote Borg Path/i)).toBeInTheDocument()
+      })
+      await user.type(screen.getByLabelText(/^Passphrase/i), 'sshfspass')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      // Step 4 - Config (exclude patterns hidden for remote source)
+      await waitFor(() => {
+        expect(screen.getByTestId('compression-settings')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      // Step 5 - Review and Submit
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Create Repository/i })).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Create Repository/i }))
+
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'SSHFS Backup',
+          path: '/backups/sshfs',
+          repository_type: 'local',
+          source_directories: ['/remote/data'],
+          source_connection_id: 1,
+          passphrase: 'sshfspass',
+        })
+      )
+    })
+
+    it('shows info alert about remote source configuration', async () => {
+      const user = userEvent.setup()
+      renderWizard('create')
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
+      })
+
+      // Step 1 - Local repository
+      await user.type(screen.getByLabelText(/Repository Name/i), 'SSHFS Backup')
+      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/sshfs')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      // Step 2 - Select Remote Client for data source
+      await waitFor(() => {
+        expect(screen.getByText(/Where is the data you want to back up/i)).toBeInTheDocument()
+      })
+
+      const remoteSourceCard = screen.getByText('Remote Client').closest('button')
+      await user.click(remoteSourceCard!)
+
+      // Should show info about SSH
+      await waitFor(() => {
+        expect(
+          screen.getByText(/The Borg UI server will SSH into the remote machine/i)
+        ).toBeInTheDocument()
+      })
+    })
+
+    it('requires source SSH connection when Remote Client is selected', async () => {
+      const user = userEvent.setup()
+      renderWizard('create')
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
+      })
+
+      // Step 1 - Local repository
+      await user.type(screen.getByLabelText(/Repository Name/i), 'SSHFS Backup')
+      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/sshfs')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      // Step 2 - Select Remote Client for data source
+      await waitFor(() => {
+        expect(screen.getByText(/Where is the data you want to back up/i)).toBeInTheDocument()
+      })
+
+      const remoteSourceCard = screen.getByText('Remote Client').closest('button')
+      await user.click(remoteSourceCard!)
+
+      // Without selecting an SSH connection, Next should be disabled
+      // (even though directory field might not be shown yet)
+      await waitFor(() => {
+        const clientLabels = screen.getAllByText('Select Remote Client')
+        expect(clientLabels.length).toBeGreaterThanOrEqual(1)
+      })
+
+      expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled()
+    })
+  })
+
+  // ============================================================
+  // SSH URL AUTO-DETECTION - Tests for automatic SSH URL parsing
+  // ============================================================
+  describe('SSH URL Auto-Detection', () => {
+    it('parses SSH URL in edit mode and extracts path correctly', async () => {
+      // Test that SSH URL format is parsed correctly when loading existing repo
+      const existingRepo = {
+        name: 'SSH URL Repo',
+        path: 'ssh://backupuser@server1.example.com:22/backups/test',
+        mode: 'full',
+        source_directories: ['/data'],
+        repository_type: 'ssh',
+      }
+      renderWizard('edit', existingRepo)
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toHaveValue('SSH URL Repo')
+      })
+
+      // Path should be extracted from SSH URL
+      expect(screen.getByLabelText(/Repository Path/i)).toHaveValue('/backups/test')
+    })
+
+    it('parses SSH URL without port in edit mode', async () => {
+      const existingRepo = {
+        name: 'SSH No Port',
+        path: 'ssh://admin@backup.server.com/backups/noport',
+        mode: 'full',
+        source_directories: ['/data'],
+        repository_type: 'ssh',
+      }
+      renderWizard('edit', existingRepo)
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toHaveValue('SSH No Port')
+      })
+
+      // Path should be extracted from SSH URL
+      expect(screen.getByLabelText(/Repository Path/i)).toHaveValue('/backups/noport')
+    })
+
+    it('switches to SSH mode when editing SSH repository', async () => {
+      const existingRepo = {
+        name: 'SSH Repo',
+        path: 'ssh://admin@backup.server.com:2222/data/backups',
+        mode: 'full',
+        source_directories: ['/important'],
+        repository_type: 'ssh',
+      }
+      renderWizard('edit', existingRepo)
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toHaveValue('SSH Repo')
+      })
+
+      // Should show Remote Client as selected (path placeholder for remote)
+      expect(screen.getByPlaceholderText(/\/path\/on\/remote\/server/i)).toBeInTheDocument()
     })
   })
 
@@ -1444,7 +1903,7 @@ describe('RepositoryWizard', () => {
   // DATA SOURCE CARD DISABLING - Tests for preventing mixed local/remote
   // ============================================================
   describe('Data Source Card Mutual Exclusion', () => {
-    it('disables Remote Machine card when local directories are selected', async () => {
+    it('disables Remote Client card when local directories are selected', async () => {
       const user = userEvent.setup()
       renderWizard('create')
 
@@ -1457,10 +1916,10 @@ describe('RepositoryWizard', () => {
       await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
-      // Step 2 - Both cards should be enabled initially
+      // Step 2 - Wait for data source question and verify both cards exist
       await waitFor(() => {
-        expect(screen.getByText('Borg UI Server')).toBeInTheDocument()
-        expect(screen.getByText('Remote Machine')).toBeInTheDocument()
+        expect(screen.getByText(/Where is the data you want to back up/i)).toBeInTheDocument()
+        expect(screen.getByText('Remote Client')).toBeInTheDocument()
       })
 
       // Add a local source directory
@@ -1468,7 +1927,7 @@ describe('RepositoryWizard', () => {
       await user.type(pathInput, '/home/user/data')
       await user.click(screen.getByRole('button', { name: /Add/i }))
 
-      // Remote Machine card should now show the warning message
+      // Remote Client card should now show the warning message
       await waitFor(() => {
         expect(screen.getByText('Remove local directories first to switch')).toBeInTheDocument()
       })
@@ -1487,10 +1946,10 @@ describe('RepositoryWizard', () => {
       await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
-      // Step 2 - Both cards should be enabled and clickable
+      // Step 2 - Wait for data source question and verify both cards exist
       await waitFor(() => {
-        expect(screen.getByText('Borg UI Server')).toBeInTheDocument()
-        expect(screen.getByText('Remote Machine')).toBeInTheDocument()
+        expect(screen.getByText(/Where is the data you want to back up/i)).toBeInTheDocument()
+        expect(screen.getByText('Remote Client')).toBeInTheDocument()
       })
 
       // Neither warning message should be visible
@@ -1513,9 +1972,9 @@ describe('RepositoryWizard', () => {
       await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
-      // Step 2 - Add a local source directory
+      // Step 2 - Wait for data source step
       await waitFor(() => {
-        expect(screen.getByText('Borg UI Server')).toBeInTheDocument()
+        expect(screen.getByText(/Where is the data you want to back up/i)).toBeInTheDocument()
       })
 
       const pathInput = screen.getByPlaceholderText('/home/user/documents')
