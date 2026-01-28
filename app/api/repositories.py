@@ -1016,6 +1016,8 @@ async def update_repository(
             repository.connection_id = repo_data.connection_id
 
         # Reconstruct path for SSH repositories (similar to create endpoint logic)
+        path_changed = False
+        old_path = repository.path
         if raw_path is not None:
             # Determine the final repository type (use updated value or existing)
             final_repo_type = repo_data.repository_type if repo_data.repository_type is not None else repository.repository_type
@@ -1049,6 +1051,7 @@ async def update_repository(
                 if existing_path:
                     raise HTTPException(status_code=400, detail="Repository path already exists")
 
+                path_changed = (final_path != old_path)
                 repository.path = final_path
             else:
                 # For local repositories, use path as-is
@@ -1058,7 +1061,75 @@ async def update_repository(
                 ).first()
                 if existing_path:
                     raise HTTPException(status_code=400, detail="Repository path already exists")
+
+                path_changed = (raw_path != old_path)
                 repository.path = raw_path
+
+            # If path changed, check if new path is a valid borg repository
+            # If not, initialize it (like create mode does)
+            if path_changed:
+                logger.info("Repository path changed - checking if new path is valid borg repository",
+                          repo_id=repo_id,
+                          old_path=old_path,
+                          new_path=repository.path)
+
+                # Check if the new path is already a borg repository
+                borg_interface = BorgInterface()
+                try:
+                    # Try to get repo info - if it succeeds, it's a valid borg repo
+                    info_result = await borg_interface.get_repository_info(
+                        repository.path,
+                        repository.passphrase,
+                        repository.ssh_key_id if repository.repository_type in ["ssh", "sftp"] else None,
+                        repository.remote_path
+                    )
+                    if info_result.get("success"):
+                        logger.info("New path is already a valid borg repository - no initialization needed",
+                                  new_path=repository.path)
+                    else:
+                        # Path is not a valid borg repo - initialize it
+                        logger.warning("New path is not a valid borg repository - initializing",
+                                     new_path=repository.path,
+                                     old_path=old_path)
+
+                        init_result = await initialize_borg_repository(
+                            repository.path,
+                            repository.encryption,
+                            repository.passphrase,
+                            repository.ssh_key_id if repository.repository_type in ["ssh", "sftp"] else None,
+                            repository.remote_path
+                        )
+
+                        if not init_result["success"]:
+                            raise HTTPException(
+                                status_code=500,
+                                detail=f"Failed to initialize repository at new path: {init_result['error']}"
+                            )
+
+                        logger.info("Successfully initialized borg repository at new path",
+                                  new_path=repository.path)
+                except Exception as e:
+                    # If borg info fails, assume repo doesn't exist and initialize
+                    logger.info("Could not verify borg repository - attempting initialization",
+                              new_path=repository.path,
+                              error=str(e))
+
+                    init_result = await initialize_borg_repository(
+                        repository.path,
+                        repository.encryption,
+                        repository.passphrase,
+                        repository.ssh_key_id if repository.repository_type in ["ssh", "sftp"] else None,
+                        repository.remote_path
+                    )
+
+                    if not init_result["success"]:
+                        raise HTTPException(
+                            status_code=500,
+                            detail=f"Failed to initialize repository at new path: {init_result['error']}"
+                        )
+
+                    logger.info("Successfully initialized borg repository at new path after verification failure",
+                              new_path=repository.path)
 
         if repo_data.compression is not None:
             repository.compression = repo_data.compression
