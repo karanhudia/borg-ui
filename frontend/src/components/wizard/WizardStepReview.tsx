@@ -79,6 +79,28 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
     return conn || null
   }
 
+  // Get repository SSH connection details for command preview
+  const getRepoConnectionDetails = () => {
+    if (data.repositoryLocation === 'ssh' && data.repoSshConnectionId) {
+      const conn = sshConnections.find((c) => c.id === data.repoSshConnectionId)
+      if (conn) {
+        return {
+          host: conn.host,
+          username: conn.username,
+          port: conn.port,
+        }
+      }
+    }
+    // Fallback to wizard state (for backward compatibility or direct input)
+    return {
+      host: data.host,
+      username: data.username,
+      port: data.port,
+    }
+  }
+
+  const repoDetails = getRepoConnectionDetails()
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* Backup Flow Preview */}
@@ -100,9 +122,9 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
             mode={mode === 'create' ? 'create' : 'import'}
             repositoryPath={data.path}
             repositoryType={data.repositoryType}
-            host={data.host}
-            username={data.username}
-            port={data.port}
+            host={repoDetails.host}
+            username={repoDetails.username}
+            port={repoDetails.port}
             encryption={data.encryption}
             compression={data.compression}
             excludePatterns={data.excludePatterns}
