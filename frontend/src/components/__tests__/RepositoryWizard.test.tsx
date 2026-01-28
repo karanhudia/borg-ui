@@ -93,7 +93,8 @@ const createQueryClient = () =>
 
 const renderWizard = (
   mode: 'create' | 'import' | 'edit' = 'create',
-  repository?: object,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  repository?: any,
   onSubmit = vi.fn(),
   onClose = vi.fn()
 ) => {

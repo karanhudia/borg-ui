@@ -23,10 +23,11 @@ import { useMatomo } from '../hooks/useMatomo'
 
 interface Repository extends RepositoryData {
   id: number
+  passphrase?: string
   source_ssh_connection_id?: number | null
   source_directories?: string[]
   exclude_patterns?: string[]
-  custom_flags?: string
+  custom_flags?: string | null
   remote_path?: string
   pre_backup_script?: string
   post_backup_script?: string
@@ -466,7 +467,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       data.host = wizardState.host
       data.username = wizardState.username
       data.port = parseInt(wizardState.port) || 22
-      data.ssh_key_id = wizardState.sshKeyId
+      data.ssh_key_id = wizardState.sshKeyId || null
       data.connection_id = wizardState.repoSshConnectionId || null
     }
 
