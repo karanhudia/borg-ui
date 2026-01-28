@@ -52,8 +52,9 @@ export interface RepositoryData {
   pre_hook_timeout?: number
   post_hook_timeout?: number
   continue_on_hook_failure?: boolean
+  passphrase?: string
   mode?: 'full' | 'observe'
-  custom_flags?: string
+  custom_flags?: string | null
   bypass_lock?: boolean
   // Allow other properties for flexibility
   [key: string]: unknown

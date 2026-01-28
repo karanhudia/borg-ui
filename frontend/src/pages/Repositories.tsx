@@ -17,7 +17,7 @@ import RepositoryWizard from '../components/RepositoryWizard'
 import PruneRepositoryDialog from '../components/PruneRepositoryDialog'
 import RepositoryInfoDialog from '../components/RepositoryInfoDialog'
 
-interface Repository {
+interface Repository extends RepositoryData {
   id: number
   name: string
   path: string
