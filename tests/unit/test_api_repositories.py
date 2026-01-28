@@ -434,6 +434,90 @@ class TestRepositoriesUpdate:
         # Should reject empty name or accept it (depending on validation)
         assert response.status_code in [200, 400, 403, 422]
 
+    def test_update_repository_clear_source_connection_id(self, test_client: TestClient, admin_headers, test_db):
+        """Test clearing source_connection_id when switching from remote to local source"""
+        # Create repository with a remote source
+        repo = Repository(
+            name="Remote Source Repo",
+            path="/tmp/remote-source-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+            source_ssh_connection_id=1,  # Initially has remote source
+            source_directories=json.dumps(["/remote/data"])
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        # Verify initial state
+        assert repo.source_ssh_connection_id == 1
+
+        # Update to clear source_connection_id (switch to local source)
+        response = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={
+                "source_connection_id": None,  # Explicitly clear it
+                "source_directories": ["/local/data"]
+            },
+            headers=admin_headers
+        )
+
+        # Should succeed
+        assert response.status_code in [200, 403, 404]
+
+        if response.status_code == 200:
+            # Refresh from database and verify source_connection_id was cleared
+            test_db.refresh(repo)
+            assert repo.source_ssh_connection_id is None
+            assert json.loads(repo.source_directories) == ["/local/data"]
+
+    def test_update_repository_type_local_to_ssh(self, test_client: TestClient, admin_headers, test_db):
+        """Test updating repository type from local to SSH"""
+        # Create local repository
+        repo = Repository(
+            name="Local Repo",
+            path="/tmp/local-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local"
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        # Verify initial state
+        assert repo.repository_type == "local"
+        assert repo.host is None
+        assert repo.username is None
+
+        # Update to SSH repository
+        response = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={
+                "repository_type": "ssh",
+                "host": "backup.example.com",
+                "port": 22,
+                "username": "backupuser",
+                "ssh_key_id": 1,
+                "connection_id": 1
+            },
+            headers=admin_headers
+        )
+
+        # Should succeed
+        assert response.status_code in [200, 403, 404]
+
+        if response.status_code == 200:
+            # Refresh from database and verify repository type was updated
+            test_db.refresh(repo)
+            assert repo.repository_type == "ssh"
+            assert repo.host == "backup.example.com"
+            assert repo.port == 22
+            assert repo.username == "backupuser"
+            assert repo.ssh_key_id == 1
+            assert repo.connection_id == 1
+
 
 @pytest.mark.unit
 class TestRepositoriesDelete:

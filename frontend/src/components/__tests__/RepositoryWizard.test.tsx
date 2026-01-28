@@ -1322,6 +1322,77 @@ describe('RepositoryWizard', () => {
       // Path should be extracted from SSH URL
       expect(screen.getByLabelText(/Repository Path/i)).toHaveValue('/data/backups')
     })
+
+    it('clears source_connection_id when switching from remote to local source', async () => {
+      const user = userEvent.setup()
+      const onSubmit = vi.fn()
+      const existingRepo = {
+        id: 1,
+        name: 'Remote Source Repo',
+        path: '/backups/remote-repo',
+        mode: 'full',
+        source_ssh_connection_id: 1, // Previously had remote source
+        source_directories: ['/remote/data'],
+        repository_type: 'local',
+      }
+      renderWizard('edit', existingRepo, onSubmit)
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toHaveValue('Remote Source Repo')
+      })
+
+      // Go to Source step
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(
+        () => {
+          expect(screen.getByText(/Where is the data you want to back up/i)).toBeInTheDocument()
+        },
+        { timeout: 5000 }
+      )
+
+      // Should show Remote Client as selected initially
+      const remoteCard = screen.getByText('Remote Client').closest('.MuiCard-root')
+      expect(remoteCard).toHaveStyle({ borderWidth: '2px' })
+
+      // First, delete the remote directory to enable switching
+      // Find the delete icon button
+      const deleteIcon = screen.getByTestId('DeleteIcon')
+      const deleteButton = deleteIcon.closest('button')
+      await user.click(deleteButton!)
+
+      // Now the local card should be enabled, switch to Borg UI Server (local)
+      await waitFor(() => {
+        const localCard = screen.getByText('Borg UI Server').closest('button')
+        expect(localCard).not.toBeDisabled()
+      })
+
+      const localCard = screen.getByText('Borg UI Server').closest('button')
+      await user.click(localCard!)
+
+      // Add a local source directory
+      const input = screen.getByPlaceholderText(/\/home\/user\/documents/i)
+      await user.type(input, '/local/data')
+      const addButton = screen.getByRole('button', { name: /^Add$/i })
+      await user.click(addButton)
+
+      // Navigate to end and submit
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Remote Borg Path/i)).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.click(screen.getByRole('button', { name: /Save Changes/i }))
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalled()
+      })
+
+      // Verify that source_connection_id is explicitly set to null
+      const submittedData = onSubmit.mock.calls[0][0]
+      expect(submittedData.source_connection_id).toBe(null)
+      expect(submittedData.source_directories).toContain('/local/data')
+    })
   })
 
   // ============================================================

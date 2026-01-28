@@ -43,6 +43,8 @@ interface WizardStepLocationProps {
   mode: 'create' | 'edit' | 'import'
   data: LocationStepData
   sshConnections: SSHConnection[]
+  dataSource?: 'local' | 'remote' // Data source from step 2
+  sourceSshConnectionId?: number | '' // Source SSH connection ID
   onChange: (data: Partial<LocationStepData>) => void
   onBrowsePath: () => void
 }
@@ -51,10 +53,20 @@ export default function WizardStepLocation({
   mode,
   data,
   sshConnections,
+  dataSource,
+  sourceSshConnectionId,
   onChange,
   onBrowsePath,
 }: WizardStepLocationProps) {
+  // Disable SSH repository location if data source is remote (prevent remote-to-remote)
+  // Only enforce this in edit mode when we know the data source
+  const isRemoteLocationDisabled =
+    mode === 'edit' && dataSource === 'remote' && !!sourceSshConnectionId
+
   const handleLocationChange = (location: 'local' | 'ssh') => {
+    if (location === 'ssh' && isRemoteLocationDisabled) {
+      return // Don't allow switching to SSH if data source is remote
+    }
     onChange({
       repositoryLocation: location,
       repoSshConnectionId: '',
@@ -216,16 +228,24 @@ export default function WizardStepLocation({
                 data.repositoryLocation === 'ssh'
                   ? (theme) => alpha(theme.palette.primary.main, 0.08)
                   : 'background.paper',
+              opacity: isRemoteLocationDisabled ? 0.5 : 1,
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
               transform: data.repositoryLocation === 'ssh' ? 'translateY(-2px)' : 'none',
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                boxShadow: (theme) => `0 4px 12px ${alpha(theme.palette.text.primary, 0.08)}`,
-                borderColor: data.repositoryLocation === 'ssh' ? 'primary.main' : 'text.primary',
-              },
+              '&:hover': !isRemoteLocationDisabled
+                ? {
+                    transform: 'translateY(-2px)',
+                    boxShadow: (theme) => `0 4px 12px ${alpha(theme.palette.text.primary, 0.08)}`,
+                    borderColor:
+                      data.repositoryLocation === 'ssh' ? 'primary.main' : 'text.primary',
+                  }
+                : {},
             }}
           >
-            <CardActionArea onClick={() => handleLocationChange('ssh')} sx={{ p: 1 }}>
+            <CardActionArea
+              onClick={() => handleLocationChange('ssh')}
+              disabled={isRemoteLocationDisabled}
+              sx={{ p: 1 }}
+            >
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
                   <Box
@@ -264,6 +284,18 @@ export default function WizardStepLocation({
             </CardActionArea>
           </Card>
         </Box>
+
+        {/* Warning when remote location is disabled due to remote data source */}
+        {isRemoteLocationDisabled && (
+          <Alert severity="info" sx={{ mt: 2 }}>
+            <Typography variant="body2">
+              <strong>Why is "Remote Client" disabled?</strong> This repository is configured to
+              back up data from a remote machine. Remote-to-remote backups (backing up from one
+              remote machine to another) are not supported. Please keep the repository on the Borg
+              UI Server.
+            </Typography>
+          </Alert>
+        )}
       </Box>
 
       {/* SSH Connection Selection */}

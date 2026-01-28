@@ -471,8 +471,12 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       data.connection_id = wizardState.repoSshConnectionId || null
     }
 
+    // Always set source_connection_id (null for local, ID for remote)
+    // This ensures we clear it when switching from remote to local in edit mode
     if (wizardState.dataSource === 'remote' && wizardState.sourceSshConnectionId) {
       data.source_connection_id = wizardState.sourceSshConnectionId
+    } else {
+      data.source_connection_id = null
     }
 
     track(EventCategory.REPOSITORY, EventAction.CREATE, `wizard-${mode}`)
@@ -506,6 +510,8 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               bypassLock: wizardState.bypassLock,
             }}
             sshConnections={sshConnections}
+            dataSource={wizardState.dataSource}
+            sourceSshConnectionId={wizardState.sourceSshConnectionId}
             onChange={(updates) => {
               // Handle SSH connection selection
               if (
