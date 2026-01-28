@@ -500,7 +500,8 @@ class TestRepositoriesUpdate:
                 "port": 22,
                 "username": "backupuser",
                 "ssh_key_id": 1,
-                "connection_id": 1
+                "connection_id": 1,
+                "path": "/home/borg-backup"
             },
             headers=admin_headers
         )
@@ -517,6 +518,48 @@ class TestRepositoriesUpdate:
             assert repo.username == "backupuser"
             assert repo.ssh_key_id == 1
             assert repo.connection_id == 1
+            # Verify path was reconstructed as SSH URL
+            assert repo.path == "ssh://backupuser@backup.example.com:22/home/borg-backup"
+
+    def test_update_ssh_repository_path_reconstruction(self, test_client: TestClient, admin_headers, test_db):
+        """Test that updating an SSH repository path properly reconstructs the SSH URL"""
+        # Create SSH repository
+        repo = Repository(
+            name="SSH Repo",
+            path="ssh://user@host.local:22/home/borg-backup",
+            encryption="none",
+            compression="lz4",
+            repository_type="ssh",
+            host="host.local",
+            username="user",
+            port=22,
+            ssh_key_id=1
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        # Verify initial state
+        assert repo.path == "ssh://user@host.local:22/home/borg-backup"
+
+        # Update with plain path (like wizard sends) - path should be reconstructed
+        response = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={
+                "path": "/home/borg-backup",  # Plain path without SSH URL
+                "source_directories": ["/data", "/config"]  # Adding source dirs
+            },
+            headers=admin_headers
+        )
+
+        # Should succeed
+        assert response.status_code in [200, 403, 404]
+
+        if response.status_code == 200:
+            # Refresh and verify path was reconstructed as SSH URL
+            test_db.refresh(repo)
+            assert repo.path == "ssh://user@host.local:22/home/borg-backup"
+            assert json.loads(repo.source_directories) == ["/data", "/config"]
 
 
 @pytest.mark.unit

@@ -990,15 +990,10 @@ async def update_repository(
                 raise HTTPException(status_code=400, detail="Repository name already exists")
             repository.name = repo_data.name
 
+        # Store raw path first (will be reconstructed for SSH below)
+        raw_path = None
         if repo_data.path is not None:
-            # Check if path already exists
-            existing_path = db.query(Repository).filter(
-                Repository.path == repo_data.path,
-                Repository.id != repo_id
-            ).first()
-            if existing_path:
-                raise HTTPException(status_code=400, detail="Repository path already exists")
-            repository.path = repo_data.path
+            raw_path = repo_data.path
 
         # Update repository type and SSH connection details
         if repo_data.repository_type is not None:
@@ -1019,6 +1014,51 @@ async def update_repository(
 
         if 'connection_id' in repo_data.model_dump(exclude_unset=True):
             repository.connection_id = repo_data.connection_id
+
+        # Reconstruct path for SSH repositories (similar to create endpoint logic)
+        if raw_path is not None:
+            # Determine the final repository type (use updated value or existing)
+            final_repo_type = repo_data.repository_type if repo_data.repository_type is not None else repository.repository_type
+
+            if final_repo_type == "ssh":
+                # For SSH repositories, reconstruct the full SSH URL
+                # Extract plain path if it's already in SSH URL format
+                path_to_use = raw_path
+                if path_to_use.startswith("ssh://"):
+                    # Extract path part from SSH URL
+                    import re
+                    match = re.match(r"ssh://[^/]+(/.*)", path_to_use)
+                    if match:
+                        path_to_use = match.group(1)
+                    else:
+                        path_to_use = path_to_use.split("/", 3)[-1] if "/" in path_to_use else path_to_use
+
+                # Get SSH connection details (use updated values or existing ones)
+                final_username = repo_data.username if repo_data.username is not None else repository.username
+                final_host = repo_data.host if repo_data.host is not None else repository.host
+                final_port = repo_data.port if repo_data.port is not None else repository.port
+
+                # Reconstruct SSH URL
+                final_path = f"ssh://{final_username}@{final_host}:{final_port}/{path_to_use.lstrip('/')}"
+
+                # Check if path already exists (for a different repository)
+                existing_path = db.query(Repository).filter(
+                    Repository.path == final_path,
+                    Repository.id != repo_id
+                ).first()
+                if existing_path:
+                    raise HTTPException(status_code=400, detail="Repository path already exists")
+
+                repository.path = final_path
+            else:
+                # For local repositories, use path as-is
+                existing_path = db.query(Repository).filter(
+                    Repository.path == raw_path,
+                    Repository.id != repo_id
+                ).first()
+                if existing_path:
+                    raise HTTPException(status_code=400, detail="Repository path already exists")
+                repository.path = raw_path
 
         if repo_data.compression is not None:
             repository.compression = repo_data.compression
