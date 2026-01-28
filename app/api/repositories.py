@@ -307,6 +307,12 @@ class RepositoryUpdate(BaseModel):
     compression: Optional[str] = None
     source_directories: Optional[List[str]] = None
     exclude_patterns: Optional[List[str]] = None
+    repository_type: Optional[str] = None  # local, ssh, sftp
+    host: Optional[str] = None  # For SSH repositories
+    port: Optional[int] = None  # SSH port
+    username: Optional[str] = None  # SSH username
+    ssh_key_id: Optional[int] = None  # Associated SSH key ID
+    connection_id: Optional[int] = None  # SSH connection ID for repository location
     remote_path: Optional[str] = None
     pre_backup_script: Optional[str] = None
     post_backup_script: Optional[str] = None
@@ -994,6 +1000,26 @@ async def update_repository(
                 raise HTTPException(status_code=400, detail="Repository path already exists")
             repository.path = repo_data.path
 
+        # Update repository type and SSH connection details
+        if repo_data.repository_type is not None:
+            repository.repository_type = repo_data.repository_type
+
+        if repo_data.host is not None:
+            repository.host = repo_data.host
+
+        if repo_data.port is not None:
+            repository.port = repo_data.port
+
+        if repo_data.username is not None:
+            repository.username = repo_data.username
+
+        # Handle ssh_key_id and connection_id - allow null to clear
+        if 'ssh_key_id' in repo_data.model_dump(exclude_unset=True):
+            repository.ssh_key_id = repo_data.ssh_key_id
+
+        if 'connection_id' in repo_data.model_dump(exclude_unset=True):
+            repository.connection_id = repo_data.connection_id
+
         if repo_data.compression is not None:
             repository.compression = repo_data.compression
 
@@ -1042,7 +1068,12 @@ async def update_repository(
         if repo_data.custom_flags is not None:
             repository.custom_flags = repo_data.custom_flags
 
-        if repo_data.source_connection_id is not None:
+        # Update source_connection_id - allow null to clear the field
+        # The frontend always sends this field explicitly (either with value or null)
+        # If not provided in the request body at all, Pydantic sets it to None (default)
+        # Since we can't distinguish "not provided" from "provided as null" with current setup,
+        # and the frontend wizard always sends this field, we check if it's in the request
+        if 'source_connection_id' in repo_data.model_dump(exclude_unset=True):
             repository.source_ssh_connection_id = repo_data.source_connection_id
 
         repository.updated_at = datetime.utcnow()

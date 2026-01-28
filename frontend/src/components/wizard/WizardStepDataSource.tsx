@@ -58,7 +58,7 @@ export default function WizardStepDataSource({
 
   // Determine if cards should be disabled based on already selected directories
   const hasLocalDirs = data.sourceDirs.length > 0 && !data.sourceSshConnectionId
-  const hasRemoteDirs = !!data.sourceSshConnectionId
+  const hasRemoteDirs = !!data.sourceSshConnectionId && data.sourceDirs.length > 0
 
   const handleDataSourceChange = (source: 'local' | 'remote') => {
     if (source === 'remote' && isRemoteToRemoteDisabled) {
@@ -369,7 +369,13 @@ export default function WizardStepDataSource({
                 <Box>
                   <SourceDirectoriesInput
                     directories={data.sourceDirs}
-                    onChange={(newDirs) => onChange({ sourceDirs: newDirs })}
+                    onChange={(newDirs) => {
+                      onChange({
+                        sourceDirs: newDirs,
+                        sourceSshConnectionId:
+                          newDirs.length === 0 ? '' : data.sourceSshConnectionId,
+                      })
+                    }}
                     onBrowseClick={onBrowseRemoteSource}
                     required={repositoryMode !== 'observe'}
                   />

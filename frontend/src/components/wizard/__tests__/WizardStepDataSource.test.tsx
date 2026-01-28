@@ -291,6 +291,38 @@ describe('WizardStepDataSource', () => {
 
       expect(screen.getByText(/Remove remote directories first to switch/i)).toBeInTheDocument()
     })
+
+    it('enables Borg UI Server when remote directories are deleted', () => {
+      // Test for bug fix: when editing with remote client selected and source directory,
+      // deleting the source directory should enable Borg UI Server option
+      const remoteDataWithoutDirs = {
+        dataSource: 'remote' as const,
+        sourceSshConnectionId: 1,
+        sourceDirs: [], // No directories
+      }
+
+      render(
+        <WizardStepDataSource
+          repositoryLocation="local"
+          repoSshConnectionId=""
+          repositoryMode="full"
+          data={remoteDataWithoutDirs}
+          sshConnections={mockSshConnections}
+          onChange={vi.fn()}
+          onBrowseSource={vi.fn()}
+          onBrowseRemoteSource={vi.fn()}
+        />
+      )
+
+      // Should NOT show the warning about removing directories
+      expect(
+        screen.queryByText(/Remove remote directories first to switch/i)
+      ).not.toBeInTheDocument()
+
+      // Borg UI Server card should be enabled (not disabled)
+      const localCard = screen.getByText('Borg UI Server').closest('button')
+      expect(localCard).not.toBeDisabled()
+    })
   })
 
   describe('Observe Mode', () => {
