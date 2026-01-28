@@ -2029,8 +2029,9 @@ class BackupService:
                 except Exception as e:
                     logger.warning("Failed to delete temporary SSH key file", temp_key_file=temp_key_file, error=str(e))
 
-            # Close the database session
-            db.close()
+            # Close the database session only if we created it
+            if close_db:
+                db.close()
 
     async def cancel_backup(self, job_id: int) -> bool:
         """
