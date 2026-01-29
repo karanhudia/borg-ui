@@ -1,11 +1,15 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Box, Typography, Chip, Tooltip } from '@mui/material'
 import { Eye, Download, Trash2, Lock, Play, AlertCircle, Clock, Calendar, User } from 'lucide-react'
+import { toast } from 'react-hot-toast'
 import DataTable, { Column, ActionButton } from './DataTable'
 import StatusBadge from './StatusBadge'
 import RepositoryCell from './RepositoryCell'
 import { formatDate, formatTimeRange } from '../utils/dateUtils'
 import { Job, Repository } from '../types/jobs'
+import ErrorDetailsDialog from './ErrorDetailsDialog'
+import LogViewerDialog from './LogViewerDialog'
+import CancelJobDialog from './CancelJobDialog'
 
 interface EmptyState {
   icon?: React.ReactNode
@@ -108,6 +112,99 @@ export const BackupJobsTable = <T extends Job = Job>({
   enableHover = true,
   getRowKey,
 }: BackupJobsTableProps<T>) => {
+  // Internal state for dialogs
+  const [errorJob, setErrorJob] = useState<T | null>(null)
+  const [logJob, setLogJob] = useState<T | null>(null)
+  const [cancelJob, setCancelJob] = useState<T | null>(null)
+
+  // Internal error handler (can be overridden by onErrorDetails prop)
+  const handleErrorClick = (job: T) => {
+    if (onErrorDetails) {
+      onErrorDetails(job)
+    } else {
+      setErrorJob(job)
+    }
+  }
+
+  const handleCloseError = () => {
+    setErrorJob(null)
+  }
+
+  // Internal log viewer handler (can be overridden by onViewLogs prop)
+  const handleViewLogsClick = (job: T) => {
+    if (onViewLogs) {
+      onViewLogs(job)
+    } else {
+      setLogJob(job)
+    }
+  }
+
+  const handleCloseLogs = () => {
+    setLogJob(null)
+  }
+
+  // Internal download logs handler (can be overridden by onDownloadLogs prop)
+  const handleDownloadLogsClick = (job: T) => {
+    if (onDownloadLogs) {
+      onDownloadLogs(job)
+    } else {
+      // Default implementation: use activity API endpoint
+      const jobType = job.type || 'backup'
+      const token = localStorage.getItem('access_token')
+      if (!token) {
+        toast.error('Authentication required')
+        return
+      }
+
+      const url = `/api/activity/${jobType}/${job.id}/logs/download?token=${token}`
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${jobType}-${job.id}-logs.txt`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      toast.success('Downloading logs...')
+    }
+  }
+
+  // Internal cancel handler (can be overridden by onCancelJob prop)
+  const handleCancelClick = (job: T) => {
+    if (onCancelJob) {
+      onCancelJob(job)
+    } else {
+      setCancelJob(job)
+    }
+  }
+
+  const handleConfirmCancel = async () => {
+    if (!cancelJob) return
+
+    try {
+      // Call cancel API
+      const jobType = cancelJob.type || 'backup'
+      const response = await fetch(`/api/activity/${jobType}/${cancelJob.id}/cancel`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to cancel job')
+      }
+
+      toast.success('Job cancelled successfully')
+      setCancelJob(null)
+    } catch (error) {
+      toast.error('Failed to cancel job')
+      console.error(error)
+    }
+  }
+
+  const handleCloseCancelDialog = () => {
+    setCancelJob(null)
+  }
+
   // Build columns array based on options
   const columns: Column<T>[] = [
     {
@@ -237,45 +334,54 @@ export const BackupJobsTable = <T extends Job = Job>({
   // Build actions array
   const actionButtons: ActionButton<T>[] = []
 
-  if (actions.viewLogs !== false && onViewLogs) {
+  if (actions.viewLogs !== false) {
     actionButtons.push({
       icon: <Eye size={18} />,
       label: 'View Logs',
-      onClick: onViewLogs,
+      onClick: handleViewLogsClick,
       color: 'primary',
       tooltip: 'View Logs',
+      show: (job) => {
+        // Show logs button only when logs exist
+        // Check has_logs flag or log_file_path, and status is not pending
+        return (job.has_logs === true || !!job.log_file_path) && job.status !== 'pending'
+      },
     })
   }
 
-  if (actions.downloadLogs !== false && onDownloadLogs) {
+  if (actions.downloadLogs !== false) {
     actionButtons.push({
       icon: <Download size={18} />,
       label: 'Download Logs',
-      onClick: onDownloadLogs,
+      onClick: handleDownloadLogsClick,
       color: 'info',
       tooltip: 'Download Logs',
-      show: (job) => job.has_logs === true,
+      show: (job) => {
+        // Show download button only when logs exist
+        // Check has_logs flag or log_file_path, and status is not pending
+        return (job.has_logs === true || !!job.log_file_path) && job.status !== 'pending'
+      },
     })
   }
 
-  if (actions.errorInfo !== false && onErrorDetails) {
+  if (actions.errorInfo !== false) {
     actionButtons.push({
       icon: <AlertCircle size={18} />,
       label: 'Error Details',
-      onClick: onErrorDetails,
+      onClick: handleErrorClick,
       color: 'error',
       tooltip: 'View Error',
       show: (job) => job.status === 'failed' && !!job.error_message,
     })
   }
 
-  if (actions.cancel !== false && onCancelJob) {
+  if (actions.cancel !== false) {
     actionButtons.push({
       icon: <Trash2 size={18} />,
       label: 'Cancel',
-      onClick: onCancelJob,
+      onClick: handleCancelClick,
       color: 'warning',
-      tooltip: 'Cancel Backup',
+      tooltip: 'Cancel Job',
       show: (job) => job.status === 'running',
     })
   }
@@ -326,17 +432,38 @@ export const BackupJobsTable = <T extends Job = Job>({
       }
 
   return (
-    <DataTable
-      data={jobs}
-      columns={columns}
-      actions={actionButtons}
-      getRowKey={getRowKey || ((job: T) => String((job as Job).id))}
-      loading={loading}
-      headerBgColor={headerBgColor}
-      enableHover={enableHover}
-      enablePointer={false}
-      emptyState={finalEmptyState}
-    />
+    <>
+      <DataTable
+        data={jobs}
+        columns={columns}
+        actions={actionButtons}
+        getRowKey={getRowKey || ((job: T) => String((job as Job).id))}
+        loading={loading}
+        headerBgColor={headerBgColor}
+        enableHover={enableHover}
+        enablePointer={false}
+        emptyState={finalEmptyState}
+      />
+
+      {/* Error Details Dialog */}
+      <ErrorDetailsDialog
+        job={errorJob}
+        open={Boolean(errorJob)}
+        onClose={handleCloseError}
+        onViewLogs={onViewLogs || handleViewLogsClick}
+      />
+
+      {/* Log Viewer Dialog */}
+      <LogViewerDialog job={logJob} open={Boolean(logJob)} onClose={handleCloseLogs} />
+
+      {/* Cancel Confirmation Dialog */}
+      <CancelJobDialog
+        open={Boolean(cancelJob)}
+        onClose={handleCloseCancelDialog}
+        onConfirm={handleConfirmCancel}
+        jobId={cancelJob?.id}
+      />
+    </>
   )
 }
 

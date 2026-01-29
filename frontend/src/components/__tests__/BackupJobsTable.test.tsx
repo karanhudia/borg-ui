@@ -307,6 +307,7 @@ describe('BackupJobsTable', () => {
       />
     )
 
+    // Download button shows only for jobs with has_logs=true or log_file_path
     // Only job 1 has has_logs: true
     const downloadButtons = screen.getAllByRole('button', { name: 'Download Logs' })
     expect(downloadButtons.length).toBe(1)
@@ -356,7 +357,7 @@ describe('BackupJobsTable', () => {
     )
 
     // Only job 2 has status: 'running'
-    const cancelButtons = screen.getAllByRole('button', { name: 'Cancel Backup' })
+    const cancelButtons = screen.getAllByRole('button', { name: 'Cancel Job' })
     expect(cancelButtons.length).toBe(1)
   })
 
@@ -371,7 +372,7 @@ describe('BackupJobsTable', () => {
       />
     )
 
-    const cancelButton = screen.getByRole('button', { name: 'Cancel Backup' })
+    const cancelButton = screen.getByRole('button', { name: 'Cancel Job' })
     expect(cancelButton).toBeInTheDocument()
 
     if (cancelButton) {
@@ -467,10 +468,12 @@ describe('BackupJobsTable', () => {
   })
 
   describe('Action Configuration', () => {
-    it('does not show actions when callbacks are not provided', () => {
+    it('shows actions with internal handlers when callbacks are not provided', () => {
       renderWithProviders(<BackupJobsTable jobs={mockJobs} actions={{ viewLogs: true }} />)
 
-      expect(screen.queryByRole('button', { name: /View Logs/i })).not.toBeInTheDocument()
+      // Actions now work with internal handlers, so buttons should appear
+      // Only job 1 has has_logs: true, so only 1 button should show
+      expect(screen.getAllByRole('button', { name: /View Logs/i }).length).toBe(1)
     })
 
     it('shows multiple actions when configured', () => {

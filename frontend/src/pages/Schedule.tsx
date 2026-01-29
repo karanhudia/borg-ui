@@ -58,8 +58,6 @@ import {
   convertCronToLocal,
 } from '../utils/dateUtils'
 import BackupJobsTable from '../components/BackupJobsTable'
-import StatusBadge from '../components/StatusBadge'
-import { TerminalLogViewer } from '../components/TerminalLogViewer'
 import ScheduledChecksSection, {
   ScheduledChecksSectionRef,
 } from '../components/ScheduledChecksSection'
@@ -141,7 +139,6 @@ const Schedule: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingJob, setEditingJob] = useState<ScheduledJob | null>(null)
   const [deleteConfirmJob, setDeleteConfirmJob] = useState<ScheduledJob | null>(null)
-  const [selectedBackupJob, setSelectedBackupJob] = useState<BackupJob | null>(null)
   const scheduledChecksSectionRef = useRef<ScheduledChecksSectionRef>(null)
 
   // Backup History filters - load from localStorage
@@ -840,21 +837,6 @@ const Schedule: React.FC = () => {
     },
   ]
 
-  // Backup History callbacks
-  const handleViewBackupLogs = (job: BackupJob) => {
-    setSelectedBackupJob(job)
-  }
-
-  const handleCancelBackupJob = (job: BackupJob) => {
-    if (window.confirm('Are you sure you want to cancel this backup?')) {
-      cancelBackupMutation.mutate(job.id)
-    }
-  }
-
-  const handleDownloadBackupLogs = (job: BackupJob) => {
-    backupAPI.downloadLogs(job.id)
-  }
-
   return (
     <Box>
       {/* Header */}
@@ -1265,9 +1247,6 @@ const Schedule: React.FC = () => {
                   downloadLogs: true,
                   errorInfo: true,
                 }}
-                onViewLogs={handleViewBackupLogs}
-                onCancelJob={handleCancelBackupJob}
-                onDownloadLogs={handleDownloadBackupLogs}
                 getRowKey={(job) => String(job.id)}
                 headerBgColor="background.default"
                 enableHover={true}
@@ -2057,50 +2036,6 @@ const Schedule: React.FC = () => {
           >
             {deleteJobMutation.isPending ? 'Deleting...' : 'Delete Job'}
           </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Backup Job Logs Dialog */}
-      <Dialog
-        open={Boolean(selectedBackupJob)}
-        onClose={() => setSelectedBackupJob(null)}
-        maxWidth="lg"
-        fullWidth
-      >
-        <DialogTitle>
-          {selectedBackupJob && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Typography variant="h6">Backup Logs - Job #{selectedBackupJob.id}</Typography>
-              <StatusBadge status={selectedBackupJob.status} />
-            </Box>
-          )}
-        </DialogTitle>
-        <DialogContent dividers>
-          {selectedBackupJob && (
-            <TerminalLogViewer
-              jobId={String(selectedBackupJob.id)}
-              status={selectedBackupJob.status}
-              jobType="backup"
-              showHeader={false}
-              onFetchLogs={async (offset) => {
-                const response = await fetch(
-                  `/api/activity/backup/${selectedBackupJob.id}/logs?offset=${offset}&limit=500`,
-                  {
-                    headers: {
-                      Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
-                    },
-                  }
-                )
-                if (!response.ok) {
-                  throw new Error('Failed to fetch logs')
-                }
-                return response.json()
-              }}
-            />
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSelectedBackupJob(null)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>

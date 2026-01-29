@@ -1,41 +1,35 @@
-import React, { useState, useMemo, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import React, { useEffect, useMemo, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
 import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  Button,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  CircularProgress,
-  Stack,
-  Paper,
   Alert,
   alpha,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  CircularProgress,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Paper,
+  Select,
+  Stack,
+  Typography,
 } from '@mui/material'
-import { Play, Square, Clock, Database, Info, RefreshCw } from 'lucide-react'
+import { Clock, Database, Info, Play, RefreshCw, Square } from 'lucide-react'
 import { backupAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import {
-  formatTimeRange,
   formatBytes as formatBytesUtil,
   formatDurationSeconds,
+  formatTimeRange,
   parseBytes,
 } from '../utils/dateUtils'
 import { generateBorgCreateCommand } from '../utils/borgUtils'
 import LockErrorDialog from '../components/LockErrorDialog'
 import { BackupJob } from '../types'
 import BackupJobsTable from '../components/BackupJobsTable'
-import StatusBadge from '../components/StatusBadge'
-import { TerminalLogViewer } from '../components/TerminalLogViewer'
 import { useMatomo } from '../hooks/useMatomo'
 
 const Backup: React.FC = () => {
@@ -44,7 +38,6 @@ const Backup: React.FC = () => {
     repositoryId: number
     repositoryName: string
   } | null>(null)
-  const [selectedJob, setSelectedJob] = useState<BackupJob | null>(null)
   const queryClient = useQueryClient()
   const location = useLocation()
   const { trackBackup, EventAction } = useMatomo()
@@ -135,30 +128,6 @@ const Backup: React.FC = () => {
   // Handle cancel backup
   const handleCancelBackup = (jobId: string) => {
     cancelBackupMutation.mutate(jobId)
-  }
-
-  // Handle view logs
-  const handleViewLogs = (job: BackupJob) => {
-    setSelectedJob(job)
-    trackBackup(EventAction.VIEW, 'logs')
-  }
-
-  // Handle close logs dialog
-  const handleCloseLogs = () => {
-    setSelectedJob(null)
-  }
-
-  // Handle download logs
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleDownloadLogs = (job: any) => {
-    try {
-      backupAPI.downloadLogs(job.id)
-      toast.success('Downloading logs...')
-      trackBackup(EventAction.DOWNLOAD, 'logs')
-    } catch {
-      // Error handled by mutation
-      toast.error('Failed to download logs')
-    }
   }
 
   // Format file size
@@ -599,11 +568,9 @@ const Backup: React.FC = () => {
               cancel: true,
               breakLock: true,
               downloadLogs: true,
+              errorInfo: true,
             }}
-            onViewLogs={handleViewLogs}
-            onCancelJob={(job) => handleCancelBackup(String(job.id))}
             onBreakLock={handleBreakLock}
-            onDownloadLogs={handleDownloadLogs}
             getRowKey={(job) => String(job.id)}
             headerBgColor="background.default"
             enableHover={true}
@@ -634,45 +601,6 @@ const Backup: React.FC = () => {
           }}
         />
       )}
-
-      {/* Logs Dialog */}
-      <Dialog open={Boolean(selectedJob)} onClose={handleCloseLogs} maxWidth="lg" fullWidth>
-        <DialogTitle>
-          {selectedJob && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Typography variant="h6">Backup Logs - Job #{selectedJob.id}</Typography>
-              <StatusBadge status={selectedJob.status} />
-            </Box>
-          )}
-        </DialogTitle>
-        <DialogContent dividers>
-          {selectedJob && (
-            <TerminalLogViewer
-              jobId={String(selectedJob.id)}
-              status={selectedJob.status}
-              jobType="backup"
-              showHeader={false}
-              onFetchLogs={async (offset) => {
-                const response = await fetch(
-                  `/api/activity/backup/${selectedJob.id}/logs?offset=${offset}&limit=500`,
-                  {
-                    headers: {
-                      Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
-                    },
-                  }
-                )
-                if (!response.ok) {
-                  throw new Error('Failed to fetch logs')
-                }
-                return response.json()
-              }}
-            />
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseLogs}>Close</Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   )
 }
