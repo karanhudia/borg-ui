@@ -85,7 +85,7 @@ class RemoteBackupService:
                 raise Exception(f"Repository {repository_id} not found")
 
             # Verify repository is SSH type (Phase 1 limitation)
-            if repository.repository_type != "ssh":
+            if not repository.connection_id:
                 raise Exception(
                     "Remote backups currently only support SSH repositories. "
                     "Local repositories will be supported in a future update."
@@ -184,8 +184,12 @@ class RemoteBackupService:
           ssh://user@repo-host:/path::{hostname}-{now} \
           /data /etc
         """
-        # Build repository URL
-        repo_url = self._get_repository_url(repository)
+        # Get DB session for connection lookup
+        db = SessionLocal()
+        try:
+            repo_url = self._get_repository_url(repository, db)
+        finally:
+            db.close()
 
         # Build borg command parts
         cmd_parts = []
@@ -231,22 +235,26 @@ class RemoteBackupService:
 
         return " ".join(cmd_parts)
 
-    def _get_repository_url(self, repository: Repository) -> str:
+    def _get_repository_url(self, repository: Repository, db: Session) -> str:
         """
         Get the repository URL that a remote host should use
 
         Examples:
         - SSH repo: ssh://backup@repo-host:22/path
         """
-        if repository.repository_type == "ssh":
-            return f"ssh://{repository.username}@{repository.host}:{repository.port}{repository.path}"
-        elif repository.repository_type == "local":
+        if repository.connection_id:
+            # Get SSH connection details
+            connection = db.query(SSHConnection).filter(
+                SSHConnection.id == repository.connection_id
+            ).first()
+            if not connection:
+                raise ValueError(f"SSH connection {repository.connection_id} not found")
+            return f"ssh://{connection.username}@{connection.host}:{connection.port}{repository.path}"
+        else:
             raise NotImplementedError(
                 "Local repositories are not yet supported for remote backups. "
                 "Please use an SSH repository."
             )
-        else:
-            raise ValueError(f"Unsupported repository type: {repository.repository_type}")
 
     async def _execute_ssh_command(
         self,

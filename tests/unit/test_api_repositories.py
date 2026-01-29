@@ -524,17 +524,34 @@ class TestRepositoriesUpdate:
 
     def test_update_ssh_repository_path_reconstruction(self, test_client: TestClient, admin_headers, test_db):
         """Test that updating an SSH repository path properly reconstructs the SSH URL"""
-        # Create SSH repository
+        from app.database.models import SSHConnection, SSHKey
+
+        # Create SSH key
+        ssh_key = SSHKey(
+            name="Test Key",
+            private_key="encrypted_key_data",
+            public_key="ssh-rsa AAAA..."
+        )
+        test_db.add(ssh_key)
+        test_db.commit()
+
+        # Create SSH connection
+        ssh_conn = SSHConnection(
+            host="host.local",
+            username="user",
+            port=22,
+            ssh_key_id=ssh_key.id
+        )
+        test_db.add(ssh_conn)
+        test_db.commit()
+
+        # Create SSH repository with connection_id
         repo = Repository(
             name="SSH Repo",
             path="ssh://user@host.local:22/home/borg-backup",
             encryption="none",
             compression="lz4",
-            repository_type="ssh",
-            host="host.local",
-            username="user",
-            port=22,
-            ssh_key_id=1
+            connection_id=ssh_conn.id
         )
         test_db.add(repo)
         test_db.commit()

@@ -646,7 +646,6 @@ class BorgmaticImportService:
         # Set repository fields
         repository.name = repo_name
         repository.path = repo_path
-        repository.repository_type = repo_type
         repository.encryption = 'repokey'  # Default encryption
         repository.compression = storage.get('compression', 'lz4')
         repository.mode = 'full'  # Default mode
@@ -675,12 +674,15 @@ class BorgmaticImportService:
         repository.continue_on_hook_failure = False  # Default: fail on hook failure
 
         # SSH settings
-        if repo_type == 'ssh' and ssh_info:
-            repository.host = ssh_info['host']
-            repository.port = ssh_info.get('port', 22)
-            repository.username = ssh_info['username']
-            repository.remote_path = ssh_info.get('remote_path')
-            result['warnings'].append(f"SSH repository created but SSH key must be configured manually: {repo_name}")
+        if repo_type == 'ssh':
+            # SSH repositories imported from borgmatic need SSH connection configured manually
+            repository.connection_id = None
+            if ssh_info and ssh_info.get('remote_path'):
+                repository.remote_path = ssh_info['remote_path']
+            result['warnings'].append(
+                f"SSH repository '{repo_name}' imported but SSH connection must be configured manually in Borg UI. "
+                f"Original connection: {ssh_info.get('username', 'user')}@{ssh_info.get('host', 'host')}:{ssh_info.get('port', 22)}"
+            )
 
         # Check settings - defaults only (no metadata)
 

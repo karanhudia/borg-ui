@@ -75,7 +75,7 @@ def break_repository_lock(repository: Repository) -> bool:
             env['BORG_PASSPHRASE'] = repository.passphrase
 
         # For remote repos, add SSH options
-        if repository.repository_type != "local":
+        if repository.connection_id:
             ssh_opts = [
                 "-o", "StrictHostKeyChecking=no",
                 "-o", "UserKnownHostsFile=/dev/null",
@@ -197,7 +197,7 @@ def cleanup_orphaned_jobs(db: Session):
             ).first()
 
             if repository:
-                if repository.repository_type == "local":
+                if not repository.connection_id:
                     # For local repos, we can safely break the lock
                     logger.info("Attempting to break lock for local repository",
                                repository_id=repository.id)
@@ -211,8 +211,7 @@ def cleanup_orphaned_jobs(db: Session):
                 else:
                     # For remote repos, don't auto-break lock (remote process may still be running)
                     logger.warning("Orphaned check job for remote repository - manual lock break may be needed",
-                                  repository_id=repository.id,
-                                  repository_type=repository.repository_type)
+                                  repository_id=repository.id)
                     job.error_message += " (Warning: Remote process may still be running, manual verification recommended)"
         else:
             # Process is still alive! This is unexpected
@@ -239,7 +238,7 @@ def cleanup_orphaned_jobs(db: Session):
             ).first()
 
             if repository:
-                if repository.repository_type == "local":
+                if not repository.connection_id:
                     # For local repos, we can safely break the lock
                     logger.info("Attempting to break lock for local repository",
                                repository_id=repository.id)
@@ -253,8 +252,7 @@ def cleanup_orphaned_jobs(db: Session):
                 else:
                     # For remote repos, don't auto-break lock
                     logger.warning("Orphaned compact job for remote repository - manual lock break may be needed",
-                                  repository_id=repository.id,
-                                  repository_type=repository.repository_type)
+                                  repository_id=repository.id)
                     job.error_message += " (Warning: Remote process may still be running, manual verification recommended)"
         else:
             # Process is still alive! This is unexpected
