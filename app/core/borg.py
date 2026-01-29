@@ -459,7 +459,7 @@ class BorgInterface:
         return await self._execute_command_streaming(cmd, max_lines=max_lines, env=env if env else None)
 
     async def extract_archive(self, repository: str, archive: str, paths: List[str],
-                            destination: str, dry_run: bool = False, remote_path: str = None, passphrase: str = None) -> Dict:
+                            destination: str, dry_run: bool = False, remote_path: str = None, passphrase: str = None, bypass_lock: bool = False) -> Dict:
         """Extract files from an archive"""
         cmd = [self.borg_cmd, "extract"]
 
@@ -468,6 +468,9 @@ class BorgInterface:
 
         if dry_run:
             cmd.append("--dry-run")
+
+        if bypass_lock:
+            cmd.append("--bypass-lock")
 
         # Skip extended attributes and ACLs to avoid errors on filesystems that don't support them
         # This prevents "Operation not supported" errors when extracting files with NFS4 ACLs, etc.

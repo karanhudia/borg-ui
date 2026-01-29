@@ -85,6 +85,9 @@ class RestoreService:
                 if repository and repository.remote_path:
                     cmd.extend(["--remote-path", repository.remote_path])
 
+                if repository and repository.bypass_lock:
+                    cmd.append("--bypass-lock")
+
                 cmd.append(f"{repository_path}::{archive_name}")
 
                 # Add paths if specified
