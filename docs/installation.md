@@ -312,26 +312,74 @@ docker rm borg-web-ui
 
 ## Advanced Configuration
 
-### Privileged Mode
+### SSHFS/Remote-to-Remote Backup Configuration
 
 {: .note }
-> **When is privileged mode needed?** Privileged mode is **only required for remote-to-remote backups** using SSHFS mounting. If you're doing direct SSH backups or local backups only, you can disable it.
+> **When is this needed?** SSHFS mounting is **only required for remote-to-remote backups** (backing up from one remote server to another by mounting both via SSH). If you're doing direct SSH backups or local backups only, you can skip this section.
 
-The default `docker-compose.yml` includes `privileged: true` to support remote-to-remote backups (backing up from one remote server to another by mounting both via SSH).
+For remote-to-remote backups using SSHFS, you need to grant the container FUSE filesystem mounting capabilities. There are two approaches:
 
-**To disable privileged mode:**
+#### Option 1: Minimal Capabilities (Recommended)
+
+This approach follows the principle of least privilege by granting only the specific permissions needed:
 
 ```yaml
 services:
   borg-ui:
-    # privileged: true  # Comment out this line
+    image: ainullcode/borg-ui:latest
+    devices:
+      - /dev/fuse:/dev/fuse
+    cap_add:
+      - SYS_ADMIN
+    # Uncomment the line below if running on Ubuntu/Debian with AppArmor
+    # security_opt:
+    #   - apparmor=unconfined
+    volumes:
+      - borg_data:/data
+      - borg_cache:/home/borg/.cache/borg
+      - /home/yourusername:/local:rw
 ```
 
-**What privileged mode enables:**
-- SSHFS/FUSE filesystem mounting for remote-to-remote backups
-- Advanced backup scenarios with remote source and remote destination
+**What each setting does:**
+- `devices: /dev/fuse` - Grants access to FUSE (Filesystem in Userspace) device
+- `cap_add: SYS_ADMIN` - Adds capability to mount filesystems
+- `security_opt: apparmor=unconfined` - **(Ubuntu/Debian only)** Disables AppArmor restrictions for SSHFS
 
-**Security consideration:** Privileged containers have elevated permissions. Only use when needed.
+{: .note }
+> **Ubuntu/Debian users:** If SSHFS mounts fail, uncomment the `security_opt` line. This is typically needed on Ubuntu Server and Debian systems with AppArmor enabled.
+
+#### Option 2: Privileged Mode
+
+Alternatively, you can use privileged mode, which grants broader permissions:
+
+```yaml
+services:
+  borg-ui:
+    image: ainullcode/borg-ui:latest
+    privileged: true
+    volumes:
+      - borg_data:/data
+      - borg_cache:/home/borg/.cache/borg
+      - /home/yourusername:/local:rw
+```
+
+{: .warning }
+> **Security consideration:** Privileged mode grants unrestricted access to the host. **Option 1 is more secure** and recommended. Only use privileged mode if you encounter issues with the minimal capabilities approach.
+
+#### Disable SSHFS Support
+
+If you don't need remote-to-remote backups, use the standard configuration without any of the above settings:
+
+```yaml
+services:
+  borg-ui:
+    image: ainullcode/borg-ui:latest
+    # No privileged mode or special capabilities needed
+    volumes:
+      - borg_data:/data
+      - borg_cache:/home/borg/.cache/borg
+      - /home/yourusername:/local:rw
+```
 
 ### Docker Container Management (Optional)
 
