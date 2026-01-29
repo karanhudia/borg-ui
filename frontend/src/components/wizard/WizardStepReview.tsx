@@ -27,11 +27,6 @@ export interface WizardReviewData {
   excludePatterns: string[]
   customFlags: string
   remotePath: string
-  // SSH details for command preview
-  host: string
-  username: string
-  port: number
-  repositoryType: 'local' | 'ssh' | 'sftp'
 }
 
 interface WizardStepReviewProps {
@@ -91,11 +86,10 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
         }
       }
     }
-    // Fallback to wizard state (for backward compatibility or direct input)
     return {
-      host: data.host,
-      username: data.username,
-      port: data.port,
+      host: '',
+      username: '',
+      port: 22,
     }
   }
 
@@ -121,7 +115,7 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
           <CommandPreview
             mode={mode === 'create' ? 'create' : 'import'}
             repositoryPath={data.path}
-            repositoryType={data.repositoryType}
+            repositoryLocation={data.repositoryLocation}
             host={repoDetails.host}
             username={repoDetails.username}
             port={repoDetails.port}

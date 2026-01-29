@@ -49,10 +49,6 @@ const defaultData: WizardReviewData = {
   excludePatterns: ['*.tmp', '*.log'],
   customFlags: '',
   remotePath: '',
-  host: '',
-  username: '',
-  port: 22,
-  repositoryType: 'local',
 }
 
 describe('WizardStepReview', () => {

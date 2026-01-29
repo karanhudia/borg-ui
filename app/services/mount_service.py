@@ -382,13 +382,12 @@ class MountService:
                 logger.info(
                     "Repository details",
                     mount_id=mount_id,
-                    repository_type=repository.repository_type,
                     connection_id=repository.connection_id,
                     has_passphrase=bool(repository.passphrase)
                 )
 
                 # Handle SSH repositories
-                if repository.repository_type == "ssh":
+                if repository.connection_id:
                     # Always disable strict host key checking for SSH repos
                     ssh_opts = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
@@ -448,8 +447,7 @@ class MountService:
                 else:
                     logger.info(
                         "Not an SSH repository",
-                        mount_id=mount_id,
-                        repository_type=repository.repository_type
+                        mount_id=mount_id
                     )
 
                 # Set passphrase if encrypted

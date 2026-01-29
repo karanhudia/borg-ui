@@ -64,12 +64,6 @@ interface WizardState {
   path: string
   repoSshConnectionId: number | ''
   bypassLock: boolean
-  // Repository type details (for SSH)
-  repositoryType: 'local' | 'ssh' | 'sftp'
-  host: string
-  username: string
-  port: string
-  sshKeyId: number | ''
   // Data source step
   dataSource: 'local' | 'remote'
   sourceSshConnectionId: number | ''
@@ -97,11 +91,6 @@ const initialState: WizardState = {
   path: '',
   repoSshConnectionId: '',
   bypassLock: false,
-  repositoryType: 'local',
-  host: '',
-  username: '',
-  port: '22',
-  sshKeyId: '',
   dataSource: 'local',
   sourceSshConnectionId: '',
   sourceDirs: [],
@@ -169,41 +158,30 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     if (!repository) return
 
     let repoPath = repository.path || ''
-    let repoHost = repository.host || ''
-    let repoUsername = repository.username || ''
-    let repoPort = repository.port || 22
 
-    // Parse SSH URL format
+    // Extract plain path from SSH URL if needed
     if (repoPath.startsWith('ssh://')) {
-      let sshUrlMatch = repoPath.match(/^ssh:\/\/([^@]+)@([^:/]+):(\d+)(.*)$/)
+      const sshUrlMatch = repoPath.match(/^ssh:\/\/[^@]+@[^:/]+(?::\d+)?(.*)$/)
       if (sshUrlMatch) {
-        repoUsername = sshUrlMatch[1]
-        repoHost = sshUrlMatch[2]
-        repoPort = parseInt(sshUrlMatch[3])
-        repoPath = sshUrlMatch[4]
-      } else {
-        sshUrlMatch = repoPath.match(/^ssh:\/\/([^@]+)@([^/]+)(.*)$/)
-        if (sshUrlMatch) {
-          repoUsername = sshUrlMatch[1]
-          repoHost = sshUrlMatch[2]
-          repoPort = 22
-          repoPath = sshUrlMatch[3]
-        }
+        repoPath = sshUrlMatch[1]
       }
     }
+
+    // Determine repository location
+    // If connection_id field exists (even if null), trust it as source of truth
+    // Otherwise fall back to legacy detection for old repos not yet edited
+    const isSSH =
+      repository.connection_id !== undefined
+        ? !!repository.connection_id // Trust connection_id if it exists
+        : repository.repository_type === 'ssh' || (repository.path || '').startsWith('ssh://') // Legacy fallback
 
     setWizardState({
       name: repository.name || '',
       repositoryMode: repository.mode || 'full',
-      repositoryLocation: repository.repository_type === 'local' ? 'local' : 'ssh',
+      repositoryLocation: isSSH ? 'ssh' : 'local',
       path: repoPath,
-      repoSshConnectionId: '',
+      repoSshConnectionId: repository.connection_id || '',
       bypassLock: repository.bypass_lock || false,
-      repositoryType: (repository.repository_type as 'local' | 'ssh' | 'sftp') || 'local',
-      host: repoHost,
-      username: repoUsername,
-      port: String(repoPort),
-      sshKeyId: repository.ssh_key_id || '',
       dataSource: repository.source_ssh_connection_id ? 'remote' : 'local',
       sourceSshConnectionId: repository.source_ssh_connection_id || '',
       sourceDirs: repository.source_directories || [],
@@ -239,11 +217,6 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     if (connection) {
       handleStateChange({
         repoSshConnectionId: connectionId,
-        repositoryType: 'ssh',
-        host: connection.host,
-        username: connection.username,
-        port: String(connection.port),
-        sshKeyId: connection.ssh_key_id,
         path: connection.default_path || wizardState.path,
       })
     }
@@ -266,13 +239,8 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
 
         handleStateChange({
           repositoryLocation: 'ssh',
-          repositoryType: 'ssh',
           path: remotePath || '/',
-          host: parsedHost,
-          username: parsedUsername,
-          port: parsedPort,
           repoSshConnectionId: matchingConnection?.id || '',
-          sshKeyId: matchingConnection?.ssh_key_id || '',
         })
         return
       } else if (matchWithoutPort) {
@@ -283,13 +251,8 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
 
         handleStateChange({
           repositoryLocation: 'ssh',
-          repositoryType: 'ssh',
           path: remotePath || '/',
-          host: parsedHost,
-          username: parsedUsername,
-          port: '22',
           repoSshConnectionId: matchingConnection?.id || '',
-          sshKeyId: matchingConnection?.ssh_key_id || '',
         })
         return
       }
@@ -447,7 +410,6 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       name: wizardState.name,
       mode: wizardState.repositoryMode,
       path: wizardState.path,
-      repository_type: wizardState.repositoryType,
       encryption: wizardState.encryption,
       passphrase: wizardState.passphrase,
       compression: wizardState.compression,
@@ -461,22 +423,12 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       post_hook_timeout: wizardState.postHookTimeout,
       continue_on_hook_failure: wizardState.continueOnHookFailure,
       bypass_lock: wizardState.bypassLock,
-    }
-
-    if (wizardState.repositoryType === 'ssh') {
-      data.host = wizardState.host
-      data.username = wizardState.username
-      data.port = parseInt(wizardState.port) || 22
-      data.ssh_key_id = wizardState.sshKeyId || null
-      data.connection_id = wizardState.repoSshConnectionId || null
-    }
-
-    // Always set source_connection_id (null for local, ID for remote)
-    // This ensures we clear it when switching from remote to local in edit mode
-    if (wizardState.dataSource === 'remote' && wizardState.sourceSshConnectionId) {
-      data.source_connection_id = wizardState.sourceSshConnectionId
-    } else {
-      data.source_connection_id = null
+      // Connection IDs - single source of truth for SSH
+      connection_id: wizardState.repoSshConnectionId || null,
+      source_connection_id:
+        wizardState.dataSource === 'remote' && wizardState.sourceSshConnectionId
+          ? wizardState.sourceSshConnectionId
+          : null,
     }
 
     track(EventCategory.REPOSITORY, EventAction.CREATE, `wizard-${mode}`)
@@ -519,15 +471,6 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
                 updates.repoSshConnectionId !== wizardState.repoSshConnectionId
               ) {
                 handleRepoSshConnectionSelect(updates.repoSshConnectionId as number)
-              } else if (updates.repositoryLocation === 'local') {
-                handleStateChange({
-                  ...updates,
-                  repositoryType: 'local',
-                  host: '',
-                  username: '',
-                  port: '22',
-                  sshKeyId: '',
-                })
               } else {
                 handleStateChange(updates)
               }
@@ -609,10 +552,6 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               excludePatterns: wizardState.excludePatterns,
               customFlags: wizardState.customFlags,
               remotePath: wizardState.remotePath,
-              host: wizardState.host,
-              username: wizardState.username,
-              port: parseInt(wizardState.port) || 22,
-              repositoryType: wizardState.repositoryType,
             }}
             sshConnections={sshConnections}
           />

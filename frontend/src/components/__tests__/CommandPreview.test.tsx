@@ -62,7 +62,7 @@ describe('CommandPreview', () => {
         <CommandPreview
           mode="create"
           repositoryPath="/backups/repo"
-          repositoryType="ssh"
+          repositoryLocation="ssh"
           host="backup-server.com"
           username="backup"
           port={2222}

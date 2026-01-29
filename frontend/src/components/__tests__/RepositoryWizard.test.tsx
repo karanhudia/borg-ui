@@ -710,7 +710,7 @@ describe('RepositoryWizard', () => {
             name: 'Test Repo',
             path: '/backups/test',
             mode: 'full',
-            repository_type: 'local',
+            connection_id: null,
             encryption: 'repokey',
             passphrase: 'testpass123',
             source_directories: ['/home/user'],
@@ -1701,9 +1701,7 @@ describe('RepositoryWizard', () => {
         expect.objectContaining({
           name: 'Local to Remote Backup',
           path: '/offsite/repo',
-          repository_type: 'ssh',
-          host: 'server1.example.com',
-          username: 'backupuser',
+          connection_id: 1,
           source_directories: ['/home/user/important'],
           passphrase: 'securepass',
         })
@@ -1842,7 +1840,7 @@ describe('RepositoryWizard', () => {
         expect.objectContaining({
           name: 'SSHFS Backup',
           path: '/backups/sshfs',
-          repository_type: 'local',
+          connection_id: null,
           source_directories: ['/remote/data'],
           source_connection_id: 1,
           passphrase: 'sshfspass',
@@ -1958,7 +1956,7 @@ describe('RepositoryWizard', () => {
         path: 'ssh://admin@backup.server.com:2222/data/backups',
         mode: 'full',
         source_directories: ['/important'],
-        repository_type: 'ssh',
+        connection_id: 1, // SSH repo has connection_id
       }
       renderWizard('edit', existingRepo)
 

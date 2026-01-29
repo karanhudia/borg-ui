@@ -852,10 +852,15 @@ class BackupService:
         except Exception as e:
             logger.error("Error unmounting SSH path", mount_point=mount_point, error=str(e), job_id=job_id)
 
-    async def _prepare_source_paths(self, source_paths: list[str], job_id: int) -> tuple[list[str], list[str]]:
+    async def _prepare_source_paths(self, source_paths: list[str], job_id: int, source_connection_id: int = None) -> tuple[list[str], list[str]]:
         """
         Prepare source paths for backup by mounting SSH URLs via SSHFS
         Uses the new mount_service with proper SSH key authentication.
+
+        Args:
+            source_paths: List of paths to prepare (may include SSH URLs)
+            job_id: Backup job ID
+            source_connection_id: SSH connection ID for remote data source (if applicable)
 
         Returns: tuple of (processed_paths, ssh_mount_roots)
             - processed_paths: list of paths to backup (SSH URLs replaced with temp root directories)
@@ -878,23 +883,38 @@ class BackupService:
                         logger.error("Failed to parse SSH URL", path=path, job_id=job_id)
                         continue
 
-                    # Find SSHConnection matching host/user/port
-                    connection = db.query(SSHConnection).filter(
-                        SSHConnection.host == parsed['host'],
-                        SSHConnection.username == parsed['username'],
-                        SSHConnection.port == int(parsed['port'])
-                    ).first()
+                    # Use provided connection_id if available, otherwise lookup by host/user/port
+                    connection = None
+                    if source_connection_id:
+                        connection = db.query(SSHConnection).filter(
+                            SSHConnection.id == source_connection_id
+                        ).first()
+                        if not connection:
+                            logger.error(
+                                "SSH connection not found by ID",
+                                connection_id=source_connection_id,
+                                path=path,
+                                job_id=job_id
+                            )
+                            continue
+                    else:
+                        # Fallback: Find SSHConnection matching host/user/port
+                        connection = db.query(SSHConnection).filter(
+                            SSHConnection.host == parsed['host'],
+                            SSHConnection.username == parsed['username'],
+                            SSHConnection.port == int(parsed['port'])
+                        ).first()
 
-                    if not connection:
-                        logger.error(
-                            "No SSH connection found for host",
-                            host=parsed['host'],
-                            username=parsed['username'],
-                            port=parsed['port'],
-                            path=path,
-                            job_id=job_id
-                        )
-                        continue
+                        if not connection:
+                            logger.error(
+                                "No SSH connection found for host",
+                                host=parsed['host'],
+                                username=parsed['username'],
+                                port=parsed['port'],
+                                path=path,
+                                job_id=job_id
+                            )
+                            continue
 
                     # Mount using mount service with SSH key authentication
                     try:
@@ -913,6 +933,7 @@ class BackupService:
                             original=path,
                             backup_root=temp_root,
                             mount_id=mount_id,
+                            connection_id=connection.id,
                             job_id=job_id
                         )
 
@@ -920,7 +941,10 @@ class BackupService:
                         logger.error(
                             "Failed to mount SSH path",
                             path=path,
+                            connection_id=connection.id if connection else None,
+                            remote_path=parsed['path'],
                             error=str(e),
+                            error_type=type(e).__name__,
                             job_id=job_id
                         )
                         # Don't add this path - skip it
@@ -1145,46 +1169,69 @@ class BackupService:
             actual_repository_path = repository
 
             # Setup SSH-specific configuration if this is an SSH repository
-            if repo_record and repo_record.repository_type == "ssh":
-                # Setup SSH key if available
-                if repo_record.ssh_key_id:
-                    from app.database.models import SSHKey
-                    from cryptography.fernet import Fernet
-                    import base64
-                    from app.config import settings
-                    import tempfile
+            from app.database.models import SSHConnection, SSHKey
 
-                    ssh_key = db.query(SSHKey).filter(SSHKey.id == repo_record.ssh_key_id).first()
-                    if ssh_key:
-                        # Decrypt private key
-                        encryption_key = settings.secret_key.encode()[:32]
-                        cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-                        private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+            ssh_key = None
+            ssh_key_source = None
 
-                        # Ensure private key ends with newline
-                        if not private_key.endswith('\n'):
-                            private_key += '\n'
+            if repo_record and repo_record.connection_id:
+                # NEW: Use connection_id to get SSH connection (preferred method)
+                connection = db.query(SSHConnection).filter(
+                    SSHConnection.id == repo_record.connection_id
+                ).first()
 
-                        # Create temporary key file
-                        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.key') as f:
-                            f.write(private_key)
-                            temp_key_file = f.name
+                if connection and connection.ssh_key_id:
+                    ssh_key = db.query(SSHKey).filter(SSHKey.id == connection.ssh_key_id).first()
+                    ssh_key_source = f"connection_id={repo_record.connection_id}"
 
-                        os.chmod(temp_key_file, 0o600)
+            elif repo_record and repo_record.repository_type == "ssh" and repo_record.ssh_key_id:
+                # FALLBACK: Legacy repos without connection_id (backward compatibility)
+                ssh_key = db.query(SSHKey).filter(SSHKey.id == repo_record.ssh_key_id).first()
+                ssh_key_source = f"legacy ssh_key_id={repo_record.ssh_key_id}"
 
-                        # Update SSH command to use the key
-                        ssh_opts = [
-                            "-i", temp_key_file,
-                            "-o", "StrictHostKeyChecking=no",
-                            "-o", "UserKnownHostsFile=/dev/null",
-                            "-o", "LogLevel=ERROR",
-                            "-o", "RequestTTY=no",  # Disable TTY allocation to prevent shell initialization output
-                            "-o", "PermitLocalCommand=no"  # Prevent local command execution
-                        ]
-                        env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
-                        logger.info("Using SSH key for remote repository",
-                                  ssh_key_id=repo_record.ssh_key_id,
-                                  repository=actual_repository_path)
+                logger.warning(
+                    "Using legacy SSH key lookup for repository without connection_id",
+                    repository=actual_repository_path,
+                    ssh_key_id=repo_record.ssh_key_id,
+                    suggestion="Edit this repository in the UI to select an SSH connection"
+                )
+
+            if ssh_key:
+                from cryptography.fernet import Fernet
+                import base64
+                from app.config import settings
+                import tempfile
+
+                # Decrypt private key
+                encryption_key = settings.secret_key.encode()[:32]
+                cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
+                private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+
+                # Ensure private key ends with newline
+                if not private_key.endswith('\n'):
+                    private_key += '\n'
+
+                # Create temporary key file
+                with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.key') as f:
+                    f.write(private_key)
+                    temp_key_file = f.name
+
+                os.chmod(temp_key_file, 0o600)
+
+                # Update SSH command to use the key
+                ssh_opts = [
+                    "-i", temp_key_file,
+                    "-o", "StrictHostKeyChecking=no",
+                    "-o", "UserKnownHostsFile=/dev/null",
+                    "-o", "LogLevel=ERROR",
+                    "-o", "RequestTTY=no",  # Disable TTY allocation to prevent shell initialization output
+                    "-o", "PermitLocalCommand=no"  # Prevent local command execution
+                ]
+                env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+                logger.info("Using SSH key for remote repository",
+                          source=ssh_key_source,
+                          ssh_key_id=ssh_key.id,
+                          repository=actual_repository_path)
 
                 # Set BORG_REMOTE_PATH if specified (path to borg binary on remote)
                 if repo_record.remote_path:
@@ -1251,8 +1298,15 @@ class BackupService:
             asyncio.create_task(self._calculate_and_update_size_background(job_id, source_paths, exclude_patterns))
 
             # Prepare source paths: mount SSH URLs via SSHFS
-            logger.info("Preparing source paths (mounting SSH URLs if needed)", source_paths=source_paths, job_id=job_id)
-            processed_source_paths, ssh_mount_roots = await self._prepare_source_paths(source_paths, job_id)
+            logger.info("Preparing source paths (mounting SSH URLs if needed)",
+                       source_paths=source_paths,
+                       source_connection_id=repo_record.source_ssh_connection_id if repo_record else None,
+                       job_id=job_id)
+            processed_source_paths, ssh_mount_roots = await self._prepare_source_paths(
+                source_paths,
+                job_id,
+                source_connection_id=repo_record.source_ssh_connection_id if repo_record else None
+            )
             if not processed_source_paths:
                 logger.error("No valid source paths after processing (all SSH mounts failed?)", job_id=job_id)
                 job.status = "failed"

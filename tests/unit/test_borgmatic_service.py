@@ -219,10 +219,13 @@ storage:
 
         repo = db_session.query(Repository).filter(Repository.name == 'ssh-repo').first()
         assert repo is not None
-        assert repo.repository_type == 'ssh'
-        assert repo.host == 'backup.example.com'
-        assert repo.username == 'user'
+        # SSH repository imported without connection_id - needs manual configuration
+        assert repo.connection_id is None
         assert repo.path == 'user@backup.example.com:/backup/ssh-repo.borg'
+
+        # Check warning message about manual SSH configuration
+        assert len(result['warnings']) > 0
+        assert any('SSH connection must be configured manually' in w for w in result['warnings'])
 
     def test_import_borg_ui_export(self, db_session):
         """Test importing Borg UI export format (round-trip) - new format."""

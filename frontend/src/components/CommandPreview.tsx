@@ -11,7 +11,7 @@ interface SourceSshConnection {
 interface CommandPreviewProps {
   mode: 'create' | 'import'
   repositoryPath: string
-  repositoryType?: 'local' | 'ssh' | 'sftp'
+  repositoryLocation?: 'local' | 'ssh'
   host?: string
   username?: string
   port?: number
@@ -48,7 +48,7 @@ const CommandBox = ({ children }: { children: React.ReactNode }) => (
 export default function CommandPreview({
   mode,
   repositoryPath,
-  repositoryType = 'local',
+  repositoryLocation = 'local',
   host,
   username,
   port = 22,
@@ -66,7 +66,7 @@ export default function CommandPreview({
 
   // Build full repository path
   let fullRepoPath = repositoryPath || '/path/to/repository'
-  if (repositoryType === 'ssh' && host && username) {
+  if (repositoryLocation === 'ssh' && host && username) {
     fullRepoPath = `ssh://${username}@${host}:${port}${repositoryPath.startsWith('/') ? '' : '/'}${repositoryPath}`
   }
 
