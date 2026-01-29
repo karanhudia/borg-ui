@@ -62,7 +62,8 @@ describe('Schedule - Functional Updater Pattern Verification', () => {
     expect(matches.length).toBeGreaterThanOrEqual(2)
 
     // Check that all repository_ids updates use functional updater
-    const repositoryUpdatesWithPrev = /setCreateForm\(\s*\(?prev\s*\)?\s*=>[^}]*repository_ids:\s*ids/g
+    const repositoryUpdatesWithPrev =
+      /setCreateForm\(\s*\(?prev\s*\)?\s*=>[^}]*repository_ids:\s*ids/g
     const createFormMatches = scheduleCode.match(repositoryUpdatesWithPrev) || []
     expect(createFormMatches.length).toBeGreaterThanOrEqual(1)
 
@@ -90,9 +91,9 @@ describe('Schedule - Functional Updater Pattern Verification', () => {
   it('should use functional updaters for all form field types', () => {
     // Verify that various field types use functional updaters
     const fieldPatterns = [
-      /setCreateForm\(\s*\(?prev\s*\)?\s*=>[^}]*name:/,           // text field
+      /setCreateForm\(\s*\(?prev\s*\)?\s*=>[^}]*name:/, // text field
       /setCreateForm\(\s*\(?prev\s*\)?\s*=>[^}]*repository_ids:/, // array field
-      /setCreateForm\(\s*\(?prev\s*\)?\s*=>[^}]*enabled:/,        // boolean field
+      /setCreateForm\(\s*\(?prev\s*\)?\s*=>[^}]*enabled:/, // boolean field
       /setCreateForm\(\s*\(?prev\s*\)?\s*=>[^}]*run_prune_after:/, // switch field
       /setCreateForm\(\s*\(?prev\s*\)?\s*=>[^}]*prune_keep_daily:/, // number field
     ]

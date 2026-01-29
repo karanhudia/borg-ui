@@ -1346,7 +1346,9 @@ const Schedule: React.FC = () => {
               <TextField
                 label="Description"
                 value={createForm.description}
-                onChange={(e) => setCreateForm((prev) => ({ ...prev, description: e.target.value }))}
+                onChange={(e) =>
+                  setCreateForm((prev) => ({ ...prev, description: e.target.value }))
+                }
                 multiline
                 rows={2}
                 placeholder="Optional description"
@@ -1381,7 +1383,9 @@ const Schedule: React.FC = () => {
                 control={
                   <Switch
                     checked={createForm.enabled}
-                    onChange={(e) => setCreateForm((prev) => ({ ...prev, enabled: e.target.checked }))}
+                    onChange={(e) =>
+                      setCreateForm((prev) => ({ ...prev, enabled: e.target.checked }))
+                    }
                   />
                 }
                 label="Enable immediately"
@@ -1604,7 +1608,10 @@ const Schedule: React.FC = () => {
                       <Switch
                         checked={createForm.run_compact_after}
                         onChange={(e) =>
-                          setCreateForm((prev) => ({ ...prev, run_compact_after: e.target.checked }))
+                          setCreateForm((prev) => ({
+                            ...prev,
+                            run_compact_after: e.target.checked,
+                          }))
                         }
                       />
                     }
@@ -1673,7 +1680,9 @@ const Schedule: React.FC = () => {
                 <TextField
                   label="Schedule"
                   value={editForm.cron_expression}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, cron_expression: e.target.value }))}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, cron_expression: e.target.value }))
+                  }
                   required
                   fullWidth
                   size="medium"
@@ -1738,7 +1747,9 @@ const Schedule: React.FC = () => {
                 control={
                   <Switch
                     checked={editForm.enabled}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, enabled: e.target.checked }))}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({ ...prev, enabled: e.target.checked }))
+                    }
                   />
                 }
                 label="Enabled"
@@ -1820,7 +1831,10 @@ const Schedule: React.FC = () => {
                         <Checkbox
                           checked={editForm.run_repository_scripts}
                           onChange={(e) =>
-                            setEditForm((prev) => ({ ...prev, run_repository_scripts: e.target.checked }))
+                            setEditForm((prev) => ({
+                              ...prev,
+                              run_repository_scripts: e.target.checked,
+                            }))
                           }
                         />
                       }
