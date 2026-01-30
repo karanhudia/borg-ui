@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -37,6 +38,25 @@ export default function LogViewerDialog<T extends JobWithLogs>({
   // Determine display label
   const displayLabel = jobTypeLabel || (job.type ? getTypeLabel(job.type) : 'Backup')
 
+  // Memoize the fetch function to prevent re-renders from causing duplicate log fetches
+  const handleFetchLogs = useCallback(
+    async (offset: number) => {
+      const response = await fetch(
+        `/api/activity/${jobType}/${job.id}/logs?offset=${offset}&limit=500`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
+          },
+        }
+      )
+      if (!response.ok) {
+        throw new Error('Failed to fetch logs')
+      }
+      return response.json()
+    },
+    [jobType, job.id]
+  )
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
       <DialogTitle>
@@ -53,20 +73,7 @@ export default function LogViewerDialog<T extends JobWithLogs>({
           status={job.status}
           jobType={jobType}
           showHeader={false}
-          onFetchLogs={async (offset) => {
-            const response = await fetch(
-              `/api/activity/${jobType}/${job.id}/logs?offset=${offset}&limit=500`,
-              {
-                headers: {
-                  Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
-                },
-              }
-            )
-            if (!response.ok) {
-              throw new Error('Failed to fetch logs')
-            }
-            return response.json()
-          }}
+          onFetchLogs={handleFetchLogs}
         />
       </DialogContent>
       <DialogActions>

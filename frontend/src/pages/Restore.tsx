@@ -19,7 +19,6 @@ import {
   FormControl,
   InputLabel,
   Paper,
-  Chip,
 } from '@mui/material'
 import {
   Database,
@@ -46,6 +45,7 @@ import LockErrorDialog from '../components/LockErrorDialog'
 import { Archive, Repository } from '../types'
 import ArchiveBrowserDialog from '../components/ArchiveBrowserDialog'
 import BackupJobsTable from '../components/BackupJobsTable'
+import DataTable, { Column, ActionButton } from '../components/DataTable'
 
 interface RestoreJob {
   id: number
@@ -299,22 +299,6 @@ const Restore: React.FC = () => {
     return archiveInfo.data.archive.stats
   }, [archiveInfo])
 
-  // Get status color for Chip
-  const getStatusColor = (status: string): 'info' | 'success' | 'error' | 'default' => {
-    switch (status) {
-      case 'running':
-        return 'info'
-      case 'completed':
-        return 'success'
-      case 'failed':
-        return 'error'
-      case 'cancelled':
-        return 'default'
-      default:
-        return 'default'
-    }
-  }
-
   // Get status icon
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -367,7 +351,6 @@ const Restore: React.FC = () => {
       tooltip: 'Restore this archive',
     },
   ]
-
 
   return (
     <Box>
@@ -630,13 +613,13 @@ const Restore: React.FC = () => {
           </Stack>
 
           <BackupJobsTable
-            jobs={recentJobs.map(job => ({
+            jobs={recentJobs.map((job: RestoreJob) => ({
               ...job,
               type: 'restore',
               repository_path: job.repository,
               archive_name: job.archive,
               error_message: job.error,
-              has_logs: !!job.logs,  // Set has_logs flag based on logs field
+              has_logs: !!job.logs, // Set has_logs flag based on logs field
             }))}
             loading={false}
             actions={{
