@@ -1,10 +1,12 @@
 /**
  * Tests for Restore page speed and ETA display functionality
  */
+import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter } from 'react-router-dom'
+import { AxiosResponse } from 'axios'
 import Restore from '../Restore'
 import * as api from '../../services/api'
 
@@ -57,12 +59,12 @@ describe('Restore Page - Speed and ETA Display', () => {
     // Mock repositories API (returns axios response structure)
     vi.mocked(api.repositoriesAPI.getRepositories).mockResolvedValue({
       data: { repositories: [] },
-    } as any)
+    } as AxiosResponse)
 
     // Mock restore jobs API with default empty response (axios response structure)
     vi.mocked(api.restoreAPI.getRestoreJobs).mockResolvedValue({
       data: { jobs: [] },
-    } as any)
+    } as AxiosResponse)
   })
 
   it('displays restore speed when job is running', async () => {
@@ -91,7 +93,7 @@ describe('Restore Page - Speed and ETA Display', () => {
 
     vi.mocked(api.restoreAPI.getRestoreJobs).mockResolvedValue({
       data: mockJobs,
-    } as any)
+    } as AxiosResponse)
 
     renderWithProviders(<Restore />)
 
@@ -126,7 +128,7 @@ describe('Restore Page - Speed and ETA Display', () => {
 
     vi.mocked(api.restoreAPI.getRestoreJobs).mockResolvedValue({
       data: mockJobs,
-    } as any)
+    } as AxiosResponse)
 
     renderWithProviders(<Restore />)
 
@@ -166,7 +168,7 @@ describe('Restore Page - Speed and ETA Display', () => {
 
     vi.mocked(api.restoreAPI.getRestoreJobs).mockResolvedValue({
       data: mockJobs,
-    } as any)
+    } as AxiosResponse)
 
     renderWithProviders(<Restore />)
 
@@ -203,7 +205,7 @@ describe('Restore Page - Speed and ETA Display', () => {
 
     vi.mocked(api.restoreAPI.getRestoreJobs).mockResolvedValue({
       data: mockJobs,
-    } as any)
+    } as AxiosResponse)
 
     renderWithProviders(<Restore />)
 
@@ -256,7 +258,7 @@ describe('Restore Page - Speed and ETA Display', () => {
 
     vi.mocked(api.restoreAPI.getRestoreJobs).mockResolvedValue({
       data: mockJobs,
-    } as any)
+    } as AxiosResponse)
 
     renderWithProviders(<Restore />)
 
@@ -292,7 +294,7 @@ describe('Restore Page - Speed and ETA Display', () => {
 
     vi.mocked(api.restoreAPI.getRestoreJobs).mockResolvedValue({
       data: mockJobs,
-    } as any)
+    } as AxiosResponse)
 
     renderWithProviders(<Restore />)
 
@@ -329,7 +331,7 @@ describe('Restore Page - Speed and ETA Display', () => {
 
     vi.mocked(api.restoreAPI.getRestoreJobs).mockResolvedValue({
       data: mockJobs,
-    } as any)
+    } as AxiosResponse)
 
     renderWithProviders(<Restore />)
 

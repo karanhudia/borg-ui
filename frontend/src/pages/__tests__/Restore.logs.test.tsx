@@ -1,10 +1,12 @@
 /**
  * Tests for Restore page logs functionality
  */
+import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter } from 'react-router-dom'
+import { AxiosResponse } from 'axios'
 import Restore from '../Restore'
 import * as api from '../../services/api'
 
@@ -57,12 +59,12 @@ describe('Restore Page - Logs Functionality', () => {
     // Mock repositories API (returns axios response structure)
     vi.mocked(api.repositoriesAPI.getRepositories).mockResolvedValue({
       data: { repositories: [] },
-    } as any)
+    } as AxiosResponse)
 
     // Mock restore jobs API with default empty response (axios response structure)
     vi.mocked(api.restoreAPI.getRestoreJobs).mockResolvedValue({
       data: { jobs: [] },
-    } as any)
+    } as AxiosResponse)
   })
 
   it('includes logs field in API response for completed jobs', async () => {
@@ -92,7 +94,7 @@ describe('Restore Page - Logs Functionality', () => {
 
     vi.mocked(api.restoreAPI.getRestoreJobs).mockResolvedValue({
       data: mockJobs,
-    } as any)
+    } as AxiosResponse)
 
     renderWithProviders(<Restore />)
 
@@ -132,7 +134,7 @@ describe('Restore Page - Logs Functionality', () => {
 
     vi.mocked(api.restoreAPI.getRestoreJobs).mockResolvedValue({
       data: mockJobs,
-    } as any)
+    } as AxiosResponse)
 
     renderWithProviders(<Restore />)
 
@@ -170,7 +172,7 @@ describe('Restore Page - Logs Functionality', () => {
 
     vi.mocked(api.restoreAPI.getRestoreJobs).mockResolvedValue({
       data: mockJobs,
-    } as any)
+    } as AxiosResponse)
 
     renderWithProviders(<Restore />)
 
@@ -218,7 +220,7 @@ Restore completed successfully`
 
     vi.mocked(api.restoreAPI.getRestoreJobs).mockResolvedValue({
       data: mockJobs,
-    } as any)
+    } as AxiosResponse)
 
     renderWithProviders(<Restore />)
 
@@ -264,7 +266,7 @@ Restore failed`
 
     vi.mocked(api.restoreAPI.getRestoreJobs).mockResolvedValue({
       data: mockJobs,
-    } as any)
+    } as AxiosResponse)
 
     renderWithProviders(<Restore />)
 
@@ -342,7 +344,7 @@ Restore failed`
 
     vi.mocked(api.restoreAPI.getRestoreJobs).mockResolvedValue({
       data: mockJobs,
-    } as any)
+    } as AxiosResponse)
 
     renderWithProviders(<Restore />)
 
