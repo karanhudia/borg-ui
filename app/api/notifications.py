@@ -22,9 +22,10 @@ router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 # Pydantic models
 class NotificationSettingsCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="User-friendly name")
-    service_url: str = Field(..., description="Apprise service URL (e.g., slack://token/)")
+    service_url: str = Field(..., description="Apprise service URL (e.g., slack://token/). Use json:// or jsons:// for JSON webhooks.")
     enabled: bool = Field(default=True)
     title_prefix: Optional[str] = Field(default=None, max_length=100, description="Optional prefix for notification titles (e.g., '[Production]')")
+    include_job_name_in_title: bool = Field(default=False, description="Include job/schedule name in notification title")
     notify_on_backup_start: bool = Field(default=False)
     notify_on_backup_success: bool = Field(default=False)
     notify_on_backup_failure: bool = Field(default=True)
@@ -42,6 +43,7 @@ class NotificationSettingsUpdate(BaseModel):
     service_url: Optional[str] = None
     enabled: Optional[bool] = None
     title_prefix: Optional[str] = None
+    include_job_name_in_title: Optional[bool] = None
     notify_on_backup_start: Optional[bool] = None
     notify_on_backup_success: Optional[bool] = None
     notify_on_backup_failure: Optional[bool] = None
@@ -68,6 +70,7 @@ class NotificationSettingsResponse(BaseModel):
     service_url: str
     enabled: bool
     title_prefix: Optional[str]
+    include_job_name_in_title: bool
     notify_on_backup_start: bool
     notify_on_backup_success: bool
     notify_on_backup_failure: bool

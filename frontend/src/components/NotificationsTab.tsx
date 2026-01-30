@@ -57,6 +57,7 @@ interface NotificationSetting {
   service_url: string
   enabled: boolean
   title_prefix: string | null
+  include_job_name_in_title: boolean
   notify_on_backup_start: boolean
   notify_on_backup_success: boolean
   notify_on_backup_failure: boolean
@@ -85,6 +86,7 @@ const NotificationsTab: React.FC = () => {
     service_url: '',
     enabled: true,
     title_prefix: '',
+    include_job_name_in_title: false,
     notify_on_backup_start: false,
     notify_on_backup_success: false,
     notify_on_backup_failure: true,
@@ -184,6 +186,7 @@ const NotificationsTab: React.FC = () => {
       service_url: '',
       enabled: true,
       title_prefix: '',
+      include_job_name_in_title: false,
       notify_on_backup_start: false,
       notify_on_backup_success: false,
       notify_on_backup_failure: true,
@@ -204,6 +207,7 @@ const NotificationsTab: React.FC = () => {
       service_url: notification.service_url,
       enabled: notification.enabled,
       title_prefix: notification.title_prefix || '',
+      include_job_name_in_title: notification.include_job_name_in_title || false,
       notify_on_backup_start: notification.notify_on_backup_start,
       notify_on_backup_success: notification.notify_on_backup_success,
       notify_on_backup_failure: notification.notify_on_backup_failure,
@@ -229,6 +233,7 @@ const NotificationsTab: React.FC = () => {
       service_url: notification.service_url,
       enabled: notification.enabled,
       title_prefix: notification.title_prefix || '',
+      include_job_name_in_title: notification.include_job_name_in_title || false,
       notify_on_backup_start: notification.notify_on_backup_start,
       notify_on_backup_success: notification.notify_on_backup_success,
       notify_on_backup_failure: notification.notify_on_backup_failure,
@@ -590,6 +595,11 @@ const NotificationsTab: React.FC = () => {
               helperText="Use Apprise URL format. See examples above."
             />
 
+            <Alert severity="info" sx={{ mt: 1 }}>
+              <strong>Tip:</strong> For automation and monitoring, use <code>jsons://</code> or{' '}
+              <code>json://</code> URLs to automatically receive pure JSON data.
+            </Alert>
+
             <TextField
               label="Title Prefix (Optional)"
               value={formData.title_prefix}
@@ -599,15 +609,42 @@ const NotificationsTab: React.FC = () => {
               helperText="Add a custom prefix to all notification titles (e.g., '[Production] ✅ Backup Successful')"
             />
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formData.enabled}
-                  onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
-                />
-              }
-              label="Enable notifications"
-            />
+            <Box sx={{ mt: 2, mb: 2 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formData.enabled}
+                    onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
+                  />
+                }
+                label="Enable notifications"
+              />
+            </Box>
+
+            <Box sx={{ mt: 2, mb: 1 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                Notification Enhancements
+              </Typography>
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formData.include_job_name_in_title}
+                    onChange={(e) =>
+                      setFormData({ ...formData, include_job_name_in_title: e.target.checked })
+                    }
+                  />
+                }
+                label="Include job/schedule name in title"
+              />
+              <Typography
+                variant="caption"
+                sx={{ display: 'block', pl: 4.5, mt: -0.5, mb: 1, color: 'text.secondary' }}
+              >
+                Adds job or schedule name to notification titles for easier identification (e.g.,
+                "✅ Backup Successful - Daily Backup")
+              </Typography>
+            </Box>
 
             <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
               Notify on:
