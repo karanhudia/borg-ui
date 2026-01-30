@@ -601,7 +601,11 @@ describe('BackupJobsTable', () => {
       ]
 
       renderWithProviders(
-        <BackupJobsTable jobs={runningJobs as MockBackupJob[]} isAdmin={true} actions={{ delete: true }} />
+        <BackupJobsTable
+          jobs={runningJobs as MockBackupJob[]}
+          isAdmin={true}
+          actions={{ delete: true }}
+        />
       )
 
       // Should not show delete button for running job
@@ -623,7 +627,11 @@ describe('BackupJobsTable', () => {
       ]
 
       renderWithProviders(
-        <BackupJobsTable jobs={pendingJobs as MockBackupJob[]} isAdmin={true} actions={{ delete: true }} />
+        <BackupJobsTable
+          jobs={pendingJobs as MockBackupJob[]}
+          isAdmin={true}
+          actions={{ delete: true }}
+        />
       )
 
       // Should not show delete button for pending job
@@ -646,7 +654,11 @@ describe('BackupJobsTable', () => {
       ]
 
       renderWithProviders(
-        <BackupJobsTable jobs={completedJobs as MockBackupJob[]} isAdmin={true} actions={{ delete: true }} />
+        <BackupJobsTable
+          jobs={completedJobs as MockBackupJob[]}
+          isAdmin={true}
+          actions={{ delete: true }}
+        />
       )
 
       // Should show delete button for completed job
@@ -670,7 +682,11 @@ describe('BackupJobsTable', () => {
       ]
 
       renderWithProviders(
-        <BackupJobsTable jobs={failedJobs as MockBackupJob[]} isAdmin={true} actions={{ delete: true }} />
+        <BackupJobsTable
+          jobs={failedJobs as MockBackupJob[]}
+          isAdmin={true}
+          actions={{ delete: true }}
+        />
       )
 
       // Should show delete button for failed job
