@@ -488,7 +488,7 @@ const Restore: React.FC = () => {
 
             <Stack spacing={3}>
               {runningJobs.map((job: RestoreJob) => (
-                <Paper key={job.id} variant="outlined" sx={{ p: 3 }}>
+                <Paper key={`running-${job.id}`} variant="outlined" sx={{ p: 3 }}>
                   <Stack
                     direction="row"
                     justifyContent="space-between"
@@ -646,7 +646,7 @@ const Restore: React.FC = () => {
               delete: true,
             }}
             isAdmin={user?.is_admin || false}
-            getRowKey={(job) => String(job.id)}
+            getRowKey={(job) => `recent-${job.id}`}
             headerBgColor="background.default"
             enableHover={true}
             emptyState={{
