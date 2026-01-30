@@ -389,3 +389,172 @@ class TestRestoreJobs:
         )
 
         assert response.status_code in [404, 405]  # Not found or not implemented
+
+@pytest.mark.unit
+class TestRestoreSpeedAndETA:
+    """Test restore speed and ETA tracking functionality"""
+
+    def test_restore_job_includes_speed_and_eta_fields(self, test_client: TestClient, admin_headers, test_db):
+        """Test that restore job API responses include speed and ETA fields"""
+        from app.database.models import RestoreJob
+        from datetime import datetime, timezone
+        
+        # Create a running restore job with speed and ETA
+        job = RestoreJob(
+            repository="/test/repo",
+            archive="test-archive",
+            destination="/test/dest",
+            status="running",
+            started_at=datetime.now(timezone.utc),
+            nfiles=100,
+            current_file="/test/file.txt",
+            progress_percent=45.5,
+            original_size=10485760,  # 10 MB
+            restored_size=4767744,   # ~4.5 MB
+            restore_speed=12.34,     # MB/s
+            estimated_time_remaining=135  # seconds
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        # Get job status
+        response = test_client.get(f"/api/restore/status/{job.id}", headers=admin_headers)
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Verify speed and ETA are included
+        assert "progress_details" in data
+        progress = data["progress_details"]
+        assert "restore_speed" in progress
+        assert "estimated_time_remaining" in progress
+        assert progress["restore_speed"] == 12.34
+        assert progress["estimated_time_remaining"] == 135
+
+    def test_restore_jobs_list_includes_speed_and_eta(self, test_client: TestClient, admin_headers, test_db):
+        """Test that restore jobs list includes speed and ETA fields"""
+        from app.database.models import RestoreJob
+        from datetime import datetime, timezone
+        
+        # Create restore jobs with different states
+        jobs_data = [
+            {
+                "repository": "/test/repo1",
+                "archive": "archive1",
+                "destination": "/test/dest1",
+                "status": "running",
+                "started_at": datetime.now(timezone.utc),
+                "restore_speed": 15.67,
+                "estimated_time_remaining": 240
+            },
+            {
+                "repository": "/test/repo2",
+                "archive": "archive2",
+                "destination": "/test/dest2",
+                "status": "completed",
+                "started_at": datetime.now(timezone.utc),
+                "completed_at": datetime.now(timezone.utc),
+                "restore_speed": 0.0,
+                "estimated_time_remaining": 0
+            }
+        ]
+        
+        for job_data in jobs_data:
+            job = RestoreJob(**job_data)
+            test_db.add(job)
+        test_db.commit()
+
+        # Get jobs list
+        response = test_client.get("/api/restore/jobs", headers=admin_headers)
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert "jobs" in data
+        
+        # Verify all jobs have speed and ETA fields
+        for job in data["jobs"]:
+            assert "progress_details" in job
+            progress = job["progress_details"]
+            assert "restore_speed" in progress
+            assert "estimated_time_remaining" in progress
+
+    def test_restore_speed_defaults_to_zero(self, test_client: TestClient, admin_headers, test_db):
+        """Test that restore speed defaults to 0.0 when not set"""
+        from app.database.models import RestoreJob
+        
+        job = RestoreJob(
+            repository="/test/repo",
+            archive="test-archive",
+            destination="/test/dest",
+            status="pending"
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(f"/api/restore/status/{job.id}", headers=admin_headers)
+        
+        assert response.status_code == 200
+        data = response.json()
+        progress = data["progress_details"]
+        assert progress["restore_speed"] == 0.0
+        assert progress["estimated_time_remaining"] == 0
+
+    def test_restore_eta_zero_when_speed_zero(self, test_client: TestClient, admin_headers, test_db):
+        """Test that ETA is 0 when restore speed is 0"""
+        from app.database.models import RestoreJob
+        from datetime import datetime, timezone
+        
+        job = RestoreJob(
+            repository="/test/repo",
+            archive="test-archive",
+            destination="/test/dest",
+            status="running",
+            started_at=datetime.now(timezone.utc),
+            original_size=10485760,
+            restored_size=1048576,
+            restore_speed=0.0,  # No speed yet
+            estimated_time_remaining=0
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(f"/api/restore/status/{job.id}", headers=admin_headers)
+        
+        assert response.status_code == 200
+        data = response.json()
+        progress = data["progress_details"]
+        assert progress["estimated_time_remaining"] == 0
+
+    def test_restore_completed_job_speed_preserved(self, test_client: TestClient, admin_headers, test_db):
+        """Test that completed restore jobs preserve final speed"""
+        from app.database.models import RestoreJob
+        from datetime import datetime, timezone
+        
+        job = RestoreJob(
+            repository="/test/repo",
+            archive="test-archive",
+            destination="/test/dest",
+            status="completed",
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
+            original_size=10485760,
+            restored_size=10485760,
+            restore_speed=18.92,  # Final speed preserved
+            estimated_time_remaining=0,
+            progress_percent=100.0
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(f"/api/restore/status/{job.id}", headers=admin_headers)
+        
+        assert response.status_code == 200
+        data = response.json()
+        progress = data["progress_details"]
+        assert progress["restore_speed"] == 18.92
+        assert progress["estimated_time_remaining"] == 0
+        assert data["status"] == "completed"
