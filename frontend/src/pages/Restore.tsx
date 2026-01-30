@@ -636,6 +636,7 @@ const Restore: React.FC = () => {
               repository_path: job.repository,
               archive_name: job.archive,
               error_message: job.error,
+              has_logs: !!job.logs,  // Set has_logs flag based on logs field
             }))}
             loading={false}
             actions={{

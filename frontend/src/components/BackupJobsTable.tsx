@@ -280,8 +280,8 @@ export const BackupJobsTable = <T extends Job = Job>({
       id: 'repository',
       label: 'Repository',
       align: 'left',
-      minWidth: '200px',
-      width: '25%',
+      minWidth: '250px',
+      width: '30%',
       render: (job: T) => {
         // Handle Activity items with different repository field names
         if (job.type && job.type === 'package') {
@@ -380,7 +380,7 @@ export const BackupJobsTable = <T extends Job = Job>({
       id: 'duration',
       label: 'Duration',
       align: 'left',
-      width: '110px',
+      width: '90px',
       render: (job: T) => (
         <Typography variant="body2" color="text.secondary">
           {formatTimeRange(job.started_at, job.completed_at, job.status)}
