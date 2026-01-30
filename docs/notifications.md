@@ -644,6 +644,7 @@ backup_data = extract_json_from_markdown(webhook_payload)
 
 **1. Prometheus/Grafana Monitoring:**
 Extract metrics from backup stats:
+{% raw %}
 ```python
 stats = backup_data.get('stats', {})
 prometheus_metrics = f"""
@@ -652,6 +653,7 @@ backup_compressed_size_bytes{{repo="{repo}"}} {stats['compressed_size']}
 backup_deduplicated_size_bytes{{repo="{repo}"}} {stats['deduplicated_size']}
 """
 ```
+{% endraw %}
 
 **2. Log Aggregation (ELK, Splunk):**
 Forward structured events to centralized logging:
