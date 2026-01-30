@@ -698,7 +698,9 @@ describe('BackupJobsTable', () => {
       // Dialog should appear
       const dialog = await screen.findByRole('dialog', {}, { timeout: 3000 })
       expect(dialog).toBeInTheDocument()
-      expect(within(dialog).getByRole('heading', { name: /delete.*backup.*entry/i })).toBeInTheDocument()
+      expect(
+        within(dialog).getByRole('heading', { name: /delete.*backup.*entry/i })
+      ).toBeInTheDocument()
     })
 
     it('closes delete dialog when cancel is clicked', async () => {
