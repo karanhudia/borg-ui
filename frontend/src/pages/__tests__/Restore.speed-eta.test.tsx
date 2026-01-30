@@ -29,6 +29,11 @@ vi.mock('../../hooks/useMatomo', () => ({
     EventAction: {},
   }),
 }))
+vi.mock('../../hooks/useAuth', () => ({
+  useAuth: () => ({
+    user: { is_admin: true },
+  }),
+}))
 
 const renderWithProviders = (ui: React.ReactElement) => {
   const queryClient = new QueryClient({
