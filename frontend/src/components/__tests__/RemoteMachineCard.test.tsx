@@ -17,6 +17,7 @@ describe('RemoteMachineCard', () => {
     host: 'server.example.com',
     username: 'admin',
     port: 22,
+    use_sftp_mode: true,
     status: 'connected',
     created_at: '2025-01-01T00:00:00Z',
   }

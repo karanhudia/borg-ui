@@ -23,6 +23,8 @@ import {
   Alert,
   Tooltip,
   InputAdornment,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material'
 import {
   Key,
@@ -57,6 +59,7 @@ interface SSHConnection {
   host: string
   username: string
   port: number
+  use_sftp_mode: boolean
   default_path?: string
   mount_point?: string
   status: string
@@ -94,6 +97,7 @@ export default function SSHConnectionsSingleKey() {
     username: '',
     port: 22,
     password: '',
+    use_sftp_mode: true,
     default_path: '',
     mount_point: '',
   })
@@ -106,6 +110,7 @@ export default function SSHConnectionsSingleKey() {
     host: '',
     username: '',
     port: 22,
+    use_sftp_mode: true,
     default_path: '',
     mount_point: '',
   })
@@ -186,6 +191,7 @@ export default function SSHConnectionsSingleKey() {
         username: '',
         port: 22,
         password: '',
+        use_sftp_mode: true,
         default_path: '',
         mount_point: '',
       })
@@ -397,6 +403,7 @@ export default function SSHConnectionsSingleKey() {
       host: connection.host,
       username: connection.username,
       port: connection.port,
+      use_sftp_mode: connection.use_sftp_mode,
       default_path: connection.default_path || '',
       mount_point: connection.mount_point || '',
     })
@@ -939,6 +946,24 @@ export default function SSHConnectionsSingleKey() {
                 ),
               }}
             />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={connectionForm.use_sftp_mode}
+                  onChange={(e) =>
+                    setConnectionForm({ ...connectionForm, use_sftp_mode: e.target.checked })
+                  }
+                />
+              }
+              label={
+                <Box>
+                  <Typography variant="body2">Use SFTP mode for key deployment</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Required by Hetzner Storage Box. Disable for Synology NAS or older SSH servers.
+                  </Typography>
+                </Box>
+              }
+            />
             <TextField
               label="Default Path (Optional)"
               fullWidth
@@ -1121,6 +1146,27 @@ export default function SSHConnectionsSingleKey() {
                 })
               }
               InputLabelProps={{ shrink: true }}
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={editConnectionForm.use_sftp_mode}
+                  onChange={(e) =>
+                    setEditConnectionForm({
+                      ...editConnectionForm,
+                      use_sftp_mode: e.target.checked,
+                    })
+                  }
+                />
+              }
+              label={
+                <Box>
+                  <Typography variant="body2">Use SFTP mode for key deployment</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Required by Hetzner Storage Box. Disable for Synology NAS or older SSH servers.
+                  </Typography>
+                </Box>
+              }
             />
             <TextField
               label="Default Path (Optional)"
