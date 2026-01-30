@@ -31,6 +31,7 @@ import LockErrorDialog from '../components/LockErrorDialog'
 import { BackupJob } from '../types'
 import BackupJobsTable from '../components/BackupJobsTable'
 import { useMatomo } from '../hooks/useMatomo'
+import { useAuth } from '../hooks/useAuth'
 
 const Backup: React.FC = () => {
   const [selectedRepository, setSelectedRepository] = useState<string>('')
@@ -41,6 +42,7 @@ const Backup: React.FC = () => {
   const queryClient = useQueryClient()
   const location = useLocation()
   const { trackBackup, EventAction } = useMatomo()
+  const { user } = useAuth()
 
   // Handle incoming navigation state (from "Backup Now" button)
   useEffect(() => {
@@ -569,8 +571,10 @@ const Backup: React.FC = () => {
               breakLock: true,
               downloadLogs: true,
               errorInfo: true,
+              delete: true,
             }}
             onBreakLock={handleBreakLock}
+            isAdmin={user?.is_admin || false}
             getRowKey={(job) => String(job.id)}
             headerBgColor="background.default"
             enableHover={true}
