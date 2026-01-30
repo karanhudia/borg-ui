@@ -251,7 +251,7 @@ class RestoreService:
                     # Send success notification
                     try:
                         await notification_service.send_restore_success(
-                            db_session, repository_path, archive_name, destination
+                            db_session, repository_path, archive_name, destination, None, None
                         )
                     except Exception as e:
                         logger.warning("Failed to send restore success notification", error=str(e))
@@ -270,7 +270,7 @@ class RestoreService:
                     # Send failure notification
                     try:
                         await notification_service.send_restore_failure(
-                            db_session, repository_path, archive_name, job.error_message
+                            db_session, repository_path, archive_name, job.error_message, None
                         )
                     except Exception as e:
                         logger.warning("Failed to send restore failure notification", error=str(e))
@@ -302,7 +302,7 @@ class RestoreService:
                     # Send failure notification
                     try:
                         await notification_service.send_restore_failure(
-                            db_session, repository_path, archive_name, str(e)
+                            db_session, repository_path, archive_name, str(e), None
                         )
                     except Exception as notif_error:
                         logger.warning("Failed to send restore failure notification", error=str(notif_error))

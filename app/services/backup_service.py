@@ -1010,6 +1010,14 @@ class BackupService:
                 logger.error("Job not found", job_id=job_id)
                 return
 
+            # Get job/schedule name for notifications
+            job_name = None
+            if job.scheduled_job_id:
+                from app.database.models import ScheduledJob
+                scheduled_job = db.query(ScheduledJob).filter(ScheduledJob.id == job.scheduled_job_id).first()
+                if scheduled_job:
+                    job_name = scheduled_job.name
+
             # Check if this is a remote backup
             if job.execution_mode == "remote_ssh":
                 logger.info("Delegating to remote backup service", job_id=job_id)
@@ -1277,7 +1285,7 @@ class BackupService:
                         # Send failure notification for pre-hook failure
                         try:
                             await notification_service.send_backup_failure(
-                                db, repository, error_msg, job_id
+                                db, repository, error_msg, job_id, job_name
                             )
                         except Exception as e:
                             logger.warning("Failed to send backup failure notification", error=str(e))
@@ -1400,7 +1408,7 @@ class BackupService:
             # Send backup start notification (size will be updated by background task)
             try:
                 await notification_service.send_backup_start(
-                    db, repository, archive_name, source_paths, None
+                    db, repository, archive_name, source_paths, None, job_name
                 )
             except Exception as e:
                 logger.warning("Failed to send backup start notification", error=str(e))
@@ -1757,7 +1765,7 @@ class BackupService:
                     # Send failure notification if post-hook failed
                     try:
                         await notification_service.send_backup_failure(
-                            db, repository, job.error_message, job_id
+                            db, repository, job.error_message, job_id, job_name
                         )
                     except Exception as e:
                         logger.warning("Failed to send backup failure notification", error=str(e))
@@ -1770,7 +1778,7 @@ class BackupService:
                             "deduplicated_size": job.deduplicated_size
                         }
                         await notification_service.send_backup_success(
-                            db, repository, archive_name, stats, job.completed_at
+                            db, repository, archive_name, stats, job.completed_at, job_name
                         )
                     except Exception as e:
                         logger.warning("Failed to send backup success notification", error=str(e))
@@ -1820,7 +1828,7 @@ class BackupService:
                     # Send failure notification if post-hook failed
                     try:
                         await notification_service.send_backup_failure(
-                            db, repository, job.error_message, job_id
+                            db, repository, job.error_message, job_id, job_name
                         )
                     except Exception as e:
                         logger.warning("Failed to send backup failure notification", error=str(e))
@@ -1833,7 +1841,7 @@ class BackupService:
                             "deduplicated_size": job.deduplicated_size
                         }
                         await notification_service.send_backup_warning(
-                            db, repository, archive_name, job.error_message, stats, job.completed_at
+                            db, repository, archive_name, job.error_message, stats, job.completed_at, job_name
                         )
                     except Exception as e:
                         logger.warning("Failed to send backup warning notification", error=str(e))
@@ -2019,7 +2027,7 @@ class BackupService:
             if job.status == "failed":
                 try:
                     await notification_service.send_backup_failure(
-                        db, repository, job.error_message or "Unknown error", job_id
+                        db, repository, job.error_message or "Unknown error", job_id, job_name
                     )
                 except Exception as e:
                     logger.warning("Failed to send backup failure notification", error=str(e))
@@ -2042,7 +2050,7 @@ class BackupService:
             # Send failure notification
             try:
                 await notification_service.send_backup_failure(
-                    db, repository, str(e), job_id
+                    db, repository, str(e), job_id, job_name
                 )
             except Exception as notif_error:
                 logger.warning("Failed to send backup failure notification", error=str(notif_error))
