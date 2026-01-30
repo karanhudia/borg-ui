@@ -211,6 +211,12 @@ class RestoreJob(Base):
     current_file = Column(Text, nullable=True)  # Current file being restored
     progress_percent = Column(Float, default=0.0)  # Progress percentage
 
+    # Speed and ETA tracking (similar to backup jobs)
+    original_size = Column(BigInteger, default=0)  # Total bytes to restore
+    restored_size = Column(BigInteger, default=0)  # Bytes restored so far
+    restore_speed = Column(Float, default=0.0)  # Current restore speed in MB/s
+    estimated_time_remaining = Column(Integer, default=0)  # Estimated seconds remaining
+
     created_at = Column(DateTime, default=utc_now)
 
 class ScheduledJob(Base):
