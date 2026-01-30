@@ -588,7 +588,7 @@ describe('BackupJobsTable', () => {
     })
 
     it('does not show delete button for running jobs', () => {
-      const runningJobs = [
+      const runningJobs: Partial<MockBackupJob>[] = [
         {
           id: 10,
           repository: '/backup/repo1',
@@ -601,7 +601,7 @@ describe('BackupJobsTable', () => {
       ]
 
       renderWithProviders(
-        <BackupJobsTable jobs={runningJobs as any} isAdmin={true} actions={{ delete: true }} />
+        <BackupJobsTable jobs={runningJobs as MockBackupJob[]} isAdmin={true} actions={{ delete: true }} />
       )
 
       // Should not show delete button for running job
@@ -610,7 +610,7 @@ describe('BackupJobsTable', () => {
     })
 
     it('does not show delete button for pending jobs', () => {
-      const pendingJobs = [
+      const pendingJobs: Partial<MockBackupJob>[] = [
         {
           id: 11,
           repository: '/backup/repo1',
@@ -623,7 +623,7 @@ describe('BackupJobsTable', () => {
       ]
 
       renderWithProviders(
-        <BackupJobsTable jobs={pendingJobs as any} isAdmin={true} actions={{ delete: true }} />
+        <BackupJobsTable jobs={pendingJobs as MockBackupJob[]} isAdmin={true} actions={{ delete: true }} />
       )
 
       // Should not show delete button for pending job
@@ -632,7 +632,7 @@ describe('BackupJobsTable', () => {
     })
 
     it('shows delete button for completed jobs (admin only)', () => {
-      const completedJobs = [
+      const completedJobs: Partial<MockBackupJob>[] = [
         {
           id: 12,
           repository: '/backup/repo1',
@@ -646,7 +646,7 @@ describe('BackupJobsTable', () => {
       ]
 
       renderWithProviders(
-        <BackupJobsTable jobs={completedJobs as any} isAdmin={true} actions={{ delete: true }} />
+        <BackupJobsTable jobs={completedJobs as MockBackupJob[]} isAdmin={true} actions={{ delete: true }} />
       )
 
       // Should show delete button for completed job
@@ -655,7 +655,7 @@ describe('BackupJobsTable', () => {
     })
 
     it('shows delete button for failed jobs (admin only)', () => {
-      const failedJobs = [
+      const failedJobs: Partial<MockBackupJob>[] = [
         {
           id: 13,
           repository: '/backup/repo1',
@@ -670,7 +670,7 @@ describe('BackupJobsTable', () => {
       ]
 
       renderWithProviders(
-        <BackupJobsTable jobs={failedJobs as any} isAdmin={true} actions={{ delete: true }} />
+        <BackupJobsTable jobs={failedJobs as MockBackupJob[]} isAdmin={true} actions={{ delete: true }} />
       )
 
       // Should show delete button for failed job
