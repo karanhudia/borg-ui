@@ -372,7 +372,7 @@ Get structured JSON data in notifications for monitoring tools, automation scrip
 
 **✨ How It Works:**
 
-Use **`json://` or `jsons://`** URLs to automatically receive pure JSON data - no checkbox needed!
+Use `json://` or `jsons://` URLs to automatically receive pure JSON data - no checkbox needed!
 
 ```
 jsons://webhook.site/your-id       ← Secure HTTPS
@@ -479,13 +479,13 @@ When using `json://` or `jsons://`, Apprise sends:
 **Fields:**
 - `version` - Apprise protocol version (always "1.0")
 - `title` - Notification title (includes job name if enabled)
-- `message` - **Pure JSON string** (when using `json://` or `jsons://`) OR formatted notification body (for other services)
+- `message` - Pure JSON string (when using `json://` or `jsons://`) OR formatted notification body (for other services)
 - `type` - Event severity: `info`, `success`, `warning`, `failure`
 - `attachments` - Always empty array (reserved for future use)
 
 #### Parsing JSON Webhooks
 
-> **💡 TIP:** When using JSON webhooks (`json://` or `jsons://`), the `message` field contains **pure JSON string** - just use `JSON.parse(payload.message)` or `json.loads(payload['message'])`. No regex extraction needed!
+**TIP:** When using JSON webhooks (`json://` or `jsons://`), the `message` field contains pure JSON string - just use `JSON.parse(payload.message)` or `json.loads(payload['message'])`. No regex extraction needed!
 
 **Python Example:**
 ```python
@@ -574,13 +574,13 @@ echo "Full data: $BACKUP_DATA"
 
 #### Service-Specific JSON Formatting
 
-**For JSON Webhooks (`json://` or `jsons://`):**
-- The `message` field contains **pure JSON string** (compact, no markdown)
+**For JSON Webhooks** (`json://` or `jsons://`):
+- The `message` field contains pure JSON string (compact, no markdown)
 - Simple to parse: `JSON.parse(payload.message)` in JavaScript, `json.loads(payload['message'])` in Python
 - Optimized for automation and monitoring tools
 
-**For Other Services (Email, Slack, Discord, etc.):**
-- The `message` field contains **formatted notification body** with embedded JSON in markdown code blocks
+**For Other Services** (Email, Slack, Discord, etc.):
+- The `message` field contains formatted notification body with embedded JSON in markdown code blocks
 - JSON appears as collapsible `<details>` in email, or code blocks in chat
 - Human-readable with pretty-printed JSON (indented)
 - Automation tools need regex extraction (see examples for `https://` webhooks below)
