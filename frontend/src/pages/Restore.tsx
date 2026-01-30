@@ -56,6 +56,7 @@ interface RestoreJob {
   completed_at?: string
   progress?: number
   error?: string
+  logs?: string
   progress_details?: {
     nfiles: number
     current_file: string
