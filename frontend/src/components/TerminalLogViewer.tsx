@@ -251,7 +251,7 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
           </Typography>
         ) : (
           logs.map((log) => (
-            <Box key={log.line_number} sx={{ mb: 0.5 }}>
+            <Box key={`${jobId}-${log.line_number}`} sx={{ mb: 0.5 }}>
               <Typography
                 component="span"
                 sx={{
