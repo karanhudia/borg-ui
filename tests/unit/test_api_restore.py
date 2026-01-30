@@ -558,3 +558,149 @@ class TestRestoreSpeedAndETA:
         assert progress["restore_speed"] == 18.92
         assert progress["estimated_time_remaining"] == 0
         assert data["status"] == "completed"
+
+@pytest.mark.unit
+class TestRestoreJobLogs:
+    """Test restore job logs functionality"""
+
+    def test_restore_jobs_list_includes_logs(self, test_client: TestClient, admin_headers, test_db):
+        """Test that /api/restore/jobs endpoint includes logs field"""
+        from app.database.models import RestoreJob
+        from datetime import datetime, timezone
+        
+        job = RestoreJob(
+            repository="/test/repo",
+            archive="test-archive",
+            destination="/test/dest",
+            status="completed",
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
+            logs="Test log line 1\nTest log line 2\nRestore completed"
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get("/api/restore/jobs", headers=admin_headers)
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert "jobs" in data
+        assert len(data["jobs"]) > 0
+        
+        # Find our job
+        our_job = next((j for j in data["jobs"] if j["id"] == job.id), None)
+        assert our_job is not None
+        assert "logs" in our_job
+        assert our_job["logs"] == job.logs
+
+    def test_restore_job_status_includes_logs(self, test_client: TestClient, admin_headers, test_db):
+        """Test that /api/restore/status/{id} endpoint includes logs field"""
+        from app.database.models import RestoreJob
+        from datetime import datetime, timezone
+        
+        job = RestoreJob(
+            repository="/test/repo",
+            archive="test-archive",
+            destination="/test/dest",
+            status="completed",
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
+            logs="Detailed restore logs here\nProgress: 100%\nSuccess"
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(f"/api/restore/status/{job.id}", headers=admin_headers)
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert "logs" in data
+        assert data["logs"] == job.logs
+
+    def test_restore_jobs_with_null_logs(self, test_client: TestClient, admin_headers, test_db):
+        """Test that jobs with null logs return null in API"""
+        from app.database.models import RestoreJob
+        from datetime import datetime, timezone
+        
+        job = RestoreJob(
+            repository="/test/repo",
+            archive="test-archive",
+            destination="/test/dest",
+            status="running",
+            started_at=datetime.now(timezone.utc),
+            logs=None  # No logs yet for running job
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get("/api/restore/jobs", headers=admin_headers)
+        
+        assert response.status_code == 200
+        data = response.json()
+        our_job = next((j for j in data["jobs"] if j["id"] == job.id), None)
+        assert our_job is not None
+        assert our_job["logs"] is None
+
+    def test_restore_jobs_with_empty_logs(self, test_client: TestClient, admin_headers, test_db):
+        """Test that jobs with empty string logs return empty string"""
+        from app.database.models import RestoreJob
+        from datetime import datetime, timezone
+        
+        job = RestoreJob(
+            repository="/test/repo",
+            archive="test-archive",
+            destination="/test/dest",
+            status="completed",
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
+            logs=""  # Empty logs
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(f"/api/restore/status/{job.id}", headers=admin_headers)
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert "logs" in data
+        assert data["logs"] == ""
+
+    def test_restore_jobs_with_multiline_logs(self, test_client: TestClient, admin_headers, test_db):
+        """Test that multiline logs are preserved correctly"""
+        from app.database.models import RestoreJob
+        from datetime import datetime, timezone
+        
+        multiline_logs = """Starting restore operation
+Repository: /test/repo
+Archive: test-archive
+Destination: /test/dest
+Progress: 50%
+Progress: 75%
+Progress: 100%
+Restore completed successfully"""
+        
+        job = RestoreJob(
+            repository="/test/repo",
+            archive="test-archive",
+            destination="/test/dest",
+            status="completed",
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
+            logs=multiline_logs
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(f"/api/restore/status/{job.id}", headers=admin_headers)
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data["logs"] == multiline_logs
+        # Verify line breaks are preserved
+        assert "\n" in data["logs"]
+        assert data["logs"].count("\n") == multiline_logs.count("\n")

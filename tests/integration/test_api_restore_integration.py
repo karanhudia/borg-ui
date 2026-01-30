@@ -344,3 +344,216 @@ class TestRestoreSpeedETAIntegration:
                 assert hasattr(job, 'estimated_time_remaining')
         finally:
             db.close()
+
+
+@pytest.mark.integration
+@pytest.mark.requires_borg
+class TestRestoreLogsIntegration:
+    """Integration tests for restore job logs capture and retrieval"""
+
+    @pytest.mark.asyncio
+    async def test_restore_captures_logs_in_database(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        db_borg_repo_with_archives,
+        tmp_path
+    ):
+        """Test that completed restore job has logs stored in database"""
+        repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
+        latest_archive = archive_names[-1]
+        restore_dest = tmp_path / "restore_logs_test"
+        restore_dest.mkdir()
+
+        # Mock to speed up test
+        from unittest.mock import MagicMock, AsyncMock, patch
+        
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_process.pid = 12345
+        mock_process.wait = AsyncMock(return_value=None)
+        
+        async def mock_stderr_read(n):
+            if not getattr(mock_stderr_read, 'called', False):
+                mock_stderr_read.called = True
+                return b'{"type":"progress_percent","current":1024,"total":2048}\n'
+            return b""
+        
+        mock_process.stderr.read = AsyncMock(side_effect=mock_stderr_read)
+        
+        class AsyncIterator:
+            def __aiter__(self): return self
+            async def __anext__(self): raise StopAsyncIteration
+            
+        mock_process.stdout = AsyncIterator()
+        
+        with patch("app.services.restore_service.asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
+            mock_exec.return_value = mock_process
+            
+            payload = {
+                "repository": str(repo_path),
+                "archive": latest_archive,
+                "paths": [],
+                "destination": str(restore_dest)
+            }
+            
+            response = test_client.post(
+                "/api/restore/start",
+                json=payload,
+                headers=admin_headers
+            )
+            
+            assert response.status_code == 200
+            job_id = response.json()["job_id"]
+            
+            # Wait for job to complete
+            time.sleep(1.0)
+            
+            # Check that logs are in database
+            from app.database.models import RestoreJob
+            from app.database.database import SessionLocal
+            
+            db = SessionLocal()
+            try:
+                job = db.query(RestoreJob).filter(RestoreJob.id == job_id).first()
+                assert job is not None
+                assert job.logs is not None
+                assert len(job.logs) > 0
+                # Should contain the JSON progress line
+                assert "progress_percent" in job.logs or "Restore completed" in job.logs
+            finally:
+                db.close()
+
+    @pytest.mark.asyncio
+    async def test_restore_logs_available_via_jobs_api(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        db_borg_repo_with_archives,
+        tmp_path
+    ):
+        """Test that restore logs are accessible via /api/restore/jobs"""
+        repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
+        latest_archive = archive_names[-1]
+        restore_dest = tmp_path / "restore_api_logs_test"
+        restore_dest.mkdir()
+
+        from unittest.mock import MagicMock, AsyncMock, patch
+        
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_process.pid = 12345
+        mock_process.wait = AsyncMock(return_value=None)
+        
+        async def mock_stderr_read(n):
+            if not getattr(mock_stderr_read, 'called', False):
+                mock_stderr_read.called = True
+                return b'Test log output\n'
+            return b""
+        
+        mock_process.stderr.read = AsyncMock(side_effect=mock_stderr_read)
+        
+        class AsyncIterator:
+            def __aiter__(self): return self
+            async def __anext__(self): raise StopAsyncIteration
+            
+        mock_process.stdout = AsyncIterator()
+        
+        with patch("app.services.restore_service.asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
+            mock_exec.return_value = mock_process
+            
+            payload = {
+                "repository": str(repo_path),
+                "archive": latest_archive,
+                "paths": [],
+                "destination": str(restore_dest)
+            }
+            
+            response = test_client.post(
+                "/api/restore/start",
+                json=payload,
+                headers=admin_headers
+            )
+            
+            assert response.status_code == 200
+            job_id = response.json()["job_id"]
+            
+            # Wait for completion
+            time.sleep(1.0)
+            
+            # Get jobs list
+            response = test_client.get("/api/restore/jobs", headers=admin_headers)
+            assert response.status_code == 200
+            data = response.json()
+            
+            # Find our job
+            our_job = next((j for j in data["jobs"] if j["id"] == job_id), None)
+            assert our_job is not None
+            assert "logs" in our_job
+
+    @pytest.mark.asyncio
+    async def test_restore_logs_available_via_status_api(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        db_borg_repo_with_archives,
+        tmp_path
+    ):
+        """Test that restore logs are accessible via /api/restore/status/{id}"""
+        repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
+        latest_archive = archive_names[-1]
+        restore_dest = tmp_path / "restore_status_logs_test"
+        restore_dest.mkdir()
+
+        from unittest.mock import MagicMock, AsyncMock, patch
+        
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_process.pid = 12345
+        mock_process.wait = AsyncMock(return_value=None)
+        
+        async def mock_stderr_read(n):
+            if not getattr(mock_stderr_read, 'called', False):
+                mock_stderr_read.called = True
+                return b'Restore progress log\n'
+            return b""
+        
+        mock_process.stderr.read = AsyncMock(side_effect=mock_stderr_read)
+        
+        class AsyncIterator:
+            def __aiter__(self): return self
+            async def __anext__(self): raise StopAsyncIteration
+            
+        mock_process.stdout = AsyncIterator()
+        
+        with patch("app.services.restore_service.asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
+            mock_exec.return_value = mock_process
+            
+            payload = {
+                "repository": str(repo_path),
+                "archive": latest_archive,
+                "paths": [],
+                "destination": str(restore_dest)
+            }
+            
+            response = test_client.post(
+                "/api/restore/start",
+                json=payload,
+                headers=admin_headers
+            )
+            
+            assert response.status_code == 200
+            job_id = response.json()["job_id"]
+            
+            # Wait for completion
+            time.sleep(1.0)
+            
+            # Get status
+            response = test_client.get(f"/api/restore/status/{job_id}", headers=admin_headers)
+            assert response.status_code == 200
+            data = response.json()
+            
+            assert "logs" in data
+            # Logs should be available for completed job
+            if data["status"] in ["completed", "failed"]:
+                assert data["logs"] is not None
