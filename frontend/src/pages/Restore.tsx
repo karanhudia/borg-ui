@@ -33,6 +33,7 @@ import {
 import { restoreAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useMatomo } from '../hooks/useMatomo'
+import { useAuth } from '../hooks/useAuth'
 import {
   formatDate,
   formatBytes as formatBytesUtil,
@@ -44,7 +45,7 @@ import PathSelectorField from '../components/PathSelectorField'
 import LockErrorDialog from '../components/LockErrorDialog'
 import { Archive, Repository } from '../types'
 import ArchiveBrowserDialog from '../components/ArchiveBrowserDialog'
-import DataTable, { Column, ActionButton } from '../components/DataTable'
+import BackupJobsTable from '../components/BackupJobsTable'
 
 interface RestoreJob {
   id: number
@@ -68,6 +69,7 @@ interface RestoreJob {
 
 const Restore: React.FC = () => {
   const { trackArchive, EventAction } = useMatomo()
+  const { user } = useAuth()
   const [selectedRepository, setSelectedRepository] = useState<string>('')
   const [selectedRepoData, setSelectedRepoData] = useState<Repository | null>(null)
   const [restoreArchive, setRestoreArchive] = useState<Archive | null>(null)
@@ -366,71 +368,6 @@ const Restore: React.FC = () => {
     },
   ]
 
-  // Recent Restore Jobs table columns
-  const restoreJobsColumns: Column<RestoreJob>[] = [
-    {
-      id: 'id',
-      label: 'Job ID',
-      render: (job) => (
-        <Typography variant="body2" fontWeight={600} color="primary">
-          #{job.id}
-        </Typography>
-      ),
-    },
-    {
-      id: 'archive',
-      label: 'Archive',
-      render: (job) => (
-        <Typography variant="body2" fontWeight={500}>
-          {job.archive}
-        </Typography>
-      ),
-    },
-    {
-      id: 'destination',
-      label: 'Destination',
-      render: (job) => (
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
-        >
-          {job.destination}
-        </Typography>
-      ),
-    },
-    {
-      id: 'status',
-      label: 'Status',
-      render: (job) => (
-        <Chip
-          icon={getStatusIcon(job.status)}
-          label={job.status.charAt(0).toUpperCase() + job.status.slice(1)}
-          color={getStatusColor(job.status)}
-          size="small"
-          sx={{ fontWeight: 500 }}
-        />
-      ),
-    },
-    {
-      id: 'duration',
-      label: 'Duration',
-      render: (job) => (
-        <Typography variant="body2" color="text.secondary">
-          {formatTimeRange(job.started_at, job.completed_at, job.status)}
-        </Typography>
-      ),
-    },
-    {
-      id: 'started',
-      label: 'Started',
-      render: (job) => (
-        <Typography variant="body2" color="text.secondary">
-          {job.started_at ? formatDate(job.started_at) : 'N/A'}
-        </Typography>
-      ),
-    },
-  ]
 
   return (
     <Box>
@@ -692,17 +629,29 @@ const Restore: React.FC = () => {
             </Typography>
           </Stack>
 
-          <DataTable
-            data={recentJobs}
-            columns={restoreJobsColumns}
-            getRowKey={(job) => job.id.toString()}
+          <BackupJobsTable
+            jobs={recentJobs.map(job => ({
+              ...job,
+              type: 'restore',
+              repository_path: job.repository,
+              archive_name: job.archive,
+              error_message: job.error,
+            }))}
+            loading={false}
+            actions={{
+              viewLogs: true,
+              downloadLogs: true,
+              errorInfo: true,
+              delete: true,
+            }}
+            isAdmin={user?.is_admin || false}
+            getRowKey={(job) => String(job.id)}
+            headerBgColor="background.default"
+            enableHover={true}
             emptyState={{
               icon: <Clock size={48} />,
               title: 'No restore jobs found',
             }}
-            headerBgColor="background.default"
-            enableHover={true}
-            variant="outlined"
           />
         </CardContent>
       </Card>
