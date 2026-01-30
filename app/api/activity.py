@@ -127,12 +127,12 @@ async def list_recent_activity(
                 'error_message': job.error_message,
                 'repository': repo_name,
                 'repository_path': job.repository,  # Always include the path
-                'log_file_path': getattr(job, 'log_file_path', None),
+                'log_file_path': None,  # Restore jobs store logs in DB, not file
                 'triggered_by': 'manual',  # Restore jobs are always manual
                 'schedule_id': None,
                 'archive_name': job.archive,
                 'package_name': None,
-                'has_logs': bool(getattr(job, 'log_file_path', None))
+                'has_logs': bool(job.logs)  # Check logs field instead of log_file_path
             })
 
     # Fetch check jobs

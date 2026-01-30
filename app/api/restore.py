@@ -352,6 +352,7 @@ async def get_restore_jobs(
                     "completed_at": serialize_datetime(job.completed_at),
                     "progress": job.progress,
                     "error_message": job.error_message,
+                    "logs": job.logs,
                     "progress_details": {
                         "nfiles": job.nfiles or 0,
                         "current_file": job.current_file or "",
