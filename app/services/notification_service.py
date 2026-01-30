@@ -265,6 +265,112 @@ def _create_html_email(title: str, content_blocks: list, footer: str = None) -> 
     return ''.join(html_parts)
 
 
+def _is_webhook_service(service_url: str) -> bool:
+    """Check if the service URL is for a webhook service."""
+    webhook_prefixes = [
+        'http://', 'https://',  # Generic webhooks
+        'json://', 'jsons://',  # Apprise JSON webhooks
+        'form://', 'forms://',  # Apprise form webhooks
+        'xml://', 'xmls://'     # Apprise XML webhooks
+    ]
+    # Exclude email services that use HTTPS (like mailgun)
+    if _is_email_service(service_url):
+        return False
+    return any(service_url.lower().startswith(prefix) for prefix in webhook_prefixes)
+
+
+def _is_json_webhook(service_url: str) -> bool:
+    """Check if the service URL is specifically for a JSON webhook."""
+    json_prefixes = ['json://', 'jsons://']
+    return any(service_url.lower().startswith(prefix) for prefix in json_prefixes)
+
+
+def _should_include_json(setting: NotificationSettings) -> bool:
+    """
+    Determine if JSON should be included in notification body.
+
+    JSON is automatically sent for json:// and jsons:// webhook URLs.
+    This is the primary use case for structured data in notifications.
+
+    Args:
+        setting: NotificationSettings object
+
+    Returns:
+        True if service_url is a JSON webhook (json:// or jsons://)
+    """
+    return _is_json_webhook(setting.service_url)
+
+
+def _build_json_data(event_type: str, data: dict, compact: bool = False) -> str:
+    """
+    Build structured JSON data for notifications.
+
+    Args:
+        event_type: Type of event (backup_success, backup_failure, etc.)
+        data: Event data dictionary
+        compact: If True, returns compact JSON (no indentation). If False, returns pretty-printed JSON.
+
+    Returns:
+        JSON string formatted for inclusion in notification body
+    """
+    import json
+
+    json_data = {
+        "event_type": event_type,
+        "timestamp": datetime.now().isoformat(),
+        **data
+    }
+
+    if compact:
+        return json.dumps(json_data)
+    else:
+        return json.dumps(json_data, indent=2)
+
+
+def _append_json_to_body(body: str, json_data: str, is_html: bool, service_url: str = '') -> str:
+    """
+    Append or replace body with JSON data based on service type.
+
+    For JSON webhooks (json:// or jsons://): Returns pure JSON string for easy parsing
+    For other services: Appends formatted JSON to existing body
+
+    Args:
+        body: Original notification body
+        json_data: JSON string to append
+        is_html: True for HTML format (email), False for Markdown (chat)
+        service_url: Service URL to detect JSON webhooks
+
+    Returns:
+        Body with JSON data (appended or replaced depending on service type)
+    """
+    # For JSON webhooks: return pure JSON string (no markdown, no HTML)
+    if _is_json_webhook(service_url):
+        return json_data
+
+    # For other services: append formatted JSON
+    if is_html:
+        # For email: use collapsible <details> section
+        json_section = f'''
+        <div style="margin-top: 20px; padding: 12px; background-color: #f8f9fa; border-radius: 4px;">
+            <details>
+                <summary style="cursor: pointer; font-weight: 600; color: #667eea;">
+                    📊 JSON Data (for automation)
+                </summary>
+                <pre style="margin-top: 10px; padding: 10px; background-color: #fff; border-radius: 4px; overflow-x: auto; font-size: 11px; font-family: 'Courier New', monospace;">{json_data}</pre>
+            </details>
+        </div>
+    </div>
+</body>
+</html>'''
+        # Replace the closing tags with JSON section + closing tags
+        body = body.replace('</div>\n</body>\n</html>', json_section)
+    else:
+        # For chat: use markdown code block
+        body += f"\n\n**📊 JSON Data (for automation)**\n```json\n{json_data}\n```"
+
+    return body
+
+
 class NotificationService:
     """Service for sending notifications via Apprise."""
 
@@ -274,7 +380,8 @@ class NotificationService:
         repository_name: str,
         archive_name: str,
         source_directories: Optional[list] = None,
-        expected_size: Optional[int] = None
+        expected_size: Optional[int] = None,
+        job_name: Optional[str] = None
     ) -> None:
         """
         Send notification when backup starts.
@@ -285,6 +392,7 @@ class NotificationService:
             archive_name: Name of archive being created
             source_directories: List of source directories being backed up (optional)
             expected_size: Expected total size in bytes (optional)
+            job_name: Name of the job/schedule (optional, for enhanced titles)
         """
         settings = db.query(NotificationSettings).filter(
             NotificationSettings.enabled == True,
@@ -340,11 +448,32 @@ class NotificationService:
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
 
+            # Build title with optional job name
             title = "🚀 Backup Started"
+            if setting.include_job_name_in_title and job_name:
+                title = f"🚀 Backup Started - {job_name}"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
 
-            await NotificationService._send_to_service(db, setting, title, html_body, markdown_body)
+            # Prepare bodies (may add JSON if enabled)
+            final_html_body = html_body
+            final_markdown_body = markdown_body
+
+            # Add JSON data if enabled
+            if _should_include_json(setting):
+                json_data = _build_json_data("backup_start", {
+                    "repository_name": repository_name,
+                    "repository_path": repo.path if repo else None,
+                    "archive_name": archive_name,
+                    "job_name": job_name,
+                    "source_directories": source_directories,
+                    "expected_size": expected_size,
+                    "started_at": start_time.isoformat()
+                }, compact=_is_json_webhook(setting.service_url))
+                final_html_body = _append_json_to_body(html_body, json_data, is_html=True, service_url=setting.service_url)
+                final_markdown_body = _append_json_to_body(markdown_body, json_data, is_html=False, service_url=setting.service_url)
+
+            await NotificationService._send_to_service(db, setting, title, final_html_body, final_markdown_body)
 
     @staticmethod
     async def send_backup_success(
@@ -352,7 +481,8 @@ class NotificationService:
         repository_name: str,
         archive_name: str,
         stats: Optional[dict] = None,
-        completion_time: Optional[datetime] = None
+        completion_time: Optional[datetime] = None,
+        job_name: Optional[str] = None
     ) -> None:
         """
         Send notification for successful backup.
@@ -363,6 +493,7 @@ class NotificationService:
             archive_name: Name of created archive
             stats: Backup statistics (optional)
             completion_time: When the backup completed (optional, defaults to now)
+            job_name: Name of the job/schedule (optional, for enhanced titles)
         """
         settings = db.query(NotificationSettings).filter(
             NotificationSettings.enabled == True,
@@ -449,18 +580,39 @@ class NotificationService:
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
 
+            # Build title with optional job name
             title = "✅ Backup Successful"
+            if setting.include_job_name_in_title and job_name:
+                title = f"✅ Backup Successful - {job_name}"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
 
-            await NotificationService._send_to_service(db, setting, title, html_body, markdown_body)
+            # Prepare bodies (may add JSON if enabled)
+            final_html_body = html_body
+            final_markdown_body = markdown_body
+
+            # Add JSON data if enabled
+            if _should_include_json(setting):
+                json_data = _build_json_data("backup_success", {
+                    "repository_name": repository_name,
+                    "repository_path": repo.path if repo else None,
+                    "archive_name": archive_name,
+                    "job_name": job_name,
+                    "stats": stats,
+                    "completed_at": completed_at.isoformat() if completed_at else None
+                }, compact=_is_json_webhook(setting.service_url))
+                final_html_body = _append_json_to_body(html_body, json_data, is_html=True, service_url=setting.service_url)
+                final_markdown_body = _append_json_to_body(markdown_body, json_data, is_html=False, service_url=setting.service_url)
+
+            await NotificationService._send_to_service(db, setting, title, final_html_body, final_markdown_body)
 
     @staticmethod
     async def send_backup_failure(
         db: Session,
         repository_name: str,
         error_message: str,
-        job_id: Optional[int] = None
+        job_id: Optional[int] = None,
+        job_name: Optional[str] = None
     ) -> None:
         """
         Send notification for failed backup.
@@ -470,6 +622,7 @@ class NotificationService:
             repository_name: Name of repository
             error_message: Error description
             job_id: Backup job ID (optional)
+            job_name: Name of the job/schedule (optional, for enhanced titles)
         """
         settings = db.query(NotificationSettings).filter(
             NotificationSettings.enabled == True,
@@ -525,16 +678,39 @@ class NotificationService:
             footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
+        # Capture failure time for JSON
+        failure_time = datetime.now()
+
         for setting in settings:
             # Check if this notification applies to this repository
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
 
+            # Build title with optional job name
             title = "❌ Backup Failed"
+            if setting.include_job_name_in_title and job_name:
+                title = f"❌ Backup Failed - {job_name}"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
 
-            await NotificationService._send_to_service(db, setting, title, html_body, markdown_body)
+            # Prepare bodies (may add JSON if enabled)
+            final_html_body = html_body
+            final_markdown_body = markdown_body
+
+            # Add JSON data if enabled
+            if _should_include_json(setting):
+                json_data = _build_json_data("backup_failure", {
+                    "repository_name": repository_name,
+                    "repository_path": repo.path if repo else None,
+                    "job_name": job_name,
+                    "job_id": job_id,
+                    "error_message": error_message,
+                    "failed_at": failure_time.isoformat()
+                }, compact=_is_json_webhook(setting.service_url))
+                final_html_body = _append_json_to_body(html_body, json_data, is_html=True, service_url=setting.service_url)
+                final_markdown_body = _append_json_to_body(markdown_body, json_data, is_html=False, service_url=setting.service_url)
+
+            await NotificationService._send_to_service(db, setting, title, final_html_body, final_markdown_body)
 
     @staticmethod
     async def send_backup_warning(
@@ -543,7 +719,8 @@ class NotificationService:
         archive_name: str,
         warning_message: str,
         stats: Optional[dict] = None,
-        completion_time: Optional[datetime] = None
+        completion_time: Optional[datetime] = None,
+        job_name: Optional[str] = None
     ) -> None:
         """
         Send notification for backup completed with warnings.
@@ -555,6 +732,7 @@ class NotificationService:
             warning_message: Warning description
             stats: Backup statistics (optional)
             completion_time: When the backup completed (optional, defaults to now)
+            job_name: Name of the job/schedule (optional, for enhanced titles)
         """
         settings = db.query(NotificationSettings).filter(
             NotificationSettings.enabled == True,
@@ -640,16 +818,40 @@ class NotificationService:
             footer=f"Completed at {(completion_time or datetime.now()).strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
+        # Capture completion time for JSON
+        completed_at = completion_time or datetime.now()
+
         for setting in settings:
             # Check if this notification applies to this repository
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
 
+            # Build title with optional job name
             title = "⚠️ Backup Completed with Warnings"
+            if setting.include_job_name_in_title and job_name:
+                title = f"⚠️ Backup Completed with Warnings - {job_name}"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
 
-            await NotificationService._send_to_service(db, setting, title, html_body, markdown_body)
+            # Prepare bodies (may add JSON if enabled)
+            final_html_body = html_body
+            final_markdown_body = markdown_body
+
+            # Add JSON data if enabled
+            if _should_include_json(setting):
+                json_data = _build_json_data("backup_warning", {
+                    "repository_name": repository_name,
+                    "repository_path": repo.path if repo else None,
+                    "archive_name": archive_name,
+                    "job_name": job_name,
+                    "warning_message": warning_message,
+                    "stats": stats,
+                    "completed_at": completed_at.isoformat()
+                }, compact=_is_json_webhook(setting.service_url))
+                final_html_body = _append_json_to_body(html_body, json_data, is_html=True, service_url=setting.service_url)
+                final_markdown_body = _append_json_to_body(markdown_body, json_data, is_html=False, service_url=setting.service_url)
+
+            await NotificationService._send_to_service(db, setting, title, final_html_body, final_markdown_body)
 
     @staticmethod
     async def send_restore_success(
@@ -657,7 +859,8 @@ class NotificationService:
         repository_name: str,
         archive_name: str,
         target_path: str,
-        completion_time: Optional[datetime] = None
+        completion_time: Optional[datetime] = None,
+        job_name: Optional[str] = None
     ) -> None:
         """
         Send notification for successful restore.
@@ -668,6 +871,7 @@ class NotificationService:
             archive_name: Name of restored archive
             target_path: Restore destination
             completion_time: When the restore completed (optional, defaults to now)
+            job_name: Name of the job/schedule (optional, for enhanced titles)
         """
         settings = db.query(NotificationSettings).filter(
             NotificationSettings.enabled == True,
@@ -712,18 +916,39 @@ class NotificationService:
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
 
+            # Build title with optional job name
             title = "✅ Restore Successful"
+            if setting.include_job_name_in_title and job_name:
+                title = f"✅ Restore Successful - {job_name}"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
 
-            await NotificationService._send_to_service(db, setting, title, html_body, markdown_body)
+            # Prepare bodies (may add JSON if enabled)
+            final_html_body = html_body
+            final_markdown_body = markdown_body
+
+            # Add JSON data if enabled
+            if _should_include_json(setting):
+                json_data = _build_json_data("restore_success", {
+                    "repository_name": repository_name,
+                    "repository_path": repo.path if repo else None,
+                    "archive_name": archive_name,
+                    "job_name": job_name,
+                    "target_path": target_path,
+                    "completed_at": completed_at.isoformat()
+                }, compact=_is_json_webhook(setting.service_url))
+                final_html_body = _append_json_to_body(html_body, json_data, is_html=True, service_url=setting.service_url)
+                final_markdown_body = _append_json_to_body(markdown_body, json_data, is_html=False, service_url=setting.service_url)
+
+            await NotificationService._send_to_service(db, setting, title, final_html_body, final_markdown_body)
 
     @staticmethod
     async def send_restore_failure(
         db: Session,
         repository_name: str,
         archive_name: str,
-        error_message: str
+        error_message: str,
+        job_name: Optional[str] = None
     ) -> None:
         """
         Send notification for failed restore.
@@ -733,6 +958,7 @@ class NotificationService:
             repository_name: Name of repository
             archive_name: Name of archive
             error_message: Error description
+            job_name: Name of the job/schedule (optional, for enhanced titles)
         """
         settings = db.query(NotificationSettings).filter(
             NotificationSettings.enabled == True,
@@ -784,16 +1010,39 @@ class NotificationService:
             footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
+        # Capture failure time for JSON
+        failure_time = datetime.now()
+
         for setting in settings:
             # Check if this notification applies to this repository
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
 
+            # Build title with optional job name
             title = "❌ Restore Failed"
+            if setting.include_job_name_in_title and job_name:
+                title = f"❌ Restore Failed - {job_name}"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
 
-            await NotificationService._send_to_service(db, setting, title, html_body, markdown_body)
+            # Prepare bodies (may add JSON if enabled)
+            final_html_body = html_body
+            final_markdown_body = markdown_body
+
+            # Add JSON data if enabled
+            if _should_include_json(setting):
+                json_data = _build_json_data("restore_failure", {
+                    "repository_name": repository_name,
+                    "repository_path": repo.path if repo else None,
+                    "archive_name": archive_name,
+                    "job_name": job_name,
+                    "error_message": error_message,
+                    "failed_at": failure_time.isoformat()
+                }, compact=_is_json_webhook(setting.service_url))
+                final_html_body = _append_json_to_body(html_body, json_data, is_html=True, service_url=setting.service_url)
+                final_markdown_body = _append_json_to_body(markdown_body, json_data, is_html=False, service_url=setting.service_url)
+
+            await NotificationService._send_to_service(db, setting, title, final_html_body, final_markdown_body)
 
     @staticmethod
     async def send_schedule_failure(
@@ -860,16 +1109,38 @@ class NotificationService:
             footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
+        # Capture failure time for JSON
+        failure_time = datetime.now()
+
         for setting in settings:
             # Check if this notification applies to this repository
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
 
+            # Build title with optional schedule name (using schedule_name as job_name)
             title = "❌ Scheduled Backup Failed"
+            if setting.include_job_name_in_title and schedule_name:
+                title = f"❌ Scheduled Backup Failed - {schedule_name}"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
 
-            await NotificationService._send_to_service(db, setting, title, html_body, markdown_body)
+            # Prepare bodies (may add JSON if enabled)
+            final_html_body = html_body
+            final_markdown_body = markdown_body
+
+            # Add JSON data if enabled
+            if _should_include_json(setting):
+                json_data = _build_json_data("schedule_failure", {
+                    "schedule_name": schedule_name,
+                    "repository_name": repository_name,
+                    "repository_path": repo.path if repo else None,
+                    "error_message": error_message,
+                    "failed_at": failure_time.isoformat()
+                }, compact=_is_json_webhook(setting.service_url))
+                final_html_body = _append_json_to_body(html_body, json_data, is_html=True, service_url=setting.service_url)
+                final_markdown_body = _append_json_to_body(markdown_body, json_data, is_html=False, service_url=setting.service_url)
+
+            await NotificationService._send_to_service(db, setting, title, final_html_body, final_markdown_body)
 
     @staticmethod
     async def test_notification(service_url: str) -> dict:
@@ -1036,7 +1307,8 @@ class NotificationService:
         status: str,  # "completed" or "failed"
         duration_seconds: Optional[int] = None,
         error_message: Optional[str] = None,
-        check_type: str = "manual"  # "manual" or "scheduled"
+        check_type: str = "manual",  # "manual" or "scheduled"
+        job_name: Optional[str] = None
     ) -> None:
         """
         Send notification for check completion (success or failure).
@@ -1049,6 +1321,7 @@ class NotificationService:
             duration_seconds: How long check took
             error_message: Error message if failed
             check_type: "manual" or "scheduled"
+            job_name: Name of the job/schedule (optional, for enhanced titles)
         """
         # Determine which settings to use
         if status == "completed":
@@ -1122,11 +1395,34 @@ class NotificationService:
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
 
+            # Build title with optional job name
             title = f"{emoji} Repository {title_text}"
+            if setting.include_job_name_in_title and job_name:
+                title = f"{emoji} Repository {title_text} - {job_name}"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
 
-            await NotificationService._send_to_service(db, setting, title, html_body, markdown_body)
+            # Prepare bodies (may add JSON if enabled)
+            final_html_body = html_body
+            final_markdown_body = markdown_body
+
+            # Add JSON data if enabled
+            if _should_include_json(setting):
+                event_type = f"check_{status}"  # "check_completed" or "check_failed"
+                json_data = _build_json_data(event_type, {
+                    "repository_name": repository_name,
+                    "repository_path": repository_path,
+                    "job_name": job_name,
+                    "check_type": check_type,
+                    "status": status,
+                    "duration_seconds": duration_seconds,
+                    "error_message": error_message if status == "failed" else None,
+                    "completed_at": completion_time.isoformat()
+                }, compact=_is_json_webhook(setting.service_url))
+                final_html_body = _append_json_to_body(html_body, json_data, is_html=True, service_url=setting.service_url)
+                final_markdown_body = _append_json_to_body(markdown_body, json_data, is_html=False, service_url=setting.service_url)
+
+            await NotificationService._send_to_service(db, setting, title, final_html_body, final_markdown_body)
 
 
 # Global instance

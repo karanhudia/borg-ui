@@ -398,6 +398,8 @@ class NotificationSettings(Base):
 
     # Customization
     title_prefix = Column(String(100), nullable=True)  # Optional custom prefix for notification titles (e.g., "[Production]")
+    include_job_name_in_title = Column(Boolean, default=False, nullable=False)  # Include job/schedule name in notification title
+    # Note: JSON data is automatically sent for json:// and jsons:// webhook URLs (no field needed)
 
     # Event triggers
     notify_on_backup_start = Column(Boolean, default=False, nullable=False)
