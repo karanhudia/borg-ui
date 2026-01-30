@@ -30,19 +30,20 @@ export default function LogViewerDialog<T extends JobWithLogs>({
   onClose,
   jobTypeLabel,
 }: LogViewerDialogProps<T>) {
-  if (!job) return null
-
   // Determine job type for API endpoint (default to 'backup' for backward compatibility)
-  const jobType = job.type || 'backup'
+  const jobType = job?.type || 'backup'
+  const jobId = job?.id
 
   // Determine display label
-  const displayLabel = jobTypeLabel || (job.type ? getTypeLabel(job.type) : 'Backup')
+  const displayLabel = jobTypeLabel || (job?.type ? getTypeLabel(job.type) : 'Backup')
 
   // Memoize the fetch function to prevent re-renders from causing duplicate log fetches
   const handleFetchLogs = useCallback(
     async (offset: number) => {
+      if (!jobId) return { lines: [], total_lines: 0, has_more: false }
+
       const response = await fetch(
-        `/api/activity/${jobType}/${job.id}/logs?offset=${offset}&limit=500`,
+        `/api/activity/${jobType}/${jobId}/logs?offset=${offset}&limit=500`,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
@@ -54,8 +55,10 @@ export default function LogViewerDialog<T extends JobWithLogs>({
       }
       return response.json()
     },
-    [jobType, job.id]
+    [jobType, jobId]
   )
+
+  if (!job) return null
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
