@@ -171,7 +171,7 @@ async def collect_storage_info(connection: SSHConnection, ssh_key: SSHKey) -> Op
         return None
 
 # Pydantic models
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 class SSHKeyCreate(BaseModel):
     name: str
@@ -210,6 +210,7 @@ class SSHQuickSetup(BaseModel):
     port: int = 22
     password: Optional[str] = None
     skip_deployment: bool = False
+    use_sftp_mode: bool = Field(default=True, description="Use SFTP mode for ssh-copy-id (required by Hetzner, disable for Synology/older systems)")
 
 class SSHConnectionCreate(BaseModel):
     host: str
@@ -218,6 +219,7 @@ class SSHConnectionCreate(BaseModel):
     password: str
     default_path: Optional[str] = None  # Default starting path for SSH browsing
     mount_point: Optional[str] = None  # Logical mount point (e.g., /hetzner)
+    use_sftp_mode: bool = Field(default=True, description="Use SFTP mode for ssh-copy-id (required by Hetzner, disable for Synology/older systems)")
 
 class SSHConnectionTest(BaseModel):
     host: str
@@ -230,6 +232,7 @@ class SSHConnectionUpdate(BaseModel):
     port: Optional[int] = None
     default_path: Optional[str] = None  # Default starting path for SSH browsing
     mount_point: Optional[str] = None  # Logical mount point
+    use_sftp_mode: Optional[bool] = None
 
 class SSHConnectionStorage(BaseModel):
     total: int
@@ -662,7 +665,7 @@ async def quick_ssh_setup(
         if not setup_data.skip_deployment and setup_data.host and setup_data.username and setup_data.password:
             deploy_result = await deploy_ssh_key_with_copy_id(
                 ssh_key, setup_data.host, setup_data.username,
-                setup_data.password, setup_data.port
+                setup_data.password, setup_data.port, setup_data.use_sftp_mode
             )
 
             if deploy_result["success"]:
@@ -672,6 +675,7 @@ async def quick_ssh_setup(
                     host=setup_data.host,
                     username=setup_data.username,
                     port=setup_data.port,
+                    use_sftp_mode=setup_data.use_sftp_mode,
                     status="connected",
                     last_success=datetime.utcnow(),
                     last_test=datetime.utcnow()
@@ -770,6 +774,7 @@ async def deploy_ssh_key(
             # Update existing connection
             existing_connection.status = "testing"
             existing_connection.last_test = datetime.utcnow()
+            existing_connection.use_sftp_mode = connection_data.use_sftp_mode
             if connection_data.default_path is not None:
                 existing_connection.default_path = connection_data.default_path
             if connection_data.mount_point is not None:
@@ -782,6 +787,7 @@ async def deploy_ssh_key(
                 host=connection_data.host,
                 username=connection_data.username,
                 port=connection_data.port,
+                use_sftp_mode=connection_data.use_sftp_mode,
                 default_path=connection_data.default_path,
                 mount_point=connection_data.mount_point,
                 status="testing",
@@ -793,7 +799,7 @@ async def deploy_ssh_key(
         # Deploy the key
         deploy_result = await deploy_ssh_key_with_copy_id(
             ssh_key, connection_data.host, connection_data.username,
-            connection_data.password, connection_data.port
+            connection_data.password, connection_data.port, connection_data.use_sftp_mode
         )
         
         # Update connection status
@@ -859,6 +865,7 @@ async def get_ssh_connections(
                 "host": conn.host,
                 "username": conn.username,
                 "port": conn.port,
+                "use_sftp_mode": conn.use_sftp_mode,
                 "default_path": conn.default_path,
                 "mount_point": conn.mount_point,
                 "status": conn.status,
@@ -971,6 +978,8 @@ async def update_ssh_connection(
             connection.default_path = connection_data.default_path
         if connection_data.mount_point is not None:
             connection.mount_point = connection_data.mount_point
+        if connection_data.use_sftp_mode is not None:
+            connection.use_sftp_mode = connection_data.use_sftp_mode
         connection.updated_at = datetime.utcnow()
 
         db.commit()
@@ -1191,7 +1200,8 @@ async def redeploy_key_to_connection(
             host=connection.host,
             username=connection.username,
             password=password,
-            port=connection.port
+            port=connection.port,
+            use_sftp_mode=connection.use_sftp_mode
         )
 
         if deploy_result["success"]:
@@ -1548,7 +1558,8 @@ async def deploy_ssh_key_with_copy_id(
     host: str,
     username: str,
     password: str,
-    port: int = 22
+    port: int = 22,
+    use_sftp_mode: bool = True
 ) -> Dict[str, Any]:
     """Deploy SSH key using ssh-copy-id"""
     try:
@@ -1588,17 +1599,24 @@ async def deploy_ssh_key_with_copy_id(
         )
 
         # Use sshpass with ssh-copy-id
-        # Note: Some servers (like Hetzner Storage Box) require the -s flag
+        # Build command with optional -s flag for SFTP mode
         cmd = [
             "sshpass", "-p", password,
-            "ssh-copy-id",
-            "-s",  # Use SFTP mode (required by some servers like Hetzner Storage Box)
+            "ssh-copy-id"
+        ]
+
+        # Add -s flag only if use_sftp_mode is enabled
+        # SFTP mode is required by some servers (Hetzner Storage Box) but breaks others (Synology NAS)
+        if use_sftp_mode:
+            cmd.append("-s")
+
+        cmd.extend([
             "-i", key_file_path,
             "-o", "StrictHostKeyChecking=no",
             "-o", "ConnectTimeout=10",
             "-p", str(port),
             f"{username}@{host}"
-        ]
+        ])
 
         # Sanitized command for logging (hide password)
         safe_cmd = " ".join(cmd[0:2] + ["***"] + cmd[3:])

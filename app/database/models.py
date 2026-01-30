@@ -133,6 +133,9 @@ class SSHConnection(Base):
     borg_version = Column(String, nullable=True)  # Detected borg version
     last_borg_check = Column(DateTime, nullable=True)  # Last time borg was verified
 
+    # SSH key deployment options
+    use_sftp_mode = Column(Boolean, default=True, nullable=False)  # Use SFTP mode (-s flag) for ssh-copy-id (required by Hetzner, breaks Synology)
+
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
