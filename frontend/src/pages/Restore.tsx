@@ -33,7 +33,12 @@ import {
 import { restoreAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useMatomo } from '../hooks/useMatomo'
-import { formatDate, formatBytes as formatBytesUtil, formatTimeRange } from '../utils/dateUtils'
+import {
+  formatDate,
+  formatBytes as formatBytesUtil,
+  formatTimeRange,
+  formatDurationSeconds,
+} from '../utils/dateUtils'
 import RepositoryInfo from '../components/RepositoryInfo'
 import PathSelectorField from '../components/PathSelectorField'
 import LockErrorDialog from '../components/LockErrorDialog'
@@ -55,6 +60,8 @@ interface RestoreJob {
     nfiles: number
     current_file: string
     progress_percent: number
+    restore_speed: number
+    estimated_time_remaining: number
   }
 }
 
@@ -639,6 +646,28 @@ const Restore: React.FC = () => {
                         {job.progress_details?.progress_percent?.toFixed(1) || '0'}%
                       </Typography>
                     </Box>
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Speed:
+                      </Typography>
+                      <Typography variant="body2" fontWeight={500} color="primary.main">
+                        {job.status === 'running' && job.progress_details?.restore_speed
+                          ? `${job.progress_details.restore_speed.toFixed(2)} MB/s`
+                          : 'N/A'}
+                      </Typography>
+                    </Box>
+                    {(job.progress_details?.estimated_time_remaining || 0) > 0 && (
+                      <Box>
+                        <Typography variant="body2" color="text.secondary">
+                          ETA:
+                        </Typography>
+                        <Typography variant="body2" fontWeight={500} color="success.main">
+                          {formatDurationSeconds(
+                            job.progress_details?.estimated_time_remaining || 0
+                          )}
+                        </Typography>
+                      </Box>
+                    )}
                   </Box>
                 </Paper>
               ))}

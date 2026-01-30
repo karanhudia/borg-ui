@@ -356,6 +356,8 @@ async def get_restore_jobs(
                         "nfiles": job.nfiles or 0,
                         "current_file": job.current_file or "",
                         "progress_percent": job.progress_percent or 0.0,
+                        "restore_speed": job.restore_speed or 0.0,
+                        "estimated_time_remaining": job.estimated_time_remaining or 0,
                     }
                 }
                 for job in jobs
@@ -398,6 +400,8 @@ async def get_restore_status(
                 "nfiles": job.nfiles or 0,
                 "current_file": job.current_file or "",
                 "progress_percent": job.progress_percent or 0.0,
+                "restore_speed": job.restore_speed or 0.0,
+                "estimated_time_remaining": job.estimated_time_remaining or 0,
             }
         }
     except HTTPException:
