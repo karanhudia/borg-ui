@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Box, Typography, Chip, Tooltip } from '@mui/material'
 import { Eye, Download, Trash2, Lock, Play, AlertCircle, Clock, Calendar, User } from 'lucide-react'
 import { toast } from 'react-hot-toast'
+import { useQueryClient } from '@tanstack/react-query'
 import DataTable, { Column, ActionButton } from './DataTable'
 import StatusBadge from './StatusBadge'
 import RepositoryCell from './RepositoryCell'
@@ -10,6 +11,7 @@ import { Job, Repository } from '../types/jobs'
 import ErrorDetailsDialog from './ErrorDetailsDialog'
 import LogViewerDialog from './LogViewerDialog'
 import CancelJobDialog from './CancelJobDialog'
+import DeleteJobDialog from './DeleteJobDialog'
 
 interface EmptyState {
   icon?: React.ReactNode
@@ -38,6 +40,7 @@ interface BackupJobsTableProps<T extends Job = Job> {
     errorInfo?: boolean
     breakLock?: boolean
     runNow?: boolean
+    delete?: boolean
   }
 
   // Callbacks
@@ -47,6 +50,10 @@ interface BackupJobsTableProps<T extends Job = Job> {
   onCancelJob?: (job: T) => void | Promise<void>
   onBreakLock?: (job: T) => void | Promise<void>
   onRunNow?: (job: T) => void
+  onDeleteJob?: (job: T) => void | Promise<void>
+
+  // User permissions
+  isAdmin?: boolean
 
   // Table styling
   headerBgColor?: string
@@ -108,14 +115,19 @@ export const BackupJobsTable = <T extends Job = Job>({
   onCancelJob,
   onBreakLock,
   onRunNow,
+  onDeleteJob,
+  isAdmin = false,
   headerBgColor = 'background.default',
   enableHover = true,
   getRowKey,
 }: BackupJobsTableProps<T>) => {
+  const queryClient = useQueryClient()
+
   // Internal state for dialogs
   const [errorJob, setErrorJob] = useState<T | null>(null)
   const [logJob, setLogJob] = useState<T | null>(null)
   const [cancelJob, setCancelJob] = useState<T | null>(null)
+  const [deleteJob, setDeleteJob] = useState<T | null>(null)
 
   // Internal error handler (can be overridden by onErrorDetails prop)
   const handleErrorClick = (job: T) => {
@@ -203,6 +215,52 @@ export const BackupJobsTable = <T extends Job = Job>({
 
   const handleCloseCancelDialog = () => {
     setCancelJob(null)
+  }
+
+  // Internal delete handler (can be overridden by onDeleteJob prop)
+  const handleDeleteClick = (job: T) => {
+    if (onDeleteJob) {
+      onDeleteJob(job)
+    } else {
+      setDeleteJob(job)
+    }
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deleteJob) return
+
+    try {
+      // Call delete API
+      const jobType = deleteJob.type || 'backup'
+      const response = await fetch(`/api/activity/${jobType}/${deleteJob.id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to delete job' }))
+        throw new Error(errorData.detail || 'Failed to delete job')
+      }
+
+      toast.success('Job deleted successfully')
+      setDeleteJob(null)
+
+      // Invalidate queries to refresh the job lists
+      queryClient.invalidateQueries({ queryKey: ['backup-status-manual'] })
+      queryClient.invalidateQueries({ queryKey: ['backup-status-scheduled'] })
+      queryClient.invalidateQueries({ queryKey: ['backup-status'] })
+      queryClient.invalidateQueries({ queryKey: ['activity'] })
+      queryClient.invalidateQueries({ queryKey: ['recent-backup-jobs'] })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete job')
+      console.error(error)
+    }
+  }
+
+  const handleCloseDeleteDialog = () => {
+    setDeleteJob(null)
   }
 
   // Build columns array based on options
@@ -408,6 +466,17 @@ export const BackupJobsTable = <T extends Job = Job>({
     })
   }
 
+  if (actions.delete !== false && isAdmin) {
+    actionButtons.push({
+      icon: <Trash2 size={18} />,
+      label: 'Delete',
+      onClick: handleDeleteClick,
+      color: 'error',
+      tooltip: 'Delete Job (Admin Only)',
+      show: (job) => job.status !== 'running' && job.status !== 'pending',
+    })
+  }
+
   // Build default emptyState
   const defaultEmptyState: EmptyState = {
     icon: (
@@ -462,6 +531,15 @@ export const BackupJobsTable = <T extends Job = Job>({
         onClose={handleCloseCancelDialog}
         onConfirm={handleConfirmCancel}
         jobId={cancelJob?.id}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteJobDialog
+        open={Boolean(deleteJob)}
+        onClose={handleCloseDeleteDialog}
+        onConfirm={handleConfirmDelete}
+        jobId={deleteJob?.id}
+        jobType={deleteJob?.type}
       />
     </>
   )

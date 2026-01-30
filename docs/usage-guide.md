@@ -614,6 +614,68 @@ When a scheduled backup is running, you'll see it in the **"Running Scheduled Ba
 
 ---
 
+## Managing Job History
+
+### Viewing Job History
+
+All completed jobs (backups, restores, checks, compacts, prunes) are stored in the system and can be viewed in:
+
+- **Backup Tab** - Recent backup jobs
+- **Activity Tab** - All job types with filtering
+- **Schedule Tab** - Execution history for scheduled jobs
+
+Each job entry shows:
+- Job ID and type
+- Status (success, failed, cancelled)
+- Start/end time and duration
+- Log files (view or download)
+- Error details (if failed)
+
+### Deleting Job Entries (Admin Only)
+
+{: .warning }
+> **Admin Access Required:** Only administrator users can delete job entries. This feature is restricted to prevent accidental data loss.
+
+**When to delete job entries:**
+- Clean up test/failed backups
+- Remove old job history
+- Manage database size
+- Remove sensitive log information
+
+**What gets deleted:**
+- ✅ Job entry from database
+- ✅ Associated log files from disk
+- ✅ All job metadata
+
+{: .note }
+> **Cannot be undone:** Deletion is permanent. Job history and logs cannot be recovered after deletion.
+
+**How to delete a job:**
+
+1. **Navigate to any job list** (Backup, Activity, or Schedule tab)
+2. **Find the completed/failed job** you want to delete
+3. **Click the trash icon (🗑️)** in the actions column
+4. **Review the warning dialog**
+5. **Click "Delete Permanently"** to confirm
+
+**Restrictions:**
+- ❌ Cannot delete running jobs - must cancel or wait for completion
+- ❌ Cannot delete pending jobs - must cancel or wait for start
+- ❌ Non-admin users cannot see delete button
+- ❌ API returns 403 Forbidden if non-admin attempts deletion
+
+**Example workflow:**
+```
+1. Admin user logs in
+2. Goes to Activity tab
+3. Filters for "Failed" jobs
+4. Clicks trash icon on old failed job
+5. Confirms deletion in dialog
+6. Job removed from all lists
+```
+
+---
+
 ## Best Practices
 
 ### Security Considerations

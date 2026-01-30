@@ -13,6 +13,7 @@ import {
 import { History, Info, RefreshCw } from 'lucide-react'
 import { activityAPI } from '../services/api'
 import { useMatomo } from '../hooks/useMatomo'
+import { useAuth } from '../hooks/useAuth'
 import BackupJobsTable from '../components/BackupJobsTable'
 
 interface ActivityItem {
@@ -35,6 +36,7 @@ interface ActivityItem {
 
 const Activity: React.FC = () => {
   const { track, EventCategory, EventAction } = useMatomo()
+  const { user } = useAuth()
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
 
@@ -138,7 +140,9 @@ const Activity: React.FC = () => {
             viewLogs: true,
             downloadLogs: true,
             errorInfo: true,
+            delete: true,
           }}
+          isAdmin={user?.is_admin || false}
           getRowKey={(activity) => `${activity.type}-${activity.id}`}
           headerBgColor="background.default"
           enableHover={true}
@@ -153,7 +157,9 @@ const Activity: React.FC = () => {
             viewLogs: true,
             downloadLogs: true,
             errorInfo: true,
+            delete: true,
           }}
+          isAdmin={user?.is_admin || false}
           getRowKey={(activity) => `${activity.type}-${activity.id}`}
           headerBgColor="background.default"
           enableHover={true}

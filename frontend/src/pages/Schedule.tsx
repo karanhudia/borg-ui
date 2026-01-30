@@ -49,6 +49,7 @@ import { toast } from 'react-hot-toast'
 import RepositoryCell from '../components/RepositoryCell'
 import MultiRepositorySelector from '../components/MultiRepositorySelector'
 import { useMatomo } from '../hooks/useMatomo'
+import { useAuth } from '../hooks/useAuth'
 import {
   formatDate,
   formatRelativeTime,
@@ -127,6 +128,7 @@ const Schedule: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { track, EventCategory, EventAction } = useMatomo()
+  const { user } = useAuth()
 
   // Determine current tab from URL
   const getCurrentTab = React.useCallback(() => {
@@ -1246,7 +1248,9 @@ const Schedule: React.FC = () => {
                   cancel: true,
                   downloadLogs: true,
                   errorInfo: true,
+                  delete: true,
                 }}
+                isAdmin={user?.is_admin || false}
                 getRowKey={(job) => String(job.id)}
                 headerBgColor="background.default"
                 enableHover={true}
