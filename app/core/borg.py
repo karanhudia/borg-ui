@@ -583,13 +583,15 @@ class BorgInterface:
         return await self._execute_command(cmd, env=env if env else None)
 
 
-    async def get_repository_info(self, repository_path: str, remote_path: str = None) -> Dict:
+    async def get_repository_info(self, repository_path: str, remote_path: str = None, bypass_lock: bool = False) -> Dict:
         """Get detailed information about a specific repository"""
         try:
             # Get repository info using borg info
             cmd = ["borg", "info"]
             if remote_path:
                 cmd.extend(["--remote-path", remote_path])
+            if bypass_lock:
+                cmd.append("--bypass-lock")
             cmd.extend([repository_path, "--json"])
             result = await self._execute_command(cmd, timeout=60)
 

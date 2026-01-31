@@ -34,6 +34,7 @@ import LogManagementTab from '../components/LogManagementTab'
 import CacheManagementTab from '../components/CacheManagementTab'
 import MountsManagementTab from '../components/MountsManagementTab'
 import SystemSettingsTab from '../components/SystemSettingsTab'
+import BetaFeaturesTab from '../components/BetaFeaturesTab'
 import Scripts from './Scripts'
 import Activity from './Activity'
 import { formatDateShort } from '../utils/dateUtils'
@@ -491,28 +492,7 @@ const Settings: React.FC = () => {
       {activeTab === 4 && user?.is_admin && <SystemSettingsTab />}
 
       {/* Beta Features Tab - Admin Only */}
-      {activeTab === 5 && user?.is_admin && (
-        <Box>
-          <Box>
-            <Typography variant="h6" fontWeight={600} gutterBottom>
-              Beta Features
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Try experimental features before they're released to everyone. These features are
-              still in development and may change.
-            </Typography>
-          </Box>
-
-          <Card sx={{ maxWidth: 600 }}>
-            <Box sx={{ p: 3 }}>
-              <Typography variant="body2" color="text.secondary">
-                No new beta features available at the moment. Check back later for new experimental
-                features.
-              </Typography>
-            </Box>
-          </Card>
-        </Box>
-      )}
+      {activeTab === 5 && user?.is_admin && <BetaFeaturesTab />}
 
       {/* Cache Management Tab - Admin Only */}
       {activeTab === 6 && user?.is_admin && <CacheManagementTab />}

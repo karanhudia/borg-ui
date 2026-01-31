@@ -1,0 +1,122 @@
+import React, { useState, useEffect } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Stack,
+  Switch,
+  FormControlLabel,
+  CircularProgress,
+} from '@mui/material'
+import { toast } from 'react-hot-toast'
+import { settingsAPI } from '../services/api'
+
+const BetaFeaturesTab: React.FC = () => {
+  const queryClient = useQueryClient()
+  const [bypassLockOnInfo, setBypassLockOnInfo] = useState(false)
+
+  // Fetch system settings
+  const { data: systemData, isLoading: systemLoading } = useQuery({
+    queryKey: ['systemSettings'],
+    queryFn: async () => {
+      const response = await settingsAPI.getSystemSettings()
+      return response.data
+    },
+  })
+
+  const systemSettings = systemData?.settings
+
+  // Initialize state from fetched data
+  useEffect(() => {
+    if (systemSettings) {
+      setBypassLockOnInfo(systemSettings.bypass_lock_on_info ?? false)
+    }
+  }, [systemSettings])
+
+  // Save settings mutation
+  const saveSettingsMutation = useMutation({
+    mutationFn: async (value: boolean) => {
+      await settingsAPI.updateSystemSettings({
+        bypass_lock_on_info: value,
+      })
+    },
+    onSuccess: () => {
+      toast.success('Setting updated successfully')
+      queryClient.invalidateQueries({ queryKey: ['systemSettings'] })
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to update setting: ${error.message}`)
+      // Revert on error
+      if (systemSettings) {
+        setBypassLockOnInfo(systemSettings.bypass_lock_on_info ?? false)
+      }
+    },
+  })
+
+  const handleToggle = (checked: boolean) => {
+    setBypassLockOnInfo(checked)
+    saveSettingsMutation.mutate(checked)
+  }
+
+  if (systemLoading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+        <CircularProgress />
+      </Box>
+    )
+  }
+
+  return (
+    <Box>
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h6" fontWeight={600} gutterBottom>
+          Beta Features
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Try experimental features before they're released to everyone. These features are still in
+          development and may change.
+        </Typography>
+      </Box>
+
+      <Card sx={{ maxWidth: 800 }}>
+        <CardContent>
+          <Stack spacing={3}>
+            {/* Bypass Lock on Info Commands */}
+            <Box>
+              <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
+                Bypass Locks for Info Commands
+              </Typography>
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={bypassLockOnInfo}
+                    onChange={(e) => handleToggle(e.target.checked)}
+                    disabled={saveSettingsMutation.isPending}
+                    color="primary"
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body1">
+                      Enable bypass-lock for all borg info commands
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Adds <code>--bypass-lock</code> to all <code>borg info</code> commands. This
+                      prevents lock contention when multiple operations try to access SSH
+                      repositories simultaneously. Enable if you see "Repository is locked" errors.
+                    </Typography>
+                  </Box>
+                }
+              />
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
+    </Box>
+  )
+}
+
+export default BetaFeaturesTab
