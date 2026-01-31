@@ -6,7 +6,7 @@ import structlog
 import os
 from dotenv import load_dotenv
 
-from app.api import auth, dashboard, backup, archives, restore, schedule, settings as settings_api, events, repositories, ssh_keys, system, filesystem, browse, notifications, scripts, packages, activity, scripts_library, mounts
+from app.api import auth, dashboard, backup, archives, restore, schedule, settings as settings_api, events, repositories, ssh_keys, system, filesystem, browse, notifications, scripts, packages, activity, scripts_library, mounts, metrics
 from app.routers import config
 from app.database.database import engine
 from app.database.models import Base
@@ -72,6 +72,7 @@ if os.path.exists("app/static"):
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Include API routers
+app.include_router(metrics.router)  # /metrics endpoint (no prefix for Prometheus)
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(backup.router, prefix="/api/backup", tags=["Backup"])
