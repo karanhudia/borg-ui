@@ -378,6 +378,7 @@ class SystemSettings(Base):
 
     # Beta features
     use_new_wizard = Column(Boolean, default=False, nullable=False)  # Enable new repository wizard (beta)
+    bypass_lock_on_info = Column(Boolean, default=False, nullable=False)  # Use --bypass-lock for all borg info commands (beta fix for SSH lock issues)
 
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)

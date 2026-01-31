@@ -2022,6 +2022,11 @@ async def get_repository_info(
             if not repository:
                 raise HTTPException(status_code=404, detail="Repository not found")
 
+            # Get system settings for global bypass_lock_on_info setting
+            from app.database.models import SystemSettings
+            system_settings = db.query(SystemSettings).first()
+            use_bypass_lock = repository.bypass_lock or (system_settings and system_settings.bypass_lock_on_info)
+
             # Build borg info command
             cmd = ["borg", "info"]
 
@@ -2029,8 +2034,8 @@ async def get_repository_info(
             if repository.remote_path:
                 cmd.extend(["--remote-path", repository.remote_path])
 
-            # Add --bypass-lock for read-only storage access
-            if repository.bypass_lock:
+            # Add --bypass-lock for read-only storage access (repo-specific or system-wide)
+            if use_bypass_lock:
                 cmd.append("--bypass-lock")
 
             cmd.extend(["--json", repository.path])
@@ -2044,6 +2049,15 @@ async def get_repository_info(
 
             # Get timeouts from DB settings (with fallback to config)
             timeouts = get_operation_timeouts(db)
+
+            # Log the command being executed (including bypass-lock status)
+            logger.info(
+                "Executing borg info command",
+                repo_id=repo_id,
+                command=" ".join(cmd),
+                bypass_lock=use_bypass_lock,
+                source="repo_setting" if repository.bypass_lock else ("system_setting" if (system_settings and system_settings.bypass_lock_on_info) else "none")
+            )
 
             # Execute command with increased timeout to match BORG_LOCK_WAIT
             process = await asyncio.create_subprocess_exec(
