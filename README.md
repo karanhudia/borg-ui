@@ -4,14 +4,14 @@
 
 Zero-configuration deployment - just run and go.
 
-**[📚 Documentation](https://karanhudia.github.io/borg-ui)** • **[🐳 Docker Hub](https://hub.docker.com/r/ainullcode/borg-ui)** • **[💬 Discord](https://discord.gg/afjM9vMj)**
+**[📚 Documentation](https://karanhudia.github.io/borg-ui)** • **[🐳 Docker Hub](https://hub.docker.com/r/ainullcode/borg-ui)** • **[💬 Discord](https://discord.gg/5KfVa5QkdQ)**
 
 [![Docker Hub](https://img.shields.io/docker/pulls/ainullcode/borg-ui)](https://hub.docker.com/r/ainullcode/borg-ui)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](LICENSE)
 [![GitHub Actions](https://github.com/karanhudia/borg-ui/workflows/Build%20and%20Publish%20Docker%20Images/badge.svg)](https://github.com/karanhudia/borg-ui/actions)
 [![Tests](https://github.com/karanhudia/borg-ui/workflows/Tests/badge.svg)](https://github.com/karanhudia/borg-ui/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/karanhudia/borg-ui/branch/main/graph/badge.svg)](https://codecov.io/gh/karanhudia/borg-ui)
-[![Discord](https://img.shields.io/discord/1331215029498732686?color=5865F2&logo=discord&logoColor=white&label=Discord)](https://discord.gg/afjM9vMj)
+[![Discord](https://img.shields.io/discord/1331215029498732686?color=5865F2&logo=discord&logoColor=white&label=Discord)](https://discord.gg/5KfVa5QkdQ)
 
 </div>
 
@@ -26,7 +26,7 @@ Zero-configuration deployment - just run and go.
 
 ### Modern Dashboard
 
-Monitor all your repositories, backup status, and system metrics at a glance with live activity feed.
+Monitor all your repositories, backup status, and system metrics at a glance. View repository health, recent activity feed, storage usage, and quick access to common operations. Get a comprehensive overview of your entire backup infrastructure in one place.
 
 <div align="center">
   <img width="800" alt="Modern Dashboard with activity monitoring" src="https://github.com/user-attachments/assets/3e9c7ae6-1507-4fe1-8f8b-8231a458bca0" />
@@ -36,7 +36,7 @@ Monitor all your repositories, backup status, and system metrics at a glance wit
 
 ### Live Backup Progress
 
-Watch your backups in real-time with detailed progress tracking, speed metrics, and current file being processed.
+Watch your backups execute in real-time with detailed progress tracking. Monitor current file being processed, backup speed (MB/s), data statistics (original, compressed, deduplicated sizes), estimated time remaining, and overall completion percentage.
 
 <div align="center">
   <img width="800" alt="Real-time backup progress with live metrics" src="https://github.com/user-attachments/assets/de7e870a-2db9-4384-be71-59e8bdd67373" />
@@ -46,7 +46,7 @@ Watch your backups in real-time with detailed progress tracking, speed metrics, 
 
 ### Repository Management
 
-Create and manage local, SSH, or SFTP repositories with multiple compression options and archive browsing.
+Create and manage repositories with support for local storage, SSH, and SFTP connections. Configure encryption (repokey, keyfile), compression algorithms (lz4, zstd, zlib, lzma, auto, obfuscate), source directories, exclude patterns, and custom borg flags. Import existing repositories or create new ones with step-by-step wizard.
 
 <div align="center">
   <img width="800" alt="Repository details" src="https://github.com/user-attachments/assets/bddfae3c-4bd6-473f-aa5e-5e2cf3d54f4b" />
@@ -57,17 +57,17 @@ Create and manage local, SSH, or SFTP repositories with multiple compression opt
 
 ### Smart Notifications
 
-Get alerts for backup failures and completions via 100+ services including Email, Slack, Discord, Telegram, Pushover, and more.
+Get instant alerts for backup events via 100+ notification services powered by Apprise. Configure Email, Slack, Discord, Telegram, Pushover, Microsoft Teams, and many more. Set up per-repository notification preferences with customizable templates for backup start, success, failure, and warnings.
 
 <div align="center">
-  <img  width="800" alt="Notification settings with 100+ integrations" src="https://github.com/user-attachments/assets/1ae11394-d4d1-4fc8-b501-965dd5bc9743" />
+  <img width="800" alt="Notification settings with 100+ integrations" src="https://github.com/user-attachments/assets/1ae11394-d4d1-4fc8-b501-965dd5bc9743" />
 </div>
 
 ---
 
 ### Archive Browsing
 
-Automatically install required system packages (borgbackup, borgmatic, rclone) on startup with progress tracking.
+Browse and restore files from any backup archive with 600x faster performance using Redis caching. Navigate through your backup history, preview file contents, and restore individual files or entire directories.
 
 <div align="center">
   <img width="800" alt="Archive Browsing" src="https://github.com/user-attachments/assets/5c42bb10-cfc4-468b-bfd3-bd403ba29516" />
@@ -77,10 +77,10 @@ Automatically install required system packages (borgbackup, borgmatic, rclone) o
 
 ### Schedule Management
 
-Automatically install required system packages (borgbackup, borgmatic, rclone) on startup with progress tracking.
+Create and manage automated backup schedules with visual cron builder. Configure multi-repository backups, set up pre/post scripts, enable automatic pruning and compacting, and track execution history with detailed logs.
 
 <div align="center">
-  <img <img width="800" alt="Create and View Schedule Tab" src="https://github.com/user-attachments/assets/ab824ea3-afca-4872-85b9-77781e393b97" />
+  <img width="800" alt="Create and View Schedule Tab" src="https://github.com/user-attachments/assets/ab824ea3-afca-4872-85b9-77781e393b97" />
 </div>
 
 ---
@@ -243,7 +243,7 @@ volumes:
 
 ## Support
 
-- **Discord**: [Join our community](https://discord.gg/afjM9vMj) - Get help, share your setup, suggest features
+- **Discord**: [Join our community](https://discord.gg/5KfVa5QkdQ) - Get help, share your setup, suggest features
 - **Documentation**: [Full Documentation](https://karanhudia.github.io/borg-ui)
 - **Bug Reports**: [GitHub Issues](https://github.com/karanhudia/borg-ui/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/karanhudia/borg-ui/discussions)
