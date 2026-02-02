@@ -40,21 +40,19 @@ export default function WizardStepBackupConfig({
         onChange={(value) => onChange({ compression: value })}
       />
 
-      {/* Exclude Patterns - Only for local data source */}
-      {dataSource === 'local' && (
-        <ExcludePatternInput
-          patterns={data.excludePatterns}
-          onChange={(patterns) => onChange({ excludePatterns: patterns })}
-          onBrowseClick={onBrowseExclude}
-        />
-      )}
+      {/* Exclude Patterns - Now works for both local and remote sources */}
+      <ExcludePatternInput
+        patterns={data.excludePatterns}
+        onChange={(patterns) => onChange({ excludePatterns: patterns })}
+        onBrowseClick={onBrowseExclude}
+      />
 
       {/* Info for remote data source */}
       {dataSource === 'remote' && (
         <Alert severity="info">
           <Typography variant="body2">
-            Source directories and exclude patterns will be configured on the remote machine during
-            backup execution.
+            Remote directories are mounted via SSHFS preserving their original paths. Exclude
+            patterns work the same as local sources (e.g., <code>*/var/cache/*</code>).
           </Typography>
         </Alert>
       )}
