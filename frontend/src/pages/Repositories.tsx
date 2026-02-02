@@ -438,7 +438,8 @@ export default function Repositories() {
       const observe = sorted.filter((r: Repository) => r.mode === 'observe')
 
       if (full.length > 0) groups.push({ name: 'Full Backup Repositories', repositories: full })
-      if (observe.length > 0) groups.push({ name: 'Observe-Only Repositories', repositories: observe })
+      if (observe.length > 0)
+        groups.push({ name: 'Observe-Only Repositories', repositories: observe })
     }
 
     return { groups: groups.length > 0 ? groups : [{ name: null, repositories: sorted }] }
