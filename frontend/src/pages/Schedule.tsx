@@ -414,7 +414,10 @@ const Schedule: React.FC = () => {
       ...createForm,
       cron_expression: utcCron,
       // Only send repository_ids if multi-repo (more than one selected)
-      repository_ids: createForm.repository_ids.length > 0 ? createForm.repository_ids : undefined,
+      repository_ids:
+        createForm.repository_ids.length > 0
+          ? Array.from(new Set(createForm.repository_ids))
+          : undefined,
       // Clear repository if using multi-repo
       repository: createForm.repository_ids.length > 0 ? undefined : createForm.repository,
     }
@@ -437,7 +440,10 @@ const Schedule: React.FC = () => {
         ...editForm,
         cron_expression: utcCron,
         // Only send repository_ids if multi-repo (more than one selected)
-        repository_ids: editForm.repository_ids.length > 0 ? editForm.repository_ids : undefined,
+        repository_ids:
+          editForm.repository_ids.length > 0
+            ? Array.from(new Set(editForm.repository_ids))
+            : undefined,
         // Clear repository if using multi-repo
         repository: editForm.repository_ids.length > 0 ? undefined : editForm.repository,
       }
@@ -499,7 +505,7 @@ const Schedule: React.FC = () => {
       name: job.name,
       cron_expression: localCron,
       repository: job.repository || '',
-      repository_ids: repository_ids,
+      repository_ids: Array.from(new Set(repository_ids)),
       enabled: job.enabled,
       description: job.description || '',
       archive_name_template: job.archive_name_template || '{job_name}-{now}',
