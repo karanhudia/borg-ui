@@ -852,7 +852,7 @@ class BackupService:
         except Exception as e:
             logger.error("Error unmounting SSH path", mount_point=mount_point, error=str(e), job_id=job_id)
 
-    async def _prepare_source_paths(self, source_paths: list[str], job_id: int, source_connection_id: int = None) -> tuple[list[str], list[str]]:
+    async def _prepare_source_paths(self, source_paths: list[str], job_id: int, source_connection_id: int = None) -> tuple[list[str], list[tuple[str, str]]]:
         """
         Prepare source paths for backup by mounting SSH URLs via SSHFS
         Uses the new mount_service with proper SSH key authentication.
@@ -862,16 +862,17 @@ class BackupService:
             job_id: Backup job ID
             source_connection_id: SSH connection ID for remote data source (if applicable)
 
-        Returns: tuple of (processed_paths, ssh_mount_roots)
-            - processed_paths: list of paths to backup (SSH URLs replaced with temp root directories)
-            - ssh_mount_roots: list of temp_root paths that are SSH mounts (for cwd handling)
+        Returns: tuple of (processed_paths, ssh_mount_info)
+            - processed_paths: list of paths to backup (SSH URLs replaced with relative paths from temp_root)
+            - ssh_mount_info: list of (temp_root, relative_path) tuples for SSH mounts
+                Where relative_path is the path relative to temp_root that preserves original structure
         """
         from app.services.mount_service import mount_service
         from app.database.models import SSHConnection
 
         processed_paths = []
         mount_ids = []
-        ssh_mount_roots = []  # Track which paths are SSH mounts
+        ssh_mount_info = []  # Track (temp_root, relative_path) for SSH mounts
 
         db = SessionLocal()
         try:
@@ -924,14 +925,20 @@ class BackupService:
                             job_id=job_id
                         )
 
-                        processed_paths.append(temp_root)
+                        # Compute relative path that preserves original structure
+                        # remote_path: /var/snap/docker/.../portainer/_data
+                        # relative_path: var/snap/docker/.../portainer/_data (no leading slash)
+                        relative_path = parsed['path'].lstrip('/')
+
+                        processed_paths.append(relative_path)
                         mount_ids.append(mount_id)
-                        ssh_mount_roots.append(temp_root)  # Track this as SSH mount
+                        ssh_mount_info.append((temp_root, relative_path))
 
                         logger.info(
                             "Mounted SSH path for backup",
                             original=path,
-                            backup_root=temp_root,
+                            temp_root=temp_root,
+                            relative_path=relative_path,
                             mount_id=mount_id,
                             connection_id=connection.id,
                             job_id=job_id
@@ -956,7 +963,7 @@ class BackupService:
             if mount_ids:
                 self.ssh_mounts[job_id] = mount_ids
 
-            return processed_paths, ssh_mount_roots
+            return processed_paths, ssh_mount_info
 
         finally:
             db.close()
@@ -1310,7 +1317,7 @@ class BackupService:
                        source_paths=source_paths,
                        source_connection_id=repo_record.source_ssh_connection_id if repo_record else None,
                        job_id=job_id)
-            processed_source_paths, ssh_mount_roots = await self._prepare_source_paths(
+            processed_source_paths, ssh_mount_info = await self._prepare_source_paths(
                 source_paths,
                 job_id,
                 source_connection_id=repo_record.source_ssh_connection_id if repo_record else None
@@ -1322,7 +1329,7 @@ class BackupService:
                 job.completed_at = datetime.utcnow()
                 db.commit()
                 return
-            logger.info("Source paths prepared", original_count=len(source_paths), processed_count=len(processed_source_paths), ssh_mount_count=len(ssh_mount_roots), job_id=job_id)
+            logger.info("Source paths prepared", original_count=len(source_paths), processed_count=len(processed_source_paths), ssh_mount_count=len(ssh_mount_info), job_id=job_id)
 
             # Build command with source directories and exclude patterns
             cmd = [
@@ -1361,44 +1368,45 @@ class BackupService:
             # Add repository::archive
             cmd.append(f"{actual_repository_path}::{archive_name}")
 
-            # Determine if we should use cwd for cleaner archive paths
-            # When ALL paths are SSH mounts, we cd to each temp_root and backup "."
-            # This stores relative paths in the archive instead of ugly /tmp/sshfs_mount_xxx/ paths
+            # Determine if we should use cwd for SSH mounts to avoid /tmp/sshfs_mount_xxx/ in archive
+            # With the new mount structure, paths already preserve original directory structure
+            # Example: /var/snap/docker/.../portainer/_data appears as var/snap/docker/.../portainer/_data in archive
             backup_cwd = None
             backup_paths = processed_source_paths
 
-            if ssh_mount_roots and len(ssh_mount_roots) == len(processed_source_paths):
-                # All paths are SSH mounts - use cwd for cleaner archive structure
-                if len(ssh_mount_roots) == 1:
-                    # Single SSH mount - cd to temp_root and backup the subdirectory name(s)
-                    # This avoids having a "." entry in the archive
-                    backup_cwd = ssh_mount_roots[0]
-                    # List the actual contents of the temp_root to backup (the mount subdirs)
-                    try:
-                        mount_contents = os.listdir(backup_cwd)
-                        # Filter out any hidden files that might exist
-                        backup_paths = [d for d in mount_contents if not d.startswith('.')]
-                        if not backup_paths:
-                            # Fallback to "." if no contents found (shouldn't happen)
-                            backup_paths = ["."]
-                    except Exception as e:
-                        logger.warning("Failed to list mount contents, using '.'",
-                                     error=str(e), cwd=backup_cwd, job_id=job_id)
-                        backup_paths = ["."]
+            if ssh_mount_info and len(ssh_mount_info) == len(processed_source_paths):
+                # All paths are SSH mounts
+                # Extract unique temp_roots
+                temp_roots = list(set(temp_root for temp_root, _ in ssh_mount_info))
+
+                if len(temp_roots) == 1:
+                    # All SSH mounts share the same temp_root - use it as cwd
+                    # This allows relative paths to work and strips the /tmp/sshfs_mount_xxx prefix
+                    backup_cwd = temp_roots[0]
+                    # processed_source_paths already contains relative paths that preserve structure
+                    # e.g., "var/snap/docker/.../portainer/_data"
+                    backup_paths = processed_source_paths
                     logger.info(
-                        "Using cwd for single SSH mount backup (cleaner archive paths)",
+                        "Using cwd for SSH mount backup (preserves original path structure)",
                         cwd=backup_cwd,
                         backup_paths=backup_paths,
                         job_id=job_id
                     )
                 else:
-                    # Multiple SSH mounts - can't use single cwd, but we can still use relative paths
-                    # For now, use absolute paths (could be improved later)
-                    logger.info(
-                        "Multiple SSH mounts - using absolute paths",
-                        mount_count=len(ssh_mount_roots),
+                    # Multiple SSH mounts with different temp_roots
+                    # Need to use absolute paths or run multiple backup commands
+                    # For now, fall back to absolute paths (each mount has different temp dir)
+                    logger.warning(
+                        "Multiple SSH mounts with different temp roots - using absolute paths",
+                        temp_root_count=len(temp_roots),
                         job_id=job_id
                     )
+                    # Convert relative paths back to absolute by prefixing with temp_root
+                    backup_paths = []
+                    for i, (temp_root, relative_path) in enumerate(ssh_mount_info):
+                        absolute_path = os.path.join(temp_root, relative_path)
+                        backup_paths.append(absolute_path)
+                    backup_cwd = None
 
             # Add all source paths to the command
             cmd.extend(backup_paths)
