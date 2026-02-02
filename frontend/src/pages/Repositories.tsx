@@ -3,8 +3,22 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
 import { useMatomo } from '../hooks/useMatomo'
-import { Box, Card, CardContent, Typography, Button, Stack } from '@mui/material'
-import { Add, Storage, FileUpload } from '@mui/icons-material'
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Button,
+  Stack,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  InputAdornment,
+  Divider,
+} from '@mui/material'
+import { Add, Storage, FileUpload, Search, SortByAlpha, FilterList } from '@mui/icons-material'
 import { repositoriesAPI, RepositoryData } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { useAppState } from '../context/AppContext'
@@ -83,6 +97,15 @@ export default function Repositories() {
 
   // Track repositories with running jobs for polling
   const [repositoriesWithJobs, setRepositoriesWithJobs] = useState<Set<number>>(new Set())
+
+  // Filter, sort, and search state
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortBy, setSortBy] = useState<string>(() => {
+    return localStorage.getItem('repos_sort') || 'name-asc'
+  })
+  const [groupBy, setGroupBy] = useState<string>(() => {
+    return localStorage.getItem('repos_group') || 'none'
+  })
 
   // Queries
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -312,6 +335,81 @@ export default function Repositories() {
     return compression || 'lz4'
   }
 
+  // Save preferences to localStorage
+  React.useEffect(() => {
+    localStorage.setItem('repos_sort', sortBy)
+  }, [sortBy])
+
+  React.useEffect(() => {
+    localStorage.setItem('repos_group', groupBy)
+  }, [groupBy])
+
+  // Filter, sort, and group repositories
+  const processedRepositories = React.useMemo(() => {
+    let filtered = repositoriesData?.data?.repositories || []
+
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter((repo: Repository) => {
+        return (
+          repo.name?.toLowerCase().includes(query) ||
+          repo.path?.toLowerCase().includes(query) ||
+          repo.repository_type?.toLowerCase().includes(query)
+        )
+      })
+    }
+
+    // Sort
+    const sorted = [...filtered].sort((a: Repository, b: Repository) => {
+      switch (sortBy) {
+        case 'name-asc':
+          return (a.name || '').localeCompare(b.name || '')
+        case 'name-desc':
+          return (b.name || '').localeCompare(a.name || '')
+        case 'last-backup-recent':
+          if (!a.last_backup && !b.last_backup) return 0
+          if (!a.last_backup) return 1
+          if (!b.last_backup) return -1
+          return new Date(b.last_backup).getTime() - new Date(a.last_backup).getTime()
+        case 'last-backup-oldest':
+          if (!a.last_backup && !b.last_backup) return 0
+          if (!a.last_backup) return 1
+          if (!b.last_backup) return -1
+          return new Date(a.last_backup).getTime() - new Date(b.last_backup).getTime()
+        case 'created-newest':
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        case 'created-oldest':
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        default:
+          return 0
+      }
+    })
+
+    // Group
+    if (groupBy === 'none') {
+      return { groups: [{ name: null, repositories: sorted }] }
+    }
+
+    const groups: { name: string; repositories: Repository[] }[] = []
+
+    if (groupBy === 'type') {
+      const local = sorted.filter((r: Repository) => !r.path?.startsWith('ssh://'))
+      const ssh = sorted.filter((r: Repository) => r.path?.startsWith('ssh://'))
+
+      if (local.length > 0) groups.push({ name: 'Local Repositories', repositories: local })
+      if (ssh.length > 0) groups.push({ name: 'Remote Repositories (SSH)', repositories: ssh })
+    } else if (groupBy === 'mode') {
+      const full = sorted.filter((r: Repository) => r.mode === 'full' || !r.mode)
+      const observe = sorted.filter((r: Repository) => r.mode === 'observe')
+
+      if (full.length > 0) groups.push({ name: 'Full Backup Repositories', repositories: full })
+      if (observe.length > 0) groups.push({ name: 'Observe-Only Repositories', repositories: observe })
+    }
+
+    return { groups: groups.length > 0 ? groups : [{ name: null, repositories: sorted }] }
+  }, [repositoriesData, searchQuery, sortBy, groupBy])
+
   const repositories = repositoriesData?.data?.repositories || []
 
   return (
@@ -352,6 +450,74 @@ export default function Repositories() {
           )}
         </Box>
       </Box>
+
+      {/* Filter, Sort, and Search Bar */}
+      {repositories.length > 0 && (
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center">
+              {/* Search */}
+              <TextField
+                size="small"
+                placeholder="Search repositories..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                sx={{ flex: 1, minWidth: 200 }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search fontSize="small" />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+
+              {/* Sort By */}
+              <FormControl size="small" sx={{ minWidth: 200 }}>
+                <InputLabel id="sort-label">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <SortByAlpha fontSize="small" />
+                    Sort By
+                  </Box>
+                </InputLabel>
+                <Select
+                  labelId="sort-label"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  label="Sort By"
+                >
+                  <MenuItem value="name-asc">Name (A-Z)</MenuItem>
+                  <MenuItem value="name-desc">Name (Z-A)</MenuItem>
+                  <MenuItem value="last-backup-recent">Last Backup (Recent)</MenuItem>
+                  <MenuItem value="last-backup-oldest">Last Backup (Oldest)</MenuItem>
+                  <MenuItem value="created-newest">Created (Newest)</MenuItem>
+                  <MenuItem value="created-oldest">Created (Oldest)</MenuItem>
+                </Select>
+              </FormControl>
+
+              {/* Group By */}
+              <FormControl size="small" sx={{ minWidth: 200 }}>
+                <InputLabel id="group-label">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <FilterList fontSize="small" />
+                    Group By
+                  </Box>
+                </InputLabel>
+                <Select
+                  labelId="group-label"
+                  value={groupBy}
+                  onChange={(e) => setGroupBy(e.target.value)}
+                  label="Group By"
+                >
+                  <MenuItem value="none">None</MenuItem>
+                  <MenuItem value="type">Repository Type</MenuItem>
+                  <MenuItem value="mode">Backup Mode</MenuItem>
+                </Select>
+              </FormControl>
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Repositories Grid */}
       {isLoading ? (
@@ -394,25 +560,79 @@ export default function Repositories() {
             )}
           </CardContent>
         </Card>
+      ) : processedRepositories.groups.length === 0 ||
+        processedRepositories.groups.every((g) => g.repositories.length === 0) ? (
+        <Card>
+          <CardContent sx={{ textAlign: 'center', py: 8 }}>
+            <Storage sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
+            <Typography variant="h6" gutterBottom>
+              No Matching Repositories
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              {searchQuery
+                ? `No repositories match "${searchQuery}". Try a different search term.`
+                : 'No repositories found.'}
+            </Typography>
+            {searchQuery && (
+              <Button variant="outlined" onClick={() => setSearchQuery('')}>
+                Clear Search
+              </Button>
+            )}
+          </CardContent>
+        </Card>
       ) : (
-        <Stack spacing={2}>
-          {repositories.map((repository: Repository) => (
-            <RepositoryCard
-              key={repository.id}
-              repository={repository}
-              isInJobsSet={repositoriesWithJobs.has(repository.id)}
-              onViewInfo={() => setViewingInfoRepository(repository)}
-              onCheck={() => handleCheckRepository(repository)}
-              onCompact={() => handleCompactRepository(repository)}
-              onPrune={() => handlePruneRepository(repository)}
-              onEdit={() => openEditModal(repository)}
-              onDelete={() => handleDeleteRepository(repository)}
-              onBackupNow={() => handleBackupNow(repository)}
-              onViewArchives={() => handleViewArchives(repository)}
-              getCompressionLabel={getCompressionLabel}
-              isAdmin={user?.is_admin || false}
-              onJobCompleted={handleJobCompleted}
-            />
+        <Stack spacing={3}>
+          {processedRepositories.groups.map((group, groupIndex) => (
+            <Box key={groupIndex}>
+              {/* Group Header */}
+              {group.name && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontSize: '1rem',
+                      fontWeight: 600,
+                      color: 'primary.main',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                    }}
+                  >
+                    <FilterList fontSize="small" />
+                    {group.name}
+                    <Typography
+                      component="span"
+                      sx={{ ml: 0.5, fontSize: '0.875rem', color: 'text.secondary' }}
+                    >
+                      ({group.repositories.length})
+                    </Typography>
+                  </Typography>
+                  <Divider sx={{ mt: 1 }} />
+                </Box>
+              )}
+
+              {/* Repository Cards */}
+              <Stack spacing={2}>
+                {group.repositories.map((repository: Repository) => (
+                  <RepositoryCard
+                    key={repository.id}
+                    repository={repository}
+                    isInJobsSet={repositoriesWithJobs.has(repository.id)}
+                    onViewInfo={() => setViewingInfoRepository(repository)}
+                    onCheck={() => handleCheckRepository(repository)}
+                    onCompact={() => handleCompactRepository(repository)}
+                    onPrune={() => handlePruneRepository(repository)}
+                    onEdit={() => openEditModal(repository)}
+                    onDelete={() => handleDeleteRepository(repository)}
+                    onBackupNow={() => handleBackupNow(repository)}
+                    onViewArchives={() => handleViewArchives(repository)}
+                    getCompressionLabel={getCompressionLabel}
+                    isAdmin={user?.is_admin || false}
+                    onJobCompleted={handleJobCompleted}
+                  />
+                ))}
+              </Stack>
+            </Box>
           ))}
         </Stack>
       )}
