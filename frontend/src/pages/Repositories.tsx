@@ -18,7 +18,7 @@ import {
   InputAdornment,
   Divider,
 } from '@mui/material'
-import { Add, Storage, FileUpload, Search, SortByAlpha, FilterList } from '@mui/icons-material'
+import { Add, Storage, FileUpload, Search, FilterList } from '@mui/icons-material'
 import { repositoriesAPI, RepositoryData } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { useAppState } from '../context/AppContext'
@@ -393,7 +393,41 @@ export default function Repositories() {
 
     const groups: { name: string; repositories: Repository[] }[] = []
 
-    if (groupBy === 'type') {
+    if (groupBy === 'location') {
+      // Group by hostname (for SSH) or "Local"
+      const locationMap = new Map<string, Repository[]>()
+
+      sorted.forEach((repo: Repository) => {
+        let locationKey = 'Local Machine'
+
+        if (repo.path?.startsWith('ssh://')) {
+          // Extract hostname from SSH URL: ssh://user@hostname:port/path
+          const match = repo.path.match(/ssh:\/\/[^@]+@([^:/]+)/)
+          if (match) {
+            locationKey = match[1] // hostname
+          } else {
+            locationKey = 'Remote (SSH)'
+          }
+        }
+
+        if (!locationMap.has(locationKey)) {
+          locationMap.set(locationKey, [])
+        }
+        locationMap.get(locationKey)!.push(repo)
+      })
+
+      // Sort location keys: Local Machine first, then alphabetically
+      const sortedKeys = Array.from(locationMap.keys()).sort((a, b) => {
+        if (a === 'Local Machine') return -1
+        if (b === 'Local Machine') return 1
+        return a.localeCompare(b)
+      })
+
+      sortedKeys.forEach((key) => {
+        const repos = locationMap.get(key)!
+        groups.push({ name: key, repositories: repos })
+      })
+    } else if (groupBy === 'type') {
       const local = sorted.filter((r: Repository) => !r.path?.startsWith('ssh://'))
       const ssh = sorted.filter((r: Repository) => r.path?.startsWith('ssh://'))
 
@@ -474,12 +508,7 @@ export default function Repositories() {
 
               {/* Sort By */}
               <FormControl size="small" sx={{ minWidth: 200 }}>
-                <InputLabel id="sort-label">
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <SortByAlpha fontSize="small" />
-                    Sort By
-                  </Box>
-                </InputLabel>
+                <InputLabel id="sort-label">Sort By</InputLabel>
                 <Select
                   labelId="sort-label"
                   value={sortBy}
@@ -497,12 +526,7 @@ export default function Repositories() {
 
               {/* Group By */}
               <FormControl size="small" sx={{ minWidth: 200 }}>
-                <InputLabel id="group-label">
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <FilterList fontSize="small" />
-                    Group By
-                  </Box>
-                </InputLabel>
+                <InputLabel id="group-label">Group By</InputLabel>
                 <Select
                   labelId="group-label"
                   value={groupBy}
@@ -510,6 +534,7 @@ export default function Repositories() {
                   label="Group By"
                 >
                   <MenuItem value="none">None</MenuItem>
+                  <MenuItem value="location">Location (Hostname)</MenuItem>
                   <MenuItem value="type">Repository Type</MenuItem>
                   <MenuItem value="mode">Backup Mode</MenuItem>
                 </Select>
