@@ -86,9 +86,9 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
           setTouched(true)
           // Preserve order for existing items, add new items at end
           const newIds = newValue.map((r) => r.id)
-          const existingIds = selectedIds.filter((id) => newIds.includes(id))
-          const addedIds = newIds.filter((id) => !selectedIds.includes(id))
-          onChange([...existingIds, ...addedIds])
+          // Use Set to enforce uniqueness while preserving order
+          const uniqueIds = Array.from(new Set(newIds))
+          onChange(uniqueIds)
         }}
         getOptionLabel={(option) => option.name}
         isOptionEqualToValue={(option, value) => option.id === value.id}
