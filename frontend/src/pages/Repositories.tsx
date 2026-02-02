@@ -489,7 +489,7 @@ export default function Repositories() {
       {/* Filter, Sort, and Search Bar */}
       {repositories.length > 0 && (
         <Card sx={{ mb: 3 }}>
-          <CardContent>
+          <CardContent sx={{ '&:last-child': { pb: 2 } }}>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center">
               {/* Search */}
               <TextField
