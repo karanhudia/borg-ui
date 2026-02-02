@@ -75,23 +75,24 @@ export default function CommandPreview({
   // Generate init command
   const initCommand = `borg init --encryption ${encryption} ${remotePathFlag}${fullRepoPath}`
 
-  // For remote source, show the directory name that will be backed up
-  const remoteSourceBasename =
-    isRemoteSource && sourceDirs.length > 0
-      ? sourceDirs[0].split('/').filter(Boolean).pop() || 'source'
-      : 'source'
+  // For remote source, show the preserved path structure (strips leading slash)
+  // Example: /var/snap/docker/.../portainer/_data -> var/snap/docker/.../portainer/_data
+  const getPreservedRemotePath = (path: string) => {
+    return path.startsWith('/') ? path.substring(1) : path
+  }
 
   const effectiveSourceDirs = isRemoteSource
-    ? [remoteSourceBasename]
+    ? sourceDirs.map(getPreservedRemotePath)
     : sourceDirs.length > 0
       ? sourceDirs
       : ['/path/to/source']
 
   // Generate create command
+  // Note: Exclude patterns now work for remote sources since paths are preserved
   const createCommand = generateBorgCreateCommand({
     repositoryPath: fullRepoPath,
     compression,
-    excludePatterns: isRemoteSource ? [] : excludePatterns,
+    excludePatterns: excludePatterns,
     sourceDirs: effectiveSourceDirs,
     customFlags,
     remotePathFlag,
@@ -134,7 +135,7 @@ export default function CommandPreview({
           </Typography>
           <CommandBox>{sshfsMount}</CommandBox>
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-            Temporarily mounts remote directory via SSHFS
+            Temporarily mounts remote directory via SSHFS (preserves full path structure)
           </Typography>
         </Box>
 
@@ -149,7 +150,7 @@ export default function CommandPreview({
           </Typography>
           <CommandBox>{createCommand}</CommandBox>
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-            Runs from mount directory with relative paths
+            Archives preserve original paths (excludes work intuitively)
           </Typography>
         </Box>
 
