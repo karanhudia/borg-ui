@@ -1,7 +1,5 @@
 <div align="center">
-
-# Borg Web UI
-
+  
 **A modern web interface for [Borg Backup](https://borgbackup.readthedocs.io/)**
 
 Zero-configuration deployment - just run and go.
@@ -41,7 +39,7 @@ Monitor all your repositories, backup status, and system metrics at a glance wit
 Watch your backups in real-time with detailed progress tracking, speed metrics, and current file being processed.
 
 <div align="center">
-  <img width="800" alt="Real-time backup progress with live metrics" src="https://github.com/user-attachments/assets/550e396e-ec36-4737-9821-899c99265f64" />
+  <img width="800" alt="Real-time backup progress with live metrics" src="https://github.com/user-attachments/assets/de7e870a-2db9-4384-be71-59e8bdd67373" />
 </div>
 
 ---
@@ -51,7 +49,8 @@ Watch your backups in real-time with detailed progress tracking, speed metrics, 
 Create and manage local, SSH, or SFTP repositories with multiple compression options and archive browsing.
 
 <div align="center">
-  <img width="800" alt="Repository details and archive browser" src="https://github.com/user-attachments/assets/6bae3403-268a-4720-bdfa-087dc2c1df41" />
+  <img width="800" alt="Repository details" src="https://github.com/user-attachments/assets/bddfae3c-4bd6-473f-aa5e-5e2cf3d54f4b" />
+  <img width="800" alt="Create Repository Dialog" src="https://github.com/user-attachments/assets/f6b56ebb-0edf-4910-98ba-53021a7bd4cd" />
 </div>
 
 ---
@@ -61,17 +60,27 @@ Create and manage local, SSH, or SFTP repositories with multiple compression opt
 Get alerts for backup failures and completions via 100+ services including Email, Slack, Discord, Telegram, Pushover, and more.
 
 <div align="center">
-  <img width="800" alt="Notification settings with 100+ integrations" src="https://github.com/user-attachments/assets/598f59a7-8f60-4203-ab5d-0ae0ee28ab61" />
+  <img  width="800" alt="Notification settings with 100+ integrations" src="https://github.com/user-attachments/assets/1ae11394-d4d1-4fc8-b501-965dd5bc9743" />
 </div>
 
 ---
 
-### Package Management
+### Archive Browsing
 
 Automatically install required system packages (borgbackup, borgmatic, rclone) on startup with progress tracking.
 
 <div align="center">
-  <img width="800" alt="Automatic package installation" src="https://github.com/user-attachments/assets/68e25c1b-b6e0-4008-b6cb-e4996a2eee7e" />
+  <img width="800" alt="Archive Browsing" src="https://github.com/user-attachments/assets/5c42bb10-cfc4-468b-bfd3-bd403ba29516" />
+</div>
+
+---
+
+### Schedule Management
+
+Automatically install required system packages (borgbackup, borgmatic, rclone) on startup with progress tracking.
+
+<div align="center">
+  <img <img width="800" alt="Create and View Schedule Tab" src="https://github.com/user-attachments/assets/ab824ea3-afca-4872-85b9-77781e393b97" />
 </div>
 
 ---
