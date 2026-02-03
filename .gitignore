@@ -127,3 +127,11 @@ coverage.json
 junit.xml
 test-results/
 .local-data/
+
+# Security scan reports (generated locally, not committed)
+security-reports/
+*-audit-report.json
+*-audit-report.txt
+trivy-*.json
+trivy-*.txt
+trivy-*.sarif

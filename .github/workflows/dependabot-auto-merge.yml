@@ -1,0 +1,85 @@
+name: Dependabot Auto-Merge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    name: Auto-merge Dependabot PRs
+    runs-on: ubuntu-latest
+    # Only run for Dependabot PRs
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - name: Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Enable auto-merge for minor and patch updates
+        # Auto-merge patch and minor updates for production dependencies
+        # Major updates require manual review
+        if: |
+          (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+           steps.metadata.outputs.update-type == 'version-update:semver-minor')
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment on PR
+        if: |
+          (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+           steps.metadata.outputs.update-type == 'version-update:semver-minor')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🤖 **Auto-merge enabled** for this ${context.payload.pull_request.title}
+
+              This PR will be automatically merged once all required checks pass.
+
+              **Update Type:** ${process.env.UPDATE_TYPE}
+              **Dependency:** ${process.env.DEPENDENCY_NAME}
+
+              ℹ️ To disable auto-merge, comment: \`@dependabot cancel merge\``
+            });
+        env:
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+          DEPENDENCY_NAME: ${{ steps.metadata.outputs.dependency-names }}
+
+      - name: Label major updates
+        if: steps.metadata.outputs.update-type == 'version-update:semver-major'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['major-update', 'needs-review']
+            });
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `⚠️ **Major version update** - Manual review required
+
+              This is a major version update that may contain breaking changes.
+              Please review the changelog and test thoroughly before merging.
+
+              **Dependency:** ${process.env.DEPENDENCY_NAME}
+
+              Once reviewed and tested, manually approve and merge this PR.`
+            });
+        env:
+          DEPENDENCY_NAME: ${{ steps.metadata.outputs.dependency-names }}
