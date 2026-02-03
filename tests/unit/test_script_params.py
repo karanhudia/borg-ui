@@ -213,21 +213,19 @@ class TestGenerateDescription:
     """Test the generate_description function"""
 
     def test_generate_description_text_param(self):
-        """Test generating description for text parameters"""
+        """Test that descriptions are no longer auto-generated (returns empty)"""
         desc = generate_description('DB_HOST', 'text')
-        assert desc == 'Db Host'
+        assert desc == ''
 
     def test_generate_description_password_param(self):
-        """Test generating description for password parameters"""
+        """Test that password descriptions are no longer auto-generated (returns empty)"""
         desc = generate_description('DB_PASSWORD', 'password')
-        assert '(encrypted)' in desc
-        assert 'Db Password' in desc
+        assert desc == ''
 
     def test_generate_description_api_key(self):
-        """Test generating description for API key"""
+        """Test that API key descriptions are no longer auto-generated (returns empty)"""
         desc = generate_description('API_KEY', 'password')
-        assert '(encrypted)' in desc
-        assert 'Api Key' in desc
+        assert desc == ''
 
 
 class TestValidateParameterName:
