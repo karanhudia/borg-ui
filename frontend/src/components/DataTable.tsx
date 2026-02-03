@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import {
   Table,
   TableBody,
@@ -6,6 +6,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TablePagination,
   Paper,
   IconButton,
   Tooltip,
@@ -68,6 +69,11 @@ export interface DataTableProps<T> {
   borderRadius?: number
   maxHeight?: string | number
 
+  // Pagination
+  defaultRowsPerPage?: number
+  rowsPerPageOptions?: number[]
+  tableId?: string // Unique identifier for localStorage persistence
+
   // Additional features
   sx?: SxProps<Theme>
 }
@@ -87,8 +93,46 @@ export default function DataTable<T>({
   variant = 'outlined',
   borderRadius = 2,
   maxHeight,
+  defaultRowsPerPage = 10,
+  rowsPerPageOptions = [5, 10, 25, 50, 100],
+  tableId,
   sx,
 }: DataTableProps<T>) {
+  // Load saved rows per page from localStorage if available
+  const getInitialRowsPerPage = () => {
+    if (!tableId) return defaultRowsPerPage
+    const saved = localStorage.getItem(`table-rows-per-page-${tableId}`)
+    if (saved) {
+      const parsed = parseInt(saved, 10)
+      // Validate that the saved value is in the options
+      if (rowsPerPageOptions.includes(parsed)) {
+        return parsed
+      }
+    }
+    return defaultRowsPerPage
+  }
+
+  // Pagination state
+  const [page, setPage] = useState(0)
+  const [rowsPerPage, setRowsPerPage] = useState(getInitialRowsPerPage)
+
+  const handleChangePage = (_event: unknown, newPage: number) => {
+    setPage(newPage)
+  }
+
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const newRowsPerPage = parseInt(event.target.value, 10)
+    setRowsPerPage(newRowsPerPage)
+    setPage(0) // Reset to first page when changing rows per page
+
+    // Save to localStorage if tableId is provided
+    if (tableId) {
+      localStorage.setItem(`table-rows-per-page-${tableId}`, String(newRowsPerPage))
+    }
+  }
+
+  // Calculate paginated data
+  const paginatedData = data.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
   // Loading state
   if (loading) {
     return (
@@ -139,7 +183,7 @@ export default function DataTable<T>({
         ...sx,
       }}
     >
-      <Table stickyHeader={stickyHeader}>
+      <Table stickyHeader={stickyHeader} sx={{ tableLayout: 'fixed' }}>
         <TableHead>
           <TableRow>
             {columns.map((column) => (
@@ -152,6 +196,7 @@ export default function DataTable<T>({
                   color: 'text.secondary',
                   width: column.width,
                   minWidth: column.minWidth,
+                  maxWidth: column.width,
                 }}
               >
                 {column.label}
@@ -164,8 +209,9 @@ export default function DataTable<T>({
                   bgcolor: headerBgColor,
                   fontWeight: 600,
                   color: 'text.secondary',
-                  width: '140px',
-                  minWidth: '140px',
+                  width: '130px',
+                  minWidth: '130px',
+                  maxWidth: '130px',
                 }}
               >
                 Actions
@@ -174,7 +220,7 @@ export default function DataTable<T>({
           </TableRow>
         </TableHead>
         <TableBody>
-          {data.map((row) => (
+          {paginatedData.map((row) => (
             <TableRow
               key={getRowKey(row)}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
@@ -201,16 +247,21 @@ export default function DataTable<T>({
                   sx={{
                     width: column.width,
                     minWidth: column.minWidth,
+                    maxWidth: column.width,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
                   }}
                 >
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   {column.render
                     ? column.render(row)
                     : ((row as Record<string, unknown>)[column.id] as React.ReactNode)}
                 </TableCell>
               ))}
               {actions && actions.length > 0 && (
-                <TableCell align="right" sx={{ width: '140px', minWidth: '140px' }}>
+                <TableCell
+                  align="right"
+                  sx={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}
+                >
                   <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
                     {actions.map((action, idx) => {
                       const shouldShow = action.show ? action.show(row) : true
@@ -248,6 +299,47 @@ export default function DataTable<T>({
           ))}
         </TableBody>
       </Table>
+      {data.length > 0 && (
+        <TablePagination
+          component="div"
+          count={data.length}
+          page={page}
+          onPageChange={handleChangePage}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+          rowsPerPageOptions={rowsPerPageOptions}
+          labelRowsPerPage="Rows per page:"
+          labelDisplayedRows={({ from, to, count }) =>
+            `${from}–${to} of ${count !== -1 ? count : `more than ${to}`}`
+          }
+          sx={{
+            borderTop: 1,
+            borderColor: 'divider',
+            '.MuiTablePagination-toolbar': {
+              minHeight: '64px',
+              paddingLeft: 2,
+              paddingRight: 1,
+            },
+            '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
+              marginTop: 0,
+              marginBottom: 0,
+              display: 'flex',
+              alignItems: 'center',
+            },
+            '.MuiTablePagination-select': {
+              paddingTop: 1,
+              paddingBottom: 1,
+              paddingLeft: 1,
+              paddingRight: 4,
+              display: 'flex',
+              alignItems: 'center',
+            },
+            '.MuiTablePagination-actions': {
+              marginLeft: 2,
+            },
+          }}
+        />
+      )}
     </TableContainer>
   )
 }

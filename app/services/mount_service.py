@@ -222,11 +222,20 @@ class MountService:
             # Decrypt SSH key
             temp_key_file = self._decrypt_and_write_key(ssh_key)
 
-            # Create temporary mount structure
-            path_basename = os.path.basename(remote_path.rstrip('/'))
+            # Create temporary mount structure that preserves the full remote path
+            # This allows excludes to work intuitively and preserves original paths in archives
+            # Example: /var/snap/docker/.../portainer/_data -> /tmp/sshfs_mount_123/var/snap/docker/.../portainer/_data
+            # Special case: / (root) -> /tmp/sshfs_mount_123/ (mount directly to temp_root)
             temp_root = tempfile.mkdtemp(prefix=f"sshfs_mount_{job_id or 'user'}_")
-            mount_dir = os.path.join(temp_root, path_basename)
-            os.makedirs(mount_dir, exist_ok=True)
+
+            # Strip leading slash from remote_path to create relative path under temp_root
+            relative_remote_path = remote_path.lstrip('/')
+            if relative_remote_path:
+                mount_dir = os.path.join(temp_root, relative_remote_path)
+                os.makedirs(mount_dir, exist_ok=True)
+            else:
+                # Backing up root directory - mount directly to temp_root
+                mount_dir = temp_root
 
             mount_id = str(uuid.uuid4())
 
@@ -382,13 +391,12 @@ class MountService:
                 logger.info(
                     "Repository details",
                     mount_id=mount_id,
-                    repository_type=repository.repository_type,
                     connection_id=repository.connection_id,
                     has_passphrase=bool(repository.passphrase)
                 )
 
                 # Handle SSH repositories
-                if repository.repository_type == "ssh":
+                if repository.connection_id:
                     # Always disable strict host key checking for SSH repos
                     ssh_opts = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
@@ -448,8 +456,7 @@ class MountService:
                 else:
                     logger.info(
                         "Not an SSH repository",
-                        mount_id=mount_id,
-                        repository_type=repository.repository_type
+                        mount_id=mount_id
                     )
 
                 # Set passphrase if encrypted

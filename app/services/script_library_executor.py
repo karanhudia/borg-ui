@@ -7,12 +7,14 @@ Handles execution of scripts from the script library, including:
 - Checking run_on conditions
 - Recording executions in database
 - Rendering script templates with parameters
+- Passing backup context via environment variables
 """
 from typing import List, Dict, Optional, Literal
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime
 from pathlib import Path
 import time
+import os
 import structlog
 import json
 import os
@@ -26,6 +28,51 @@ logger = structlog.get_logger()
 
 HookType = Literal["pre-backup", "post-backup"]
 BackupResult = Literal["success", "failure", "warning"]
+
+
+def build_script_env(
+    repository: Optional[Repository] = None,
+    hook_type: Optional[HookType] = None,
+    backup_result: Optional[BackupResult] = None,
+    backup_job_id: Optional[int] = None
+) -> Dict[str, str]:
+    """
+    Build environment variables for script execution.
+
+    These variables are available to all pre/post backup scripts:
+    - BORG_UI_BACKUP_STATUS: 'success', 'failure', or 'warning' (post-backup only)
+    - BORG_UI_REPOSITORY_NAME: Name of the repository
+    - BORG_UI_REPOSITORY_PATH: Path to the repository
+    - BORG_UI_REPOSITORY_ID: Repository ID
+    - BORG_UI_HOOK_TYPE: 'pre-backup' or 'post-backup'
+    - BORG_UI_JOB_ID: Backup job ID (if available)
+
+    Args:
+        repository: Repository model instance
+        hook_type: 'pre-backup' or 'post-backup'
+        backup_result: 'success', 'failure', or 'warning'
+        backup_job_id: Backup job ID
+
+    Returns:
+        Dict of environment variables
+    """
+    env = os.environ.copy()
+
+    if hook_type:
+        env['BORG_UI_HOOK_TYPE'] = hook_type
+
+    if backup_result:
+        env['BORG_UI_BACKUP_STATUS'] = backup_result
+
+    if repository:
+        env['BORG_UI_REPOSITORY_ID'] = str(repository.id)
+        env['BORG_UI_REPOSITORY_NAME'] = repository.name or ''
+        env['BORG_UI_REPOSITORY_PATH'] = repository.path or ''
+
+    if backup_job_id:
+        env['BORG_UI_JOB_ID'] = str(backup_job_id)
+
+    return env
 
 class ScriptLibraryExecutor:
     """Manages script library execution for backup hooks"""
@@ -63,6 +110,9 @@ class ScriptLibraryExecutor:
                    repository_id=repository_id,
                    hook_type=hook_type,
                    backup_result=backup_result)
+
+        # Get repository for environment variables
+        repository = self.db.query(Repository).filter(Repository.id == repository_id).first()
 
         # Load scripts for this repository and hook type
         repo_scripts = self.db.query(RepositoryScript).filter(
@@ -125,9 +175,10 @@ class ScriptLibraryExecutor:
             # Execute script and record results
             result = await self._execute_script_and_record(
                 repo_script=rs,
-                repository_id=repository_id,
+                repository=repository,
                 backup_job_id=backup_job_id,
-                hook_type=hook_type
+                hook_type=hook_type,
+                backup_result=backup_result
             )
 
             executions.append(result)
@@ -183,9 +234,10 @@ class ScriptLibraryExecutor:
     async def _execute_script_and_record(
         self,
         repo_script: RepositoryScript,
-        repository_id: int,
+        repository: Repository,
         backup_job_id: Optional[int],
-        hook_type: HookType
+        hook_type: HookType,
+        backup_result: Optional[BackupResult] = None
     ) -> Dict:
         """Execute a single script and record execution in database"""
         script = repo_script.script
@@ -194,7 +246,7 @@ class ScriptLibraryExecutor:
         # Create execution record (pending)
         execution = ScriptExecution(
             script_id=script.id,
-            repository_id=repository_id,
+            repository_id=repository.id,
             backup_job_id=backup_job_id,
             hook_type=hook_type,
             status="running",
@@ -275,13 +327,14 @@ class ScriptLibraryExecutor:
             logger.info("Executing script file",
                        script_id=script.id,
                        file_path=str(file_path),
-                       timeout=timeout)
+                       timeout=timeout,
+                       backup_status=backup_result)
 
             exec_result = await execute_script(
                 script=script_content,
                 timeout=float(timeout),
                 env=script_env,  # Pass environment with parameters
-                context=f"repo:{repository_id}:script:{script.id}"
+                context=f"repo:{repository.id}:script:{script.id}"
             )
 
             execution_time = time.time() - start_time
@@ -380,25 +433,37 @@ class ScriptLibraryExecutor:
         script_content: str,
         script_type: str,
         timeout: int,
-        repository_id: int,
-        backup_job_id: Optional[int] = None
+        repository: Repository,
+        backup_job_id: Optional[int] = None,
+        backup_result: Optional[BackupResult] = None
     ) -> Dict:
         """
         Execute an inline script (backward compatibility)
 
         This is for repositories still using the old pre_backup_script/post_backup_script fields.
+        Environment variables are passed to provide backup context.
         """
         logger.info("Executing inline script (legacy)",
-                   repository_id=repository_id,
-                   script_type=script_type)
+                   repository_id=repository.id,
+                   script_type=script_type,
+                   backup_status=backup_result)
 
         start_time = time.time()
+
+        # Build environment with backup context
+        script_env = build_script_env(
+            repository=repository,
+            hook_type=script_type,
+            backup_result=backup_result,
+            backup_job_id=backup_job_id
+        )
 
         try:
             exec_result = await execute_script(
                 script=script_content,
                 timeout=float(timeout),
-                context=f"repo:{repository_id}:inline:{script_type}"
+                env=script_env,
+                context=f"repo:{repository.id}:inline:{script_type}"
             )
 
             execution_time = time.time() - start_time

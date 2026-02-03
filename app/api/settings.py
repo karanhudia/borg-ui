@@ -11,6 +11,7 @@ from sqlalchemy import text
 from app.core.borg import BorgInterface
 from app.config import settings as app_settings
 from app.services.cache_service import archive_cache
+from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["settings"])
@@ -96,6 +97,7 @@ class SystemSettingsUpdate(BaseModel):
     auto_cleanup: Optional[bool] = None
     cleanup_retention_days: Optional[int] = None
     use_new_wizard: Optional[bool] = None
+    bypass_lock_on_info: Optional[bool] = None  # Use --bypass-lock for all borg info commands (beta)
     stats_refresh_interval_minutes: Optional[int] = None  # How often to refresh repository stats (0 = disabled)
 
 @router.get("/system")
@@ -205,8 +207,9 @@ async def get_system_settings(
                 "auto_cleanup": settings.auto_cleanup,
                 "cleanup_retention_days": settings.cleanup_retention_days,
                 "use_new_wizard": settings.use_new_wizard,
+                "bypass_lock_on_info": settings.bypass_lock_on_info,
                 "stats_refresh_interval_minutes": settings.stats_refresh_interval_minutes if settings.stats_refresh_interval_minutes is not None else 60,
-                "last_stats_refresh": settings.last_stats_refresh.isoformat() if settings.last_stats_refresh else None,
+                "last_stats_refresh": serialize_datetime(settings.last_stats_refresh),
                 "borg_version": borg.get_version(),
                 "app_version": "1.36.1"
             },
@@ -311,6 +314,8 @@ async def update_system_settings(
             settings.cleanup_retention_days = settings_update.cleanup_retention_days
         if settings_update.use_new_wizard is not None:
             settings.use_new_wizard = settings_update.use_new_wizard
+        if settings_update.bypass_lock_on_info is not None:
+            settings.bypass_lock_on_info = settings_update.bypass_lock_on_info
         if settings_update.stats_refresh_interval_minutes is not None:
             settings.stats_refresh_interval_minutes = settings_update.stats_refresh_interval_minutes
 

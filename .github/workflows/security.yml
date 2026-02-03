@@ -1,0 +1,247 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run weekly on Monday at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:  # Allow manual triggering
+
+# Required permissions for uploading to GitHub Security tab
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  npm-audit:
+    name: Frontend Security (npm audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run npm audit
+        working-directory: frontend
+        run: |
+          # Audit and fail on moderate or higher vulnerabilities
+          npm audit --audit-level=moderate
+        continue-on-error: false
+
+      - name: Generate npm audit report
+        if: always()
+        working-directory: frontend
+        run: |
+          npm audit --json > npm-audit-report.json || true
+          npm audit > npm-audit-report.txt || true
+
+      - name: Upload npm audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-report
+          path: |
+            frontend/npm-audit-report.json
+            frontend/npm-audit-report.txt
+          retention-days: 30
+
+  pip-audit:
+    name: Backend Security (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'  # Use Python 3.11 for better security coverage
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Run pip-audit
+        run: |
+          # Scan requirements.txt for vulnerabilities
+          # Ignore known Python 3.9 limitation vulnerabilities:
+          # - GHSA-wp53-j4wj-2cfg: python-multipart (fix requires Python 3.10+)
+          # - GHSA-wj6h-64fc-37mp: ecdsa (no fix for Python 3.9)
+          pip-audit -r requirements.txt \
+            --ignore-vuln GHSA-wp53-j4wj-2cfg \
+            --ignore-vuln GHSA-wj6h-64fc-37mp
+
+      - name: Generate pip-audit report
+        if: always()
+        run: |
+          pip-audit -r requirements.txt --format json > pip-audit-report.json || true
+          pip-audit -r requirements.txt > pip-audit-report.txt || true
+
+      - name: Upload pip-audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-report
+          path: |
+            pip-audit-report.json
+            pip-audit-report.txt
+          retention-days: 30
+
+  trivy-fs:
+    name: Trivy Filesystem Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner (filesystem)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'  # Report but don't fail (we have known Python 3.9 limitations)
+
+      - name: Upload Trivy results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Generate human-readable Trivy report
+        if: always()
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          output: 'trivy-report.txt'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+
+      - name: Upload Trivy report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-filesystem-report
+          path: trivy-report.txt
+          retention-days: 30
+
+  trivy-docker:
+    name: Trivy Docker Image Scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t borg-ui:${{ github.sha }} .
+
+      - name: Run Trivy vulnerability scanner (Docker image)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: 'borg-ui:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-docker-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'  # Report but don't fail (we have known Python 3.9 limitations)
+
+      - name: Upload Trivy Docker results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: 'trivy-docker-results.sarif'
+
+      - name: Generate human-readable Docker report
+        if: always()
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: 'borg-ui:${{ github.sha }}'
+          format: 'table'
+          output: 'trivy-docker-report.txt'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+
+      - name: Upload Docker scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-docker-report
+          path: trivy-docker-report.txt
+          retention-days: 30
+
+  security-summary:
+    name: Security Scan Summary
+    runs-on: ubuntu-latest
+    needs: [npm-audit, pip-audit, trivy-fs]
+    if: always()
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create security summary
+        run: |
+          echo "# 🔒 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Scan Date:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "## Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.npm-audit.result }}" == "success" ]; then
+            echo "✅ **Frontend (npm audit):** PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Frontend (npm audit):** FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.pip-audit.result }}" == "success" ]; then
+            echo "✅ **Backend (pip-audit):** PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Backend (pip-audit):** FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.trivy-fs.result }}" == "success" ]; then
+            echo "✅ **Filesystem (Trivy):** PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Filesystem (Trivy):** FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📊 **Detailed reports available in workflow artifacts**" >> $GITHUB_STEP_SUMMARY
+
+      - name: Comment on PR (if applicable)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let comment = '## 🔒 Security Scan Results\n\n';
+
+            comment += `**Commit:** ${context.sha.substring(0, 7)}\n\n`;
+            comment += '| Check | Status |\n';
+            comment += '|-------|--------|\n';
+            comment += `| Frontend (npm audit) | ${'${{ needs.npm-audit.result }}' === 'success' ? '✅ PASSED' : '❌ FAILED'} |\n`;
+            comment += `| Backend (pip-audit) | ${'${{ needs.pip-audit.result }}' === 'success' ? '✅ PASSED' : '❌ FAILED'} |\n`;
+            comment += `| Filesystem (Trivy) | ${'${{ needs.trivy-fs.result }}' === 'success' ? '✅ PASSED' : '❌ FAILED'} |\n`;
+            comment += '\n📊 See workflow artifacts for detailed reports.\n';
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

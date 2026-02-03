@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../../test/test-utils'
 import BackupJobsTable from '../BackupJobsTable'
@@ -307,6 +307,7 @@ describe('BackupJobsTable', () => {
       />
     )
 
+    // Download button shows only for jobs with has_logs=true or log_file_path
     // Only job 1 has has_logs: true
     const downloadButtons = screen.getAllByRole('button', { name: 'Download Logs' })
     expect(downloadButtons.length).toBe(1)
@@ -356,7 +357,7 @@ describe('BackupJobsTable', () => {
     )
 
     // Only job 2 has status: 'running'
-    const cancelButtons = screen.getAllByRole('button', { name: 'Cancel Backup' })
+    const cancelButtons = screen.getAllByRole('button', { name: 'Cancel Job' })
     expect(cancelButtons.length).toBe(1)
   })
 
@@ -371,7 +372,7 @@ describe('BackupJobsTable', () => {
       />
     )
 
-    const cancelButton = screen.getByRole('button', { name: 'Cancel Backup' })
+    const cancelButton = screen.getByRole('button', { name: 'Cancel Job' })
     expect(cancelButton).toBeInTheDocument()
 
     if (cancelButton) {
@@ -467,10 +468,12 @@ describe('BackupJobsTable', () => {
   })
 
   describe('Action Configuration', () => {
-    it('does not show actions when callbacks are not provided', () => {
+    it('shows actions with internal handlers when callbacks are not provided', () => {
       renderWithProviders(<BackupJobsTable jobs={mockJobs} actions={{ viewLogs: true }} />)
 
-      expect(screen.queryByRole('button', { name: /View Logs/i })).not.toBeInTheDocument()
+      // Actions now work with internal handlers, so buttons should appear
+      // Only job 1 has has_logs: true, so only 1 button should show
+      expect(screen.getAllByRole('button', { name: /View Logs/i }).length).toBe(1)
     })
 
     it('shows multiple actions when configured', () => {
@@ -552,6 +555,230 @@ describe('BackupJobsTable', () => {
       )
 
       expect(screen.getByText('No jobs found')).toBeInTheDocument()
+    })
+  })
+
+  describe('Delete Job Action', () => {
+    it('shows delete button only for admin users', () => {
+      renderWithProviders(
+        <BackupJobsTable jobs={mockJobs} isAdmin={true} actions={{ delete: true }} />
+      )
+
+      // Delete buttons should be visible for completed/failed jobs
+      const deleteButtons = screen.queryAllByLabelText(/delete/i)
+      expect(deleteButtons.length).toBeGreaterThan(0)
+    })
+
+    it('does not show delete button for non-admin users', () => {
+      renderWithProviders(
+        <BackupJobsTable jobs={mockJobs} isAdmin={false} actions={{ delete: true }} />
+      )
+
+      // Delete buttons should NOT be visible
+      const deleteButtons = screen.queryAllByLabelText(/delete/i)
+      expect(deleteButtons.length).toBe(0)
+    })
+
+    it('does not show delete button when isAdmin is undefined', () => {
+      renderWithProviders(<BackupJobsTable jobs={mockJobs} actions={{ delete: true }} />)
+
+      // Delete buttons should NOT be visible (defaults to false)
+      const deleteButtons = screen.queryAllByLabelText(/delete/i)
+      expect(deleteButtons.length).toBe(0)
+    })
+
+    it('does not show delete button for running jobs', () => {
+      const runningJobs: Partial<MockBackupJob>[] = [
+        {
+          id: 10,
+          repository: '/backup/repo1',
+          repository_path: '/backup/repo1',
+          type: 'backup',
+          status: 'running',
+          started_at: '2024-01-20T10:00:00Z',
+          triggered_by: 'manual',
+        },
+      ]
+
+      renderWithProviders(
+        <BackupJobsTable
+          jobs={runningJobs as MockBackupJob[]}
+          isAdmin={true}
+          actions={{ delete: true }}
+        />
+      )
+
+      // Should not show delete button for running job
+      const deleteButtons = screen.queryAllByLabelText(/delete/i)
+      expect(deleteButtons.length).toBe(0)
+    })
+
+    it('shows delete button for pending jobs (to clean up stuck jobs)', () => {
+      const pendingJobs: Partial<MockBackupJob>[] = [
+        {
+          id: 11,
+          repository: '/backup/repo1',
+          repository_path: '/backup/repo1',
+          type: 'backup',
+          status: 'pending',
+          started_at: '2024-01-20T10:00:00Z',
+          triggered_by: 'manual',
+        },
+      ]
+
+      renderWithProviders(
+        <BackupJobsTable
+          jobs={pendingJobs as MockBackupJob[]}
+          isAdmin={true}
+          actions={{ delete: true }}
+        />
+      )
+
+      // Should show delete button for pending job (useful for cleaning up stuck jobs)
+      // Query for icon buttons specifically (excludes dialog buttons)
+      const deleteButtons = screen.queryAllByRole('button', { name: /delete job/i })
+      expect(deleteButtons.length).toBe(1)
+    })
+
+    it('shows delete button for completed jobs (admin only)', () => {
+      const completedJobs: Partial<MockBackupJob>[] = [
+        {
+          id: 12,
+          repository: '/backup/repo1',
+          repository_path: '/backup/repo1',
+          type: 'backup',
+          status: 'completed',
+          started_at: '2024-01-20T10:00:00Z',
+          completed_at: '2024-01-20T10:30:00Z',
+          triggered_by: 'manual',
+        },
+      ]
+
+      renderWithProviders(
+        <BackupJobsTable
+          jobs={completedJobs as MockBackupJob[]}
+          isAdmin={true}
+          actions={{ delete: true }}
+        />
+      )
+
+      // Should show delete button for completed job
+      const deleteButtons = screen.queryAllByLabelText(/delete/i)
+      expect(deleteButtons.length).toBeGreaterThan(0)
+    })
+
+    it('shows delete button for failed jobs (admin only)', () => {
+      const failedJobs: Partial<MockBackupJob>[] = [
+        {
+          id: 13,
+          repository: '/backup/repo1',
+          repository_path: '/backup/repo1',
+          type: 'backup',
+          status: 'failed',
+          started_at: '2024-01-20T10:00:00Z',
+          completed_at: '2024-01-20T10:30:00Z',
+          triggered_by: 'manual',
+          error_message: 'Backup failed',
+        },
+      ]
+
+      renderWithProviders(
+        <BackupJobsTable
+          jobs={failedJobs as MockBackupJob[]}
+          isAdmin={true}
+          actions={{ delete: true }}
+        />
+      )
+
+      // Should show delete button for failed job
+      const deleteButtons = screen.queryAllByLabelText(/delete/i)
+      expect(deleteButtons.length).toBeGreaterThan(0)
+    })
+
+    it('opens delete confirmation dialog when delete button clicked', async () => {
+      const user = userEvent.setup()
+
+      renderWithProviders(
+        <BackupJobsTable jobs={mockJobs} isAdmin={true} actions={{ delete: true }} />
+      )
+
+      // Verify dialog is not initially visible
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+      // Find delete button - filter to only actual buttons (not tooltip wrappers)
+      const allDeleteElements = screen.getAllByLabelText('Delete Job (Admin Only)')
+      const deleteButtons = allDeleteElements.filter((el) => el.tagName === 'BUTTON')
+      expect(deleteButtons.length).toBeGreaterThan(0)
+
+      await user.click(deleteButtons[0])
+
+      // Dialog should appear
+      const dialog = await screen.findByRole('dialog', {}, { timeout: 3000 })
+      expect(dialog).toBeInTheDocument()
+      expect(
+        within(dialog).getByRole('heading', { name: /delete.*backup.*entry/i })
+      ).toBeInTheDocument()
+    })
+
+    it('closes delete dialog when cancel is clicked', async () => {
+      const user = userEvent.setup()
+
+      renderWithProviders(
+        <BackupJobsTable jobs={mockJobs} isAdmin={true} actions={{ delete: true }} />
+      )
+
+      // Find delete button - filter to only actual buttons
+      const allDeleteElements = screen.getAllByLabelText('Delete Job (Admin Only)')
+      const deleteButtons = allDeleteElements.filter((el) => el.tagName === 'BUTTON')
+      await user.click(deleteButtons[0])
+
+      // Wait for dialog to appear
+      const dialog = await screen.findByRole('dialog')
+      expect(dialog).toBeInTheDocument()
+
+      // Click cancel
+      const cancelButton = screen.getByRole('button', { name: /^cancel$/i })
+      await user.click(cancelButton)
+
+      // Dialog should close
+      await waitFor(() => {
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      })
+    })
+
+    it('respects delete action disabled flag', () => {
+      renderWithProviders(
+        <BackupJobsTable jobs={mockJobs} isAdmin={true} actions={{ delete: false }} />
+      )
+
+      // Delete buttons should NOT be visible even for admin
+      const deleteButtons = screen.queryAllByLabelText(/delete/i)
+      expect(deleteButtons.length).toBe(0)
+    })
+
+    it('calls onDeleteJob callback when provided', async () => {
+      const user = userEvent.setup()
+      const onDeleteJob = vi.fn()
+
+      renderWithProviders(
+        <BackupJobsTable
+          jobs={mockJobs}
+          isAdmin={true}
+          actions={{ delete: true }}
+          onDeleteJob={onDeleteJob}
+        />
+      )
+
+      // Find delete button - filter to only actual buttons
+      const allDeleteElements = screen.getAllByLabelText('Delete Job (Admin Only)')
+      const deleteButtons = allDeleteElements.filter((el) => el.tagName === 'BUTTON')
+      await user.click(deleteButtons[0])
+
+      // Dialog should not open (custom handler)
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+      // Callback should be called
+      expect(onDeleteJob).toHaveBeenCalledWith(mockJobs[0])
     })
   })
 })

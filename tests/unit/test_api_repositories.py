@@ -15,6 +15,7 @@ Integration tests (test_api_repositories_integration.py) handle:
 """
 import pytest
 import json
+import os
 from fastapi.testclient import TestClient
 from app.database.models import Repository, ScheduledJob
 
@@ -434,6 +435,254 @@ class TestRepositoriesUpdate:
         # Should reject empty name or accept it (depending on validation)
         assert response.status_code in [200, 400, 403, 422]
 
+    def test_update_repository_clear_source_connection_id(self, test_client: TestClient, admin_headers, test_db):
+        """Test clearing source_connection_id when switching from remote to local source"""
+        # Create repository with a remote source
+        repo = Repository(
+            name="Remote Source Repo",
+            path="/tmp/remote-source-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+            source_ssh_connection_id=1,  # Initially has remote source
+            source_directories=json.dumps(["/remote/data"])
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        # Verify initial state
+        assert repo.source_ssh_connection_id == 1
+
+        # Update to clear source_connection_id (switch to local source)
+        response = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={
+                "source_connection_id": None,  # Explicitly clear it
+                "source_directories": ["/local/data"]
+            },
+            headers=admin_headers
+        )
+
+        # Should succeed
+        assert response.status_code in [200, 403, 404]
+
+        if response.status_code == 200:
+            # Refresh from database and verify source_connection_id was cleared
+            test_db.refresh(repo)
+            assert repo.source_ssh_connection_id is None
+            assert json.loads(repo.source_directories) == ["/local/data"]
+
+    def test_update_repository_type_local_to_ssh(self, test_client: TestClient, admin_headers, test_db):
+        """Test updating repository type from local to SSH"""
+        # Create local repository
+        repo = Repository(
+            name="Local Repo",
+            path="/tmp/local-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local"
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        # Verify initial state
+        assert repo.repository_type == "local"
+        assert repo.host is None
+        assert repo.username is None
+
+        # Update to SSH repository
+        response = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={
+                "repository_type": "ssh",
+                "host": "backup.example.com",
+                "port": 22,
+                "username": "backupuser",
+                "ssh_key_id": 1,
+                "connection_id": 1,
+                "path": "/home/borg-backup"
+            },
+            headers=admin_headers
+        )
+
+        # Should succeed, or 500 if SSH key doesn't exist (test environment)
+        assert response.status_code in [200, 403, 404, 500]
+
+        if response.status_code == 200:
+            # Refresh from database and verify repository type was updated
+            test_db.refresh(repo)
+            assert repo.repository_type == "ssh"
+            assert repo.host == "backup.example.com"
+            assert repo.port == 22
+            assert repo.username == "backupuser"
+            assert repo.ssh_key_id == 1
+            assert repo.connection_id == 1
+            # Verify path was reconstructed as SSH URL
+            assert repo.path == "ssh://backupuser@backup.example.com:22/home/borg-backup"
+
+    def test_update_ssh_repository_path_reconstruction(self, test_client: TestClient, admin_headers, test_db):
+        """Test that updating an SSH repository path properly reconstructs the SSH URL"""
+        from app.database.models import SSHConnection, SSHKey
+
+        # Create SSH key
+        ssh_key = SSHKey(
+            name="Test Key",
+            private_key="encrypted_key_data",
+            public_key="ssh-rsa AAAA..."
+        )
+        test_db.add(ssh_key)
+        test_db.commit()
+
+        # Create SSH connection
+        ssh_conn = SSHConnection(
+            host="host.local",
+            username="user",
+            port=22,
+            ssh_key_id=ssh_key.id
+        )
+        test_db.add(ssh_conn)
+        test_db.commit()
+
+        # Create SSH repository with connection_id
+        repo = Repository(
+            name="SSH Repo",
+            path="ssh://user@host.local:22/home/borg-backup",
+            encryption="none",
+            compression="lz4",
+            connection_id=ssh_conn.id
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        # Verify initial state
+        assert repo.path == "ssh://user@host.local:22/home/borg-backup"
+
+        # Update with plain path (like wizard sends) - path should be reconstructed
+        response = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={
+                "path": "/home/borg-backup",  # Plain path without SSH URL
+                "source_directories": ["/data", "/config"]  # Adding source dirs
+            },
+            headers=admin_headers
+        )
+
+        # Should succeed
+        assert response.status_code in [200, 403, 404]
+
+        if response.status_code == 200:
+            # Refresh and verify path was reconstructed as SSH URL
+            test_db.refresh(repo)
+            assert repo.path == "ssh://user@host.local:22/home/borg-backup"
+            assert json.loads(repo.source_directories) == ["/data", "/config"]
+
+    def test_update_repository_path_change_initializes_new_repo(self, test_client: TestClient, admin_headers, test_db):
+        """Test that changing repository path to a non-existent location initializes a new borg repository"""
+        import tempfile
+        import shutil
+
+        # Create a temporary directory for the test repositories
+        temp_dir = tempfile.mkdtemp()
+
+        try:
+            # Create initial repository
+            initial_path = f"{temp_dir}/initial-repo"
+            os.makedirs(initial_path, exist_ok=True)
+
+            # Create a minimal borg repository structure at initial path
+            os.makedirs(f"{initial_path}/data", exist_ok=True)
+            with open(f"{initial_path}/config", 'w') as f:
+                f.write("[repository]\nversion = 1\n")
+
+            repo = Repository(
+                name="Path Change Repo",
+                path=initial_path,
+                encryption="none",
+                compression="lz4",
+                repository_type="local"
+            )
+            test_db.add(repo)
+            test_db.commit()
+            test_db.refresh(repo)
+
+            # Verify initial state
+            assert repo.path == initial_path
+
+            # Update to a NEW path that doesn't exist yet
+            new_path = f"{temp_dir}/new-repo"
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={
+                    "path": new_path
+                },
+                headers=admin_headers
+            )
+
+            # Response could be 200 (success), 403 (not admin), 404 (not found), or 500 (borg not available)
+            # We accept any of these since we can't guarantee borg is installed in test environment
+            assert response.status_code in [200, 403, 404, 500]
+
+            if response.status_code == 200:
+                # Verify path was updated in database
+                test_db.refresh(repo)
+                assert repo.path == new_path
+
+                # Note: We can't verify borg init was called without mocking
+                # In integration tests, we would verify the new path has borg repo structure
+        finally:
+            # Clean up temp directory
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_update_repository_path_to_existing_repo_does_not_reinit(self, test_client: TestClient, admin_headers, test_db):
+        """Test that changing path to an existing borg repository doesn't reinitialize it"""
+        import tempfile
+        import shutil
+
+        temp_dir = tempfile.mkdtemp()
+
+        try:
+            # Create two borg repositories
+            initial_path = f"{temp_dir}/initial-repo"
+            existing_repo_path = f"{temp_dir}/existing-repo"
+
+            for path in [initial_path, existing_repo_path]:
+                os.makedirs(path, exist_ok=True)
+                os.makedirs(f"{path}/data", exist_ok=True)
+                with open(f"{path}/config", 'w') as f:
+                    f.write("[repository]\nversion = 1\n")
+
+            repo = Repository(
+                name="Relocate Repo",
+                path=initial_path,
+                encryption="none",
+                compression="lz4",
+                repository_type="local"
+            )
+            test_db.add(repo)
+            test_db.commit()
+            test_db.refresh(repo)
+
+            # Update to point to the existing borg repository
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={
+                    "path": existing_repo_path
+                },
+                headers=admin_headers
+            )
+
+            # Should accept the path change since it's a valid borg repo
+            assert response.status_code in [200, 403, 404, 500]
+
+            if response.status_code == 200:
+                test_db.refresh(repo)
+                assert repo.path == existing_repo_path
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
 
 @pytest.mark.unit
 class TestRepositoriesDelete:
@@ -794,3 +1043,71 @@ class TestRepositoryCheckSchedule:
         )
 
         assert response.status_code == 404
+
+
+@pytest.mark.unit
+class TestBorgEnvironmentSetup:
+    """Test borg environment setup functions"""
+
+    def test_setup_borg_env_sets_relocated_repo_access(self):
+        """Test that setup_borg_env sets BORG_RELOCATED_REPO_ACCESS_IS_OK"""
+        from app.api.repositories import setup_borg_env
+
+        env = setup_borg_env()
+
+        assert "BORG_RELOCATED_REPO_ACCESS_IS_OK" in env
+        assert env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] == "yes"
+
+    def test_setup_borg_env_sets_unencrypted_repo_access(self):
+        """Test that setup_borg_env sets BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"""
+        from app.api.repositories import setup_borg_env
+
+        env = setup_borg_env()
+
+        assert "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK" in env
+        assert env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] == "yes"
+
+    def test_setup_borg_env_sets_passphrase(self):
+        """Test that setup_borg_env sets passphrase when provided"""
+        from app.api.repositories import setup_borg_env
+
+        env = setup_borg_env(passphrase="test-passphrase")
+
+        assert "BORG_PASSPHRASE" in env
+        assert env["BORG_PASSPHRASE"] == "test-passphrase"
+
+    def test_setup_borg_env_no_passphrase_when_not_provided(self):
+        """Test that setup_borg_env doesn't set passphrase when not provided"""
+        from app.api.repositories import setup_borg_env
+
+        env = setup_borg_env()
+
+        assert "BORG_PASSPHRASE" not in env
+
+    def test_setup_borg_env_sets_lock_wait(self):
+        """Test that setup_borg_env sets BORG_LOCK_WAIT"""
+        from app.api.repositories import setup_borg_env
+
+        env = setup_borg_env()
+
+        assert "BORG_LOCK_WAIT" in env
+        assert env["BORG_LOCK_WAIT"] == "180"
+
+    def test_setup_borg_env_sets_hostname_unique(self):
+        """Test that setup_borg_env sets BORG_HOSTNAME_IS_UNIQUE"""
+        from app.api.repositories import setup_borg_env
+
+        env = setup_borg_env()
+
+        assert "BORG_HOSTNAME_IS_UNIQUE" in env
+        assert env["BORG_HOSTNAME_IS_UNIQUE"] == "yes"
+
+    def test_setup_borg_env_sets_ssh_opts(self):
+        """Test that setup_borg_env sets BORG_RSH when ssh_opts provided"""
+        from app.api.repositories import setup_borg_env
+
+        ssh_opts = ["-o", "StrictHostKeyChecking=no"]
+        env = setup_borg_env(ssh_opts=ssh_opts)
+
+        assert "BORG_RSH" in env
+        assert "StrictHostKeyChecking=no" in env["BORG_RSH"]

@@ -28,16 +28,23 @@ class RestoreRequest(BaseModel):
 @router.post("/preview")
 async def preview_restore(
     restore_request: RestoreRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """Preview a restore operation"""
     try:
+        # Get repository details for bypass_lock flag
+        repo = db.query(Repository).filter(Repository.path == restore_request.repository).first()
+
         result = await borg.extract_archive(
             restore_request.repository,
             restore_request.archive,
             restore_request.paths,
             restore_request.destination,
-            dry_run=True
+            dry_run=True,
+            remote_path=repo.remote_path if repo else None,
+            passphrase=repo.passphrase if repo else None,
+            bypass_lock=repo.bypass_lock if repo else False
         )
         return {"preview": result["stdout"]}
     except Exception as e:
@@ -345,10 +352,13 @@ async def get_restore_jobs(
                     "completed_at": serialize_datetime(job.completed_at),
                     "progress": job.progress,
                     "error_message": job.error_message,
+                    "logs": job.logs,
                     "progress_details": {
                         "nfiles": job.nfiles or 0,
                         "current_file": job.current_file or "",
                         "progress_percent": job.progress_percent or 0.0,
+                        "restore_speed": job.restore_speed or 0.0,
+                        "estimated_time_remaining": job.estimated_time_remaining or 0,
                     }
                 }
                 for job in jobs
@@ -391,6 +401,8 @@ async def get_restore_status(
                 "nfiles": job.nfiles or 0,
                 "current_file": job.current_file or "",
                 "progress_percent": job.progress_percent or 0.0,
+                "restore_speed": job.restore_speed or 0.0,
+                "estimated_time_remaining": job.estimated_time_remaining or 0,
             }
         }
     except HTTPException:

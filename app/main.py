@@ -6,7 +6,7 @@ import structlog
 import os
 from dotenv import load_dotenv
 
-from app.api import auth, dashboard, backup, archives, restore, schedule, settings as settings_api, events, repositories, ssh_keys, system, filesystem, browse, notifications, scripts, packages, activity, scripts_library, mounts
+from app.api import auth, dashboard, backup, archives, restore, schedule, settings as settings_api, events, repositories, ssh_keys, system, filesystem, browse, notifications, scripts, packages, activity, scripts_library, mounts, metrics
 from app.routers import config
 from app.database.database import engine
 from app.database.models import Base
@@ -50,7 +50,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="Borg Web UI",
     description="A lightweight web interface for Borg backup management",
-    version="1.38.2",
+    version="1.56.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc"
 )
@@ -72,6 +72,7 @@ if os.path.exists("app/static"):
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Include API routers
+app.include_router(metrics.router)  # /metrics endpoint (no prefix for Prometheus)
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(backup.router, prefix="/api/backup", tags=["Backup"])
@@ -186,17 +187,24 @@ async def startup_event():
     # Start scheduled backup checker (background task)
     from app.api.schedule import check_scheduled_jobs
     import asyncio
-    asyncio.create_task(check_scheduled_jobs())
+    
+    # Track background tasks for cleanup
+    app.state.background_tasks = []
+    
+    task1 = asyncio.create_task(check_scheduled_jobs())
+    app.state.background_tasks.append(task1)
     logger.info("Scheduled backup checker started")
 
     # Start check scheduler (background task)
     from app.services.check_scheduler import check_scheduler
-    asyncio.create_task(check_scheduler.start())
+    task2 = asyncio.create_task(check_scheduler.start())
+    app.state.background_tasks.append(task2)
     logger.info("Check scheduler started")
 
     # Start stats refresh scheduler (background task)
     from app.services.stats_refresh_scheduler import stats_refresh_scheduler
-    asyncio.create_task(stats_refresh_scheduler.start())
+    task3 = asyncio.create_task(stats_refresh_scheduler.start())
+    app.state.background_tasks.append(task3)
     logger.info("Stats refresh scheduler started")
 
     logger.info("Borg Web UI started successfully")
@@ -205,6 +213,21 @@ async def startup_event():
 async def shutdown_event():
     """Cleanup on application shutdown"""
     logger.info("Shutting down Borg Web UI")
+    
+    # Cancel background tasks
+    tasks = getattr(app.state, "background_tasks", [])
+    if tasks:
+        logger.info(f"Cancelling {len(tasks)} background tasks")
+        for task in tasks:
+            task.cancel()
+        
+        # Wait for tasks to finish cancelling
+        import asyncio
+        try:
+            await asyncio.gather(*tasks, return_exceptions=True)
+            logger.info("Background tasks cancelled")
+        except Exception as e:
+            logger.warning("Error waiting for background tasks to cancel", error=str(e))
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -252,7 +275,7 @@ async def api_info():
     """API information endpoint"""
     return {
         "name": "Borg Web UI API",
-        "version": "1.38.2",
+        "version": "1.56.0",
         "docs": "/api/docs",
         "status": "running"
     }

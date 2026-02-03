@@ -47,6 +47,7 @@ interface RemoteMachine {
   host: string
   username: string
   port: number
+  use_sftp_mode: boolean
   default_path?: string
   mount_point?: string
   status: string

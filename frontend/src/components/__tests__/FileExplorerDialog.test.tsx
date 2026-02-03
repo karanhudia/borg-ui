@@ -813,6 +813,276 @@ describe('FileExplorerDialog', () => {
     })
   })
 
+  describe('showSshMountPoints prop', () => {
+    it('hides SSH mount points when showSshMountPoints is false', async () => {
+      // Mock root directory response with local items
+      vi.mocked(api.get).mockResolvedValue({
+        data: {
+          current_path: '/',
+          items: [
+            {
+              name: 'home',
+              path: '/home',
+              is_directory: true,
+              is_borg_repo: false,
+            },
+          ],
+          is_inside_local_mount: false,
+        },
+      })
+
+      renderWithProviders(
+        <FileExplorerDialog
+          open={true}
+          onClose={mockOnClose}
+          onSelect={mockOnSelect}
+          initialPath="/"
+          showSshMountPoints={false}
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('home')).toBeInTheDocument()
+      })
+
+      // SSH mount point should NOT be visible
+      expect(screen.queryByText('Remote Server')).not.toBeInTheDocument()
+    })
+
+    it('shows SSH mount points when showSshMountPoints is true (default)', async () => {
+      // Mock root directory response
+      vi.mocked(api.get).mockResolvedValue({
+        data: {
+          current_path: '/',
+          items: [],
+          is_inside_local_mount: false,
+        },
+      })
+
+      renderWithProviders(
+        <FileExplorerDialog
+          open={true}
+          onClose={mockOnClose}
+          onSelect={mockOnSelect}
+          initialPath="/"
+          showSshMountPoints={true}
+        />
+      )
+
+      await waitFor(
+        () => {
+          expect(screen.getByText('Remote Server')).toBeInTheDocument()
+        },
+        { timeout: 2000 }
+      )
+    })
+  })
+
+  describe('allowedSshConnectionId prop', () => {
+    const mockMultipleSSHConnections = {
+      data: {
+        connections: [
+          {
+            id: 1,
+            ssh_key_id: 1,
+            host: 'server1.com',
+            username: 'user1',
+            port: 22,
+            status: 'connected',
+            mount_point: 'Server 1',
+            default_path: '/home/user1',
+          },
+          {
+            id: 2,
+            ssh_key_id: 2,
+            host: 'server2.com',
+            username: 'user2',
+            port: 22,
+            status: 'connected',
+            mount_point: 'Server 2',
+            default_path: '/home/user2',
+          },
+          {
+            id: 3,
+            ssh_key_id: 3,
+            host: 'server3.com',
+            username: 'user3',
+            port: 22,
+            status: 'connected',
+            mount_point: 'Server 3',
+            default_path: '/home/user3',
+          },
+        ],
+      },
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      config: {} as any,
+    }
+
+    it('shows only the allowed SSH connection when allowedSshConnectionId is set', async () => {
+      vi.mocked(sshKeysAPI.getSSHConnections).mockResolvedValue(mockMultipleSSHConnections)
+
+      // Mock root directory response
+      vi.mocked(api.get).mockResolvedValue({
+        data: {
+          current_path: '/',
+          items: [],
+          is_inside_local_mount: false,
+        },
+      })
+
+      renderWithProviders(
+        <FileExplorerDialog
+          open={true}
+          onClose={mockOnClose}
+          onSelect={mockOnSelect}
+          initialPath="/"
+          allowedSshConnectionId={2}
+        />
+      )
+
+      await waitFor(
+        () => {
+          // Only Server 2 should be visible
+          expect(screen.getByText('Server 2')).toBeInTheDocument()
+        },
+        { timeout: 2000 }
+      )
+
+      // Other servers should NOT be visible
+      expect(screen.queryByText('Server 1')).not.toBeInTheDocument()
+      expect(screen.queryByText('Server 3')).not.toBeInTheDocument()
+    })
+
+    it('shows all SSH connections when allowedSshConnectionId is null', async () => {
+      vi.mocked(sshKeysAPI.getSSHConnections).mockResolvedValue(mockMultipleSSHConnections)
+
+      // Mock root directory response
+      vi.mocked(api.get).mockResolvedValue({
+        data: {
+          current_path: '/',
+          items: [],
+          is_inside_local_mount: false,
+        },
+      })
+
+      renderWithProviders(
+        <FileExplorerDialog
+          open={true}
+          onClose={mockOnClose}
+          onSelect={mockOnSelect}
+          initialPath="/"
+          allowedSshConnectionId={null}
+        />
+      )
+
+      await waitFor(
+        () => {
+          expect(screen.getByText('Server 1')).toBeInTheDocument()
+          expect(screen.getByText('Server 2')).toBeInTheDocument()
+          expect(screen.getByText('Server 3')).toBeInTheDocument()
+        },
+        { timeout: 2000 }
+      )
+    })
+
+    it('hides local filesystem items when allowedSshConnectionId is set at root', async () => {
+      vi.mocked(sshKeysAPI.getSSHConnections).mockResolvedValue(mockMultipleSSHConnections)
+
+      // Mock root directory response with local items
+      vi.mocked(api.get).mockResolvedValue({
+        data: {
+          current_path: '/',
+          items: [
+            {
+              name: 'home',
+              path: '/home',
+              is_directory: true,
+              is_borg_repo: false,
+            },
+            {
+              name: 'var',
+              path: '/var',
+              is_directory: true,
+              is_borg_repo: false,
+            },
+          ],
+          is_inside_local_mount: false,
+        },
+      })
+
+      renderWithProviders(
+        <FileExplorerDialog
+          open={true}
+          onClose={mockOnClose}
+          onSelect={mockOnSelect}
+          initialPath="/"
+          allowedSshConnectionId={2}
+        />
+      )
+
+      await waitFor(
+        () => {
+          // Only Server 2 should be visible
+          expect(screen.getByText('Server 2')).toBeInTheDocument()
+        },
+        { timeout: 2000 }
+      )
+
+      // Local directories should NOT be visible when allowedSshConnectionId is set
+      expect(screen.queryByText('home')).not.toBeInTheDocument()
+      expect(screen.queryByText('var')).not.toBeInTheDocument()
+    })
+
+    it('shows local items when allowedSshConnectionId is not set', async () => {
+      vi.mocked(sshKeysAPI.getSSHConnections).mockResolvedValue(mockMultipleSSHConnections)
+
+      // Mock root directory response with local items
+      vi.mocked(api.get).mockResolvedValue({
+        data: {
+          current_path: '/',
+          items: [
+            {
+              name: 'home',
+              path: '/home',
+              is_directory: true,
+              is_borg_repo: false,
+            },
+          ],
+          is_inside_local_mount: false,
+        },
+      })
+
+      renderWithProviders(
+        <FileExplorerDialog
+          open={true}
+          onClose={mockOnClose}
+          onSelect={mockOnSelect}
+          initialPath="/"
+          allowedSshConnectionId={null}
+        />
+      )
+
+      await waitFor(
+        () => {
+          // Local directory should be visible
+          expect(screen.getByText('home')).toBeInTheDocument()
+        },
+        { timeout: 2000 }
+      )
+
+      // SSH mount points should also be visible
+      await waitFor(
+        () => {
+          expect(screen.getByText('Server 1')).toBeInTheDocument()
+        },
+        { timeout: 2000 }
+      )
+    })
+  })
+
   describe('Integration Tests', () => {
     it('completes full directory navigation and selection flow', async () => {
       const user = userEvent.setup()

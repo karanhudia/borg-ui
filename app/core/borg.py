@@ -51,6 +51,10 @@ class BorgInterface:
         # Mark this container's hostname as unique to avoid lock conflicts
         exec_env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
 
+        # Allow non-interactive access to unencrypted and relocated repositories
+        exec_env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+        exec_env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
+
         # Add SSH options to disable host key checking for remote repos
         # This allows automatic connection to new hosts without manual intervention
         ssh_opts = [
@@ -455,7 +459,7 @@ class BorgInterface:
         return await self._execute_command_streaming(cmd, max_lines=max_lines, env=env if env else None)
 
     async def extract_archive(self, repository: str, archive: str, paths: List[str],
-                            destination: str, dry_run: bool = False, remote_path: str = None, passphrase: str = None) -> Dict:
+                            destination: str, dry_run: bool = False, remote_path: str = None, passphrase: str = None, bypass_lock: bool = False) -> Dict:
         """Extract files from an archive"""
         cmd = [self.borg_cmd, "extract"]
 
@@ -464,6 +468,9 @@ class BorgInterface:
 
         if dry_run:
             cmd.append("--dry-run")
+
+        if bypass_lock:
+            cmd.append("--bypass-lock")
 
         # Skip extended attributes and ACLs to avoid errors on filesystems that don't support them
         # This prevents "Operation not supported" errors when extracting files with NFS4 ACLs, etc.
@@ -576,13 +583,15 @@ class BorgInterface:
         return await self._execute_command(cmd, env=env if env else None)
 
 
-    async def get_repository_info(self, repository_path: str, remote_path: str = None) -> Dict:
+    async def get_repository_info(self, repository_path: str, remote_path: str = None, bypass_lock: bool = False) -> Dict:
         """Get detailed information about a specific repository"""
         try:
             # Get repository info using borg info
             cmd = ["borg", "info"]
             if remote_path:
                 cmd.extend(["--remote-path", remote_path])
+            if bypass_lock:
+                cmd.append("--bypass-lock")
             cmd.extend([repository_path, "--json"])
             result = await self._execute_command(cmd, timeout=60)
 

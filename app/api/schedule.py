@@ -9,7 +9,7 @@ import os
 import asyncio
 
 from app.database.database import get_db, SessionLocal
-from app.database.models import User, ScheduledJob, ScheduledJobRepository, CompactJob, PruneJob, Repository, BackupJob, Script
+from app.database.models import User, ScheduledJob, ScheduledJobRepository, CompactJob, PruneJob, Repository, BackupJob, Script, RepositoryScript
 from app.core.security import get_current_user
 from app.core.borg import BorgInterface
 from app.config import settings
@@ -794,7 +794,8 @@ async def run_scheduled_job_now(
             backup_job = BackupJob(
                 repository=repo.path,
                 status="pending",
-                scheduled_job_id=job.id  # Link to scheduled job
+                scheduled_job_id=job.id,  # Link to scheduled job
+                created_at=datetime.now(timezone.utc)  # Explicit timestamp to prevent NULL
             )
             db.add(backup_job)
             db.commit()
@@ -1008,7 +1009,8 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
             backup_job = BackupJob(
                 repository=repo.path,
                 status="pending",
-                scheduled_job_id=scheduled_job.id
+                scheduled_job_id=scheduled_job.id,
+                created_at=datetime.now(timezone.utc)  # Explicit timestamp to prevent NULL
             )
             db.add(backup_job)
             db.commit()
@@ -1028,13 +1030,43 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
             else:
                 archive_name = f"{scheduled_job.name}-{repo.name}-{timestamp_now}"
 
-            # Run repository-level pre-script if enabled
-            if scheduled_job.run_repository_scripts and repo.pre_backup_script_id:
+            # Run repository-level pre-scripts if enabled
+            if scheduled_job.run_repository_scripts:
                 try:
-                    script = db.query(Script).filter_by(id=repo.pre_backup_script_id).first()
-                    if script:
-                        await run_script_from_library(script, db, job_id=backup_job.id)
-                        logger.info("Repository pre-script completed", repo_name=repo.name, script_name=script.name)
+                    from app.services.script_library_executor import ScriptLibraryExecutor
+
+                    # Check for library scripts first (newer system)
+                    library_scripts = db.query(RepositoryScript).filter(
+                        RepositoryScript.repository_id == repo.id,
+                        RepositoryScript.hook_type == 'pre-backup',
+                        RepositoryScript.enabled == True
+                    ).order_by(RepositoryScript.execution_order).all()
+
+                    if library_scripts:
+                        # Execute library scripts in order
+                        for repo_script in library_scripts:
+                            script = db.query(Script).filter_by(id=repo_script.script_id).first()
+                            if script:
+                                await run_script_from_library(script, db, job_id=backup_job.id)
+                                logger.info("Repository library pre-script completed",
+                                          repo_name=repo.name, script_name=script.name)
+                    elif repo.pre_backup_script:
+                        # Fall back to inline script (legacy)
+                        executor = ScriptLibraryExecutor(db)
+                        timeout = repo.pre_hook_timeout or 300
+                        result = await executor.execute_inline_script(
+                            script_content=repo.pre_backup_script,
+                            script_type='pre-backup',
+                            timeout=timeout,
+                            repository=repo,
+                            backup_job_id=backup_job.id,
+                            backup_result=None
+                        )
+                        if result["success"]:
+                            logger.info("Repository inline pre-script completed", repo_name=repo.name)
+                        else:
+                            logger.error("Repository inline pre-script failed", repo_name=repo.name,
+                                       error=result.get("logs"))
                 except Exception as e:
                     logger.error("Repository pre-script failed", repo_name=repo.name, error=str(e))
                     # Continue with backup even if repo pre-script fails
@@ -1042,13 +1074,53 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
             # Execute backup
             await backup_service.execute_backup(backup_job.id, repo.path, db, archive_name=archive_name)
 
-            # Run repository-level post-script if enabled
-            if scheduled_job.run_repository_scripts and repo.post_backup_script_id:
+            # Run repository-level post-scripts if enabled
+            if scheduled_job.run_repository_scripts:
                 try:
-                    script = db.query(Script).filter_by(id=repo.post_backup_script_id).first()
-                    if script:
-                        await run_script_from_library(script, db, job_id=backup_job.id)
-                        logger.info("Repository post-script completed", repo_name=repo.name, script_name=script.name)
+                    from app.services.script_library_executor import ScriptLibraryExecutor
+
+                    # Get backup result for post-script context
+                    db.refresh(backup_job)
+                    backup_result = {
+                        "status": backup_job.status,
+                        "original_size": backup_job.original_size,
+                        "compressed_size": backup_job.compressed_size,
+                        "deduplicated_size": backup_job.deduplicated_size,
+                        "nfiles": backup_job.nfiles
+                    } if backup_job.status in ["completed", "completed_with_warnings"] else None
+
+                    # Check for library scripts first (newer system)
+                    library_scripts = db.query(RepositoryScript).filter(
+                        RepositoryScript.repository_id == repo.id,
+                        RepositoryScript.hook_type == 'post-backup',
+                        RepositoryScript.enabled == True
+                    ).order_by(RepositoryScript.execution_order).all()
+
+                    if library_scripts:
+                        # Execute library scripts in order
+                        for repo_script in library_scripts:
+                            script = db.query(Script).filter_by(id=repo_script.script_id).first()
+                            if script:
+                                await run_script_from_library(script, db, job_id=backup_job.id)
+                                logger.info("Repository library post-script completed",
+                                          repo_name=repo.name, script_name=script.name)
+                    elif repo.post_backup_script:
+                        # Fall back to inline script (legacy)
+                        executor = ScriptLibraryExecutor(db)
+                        timeout = repo.post_hook_timeout or 300
+                        result = await executor.execute_inline_script(
+                            script_content=repo.post_backup_script,
+                            script_type='post-backup',
+                            timeout=timeout,
+                            repository=repo,
+                            backup_job_id=backup_job.id,
+                            backup_result=backup_result
+                        )
+                        if result["success"]:
+                            logger.info("Repository inline post-script completed", repo_name=repo.name)
+                        else:
+                            logger.error("Repository inline post-script failed", repo_name=repo.name,
+                                       error=result.get("logs"))
                 except Exception as e:
                     logger.error("Repository post-script failed", repo_name=repo.name, error=str(e))
 
@@ -1367,8 +1439,8 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
 async def check_scheduled_jobs():
     """Check and execute scheduled jobs"""
     while True:
+        db = SessionLocal()
         try:
-            db = next(get_db())
             jobs = db.query(ScheduledJob).filter(
                 ScheduledJob.enabled == True,
                 ScheduledJob.next_run <= datetime.now(timezone.utc)
@@ -1408,7 +1480,8 @@ async def check_scheduled_jobs():
                         backup_job = BackupJob(
                             repository=repo.path,
                             status="pending",
-                            scheduled_job_id=job.id  # Link to scheduled job
+                            scheduled_job_id=job.id,  # Link to scheduled job
+                            created_at=datetime.now(timezone.utc)  # Explicit timestamp to prevent NULL
                         )
                         db.add(backup_job)
                         db.commit()
@@ -1473,10 +1546,10 @@ async def check_scheduled_jobs():
                     except Exception as notif_error:
                         logger.warning("Failed to send schedule failure notification", error=str(notif_error))
 
-            db.close()
-
         except Exception as e:
             logger.error("Error in scheduled job checker", error=str(e))
+        finally:
+            db.close()
 
         # Wait for 1 minute before next check
         await asyncio.sleep(60) 

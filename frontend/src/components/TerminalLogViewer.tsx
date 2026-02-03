@@ -34,6 +34,7 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
   const logContainerRef = useRef<HTMLDivElement>(null)
   const [autoScroll, setAutoScroll] = useState(true)
   const [totalLines, setTotalLines] = useState(0)
+  const [showingTail, setShowingTail] = useState(false)
 
   // Fetch logs on mount and poll while running
   useEffect(() => {
@@ -47,21 +48,33 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
         const offset = status === 'running' ? 0 : logsRef.current.length
         const result = await onFetchLogs(offset)
 
-        if (result.lines.length > 0) {
-          if (status === 'running') {
-            // For running jobs, replace logs entirely (backend sends tail)
-            setLogs(result.lines)
-            logsRef.current = result.lines
-          } else {
-            // For completed jobs, append new lines
-            setLogs((prev) => {
-              const newLogs = [...prev, ...result.lines]
-              logsRef.current = newLogs
-              return newLogs
-            })
+        // For completed/failed jobs on initial load: if there are many lines, fetch the tail instead
+        if (status !== 'running' && logsRef.current.length === 0 && result.total_lines > 500) {
+          // Fetch last 500 lines
+          const tailOffset = Math.max(0, result.total_lines - 500)
+          const tailResult = await onFetchLogs(tailOffset)
+          setLogs(tailResult.lines)
+          logsRef.current = tailResult.lines
+          setTotalLines(tailResult.total_lines)
+          setShowingTail(true)
+        } else {
+          // Normal behavior
+          if (result.lines.length > 0) {
+            if (status === 'running') {
+              // For running jobs, replace logs entirely (backend sends tail)
+              setLogs(result.lines)
+              logsRef.current = result.lines
+            } else {
+              // For completed jobs, append new lines
+              setLogs((prev) => {
+                const newLogs = [...prev, ...result.lines]
+                logsRef.current = newLogs
+                return newLogs
+              })
+            }
           }
+          setTotalLines(result.total_lines)
         }
-        setTotalLines(result.total_lines)
       } catch (error) {
         console.error('Failed to fetch logs:', error)
       } finally {
@@ -115,6 +128,22 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
     toast.success('Logs downloaded')
   }
 
+  // Jump to beginning of logs
+  const handleJumpToStart = async () => {
+    try {
+      const result = await onFetchLogs(0)
+      setLogs(result.lines)
+      logsRef.current = result.lines
+      setShowingTail(false)
+      if (logContainerRef.current) {
+        logContainerRef.current.scrollTop = 0
+      }
+    } catch (error) {
+      console.error('Failed to fetch logs from start:', error)
+      toast.error('Failed to load logs')
+    }
+  }
+
   return (
     <Box>
       {/* Header */}
@@ -156,8 +185,8 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
         </Box>
       )}
 
-      {/* Status indicator above terminal - only show for running jobs */}
-      {status === 'running' && (
+      {/* Status indicator above terminal */}
+      {status === 'running' ? (
         <Box sx={{ mb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Chip
             icon={<PlayCircle size={16} />}
@@ -172,7 +201,19 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
             </Typography>
           )}
         </Box>
-      )}
+      ) : showingTail && totalLines > 500 ? (
+        <Box sx={{ mb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Chip
+            label={`Showing last 500 of ${totalLines.toLocaleString()} lines (errors typically appear at end)`}
+            color="warning"
+            size="small"
+            sx={{ fontWeight: 500 }}
+          />
+          <Button size="small" onClick={handleJumpToStart} sx={{ minWidth: 'auto' }}>
+            Jump to Start
+          </Button>
+        </Box>
+      ) : null}
 
       {/* Terminal */}
       <Paper
@@ -210,7 +251,7 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
           </Typography>
         ) : (
           logs.map((log) => (
-            <Box key={log.line_number} sx={{ mb: 0.5 }}>
+            <Box key={`${jobId}-${log.line_number}`} sx={{ mb: 0.5 }}>
               <Typography
                 component="span"
                 sx={{

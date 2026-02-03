@@ -132,7 +132,10 @@ class SSHConnection(Base):
     borg_binary_path = Column(String, default="/usr/bin/borg")  # Path to borg on remote host
     borg_version = Column(String, nullable=True)  # Detected borg version
     last_borg_check = Column(DateTime, nullable=True)  # Last time borg was verified
-    
+
+    # SSH key deployment options
+    use_sftp_mode = Column(Boolean, default=True, nullable=False)  # Use SFTP mode (-s flag) for ssh-copy-id (required by Hetzner, breaks Synology)
+
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
@@ -207,6 +210,12 @@ class RestoreJob(Base):
     nfiles = Column(Integer, default=0)  # Number of files restored
     current_file = Column(Text, nullable=True)  # Current file being restored
     progress_percent = Column(Float, default=0.0)  # Progress percentage
+
+    # Speed and ETA tracking (similar to backup jobs)
+    original_size = Column(BigInteger, default=0)  # Total bytes to restore
+    restored_size = Column(BigInteger, default=0)  # Bytes restored so far
+    restore_speed = Column(Float, default=0.0)  # Current restore speed in MB/s
+    estimated_time_remaining = Column(Integer, default=0)  # Estimated seconds remaining
 
     created_at = Column(DateTime, default=utc_now)
 
@@ -370,7 +379,8 @@ class SystemSettings(Base):
 
     # Beta features
     use_new_wizard = Column(Boolean, default=False, nullable=False)  # Enable new repository wizard (beta)
-    
+    bypass_lock_on_info = Column(Boolean, default=False, nullable=False)  # Use --bypass-lock for all borg info commands (beta fix for SSH lock issues)
+
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
@@ -399,6 +409,8 @@ class NotificationSettings(Base):
 
     # Customization
     title_prefix = Column(String(100), nullable=True)  # Optional custom prefix for notification titles (e.g., "[Production]")
+    include_job_name_in_title = Column(Boolean, default=False, nullable=False)  # Include job/schedule name in notification title
+    # Note: JSON data is automatically sent for json:// and jsons:// webhook URLs (no field needed)
 
     # Event triggers
     notify_on_backup_start = Column(Boolean, default=False, nullable=False)

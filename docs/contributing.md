@@ -173,7 +173,7 @@ For feature requests, please provide:
 
 ## License
 
-By contributing to Borg Web UI, you agree that your contributions will be licensed under the GNU General Public License v3.0.
+By contributing to Borg Web UI, you agree that your contributions will be licensed under the GNU Affero General Public License v3.0.
 
 ## Questions?
 

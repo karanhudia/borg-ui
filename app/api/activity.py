@@ -55,7 +55,7 @@ class ActivityItem(BaseModel):
 
 @router.get("/recent", response_model=List[ActivityItem])
 async def list_recent_activity(
-    limit: int = 50,
+    limit: int = 200,
     job_type: Optional[str] = None,  # Filter by type: 'backup', 'restore', etc.
     status: Optional[str] = None,  # Filter by status: 'running', 'completed', 'failed'
     current_user: User = Depends(get_current_user),
@@ -127,12 +127,12 @@ async def list_recent_activity(
                 'error_message': job.error_message,
                 'repository': repo_name,
                 'repository_path': job.repository,  # Always include the path
-                'log_file_path': getattr(job, 'log_file_path', None),
+                'log_file_path': None,  # Restore jobs store logs in DB, not file
                 'triggered_by': 'manual',  # Restore jobs are always manual
                 'schedule_id': None,
                 'archive_name': job.archive,
                 'package_name': None,
-                'has_logs': bool(getattr(job, 'log_file_path', None))
+                'has_logs': bool(job.logs)  # Check logs field instead of log_file_path
             })
 
     # Fetch check jobs
@@ -531,3 +531,83 @@ async def download_job_logs(
         status_code=404,
         detail="No logs available for this job"
     )
+
+
+@router.delete("/{job_type}/{job_id}")
+async def delete_job(
+    job_type: str,
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a job entry and its associated log files.
+
+    Only admin users can delete job entries.
+    Cannot delete running or pending jobs.
+    """
+
+    # Check if user is admin
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can delete job entries"
+        )
+
+    # Map job type to model
+    job_models = {
+        'backup': BackupJob,
+        'restore': RestoreJob,
+        'check': CheckJob,
+        'compact': CompactJob,
+        'prune': PruneJob,
+        'package': PackageInstallJob
+    }
+
+    if job_type not in job_models:
+        raise HTTPException(status_code=400, detail=f"Invalid job type: {job_type}")
+
+    job_model = job_models[job_type]
+    job = db.query(job_model).filter(job_model.id == job_id).first()
+
+    if not job:
+        raise HTTPException(status_code=404, detail=f"{job_type.capitalize()} job not found")
+
+    # Prevent deletion of running or pending jobs
+    if job.status in ['running', 'pending']:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot delete {job.status} job. Wait for the job to complete or cancel it first."
+        )
+
+    # Delete log file if it exists
+    log_file_path = getattr(job, 'log_file_path', None)
+    if log_file_path and os.path.exists(log_file_path):
+        try:
+            os.remove(log_file_path)
+            logger.info(f"Deleted log file for {job_type} job {job_id}", path=log_file_path)
+        except Exception as e:
+            logger.warning(f"Failed to delete log file for {job_type} job {job_id}",
+                         path=log_file_path, error=str(e))
+            # Continue with job deletion even if log file deletion fails
+
+    # Delete the job from database
+    try:
+        db.delete(job)
+        db.commit()
+        logger.info(f"Deleted {job_type} job {job_id} by admin user",
+                   admin_user=current_user.username)
+
+        return {
+            "success": True,
+            "message": f"{job_type.capitalize()} job deleted successfully",
+            "job_id": job_id,
+            "job_type": job_type
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to delete {job_type} job {job_id}", error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete job: {str(e)}"
+        )

@@ -19,7 +19,6 @@ import {
   MenuItem,
   Select,
   FormControl,
-  Switch,
 } from '@mui/material'
 import { Users, Trash2, Plus, Edit, Key, AlertCircle, Moon, Sun } from 'lucide-react'
 import { settingsAPI } from '../services/api'
@@ -35,6 +34,7 @@ import LogManagementTab from '../components/LogManagementTab'
 import CacheManagementTab from '../components/CacheManagementTab'
 import MountsManagementTab from '../components/MountsManagementTab'
 import SystemSettingsTab from '../components/SystemSettingsTab'
+import BetaFeaturesTab from '../components/BetaFeaturesTab'
 import Scripts from './Scripts'
 import Activity from './Activity'
 import { formatDateShort } from '../utils/dateUtils'
@@ -178,27 +178,6 @@ const Settings: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to reset password')
-    },
-  })
-
-  // System settings
-  const { data: systemSettingsData } = useQuery({
-    queryKey: ['systemSettings'],
-    queryFn: settingsAPI.getSystemSettings,
-    enabled: user?.is_admin === true,
-  })
-
-  const systemSettings = systemSettingsData?.data?.settings
-
-  const updateSystemSettingsMutation = useMutation({
-    mutationFn: settingsAPI.updateSystemSettings,
-    onSuccess: () => {
-      toast.success('Settings updated successfully')
-      queryClient.invalidateQueries({ queryKey: ['systemSettings'] })
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to update settings')
     },
   })
 
@@ -513,46 +492,7 @@ const Settings: React.FC = () => {
       {activeTab === 4 && user?.is_admin && <SystemSettingsTab />}
 
       {/* Beta Features Tab - Admin Only */}
-      {activeTab === 5 && user?.is_admin && (
-        <Box>
-          <Box>
-            <Typography variant="h6" fontWeight={600} gutterBottom>
-              Beta Features
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Try experimental features before they're released to everyone. These features are
-              still in development and may change.
-            </Typography>
-          </Box>
-
-          <Card sx={{ maxWidth: 600 }}>
-            <Box sx={{ p: 3 }}>
-              <Stack spacing={3}>
-                <Box
-                  sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                >
-                  <Box sx={{ flex: 1 }}>
-                    <Typography variant="subtitle1" fontWeight={500}>
-                      New Repository Wizard
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Modern step-by-step wizard for creating and editing repositories with improved
-                      UX and validation
-                    </Typography>
-                  </Box>
-                  <Switch
-                    checked={systemSettings?.use_new_wizard || false}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                      updateSystemSettingsMutation.mutate({ use_new_wizard: e.target.checked })
-                    }}
-                    disabled={updateSystemSettingsMutation.isPending}
-                  />
-                </Box>
-              </Stack>
-            </Box>
-          </Card>
-        </Box>
-      )}
+      {activeTab === 5 && user?.is_admin && <BetaFeaturesTab />}
 
       {/* Cache Management Tab - Admin Only */}
       {activeTab === 6 && user?.is_admin && <CacheManagementTab />}

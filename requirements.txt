@@ -3,10 +3,10 @@ apprise==1.9.6
 bcrypt==4.0.1
 coverage[toml]==7.3.2
 croniter==1.4.1
-cryptography==41.0.7
+cryptography==44.0.1
 fastapi-cache2==0.2.1
-fastapi==0.104.1
-gunicorn==21.2.0
+fastapi==0.118.0
+gunicorn==23.0.0
 httpx==0.25.2
 passlib[bcrypt]==1.7.4
 psutil==5.9.6
@@ -16,8 +16,8 @@ pytest-asyncio==0.21.1
 pytest-cov==4.1.0
 pytest==7.4.3
 python-dotenv==1.0.0
-python-jose[cryptography]==3.3.0
-python-multipart==0.0.6
+python-jose[cryptography]==3.4.0
+python-multipart==0.0.20
 pyyaml==6.0.1
 redis==5.0.1
 requests==2.32.4

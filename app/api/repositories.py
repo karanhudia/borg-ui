@@ -23,6 +23,26 @@ router = APIRouter(tags=["repositories"])
 # Initialize Borg interface
 borg = BorgInterface()
 
+
+def get_connection_details(connection_id: int, db: Session) -> Dict[str, Any]:
+    """
+    Get SSH connection details from connection_id.
+    Returns dict with host, username, port, ssh_key_id.
+    Raises HTTPException if connection not found.
+    """
+    from app.database.models import SSHConnection
+
+    connection = db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
+    if not connection:
+        raise HTTPException(status_code=404, detail=f"SSH connection with ID {connection_id} not found")
+
+    return {
+        "host": connection.host,
+        "username": connection.username,
+        "port": connection.port,
+        "ssh_key_id": connection.ssh_key_id
+    }
+
 # Helper function to get standard SSH options
 def get_standard_ssh_opts(include_key_path=None):
     """Get standardized SSH options for Borg operations
@@ -59,6 +79,8 @@ def setup_borg_env(base_env=None, passphrase=None, ssh_opts=None):
 
     # Allow non-interactive access to unencrypted repositories
     env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+    # Allow access to repositories that have been relocated/moved
+    env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
 
     # Configure lock behavior to prevent timeout issues
     # Wait up to 180 seconds (3 minutes) for locks instead of default 1 second
@@ -258,11 +280,7 @@ class RepositoryCreate(BaseModel):
     passphrase: Optional[str] = None
     source_directories: Optional[List[str]] = None  # List of directories to backup
     exclude_patterns: Optional[List[str]] = None  # List of exclude patterns (e.g., ["*.log", "*.tmp"])
-    repository_type: str = "local"  # local, ssh, sftp
-    host: Optional[str] = None  # For SSH repositories
-    port: Optional[int] = 22  # SSH port
-    username: Optional[str] = None  # SSH username
-    ssh_key_id: Optional[int] = None  # Associated SSH key ID
+    connection_id: Optional[int] = None  # SSH connection ID for repository location
     remote_path: Optional[str] = None  # Path to borg on remote server (e.g., /usr/local/bin/borg)
     pre_backup_script: Optional[str] = None  # Script to run before backup
     post_backup_script: Optional[str] = None  # Script to run after backup
@@ -282,11 +300,7 @@ class RepositoryImport(BaseModel):
     compression: str = "lz4"  # Default compression for future backups
     source_directories: Optional[List[str]] = None  # List of directories to backup
     exclude_patterns: Optional[List[str]] = None  # List of exclude patterns
-    repository_type: str = "local"  # local, ssh, sftp
-    host: Optional[str] = None  # For SSH repositories
-    port: Optional[int] = 22  # SSH port
-    username: Optional[str] = None  # SSH username
-    ssh_key_id: Optional[int] = None  # Associated SSH key ID
+    connection_id: Optional[int] = None  # SSH connection ID for repository location
     remote_path: Optional[str] = None  # Path to borg on remote server
     pre_backup_script: Optional[str] = None  # Script to run before backup
     post_backup_script: Optional[str] = None  # Script to run after backup
@@ -305,6 +319,7 @@ class RepositoryUpdate(BaseModel):
     compression: Optional[str] = None
     source_directories: Optional[List[str]] = None
     exclude_patterns: Optional[List[str]] = None
+    connection_id: Optional[int] = None  # SSH connection ID for repository location
     remote_path: Optional[str] = None
     pre_backup_script: Optional[str] = None
     post_backup_script: Optional[str] = None
@@ -389,7 +404,8 @@ async def get_repositories(
                 "mode": repo.mode or "full",  # Default to "full" for backward compatibility
                 "bypass_lock": repo.bypass_lock or False,
                 "custom_flags": repo.custom_flags,
-                "has_running_maintenance": has_check or has_compact or has_prune
+                "has_running_maintenance": has_check or has_compact or has_prune,
+                "source_ssh_connection_id": repo.source_ssh_connection_id
             })
 
         return {
@@ -427,16 +443,23 @@ async def create_repository(
                     detail=f"Passphrase is required for encryption mode '{repo_data.encryption}'. Use encryption='none' for unencrypted repositories."
                 )
 
-        # Validate repository type and path
+        # Validate connection_id and path
         repo_path = repo_data.path.strip()
 
-        if repo_data.repository_type == "local":
-            # For local repositories, ensure path is absolute
+        # Initialize SSH connection details
+        ssh_host = None
+        ssh_username = None
+        ssh_port = None
+        ssh_key_id_for_init = None
+
+        if not repo_data.connection_id:
+            # Local repository
+            # Ensure path is absolute
             # But first check if path looks like an SSH URL
             if repo_path.startswith("ssh://"):
                 raise HTTPException(
                     status_code=400,
-                    detail="Path appears to be an SSH URL but repository_type is 'local'. Please set repository_type to 'ssh'."
+                    detail="Path appears to be an SSH URL but no connection_id provided. Please select an SSH connection."
                 )
 
             if not os.path.isabs(repo_path):
@@ -445,22 +468,21 @@ async def create_repository(
 
             # Validate that the path is a valid absolute path
             repo_path = os.path.abspath(repo_path)
-        elif repo_data.repository_type in ["ssh", "sftp"]:
-            # For SSH repositories, validate required fields
-            if not repo_data.host:
-                raise HTTPException(status_code=400, detail="Host is required for SSH repositories")
-            if not repo_data.username:
-                raise HTTPException(status_code=400, detail="Username is required for SSH repositories")
-            if not repo_data.ssh_key_id:
-                raise HTTPException(status_code=400, detail="SSH key is required for SSH repositories")
+        else:
+            # Remote repository - get connection details
+            connection_details = get_connection_details(repo_data.connection_id, db)
+            ssh_host = connection_details["host"]
+            ssh_username = connection_details["username"]
+            ssh_port = connection_details["port"]
+            ssh_key_id_for_init = connection_details["ssh_key_id"]
 
             # Note: We don't check if borg is installed on the remote machine.
             # Some SSH hosts (like Hetzner Storagebox) use restricted shells that block
             # diagnostic commands like "which borg", but Borg commands still work.
             # If Borg is truly not installed, the borg init command will fail with a clear error.
             logger.info("Skipping remote borg check for SSH repository",
-                       host=repo_data.host,
-                       username=repo_data.username)
+                       host=ssh_host,
+                       username=ssh_username)
 
             # Build SSH repository path
             # If path already starts with ssh://, extract just the remote path
@@ -474,9 +496,7 @@ async def create_repository(
                     # Fallback: strip ssh:// and extract path after host
                     repo_path = repo_path.split("/", 3)[-1] if "/" in repo_path else repo_path
 
-            repo_path = f"ssh://{repo_data.username}@{repo_data.host}:{repo_data.port}/{repo_path.lstrip('/')}"
-        else:
-            raise HTTPException(status_code=400, detail="Invalid repository type. Must be 'local', 'ssh', or 'sftp'")
+            repo_path = f"ssh://{ssh_username}@{ssh_host}:{ssh_port}/{repo_path.lstrip('/')}"
 
         # Check if repository name already exists
         existing_repo = db.query(Repository).filter(Repository.name == repo_data.name).first()
@@ -489,7 +509,7 @@ async def create_repository(
             raise HTTPException(status_code=400, detail="Repository path already exists")
 
         # Create repository directory if local (but not if using /local mount)
-        if repo_data.repository_type == "local":
+        if not repo_data.connection_id:
             # Skip directory creation if path is within /local mount (host filesystem)
             # User must ensure parent directory exists with proper permissions
             if not repo_path.startswith("/local/"):
@@ -555,7 +575,7 @@ async def create_repository(
             repo_path,
             repo_data.encryption,
             repo_data.passphrase,
-            repo_data.ssh_key_id if repo_data.repository_type in ["ssh", "sftp"] else None,
+            ssh_key_id_for_init,
             repo_data.remote_path
         )
 
@@ -581,11 +601,7 @@ async def create_repository(
             passphrase=repo_data.passphrase,  # Store passphrase for backups
             source_directories=source_directories_json,
             exclude_patterns=exclude_patterns_json,
-            repository_type=repo_data.repository_type,
-            host=repo_data.host,
-            port=repo_data.port,
-            username=repo_data.username,
-            ssh_key_id=repo_data.ssh_key_id,
+            connection_id=repo_data.connection_id,
             remote_path=repo_data.remote_path,
             pre_backup_script=repo_data.pre_backup_script,
             post_backup_script=repo_data.post_backup_script,
@@ -649,16 +665,23 @@ async def import_repository(
                     detail="At least one source directory is required for full mode repositories. Source directories specify what data will be backed up to this repository."
                 )
 
-        # Validate repository type and path
+        # Validate connection_id and path
         repo_path = repo_data.path.strip()
 
-        if repo_data.repository_type == "local":
-            # For local repositories, ensure path is absolute
+        # Initialize SSH connection details
+        ssh_host = None
+        ssh_username = None
+        ssh_port = None
+        ssh_key_id_for_verify = None
+
+        if not repo_data.connection_id:
+            # Local repository
+            # Ensure path is absolute
             # But first check if path looks like an SSH URL
             if repo_path.startswith("ssh://"):
                 raise HTTPException(
                     status_code=400,
-                    detail="Path appears to be an SSH URL but repository_type is 'local'. Please set repository_type to 'ssh'."
+                    detail="Path appears to be an SSH URL but no connection_id provided. Please select an SSH connection."
                 )
 
             if not os.path.isabs(repo_path):
@@ -683,22 +706,21 @@ async def import_repository(
                     detail=f"Not a valid Borg repository: {repo_path}. Missing 'config' file."
                 )
 
-        elif repo_data.repository_type in ["ssh", "sftp"]:
-            # For SSH repositories, validate required fields
-            if not repo_data.host:
-                raise HTTPException(status_code=400, detail="Host is required for SSH repositories")
-            if not repo_data.username:
-                raise HTTPException(status_code=400, detail="Username is required for SSH repositories")
-            if not repo_data.ssh_key_id:
-                raise HTTPException(status_code=400, detail="SSH key is required for SSH repositories")
+        else:
+            # Remote repository - get connection details
+            connection_details = get_connection_details(repo_data.connection_id, db)
+            ssh_host = connection_details["host"]
+            ssh_username = connection_details["username"]
+            ssh_port = connection_details["port"]
+            ssh_key_id_for_verify = connection_details["ssh_key_id"]
 
             # Note: We don't check if borg is installed on the remote machine.
             # Some SSH hosts (like Hetzner Storagebox) use restricted shells that block
             # diagnostic commands like "which borg", but Borg commands still work.
             # If Borg is truly not installed, the borg info command will fail with a clear error.
             logger.info("Skipping remote borg check for SSH repository",
-                       host=repo_data.host,
-                       username=repo_data.username)
+                       host=ssh_host,
+                       username=ssh_username)
 
             # Build SSH repository path
             if repo_path.startswith("ssh://"):
@@ -710,9 +732,7 @@ async def import_repository(
                 else:
                     repo_path = repo_path.split("/", 3)[-1] if "/" in repo_path else repo_path
 
-            repo_path = f"ssh://{repo_data.username}@{repo_data.host}:{repo_data.port}/{repo_path.lstrip('/')}"
-        else:
-            raise HTTPException(status_code=400, detail="Invalid repository type. Must be 'local', 'ssh', or 'sftp'")
+            repo_path = f"ssh://{ssh_username}@{ssh_host}:{ssh_port}/{repo_path.lstrip('/')}"
 
         # Check if repository name already exists
         existing_repo = db.query(Repository).filter(Repository.name == repo_data.name).first()
@@ -732,7 +752,7 @@ async def import_repository(
         verify_result = await verify_existing_repository(
             repo_path,
             repo_data.passphrase,
-            repo_data.ssh_key_id if repo_data.repository_type in ["ssh", "sftp"] else None,
+            ssh_key_id_for_verify,
             repo_data.remote_path,
             repo_data.bypass_lock
         )
@@ -782,11 +802,7 @@ async def import_repository(
             passphrase=repo_data.passphrase,
             source_directories=source_directories_json,
             exclude_patterns=exclude_patterns_json,
-            repository_type=repo_data.repository_type,
-            host=repo_data.host,
-            port=repo_data.port,
-            username=repo_data.username,
-            ssh_key_id=repo_data.ssh_key_id,
+            connection_id=repo_data.connection_id,
             remote_path=repo_data.remote_path,
             archive_count=0,  # Will be updated below
             pre_backup_script=repo_data.pre_backup_script,
@@ -883,6 +899,8 @@ async def upload_keyfile(
         keyfile_name = f"{safe_name}.key"
 
         # Store keyfile in /data/borg_keys/
+        # The entrypoint.sh creates a symlink: ~/.config/borg/keys -> /data/borg_keys
+        # This makes keyfiles persistent across container restarts and maintains backwards compatibility
         keyfile_dir = os.path.join(settings.data_dir, "borg_keys")
         os.makedirs(keyfile_dir, exist_ok=True)
 
@@ -944,6 +962,7 @@ async def get_repository(
                 "archive_count": repository.archive_count,
                 "created_at": format_datetime(repository.created_at),
                 "updated_at": format_datetime(repository.updated_at),
+                "source_ssh_connection_id": repository.source_ssh_connection_id,
                 "stats": stats
             }
         }
@@ -980,15 +999,146 @@ async def update_repository(
                 raise HTTPException(status_code=400, detail="Repository name already exists")
             repository.name = repo_data.name
 
+        # Store raw path first (will be reconstructed for SSH below)
+        raw_path = None
         if repo_data.path is not None:
-            # Check if path already exists
-            existing_path = db.query(Repository).filter(
-                Repository.path == repo_data.path,
-                Repository.id != repo_id
-            ).first()
-            if existing_path:
-                raise HTTPException(status_code=400, detail="Repository path already exists")
-            repository.path = repo_data.path
+            raw_path = repo_data.path
+
+        # Handle connection_id - allow null to clear (switch to local)
+        if 'connection_id' in repo_data.model_dump(exclude_unset=True):
+            repository.connection_id = repo_data.connection_id
+            # Clear legacy fields when switching repository type
+            if repo_data.connection_id is None:
+                # Switching to local - clear SSH-related legacy fields
+                repository.repository_type = 'local'
+                repository.host = None
+                repository.port = 22
+                repository.username = None
+                repository.ssh_key_id = None
+            else:
+                # Switching to SSH - set repository_type (for backward compatibility with old code)
+                repository.repository_type = 'ssh'
+
+        # Reconstruct path if connection_id or path changed (similar to create endpoint logic)
+        path_changed = False
+        old_path = repository.path
+        if raw_path is not None or 'connection_id' in repo_data.model_dump(exclude_unset=True):
+            # Determine the final connection_id (use updated value or existing)
+            final_connection_id = repo_data.connection_id if 'connection_id' in repo_data.model_dump(exclude_unset=True) else repository.connection_id
+
+            # Use the raw_path if provided, otherwise use existing path
+            path_to_use = raw_path if raw_path is not None else repository.path
+
+            if final_connection_id:
+                # Remote repository - reconstruct SSH URL
+                connection_details = get_connection_details(final_connection_id, db)
+
+                # Extract plain path if it's already in SSH URL format
+                if path_to_use.startswith("ssh://"):
+                    # Extract path part from SSH URL
+                    import re
+                    match = re.match(r"ssh://[^/]+(/.*)", path_to_use)
+                    if match:
+                        path_to_use = match.group(1)
+                    else:
+                        path_to_use = path_to_use.split("/", 3)[-1] if "/" in path_to_use else path_to_use
+
+                # Reconstruct SSH URL
+                final_path = f"ssh://{connection_details['username']}@{connection_details['host']}:{connection_details['port']}/{path_to_use.lstrip('/')}"
+
+                # Check if path already exists (for a different repository)
+                existing_path = db.query(Repository).filter(
+                    Repository.path == final_path,
+                    Repository.id != repo_id
+                ).first()
+                if existing_path:
+                    raise HTTPException(status_code=400, detail="Repository path already exists")
+
+                path_changed = (final_path != old_path)
+                repository.path = final_path
+            else:
+                # Local repository - use path as-is
+                existing_path = db.query(Repository).filter(
+                    Repository.path == path_to_use,
+                    Repository.id != repo_id
+                ).first()
+                if existing_path:
+                    raise HTTPException(status_code=400, detail="Repository path already exists")
+
+                path_changed = (path_to_use != old_path)
+                repository.path = path_to_use
+
+            # If path changed, check if new path is a valid borg repository
+            # If not, initialize it (like create mode does)
+            if path_changed:
+                logger.info("Repository path changed - checking if new path is valid borg repository",
+                          repo_id=repo_id,
+                          old_path=old_path,
+                          new_path=repository.path)
+
+                # Get SSH key ID if using remote connection
+                ssh_key_id_for_init = None
+                if repository.connection_id:
+                    connection_details = get_connection_details(repository.connection_id, db)
+                    ssh_key_id_for_init = connection_details["ssh_key_id"]
+
+                # Check if the new path is already a borg repository
+                borg_interface = BorgInterface()
+                try:
+                    # Try to get repo info - if it succeeds, it's a valid borg repo
+                    info_result = await borg_interface.get_repository_info(
+                        repository.path,
+                        repository.passphrase,
+                        ssh_key_id_for_init,
+                        repository.remote_path
+                    )
+                    if info_result.get("success"):
+                        logger.info("New path is already a valid borg repository - no initialization needed",
+                                  new_path=repository.path)
+                    else:
+                        # Path is not a valid borg repo - initialize it
+                        logger.warning("New path is not a valid borg repository - initializing",
+                                     new_path=repository.path,
+                                     old_path=old_path)
+
+                        init_result = await initialize_borg_repository(
+                            repository.path,
+                            repository.encryption,
+                            repository.passphrase,
+                            ssh_key_id_for_init,
+                            repository.remote_path
+                        )
+
+                        if not init_result["success"]:
+                            raise HTTPException(
+                                status_code=500,
+                                detail=f"Failed to initialize repository at new path: {init_result['error']}"
+                            )
+
+                        logger.info("Successfully initialized borg repository at new path",
+                                  new_path=repository.path)
+                except Exception as e:
+                    # If borg info fails, assume repo doesn't exist and initialize
+                    logger.info("Could not verify borg repository - attempting initialization",
+                              new_path=repository.path,
+                              error=str(e))
+
+                    init_result = await initialize_borg_repository(
+                        repository.path,
+                        repository.encryption,
+                        repository.passphrase,
+                        ssh_key_id_for_init,
+                        repository.remote_path
+                    )
+
+                    if not init_result["success"]:
+                        raise HTTPException(
+                            status_code=500,
+                            detail=f"Failed to initialize repository at new path: {init_result['error']}"
+                        )
+
+                    logger.info("Successfully initialized borg repository at new path after verification failure",
+                              new_path=repository.path)
 
         if repo_data.compression is not None:
             repository.compression = repo_data.compression
@@ -1038,7 +1188,12 @@ async def update_repository(
         if repo_data.custom_flags is not None:
             repository.custom_flags = repo_data.custom_flags
 
-        if repo_data.source_connection_id is not None:
+        # Update source_connection_id - allow null to clear the field
+        # The frontend always sends this field explicitly (either with value or null)
+        # If not provided in the request body at all, Pydantic sets it to None (default)
+        # Since we can't distinguish "not provided" from "provided as null" with current setup,
+        # and the frontend wizard always sends this field, we check if it's in the request
+        if 'source_connection_id' in repo_data.model_dump(exclude_unset=True):
             repository.source_ssh_connection_id = repo_data.source_connection_id
 
         repository.updated_at = datetime.utcnow()
@@ -1083,6 +1238,18 @@ async def delete_repository(
                     )
             except:
                 pass
+
+        # Manually clean up script associations (in case CASCADE doesn't work)
+        from app.database.models import RepositoryScript
+        script_associations = db.query(RepositoryScript).filter(
+            RepositoryScript.repository_id == repo_id
+        ).all()
+
+        if script_associations:
+            association_count = len(script_associations)
+            for assoc in script_associations:
+                db.delete(assoc)
+            logger.info("Cleaned up script associations", repo_id=repo_id, count=association_count)
 
         # Delete repository from database
         db.delete(repository)
@@ -1143,7 +1310,7 @@ async def check_repository(
             check_service.execute_check(
                 check_job.id,
                 repo_id,
-                db
+                None  # Create new session for background task
             )
         )
 
@@ -1203,7 +1370,7 @@ async def compact_repository(
             compact_service.execute_compact(
                 compact_job.id,
                 repo_id,
-                db
+                None  # Create new session for background task
             )
         )
 
@@ -1459,6 +1626,7 @@ async def verify_existing_repository(path: str, passphrase: str = None, ssh_key_
         if passphrase:
             env["BORG_PASSPHRASE"] = passphrase
         env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+        env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
 
         # Handle SSH key for remote repositories
         if ssh_key_id and path.startswith("ssh://"):
@@ -1608,6 +1776,7 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
             logger.info("Passphrase added to environment")
         # Allow non-interactive access to unencrypted repositories
         env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+        env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
 
         # Handle SSH key for remote repositories
         if ssh_key_id and path.startswith("ssh://"):
@@ -1855,6 +2024,11 @@ async def get_repository_info(
             if not repository:
                 raise HTTPException(status_code=404, detail="Repository not found")
 
+            # Get system settings for global bypass_lock_on_info setting
+            from app.database.models import SystemSettings
+            system_settings = db.query(SystemSettings).first()
+            use_bypass_lock = repository.bypass_lock or (system_settings and system_settings.bypass_lock_on_info)
+
             # Build borg info command
             cmd = ["borg", "info"]
 
@@ -1862,8 +2036,8 @@ async def get_repository_info(
             if repository.remote_path:
                 cmd.extend(["--remote-path", repository.remote_path])
 
-            # Add --bypass-lock for read-only storage access
-            if repository.bypass_lock:
+            # Add --bypass-lock for read-only storage access (repo-specific or system-wide)
+            if use_bypass_lock:
                 cmd.append("--bypass-lock")
 
             cmd.extend(["--json", repository.path])
@@ -1877,6 +2051,15 @@ async def get_repository_info(
 
             # Get timeouts from DB settings (with fallback to config)
             timeouts = get_operation_timeouts(db)
+
+            # Log the command being executed (including bypass-lock status)
+            logger.info(
+                "Executing borg info command",
+                repo_id=repo_id,
+                command=" ".join(cmd),
+                bypass_lock=use_bypass_lock,
+                source="repo_setting" if repository.bypass_lock else ("system_setting" if (system_settings and system_settings.bypass_lock_on_info) else "none")
+            )
 
             # Execute command with increased timeout to match BORG_LOCK_WAIT
             process = await asyncio.create_subprocess_exec(
@@ -2085,6 +2268,7 @@ async def get_archive_info(
             if repository.passphrase:
                 list_env["BORG_PASSPHRASE"] = repository.passphrase
             list_env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+            list_env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
 
             # Add SSH options
             ssh_opts = get_standard_ssh_opts()

@@ -3,24 +3,18 @@ import { useQuery } from '@tanstack/react-query'
 import {
   Box,
   Card,
-  Typography,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
   FormControl,
+  IconButton,
   InputLabel,
-  Select,
   MenuItem,
+  Select,
+  Typography,
 } from '@mui/material'
-import { History, RefreshCw, Info } from 'lucide-react'
+import { History, Info, RefreshCw } from 'lucide-react'
 import { activityAPI } from '../services/api'
 import { useMatomo } from '../hooks/useMatomo'
+import { useAuth } from '../hooks/useAuth'
 import BackupJobsTable from '../components/BackupJobsTable'
-import { TerminalLogViewer } from '../components/TerminalLogViewer'
-import StatusBadge from '../components/StatusBadge'
 
 interface ActivityItem {
   id: number
@@ -42,7 +36,7 @@ interface ActivityItem {
 
 const Activity: React.FC = () => {
   const { track, EventCategory, EventAction } = useMatomo()
-  const [selectedJob, setSelectedJob] = useState<ActivityItem | null>(null)
+  const { user } = useAuth()
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
 
@@ -54,7 +48,7 @@ const Activity: React.FC = () => {
   } = useQuery({
     queryKey: ['activity', typeFilter, statusFilter],
     queryFn: async () => {
-      const params: Record<string, unknown> = { limit: 50 }
+      const params: Record<string, unknown> = { limit: 200 }
       if (typeFilter !== 'all') params.job_type = typeFilter
       if (statusFilter !== 'all') params.status = statusFilter
 
@@ -63,39 +57,6 @@ const Activity: React.FC = () => {
     },
     refetchInterval: 3000, // Refresh every 3 seconds
   })
-
-  const getTypeLabel = (type: string): string => {
-    switch (type) {
-      case 'backup':
-        return 'Backup'
-      case 'restore':
-        return 'Restore'
-      case 'check':
-        return 'Repository Check'
-      case 'compact':
-        return 'Compact'
-      case 'prune':
-        return 'Prune'
-      case 'package':
-        return 'Package Install'
-      default:
-        return type
-    }
-  }
-
-  const handleViewLogs = (job: ActivityItem) => {
-    setSelectedJob(job)
-    track(EventCategory.NAVIGATION, EventAction.VIEW, 'logs')
-  }
-
-  const handleCloseLogs = () => {
-    setSelectedJob(null)
-  }
-
-  const handleDownloadLogs = (job: ActivityItem) => {
-    activityAPI.downloadLogs(job.type, job.id)
-    track(EventCategory.NAVIGATION, EventAction.DOWNLOAD, 'logs')
-  }
 
   const handleTypeFilterChange = (value: string) => {
     setTypeFilter(value)
@@ -178,12 +139,14 @@ const Activity: React.FC = () => {
           actions={{
             viewLogs: true,
             downloadLogs: true,
+            errorInfo: true,
+            delete: true,
           }}
-          onViewLogs={handleViewLogs}
-          onDownloadLogs={handleDownloadLogs}
+          isAdmin={user?.is_admin || false}
           getRowKey={(activity) => `${activity.type}-${activity.id}`}
           headerBgColor="background.default"
           enableHover={true}
+          tableId="activity"
         />
       ) : (
         <BackupJobsTable<ActivityItem>
@@ -194,12 +157,14 @@ const Activity: React.FC = () => {
           actions={{
             viewLogs: true,
             downloadLogs: true,
+            errorInfo: true,
+            delete: true,
           }}
-          onViewLogs={handleViewLogs}
-          onDownloadLogs={handleDownloadLogs}
+          isAdmin={user?.is_admin || false}
           getRowKey={(activity) => `${activity.type}-${activity.id}`}
           headerBgColor="background.default"
           enableHover={true}
+          tableId="activity"
           emptyState={{
             icon: <Info size={48} />,
             title: 'No activity found',
@@ -207,37 +172,6 @@ const Activity: React.FC = () => {
           }}
         />
       )}
-
-      {/* Logs Dialog */}
-      <Dialog open={Boolean(selectedJob)} onClose={handleCloseLogs} maxWidth="lg" fullWidth>
-        <DialogTitle>
-          {selectedJob && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Typography variant="h6">
-                {getTypeLabel(selectedJob.type)} Logs - Job #{selectedJob.id}
-              </Typography>
-              <StatusBadge status={selectedJob.status} />
-            </Box>
-          )}
-        </DialogTitle>
-        <DialogContent dividers>
-          {selectedJob && (
-            <TerminalLogViewer
-              jobId={`${selectedJob.type}-${selectedJob.id}`}
-              status={selectedJob.status}
-              jobType={selectedJob.type}
-              showHeader={false}
-              onFetchLogs={async (offset) => {
-                const response = await activityAPI.getLogs(selectedJob.type, selectedJob.id, offset)
-                return response.data
-              }}
-            />
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseLogs}>Close</Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   )
 }

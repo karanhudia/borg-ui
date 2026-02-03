@@ -49,6 +49,7 @@ import { toast } from 'react-hot-toast'
 import RepositoryCell from '../components/RepositoryCell'
 import MultiRepositorySelector from '../components/MultiRepositorySelector'
 import { useMatomo } from '../hooks/useMatomo'
+import { useAuth } from '../hooks/useAuth'
 import {
   formatDate,
   formatRelativeTime,
@@ -58,12 +59,11 @@ import {
   convertCronToLocal,
 } from '../utils/dateUtils'
 import BackupJobsTable from '../components/BackupJobsTable'
-import StatusBadge from '../components/StatusBadge'
-import { TerminalLogViewer } from '../components/TerminalLogViewer'
 import ScheduledChecksSection, {
   ScheduledChecksSectionRef,
 } from '../components/ScheduledChecksSection'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
+import CronBuilderDialog from '../components/CronBuilderDialog'
 
 interface ScheduledJob {
   id: number
@@ -128,6 +128,7 @@ const Schedule: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { track, EventCategory, EventAction } = useMatomo()
+  const { user } = useAuth()
 
   // Determine current tab from URL
   const getCurrentTab = React.useCallback(() => {
@@ -139,9 +140,7 @@ const Schedule: React.FC = () => {
   const [currentTab, setCurrentTab] = useState(getCurrentTab())
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingJob, setEditingJob] = useState<ScheduledJob | null>(null)
-  const [showCronBuilder, setShowCronBuilder] = useState(false)
   const [deleteConfirmJob, setDeleteConfirmJob] = useState<ScheduledJob | null>(null)
-  const [selectedBackupJob, setSelectedBackupJob] = useState<BackupJob | null>(null)
   const scheduledChecksSectionRef = useRef<ScheduledChecksSectionRef>(null)
 
   // Backup History filters - load from localStorage
@@ -209,12 +208,6 @@ const Schedule: React.FC = () => {
     queryKey: ['backup-jobs-scheduled'],
     queryFn: backupAPI.getScheduledJobs,
     refetchInterval: 3000, // Refresh every 3 seconds
-  })
-
-  // Get cron presets
-  const { data: presetsData } = useQuery({
-    queryKey: ['cron-presets'],
-    queryFn: scheduleAPI.getCronPresets,
   })
 
   // Get scripts library
@@ -421,7 +414,10 @@ const Schedule: React.FC = () => {
       ...createForm,
       cron_expression: utcCron,
       // Only send repository_ids if multi-repo (more than one selected)
-      repository_ids: createForm.repository_ids.length > 0 ? createForm.repository_ids : undefined,
+      repository_ids:
+        createForm.repository_ids.length > 0
+          ? Array.from(new Set(createForm.repository_ids))
+          : undefined,
       // Clear repository if using multi-repo
       repository: createForm.repository_ids.length > 0 ? undefined : createForm.repository,
     }
@@ -444,7 +440,10 @@ const Schedule: React.FC = () => {
         ...editForm,
         cron_expression: utcCron,
         // Only send repository_ids if multi-repo (more than one selected)
-        repository_ids: editForm.repository_ids.length > 0 ? editForm.repository_ids : undefined,
+        repository_ids:
+          editForm.repository_ids.length > 0
+            ? Array.from(new Set(editForm.repository_ids))
+            : undefined,
         // Clear repository if using multi-repo
         repository: editForm.repository_ids.length > 0 ? undefined : editForm.repository,
       }
@@ -506,7 +505,7 @@ const Schedule: React.FC = () => {
       name: job.name,
       cron_expression: localCron,
       repository: job.repository || '',
-      repository_ids: repository_ids,
+      repository_ids: Array.from(new Set(repository_ids)),
       enabled: job.enabled,
       description: job.description || '',
       archive_name_template: job.archive_name_template || '{job_name}-{now}',
@@ -522,37 +521,6 @@ const Schedule: React.FC = () => {
       prune_keep_quarterly: job.prune_keep_quarterly ?? 0,
       prune_keep_yearly: job.prune_keep_yearly ?? 1,
     })
-  }
-
-  const openCronBuilder = () => {
-    setShowCronBuilder(true)
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const applyCronPreset = (preset: any) => {
-    if (editingJob) {
-      setEditForm({ ...editForm, cron_expression: preset.expression })
-    } else {
-      setCreateForm({ ...createForm, cron_expression: preset.expression })
-    }
-    setShowCronBuilder(false)
-  }
-
-  const formatCronExpression = (expression: string) => {
-    const descriptions: { [key: string]: string } = {
-      '0 0 * * *': 'Daily at midnight',
-      '0 2 * * *': 'Daily at 2 AM',
-      '0 */6 * * *': 'Every 6 hours',
-      '0 * * * *': 'Every hour',
-      '*/15 * * * *': 'Every 15 minutes',
-      '*/5 * * * *': 'Every 5 minutes',
-      '* * * * *': 'Every minute',
-      '0 0 * * 0': 'Weekly on Sunday',
-      '0 0 1 * *': 'Monthly on 1st',
-      '0 9 * * 1-5': 'Weekdays at 9 AM',
-      '0 6 * * 0,6': 'Weekends at 6 AM',
-    }
-    return descriptions[expression] || expression
   }
 
   const getRepositoryName = (path: string) => {
@@ -617,7 +585,7 @@ const Schedule: React.FC = () => {
     }
     return true
   })
-  const recentBackupJobs = filteredBackupJobs.slice(0, 10)
+  const recentBackupJobs = filteredBackupJobs
   const upcomingJobs = upcomingData?.data?.upcoming_jobs || []
 
   // Scheduled Jobs Table Column Definitions
@@ -739,19 +707,18 @@ const Schedule: React.FC = () => {
       id: 'schedule',
       label: 'Schedule',
       width: '12%',
-      render: (job) => (
-        <>
+      render: (job) => {
+        const localCron = convertCronToLocal(job.cron_expression)
+        return (
           <Chip
-            label={formatCronExpression(convertCronToLocal(job.cron_expression))}
+            label={localCron}
             size="small"
             variant="outlined"
             color="primary"
+            sx={{ fontFamily: 'monospace' }}
           />
-          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-            {convertCronToLocal(job.cron_expression)}
-          </Typography>
-        </>
-      ),
+        )
+      },
     },
     {
       id: 'last_run',
@@ -877,21 +844,6 @@ const Schedule: React.FC = () => {
       tooltip: 'Delete',
     },
   ]
-
-  // Backup History callbacks
-  const handleViewBackupLogs = (job: BackupJob) => {
-    setSelectedBackupJob(job)
-  }
-
-  const handleCancelBackupJob = (job: BackupJob) => {
-    if (window.confirm('Are you sure you want to cancel this backup?')) {
-      cancelBackupMutation.mutate(job.id)
-    }
-  }
-
-  const handleDownloadBackupLogs = (job: BackupJob) => {
-    backupAPI.downloadLogs(job.id)
-  }
 
   return (
     <Box>
@@ -1302,13 +1254,13 @@ const Schedule: React.FC = () => {
                   cancel: true,
                   downloadLogs: true,
                   errorInfo: true,
+                  delete: true,
                 }}
-                onViewLogs={handleViewBackupLogs}
-                onCancelJob={handleCancelBackupJob}
-                onDownloadLogs={handleDownloadBackupLogs}
+                isAdmin={user?.is_admin || false}
                 getRowKey={(job) => String(job.id)}
                 headerBgColor="background.default"
                 enableHover={true}
+                tableId="schedule"
                 emptyState={{
                   icon: <Clock size={48} />,
                   title: 'No backup jobs found',
@@ -1340,7 +1292,7 @@ const Schedule: React.FC = () => {
               <TextField
                 label="Job Name"
                 value={createForm.name}
-                onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                onChange={(e) => setCreateForm((prev) => ({ ...prev, name: e.target.value }))}
                 required
                 fullWidth
                 placeholder="Daily backup"
@@ -1357,7 +1309,7 @@ const Schedule: React.FC = () => {
               <MultiRepositorySelector
                 repositories={repositories}
                 selectedIds={createForm.repository_ids}
-                onChange={(ids) => setCreateForm({ ...createForm, repository_ids: ids })}
+                onChange={(ids) => setCreateForm((prev) => ({ ...prev, repository_ids: ids }))}
                 label="Repositories"
                 placeholder="Select repositories..."
                 helperText="Choose repositories to backup. Use arrows to change backup order for multi-repository schedules."
@@ -1372,7 +1324,7 @@ const Schedule: React.FC = () => {
                   label="Schedule"
                   value={createForm.cron_expression}
                   onChange={(e) =>
-                    setCreateForm({ ...createForm, cron_expression: e.target.value })
+                    setCreateForm((prev) => ({ ...prev, cron_expression: e.target.value }))
                   }
                   required
                   fullWidth
@@ -1386,30 +1338,28 @@ const Schedule: React.FC = () => {
                     },
                     endAdornment: (
                       <InputAdornment position="end">
-                        <Tooltip title="Choose preset schedule" arrow>
-                          <IconButton onClick={openCronBuilder} edge="end">
-                            <Clock size={20} />
-                          </IconButton>
-                        </Tooltip>
+                        <CronBuilderDialog
+                          value={createForm.cron_expression}
+                          onChange={(localCron) =>
+                            setCreateForm((prev) => ({ ...prev, cron_expression: localCron }))
+                          }
+                          dialogTitle="Configure Schedule"
+                        />
                       </InputAdornment>
                     ),
                   }}
                   InputLabelProps={{
                     sx: { fontSize: '1.1rem' },
                   }}
-                  helperText={
-                    <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <CheckCircle size={14} style={{ color: '#2e7d32' }} />
-                      <span>{formatCronExpression(createForm.cron_expression)}</span>
-                    </Box>
-                  }
                 />
               </Box>
 
               <TextField
                 label="Description"
                 value={createForm.description}
-                onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
+                onChange={(e) =>
+                  setCreateForm((prev) => ({ ...prev, description: e.target.value }))
+                }
                 multiline
                 rows={2}
                 placeholder="Optional description"
@@ -1427,7 +1377,7 @@ const Schedule: React.FC = () => {
                 label="Archive Name Template"
                 value={createForm.archive_name_template}
                 onChange={(e) =>
-                  setCreateForm({ ...createForm, archive_name_template: e.target.value })
+                  setCreateForm((prev) => ({ ...prev, archive_name_template: e.target.value }))
                 }
                 fullWidth
                 size="medium"
@@ -1444,7 +1394,9 @@ const Schedule: React.FC = () => {
                 control={
                   <Switch
                     checked={createForm.enabled}
-                    onChange={(e) => setCreateForm({ ...createForm, enabled: e.target.checked })}
+                    onChange={(e) =>
+                      setCreateForm((prev) => ({ ...prev, enabled: e.target.checked }))
+                    }
                   />
                 }
                 label="Enable immediately"
@@ -1474,10 +1426,10 @@ const Schedule: React.FC = () => {
                       <Select
                         value={createForm.pre_backup_script_id || ''}
                         onChange={(e) =>
-                          setCreateForm({
-                            ...createForm,
+                          setCreateForm((prev) => ({
+                            ...prev,
                             pre_backup_script_id: e.target.value ? Number(e.target.value) : null,
-                          })
+                          }))
                         }
                         label="Pre-Backup Script (runs once before all backups)"
                         sx={{ fontSize: '1.1rem', minHeight: 56 }}
@@ -1501,10 +1453,10 @@ const Schedule: React.FC = () => {
                       <Select
                         value={createForm.post_backup_script_id || ''}
                         onChange={(e) =>
-                          setCreateForm({
-                            ...createForm,
+                          setCreateForm((prev) => ({
+                            ...prev,
                             post_backup_script_id: e.target.value ? Number(e.target.value) : null,
-                          })
+                          }))
                         }
                         label="Post-Backup Script (runs once after all backups)"
                         sx={{ fontSize: '1.1rem', minHeight: 56 }}
@@ -1526,10 +1478,10 @@ const Schedule: React.FC = () => {
                         <Checkbox
                           checked={createForm.run_repository_scripts}
                           onChange={(e) =>
-                            setCreateForm({
-                              ...createForm,
+                            setCreateForm((prev) => ({
+                              ...prev,
                               run_repository_scripts: e.target.checked,
-                            })
+                            }))
                           }
                         />
                       }
@@ -1562,7 +1514,7 @@ const Schedule: React.FC = () => {
                       <Switch
                         checked={createForm.run_prune_after}
                         onChange={(e) =>
-                          setCreateForm({ ...createForm, run_prune_after: e.target.checked })
+                          setCreateForm((prev) => ({ ...prev, run_prune_after: e.target.checked }))
                         }
                       />
                     }
@@ -1579,10 +1531,10 @@ const Schedule: React.FC = () => {
                         value={createForm.prune_keep_hourly}
                         onChange={(e) => {
                           const value = parseInt(e.target.value, 10)
-                          setCreateForm({
-                            ...createForm,
+                          setCreateForm((prev) => ({
+                            ...prev,
                             prune_keep_hourly: isNaN(value) ? 0 : Math.max(0, value),
-                          })
+                          }))
                         }}
                         inputProps={{ min: 0 }}
                         size="small"
@@ -1593,10 +1545,10 @@ const Schedule: React.FC = () => {
                         type="number"
                         value={createForm.prune_keep_daily}
                         onChange={(e) =>
-                          setCreateForm({
-                            ...createForm,
+                          setCreateForm((prev) => ({
+                            ...prev,
                             prune_keep_daily: parseInt(e.target.value) || 0,
-                          })
+                          }))
                         }
                         inputProps={{ min: 0 }}
                         size="small"
@@ -1607,10 +1559,10 @@ const Schedule: React.FC = () => {
                         type="number"
                         value={createForm.prune_keep_weekly}
                         onChange={(e) =>
-                          setCreateForm({
-                            ...createForm,
+                          setCreateForm((prev) => ({
+                            ...prev,
                             prune_keep_weekly: parseInt(e.target.value) || 0,
-                          })
+                          }))
                         }
                         inputProps={{ min: 0 }}
                         size="small"
@@ -1621,10 +1573,10 @@ const Schedule: React.FC = () => {
                         type="number"
                         value={createForm.prune_keep_monthly}
                         onChange={(e) =>
-                          setCreateForm({
-                            ...createForm,
+                          setCreateForm((prev) => ({
+                            ...prev,
                             prune_keep_monthly: parseInt(e.target.value) || 0,
-                          })
+                          }))
                         }
                         inputProps={{ min: 0 }}
                         size="small"
@@ -1636,10 +1588,10 @@ const Schedule: React.FC = () => {
                         value={createForm.prune_keep_quarterly}
                         onChange={(e) => {
                           const value = parseInt(e.target.value, 10)
-                          setCreateForm({
-                            ...createForm,
+                          setCreateForm((prev) => ({
+                            ...prev,
                             prune_keep_quarterly: isNaN(value) ? 0 : Math.max(0, value),
-                          })
+                          }))
                         }}
                         inputProps={{ min: 0 }}
                         size="small"
@@ -1650,10 +1602,10 @@ const Schedule: React.FC = () => {
                         type="number"
                         value={createForm.prune_keep_yearly}
                         onChange={(e) =>
-                          setCreateForm({
-                            ...createForm,
+                          setCreateForm((prev) => ({
+                            ...prev,
                             prune_keep_yearly: parseInt(e.target.value) || 0,
-                          })
+                          }))
                         }
                         inputProps={{ min: 0 }}
                         size="small"
@@ -1667,7 +1619,10 @@ const Schedule: React.FC = () => {
                       <Switch
                         checked={createForm.run_compact_after}
                         onChange={(e) =>
-                          setCreateForm({ ...createForm, run_compact_after: e.target.checked })
+                          setCreateForm((prev) => ({
+                            ...prev,
+                            run_compact_after: e.target.checked,
+                          }))
                         }
                       />
                     }
@@ -1707,7 +1662,7 @@ const Schedule: React.FC = () => {
               <TextField
                 label="Job Name"
                 value={editForm.name}
-                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
                 required
                 fullWidth
                 size="medium"
@@ -1722,7 +1677,7 @@ const Schedule: React.FC = () => {
               <MultiRepositorySelector
                 repositories={repositories}
                 selectedIds={editForm.repository_ids}
-                onChange={(ids) => setEditForm({ ...editForm, repository_ids: ids })}
+                onChange={(ids) => setEditForm((prev) => ({ ...prev, repository_ids: ids }))}
                 label="Repositories"
                 placeholder="Select repositories..."
                 helperText="Choose repositories to backup. Use arrows to change backup order for multi-repository schedules."
@@ -1736,7 +1691,9 @@ const Schedule: React.FC = () => {
                 <TextField
                   label="Schedule"
                   value={editForm.cron_expression}
-                  onChange={(e) => setEditForm({ ...editForm, cron_expression: e.target.value })}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, cron_expression: e.target.value }))
+                  }
                   required
                   fullWidth
                   size="medium"
@@ -1748,30 +1705,26 @@ const Schedule: React.FC = () => {
                     },
                     endAdornment: (
                       <InputAdornment position="end">
-                        <Tooltip title="Choose preset schedule" arrow>
-                          <IconButton onClick={openCronBuilder} edge="end">
-                            <Clock size={20} />
-                          </IconButton>
-                        </Tooltip>
+                        <CronBuilderDialog
+                          value={editForm.cron_expression}
+                          onChange={(localCron) =>
+                            setEditForm((prev) => ({ ...prev, cron_expression: localCron }))
+                          }
+                          dialogTitle="Configure Schedule"
+                        />
                       </InputAdornment>
                     ),
                   }}
                   InputLabelProps={{
                     sx: { fontSize: '1.1rem' },
                   }}
-                  helperText={
-                    <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <CheckCircle size={14} style={{ color: '#2e7d32' }} />
-                      <span>{formatCronExpression(editForm.cron_expression)}</span>
-                    </Box>
-                  }
                 />
               </Box>
 
               <TextField
                 label="Description"
                 value={editForm.description}
-                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))}
                 multiline
                 rows={2}
                 fullWidth
@@ -1788,7 +1741,7 @@ const Schedule: React.FC = () => {
                 label="Archive Name Template"
                 value={editForm.archive_name_template}
                 onChange={(e) =>
-                  setEditForm({ ...editForm, archive_name_template: e.target.value })
+                  setEditForm((prev) => ({ ...prev, archive_name_template: e.target.value }))
                 }
                 fullWidth
                 size="medium"
@@ -1805,7 +1758,9 @@ const Schedule: React.FC = () => {
                 control={
                   <Switch
                     checked={editForm.enabled}
-                    onChange={(e) => setEditForm({ ...editForm, enabled: e.target.checked })}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({ ...prev, enabled: e.target.checked }))
+                    }
                   />
                 }
                 label="Enabled"
@@ -1835,10 +1790,10 @@ const Schedule: React.FC = () => {
                       <Select
                         value={editForm.pre_backup_script_id || ''}
                         onChange={(e) =>
-                          setEditForm({
-                            ...editForm,
+                          setEditForm((prev) => ({
+                            ...prev,
                             pre_backup_script_id: e.target.value ? Number(e.target.value) : null,
-                          })
+                          }))
                         }
                         label="Pre-Backup Script (runs once before all backups)"
                         sx={{ fontSize: '1.1rem', minHeight: 56 }}
@@ -1862,10 +1817,10 @@ const Schedule: React.FC = () => {
                       <Select
                         value={editForm.post_backup_script_id || ''}
                         onChange={(e) =>
-                          setEditForm({
-                            ...editForm,
+                          setEditForm((prev) => ({
+                            ...prev,
                             post_backup_script_id: e.target.value ? Number(e.target.value) : null,
-                          })
+                          }))
                         }
                         label="Post-Backup Script (runs once after all backups)"
                         sx={{ fontSize: '1.1rem', minHeight: 56 }}
@@ -1887,7 +1842,10 @@ const Schedule: React.FC = () => {
                         <Checkbox
                           checked={editForm.run_repository_scripts}
                           onChange={(e) =>
-                            setEditForm({ ...editForm, run_repository_scripts: e.target.checked })
+                            setEditForm((prev) => ({
+                              ...prev,
+                              run_repository_scripts: e.target.checked,
+                            }))
                           }
                         />
                       }
@@ -1920,7 +1878,7 @@ const Schedule: React.FC = () => {
                       <Switch
                         checked={editForm.run_prune_after}
                         onChange={(e) =>
-                          setEditForm({ ...editForm, run_prune_after: e.target.checked })
+                          setEditForm((prev) => ({ ...prev, run_prune_after: e.target.checked }))
                         }
                       />
                     }
@@ -1937,10 +1895,10 @@ const Schedule: React.FC = () => {
                         value={editForm.prune_keep_hourly}
                         onChange={(e) => {
                           const value = parseInt(e.target.value, 10)
-                          setEditForm({
-                            ...editForm,
+                          setEditForm((prev) => ({
+                            ...prev,
                             prune_keep_hourly: isNaN(value) ? 0 : Math.max(0, value),
-                          })
+                          }))
                         }}
                         inputProps={{ min: 0 }}
                         size="small"
@@ -1951,10 +1909,10 @@ const Schedule: React.FC = () => {
                         type="number"
                         value={editForm.prune_keep_daily}
                         onChange={(e) =>
-                          setEditForm({
-                            ...editForm,
+                          setEditForm((prev) => ({
+                            ...prev,
                             prune_keep_daily: parseInt(e.target.value) || 0,
-                          })
+                          }))
                         }
                         inputProps={{ min: 0 }}
                         size="small"
@@ -1965,10 +1923,10 @@ const Schedule: React.FC = () => {
                         type="number"
                         value={editForm.prune_keep_weekly}
                         onChange={(e) =>
-                          setEditForm({
-                            ...editForm,
+                          setEditForm((prev) => ({
+                            ...prev,
                             prune_keep_weekly: parseInt(e.target.value) || 0,
-                          })
+                          }))
                         }
                         inputProps={{ min: 0 }}
                         size="small"
@@ -1979,10 +1937,10 @@ const Schedule: React.FC = () => {
                         type="number"
                         value={editForm.prune_keep_monthly}
                         onChange={(e) =>
-                          setEditForm({
-                            ...editForm,
+                          setEditForm((prev) => ({
+                            ...prev,
                             prune_keep_monthly: parseInt(e.target.value) || 0,
-                          })
+                          }))
                         }
                         inputProps={{ min: 0 }}
                         size="small"
@@ -1994,10 +1952,10 @@ const Schedule: React.FC = () => {
                         value={editForm.prune_keep_quarterly}
                         onChange={(e) => {
                           const value = parseInt(e.target.value, 10)
-                          setEditForm({
-                            ...editForm,
+                          setEditForm((prev) => ({
+                            ...prev,
                             prune_keep_quarterly: isNaN(value) ? 0 : Math.max(0, value),
-                          })
+                          }))
                         }}
                         inputProps={{ min: 0 }}
                         size="small"
@@ -2008,10 +1966,10 @@ const Schedule: React.FC = () => {
                         type="number"
                         value={editForm.prune_keep_yearly}
                         onChange={(e) =>
-                          setEditForm({
-                            ...editForm,
+                          setEditForm((prev) => ({
+                            ...prev,
                             prune_keep_yearly: parseInt(e.target.value) || 0,
-                          })
+                          }))
                         }
                         inputProps={{ min: 0 }}
                         size="small"
@@ -2025,7 +1983,7 @@ const Schedule: React.FC = () => {
                       <Switch
                         checked={editForm.run_compact_after}
                         onChange={(e) =>
-                          setEditForm({ ...editForm, run_compact_after: e.target.checked })
+                          setEditForm((prev) => ({ ...prev, run_compact_after: e.target.checked }))
                         }
                       />
                     }
@@ -2052,60 +2010,6 @@ const Schedule: React.FC = () => {
             </Button>
           </DialogActions>
         </form>
-      </Dialog>
-
-      {/* Cron Builder Modal */}
-      <Dialog
-        open={showCronBuilder}
-        onClose={() => setShowCronBuilder(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Cron Expression Presets</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mt: 1 }}>
-            Select a preset schedule for your backup job
-          </Typography>
-          <Stack spacing={1} sx={{ mt: 2 }}>
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            {presetsData?.data?.presets?.map((preset: any) => (
-              <Paper
-                key={preset.expression}
-                sx={{
-                  p: 2,
-                  cursor: 'pointer',
-                  border: 1,
-                  borderColor: 'divider',
-                  '&:hover': {
-                    backgroundColor: 'action.hover',
-                    borderColor: 'primary.main',
-                  },
-                }}
-                onClick={() => applyCronPreset(preset)}
-              >
-                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                  <Box>
-                    <Typography variant="body2" fontWeight={500}>
-                      {preset.name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {preset.description}
-                    </Typography>
-                  </Box>
-                  <Chip
-                    label={preset.expression}
-                    size="small"
-                    variant="outlined"
-                    sx={{ fontFamily: 'monospace' }}
-                  />
-                </Stack>
-              </Paper>
-            ))}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowCronBuilder(false)}>Close</Button>
-        </DialogActions>
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
@@ -2157,50 +2061,6 @@ const Schedule: React.FC = () => {
           >
             {deleteJobMutation.isPending ? 'Deleting...' : 'Delete Job'}
           </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Backup Job Logs Dialog */}
-      <Dialog
-        open={Boolean(selectedBackupJob)}
-        onClose={() => setSelectedBackupJob(null)}
-        maxWidth="lg"
-        fullWidth
-      >
-        <DialogTitle>
-          {selectedBackupJob && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Typography variant="h6">Backup Logs - Job #{selectedBackupJob.id}</Typography>
-              <StatusBadge status={selectedBackupJob.status} />
-            </Box>
-          )}
-        </DialogTitle>
-        <DialogContent dividers>
-          {selectedBackupJob && (
-            <TerminalLogViewer
-              jobId={String(selectedBackupJob.id)}
-              status={selectedBackupJob.status}
-              jobType="backup"
-              showHeader={false}
-              onFetchLogs={async (offset) => {
-                const response = await fetch(
-                  `/api/activity/backup/${selectedBackupJob.id}/logs?offset=${offset}&limit=500`,
-                  {
-                    headers: {
-                      Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
-                    },
-                  }
-                )
-                if (!response.ok) {
-                  throw new Error('Failed to fetch logs')
-                }
-                return response.json()
-              }}
-            />
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSelectedBackupJob(null)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>

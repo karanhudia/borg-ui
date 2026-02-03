@@ -1,15 +1,19 @@
-# Borg Web UI
+<div align="center">
+  
+**A modern web interface for [Borg Backup](https://borgbackup.readthedocs.io/)**
+
+Zero-configuration deployment - just run and go.
+
+**[📚 Documentation](https://karanhudia.github.io/borg-ui)** • **[🐳 Docker Hub](https://hub.docker.com/r/ainullcode/borg-ui)** • **[💬 Discord](https://discord.gg/5KfVa5QkdQ)**
 
 [![Docker Hub](https://img.shields.io/docker/pulls/ainullcode/borg-ui)](https://hub.docker.com/r/ainullcode/borg-ui)
-[![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](LICENSE)
 [![GitHub Actions](https://github.com/karanhudia/borg-ui/workflows/Build%20and%20Publish%20Docker%20Images/badge.svg)](https://github.com/karanhudia/borg-ui/actions)
 [![Tests](https://github.com/karanhudia/borg-ui/workflows/Tests/badge.svg)](https://github.com/karanhudia/borg-ui/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/karanhudia/borg-ui/branch/main/graph/badge.svg)](https://codecov.io/gh/karanhudia/borg-ui)
-[![Discord](https://img.shields.io/discord/1331215029498732686?color=5865F2&logo=discord&logoColor=white&label=Discord)](https://discord.gg/afjM9vMj)
+[![Discord](https://img.shields.io/discord/1331215029498732686?color=5865F2&logo=discord&logoColor=white&label=Discord)](https://discord.gg/5KfVa5QkdQ)
 
-A modern web interface for [Borg Backup](https://borgbackup.readthedocs.io/). Zero-configuration deployment - just run and go.
-
-**[Documentation](https://karanhudia.github.io/borg-ui)** | **[Docker Hub](https://hub.docker.com/r/ainullcode/borg-ui)**
+</div>
 
 ---
 
@@ -18,50 +22,80 @@ A modern web interface for [Borg Backup](https://borgbackup.readthedocs.io/). Ze
 
 ---
 
-## Screenshots
+## Features & Screenshots
 
-<img width="800" alt="dashboard" src="https://github.com/user-attachments/assets/8c876ee3-e3e2-43af-b36a-cef74b03560c" />
+### Modern Dashboard
 
-<img width="800" alt="backup-live-progress" src="https://github.com/user-attachments/assets/550e396e-ec36-4737-9821-899c99265f64" />
+Monitor all your repositories, backup status, and system metrics at a glance. View repository health, recent activity feed, storage usage, and quick access to common operations. Get a comprehensive overview of your entire backup infrastructure in one place.
 
-<img width="800" alt="repository-details" src="https://github.com/user-attachments/assets/6bae3403-268a-4720-bdfa-087dc2c1df41" />
-
-<img width="800" alt="notifications-settings" src="https://github.com/user-attachments/assets/598f59a7-8f60-4203-ab5d-0ae0ee28ab61" />
-
-<img width="800" alt="packages-install" src="https://github.com/user-attachments/assets/68e25c1b-b6e0-4008-b6cb-e4996a2eee7e" />
+<div align="center">
+  <img width="800" alt="Modern Dashboard with activity monitoring" src="https://github.com/user-attachments/assets/3e9c7ae6-1507-4fe1-8f8b-8231a458bca0" />
+</div>
 
 ---
 
-## Features
+### Live Backup Progress
+
+Watch your backups execute in real-time with detailed progress tracking. Monitor current file being processed, backup speed (MB/s), data statistics (original, compressed, deduplicated sizes), estimated time remaining, and overall completion percentage.
+
+<div align="center">
+  <img width="800" alt="Real-time backup progress with live metrics" src="https://github.com/user-attachments/assets/de7e870a-2db9-4384-be71-59e8bdd67373" />
+</div>
+
+---
+
+### Repository Management
+
+Create and manage repositories with support for local storage, SSH, and SFTP connections. Configure encryption (repokey, keyfile), compression algorithms (lz4, zstd, zlib, lzma, auto, obfuscate), source directories, exclude patterns, and custom borg flags. Import existing repositories or create new ones with step-by-step wizard.
+
+<div align="center">
+  <img width="800" alt="Repository details" src="https://github.com/user-attachments/assets/bddfae3c-4bd6-473f-aa5e-5e2cf3d54f4b" />
+  <img width="800" alt="Create Repository Dialog" src="https://github.com/user-attachments/assets/f6b56ebb-0edf-4910-98ba-53021a7bd4cd" />
+</div>
+
+---
+
+### Smart Notifications
+
+Get instant alerts for backup events via 100+ notification services powered by Apprise. Configure Email, Slack, Discord, Telegram, Pushover, Microsoft Teams, and many more. Set up per-repository notification preferences with customizable templates for backup start, success, failure, and warnings.
+
+<div align="center">
+  <img width="800" alt="Notification settings with 100+ integrations" src="https://github.com/user-attachments/assets/1ae11394-d4d1-4fc8-b501-965dd5bc9743" />
+</div>
+
+---
+
+### Archive Browsing
+
+Browse and restore files from any backup archive with 600x faster performance using Redis caching. Navigate through your backup history, preview file contents, and restore individual files or entire directories.
+
+<div align="center">
+  <img width="800" alt="Archive Browsing" src="https://github.com/user-attachments/assets/5c42bb10-cfc4-468b-bfd3-bd403ba29516" />
+</div>
+
+---
+
+### Schedule Management
+
+Create and manage automated backup schedules with visual cron builder. Configure multi-repository backups, set up pre/post scripts, enable automatic pruning and compacting, and track execution history with detailed logs.
+
+<div align="center">
+  <img width="800" alt="Create and View Schedule Tab" src="https://github.com/user-attachments/assets/ab824ea3-afca-4872-85b9-77781e393b97" />
+</div>
+
+---
+
+## Key Features
 
 - **Backup Management** - Create, schedule, and monitor backups with live progress tracking
 - **Archive Browser** - Browse and restore files from any backup archive with Redis caching (600x faster for large repos)
 - **Repository Management** - Support for local, SSH, and SFTP repositories with multiple compression options
 - **Scheduling** - Visual cron job builder with execution history
 - **Pre/Post Backup Hooks** - Run custom scripts before/after backups (e.g., stop Docker containers, database dumps)
-- **Notifications** - Get alerts for backup failures and completions via 100+ services (Email, Slack, Discord, Telegram, Pushover, etc.)
+- **Notifications** - Get alerts via 100+ services (Email, Slack, Discord, Telegram, Pushover, etc.)
 - **SSH Key Management** - Generate, import, and deploy SSH keys for remote repositories
 - **Real-time Monitoring** - Live backup progress, system metrics, and health checks
 - **Multi-platform** - Supports amd64, arm64, and armv7 architectures
-
----
-
-## Privacy & Analytics
-
-Borg UI collects **anonymous usage statistics** to help us improve the product. We believe in **full transparency**:
-
-- **[View our analytics dashboard publicly](https://analytics.nullcodeai.dev/)** - See exactly what we collect in real-time
-- **Opt-out anytime** - Go to Settings → Preferences to disable
-- **Self-hosted Matomo** - No third-party services, data stays with us
-- **No sensitive data** - We never collect passwords, keys, backup data, or file paths
-
-**We collect:** Page views, feature usage, browser type, screen resolution, navigation patterns
-
-**We DON'T collect:** IP addresses, hostnames, passwords, encryption keys, backup data, file paths, cookies, or any personally identifiable information
-
-Don't like what we're tracking? [Open an issue](https://github.com/karanhudia/borg-ui/issues) and we'll consider adjusting our practices.
-
-Read our full [Privacy Policy](PRIVACY.md) for details. No hidden tracking, no selling data, just transparent analytics to build a better product.
 
 ---
 
@@ -110,6 +144,8 @@ docker compose up -d
 Access at `http://localhost:8081`
 
 **Default credentials:** `admin` / `admin123` (you'll be prompted to change on first login)
+
+---
 
 ### Docker Run
 
@@ -207,7 +243,7 @@ volumes:
 
 ## Support
 
-- **Discord**: [Join our community](https://discord.gg/afjM9vMj) - Get help, share your setup, suggest features
+- **Discord**: [Join our community](https://discord.gg/5KfVa5QkdQ) - Get help, share your setup, suggest features
 - **Documentation**: [Full Documentation](https://karanhudia.github.io/borg-ui)
 - **Bug Reports**: [GitHub Issues](https://github.com/karanhudia/borg-ui/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/karanhudia/borg-ui/discussions)
@@ -252,10 +288,14 @@ See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for contribution guidelines.
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU Affero General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
 
 ---
 
+<div align="center">
+
 Built with [Borg Backup](https://borgbackup.readthedocs.io/), [FastAPI](https://fastapi.tiangolo.com/), [React](https://react.dev/), and [Material-UI](https://mui.com/)
 
-Made by [Karan Hudia](https://github.com/karanhudia)
+Made with ❤️ by [Karan Hudia](https://github.com/karanhudia)
+
+</div>

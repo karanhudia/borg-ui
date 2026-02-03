@@ -52,8 +52,9 @@ export interface RepositoryData {
   pre_hook_timeout?: number
   post_hook_timeout?: number
   continue_on_hook_failure?: boolean
+  passphrase?: string
   mode?: 'full' | 'observe'
-  custom_flags?: string
+  custom_flags?: string | null
   bypass_lock?: boolean
   // Allow other properties for flexibility
   [key: string]: unknown
@@ -66,6 +67,7 @@ export interface SystemSettings {
   init_timeout?: number
   backup_timeout?: number
   stats_refresh_interval_minutes?: number
+  bypass_lock_on_info?: boolean
   [key: string]: unknown
 }
 
@@ -265,6 +267,15 @@ export const repositoriesAPI = {
   getRepositories: () => api.get('/repositories/'),
   createRepository: (data: RepositoryData) => api.post('/repositories/', data),
   importRepository: (data: RepositoryData) => api.post('/repositories/import', data),
+  uploadKeyfile: (id: number, keyfile: File) => {
+    const formData = new FormData()
+    formData.append('keyfile', keyfile)
+    return api.post(`/repositories/${id}/keyfile`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+  },
   getRepository: (id: number) => api.get(`/repositories/${id}`),
   updateRepository: (id: number, data: RepositoryData) => api.put(`/repositories/${id}`, data),
   deleteRepository: (id: number) => api.delete(`/repositories/${id}`),
@@ -303,13 +314,6 @@ export const repositoriesAPI = {
     api.put(`/repositories/${id}/check-schedule`, data),
   list: () => api.get('/repositories/'),
   startCheck: (id: number, data: ApiData) => api.post(`/repositories/${id}/check`, data),
-  // Keyfile management
-  uploadKeyfile: (id: number, formData: FormData) =>
-    api.post(`/repositories/${id}/keyfile`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    }),
 }
 
 // SSH Keys API

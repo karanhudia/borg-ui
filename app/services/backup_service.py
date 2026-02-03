@@ -170,7 +170,8 @@ class BackupService:
 
             logger.info("Using inline script (legacy)",
                        repository_id=repo_record.id,
-                       hook_type=hook_type)
+                       hook_type=hook_type,
+                       backup_result=backup_result)
 
             # Execute inline script
             executor = ScriptLibraryExecutor(db)
@@ -181,8 +182,9 @@ class BackupService:
                 script_content=inline_script,
                 script_type=hook_type,
                 timeout=timeout,
-                repository_id=repo_record.id,
-                backup_job_id=job_id
+                repository=repo_record,
+                backup_job_id=job_id,
+                backup_result=backup_result
             )
 
             return {
@@ -850,18 +852,27 @@ class BackupService:
         except Exception as e:
             logger.error("Error unmounting SSH path", mount_point=mount_point, error=str(e), job_id=job_id)
 
-    async def _prepare_source_paths(self, source_paths: list[str], job_id: int) -> list[str]:
+    async def _prepare_source_paths(self, source_paths: list[str], job_id: int, source_connection_id: int = None) -> tuple[list[str], list[tuple[str, str]]]:
         """
         Prepare source paths for backup by mounting SSH URLs via SSHFS
         Uses the new mount_service with proper SSH key authentication.
 
-        Returns: list of processed paths (SSH URLs replaced with temp root directories)
+        Args:
+            source_paths: List of paths to prepare (may include SSH URLs)
+            job_id: Backup job ID
+            source_connection_id: SSH connection ID for remote data source (if applicable)
+
+        Returns: tuple of (processed_paths, ssh_mount_info)
+            - processed_paths: list of paths to backup (SSH URLs replaced with relative paths from temp_root)
+            - ssh_mount_info: list of (temp_root, relative_path) tuples for SSH mounts
+                Where relative_path is the path relative to temp_root that preserves original structure
         """
         from app.services.mount_service import mount_service
         from app.database.models import SSHConnection
 
         processed_paths = []
         mount_ids = []
+        ssh_mount_info = []  # Track (temp_root, relative_path) for SSH mounts
 
         db = SessionLocal()
         try:
@@ -873,23 +884,38 @@ class BackupService:
                         logger.error("Failed to parse SSH URL", path=path, job_id=job_id)
                         continue
 
-                    # Find SSHConnection matching host/user/port
-                    connection = db.query(SSHConnection).filter(
-                        SSHConnection.host == parsed['host'],
-                        SSHConnection.username == parsed['username'],
-                        SSHConnection.port == int(parsed['port'])
-                    ).first()
+                    # Use provided connection_id if available, otherwise lookup by host/user/port
+                    connection = None
+                    if source_connection_id:
+                        connection = db.query(SSHConnection).filter(
+                            SSHConnection.id == source_connection_id
+                        ).first()
+                        if not connection:
+                            logger.error(
+                                "SSH connection not found by ID",
+                                connection_id=source_connection_id,
+                                path=path,
+                                job_id=job_id
+                            )
+                            continue
+                    else:
+                        # Fallback: Find SSHConnection matching host/user/port
+                        connection = db.query(SSHConnection).filter(
+                            SSHConnection.host == parsed['host'],
+                            SSHConnection.username == parsed['username'],
+                            SSHConnection.port == int(parsed['port'])
+                        ).first()
 
-                    if not connection:
-                        logger.error(
-                            "No SSH connection found for host",
-                            host=parsed['host'],
-                            username=parsed['username'],
-                            port=parsed['port'],
-                            path=path,
-                            job_id=job_id
-                        )
-                        continue
+                        if not connection:
+                            logger.error(
+                                "No SSH connection found for host",
+                                host=parsed['host'],
+                                username=parsed['username'],
+                                port=parsed['port'],
+                                path=path,
+                                job_id=job_id
+                            )
+                            continue
 
                     # Mount using mount service with SSH key authentication
                     try:
@@ -899,14 +925,26 @@ class BackupService:
                             job_id=job_id
                         )
 
-                        processed_paths.append(temp_root)
+                        # Compute relative path that preserves original structure
+                        # remote_path: /var/snap/docker/.../portainer/_data
+                        # relative_path: var/snap/docker/.../portainer/_data (no leading slash)
+                        # Special case: / (root) -> . (backup everything from cwd)
+                        relative_path = parsed['path'].lstrip('/')
+                        if not relative_path:
+                            # Backing up root directory - use "." to backup everything
+                            relative_path = '.'
+
+                        processed_paths.append(relative_path)
                         mount_ids.append(mount_id)
+                        ssh_mount_info.append((temp_root, relative_path))
 
                         logger.info(
                             "Mounted SSH path for backup",
                             original=path,
-                            backup_root=temp_root,
+                            temp_root=temp_root,
+                            relative_path=relative_path,
                             mount_id=mount_id,
+                            connection_id=connection.id,
                             job_id=job_id
                         )
 
@@ -914,7 +952,10 @@ class BackupService:
                         logger.error(
                             "Failed to mount SSH path",
                             path=path,
+                            connection_id=connection.id if connection else None,
+                            remote_path=parsed['path'],
                             error=str(e),
+                            error_type=type(e).__name__,
                             job_id=job_id
                         )
                         # Don't add this path - skip it
@@ -926,7 +967,7 @@ class BackupService:
             if mount_ids:
                 self.ssh_mounts[job_id] = mount_ids
 
-            return processed_paths
+            return processed_paths, ssh_mount_info
 
         finally:
             db.close()
@@ -966,8 +1007,11 @@ class BackupService:
             archive_name: Optional custom archive name (if None, will use default manual-backup naming)
         """
 
-        # Create a new database session for this background task
-        db = SessionLocal()
+        # Use provided session or create a new one
+        close_db = False
+        if db is None:
+            db = SessionLocal()
+            close_db = True
         temp_key_file = None  # Track SSH key file for cleanup
 
         try:
@@ -976,6 +1020,14 @@ class BackupService:
             if not job:
                 logger.error("Job not found", job_id=job_id)
                 return
+
+            # Get job/schedule name for notifications
+            job_name = None
+            if job.scheduled_job_id:
+                from app.database.models import ScheduledJob
+                scheduled_job = db.query(ScheduledJob).filter(ScheduledJob.id == job.scheduled_job_id).first()
+                if scheduled_job:
+                    job_name = scheduled_job.name
 
             # Check if this is a remote backup
             if job.execution_mode == "remote_ssh":
@@ -1066,10 +1118,35 @@ class BackupService:
                         try:
                             source_dirs = json.loads(repo_record.source_directories)
                             if source_dirs and isinstance(source_dirs, list) and len(source_dirs) > 0:
-                                source_paths = source_dirs
-                                logger.info("Using source directories from repository",
-                                          repository=repository,
-                                          source_directories=source_paths)
+                                # Check if this is a remote source (pull-based backup)
+                                if repo_record.source_ssh_connection_id:
+                                    # Construct SSH URLs for remote sources
+                                    from app.database.models import SSHConnection
+                                    connection = db.query(SSHConnection).filter(
+                                        SSHConnection.id == repo_record.source_ssh_connection_id
+                                    ).first()
+
+                                    if connection:
+                                        # Convert plain paths to SSH URLs
+                                        source_paths = [
+                                            f"ssh://{connection.username}@{connection.host}:{connection.port}{path}"
+                                            for path in source_dirs
+                                        ]
+                                        logger.info("Using remote source directories (pull-based backup)",
+                                                  repository=repository,
+                                                  connection_id=connection.id,
+                                                  connection_host=connection.host,
+                                                  source_directories=source_paths)
+                                    else:
+                                        error_msg = f"SSH connection {repo_record.source_ssh_connection_id} not found for remote source"
+                                        logger.error(error_msg, repository=repository)
+                                        raise ValueError(error_msg)
+                                else:
+                                    # Local source paths
+                                    source_paths = source_dirs
+                                    logger.info("Using local source directories",
+                                              repository=repository,
+                                              source_directories=source_paths)
                             else:
                                 error_msg = "No source directories configured for this repository. Please add source directories in repository settings."
                                 logger.error(error_msg, repository=repository)
@@ -1111,46 +1188,69 @@ class BackupService:
             actual_repository_path = repository
 
             # Setup SSH-specific configuration if this is an SSH repository
-            if repo_record and repo_record.repository_type == "ssh":
-                # Setup SSH key if available
-                if repo_record.ssh_key_id:
-                    from app.database.models import SSHKey
-                    from cryptography.fernet import Fernet
-                    import base64
-                    from app.config import settings
-                    import tempfile
+            from app.database.models import SSHConnection, SSHKey
 
-                    ssh_key = db.query(SSHKey).filter(SSHKey.id == repo_record.ssh_key_id).first()
-                    if ssh_key:
-                        # Decrypt private key
-                        encryption_key = settings.secret_key.encode()[:32]
-                        cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-                        private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+            ssh_key = None
+            ssh_key_source = None
 
-                        # Ensure private key ends with newline
-                        if not private_key.endswith('\n'):
-                            private_key += '\n'
+            if repo_record and repo_record.connection_id:
+                # NEW: Use connection_id to get SSH connection (preferred method)
+                connection = db.query(SSHConnection).filter(
+                    SSHConnection.id == repo_record.connection_id
+                ).first()
 
-                        # Create temporary key file
-                        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.key') as f:
-                            f.write(private_key)
-                            temp_key_file = f.name
+                if connection and connection.ssh_key_id:
+                    ssh_key = db.query(SSHKey).filter(SSHKey.id == connection.ssh_key_id).first()
+                    ssh_key_source = f"connection_id={repo_record.connection_id}"
 
-                        os.chmod(temp_key_file, 0o600)
+            elif repo_record and repo_record.repository_type == "ssh" and repo_record.ssh_key_id:
+                # FALLBACK: Legacy repos without connection_id (backward compatibility)
+                ssh_key = db.query(SSHKey).filter(SSHKey.id == repo_record.ssh_key_id).first()
+                ssh_key_source = f"legacy ssh_key_id={repo_record.ssh_key_id}"
 
-                        # Update SSH command to use the key
-                        ssh_opts = [
-                            "-i", temp_key_file,
-                            "-o", "StrictHostKeyChecking=no",
-                            "-o", "UserKnownHostsFile=/dev/null",
-                            "-o", "LogLevel=ERROR",
-                            "-o", "RequestTTY=no",  # Disable TTY allocation to prevent shell initialization output
-                            "-o", "PermitLocalCommand=no"  # Prevent local command execution
-                        ]
-                        env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
-                        logger.info("Using SSH key for remote repository",
-                                  ssh_key_id=repo_record.ssh_key_id,
-                                  repository=actual_repository_path)
+                logger.warning(
+                    "Using legacy SSH key lookup for repository without connection_id",
+                    repository=actual_repository_path,
+                    ssh_key_id=repo_record.ssh_key_id,
+                    suggestion="Edit this repository in the UI to select an SSH connection"
+                )
+
+            if ssh_key:
+                from cryptography.fernet import Fernet
+                import base64
+                from app.config import settings
+                import tempfile
+
+                # Decrypt private key
+                encryption_key = settings.secret_key.encode()[:32]
+                cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
+                private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+
+                # Ensure private key ends with newline
+                if not private_key.endswith('\n'):
+                    private_key += '\n'
+
+                # Create temporary key file
+                with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.key') as f:
+                    f.write(private_key)
+                    temp_key_file = f.name
+
+                os.chmod(temp_key_file, 0o600)
+
+                # Update SSH command to use the key
+                ssh_opts = [
+                    "-i", temp_key_file,
+                    "-o", "StrictHostKeyChecking=no",
+                    "-o", "UserKnownHostsFile=/dev/null",
+                    "-o", "LogLevel=ERROR",
+                    "-o", "RequestTTY=no",  # Disable TTY allocation to prevent shell initialization output
+                    "-o", "PermitLocalCommand=no"  # Prevent local command execution
+                ]
+                env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+                logger.info("Using SSH key for remote repository",
+                          source=ssh_key_source,
+                          ssh_key_id=ssh_key.id,
+                          repository=actual_repository_path)
 
                 # Set BORG_REMOTE_PATH if specified (path to borg binary on remote)
                 if repo_record.remote_path:
@@ -1196,7 +1296,7 @@ class BackupService:
                         # Send failure notification for pre-hook failure
                         try:
                             await notification_service.send_backup_failure(
-                                db, repository, error_msg, job_id
+                                db, repository, error_msg, job_id, job_name
                             )
                         except Exception as e:
                             logger.warning("Failed to send backup failure notification", error=str(e))
@@ -1217,8 +1317,15 @@ class BackupService:
             asyncio.create_task(self._calculate_and_update_size_background(job_id, source_paths, exclude_patterns))
 
             # Prepare source paths: mount SSH URLs via SSHFS
-            logger.info("Preparing source paths (mounting SSH URLs if needed)", source_paths=source_paths, job_id=job_id)
-            processed_source_paths = await self._prepare_source_paths(source_paths, job_id)
+            logger.info("Preparing source paths (mounting SSH URLs if needed)",
+                       source_paths=source_paths,
+                       source_connection_id=repo_record.source_ssh_connection_id if repo_record else None,
+                       job_id=job_id)
+            processed_source_paths, ssh_mount_info = await self._prepare_source_paths(
+                source_paths,
+                job_id,
+                source_connection_id=repo_record.source_ssh_connection_id if repo_record else None
+            )
             if not processed_source_paths:
                 logger.error("No valid source paths after processing (all SSH mounts failed?)", job_id=job_id)
                 job.status = "failed"
@@ -1226,7 +1333,7 @@ class BackupService:
                 job.completed_at = datetime.utcnow()
                 db.commit()
                 return
-            logger.info("Source paths prepared", original_count=len(source_paths), processed_count=len(processed_source_paths), job_id=job_id)
+            logger.info("Source paths prepared", original_count=len(source_paths), processed_count=len(processed_source_paths), ssh_mount_count=len(ssh_mount_info), job_id=job_id)
 
             # Build command with source directories and exclude patterns
             cmd = [
@@ -1265,15 +1372,55 @@ class BackupService:
             # Add repository::archive
             cmd.append(f"{actual_repository_path}::{archive_name}")
 
-            # Add all source paths to the command (using processed paths with mounted SSH URLs)
-            cmd.extend(processed_source_paths)
+            # Determine if we should use cwd for SSH mounts to avoid /tmp/sshfs_mount_xxx/ in archive
+            # With the new mount structure, paths already preserve original directory structure
+            # Example: /var/snap/docker/.../portainer/_data appears as var/snap/docker/.../portainer/_data in archive
+            backup_cwd = None
+            backup_paths = processed_source_paths
 
-            logger.info("Starting borg backup", job_id=job_id, repository=actual_repository_path, archive=archive_name, command=" ".join(cmd))
+            if ssh_mount_info and len(ssh_mount_info) == len(processed_source_paths):
+                # All paths are SSH mounts
+                # Extract unique temp_roots
+                temp_roots = list(set(temp_root for temp_root, _ in ssh_mount_info))
+
+                if len(temp_roots) == 1:
+                    # All SSH mounts share the same temp_root - use it as cwd
+                    # This allows relative paths to work and strips the /tmp/sshfs_mount_xxx prefix
+                    backup_cwd = temp_roots[0]
+                    # processed_source_paths already contains relative paths that preserve structure
+                    # e.g., "var/snap/docker/.../portainer/_data"
+                    backup_paths = processed_source_paths
+                    logger.info(
+                        "Using cwd for SSH mount backup (preserves original path structure)",
+                        cwd=backup_cwd,
+                        backup_paths=backup_paths,
+                        job_id=job_id
+                    )
+                else:
+                    # Multiple SSH mounts with different temp_roots
+                    # Need to use absolute paths or run multiple backup commands
+                    # For now, fall back to absolute paths (each mount has different temp dir)
+                    logger.warning(
+                        "Multiple SSH mounts with different temp roots - using absolute paths",
+                        temp_root_count=len(temp_roots),
+                        job_id=job_id
+                    )
+                    # Convert relative paths back to absolute by prefixing with temp_root
+                    backup_paths = []
+                    for i, (temp_root, relative_path) in enumerate(ssh_mount_info):
+                        absolute_path = os.path.join(temp_root, relative_path)
+                        backup_paths.append(absolute_path)
+                    backup_cwd = None
+
+            # Add all source paths to the command
+            cmd.extend(backup_paths)
+
+            logger.info("Starting borg backup", job_id=job_id, repository=actual_repository_path, archive=archive_name, cwd=backup_cwd, command=" ".join(cmd))
 
             # Send backup start notification (size will be updated by background task)
             try:
                 await notification_service.send_backup_start(
-                    db, repository, archive_name, source_paths, None
+                    db, repository, archive_name, source_paths, None, job_name
                 )
             except Exception as e:
                 logger.warning("Failed to send backup start notification", error=str(e))
@@ -1283,7 +1430,8 @@ class BackupService:
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,  # Merge stderr into stdout
-                env=env
+                env=env,
+                cwd=backup_cwd  # Use cwd for SSH mounts to get cleaner archive paths
             )
 
             # Track this process so it can be cancelled
@@ -1629,7 +1777,7 @@ class BackupService:
                     # Send failure notification if post-hook failed
                     try:
                         await notification_service.send_backup_failure(
-                            db, repository, job.error_message, job_id
+                            db, repository, job.error_message, job_id, job_name
                         )
                     except Exception as e:
                         logger.warning("Failed to send backup failure notification", error=str(e))
@@ -1642,7 +1790,7 @@ class BackupService:
                             "deduplicated_size": job.deduplicated_size
                         }
                         await notification_service.send_backup_success(
-                            db, repository, archive_name, stats, job.completed_at
+                            db, repository, archive_name, stats, job.completed_at, job_name
                         )
                     except Exception as e:
                         logger.warning("Failed to send backup success notification", error=str(e))
@@ -1692,7 +1840,7 @@ class BackupService:
                     # Send failure notification if post-hook failed
                     try:
                         await notification_service.send_backup_failure(
-                            db, repository, job.error_message, job_id
+                            db, repository, job.error_message, job_id, job_name
                         )
                     except Exception as e:
                         logger.warning("Failed to send backup failure notification", error=str(e))
@@ -1705,7 +1853,7 @@ class BackupService:
                             "deduplicated_size": job.deduplicated_size
                         }
                         await notification_service.send_backup_warning(
-                            db, repository, archive_name, job.error_message, stats, job.completed_at
+                            db, repository, archive_name, job.error_message, stats, job.completed_at, job_name
                         )
                     except Exception as e:
                         logger.warning("Failed to send backup warning notification", error=str(e))
@@ -1891,7 +2039,7 @@ class BackupService:
             if job.status == "failed":
                 try:
                     await notification_service.send_backup_failure(
-                        db, repository, job.error_message or "Unknown error", job_id
+                        db, repository, job.error_message or "Unknown error", job_id, job_name
                     )
                 except Exception as e:
                     logger.warning("Failed to send backup failure notification", error=str(e))
@@ -1914,7 +2062,7 @@ class BackupService:
             # Send failure notification
             try:
                 await notification_service.send_backup_failure(
-                    db, repository, str(e), job_id
+                    db, repository, str(e), job_id, job_name
                 )
             except Exception as notif_error:
                 logger.warning("Failed to send backup failure notification", error=str(notif_error))
@@ -1955,8 +2103,9 @@ class BackupService:
                 except Exception as e:
                     logger.warning("Failed to delete temporary SSH key file", temp_key_file=temp_key_file, error=str(e))
 
-            # Close the database session
-            db.close()
+            # Close the database session only if we created it
+            if close_db:
+                db.close()
 
     async def cancel_backup(self, job_id: int) -> bool:
         """

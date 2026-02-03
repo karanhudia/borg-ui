@@ -271,7 +271,7 @@ async def delete_archive(
                 delete_job.id,
                 repo.id,
                 archive_id,
-                db
+                None  # Create new session for background task
             )
         )
 
@@ -338,7 +338,8 @@ async def download_file_from_archive(
                 temp_dir,
                 dry_run=False,
                 remote_path=repo.remote_path,
-                passphrase=repo.passphrase
+                passphrase=repo.passphrase,
+                bypass_lock=repo.bypass_lock
             )
 
             if not result.get("success"):

@@ -79,11 +79,14 @@ class RestoreService:
                     return
 
             try:
-                # Build borg extract command with progress tracking
-                cmd = ["borg", "extract", "--progress"]
+                # Build borg extract command with progress tracking and JSON output
+                cmd = ["borg", "extract", "--progress", "--log-json"]
 
                 if repository and repository.remote_path:
                     cmd.extend(["--remote-path", repository.remote_path])
+
+                if repository and repository.bypass_lock:
+                    cmd.append("--bypass-lock")
 
                 cmd.append(f"{repository_path}::{archive_name}")
 
@@ -118,9 +121,14 @@ class RestoreService:
                     *cmd,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
+                    stdin=asyncio.subprocess.PIPE,  # Pipe stdin so we can close it
                     cwd=destination,
                     env=env
                 )
+                
+                # Close stdin immediately to prevent hanging on prompts
+                if process.stdin:
+                    process.stdin.close()
 
                 # Track this process so it can be cancelled
                 self.running_processes[job_id] = process
@@ -133,10 +141,14 @@ class RestoreService:
                 seen_files = set()  # Track unique files
                 nfiles = 0
 
+                # Speed tracking: Moving average over 30-second window (same as backup jobs)
+                speed_tracking = []  # List of (timestamp, restored_size) tuples
+                SPEED_WINDOW_SECONDS = 30  # Calculate speed over last 30 seconds
+
                 # Read stderr for progress (borg writes progress to stderr)
-                # Borg uses \r for progress updates, we need to read raw bytes and split on \r
+                # With --log-json, we get JSON progress messages
                 async def read_stderr():
-                    nonlocal current_file, last_update_time, nfiles
+                    nonlocal current_file, last_update_time, nfiles, speed_tracking
                     buffer = b''
 
                     while True:
@@ -176,38 +188,87 @@ class RestoreService:
                             if line_text:
                                 stderr_lines.append(line_text)
 
-                                # Parse progress from stderr
-                                # Format: "XX.X% Extracting: filepath" with progress updates
+                                # Parse JSON progress messages from stderr
                                 try:
-                                    if "% Extracting:" in line_text:
-                                        # Extract percentage and file path
-                                        parts = line_text.split("% Extracting:", 1)
-                                        if len(parts) == 2:
-                                            try:
-                                                percent = float(parts[0].strip())
-                                                current_file = parts[1].strip()
+                                    # Check if line is JSON (starts with {)
+                                    if line_text and line_text[0] == '{':
+                                        json_msg = json.loads(line_text)
+                                        msg_type = json_msg.get('type')
 
-                                                # Count unique files
-                                                if current_file and current_file not in seen_files:
-                                                    seen_files.add(current_file)
-                                                    nfiles = len(seen_files)
+                                        # Parse progress_percent messages for restore progress
+                                        if msg_type == 'progress_percent' and not json_msg.get('finished'):
+                                            # Extract byte counts and current file
+                                            restored_size = json_msg.get('current', 0)
+                                            original_size = json_msg.get('total', 0)
+                                            file_info = json_msg.get('info', [])
+                                            current_file = file_info[0] if file_info else ""
 
-                                                # Update job with percentage, file, and count
-                                                job.progress_percent = percent
-                                                job.current_file = current_file
-                                                job.nfiles = nfiles
+                                            # Update job with size stats
+                                            job.restored_size = restored_size
+                                            job.original_size = original_size
 
-                                                # Commit every 2 seconds to reduce database load
-                                                now = datetime.now(timezone.utc)
-                                                if (now - last_update_time).total_seconds() >= 2.0:
-                                                    try:
-                                                        db_session.commit()
-                                                        last_update_time = now
-                                                        logger.info("Progress update", job_id=job_id, percent=percent, nfiles=nfiles, file=current_file[:50] if current_file else '')
-                                                    except:
-                                                        db_session.rollback()
-                                            except ValueError:
-                                                pass
+                                            # Calculate progress percentage
+                                            if original_size > 0:
+                                                job.progress_percent = min(100.0, (restored_size / original_size) * 100.0)
+
+                                            # Count unique files
+                                            if current_file and current_file not in seen_files:
+                                                seen_files.add(current_file)
+                                                nfiles = len(seen_files)
+
+                                            job.current_file = current_file
+                                            job.nfiles = nfiles
+
+                                            # Calculate restore speed using moving average (30-second window)
+                                            if restored_size > 0:
+                                                current_time = asyncio.get_event_loop().time()
+
+                                                # Add current data point
+                                                speed_tracking.append((current_time, restored_size))
+
+                                                # Remove data points older than window
+                                                speed_tracking[:] = [(t, s) for t, s in speed_tracking
+                                                                   if current_time - t <= SPEED_WINDOW_SECONDS]
+
+                                                # Calculate speed from moving average (need at least 2 data points)
+                                                if len(speed_tracking) >= 2:
+                                                    time_diff = speed_tracking[-1][0] - speed_tracking[0][0]
+                                                    size_diff = speed_tracking[-1][1] - speed_tracking[0][1]
+
+                                                    if time_diff > 0 and size_diff > 0:
+                                                        # Speed in MB/s
+                                                        job.restore_speed = (size_diff / (1024 * 1024)) / time_diff
+                                                    elif time_diff > 0:
+                                                        # No size change yet
+                                                        job.restore_speed = 0.0
+
+                                                    # Calculate estimated time remaining (in seconds)
+                                                    remaining_bytes = original_size - restored_size
+                                                    if remaining_bytes > 0 and job.restore_speed > 0:
+                                                        # Speed is in MB/s, convert remaining bytes to MB
+                                                        remaining_mb = remaining_bytes / (1024 * 1024)
+                                                        job.estimated_time_remaining = int(remaining_mb / job.restore_speed)
+                                                    else:
+                                                        job.estimated_time_remaining = 0
+
+                                            # Commit every 2 seconds to reduce database load
+                                            now = datetime.now(timezone.utc)
+                                            if (now - last_update_time).total_seconds() >= 2.0:
+                                                try:
+                                                    db_session.commit()
+                                                    last_update_time = now
+                                                    logger.info("Restore progress update",
+                                                              job_id=job_id,
+                                                              percent=job.progress_percent,
+                                                              nfiles=nfiles,
+                                                              speed_mb_s=job.restore_speed,
+                                                              eta_seconds=job.estimated_time_remaining,
+                                                              file=current_file[:50] if current_file else '')
+                                                except:
+                                                    db_session.rollback()
+                                except json.JSONDecodeError:
+                                    # Not JSON, ignore (might be non-JSON log messages)
+                                    pass
                                 except Exception as e:
                                     logger.debug("Failed to parse progress line", line=line_text[:100], error=str(e))
 
@@ -243,7 +304,7 @@ class RestoreService:
                     # Send success notification
                     try:
                         await notification_service.send_restore_success(
-                            db_session, repository_path, archive_name, destination
+                            db_session, repository_path, archive_name, destination, None, None
                         )
                     except Exception as e:
                         logger.warning("Failed to send restore success notification", error=str(e))
@@ -262,7 +323,7 @@ class RestoreService:
                     # Send failure notification
                     try:
                         await notification_service.send_restore_failure(
-                            db_session, repository_path, archive_name, job.error_message
+                            db_session, repository_path, archive_name, job.error_message, None
                         )
                     except Exception as e:
                         logger.warning("Failed to send restore failure notification", error=str(e))
@@ -294,7 +355,7 @@ class RestoreService:
                     # Send failure notification
                     try:
                         await notification_service.send_restore_failure(
-                            db_session, repository_path, archive_name, str(e)
+                            db_session, repository_path, archive_name, str(e), None
                         )
                     except Exception as notif_error:
                         logger.warning("Failed to send restore failure notification", error=str(notif_error))
