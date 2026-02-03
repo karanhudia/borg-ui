@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import {
   Table,
   TableBody,
@@ -6,6 +6,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TablePagination,
   Paper,
   IconButton,
   Tooltip,
@@ -68,6 +69,11 @@ export interface DataTableProps<T> {
   borderRadius?: number
   maxHeight?: string | number
 
+  // Pagination
+  pagination?: boolean
+  defaultRowsPerPage?: number
+  rowsPerPageOptions?: number[]
+
   // Additional features
   sx?: SxProps<Theme>
 }
@@ -87,8 +93,28 @@ export default function DataTable<T>({
   variant = 'outlined',
   borderRadius = 2,
   maxHeight,
+  pagination = false,
+  defaultRowsPerPage = 10,
+  rowsPerPageOptions = [5, 10, 25, 50, 100],
   sx,
 }: DataTableProps<T>) {
+  // Pagination state
+  const [page, setPage] = useState(0)
+  const [rowsPerPage, setRowsPerPage] = useState(defaultRowsPerPage)
+
+  const handleChangePage = (_event: unknown, newPage: number) => {
+    setPage(newPage)
+  }
+
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10))
+    setPage(0) // Reset to first page when changing rows per page
+  }
+
+  // Calculate paginated data
+  const paginatedData = pagination
+    ? data.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+    : data
   // Loading state
   if (loading) {
     return (
@@ -174,7 +200,7 @@ export default function DataTable<T>({
           </TableRow>
         </TableHead>
         <TableBody>
-          {data.map((row) => (
+          {paginatedData.map((row) => (
             <TableRow
               key={getRowKey(row)}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
@@ -247,6 +273,21 @@ export default function DataTable<T>({
           ))}
         </TableBody>
       </Table>
+      {pagination && data.length > 0 && (
+        <TablePagination
+          component="div"
+          count={data.length}
+          page={page}
+          onPageChange={handleChangePage}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+          rowsPerPageOptions={rowsPerPageOptions}
+          labelRowsPerPage="Rows per page:"
+          labelDisplayedRows={({ from, to, count }) =>
+            `${from}–${to} of ${count !== -1 ? count : `more than ${to}`}`
+          }
+        />
+      )}
     </TableContainer>
   )
 }
