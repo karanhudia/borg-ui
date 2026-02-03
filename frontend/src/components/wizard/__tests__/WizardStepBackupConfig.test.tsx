@@ -195,7 +195,7 @@ describe('WizardStepBackupConfig', () => {
   })
 
   describe('Remote Data Source', () => {
-    it('hides exclude pattern input for remote data source', () => {
+    it('shows exclude pattern input for remote data source', () => {
       render(
         <WizardStepBackupConfig
           dataSource="remote"
@@ -206,10 +206,11 @@ describe('WizardStepBackupConfig', () => {
         />
       )
 
-      expect(screen.queryByTestId('exclude-pattern-input')).not.toBeInTheDocument()
+      // After SSHFS path preservation fix, excludes work for remote sources too
+      expect(screen.getByTestId('exclude-pattern-input')).toBeInTheDocument()
     })
 
-    it('shows info alert for remote data source', () => {
+    it('shows info alert for remote data source explaining how excludes work', () => {
       render(
         <WizardStepBackupConfig
           dataSource="remote"
@@ -222,7 +223,7 @@ describe('WizardStepBackupConfig', () => {
 
       expect(
         screen.getByText(
-          /Source directories and exclude patterns will be configured on the remote machine/i
+          /Remote directories are mounted via SSHFS preserving their original paths/i
         )
       ).toBeInTheDocument()
     })

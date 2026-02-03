@@ -613,7 +613,7 @@ describe('BackupJobsTable', () => {
       expect(deleteButtons.length).toBe(0)
     })
 
-    it('does not show delete button for pending jobs', () => {
+    it('shows delete button for pending jobs (to clean up stuck jobs)', () => {
       const pendingJobs: Partial<MockBackupJob>[] = [
         {
           id: 11,
@@ -634,9 +634,10 @@ describe('BackupJobsTable', () => {
         />
       )
 
-      // Should not show delete button for pending job
-      const deleteButtons = screen.queryAllByLabelText(/delete/i)
-      expect(deleteButtons.length).toBe(0)
+      // Should show delete button for pending job (useful for cleaning up stuck jobs)
+      // Query for icon buttons specifically (excludes dialog buttons)
+      const deleteButtons = screen.queryAllByRole('button', { name: /delete job/i })
+      expect(deleteButtons.length).toBe(1)
     })
 
     it('shows delete button for completed jobs (admin only)', () => {
