@@ -75,7 +75,7 @@ async def start_backup(
 async def get_all_backup_jobs(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-    limit: int = 50,
+    limit: int = 200,
     scheduled_only: bool = False,
     manual_only: bool = False
 ):
