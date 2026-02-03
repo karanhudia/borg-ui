@@ -15,10 +15,12 @@ import hashlib
 
 from app.database.database import get_db
 from app.database.models import Script, RepositoryScript, ScriptExecution, Repository, User
-from app.core.security import get_current_user
+from app.core.security import get_current_user, encrypt_secret
 from app.config import settings
 from app.services.script_executor import execute_script
+from app.utils.script_params import parse_script_parameters, mask_password_values
 import structlog
+import json
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -31,6 +33,7 @@ class ScriptCreate(BaseModel):
     timeout: int = 300
     run_on: str = "always"  # 'success', 'failure', 'always', 'warning'
     category: str = "custom"  # 'custom', 'template'
+    parameters: Optional[List[dict]] = None  # User-configured parameter definitions
 
 class ScriptUpdate(BaseModel):
     name: Optional[str] = None
@@ -38,6 +41,7 @@ class ScriptUpdate(BaseModel):
     content: Optional[str] = None
     timeout: Optional[int] = None
     run_on: Optional[str] = None
+    parameters: Optional[List[dict]] = None  # User-configured parameter definitions
 
 class ScriptResponse(BaseModel):
     id: int
@@ -51,6 +55,7 @@ class ScriptResponse(BaseModel):
     is_template: bool
     created_at: datetime
     updated_at: datetime
+    parameters: Optional[List[dict]] = None  # Parameter definitions
 
 class ScriptDetailResponse(ScriptResponse):
     content: str  # Include script content in detail view
@@ -65,8 +70,20 @@ class RepositoryScriptAssignment(BaseModel):
     custom_timeout: Optional[int] = None
     custom_run_on: Optional[str] = None
     continue_on_error: Optional[bool] = True
+    parameter_values: Optional[dict] = None  # Parameter values (passwords will be encrypted)
 
-# Helper functions
+class ScriptTestRequest(BaseModel):
+    parameter_values: Optional[dict] = None  # Optional parameter values for testing
+    timeout: Optional[int] = None
+
+class RepositoryScriptUpdate(BaseModel):
+    execution_order: Optional[float] = None
+    enabled: Optional[bool] = None
+    custom_timeout: Optional[int] = None
+    custom_run_on: Optional[str] = None
+    continue_on_error: Optional[bool] = None
+    parameter_values: Optional[dict] = None  # Parameter values (passwords will be encrypted)
+
 def ensure_scripts_directory():
     """Ensure /data/scripts/library directory exists"""
     scripts_dir = Path(settings.data_dir) / "scripts" / "library"
@@ -142,7 +159,8 @@ async def list_scripts(
             usage_count=script.usage_count,
             is_template=script.is_template,
             created_at=script.created_at,
-            updated_at=script.updated_at
+            updated_at=script.updated_at,
+            parameters=json.loads(script.parameters) if script.parameters else None
         )
         for script in scripts
     ]
@@ -225,6 +243,7 @@ async def get_script(
         is_template=script.is_template,
         created_at=script.created_at,
         updated_at=script.updated_at,
+        parameters=json.loads(script.parameters) if script.parameters else None,
         content=content,
         repositories=repositories,
         recent_executions=recent_executions
@@ -263,6 +282,25 @@ async def create_script(
         logger.error("Failed to write script file", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to write script file: {str(e)}")
 
+    # Use user-provided parameters if available, otherwise parse from content
+    if script_data.parameters:
+        parameters = script_data.parameters
+        logger.info(
+            "Using user-provided parameters",
+            param_count=len(parameters),
+            parameters=parameters
+        )
+    else:
+        # Fallback to auto-parsing (for backward compatibility)
+        parameters = parse_script_parameters(script_data.content)
+        logger.info(
+            "Auto-parsed parameters (no user config provided)",
+            param_count=len(parameters),
+            parameters=parameters
+        )
+    
+    parameters_json = json.dumps(parameters) if parameters else None
+
     # Create database record
     script = Script(
         name=script_data.name,
@@ -271,6 +309,7 @@ async def create_script(
         category=script_data.category,
         timeout=script_data.timeout,
         run_on=script_data.run_on,
+        parameters=parameters_json,
         created_by_user_id=current_user.id,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow()
@@ -280,8 +319,18 @@ async def create_script(
     db.commit()
     db.refresh(script)
 
-    logger.info("Script created", script_id=script.id, name=script.name, user_id=current_user.id)
+    logger.info(
+        "Script created",
+        script_id=script.id,
+        name=script.name,
+        user_id=current_user.id,
+        param_count=len(parameters),
+        stored_params=script.parameters
+    )
 
+    # Parse from database to ensure consistency
+    response_parameters = json.loads(script.parameters) if script.parameters else None
+    
     return ScriptResponse(
         id=script.id,
         name=script.name,
@@ -293,7 +342,8 @@ async def create_script(
         usage_count=0,
         is_template=False,
         created_at=script.created_at,
-        updated_at=script.updated_at
+        updated_at=script.updated_at,
+        parameters=response_parameters
     )
 
 @router.put("/scripts/{script_id}", response_model=ScriptResponse)
@@ -342,9 +392,38 @@ async def update_script(
         try:
             write_script_file(file_path, script_data.content)
             logger.info("Script file updated", script_id=script_id, path=str(file_path))
+            
+            # Use user-provided parameters if available, otherwise re-parse
+            if script_data.parameters is not None:
+                parameters = script_data.parameters
+                logger.info(
+                    "Using user-provided parameters for updated script",
+                    script_id=script_id,
+                    param_count=len(parameters),
+                    parameters=parameters
+                )
+            else:
+                # Re-parse parameters when content changes (backward compatibility)
+                parameters = parse_script_parameters(script_data.content)
+                logger.info(
+                    "Auto-parsed parameters for updated script",
+                    script_id=script_id,
+                    param_count=len(parameters),
+                    parameters=parameters
+                )
+            
+            script.parameters = json.dumps(parameters) if parameters else None
         except Exception as e:
             logger.error("Failed to update script file", script_id=script_id, error=str(e))
             raise HTTPException(status_code=500, detail=f"Failed to update script file: {str(e)}")
+    elif script_data.parameters is not None:
+        # Update parameters without changing content
+        script.parameters = json.dumps(script_data.parameters) if script_data.parameters else None
+        logger.info(
+            "Updated parameters without content change",
+            script_id=script_id,
+            param_count=len(script_data.parameters)
+        )
 
     script.updated_at = datetime.utcnow()
     db.commit()
@@ -363,7 +442,8 @@ async def update_script(
         usage_count=script.usage_count,
         is_template=script.is_template,
         created_at=script.created_at,
-        updated_at=script.updated_at
+        updated_at=script.updated_at,
+        parameters=json.loads(script.parameters) if script.parameters else None
     )
 
 @router.delete("/scripts/{script_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -443,7 +523,7 @@ async def delete_script(
 @router.post("/scripts/{script_id}/test")
 async def test_script(
     script_id: int,
-    timeout: Optional[int] = None,
+    test_data: ScriptTestRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -458,13 +538,53 @@ async def test_script(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to read script file: {str(e)}")
 
-    # Execute script
-    test_timeout = timeout or script.timeout
+    # Prepare environment variables with parameters and system vars
+    import os
+    script_env = os.environ.copy()
+    
+    if script.parameters and test_data.parameter_values:
+        try:
+            from app.services.template_service import get_system_variables
+            
+            # Parse parameter definitions
+            parameters = json.loads(script.parameters)
+            
+            # Build test system variables
+            system_vars = get_system_variables(
+                repository_id=None,
+                repository_name="test-repository",
+                repository_path="/test/path",
+                hook_type="pre-backup"
+            )
+            
+            # Add system variables to environment
+            script_env.update(system_vars)
+            
+            # Add user-provided test parameter values to environment
+            # Test values aren't encrypted, so use them directly
+            for param in parameters:
+                param_name = param['name']
+                if param_name in test_data.parameter_values:
+                    script_env[param_name] = test_data.parameter_values[param_name]
+                elif 'default' in param and param['default']:
+                    script_env[param_name] = param['default']
+            
+            logger.info("Prepared test script environment",
+                       script_id=script_id,
+                       param_count=len(parameters),
+                       env_vars=len(script_env))
+        except Exception as e:
+            logger.error("Failed to prepare test script environment", script_id=script_id, error=str(e))
+            raise HTTPException(status_code=400, detail=f"Failed to prepare script environment: {str(e)}")
+
+    # Execute script with environment
+    test_timeout = test_data.timeout or script.timeout
     try:
         result = await execute_script(
             script=content,
             timeout=float(test_timeout),
-            context=f"test:{script.name}"
+            context=f"test:{script.name}",
+            env=script_env if (script.parameters and test_data.parameter_values) else None
         )
 
         return {
@@ -504,6 +624,13 @@ async def get_repository_scripts(
     ).options(joinedload(RepositoryScript.script)).order_by(RepositoryScript.execution_order).all()
 
     def format_script(rs):
+        # Get script parameters for masking
+        script_params = json.loads(rs.script.parameters) if rs.script.parameters else []
+        
+        # Get parameter values and mask passwords
+        param_values = json.loads(rs.parameter_values) if rs.parameter_values else {}
+        masked_values = mask_password_values(script_params, param_values) if param_values else None
+        
         return {
             "id": rs.id,
             "script_id": rs.script_id,
@@ -515,7 +642,9 @@ async def get_repository_scripts(
             "custom_run_on": rs.custom_run_on,
             "continue_on_error": rs.continue_on_error,
             "default_timeout": rs.script.timeout,
-            "default_run_on": rs.script.run_on
+            "default_run_on": rs.script.run_on,
+            "parameters": script_params,
+            "parameter_values": masked_values
         }
 
     return {
@@ -558,6 +687,40 @@ async def assign_script_to_repository(
             detail=f"Script '{script.name}' is already assigned to this repository as {assignment.hook_type}"
         )
 
+    # Process parameter values - encrypt password-type parameters
+    parameter_values_json = None
+    if assignment.parameter_values:
+        # Get script parameter definitions
+        script_params = json.loads(script.parameters) if script.parameters else []
+        
+        # Create dict to store processed values
+        processed_values = {}
+        
+        for param_def in script_params:
+            param_name = param_def['name']
+            param_type = param_def.get('type', 'text')
+            
+            # Get value from assignment
+            if param_name in assignment.parameter_values:
+                value = assignment.parameter_values[param_name]
+                
+                # Encrypt password-type parameters
+                if param_type == 'password' and value:
+                    try:
+                        processed_values[param_name] = encrypt_secret(value)
+                        logger.debug("Encrypted password parameter", param_name=param_name)
+                    except Exception as e:
+                        logger.error("Failed to encrypt parameter", param_name=param_name, error=str(e))
+                        raise HTTPException(
+                            status_code=500,
+                            detail=f"Failed to encrypt parameter '{param_name}': {str(e)}"
+                        )
+                else:
+                    # Plain text parameter
+                    processed_values[param_name] = value
+        
+        parameter_values_json = json.dumps(processed_values) if processed_values else None
+
     # Create assignment
     repo_script = RepositoryScript(
         repository_id=repository_id,
@@ -568,6 +731,7 @@ async def assign_script_to_repository(
         custom_timeout=assignment.custom_timeout,
         custom_run_on=assignment.custom_run_on,
         continue_on_error=assignment.continue_on_error if assignment.continue_on_error is not None else True,
+        parameter_values=parameter_values_json,
         created_at=datetime.utcnow()
     )
 
@@ -594,11 +758,7 @@ async def assign_script_to_repository(
 async def update_repository_script_assignment(
     repository_id: int,
     repo_script_id: int,
-    execution_order: Optional[float] = None,
-    enabled: Optional[bool] = None,
-    custom_timeout: Optional[int] = None,
-    custom_run_on: Optional[str] = None,
-    continue_on_error: Optional[bool] = None,
+    update_data: RepositoryScriptUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -606,30 +766,61 @@ async def update_repository_script_assignment(
     repo_script = db.query(RepositoryScript).filter(
         RepositoryScript.id == repo_script_id,
         RepositoryScript.repository_id == repository_id
-    ).first()
+    ).options(joinedload(RepositoryScript.script)).first()
 
     if not repo_script:
         raise HTTPException(status_code=404, detail="Script assignment not found")
 
-    if execution_order is not None:
-        repo_script.execution_order = execution_order
+    if update_data.execution_order is not None:
+        repo_script.execution_order = update_data.execution_order
 
-    if enabled is not None:
-        repo_script.enabled = enabled
+    if update_data.enabled is not None:
+        repo_script.enabled = update_data.enabled
 
-    if custom_timeout is not None:
-        repo_script.custom_timeout = custom_timeout
+    if update_data.custom_timeout is not None:
+        repo_script.custom_timeout = update_data.custom_timeout
 
-    if custom_run_on is not None:
+    if update_data.custom_run_on is not None:
         valid_run_on = ['success', 'failure', 'always', 'warning']
-        if custom_run_on not in valid_run_on:
-            raise HTTPException(status_code=400, detail=f"run_on must be one of: {', '.join(valid_run_on)}")
-        repo_script.custom_run_on = custom_run_on
+        if update_data.custom_run_on not in valid_run_on:
+            raise HTTPException(status_code=400, detail=f"custom_run_on must be one of: {', '.join(valid_run_on)}")
+        repo_script.custom_run_on = update_data.custom_run_on
 
-    if continue_on_error is not None:
-        repo_script.continue_on_error = continue_on_error
+    if update_data.continue_on_error is not None:
+        repo_script.continue_on_error = update_data.continue_on_error
+
+    # Update parameter values with encryption
+    if update_data.parameter_values is not None:
+        # Get script parameter definitions
+        script_params = json.loads(repo_script.script.parameters) if repo_script.script.parameters else []
+        
+        # Process and encrypt password-type parameters
+        processed_values = {}
+        for param_def in script_params:
+            param_name = param_def['name']
+            param_type = param_def.get('type', 'text')
+            
+            if param_name in update_data.parameter_values:
+                value = update_data.parameter_values[param_name]
+                
+                # Encrypt password-type parameters
+                if param_type == 'password' and value:
+                    try:
+                        processed_values[param_name] = encrypt_secret(value)
+                    except Exception as e:
+                        logger.error("Failed to encrypt parameter", param_name=param_name, error=str(e))
+                        raise HTTPException(
+                            status_code=500,
+                            detail=f"Failed to encrypt parameter '{param_name}': {str(e)}"
+                        )
+                else:
+                    # Plain text parameter
+                    processed_values[param_name] = value
+        
+        repo_script.parameter_values = json.dumps(processed_values) if processed_values else None
 
     db.commit()
+    db.refresh(repo_script)
 
     logger.info("Repository script assignment updated",
                 repo_script_id=repo_script_id,

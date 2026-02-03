@@ -6,6 +6,8 @@ from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 import structlog
+from cryptography.fernet import Fernet
+import base64
 
 from app.config import settings
 from app.database.database import get_db
@@ -179,4 +181,53 @@ def update_user_password(db: Session, user_id: int, new_password: str) -> bool:
     
     user.password_hash = get_password_hash(new_password)
     db.commit()
-    return True 
+    return True
+
+
+# Secret encryption/decryption utilities
+# Uses Fernet symmetric encryption (same mechanism as SSH keys)
+
+def encrypt_secret(value: str) -> str:
+    """
+    Encrypt a secret value (e.g., password, token, API key).
+    
+    Args:
+        value: Plain text secret to encrypt
+        
+    Returns:
+        Base64-encoded encrypted string
+        
+    Raises:
+        ValueError: If value is empty or None
+    """
+    if not value:
+        raise ValueError("Cannot encrypt empty or None value")
+    
+    encryption_key = settings.secret_key.encode()[:32]
+    cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
+    encrypted_value = cipher.encrypt(value.encode()).decode()
+    return encrypted_value
+
+
+def decrypt_secret(encrypted_value: str) -> str:
+    """
+    Decrypt a secret value that was encrypted with encrypt_secret().
+    
+    Args:
+        encrypted_value: Base64-encoded encrypted string
+        
+    Returns:
+        Decrypted plain text string
+        
+    Raises:
+        ValueError: If encrypted_value is empty or None
+        cryptography.fernet.InvalidToken: If decryption fails (wrong key or corrupted data)
+    """
+    if not encrypted_value:
+        raise ValueError("Cannot decrypt empty or None value")
+    
+    encryption_key = settings.secret_key.encode()[:32]
+    cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
+    decrypted_value = cipher.decrypt(encrypted_value.encode()).decode()
+    return decrypted_value
+ 
