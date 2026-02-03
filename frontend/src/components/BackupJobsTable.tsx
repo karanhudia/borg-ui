@@ -545,6 +545,9 @@ export const BackupJobsTable = <T extends Job = Job>({
         enableHover={enableHover}
         enablePointer={false}
         emptyState={finalEmptyState}
+        pagination={true}
+        defaultRowsPerPage={10}
+        rowsPerPageOptions={[5, 10, 25, 50, 100]}
       />
 
       {/* Error Details Dialog */}
