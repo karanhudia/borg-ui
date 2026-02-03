@@ -70,7 +70,6 @@ export interface DataTableProps<T> {
   maxHeight?: string | number
 
   // Pagination
-  pagination?: boolean
   defaultRowsPerPage?: number
   rowsPerPageOptions?: number[]
 
@@ -93,7 +92,6 @@ export default function DataTable<T>({
   variant = 'outlined',
   borderRadius = 2,
   maxHeight,
-  pagination = false,
   defaultRowsPerPage = 10,
   rowsPerPageOptions = [5, 10, 25, 50, 100],
   sx,
@@ -112,9 +110,7 @@ export default function DataTable<T>({
   }
 
   // Calculate paginated data
-  const paginatedData = pagination
-    ? data.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-    : data
+  const paginatedData = data.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
   // Loading state
   if (loading) {
     return (
@@ -273,7 +269,7 @@ export default function DataTable<T>({
           ))}
         </TableBody>
       </Table>
-      {pagination && data.length > 0 && (
+      {data.length > 0 && (
         <TablePagination
           component="div"
           count={data.length}
@@ -286,6 +282,26 @@ export default function DataTable<T>({
           labelDisplayedRows={({ from, to, count }) =>
             `${from}–${to} of ${count !== -1 ? count : `more than ${to}`}`
           }
+          sx={{
+            borderTop: 1,
+            borderColor: 'divider',
+            '.MuiTablePagination-toolbar': {
+              minHeight: '52px',
+              alignItems: 'center',
+            },
+            '.MuiTablePagination-selectLabel': {
+              margin: 0,
+            },
+            '.MuiTablePagination-select': {
+              paddingTop: '8px',
+              paddingBottom: '8px',
+              display: 'flex',
+              alignItems: 'center',
+            },
+            '.MuiTablePagination-displayedRows': {
+              margin: 0,
+            },
+          }}
         />
       )}
     </TableContainer>

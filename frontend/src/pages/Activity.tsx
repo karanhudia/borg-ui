@@ -146,7 +146,6 @@ const Activity: React.FC = () => {
           getRowKey={(activity) => `${activity.type}-${activity.id}`}
           headerBgColor="background.default"
           enableHover={true}
-          enablePagination={true}
         />
       ) : (
         <BackupJobsTable<ActivityItem>
@@ -164,7 +163,6 @@ const Activity: React.FC = () => {
           getRowKey={(activity) => `${activity.type}-${activity.id}`}
           headerBgColor="background.default"
           enableHover={true}
-          enablePagination={true}
           emptyState={{
             icon: <Info size={48} />,
             title: 'No activity found',
