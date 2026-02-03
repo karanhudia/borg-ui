@@ -217,3 +217,62 @@ def db_encrypted_borg_repo(test_db, encrypted_borg_repo):
     test_db.refresh(repo)
 
     return repo, repo_path, test_data_path, passphrase
+
+
+@pytest.fixture
+def keyfile_borg_repo(tmp_path, borg_binary):
+    """
+    Create a keyfile-encrypted borg repository for testing.
+    Returns (repo_path, test_data_path, passphrase, keyfile_path)
+
+    This fixture is critical for testing the keyfile import bug fix.
+    """
+    repo_path = tmp_path / "keyfile-repo"
+    test_data_path = tmp_path / "keyfile-data"
+    keyfile_export_path = tmp_path / "exported-key.txt"
+
+    repo_path.mkdir()
+    test_data_path.mkdir()
+
+    passphrase = "test-keyfile-pass-456"
+
+    # Initialize with keyfile encryption
+    env = os.environ.copy()
+    env["BORG_PASSPHRASE"] = passphrase
+
+    result = subprocess.run(
+        [borg_binary, "init", "--encryption=keyfile", str(repo_path)],
+        capture_output=True,
+        text=True,
+        env=env
+    )
+
+    if result.returncode != 0:
+        pytest.fail(f"Failed to initialize keyfile repository: {result.stderr}")
+
+    # Export the keyfile for import testing
+    # This simulates a user who has an existing keyfile-encrypted repository
+    result = subprocess.run(
+        [borg_binary, "key", "export", str(repo_path), str(keyfile_export_path)],
+        capture_output=True,
+        text=True,
+        env=env
+    )
+
+    if result.returncode != 0:
+        pytest.fail(f"Failed to export keyfile: {result.stderr}")
+
+    # Create test archive
+    (test_data_path / "secret-file.txt").write_text("Keyfile-protected data")
+
+    result = subprocess.run(
+        [borg_binary, "create", f"{repo_path}::keyfile-archive", str(test_data_path)],
+        capture_output=True,
+        text=True,
+        env=env
+    )
+
+    if result.returncode != 0:
+        pytest.fail(f"Failed to create keyfile archive: {result.stderr}")
+
+    yield repo_path, test_data_path, passphrase, keyfile_export_path

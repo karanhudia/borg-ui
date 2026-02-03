@@ -42,7 +42,7 @@ interface RepositoryWizardProps {
   onClose: () => void
   mode: 'create' | 'edit' | 'import'
   repository?: Repository
-  onSubmit: (data: RepositoryData) => void
+  onSubmit: (data: RepositoryData, keyfile?: File | null) => void
 }
 
 interface SSHConnection {
@@ -441,7 +441,8 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       wizardState.name
     )
 
-    onSubmit(data)
+    // Pass keyfile for import mode
+    onSubmit(data, mode === 'import' ? wizardState.selectedKeyfile : null)
   }
 
   // Render current step content

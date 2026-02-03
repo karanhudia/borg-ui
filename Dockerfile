@@ -120,6 +120,7 @@ COPY VERSION ./VERSION
 RUN mkdir -p \
     /data \
     /data/ssh_keys \
+    /data/borg_keys \
     /data/logs \
     /data/config \
     /backups \

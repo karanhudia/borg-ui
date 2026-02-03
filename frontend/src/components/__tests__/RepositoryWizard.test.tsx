@@ -715,7 +715,8 @@ describe('RepositoryWizard', () => {
             passphrase: 'testpass123',
             source_directories: ['/home/user'],
             compression: 'lz4',
-          })
+          }),
+          null // keyfile parameter (null for create mode)
         )
       })
     })
@@ -861,7 +862,8 @@ describe('RepositoryWizard', () => {
             passphrase: 'importpass',
             source_directories: ['/data/important'],
             bypass_lock: false,
-          })
+          }),
+          null // keyfile parameter (null when no keyfile selected)
         )
       })
     })
@@ -1114,7 +1116,8 @@ describe('RepositoryWizard', () => {
             mode: 'observe',
             bypass_lock: true,
             source_directories: [],
-          })
+          }),
+          null // keyfile parameter
         )
       })
 
@@ -1176,7 +1179,8 @@ describe('RepositoryWizard', () => {
             mode: 'observe',
             source_directories: ['/optional/source'],
             bypass_lock: false,
-          })
+          }),
+          null // keyfile parameter
         )
       })
     })
@@ -1704,14 +1708,16 @@ describe('RepositoryWizard', () => {
           connection_id: 1,
           source_directories: ['/home/user/important'],
           passphrase: 'securepass',
-        })
+        }),
+        null // keyfile parameter (null for create mode)
       )
 
       // Verify connection_id is included
       expect(onSubmit).toHaveBeenCalledWith(
         expect.objectContaining({
           connection_id: 1,
-        })
+        }),
+        null // keyfile parameter (null for create mode)
       )
     })
   })
@@ -1844,7 +1850,8 @@ describe('RepositoryWizard', () => {
           source_directories: ['/remote/data'],
           source_connection_id: 1,
           passphrase: 'sshfspass',
-        })
+        }),
+        null // keyfile parameter (null for create mode)
       )
     })
 

@@ -304,14 +304,30 @@ export default function Repositories() {
     setWizardRepository(null)
   }
 
-  const handleWizardSubmit = async (data: RepositoryData) => {
+  const handleWizardSubmit = async (data: RepositoryData, keyfile?: File | null) => {
     try {
       if (wizardMode === 'edit' && wizardRepository) {
         await repositoriesAPI.updateRepository(wizardRepository.id, data)
         toast.success('Repository updated successfully')
       } else if (wizardMode === 'import') {
-        await repositoriesAPI.importRepository(data)
-        toast.success('Repository imported successfully')
+        const response = await repositoriesAPI.importRepository(data)
+        const repositoryId = response.data?.repository?.id
+
+        // Upload keyfile if provided
+        if (keyfile && repositoryId) {
+          try {
+            await repositoriesAPI.uploadKeyfile(repositoryId, keyfile)
+            toast.success('Repository imported and keyfile uploaded successfully')
+          } catch (keyfileError) {
+            // Repository was imported but keyfile upload failed
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const errorDetail =
+              (keyfileError as any)?.response?.data?.detail || 'Failed to upload keyfile'
+            toast.error(`Repository imported, but ${errorDetail}`)
+          }
+        } else {
+          toast.success('Repository imported successfully')
+        }
       } else {
         await repositoriesAPI.createRepository(data)
         toast.success('Repository created successfully')
