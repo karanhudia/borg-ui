@@ -45,6 +45,7 @@ class UserResponse(BaseModel):
     is_active: bool
     is_admin: bool
     must_change_password: bool = False
+    last_login: datetime = None
     created_at: datetime
 
     class Config:
@@ -70,12 +71,17 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Inactive user"
         )
-    
+
+    # Update last login timestamp
+    from datetime import timezone
+    user.last_login = datetime.now(timezone.utc)
+    db.commit()
+
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
     access_token = create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
-    
+
     logger.info("User logged in successfully", username=user.username)
 
     return {
