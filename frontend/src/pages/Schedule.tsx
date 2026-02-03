@@ -585,7 +585,7 @@ const Schedule: React.FC = () => {
     }
     return true
   })
-  const recentBackupJobs = filteredBackupJobs.slice(0, 10)
+  const recentBackupJobs = filteredBackupJobs
   const upcomingJobs = upcomingData?.data?.upcoming_jobs || []
 
   // Scheduled Jobs Table Column Definitions

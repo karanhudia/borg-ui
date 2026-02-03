@@ -286,20 +286,26 @@ export default function DataTable<T>({
             borderTop: 1,
             borderColor: 'divider',
             '.MuiTablePagination-toolbar': {
-              minHeight: '52px',
-              alignItems: 'center',
+              minHeight: '64px',
+              paddingLeft: 2,
+              paddingRight: 1,
             },
-            '.MuiTablePagination-selectLabel': {
-              margin: 0,
-            },
-            '.MuiTablePagination-select': {
-              paddingTop: '8px',
-              paddingBottom: '8px',
+            '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
+              marginTop: 0,
+              marginBottom: 0,
               display: 'flex',
               alignItems: 'center',
             },
-            '.MuiTablePagination-displayedRows': {
-              margin: 0,
+            '.MuiTablePagination-select': {
+              paddingTop: 1,
+              paddingBottom: 1,
+              paddingLeft: 1,
+              paddingRight: 4,
+              display: 'flex',
+              alignItems: 'center',
+            },
+            '.MuiTablePagination-actions': {
+              marginLeft: 2,
             },
           }}
         />
