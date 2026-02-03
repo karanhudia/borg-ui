@@ -75,10 +75,12 @@ jobs:
       - name: Run pip-audit
         run: |
           # Scan requirements.txt for vulnerabilities
-          # Note: We expect 2 known vulnerabilities due to Python 3.9 limitations
-          # (python-multipart 0.0.22 and ecdsa fix require Python 3.10+)
-          pip-audit -r requirements.txt
-        continue-on-error: true  # Don't fail on known Python 3.9 limitations
+          # Ignore known Python 3.9 limitation vulnerabilities:
+          # - GHSA-wp53-j4wj-2cfg: python-multipart (fix requires Python 3.10+)
+          # - GHSA-wj6h-64fc-37mp: ecdsa (no fix for Python 3.9)
+          pip-audit -r requirements.txt \
+            --ignore-vuln GHSA-wp53-j4wj-2cfg \
+            --ignore-vuln GHSA-wj6h-64fc-37mp
 
       - name: Generate pip-audit report
         if: always()
