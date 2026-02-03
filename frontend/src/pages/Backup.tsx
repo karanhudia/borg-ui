@@ -156,7 +156,7 @@ const Backup: React.FC = () => {
 
   const runningJobs =
     backupStatus?.data?.jobs?.filter((job: BackupJob) => job.status === 'running') || []
-  const recentJobs = backupStatus?.data?.jobs?.slice(0, 10) || []
+  const recentJobs = backupStatus?.data?.jobs || []
 
   // Handle break lock action
   const handleBreakLock = async (job: BackupJob) => {
