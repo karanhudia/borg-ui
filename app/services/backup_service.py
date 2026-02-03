@@ -1794,8 +1794,8 @@ class BackupService:
                         )
                     except Exception as e:
                         logger.warning("Failed to send backup success notification", error=str(e))
-            elif 100 <= actual_returncode <= 127:
-                # Warning (modern exit code system)
+            elif actual_returncode == 1 or (100 <= actual_returncode <= 127):
+                # Warning (legacy exit code 1 or modern exit codes 100-127)
                 job.status = "completed_with_warnings"
                 job.progress = 100
                 job.error_message = f"Backup completed with warning (exit code {actual_returncode})"

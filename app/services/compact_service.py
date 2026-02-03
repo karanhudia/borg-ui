@@ -253,14 +253,24 @@ class CompactService:
                 # Update repository's last_compact timestamp
                 repository.last_compact = datetime.utcnow()
                 logger.info("Compact completed successfully", job_id=job_id)
+            elif process.returncode == 1 or (100 <= process.returncode <= 127):
+                # Warning (legacy exit code 1 or modern exit codes 100-127)
+                job.status = "completed_with_warnings"
+                job.progress = 100
+                job.progress_message = f"Compact completed with warnings (exit code {process.returncode})"
+                job.error_message = f"Compact completed with warnings (exit code {process.returncode})"
+                job.completed_at = datetime.utcnow()
+                # Update repository's last_compact timestamp even with warnings
+                repository.last_compact = datetime.utcnow()
+                logger.warning("Compact completed with warnings", job_id=job_id, exit_code=process.returncode)
             else:
                 job.status = "failed"
                 job.error_message = f"Compact failed with exit code {process.returncode}"
                 job.completed_at = datetime.utcnow()
                 logger.error("Compact failed", job_id=job_id, exit_code=process.returncode)
 
-            # Save logs for all completed/failed/cancelled jobs
-            if job.status in ['failed', 'cancelled', 'completed']:
+            # Save logs for all completed/failed/cancelled/warning jobs
+            if job.status in ['failed', 'cancelled', 'completed', 'completed_with_warnings']:
                 log_file = self.log_dir / f"compact_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
                 try:
                     log_file.write_text('\n'.join(log_buffer))

@@ -50,7 +50,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="Borg Web UI",
     description="A lightweight web interface for Borg backup management",
-    version="1.56.0",
+    version="1.64.1",
     docs_url="/api/docs",
     redoc_url="/api/redoc"
 )

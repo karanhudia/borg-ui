@@ -308,6 +308,31 @@ class RestoreService:
                         )
                     except Exception as e:
                         logger.warning("Failed to send restore success notification", error=str(e))
+                elif process.returncode == 1 or (100 <= process.returncode <= 127):
+                    # Warning (legacy exit code 1 or modern exit codes 100-127)
+                    job.status = "completed_with_warnings"
+                    job.progress = 100
+                    job.progress_percent = 100.0
+                    job.completed_at = datetime.now(timezone.utc)
+                    stderr_output = "\n".join(stderr_lines)
+                    job.error_message = f"Restore completed with warnings (exit code {process.returncode})"
+                    job.logs = f"STDOUT:\n{chr(10).join(stdout_lines)}\n\nSTDERR:\n{stderr_output}"
+
+                    logger.warning("Restore completed with warnings",
+                               job_id=job_id,
+                               repository=repository_path,
+                               archive=archive_name,
+                               destination=destination,
+                               exit_code=process.returncode,
+                               nfiles=nfiles)
+
+                    # Send warning notification (use success notification with note about warnings)
+                    try:
+                        await notification_service.send_restore_success(
+                            db_session, repository_path, archive_name, destination, None, None
+                        )
+                    except Exception as e:
+                        logger.warning("Failed to send restore warning notification", error=str(e))
                 else:
                     job.status = "failed"
                     stderr_output = "\n".join(stderr_lines)

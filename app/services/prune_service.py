@@ -214,6 +214,15 @@ class PruneService:
                 logger.info("Prune completed successfully",
                            job_id=job_id,
                            dry_run=dry_run)
+            elif process.returncode == 1 or (100 <= process.returncode <= 127):
+                # Warning (legacy exit code 1 or modern exit codes 100-127)
+                job.status = "completed_with_warnings"
+                job.error_message = f"Prune completed with warnings (exit code {process.returncode})"
+                job.completed_at = datetime.utcnow()
+                logger.warning("Prune completed with warnings",
+                           job_id=job_id,
+                           exit_code=process.returncode,
+                           dry_run=dry_run)
             else:
                 job.status = "failed"
                 job.error_message = f"Prune failed with exit code {process.returncode}"
@@ -222,8 +231,8 @@ class PruneService:
                            job_id=job_id,
                            exit_code=process.returncode)
 
-            # Save logs for all completed/failed/cancelled jobs
-            if job.status in ['failed', 'cancelled', 'completed']:
+            # Save logs for all completed/failed/cancelled/warning jobs
+            if job.status in ['failed', 'cancelled', 'completed', 'completed_with_warnings']:
                 log_file = self.log_dir / f"prune_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
                 try:
                     log_file.write_text('\n'.join(log_buffer))

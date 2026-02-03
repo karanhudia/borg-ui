@@ -275,6 +275,16 @@ class CheckService:
                 # Update repository's last_check timestamp
                 repository.last_check = datetime.utcnow()
                 logger.info("Check completed successfully", job_id=job_id)
+            elif process.returncode == 1 or (100 <= process.returncode <= 127):
+                # Warning (legacy exit code 1 or modern exit codes 100-127)
+                job.status = "completed_with_warnings"
+                job.progress = 100
+                job.progress_message = f"Check completed with warnings (exit code {process.returncode})"
+                job.error_message = f"Check completed with warnings (exit code {process.returncode})"
+                job.completed_at = datetime.utcnow()
+                # Update repository's last_check timestamp even with warnings
+                repository.last_check = datetime.utcnow()
+                logger.warning("Check completed with warnings", job_id=job_id, exit_code=process.returncode)
             else:
                 job.status = "failed"
                 job.error_message = f"Check failed with exit code {process.returncode}"
