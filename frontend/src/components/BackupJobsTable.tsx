@@ -473,7 +473,7 @@ export const BackupJobsTable = <T extends Job = Job>({
       onClick: handleDeleteClick,
       color: 'error',
       tooltip: 'Delete Job (Admin Only)',
-      show: (job) => job.status !== 'running' && job.status !== 'pending',
+      show: (job) => job.status !== 'running', // Allow deleting pending jobs (useful for stuck jobs)
     })
   }
 
