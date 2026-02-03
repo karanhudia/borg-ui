@@ -62,9 +62,11 @@ updates:
           - "minor"
           - "patch"
     ignore:
-      # Example: ignore specific packages
-      # - dependency-name: "fastapi"
-      #   versions: ["> 0.104.1, < 0.115.0"]
+      # Ignore Python 3.10+ only packages (we're on Python 3.9)
+      - dependency-name: "python-multipart"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      - dependency-name: "ecdsa"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
 
   # Docker base image updates
   - package-ecosystem: "docker"
