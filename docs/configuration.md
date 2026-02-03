@@ -402,9 +402,11 @@ The system checks settings in the following order:
 
 **Symptoms you need higher timeouts:**
 - "Repository verification timed out" during import
-- "Mount timeout" errors when browsing archives
+- "Mount timeout" errors when browsing archives or using **Mount Archive** (Archives → Mount)
 - Operations fail with timeout errors in logs
 - Large operations (info/list) succeed when run manually but fail in UI
+
+For **Mount Archive** specifically, see the [Mounting Archives](mounting) guide for how to mount and when to increase the Mount Timeout (e.g. for 10TB+ repositories).
 
 ### For Raspberry Pi / Low Memory
 

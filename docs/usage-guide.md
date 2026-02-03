@@ -612,6 +612,8 @@ When a scheduled backup is running, you'll see it in the **"Running Scheduled Ba
 
 **🎉 Files restored!**
 
+You can also [mount an archive as a read-only filesystem](mounting) for direct filesystem-style access (e.g. from the host or via `docker exec`), useful when you need to browse or copy many files without using the in-app browser.
+
 ---
 
 ## Managing Job History
