@@ -1260,6 +1260,7 @@ const Schedule: React.FC = () => {
                 getRowKey={(job) => String(job.id)}
                 headerBgColor="background.default"
                 enableHover={true}
+                tableId="schedule"
                 emptyState={{
                   icon: <Clock size={48} />,
                   title: 'No backup jobs found',
