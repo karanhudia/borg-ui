@@ -182,6 +182,15 @@ class DeleteArchiveService:
                 job.progress = 100
                 job.progress_message = f"Archive {archive_name} deleted successfully"
                 logger.info("Delete job completed", job_id=job_id)
+            elif process.returncode == 1 or (100 <= process.returncode <= 127):
+                # Warning (legacy exit code 1 or modern exit codes 100-127)
+                job.status = "completed_with_warnings"
+                job.progress = 100
+                job.progress_message = f"Archive {archive_name} deleted with warnings (exit code {process.returncode})"
+                job.error_message = f"Archive deletion completed with warnings (exit code {process.returncode})"
+                if log_buffer:
+                    job.error_message += "\n\n" + "\n".join(log_buffer[-50:])  # Last 50 lines
+                logger.warning("Delete job completed with warnings", job_id=job_id, exit_code=process.returncode)
             else:
                 job.status = "failed"
                 job.progress_message = "Archive deletion failed"
