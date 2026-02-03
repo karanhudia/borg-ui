@@ -313,8 +313,7 @@ export const BackupJobsTable = <T extends Job = Job>({
       id: 'repository',
       label: 'Repository',
       align: 'left',
-      minWidth: '250px',
-      width: '30%',
+      width: '350px',
       render: (job: T) => {
         // Handle Activity items with different repository field names
         if (job.type && job.type === 'package') {
@@ -395,7 +394,7 @@ export const BackupJobsTable = <T extends Job = Job>({
       id: 'status',
       label: 'Status',
       align: 'left',
-      width: '100px',
+      width: '190px',
       render: (job: T) => <StatusBadge status={job.status} />,
     },
     {

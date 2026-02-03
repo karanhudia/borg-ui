@@ -161,7 +161,7 @@ export default function DataTable<T>({
         ...sx,
       }}
     >
-      <Table stickyHeader={stickyHeader}>
+      <Table stickyHeader={stickyHeader} sx={{ tableLayout: 'fixed' }}>
         <TableHead>
           <TableRow>
             {columns.map((column) => (
@@ -174,6 +174,7 @@ export default function DataTable<T>({
                   color: 'text.secondary',
                   width: column.width,
                   minWidth: column.minWidth,
+                  maxWidth: column.width,
                 }}
               >
                 {column.label}
@@ -188,6 +189,7 @@ export default function DataTable<T>({
                   color: 'text.secondary',
                   width: '140px',
                   minWidth: '140px',
+                  maxWidth: '140px',
                 }}
               >
                 Actions
@@ -223,6 +225,9 @@ export default function DataTable<T>({
                   sx={{
                     width: column.width,
                     minWidth: column.minWidth,
+                    maxWidth: column.width,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
                   }}
                 >
                   {column.render
@@ -231,7 +236,10 @@ export default function DataTable<T>({
                 </TableCell>
               ))}
               {actions && actions.length > 0 && (
-                <TableCell align="right" sx={{ width: '140px', minWidth: '140px' }}>
+                <TableCell
+                  align="right"
+                  sx={{ width: '140px', minWidth: '140px', maxWidth: '140px' }}
+                >
                   <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
                     {actions.map((action, idx) => {
                       const shouldShow = action.show ? action.show(row) : true
