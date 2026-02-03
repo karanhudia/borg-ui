@@ -48,7 +48,7 @@ const Activity: React.FC = () => {
   } = useQuery({
     queryKey: ['activity', typeFilter, statusFilter],
     queryFn: async () => {
-      const params: Record<string, unknown> = { limit: 50 }
+      const params: Record<string, unknown> = { limit: 200 }
       if (typeFilter !== 'all') params.job_type = typeFilter
       if (statusFilter !== 'all') params.status = statusFilter
 
@@ -146,6 +146,7 @@ const Activity: React.FC = () => {
           getRowKey={(activity) => `${activity.type}-${activity.id}`}
           headerBgColor="background.default"
           enableHover={true}
+          enablePagination={true}
         />
       ) : (
         <BackupJobsTable<ActivityItem>
@@ -163,6 +164,7 @@ const Activity: React.FC = () => {
           getRowKey={(activity) => `${activity.type}-${activity.id}`}
           headerBgColor="background.default"
           enableHover={true}
+          enablePagination={true}
           emptyState={{
             icon: <Info size={48} />,
             title: 'No activity found',

@@ -55,7 +55,7 @@ class ActivityItem(BaseModel):
 
 @router.get("/recent", response_model=List[ActivityItem])
 async def list_recent_activity(
-    limit: int = 50,
+    limit: int = 200,
     job_type: Optional[str] = None,  # Filter by type: 'backup', 'restore', etc.
     status: Optional[str] = None,  # Filter by status: 'running', 'completed', 'failed'
     current_user: User = Depends(get_current_user),
