@@ -25,8 +25,16 @@ export const RepositoryCell: React.FC<RepositoryCellProps> = ({
     <Tooltip title={displayPath || 'No path information'} placement="top" arrow>
       <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ color: 'text.secondary' }}>
         {withIcon && <HardDrive size={16} style={{ flexShrink: 0, marginTop: 2 }} />}
-        <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography variant="body2" fontWeight={500} sx={{ wordBreak: 'break-word' }}>
+        <Box sx={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
+          <Typography
+            variant="body2"
+            fontWeight={500}
+            sx={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
             {displayName}
           </Typography>
           {repositoryPath && (
@@ -36,7 +44,6 @@ export const RepositoryCell: React.FC<RepositoryCellProps> = ({
               sx={{
                 fontFamily: 'monospace',
                 fontSize: '0.7rem',
-                maxWidth: 250,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
