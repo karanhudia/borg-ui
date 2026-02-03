@@ -187,9 +187,9 @@ export default function DataTable<T>({
                   bgcolor: headerBgColor,
                   fontWeight: 600,
                   color: 'text.secondary',
-                  width: '140px',
-                  minWidth: '140px',
-                  maxWidth: '140px',
+                  width: '130px',
+                  minWidth: '130px',
+                  maxWidth: '130px',
                 }}
               >
                 Actions
@@ -238,7 +238,7 @@ export default function DataTable<T>({
               {actions && actions.length > 0 && (
                 <TableCell
                   align="right"
-                  sx={{ width: '140px', minWidth: '140px', maxWidth: '140px' }}
+                  sx={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}
                 >
                   <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
                     {actions.map((action, idx) => {

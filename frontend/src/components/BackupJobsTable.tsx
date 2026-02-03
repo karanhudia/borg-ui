@@ -302,7 +302,7 @@ export const BackupJobsTable = <T extends Job = Job>({
       id: 'id',
       label: 'Job ID',
       align: 'left',
-      width: '80px',
+      width: '60px',
       render: (job: T) => (
         <Typography variant="body2" fontWeight={600} color="primary">
           #{job.id}
@@ -313,7 +313,7 @@ export const BackupJobsTable = <T extends Job = Job>({
       id: 'repository',
       label: 'Repository',
       align: 'left',
-      width: '350px',
+      width: '250px',
       render: (job: T) => {
         // Handle Activity items with different repository field names
         if (job.type && job.type === 'package') {
@@ -350,7 +350,7 @@ export const BackupJobsTable = <T extends Job = Job>({
             id: 'type',
             label: 'Type',
             align: 'left' as const,
-            width: '140px',
+            width: '120px',
             render: (job: T) => (
               <Chip
                 label={getTypeLabel(job.type || '')}
@@ -368,7 +368,7 @@ export const BackupJobsTable = <T extends Job = Job>({
             id: 'trigger',
             label: 'Trigger',
             align: 'center' as const,
-            width: '90px',
+            width: '70px',
             render: (job: T) => {
               const isScheduled = job.triggered_by === 'schedule'
               return (
@@ -394,14 +394,14 @@ export const BackupJobsTable = <T extends Job = Job>({
       id: 'status',
       label: 'Status',
       align: 'left',
-      width: '190px',
+      width: '180px',
       render: (job: T) => <StatusBadge status={job.status} />,
     },
     {
       id: 'started_at',
       label: 'Started',
       align: 'left',
-      width: '180px',
+      width: '160px',
       render: (job: T) => (
         <Typography variant="body2" color="text.secondary">
           {job.started_at ? formatDate(job.started_at) : '-'}
@@ -412,7 +412,7 @@ export const BackupJobsTable = <T extends Job = Job>({
       id: 'duration',
       label: 'Duration',
       align: 'left',
-      width: '90px',
+      width: '80px',
       render: (job: T) => (
         <Typography variant="body2" color="text.secondary">
           {formatTimeRange(job.started_at, job.completed_at, job.status)}
