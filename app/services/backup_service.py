@@ -928,7 +928,11 @@ class BackupService:
                         # Compute relative path that preserves original structure
                         # remote_path: /var/snap/docker/.../portainer/_data
                         # relative_path: var/snap/docker/.../portainer/_data (no leading slash)
+                        # Special case: / (root) -> . (backup everything from cwd)
                         relative_path = parsed['path'].lstrip('/')
+                        if not relative_path:
+                            # Backing up root directory - use "." to backup everything
+                            relative_path = '.'
 
                         processed_paths.append(relative_path)
                         mount_ids.append(mount_id)

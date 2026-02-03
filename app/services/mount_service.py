@@ -225,12 +225,17 @@ class MountService:
             # Create temporary mount structure that preserves the full remote path
             # This allows excludes to work intuitively and preserves original paths in archives
             # Example: /var/snap/docker/.../portainer/_data -> /tmp/sshfs_mount_123/var/snap/docker/.../portainer/_data
+            # Special case: / (root) -> /tmp/sshfs_mount_123/ (mount directly to temp_root)
             temp_root = tempfile.mkdtemp(prefix=f"sshfs_mount_{job_id or 'user'}_")
 
             # Strip leading slash from remote_path to create relative path under temp_root
             relative_remote_path = remote_path.lstrip('/')
-            mount_dir = os.path.join(temp_root, relative_remote_path)
-            os.makedirs(mount_dir, exist_ok=True)
+            if relative_remote_path:
+                mount_dir = os.path.join(temp_root, relative_remote_path)
+                os.makedirs(mount_dir, exist_ok=True)
+            else:
+                # Backing up root directory - mount directly to temp_root
+                mount_dir = temp_root
 
             mount_id = str(uuid.uuid4())
 
