@@ -37,7 +37,7 @@ services:
       - borg_cache:/home/borg/.cache/borg
 
       # System mounts
-      - /etc/localtime:/etc/localtime:ro  # Sync timezone with host
+      - /etc/localtime:/etc/localtime:ro # Sync timezone with host
 
       # Filesystem access for backups
       # ⚠️ IMPORTANT: Replace with specific directories in production
@@ -104,8 +104,8 @@ services:
       # - REDIS_URL=redis://192.168.1.100:6379/0
 
       # Cache defaults (override in Settings → Cache UI)
-      - CACHE_TTL_SECONDS=7200        # 2 hours
-      - CACHE_MAX_SIZE_MB=2048        # 2GB
+      - CACHE_TTL_SECONDS=7200 # 2 hours
+      - CACHE_MAX_SIZE_MB=2048 # 2GB
 
     healthcheck:
       test: ["CMD", "sh", "-c", "curl -f http://localhost:$${PORT:-8081}/"]
