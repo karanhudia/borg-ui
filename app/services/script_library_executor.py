@@ -265,17 +265,14 @@ class ScriptLibraryExecutor:
 
             script_content = file_path.read_text()
 
-            # Get repository info for system variables
-            repository = self.db.query(Repository).filter(Repository.id == repository_id).first()
-            
             # Prepare environment variables with parameters
             script_env = os.environ.copy()
-            
+
             # Add system variables
             system_vars = get_system_variables(
-                repository_id=repository_id,
-                repository_name=repository.name if repository else None,
-                repository_path=repository.path if repository else None,
+                repository_id=repository.id,
+                repository_name=repository.name,
+                repository_path=repository.path,
                 hook_type=hook_type
             )
             script_env.update(system_vars)
