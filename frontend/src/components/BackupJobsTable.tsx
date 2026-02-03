@@ -229,10 +229,43 @@ export const BackupJobsTable = <T extends Job = Job>({
   const handleConfirmDelete = async () => {
     if (!deleteJob) return
 
+    const jobToDelete = deleteJob
+    const jobType = jobToDelete.type || 'backup'
+
+    // Close dialog immediately for better UX
+    setDeleteJob(null)
+
+    // Store previous data for rollback on error
+    const queryKeys = [
+      ['backup-status-manual'],
+      ['backup-status-scheduled'],
+      ['backup-status'],
+      ['activity'],
+      ['recent-backup-jobs'],
+    ]
+
+    // Optimistically update all query caches by removing the deleted job
+    const previousData = queryKeys.map((queryKey) => {
+      const previous = queryClient.getQueryData(queryKey)
+      if (previous) {
+        queryClient.setQueryData(queryKey, (old: any) => {
+          if (!old) return old
+          // Handle different data structures
+          if (Array.isArray(old)) {
+            return old.filter((job: any) => job.id !== jobToDelete.id)
+          }
+          if (old.jobs && Array.isArray(old.jobs)) {
+            return { ...old, jobs: old.jobs.filter((job: any) => job.id !== jobToDelete.id) }
+          }
+          return old
+        })
+      }
+      return { queryKey, data: previous }
+    })
+
     try {
       // Call delete API
-      const jobType = deleteJob.type || 'backup'
-      const response = await fetch(`/api/activity/${jobType}/${deleteJob.id}`, {
+      const response = await fetch(`/api/activity/${jobType}/${jobToDelete.id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
@@ -244,16 +277,16 @@ export const BackupJobsTable = <T extends Job = Job>({
         throw new Error(errorData.detail || 'Failed to delete job')
       }
 
+      // Success - show toast after item is already removed from UI
       toast.success('Job deleted successfully')
-      setDeleteJob(null)
-
-      // Invalidate queries to refresh the job lists
-      queryClient.invalidateQueries({ queryKey: ['backup-status-manual'] })
-      queryClient.invalidateQueries({ queryKey: ['backup-status-scheduled'] })
-      queryClient.invalidateQueries({ queryKey: ['backup-status'] })
-      queryClient.invalidateQueries({ queryKey: ['activity'] })
-      queryClient.invalidateQueries({ queryKey: ['recent-backup-jobs'] })
     } catch (error) {
+      // Rollback optimistic updates on error
+      previousData.forEach(({ queryKey, data }) => {
+        if (data !== undefined) {
+          queryClient.setQueryData(queryKey, data)
+        }
+      })
+
       toast.error(error instanceof Error ? error.message : 'Failed to delete job')
       console.error(error)
     }
