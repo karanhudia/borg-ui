@@ -899,6 +899,8 @@ async def upload_keyfile(
         keyfile_name = f"{safe_name}.key"
 
         # Store keyfile in /data/borg_keys/
+        # The entrypoint.sh creates a symlink: ~/.config/borg/keys -> /data/borg_keys
+        # This makes keyfiles persistent across container restarts and maintains backwards compatibility
         keyfile_dir = os.path.join(settings.data_dir, "borg_keys")
         os.makedirs(keyfile_dir, exist_ok=True)
 
