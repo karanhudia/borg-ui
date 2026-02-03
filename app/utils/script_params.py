@@ -124,29 +124,17 @@ def detect_parameter_type(param_name: str) -> str:
 def generate_description(param_name: str, param_type: str) -> str:
     """
     Generate a human-friendly description for a parameter based on its name.
-    
+
     Args:
         param_name: The parameter name (e.g., 'DB_HOST', 'API_KEY')
         param_type: The parameter type ('text' or 'password')
-        
+
     Returns:
-        A descriptive string
+        A descriptive string (empty for auto-detected params as user should provide their own)
     """
-    # Convert UPPER_SNAKE to Title Case Words
-    words = param_name.lower().replace('_', ' ').title()
-    
-    if param_type == 'password':
-        # Add security context for password types
-        if 'key' in param_name.lower():
-            return f"{words} (encrypted)"
-        elif 'token' in param_name.lower():
-            return f"{words} (encrypted)"
-        elif 'secret' in param_name.lower():
-            return f"{words} (encrypted)"
-        else:
-            return f"{words} (encrypted)"
-    
-    return words
+    # Don't generate redundant descriptions - let users provide meaningful ones
+    # Auto-generated descriptions like "Db Host" or "Api Key" are not helpful
+    return ""
 
 
 def validate_parameter_name(param_name: str) -> bool:
@@ -174,21 +162,31 @@ def validate_parameter_value(
 ) -> tuple[bool, Optional[str]]:
     """
     Validate a parameter value against its definition.
-    
+
     Args:
         param_def: Parameter definition dict with 'name', 'type', 'required' fields
         value: The value to validate (can be None or empty string)
-        
+
     Returns:
         Tuple of (is_valid, error_message)
     """
     param_name = param_def.get('name')
     required = param_def.get('required', False)
-    
+
     # Check required fields
     if required and not value:
         return False, f"Parameter '{param_name}' is required but no value provided"
-    
+
+    # Basic length validation to prevent extremely large values
+    if value and len(value) > 10000:
+        return False, f"Parameter '{param_name}' value exceeds maximum length of 10000 characters"
+
+    # Note: We don't validate for shell metacharacters here because:
+    # 1. Bash properly handles ${VAR} expansion from environment variables
+    # 2. Environment variables are not directly interpolated into shell commands
+    # 3. Users may legitimately need special characters in their values
+    # The script execution uses subprocess with env parameter, not shell string interpolation
+
     # Value is valid
     return True, None
 

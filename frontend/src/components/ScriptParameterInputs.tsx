@@ -83,7 +83,7 @@ export default function ScriptParameterInputs({
               onChange={(e) => handleChange(param.name, e.target.value)}
               required={param.required}
               placeholder={param.default || ''}
-              helperText={showDescriptions ? param.description : undefined}
+              helperText={showDescriptions && param.description ? param.description : undefined}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
