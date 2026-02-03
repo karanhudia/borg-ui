@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Table,
   TableBody,
@@ -72,6 +72,7 @@ export interface DataTableProps<T> {
   // Pagination
   defaultRowsPerPage?: number
   rowsPerPageOptions?: number[]
+  tableId?: string // Unique identifier for localStorage persistence
 
   // Additional features
   sx?: SxProps<Theme>
@@ -94,19 +95,40 @@ export default function DataTable<T>({
   maxHeight,
   defaultRowsPerPage = 10,
   rowsPerPageOptions = [5, 10, 25, 50, 100],
+  tableId,
   sx,
 }: DataTableProps<T>) {
+  // Load saved rows per page from localStorage if available
+  const getInitialRowsPerPage = () => {
+    if (!tableId) return defaultRowsPerPage
+    const saved = localStorage.getItem(`table-rows-per-page-${tableId}`)
+    if (saved) {
+      const parsed = parseInt(saved, 10)
+      // Validate that the saved value is in the options
+      if (rowsPerPageOptions.includes(parsed)) {
+        return parsed
+      }
+    }
+    return defaultRowsPerPage
+  }
+
   // Pagination state
   const [page, setPage] = useState(0)
-  const [rowsPerPage, setRowsPerPage] = useState(defaultRowsPerPage)
+  const [rowsPerPage, setRowsPerPage] = useState(getInitialRowsPerPage)
 
   const handleChangePage = (_event: unknown, newPage: number) => {
     setPage(newPage)
   }
 
   const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(parseInt(event.target.value, 10))
+    const newRowsPerPage = parseInt(event.target.value, 10)
+    setRowsPerPage(newRowsPerPage)
     setPage(0) // Reset to first page when changing rows per page
+
+    // Save to localStorage if tableId is provided
+    if (tableId) {
+      localStorage.setItem(`table-rows-per-page-${tableId}`, String(newRowsPerPage))
+    }
   }
 
   // Calculate paginated data

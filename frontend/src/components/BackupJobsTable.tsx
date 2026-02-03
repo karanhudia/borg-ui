@@ -59,6 +59,9 @@ interface BackupJobsTableProps<T extends Job = Job> {
   headerBgColor?: string
   enableHover?: boolean
   getRowKey?: (job: T) => string | number
+
+  // Pagination
+  tableId?: string // Unique identifier for localStorage persistence
 }
 
 const getTypeLabel = (type: string): string => {
@@ -120,6 +123,7 @@ export const BackupJobsTable = <T extends Job = Job>({
   headerBgColor = 'background.default',
   enableHover = true,
   getRowKey,
+  tableId,
 }: BackupJobsTableProps<T>) => {
   const queryClient = useQueryClient()
 
@@ -546,6 +550,7 @@ export const BackupJobsTable = <T extends Job = Job>({
         emptyState={finalEmptyState}
         defaultRowsPerPage={10}
         rowsPerPageOptions={[5, 10, 25, 50, 100]}
+        tableId={tableId}
       />
 
       {/* Error Details Dialog */}

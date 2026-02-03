@@ -578,6 +578,7 @@ const Backup: React.FC = () => {
             getRowKey={(job) => String(job.id)}
             headerBgColor="background.default"
             enableHover={true}
+            tableId="backup"
             emptyState={{
               icon: (
                 <Box sx={{ color: 'text.disabled' }}>
