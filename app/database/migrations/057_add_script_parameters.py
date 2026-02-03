@@ -56,11 +56,28 @@ def downgrade(db):
     print("Running downgrade for migration 057: Remove Script Parameters Support")
 
     try:
-        # SQLite doesn't support DROP COLUMN directly in older versions
-        # We'll need to recreate the tables without these columns if needed
-        print("⚠ Downgrade not implemented - SQLite limitations")
-        print("  To remove these columns, you would need to recreate the tables")
-        
+        # Check SQLite version for DROP COLUMN support (added in SQLite 3.35.0)
+        cursor = db.execute(text("SELECT sqlite_version()"))
+        sqlite_version = cursor.fetchone()[0]
+        major, minor, patch = map(int, sqlite_version.split('.'))
+
+        if (major, minor) >= (3, 35):
+            # SQLite 3.35+ supports DROP COLUMN
+            print("Dropping parameters column from scripts table...")
+            db.execute(text("ALTER TABLE scripts DROP COLUMN parameters"))
+            print("✓ Dropped parameters column")
+
+            print("Dropping parameter_values column from repository_scripts table...")
+            db.execute(text("ALTER TABLE repository_scripts DROP COLUMN parameter_values"))
+            print("✓ Dropped parameter_values column")
+
+            db.commit()
+            print("✓ Downgrade 057 completed successfully")
+        else:
+            print(f"⚠ SQLite version {sqlite_version} does not support DROP COLUMN")
+            print("  Columns will remain in tables but are safe to ignore")
+            print("  To fully remove: upgrade to SQLite 3.35+ or manually recreate tables")
+
     except Exception as e:
         print(f"✗ Downgrade 057 failed: {str(e)}")
         db.rollback()

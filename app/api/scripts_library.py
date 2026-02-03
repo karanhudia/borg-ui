@@ -687,23 +687,30 @@ async def assign_script_to_repository(
             detail=f"Script '{script.name}' is already assigned to this repository as {assignment.hook_type}"
         )
 
-    # Process parameter values - encrypt password-type parameters
+    # Process parameter values - validate and encrypt password-type parameters
     parameter_values_json = None
     if assignment.parameter_values:
+        from app.utils.script_params import validate_parameter_value
+
         # Get script parameter definitions
         script_params = json.loads(script.parameters) if script.parameters else []
-        
+
         # Create dict to store processed values
         processed_values = {}
-        
+
         for param_def in script_params:
             param_name = param_def['name']
             param_type = param_def.get('type', 'text')
-            
+
             # Get value from assignment
             if param_name in assignment.parameter_values:
                 value = assignment.parameter_values[param_name]
-                
+
+                # Validate parameter value
+                is_valid, error_msg = validate_parameter_value(param_def, value)
+                if not is_valid:
+                    raise HTTPException(status_code=400, detail=error_msg)
+
                 # Encrypt password-type parameters
                 if param_type == 'password' and value:
                     try:
@@ -718,7 +725,7 @@ async def assign_script_to_repository(
                 else:
                     # Plain text parameter
                     processed_values[param_name] = value
-        
+
         parameter_values_json = json.dumps(processed_values) if processed_values else None
 
     # Create assignment
@@ -789,20 +796,27 @@ async def update_repository_script_assignment(
     if update_data.continue_on_error is not None:
         repo_script.continue_on_error = update_data.continue_on_error
 
-    # Update parameter values with encryption
+    # Update parameter values with validation and encryption
     if update_data.parameter_values is not None:
+        from app.utils.script_params import validate_parameter_value
+
         # Get script parameter definitions
         script_params = json.loads(repo_script.script.parameters) if repo_script.script.parameters else []
-        
+
         # Process and encrypt password-type parameters
         processed_values = {}
         for param_def in script_params:
             param_name = param_def['name']
             param_type = param_def.get('type', 'text')
-            
+
             if param_name in update_data.parameter_values:
                 value = update_data.parameter_values[param_name]
-                
+
+                # Validate parameter value
+                is_valid, error_msg = validate_parameter_value(param_def, value)
+                if not is_valid:
+                    raise HTTPException(status_code=400, detail=error_msg)
+
                 # Encrypt password-type parameters
                 if param_type == 'password' and value:
                     try:
@@ -816,7 +830,7 @@ async def update_repository_script_assignment(
                 else:
                     # Plain text parameter
                     processed_values[param_name] = value
-        
+
         repo_script.parameter_values = json.dumps(processed_values) if processed_values else None
 
     db.commit()
