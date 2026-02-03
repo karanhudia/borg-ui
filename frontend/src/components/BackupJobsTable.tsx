@@ -252,14 +252,17 @@ export const BackupJobsTable = <T extends Job = Job>({
     const previousData = queryKeys.map((queryKey) => {
       const previous = queryClient.getQueryData(queryKey)
       if (previous) {
-        queryClient.setQueryData(queryKey, (old: any) => {
+        queryClient.setQueryData(queryKey, (old: unknown) => {
           if (!old) return old
           // Handle different data structures
           if (Array.isArray(old)) {
-            return old.filter((job: any) => job.id !== jobToDelete.id)
+            return old.filter((job) => (job as T).id !== jobToDelete.id)
           }
-          if (old.jobs && Array.isArray(old.jobs)) {
-            return { ...old, jobs: old.jobs.filter((job: any) => job.id !== jobToDelete.id) }
+          if (typeof old === 'object' && old !== null && 'jobs' in old) {
+            const oldData = old as { jobs: T[] }
+            if (Array.isArray(oldData.jobs)) {
+              return { ...oldData, jobs: oldData.jobs.filter((job) => job.id !== jobToDelete.id) }
+            }
           }
           return old
         })
