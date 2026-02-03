@@ -59,9 +59,6 @@ interface BackupJobsTableProps<T extends Job = Job> {
   headerBgColor?: string
   enableHover?: boolean
   getRowKey?: (job: T) => string | number
-
-  // Pagination
-  enablePagination?: boolean
 }
 
 const getTypeLabel = (type: string): string => {
@@ -123,7 +120,6 @@ export const BackupJobsTable = <T extends Job = Job>({
   headerBgColor = 'background.default',
   enableHover = true,
   getRowKey,
-  enablePagination = false,
 }: BackupJobsTableProps<T>) => {
   const queryClient = useQueryClient()
 
@@ -549,7 +545,6 @@ export const BackupJobsTable = <T extends Job = Job>({
         enableHover={enableHover}
         enablePointer={false}
         emptyState={finalEmptyState}
-        pagination={enablePagination}
         defaultRowsPerPage={10}
         rowsPerPageOptions={[5, 10, 25, 50, 100]}
       />
