@@ -1,5 +1,5 @@
 <div align="center">
-    <img src="LogoWithName.png" alt="Borg UI" width="300">
+    <img alt="Borg UI" width="300" src="https://github.com/user-attachments/assets/69b9330f-81fc-47bd-8f11-672da6ac0d31" />
 </div>
 
 ---
