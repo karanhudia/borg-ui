@@ -1,8 +1,5 @@
 <div align="center">
-    <h1>
-        <img src="LogoWithBackground.png" alt="Borg UI Logo" width="80" style="vertical-align: middle;">
-        BORG UI
-    </h1>
+    <img src="LogoWithName.png" alt="Borg UI" width="300">
 </div>
 
 ---
