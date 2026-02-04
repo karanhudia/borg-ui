@@ -7,41 +7,13 @@ description: "How to install Borg Web UI on various platforms"
 
 # Installation Guide
 
-Complete installation instructions for all platforms.
+Choose your platform and copy-paste the configuration. Access at `http://localhost:8081` with credentials: `admin` / `admin123`
 
 ---
 
-## Quick Start
+## Docker Compose (Recommended)
 
-The fastest way to get started:
-
-```bash
-docker run -d \
-  --name borg-web-ui \
-  --restart unless-stopped \
-  -p 8081:8081 \
-  -e TZ=America/Chicago \
-  -e PUID=1000 \
-  -e PGID=1000 \
-  -v borg_data:/data \
-  -v borg_cache:/home/borg/.cache/borg \
-  -v /home/yourusername:/local:rw \
-  ainullcode/borg-ui:latest
-```
-
-**⚠️ Security Note:** Replace `/home/yourusername` with your actual directory path. See the [Restrict Filesystem Access](#restrict-filesystem-access) section below for details.
-
-Access at `http://localhost:8081`
-
-**Default credentials:** `admin` / `admin123`
-
----
-
-## Installation Methods
-
-### Docker Compose (Recommended)
-
-Create `docker-compose.yml`:
+Create `docker-compose.yml` and run `docker compose up -d`:
 
 ```yaml
 version: '3.8'
@@ -56,44 +28,71 @@ services:
     volumes:
       - borg_data:/data
       - borg_cache:/home/borg/.cache/borg
-      # Mount directories you want to backup (REPLACE with your actual paths)
-      - /home/yourusername:/local:rw     # Replace with your directory path
+      - /mnt/backup-source:/local:rw
     environment:
-      - TZ=America/Chicago  # Set your timezone
+      - TZ=America/Chicago
       - PUID=1000
       - PGID=1000
+    # Optional: Remove these 3 lines if you don't want Redis
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - borg_network
+
+  # Optional: Redis speeds up archive browsing 600x
+  # Remove this entire section if you don't need it
+  redis:
+    image: redis:7-alpine
+    container_name: borg-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - borg_network
+
+networks:
+  borg_network:
 
 volumes:
   borg_data:
   borg_cache:
 ```
 
-**⚠️ Security Note:** Replace `/home/yourusername` with your actual directory path. See the [Restrict Filesystem Access](#restrict-filesystem-access) section below for more information.
-
-Start the container:
-
+**First time setup:** Create the backup source directory:
 ```bash
-docker compose up -d
+sudo mkdir -p /mnt/backup-source
+sudo chown -R 1000:1000 /mnt/backup-source
 ```
 
-### Portainer
+---
 
-1. Go to **Stacks** > **Add Stack**
-2. Name your stack: `borg-ui`
-3. Paste the docker-compose configuration above
-4. Click **Deploy the stack**
-5. Access at `http://your-server-ip:8081`
+## Portainer
 
-### Unraid
+1. **Stacks** > **Add Stack**
+2. Name: `borg-ui`
+3. Paste the Docker Compose configuration above
+4. **Deploy the stack**
+5. Access: `http://your-server-ip:8081`
 
-#### Option 1: Docker Compose (Recommended)
+---
+
+## Unraid
+
+### Option 1: Docker Compose Manager
 
 1. Install **Compose Manager** plugin
-2. Go to **Docker** > **Compose** > **Add New Stack**
+2. **Docker** > **Compose** > **Add New Stack**
 3. Name: `borg-ui`
-4. Paste configuration:
+4. Paste:
 
 ```yaml
+version: '3.8'
+
 services:
   borg-ui:
     image: ainullcode/borg-ui:latest
@@ -106,418 +105,219 @@ services:
       - /mnt/user/appdata/borg-ui/cache:/home/borg/.cache/borg
       - /mnt/user:/local:rw  # Customize to specific shares if needed
     environment:
-      - TZ=America/Chicago  # Set your timezone
+      - TZ=America/Chicago
       - PUID=99
       - PGID=100
+    # Optional: Remove these 3 lines if you don't want Redis
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - borg_network
+
+  # Optional: Redis speeds up archive browsing 600x
+  # Remove this entire section if you don't need it
+  redis:
+    image: redis:7-alpine
+    container_name: borg-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - borg_network
+
+networks:
+  borg_network:
 ```
 
-**Note:** `/mnt/user` provides access to all Unraid shares. For better security, mount specific shares only (e.g., `/mnt/user/documents:/local:rw`).
+5. **Compose Up**
 
-5. Click **Compose Up**
+### Option 2: Unraid Web UI
 
-#### Option 2: Unraid Web UI
+**Docker** tab > **Add Container**:
 
-1. Go to **Docker** tab > **Add Container**
-2. Configure:
-   - **Name**: `borg-web-ui`
-   - **Repository**: `ainullcode/borg-ui:latest`
-   - **Network Type**: `Bridge`
+| Setting | Value |
+|---------|-------|
+| Name | `borg-web-ui` |
+| Repository | `ainullcode/borg-ui:latest` |
+| Network Type | `Bridge` |
 
 **Port Mappings:**
-- Container Port `8081` → Host Port `8081`
+- `8081` → `8081`
 
 **Volume Mappings:**
-| Container Path | Host Path | Access |
-|----------------|-----------|--------|
-| `/data` | `/mnt/user/appdata/borg-ui` | Read/Write |
-| `/home/borg/.cache/borg` | `/mnt/user/appdata/borg-ui/cache` | Read/Write |
-| `/local` | `/mnt/user` | Read/Write |
+| Container Path | Host Path |
+|----------------|-----------|
+| `/data` | `/mnt/user/appdata/borg-ui` |
+| `/home/borg/.cache/borg` | `/mnt/user/appdata/borg-ui/cache` |
+| `/local` | `/mnt/user` |
 
-**Environment Variables:**
-- `TZ`: `America/Chicago` (your timezone)
-- `PUID`: `99`
-- `PGID`: `100`
+**Environment:**
+- `TZ` = `America/Chicago`
+- `PUID` = `99`
+- `PGID` = `100`
 
-3. Click **Apply**
+Click **Apply**
+
+---
+
+## Docker Run (Single Command)
+
+```bash
+docker run -d \
+  --name borg-web-ui \
+  --restart unless-stopped \
+  -p 8081:8081 \
+  -e TZ=America/Chicago \
+  -e PUID=1000 \
+  -e PGID=1000 \
+  -v borg_data:/data \
+  -v borg_cache:/home/borg/.cache/borg \
+  -v /mnt/backup-source:/local:rw \
+  ainullcode/borg-ui:latest
+```
+
+**First time setup:**
+```bash
+sudo mkdir -p /mnt/backup-source
+sudo chown -R 1000:1000 /mnt/backup-source
+```
 
 ---
 
 ## Post-Installation
 
-### First Login
+**1. Login:**
+Visit `http://localhost:8081` → Username: `admin` / Password: `admin123`
 
-1. Access `http://localhost:8081` (or your server IP)
-2. Login with default credentials:
-   - Username: `admin`
-   - Password: `admin123`
-3. You'll be prompted to change your password
+**2. Change Password:**
+You'll be prompted on first login
 
-### Verify Installation
-
-Check that the container is running:
-
-```bash
-docker ps | grep borg-web-ui
-docker logs borg-web-ui
-```
-
-You should see:
-```
-INFO: Application startup complete
-INFO: Uvicorn running on http://0.0.0.0:8081
-```
+**3. Create Your First Backup:**
+See [Usage Guide](usage-guide.md)
 
 ---
 
 ## Customization
 
-### Set Timezone (Recommended)
+### Mount Your Directories
 
-Set your local timezone for correct archive timestamps and scheduling:
+Replace `/mnt/backup-source` with your actual directories:
+
+```yaml
+volumes:
+  - /home/john:/local:rw
+  - /var/www:/local/www:ro
+  - /mnt/photos:/local/photos:rw
+```
+
+### Change Timezone
+
+Find yours at [timezones list](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones):
 
 ```yaml
 environment:
-  - TZ=America/Chicago  # Set your timezone
-  - PUID=1000
-  - PGID=1000
+  - TZ=Europe/London  # or America/New_York, Asia/Tokyo, etc.
 ```
-
-**Common timezones:**
-- **US East Coast**: `America/New_York`
-- **US Central**: `America/Chicago`
-- **US West Coast**: `America/Los_Angeles`
-- **UK**: `Europe/London`
-- **Central Europe**: `Europe/Paris`
-- **India**: `Asia/Kolkata`
-- **Japan**: `Asia/Tokyo`
-- **Australia (Sydney)**: `Australia/Sydney`
-
-[Full timezone list →](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)
-
-{: .note }
-> **Why set timezone?** Docker containers default to UTC. Without setting `TZ`, your archive names and timestamps will show UTC time instead of your local time, which can be confusing.
 
 ### Change Port
 
-To use a different port:
-
 ```yaml
-environment:
-  - PORT=8082
 ports:
-  - "8082:8082"
+  - "8082:8081"  # Access on port 8082
 ```
 
-### Restrict Filesystem Access
-
-**⚠️ Important Security Consideration**
-
-For production use, mount only the specific directories you need to backup instead of broad filesystem access:
-
-```yaml
-volumes:
-  # ✅ Recommended: Mount specific directories
-  - /home/yourusername:/local:rw         # Replace with your path
-  - /mnt/data:/local/data:rw             # Additional directories as needed
-  - /opt/myapp:/local/myapp:ro           # Read-only if only backing up
-
-  # ❌ NOT Recommended: Full filesystem access
-  # - /:/local:rw  # Security risk - avoid in production
-```
-
-**Common Patterns:**
-
-**Personal Computer:**
-```yaml
-- /home/john:/local:rw           # Home directory
-- /home/john/documents:/local:rw # Or just documents
-```
-
-**Server:**
-```yaml
-- /var/www:/local/www:ro         # Website files (read-only)
-- /var/lib/postgresql:/local/db:rw  # Database directory
-- /opt/apps:/local/apps:rw       # Application data
-```
-
-**Multiple Users:**
-```yaml
-- /home/user1:/local/user1:rw
-- /home/user2:/local/user2:rw
-- /mnt/shared:/local/shared:rw
-```
-
-**Best Practices:**
-- Mount only directories that need backup
-- Use `:ro` (read-only) for backup-only directories where you won't restore files
-- For multiple directories, add multiple volume mounts
-- Never mount root (`/`) unless absolutely necessary for system-level backups
-
-**Custom Mount Names:**
-
-If you prefer a different container path than `/local`, update both the volume and the `LOCAL_MOUNT_POINTS` environment variable:
-
-```yaml
-volumes:
-  - /home/john:/mylocalserver:rw        # Custom mount path
-environment:
-  - LOCAL_MOUNT_POINTS=/mylocalserver   # Tell the file browser
-```
-
-This highlights your mount in the file browser with a 💾 icon and **"Host"** badge, making it easy to find your data.
-
-See [Configuration Guide](configuration.md) for more examples and details.
-
-### Set User/Group IDs
-
-Match your host user to avoid permission issues:
+### Fix Permission Errors
 
 ```bash
-# Find your IDs
-id -u && id -g
+id -u && id -g  # Shows your user/group IDs
+```
 
-# Set in docker-compose.yml
+Update environment with your IDs:
+```yaml
 environment:
-  - PUID=1000  # Your user ID
-  - PGID=1000  # Your group ID
+  - PUID=1000
+  - PGID=1000
 ```
 
 ---
 
 ## Updating
 
-### Docker Compose
-
+**Docker Compose:**
 ```bash
-docker compose pull
-docker compose up -d
+docker compose pull && docker compose up -d
 ```
 
-### Docker Run
-
+**Docker Run:**
 ```bash
 docker pull ainullcode/borg-ui:latest
-docker stop borg-web-ui
-docker rm borg-web-ui
+docker stop borg-web-ui && docker rm borg-web-ui
 # Run the docker run command again
 ```
 
-### Portainer
-
-1. Go to **Stacks**
-2. Select `borg-ui`
-3. Click **Pull and redeploy**
-
----
-
-## Advanced Configuration
-
-### SSHFS/Remote-to-Remote Backup Configuration
-
-{: .note }
-> **When is this needed?** SSHFS mounting is **only required for remote-to-remote backups** (backing up from one remote server to another by mounting both via SSH). If you're doing direct SSH backups or local backups only, you can skip this section.
-
-For remote-to-remote backups using SSHFS, you need to grant the container FUSE filesystem mounting capabilities. There are two approaches:
-
-#### Option 1: Minimal Capabilities (Recommended)
-
-This approach follows the principle of least privilege by granting only the specific permissions needed:
-
-```yaml
-services:
-  borg-ui:
-    image: ainullcode/borg-ui:latest
-    devices:
-      - /dev/fuse:/dev/fuse
-    cap_add:
-      - SYS_ADMIN
-    # Uncomment the line below if running on Ubuntu/Debian with AppArmor
-    # security_opt:
-    #   - apparmor=unconfined
-    volumes:
-      - borg_data:/data
-      - borg_cache:/home/borg/.cache/borg
-      - /home/yourusername:/local:rw
-```
-
-**What each setting does:**
-- `devices: /dev/fuse` - Grants access to FUSE (Filesystem in Userspace) device
-- `cap_add: SYS_ADMIN` - Adds capability to mount filesystems
-- `security_opt: apparmor=unconfined` - **(Ubuntu/Debian only)** Disables AppArmor restrictions for SSHFS
-
-{: .note }
-> **Ubuntu/Debian users:** If SSHFS mounts fail, uncomment the `security_opt` line. This is typically needed on Ubuntu Server and Debian systems with AppArmor enabled.
-
-#### Option 2: Privileged Mode
-
-Alternatively, you can use privileged mode, which grants broader permissions:
-
-```yaml
-services:
-  borg-ui:
-    image: ainullcode/borg-ui:latest
-    privileged: true
-    volumes:
-      - borg_data:/data
-      - borg_cache:/home/borg/.cache/borg
-      - /home/yourusername:/local:rw
-```
-
-{: .warning }
-> **Security consideration:** Privileged mode grants unrestricted access to the host. **Option 1 is more secure** and recommended. Only use privileged mode if you encounter issues with the minimal capabilities approach.
-
-#### Disable SSHFS Support
-
-If you don't need remote-to-remote backups, use the standard configuration without any of the above settings:
-
-```yaml
-services:
-  borg-ui:
-    image: ainullcode/borg-ui:latest
-    # No privileged mode or special capabilities needed
-    volumes:
-      - borg_data:/data
-      - borg_cache:/home/borg/.cache/borg
-      - /home/yourusername:/local:rw
-```
-
-### Docker Container Management (Optional)
-
-If you need to stop/start Docker containers during backups (e.g., for database consistency), you can mount the Docker socket:
-
-**⚠️ Security Warning:** Mounting `/var/run/docker.sock` gives the container access to your Docker daemon (equivalent to root access). Only enable if you need this functionality.
-
-#### Enable Docker Socket Access
-
-Edit your `docker-compose.yml` and add the docker.sock volume:
-
-```yaml
-services:
-  borg-ui:
-    image: ainullcode/borg-ui:latest
-    container_name: borg-web-ui
-    restart: unless-stopped
-    ports:
-      - "8081:8081"
-    volumes:
-      - borg_data:/data
-      - borg_cache:/home/borg/.cache/borg
-      - /home/yourusername:/local:rw  # Replace with your path
-      # Add this line for Docker container management:
-      - /var/run/docker.sock:/var/run/docker.sock:rw
-    environment:
-      - TZ=America/Chicago
-      - PUID=1000
-      - PGID=1000
-```
-
-Restart the container:
-```bash
-docker compose down
-docker compose up -d
-```
-
-#### Usage
-
-Once enabled, you can use pre/post backup scripts in your repository configuration to control containers:
-
-**Pre-backup script example:**
-```bash
-#!/bin/bash
-# Install Docker CLI if not present
-if ! command -v docker &> /dev/null; then
-    curl -fsSL https://get.docker.com | sh
-fi
-
-# Stop database container
-docker stop postgres-db
-```
-
-**Post-backup script example:**
-```bash
-#!/bin/bash
-# Restart database container
-docker start postgres-db
-```
-
-See the **[Docker Container Hooks Guide](../docs/docker-hooks.md)** for detailed examples, security considerations, and best practices.
+**Portainer:**
+Stacks → Select `borg-ui` → Pull and redeploy
 
 ---
 
 ## Troubleshooting
 
-### Container Won't Start
-
-Check logs:
+**Container won't start:**
 ```bash
 docker logs borg-web-ui
 ```
 
-### Port Already in Use
-
-Change the port:
+**Port already in use:**
 ```yaml
 ports:
   - "8082:8081"
 ```
 
-### Permission Denied Errors
-
-Match your host user ID:
-```yaml
-environment:
-  - PUID=1000
-  - PGID=1000
-```
-
-Find your IDs: `id -u && id -g`
-
-### Cannot Access Web Interface
-
-Check firewall rules:
+**Permission errors:**
 ```bash
-# Linux
-sudo ufw allow 8081
+id -u && id -g  # Find your user/group IDs
+```
+Update `PUID` and `PGID` in environment
 
-# Check container is running
+**Can't access web interface:**
+```bash
+sudo ufw allow 8081
 docker ps | grep borg-web-ui
 ```
 
-### Wrong Timestamps in Archives
-
-If archive timestamps show UTC instead of your local time:
-
+**Wrong timestamps:**
 ```yaml
 environment:
-  - TZ=Asia/Kolkata  # Add your timezone
+  - TZ=Your/Timezone
 ```
-
-Then restart:
-```bash
-docker compose down && docker compose up -d
-```
-
-Verify:
-```bash
-docker exec borg-web-ui date
-```
+Then: `docker compose down && docker compose up -d`
 
 ---
 
-## Uninstallation
+## Advanced (Optional)
 
-### Remove Container
+**Redis (already included):** Speeds up archive browsing 600x. See [Cache Configuration](cache) for tuning or removal
 
+**Remote SSH backups:** See [SSH Remote Mounting Guide](mounting)
+
+**Manage Docker containers during backups:** See [Docker Hooks Guide](docker-hooks)
+
+---
+
+## Uninstall
+
+**Remove container:**
 ```bash
 docker compose down
-# or
-docker stop borg-web-ui && docker rm borg-web-ui
 ```
 
-### Remove Data (Optional)
-
+**Remove all data (warning: deletes backups):**
 ```bash
-# WARNING: This deletes all application data
 docker volume rm borg_data borg_cache
 ```
 
@@ -525,6 +325,6 @@ docker volume rm borg_data borg_cache
 
 ## Next Steps
 
-- [Configuration Guide](configuration.md) - Customize your setup
 - [Usage Guide](usage-guide.md) - Create your first backup
-- [Notifications Setup](notifications.md) - Get alerts for backup events
+- [Notifications Setup](notifications.md) - Email, Slack, Discord alerts
+- [Configuration Guide](configuration.md) - Advanced settings
