@@ -15,11 +15,18 @@ interface WizardStepIndicatorProps {
 
 // Step colors - tuned for each theme
 const stepColors = {
+  // RepositoryWizard colors
   location: { light: '#1565c0', dark: '#64b5f6' }, // blue
   source: { light: '#2e7d32', dark: '#81c784' }, // green
   security: { light: '#7b1fa2', dark: '#ce93d8' }, // purple
   config: { light: '#e65100', dark: '#ffb74d' }, // orange
   review: { light: '#0277bd', dark: '#4fc3f7' }, // cyan
+
+  // ScheduleWizard colors (same palette, different mapping)
+  basic: { light: '#1565c0', dark: '#64b5f6' }, // blue (like location)
+  schedule: { light: '#e65100', dark: '#ffb74d' }, // orange (like config)
+  scripts: { light: '#7b1fa2', dark: '#ce93d8' }, // purple (like security)
+  maintenance: { light: '#2e7d32', dark: '#81c784' }, // green (like source)
 }
 
 export default function WizardStepIndicator({

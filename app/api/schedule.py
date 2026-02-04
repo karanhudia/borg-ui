@@ -38,6 +38,8 @@ class ScheduledJobCreate(BaseModel):
     run_repository_scripts: bool = False  # Whether to run per-repository pre/post scripts
     pre_backup_script_id: Optional[int] = None  # Schedule-level pre-backup script
     post_backup_script_id: Optional[int] = None  # Schedule-level post-backup script
+    pre_backup_script_parameters: Optional[Dict[str, Any]] = None  # Parameters for pre-backup script
+    post_backup_script_parameters: Optional[Dict[str, Any]] = None  # Parameters for post-backup script
     # Prune and compact settings
     run_prune_after: bool = False
     run_compact_after: bool = False
@@ -61,6 +63,8 @@ class ScheduledJobUpdate(BaseModel):
     run_repository_scripts: Optional[bool] = None
     pre_backup_script_id: Optional[int] = None
     post_backup_script_id: Optional[int] = None
+    pre_backup_script_parameters: Optional[Dict[str, Any]] = None  # Parameters for pre-backup script
+    post_backup_script_parameters: Optional[Dict[str, Any]] = None  # Parameters for post-backup script
     # Prune and compact settings
     run_prune_after: Optional[bool] = None
     run_compact_after: Optional[bool] = None
@@ -94,7 +98,24 @@ async def get_scheduled_jobs(
                 .filter_by(scheduled_job_id=job.id)\
                 .order_by(ScheduledJobRepository.execution_order)\
                 .all()
-            repository_ids = [link.repository_id for link in repo_links] if repo_links else None
+
+            # Deduplicate repository IDs while preserving order (in case of database corruption)
+            if repo_links:
+                seen = set()
+                repository_ids = []
+                for link in repo_links:
+                    if link.repository_id not in seen:
+                        seen.add(link.repository_id)
+                        repository_ids.append(link.repository_id)
+
+                # Log if duplicates were found in database
+                if len(repository_ids) != len(repo_links):
+                    logger.warning("Found duplicate repository IDs in junction table",
+                                 schedule_id=job.id,
+                                 total_links=len(repo_links),
+                                 unique_repos=len(repository_ids))
+            else:
+                repository_ids = None
 
             result_jobs.append({
                 "id": job.id,
@@ -114,6 +135,8 @@ async def get_scheduled_jobs(
                 "run_repository_scripts": job.run_repository_scripts,
                 "pre_backup_script_id": job.pre_backup_script_id,
                 "post_backup_script_id": job.post_backup_script_id,
+                "pre_backup_script_parameters": job.pre_backup_script_parameters,
+                "post_backup_script_parameters": job.post_backup_script_parameters,
                 # Prune and compact settings
                 "run_prune_after": job.run_prune_after,
                 "run_compact_after": job.run_compact_after,
@@ -144,7 +167,7 @@ async def create_scheduled_job(
     """Create a new scheduled job"""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     try:
         # Validate cron expression
         try:
@@ -213,6 +236,8 @@ async def create_scheduled_job(
             run_repository_scripts=job_data.run_repository_scripts,
             pre_backup_script_id=job_data.pre_backup_script_id,
             post_backup_script_id=job_data.post_backup_script_id,
+            pre_backup_script_parameters=job_data.pre_backup_script_parameters,
+            post_backup_script_parameters=job_data.post_backup_script_parameters,
             # Prune and compact settings
             run_prune_after=job_data.run_prune_after,
             run_compact_after=job_data.run_compact_after,
@@ -520,6 +545,12 @@ async def update_scheduled_job(
 
         if job_data.post_backup_script_id is not None:
             job.post_backup_script_id = job_data.post_backup_script_id
+
+        if job_data.pre_backup_script_parameters is not None:
+            job.pre_backup_script_parameters = job_data.pre_backup_script_parameters
+
+        if job_data.post_backup_script_parameters is not None:
+            job.post_backup_script_parameters = job_data.post_backup_script_parameters
 
         # Handle repository_ids update (multi-repo)
         if job_data.repository_ids is not None:

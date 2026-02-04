@@ -35,6 +35,7 @@ export interface BackupJob {
   triggered_by?: string
   schedule_id?: number | null
   has_logs?: boolean
+  maintenance_status?: string
   progress_details?: {
     original_size: number
     compressed_size: number
