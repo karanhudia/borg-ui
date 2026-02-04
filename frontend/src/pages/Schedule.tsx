@@ -3,67 +3,38 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
   Button,
-  TextField,
-  CircularProgress,
-  Stack,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  IconButton,
   Chip,
   FormControlLabel,
   Switch,
   Tooltip,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  InputAdornment,
   Alert,
-  Paper,
   Tabs,
   Tab,
-  Checkbox,
 } from '@mui/material'
-import {
-  Plus,
-  Edit,
-  Trash2,
-  Play,
-  Clock,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-  Calendar,
-  RefreshCw,
-  X,
-  Copy,
-} from 'lucide-react'
+import { Plus, Edit, Trash2, Play, CheckCircle, XCircle, Copy } from 'lucide-react'
 import { scheduleAPI, repositoriesAPI, backupAPI, scriptsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import RepositoryCell from '../components/RepositoryCell'
-import MultiRepositorySelector from '../components/MultiRepositorySelector'
 import { useMatomo } from '../hooks/useMatomo'
 import { useAuth } from '../hooks/useAuth'
 import {
   formatDate,
   formatRelativeTime,
-  formatBytes as formatBytesUtil,
   formatDurationSeconds,
-  convertCronToUTC,
   convertCronToLocal,
 } from '../utils/dateUtils'
-import BackupJobsTable from '../components/BackupJobsTable'
 import ScheduledChecksSection, {
   ScheduledChecksSectionRef,
 } from '../components/ScheduledChecksSection'
-import DataTable, { Column, ActionButton } from '../components/DataTable'
-import CronBuilderDialog from '../components/CronBuilderDialog'
+import { Column, ActionButton } from '../components/DataTable'
+import ScheduleWizard, { ScheduleData } from '../components/ScheduleWizard'
+import DeleteScheduleDialog from '../components/DeleteScheduleDialog'
+import UpcomingJobsTable from '../components/UpcomingJobsTable'
+import BackupHistorySection from '../components/BackupHistorySection'
+import RunningBackupsSection from '../components/RunningBackupsSection'
+import ScheduledJobsTable from '../components/ScheduledJobsTable'
 
 interface ScheduledJob {
   id: number
@@ -138,10 +109,13 @@ const Schedule: React.FC = () => {
   }, [location.pathname])
 
   const [currentTab, setCurrentTab] = useState(getCurrentTab())
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [editingJob, setEditingJob] = useState<ScheduledJob | null>(null)
   const [deleteConfirmJob, setDeleteConfirmJob] = useState<ScheduledJob | null>(null)
   const scheduledChecksSectionRef = useRef<ScheduledChecksSectionRef>(null)
+
+  // Wizard state
+  const [showScheduleWizard, setShowScheduleWizard] = useState(false)
+  const [wizardMode, setWizardMode] = useState<'create' | 'edit'>('create')
+  const [editingJobForWizard, setEditingJobForWizard] = useState<ScheduledJob | undefined>()
 
   // Backup History filters - load from localStorage
   const [filterSchedule, setFilterSchedule] = useState<number | 'all'>(() => {
@@ -230,8 +204,6 @@ const Schedule: React.FC = () => {
       toast.success('Scheduled job created successfully')
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
-      setShowCreateModal(false)
-      resetCreateForm()
       track(EventCategory.BACKUP, EventAction.CREATE, 'schedule')
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -249,7 +221,6 @@ const Schedule: React.FC = () => {
       toast.success('Scheduled job updated successfully')
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
-      setEditingJob(null)
       track(EventCategory.BACKUP, EventAction.EDIT, 'schedule')
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -333,128 +304,6 @@ const Schedule: React.FC = () => {
     },
   })
 
-  // Form states
-  const [createForm, setCreateForm] = useState({
-    name: '',
-    cron_expression: '0 2 * * *',
-    repository: '', // Keep for backward compatibility
-    repository_ids: [] as number[], // Multi-repo selection
-    enabled: true,
-    description: '',
-    archive_name_template: '{job_name}-{now}',
-    run_repository_scripts: false,
-    pre_backup_script_id: null as number | null,
-    post_backup_script_id: null as number | null,
-    run_prune_after: false,
-    run_compact_after: false,
-    prune_keep_hourly: 0,
-    prune_keep_daily: 7,
-    prune_keep_weekly: 4,
-    prune_keep_monthly: 6,
-    prune_keep_quarterly: 0,
-    prune_keep_yearly: 1,
-  })
-
-  const [editForm, setEditForm] = useState({
-    name: '',
-    cron_expression: '',
-    repository: '',
-    repository_ids: [] as number[],
-    enabled: true,
-    description: '',
-    archive_name_template: '',
-    run_repository_scripts: false,
-    pre_backup_script_id: null as number | null,
-    post_backup_script_id: null as number | null,
-    run_prune_after: false,
-    run_compact_after: false,
-    prune_keep_hourly: 0,
-    prune_keep_daily: 7,
-    prune_keep_weekly: 4,
-    prune_keep_monthly: 6,
-    prune_keep_quarterly: 0,
-    prune_keep_yearly: 1,
-  })
-
-  const resetCreateForm = () => {
-    setCreateForm({
-      name: '',
-      cron_expression: '0 2 * * *',
-      repository: '',
-      repository_ids: [],
-      enabled: true,
-      description: '',
-      archive_name_template: '{job_name}-{now}',
-      run_repository_scripts: false,
-      pre_backup_script_id: null,
-      post_backup_script_id: null,
-      run_prune_after: false,
-      run_compact_after: false,
-      prune_keep_hourly: 0,
-      prune_keep_daily: 7,
-      prune_keep_weekly: 4,
-      prune_keep_monthly: 6,
-      prune_keep_quarterly: 0,
-      prune_keep_yearly: 1,
-    })
-  }
-
-  const handleCreateJob = (e: React.FormEvent) => {
-    e.preventDefault()
-    // Validate that at least one repository is selected
-    if (!createForm.repository && createForm.repository_ids.length === 0) {
-      toast.error('Please select at least one repository')
-      return
-    }
-    // Convert cron expression from local time to UTC before sending to server
-    const utcCron = convertCronToUTC(createForm.cron_expression)
-
-    // Prepare payload - send repository_ids if multi-repo, otherwise send repository
-    const payload = {
-      ...createForm,
-      cron_expression: utcCron,
-      // Only send repository_ids if multi-repo (more than one selected)
-      repository_ids:
-        createForm.repository_ids.length > 0
-          ? Array.from(new Set(createForm.repository_ids))
-          : undefined,
-      // Clear repository if using multi-repo
-      repository: createForm.repository_ids.length > 0 ? undefined : createForm.repository,
-    }
-
-    createJobMutation.mutate(payload)
-  }
-
-  const handleUpdateJob = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!editForm.repository && editForm.repository_ids.length === 0) {
-      toast.error('Please select a repository')
-      return
-    }
-    if (editingJob) {
-      // Convert cron expression from local time to UTC before sending to server
-      const utcCron = convertCronToUTC(editForm.cron_expression)
-
-      // Prepare payload - send repository_ids if multi-repo, otherwise send repository
-      const payload = {
-        ...editForm,
-        cron_expression: utcCron,
-        // Only send repository_ids if multi-repo (more than one selected)
-        repository_ids:
-          editForm.repository_ids.length > 0
-            ? Array.from(new Set(editForm.repository_ids))
-            : undefined,
-        // Clear repository if using multi-repo
-        repository: editForm.repository_ids.length > 0 ? undefined : editForm.repository,
-      }
-
-      updateJobMutation.mutate({
-        id: editingJob.id,
-        data: payload,
-      })
-    }
-  }
-
   const handleDeleteJob = () => {
     if (deleteConfirmJob) {
       deleteJobMutation.mutate(deleteConfirmJob.id)
@@ -475,52 +324,29 @@ const Schedule: React.FC = () => {
     duplicateJobMutation.mutate(job.id)
   }
 
-  const openCreateModal = () => {
-    resetCreateForm()
-    setShowCreateModal(true)
+  // Wizard handlers
+  const openCreateWizard = () => {
+    setWizardMode('create')
+    setEditingJobForWizard(undefined)
+    setShowScheduleWizard(true)
   }
 
-  const openEditModal = (job: ScheduledJob) => {
-    setEditingJob(job)
-    // Convert UTC cron expression from server to local time for editing
-    const localCron = convertCronToLocal(job.cron_expression)
+  const openEditWizard = (job: ScheduledJob) => {
+    setWizardMode('edit')
+    setEditingJobForWizard(job)
+    setShowScheduleWizard(true)
+  }
 
-    // Handle converting old single-repo format to new multi-repo format
-    let repository_ids: number[] = []
-    if (job.repository_ids && job.repository_ids.length > 0) {
-      // New format: already has repository_ids array
-      repository_ids = job.repository_ids
-    } else if (job.repository_id) {
-      // Old format: single repository_id (integer)
-      repository_ids = [job.repository_id]
-    } else if (job.repository) {
-      // Legacy format: repository path (string) - need to find ID
-      const repo = repositories?.find((r: Repository) => r.path === job.repository)
-      if (repo) {
-        repository_ids = [repo.id]
-      }
+  const handleWizardSubmit = (data: ScheduleData) => {
+    if (wizardMode === 'create') {
+      createJobMutation.mutate(data)
+    } else if (wizardMode === 'edit' && editingJobForWizard) {
+      updateJobMutation.mutate({
+        id: editingJobForWizard.id,
+        data,
+      })
     }
-
-    setEditForm({
-      name: job.name,
-      cron_expression: localCron,
-      repository: job.repository || '',
-      repository_ids: Array.from(new Set(repository_ids)),
-      enabled: job.enabled,
-      description: job.description || '',
-      archive_name_template: job.archive_name_template || '{job_name}-{now}',
-      run_repository_scripts: job.run_repository_scripts || false,
-      pre_backup_script_id: job.pre_backup_script_id || null,
-      post_backup_script_id: job.post_backup_script_id || null,
-      run_prune_after: job.run_prune_after || false,
-      run_compact_after: job.run_compact_after || false,
-      prune_keep_hourly: job.prune_keep_hourly ?? 0,
-      prune_keep_daily: job.prune_keep_daily ?? 7,
-      prune_keep_weekly: job.prune_keep_weekly ?? 4,
-      prune_keep_monthly: job.prune_keep_monthly ?? 6,
-      prune_keep_quarterly: job.prune_keep_quarterly ?? 0,
-      prune_keep_yearly: job.prune_keep_yearly ?? 1,
-    })
+    setShowScheduleWizard(false)
   }
 
   const getRepositoryName = (path: string) => {
@@ -573,19 +399,6 @@ const Schedule: React.FC = () => {
       job.status === 'running' ||
       (job.maintenance_status && job.maintenance_status.includes('running'))
   )
-
-  // Apply filters to backup history
-  const filteredBackupJobs = allBackupJobs.filter((job: BackupJob) => {
-    if (filterSchedule !== 'all' && job.scheduled_job_id !== filterSchedule) return false
-    if (filterRepository !== 'all' && job.repository !== filterRepository) return false
-    if (filterStatus !== 'all') {
-      if (filterStatus === 'completed' && job.status !== 'completed') return false
-      if (filterStatus === 'failed' && job.status !== 'failed') return false
-      if (filterStatus === 'warning' && job.status !== 'completed_with_warnings') return false
-    }
-    return true
-  })
-  const recentBackupJobs = filteredBackupJobs
   const upcomingJobs = upcomingData?.data?.upcoming_jobs || []
 
   // Scheduled Jobs Table Column Definitions
@@ -824,7 +637,7 @@ const Schedule: React.FC = () => {
     {
       icon: <Edit size={16} />,
       label: 'Edit',
-      onClick: (job) => openEditModal(job),
+      onClick: (job) => openEditWizard(job),
       color: 'default',
       tooltip: 'Edit',
     },
@@ -863,7 +676,7 @@ const Schedule: React.FC = () => {
           <Button
             variant="contained"
             startIcon={<Plus size={18} />}
-            onClick={openCreateModal}
+            onClick={openCreateWizard}
             disabled={!repositories || repositories.length === 0}
           >
             Create Backup Schedule
@@ -899,375 +712,47 @@ const Schedule: React.FC = () => {
           )}
 
           {/* Running Scheduled Jobs */}
-          {runningBackupJobs.length > 0 && (
-            <Card sx={{ mb: 3 }}>
-              <CardContent>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-                  <RefreshCw size={20} color="#1976d2" className="animate-spin" />
-                  <Typography variant="h6" fontWeight={600}>
-                    Running Scheduled Backups
-                  </Typography>
-                  <Chip
-                    label={`${runningBackupJobs.length} active`}
-                    size="small"
-                    color="primary"
-                    sx={{ ml: 1 }}
-                  />
-                </Stack>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Real-time progress for scheduled backup jobs
-                </Typography>
-
-                <Stack spacing={2}>
-                  {runningBackupJobs.map((job: BackupJob) => (
-                    <Paper
-                      key={job.id}
-                      elevation={0}
-                      sx={{
-                        p: 2,
-                        border: 1,
-                        borderColor: 'primary.main',
-                        borderRadius: 2,
-                        backgroundColor: 'primary.lighter',
-                      }}
-                    >
-                      {/* Job Header */}
-                      <Stack
-                        direction="row"
-                        justifyContent="space-between"
-                        alignItems="center"
-                        sx={{ mb: 2 }}
-                      >
-                        <Stack direction="row" spacing={2} alignItems="center">
-                          <Chip
-                            icon={<RefreshCw size={14} className="animate-spin" />}
-                            label="Running"
-                            color="primary"
-                            size="small"
-                          />
-                          <Typography variant="body2" fontWeight={600}>
-                            Job #{job.id} - {getRepositoryName(job.repository)}
-                          </Typography>
-                        </Stack>
-                        <Stack direction="row" spacing={1} alignItems="center">
-                          <Typography variant="caption" color="text.secondary">
-                            Started: {formatRelativeTime(job.started_at)}
-                          </Typography>
-                          <Tooltip title="Cancel Backup" arrow>
-                            <IconButton
-                              size="small"
-                              color="error"
-                              onClick={() => {
-                                if (
-                                  window.confirm(
-                                    `Are you sure you want to cancel backup job #${job.id}?`
-                                  )
-                                ) {
-                                  cancelBackupMutation.mutate(job.id)
-                                }
-                              }}
-                              disabled={cancelBackupMutation.isPending}
-                              sx={{ ml: 1 }}
-                            >
-                              <X size={16} />
-                            </IconButton>
-                          </Tooltip>
-                        </Stack>
-                      </Stack>
-
-                      {/* Current File Being Processed */}
-                      {job.progress_details?.current_file && (
-                        <Alert severity="info" sx={{ mb: 2, py: 0.5 }}>
-                          <Typography variant="caption" fontWeight={500}>
-                            Current File:
-                          </Typography>
-                          <Typography
-                            variant="caption"
-                            sx={{
-                              fontFamily: 'monospace',
-                              display: 'block',
-                              mt: 0.5,
-                              wordBreak: 'break-all',
-                            }}
-                          >
-                            {job.progress_details.current_file}
-                          </Typography>
-                        </Alert>
-                      )}
-
-                      {/* Maintenance Status */}
-                      {job.maintenance_status &&
-                        getMaintenanceStatusLabel(job.maintenance_status) && (
-                          <Alert
-                            severity={getMaintenanceStatusColor(job.maintenance_status)}
-                            sx={{ mb: 2, py: 0.5 }}
-                            icon={
-                              job.maintenance_status.includes('running') ? (
-                                <RefreshCw size={16} className="animate-spin" />
-                              ) : undefined
-                            }
-                          >
-                            <Typography variant="caption" fontWeight={500}>
-                              {getMaintenanceStatusLabel(job.maintenance_status)}
-                            </Typography>
-                          </Alert>
-                        )}
-
-                      {/* Job Details Grid */}
-                      <Box
-                        sx={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                          gap: 2,
-                          width: '100%',
-                        }}
-                      >
-                        <Box>
-                          <Typography variant="body2" color="text.secondary">
-                            Files Processed:
-                          </Typography>
-                          <Typography variant="body2" fontWeight={500}>
-                            {job.progress_details?.nfiles?.toLocaleString() || '0'}
-                          </Typography>
-                        </Box>
-                        <Box>
-                          <Typography variant="body2" color="text.secondary">
-                            Original Size:
-                          </Typography>
-                          <Typography variant="body2" fontWeight={500}>
-                            {job.progress_details?.original_size
-                              ? formatBytesUtil(job.progress_details.original_size)
-                              : 'N/A'}
-                          </Typography>
-                        </Box>
-                        <Box>
-                          <Typography variant="body2" color="text.secondary">
-                            Compressed:
-                          </Typography>
-                          <Typography variant="body2" fontWeight={500}>
-                            {job.progress_details?.compressed_size !== undefined &&
-                            job.progress_details?.compressed_size !== null
-                              ? formatBytesUtil(job.progress_details.compressed_size)
-                              : 'N/A'}
-                          </Typography>
-                        </Box>
-                        <Box>
-                          <Typography variant="body2" color="text.secondary">
-                            Deduplicated:
-                          </Typography>
-                          <Typography variant="body2" fontWeight={500} color="success.main">
-                            {job.progress_details?.deduplicated_size !== undefined &&
-                            job.progress_details?.deduplicated_size !== null
-                              ? formatBytesUtil(job.progress_details.deduplicated_size)
-                              : 'N/A'}
-                          </Typography>
-                        </Box>
-                        {job.progress_details?.total_expected_size &&
-                          job.progress_details.total_expected_size > 0 && (
-                            <Box>
-                              <Typography variant="body2" color="text.secondary">
-                                Total Source Size:
-                              </Typography>
-                              <Typography variant="body2" fontWeight={500} color="info.main">
-                                {formatBytesUtil(job.progress_details.total_expected_size)}
-                              </Typography>
-                            </Box>
-                          )}
-                        <Box>
-                          <Typography variant="body2" color="text.secondary">
-                            Speed:
-                          </Typography>
-                          <Typography variant="body2" fontWeight={500} color="primary.main">
-                            {job.progress_details?.backup_speed
-                              ? `${job.progress_details.backup_speed.toFixed(2)} MB/s`
-                              : 'N/A'}
-                          </Typography>
-                        </Box>
-                        {(job.progress_details?.estimated_time_remaining ?? 0) > 0 && (
-                          <Box>
-                            <Typography variant="body2" color="text.secondary">
-                              ETA:
-                            </Typography>
-                            <Typography variant="body2" fontWeight={500} color="success.main">
-                              {formatDurationSeconds(
-                                job.progress_details?.estimated_time_remaining ?? 0
-                              )}
-                            </Typography>
-                          </Box>
-                        )}
-                      </Box>
-                    </Paper>
-                  ))}
-                </Stack>
-              </CardContent>
-            </Card>
-          )}
+          <RunningBackupsSection
+            runningBackupJobs={runningBackupJobs}
+            getRepositoryName={getRepositoryName}
+            formatRelativeTime={formatRelativeTime}
+            formatDurationSeconds={formatDurationSeconds}
+            getMaintenanceStatusLabel={getMaintenanceStatusLabel}
+            getMaintenanceStatusColor={getMaintenanceStatusColor}
+            onCancelBackup={(jobId) => cancelBackupMutation.mutate(String(jobId))}
+            isCancelling={cancelBackupMutation.isPending}
+          />
 
           {/* Upcoming Jobs Summary */}
-          {upcomingJobs.length > 0 && (
-            <Card sx={{ mb: 3 }}>
-              <CardContent>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-                  <Calendar size={20} color="#1976d2" />
-                  <Typography variant="h6" fontWeight={600}>
-                    Upcoming Jobs (Next 24 Hours)
-                  </Typography>
-                </Stack>
-                <Stack spacing={1.5}>
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                  {upcomingJobs.slice(0, 5).map((job: any) => (
-                    <Box
-                      key={job.id}
-                      sx={{
-                        p: 2,
-                        backgroundColor: 'action.hover',
-                        borderRadius: 1,
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <Box>
-                        <Typography variant="body2" fontWeight={500}>
-                          {job.name}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {job.repository_ids && job.repository_ids.length > 0
-                            ? `${job.repository_ids.length} repositories`
-                            : job.repository_id
-                              ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                repositories.find((r: any) => r.id === job.repository_id)?.name ||
-                                'Unknown'
-                              : getRepositoryName(job.repository)}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ textAlign: 'right' }}>
-                        <Typography variant="body2" fontWeight={500}>
-                          {formatDate(job.next_run)}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {formatRelativeTime(job.next_run)}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  ))}
-                </Stack>
-              </CardContent>
-            </Card>
-          )}
+          <UpcomingJobsTable
+            upcomingJobs={upcomingJobs}
+            repositories={repositories}
+            isLoading={isLoading}
+            getRepositoryName={getRepositoryName}
+          />
 
           {/* Scheduled Jobs Table */}
-          <Card>
-            <CardContent>
-              <Typography variant="h6" fontWeight={600} gutterBottom>
-                All Scheduled Jobs
-              </Typography>
-
-              <Box sx={{ mt: 2 }}>
-                <DataTable
-                  data={jobs}
-                  columns={scheduledJobsColumns}
-                  actions={scheduledJobsActions}
-                  getRowKey={(job) => job.id}
-                  loading={isLoading}
-                  enableHover={true}
-                  headerBgColor="background.default"
-                  emptyState={{
-                    icon: <Clock size={48} />,
-                    title: 'No scheduled jobs found',
-                    description: 'Create your first scheduled backup job',
-                  }}
-                />
-              </Box>
-            </CardContent>
-          </Card>
+          <ScheduledJobsTable
+            jobs={jobs}
+            columns={scheduledJobsColumns}
+            actions={scheduledJobsActions}
+            isLoading={isLoading}
+          />
 
           {/* Backup History */}
-          <Card sx={{ mt: 3 }}>
-            <CardContent>
-              <Typography variant="h6" fontWeight={600} gutterBottom>
-                Backup History
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Showing {recentBackupJobs.length} of {filteredBackupJobs.length} backup jobs
-                {(filterSchedule !== 'all' ||
-                  filterRepository !== 'all' ||
-                  filterStatus !== 'all') &&
-                  ' (filtered)'}
-              </Typography>
-
-              {/* Filters */}
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3 }}>
-                <FormControl size="small" sx={{ minWidth: 200 }}>
-                  <InputLabel>Schedule</InputLabel>
-                  <Select
-                    value={filterSchedule}
-                    label="Schedule"
-                    onChange={(e) => setFilterSchedule(e.target.value as number | 'all')}
-                  >
-                    <MenuItem value="all">All Schedules</MenuItem>
-                    {jobs.map((job: ScheduledJob) => (
-                      <MenuItem key={job.id} value={job.id}>
-                        {job.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-
-                <FormControl size="small" sx={{ minWidth: 200 }}>
-                  <InputLabel>Repository</InputLabel>
-                  <Select
-                    value={filterRepository}
-                    label="Repository"
-                    onChange={(e) => setFilterRepository(e.target.value)}
-                  >
-                    <MenuItem value="all">All Repositories</MenuItem>
-                    {repositories.map((repo: Repository) => (
-                      <MenuItem key={repo.id} value={repo.path}>
-                        {repo.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-
-                <FormControl size="small" sx={{ minWidth: 150 }}>
-                  <InputLabel>Status</InputLabel>
-                  <Select
-                    value={filterStatus}
-                    label="Status"
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                  >
-                    <MenuItem value="all">All Status</MenuItem>
-                    <MenuItem value="completed">Completed</MenuItem>
-                    <MenuItem value="failed">Failed</MenuItem>
-                    <MenuItem value="warning">Warning</MenuItem>
-                  </Select>
-                </FormControl>
-              </Stack>
-
-              <BackupJobsTable
-                jobs={recentBackupJobs}
-                repositories={repositories || []}
-                loading={loadingBackupJobs}
-                actions={{
-                  viewLogs: true,
-                  cancel: true,
-                  downloadLogs: true,
-                  errorInfo: true,
-                  delete: true,
-                }}
-                isAdmin={user?.is_admin || false}
-                getRowKey={(job) => String(job.id)}
-                headerBgColor="background.default"
-                enableHover={true}
-                tableId="schedule"
-                emptyState={{
-                  icon: <Clock size={48} />,
-                  title: 'No backup jobs found',
-                }}
-              />
-            </CardContent>
-          </Card>
+          <BackupHistorySection
+            backupJobs={allBackupJobs}
+            scheduledJobs={jobs}
+            repositories={repositories}
+            isLoading={loadingBackupJobs}
+            isAdmin={user?.is_admin || false}
+            filterSchedule={filterSchedule}
+            filterRepository={filterRepository}
+            filterStatus={filterStatus}
+            onFilterScheduleChange={setFilterSchedule}
+            onFilterRepositoryChange={setFilterRepository}
+            onFilterStatusChange={setFilterStatus}
+          />
         </Box>
       )}
 
@@ -1278,791 +763,25 @@ const Schedule: React.FC = () => {
         </Box>
       )}
 
-      {/* Create Job Modal */}
-      <Dialog
-        open={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Create Scheduled Job</DialogTitle>
-        <form onSubmit={handleCreateJob}>
-          <DialogContent>
-            <Stack spacing={3}>
-              <TextField
-                label="Job Name"
-                value={createForm.name}
-                onChange={(e) => setCreateForm((prev) => ({ ...prev, name: e.target.value }))}
-                required
-                fullWidth
-                placeholder="Daily backup"
-                helperText="A descriptive name for this scheduled job"
-                size="medium"
-                InputProps={{
-                  sx: { fontSize: '1.1rem' },
-                }}
-                InputLabelProps={{
-                  sx: { fontSize: '1.1rem' },
-                }}
-              />
-
-              <MultiRepositorySelector
-                repositories={repositories}
-                selectedIds={createForm.repository_ids}
-                onChange={(ids) => setCreateForm((prev) => ({ ...prev, repository_ids: ids }))}
-                label="Repositories"
-                placeholder="Select repositories..."
-                helperText="Choose repositories to backup. Use arrows to change backup order for multi-repository schedules."
-                required
-                size="medium"
-                allowReorder={true}
-                filterMode="observe"
-              />
-
-              <Box>
-                <TextField
-                  label="Schedule"
-                  value={createForm.cron_expression}
-                  onChange={(e) =>
-                    setCreateForm((prev) => ({ ...prev, cron_expression: e.target.value }))
-                  }
-                  required
-                  fullWidth
-                  size="medium"
-                  placeholder="0 2 * * *"
-                  InputProps={{
-                    sx: {
-                      fontFamily: 'monospace',
-                      fontSize: '1.1rem',
-                      letterSpacing: '0.1em',
-                    },
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <CronBuilderDialog
-                          value={createForm.cron_expression}
-                          onChange={(localCron) =>
-                            setCreateForm((prev) => ({ ...prev, cron_expression: localCron }))
-                          }
-                          dialogTitle="Configure Schedule"
-                        />
-                      </InputAdornment>
-                    ),
-                  }}
-                  InputLabelProps={{
-                    sx: { fontSize: '1.1rem' },
-                  }}
-                />
-              </Box>
-
-              <TextField
-                label="Description"
-                value={createForm.description}
-                onChange={(e) =>
-                  setCreateForm((prev) => ({ ...prev, description: e.target.value }))
-                }
-                multiline
-                rows={2}
-                placeholder="Optional description"
-                fullWidth
-                size="medium"
-                InputProps={{
-                  sx: { fontSize: '1.1rem' },
-                }}
-                InputLabelProps={{
-                  sx: { fontSize: '1.1rem' },
-                }}
-              />
-
-              <TextField
-                label="Archive Name Template"
-                value={createForm.archive_name_template}
-                onChange={(e) =>
-                  setCreateForm((prev) => ({ ...prev, archive_name_template: e.target.value }))
-                }
-                fullWidth
-                size="medium"
-                helperText="Customize archive naming. Available placeholders: {job_name}, {now}, {date}, {time}, {timestamp}"
-                InputProps={{
-                  sx: { fontSize: '1.1rem', fontFamily: 'monospace' },
-                }}
-                InputLabelProps={{
-                  sx: { fontSize: '1.1rem' },
-                }}
-              />
-
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={createForm.enabled}
-                    onChange={(e) =>
-                      setCreateForm((prev) => ({ ...prev, enabled: e.target.checked }))
-                    }
-                  />
-                }
-                label="Enable immediately"
-              />
-
-              {/* Multi-Repo Scripts Section */}
-              {createForm.repository_ids.length > 0 && (
-                <Box sx={{ mt: 2, p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                  <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-                    Schedule-Level Scripts
-                  </Typography>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    display="block"
-                    sx={{ mb: 2 }}
-                  >
-                    These scripts run once per schedule (e.g., wake server before all backups,
-                    shutdown after)
-                  </Typography>
-
-                  <Stack spacing={2}>
-                    <FormControl fullWidth size="medium">
-                      <InputLabel sx={{ fontSize: '1.1rem' }}>
-                        Pre-Backup Script (runs once before all backups)
-                      </InputLabel>
-                      <Select
-                        value={createForm.pre_backup_script_id || ''}
-                        onChange={(e) =>
-                          setCreateForm((prev) => ({
-                            ...prev,
-                            pre_backup_script_id: e.target.value ? Number(e.target.value) : null,
-                          }))
-                        }
-                        label="Pre-Backup Script (runs once before all backups)"
-                        sx={{ fontSize: '1.1rem', minHeight: 56 }}
-                      >
-                        <MenuItem value="">
-                          <em>None</em>
-                        </MenuItem>
-                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                        {scriptsData?.data?.map((script: any) => (
-                          <MenuItem key={script.id} value={script.id}>
-                            {script.name}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-
-                    <FormControl fullWidth size="medium">
-                      <InputLabel sx={{ fontSize: '1.1rem' }}>
-                        Post-Backup Script (runs once after all backups)
-                      </InputLabel>
-                      <Select
-                        value={createForm.post_backup_script_id || ''}
-                        onChange={(e) =>
-                          setCreateForm((prev) => ({
-                            ...prev,
-                            post_backup_script_id: e.target.value ? Number(e.target.value) : null,
-                          }))
-                        }
-                        label="Post-Backup Script (runs once after all backups)"
-                        sx={{ fontSize: '1.1rem', minHeight: 56 }}
-                      >
-                        <MenuItem value="">
-                          <em>None</em>
-                        </MenuItem>
-                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                        {scriptsData?.data?.map((script: any) => (
-                          <MenuItem key={script.id} value={script.id}>
-                            {script.name}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={createForm.run_repository_scripts}
-                          onChange={(e) =>
-                            setCreateForm((prev) => ({
-                              ...prev,
-                              run_repository_scripts: e.target.checked,
-                            }))
-                          }
-                        />
-                      }
-                      label={
-                        <Box>
-                          <Typography variant="body2">Run repository-level scripts</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            If enabled, each repository's pre/post scripts will run during its
-                            backup
-                          </Typography>
-                        </Box>
-                      }
-                    />
-                  </Stack>
-                </Box>
-              )}
-
-              {/* Maintenance Section */}
-              <Box sx={{ mt: 2, p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-                  Maintenance Options
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
-                  Automatically run prune and compact operations after successful backups
-                </Typography>
-
-                <Stack spacing={2}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={createForm.run_prune_after}
-                        onChange={(e) =>
-                          setCreateForm((prev) => ({ ...prev, run_prune_after: e.target.checked }))
-                        }
-                      />
-                    }
-                    label="Run prune after backup"
-                  />
-
-                  {createForm.run_prune_after && (
-                    <Box
-                      sx={{ pl: 4, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}
-                    >
-                      <TextField
-                        label="Keep Hourly"
-                        type="number"
-                        value={createForm.prune_keep_hourly}
-                        onChange={(e) => {
-                          const value = parseInt(e.target.value, 10)
-                          setCreateForm((prev) => ({
-                            ...prev,
-                            prune_keep_hourly: isNaN(value) ? 0 : Math.max(0, value),
-                          }))
-                        }}
-                        inputProps={{ min: 0 }}
-                        size="small"
-                        helperText="Hourly backups to keep (0 = disabled)"
-                      />
-                      <TextField
-                        label="Keep Daily"
-                        type="number"
-                        value={createForm.prune_keep_daily}
-                        onChange={(e) =>
-                          setCreateForm((prev) => ({
-                            ...prev,
-                            prune_keep_daily: parseInt(e.target.value) || 0,
-                          }))
-                        }
-                        inputProps={{ min: 0 }}
-                        size="small"
-                        helperText="Daily backups to keep"
-                      />
-                      <TextField
-                        label="Keep Weekly"
-                        type="number"
-                        value={createForm.prune_keep_weekly}
-                        onChange={(e) =>
-                          setCreateForm((prev) => ({
-                            ...prev,
-                            prune_keep_weekly: parseInt(e.target.value) || 0,
-                          }))
-                        }
-                        inputProps={{ min: 0 }}
-                        size="small"
-                        helperText="Weekly backups to keep"
-                      />
-                      <TextField
-                        label="Keep Monthly"
-                        type="number"
-                        value={createForm.prune_keep_monthly}
-                        onChange={(e) =>
-                          setCreateForm((prev) => ({
-                            ...prev,
-                            prune_keep_monthly: parseInt(e.target.value) || 0,
-                          }))
-                        }
-                        inputProps={{ min: 0 }}
-                        size="small"
-                        helperText="Monthly backups to keep"
-                      />
-                      <TextField
-                        label="Keep Quarterly"
-                        type="number"
-                        value={createForm.prune_keep_quarterly}
-                        onChange={(e) => {
-                          const value = parseInt(e.target.value, 10)
-                          setCreateForm((prev) => ({
-                            ...prev,
-                            prune_keep_quarterly: isNaN(value) ? 0 : Math.max(0, value),
-                          }))
-                        }}
-                        inputProps={{ min: 0 }}
-                        size="small"
-                        helperText="Quarterly backups to keep (0 = disabled)"
-                      />
-                      <TextField
-                        label="Keep Yearly"
-                        type="number"
-                        value={createForm.prune_keep_yearly}
-                        onChange={(e) =>
-                          setCreateForm((prev) => ({
-                            ...prev,
-                            prune_keep_yearly: parseInt(e.target.value) || 0,
-                          }))
-                        }
-                        inputProps={{ min: 0 }}
-                        size="small"
-                        helperText="Yearly backups to keep"
-                      />
-                    </Box>
-                  )}
-
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={createForm.run_compact_after}
-                        onChange={(e) =>
-                          setCreateForm((prev) => ({
-                            ...prev,
-                            run_compact_after: e.target.checked,
-                          }))
-                        }
-                      />
-                    }
-                    label="Run compact after prune"
-                  />
-                  {createForm.run_compact_after && (
-                    <Alert severity="info" sx={{ ml: 4 }}>
-                      Compact will reclaim disk space after removing old archives
-                    </Alert>
-                  )}
-                </Stack>
-              </Box>
-            </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setShowCreateModal(false)}>Cancel</Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={createJobMutation.isPending}
-              startIcon={
-                createJobMutation.isPending ? <CircularProgress size={16} /> : <Plus size={16} />
-              }
-            >
-              {createJobMutation.isPending ? 'Creating...' : 'Create Job'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
-
-      {/* Edit Job Modal */}
-      <Dialog open={!!editingJob} onClose={() => setEditingJob(null)} maxWidth="sm" fullWidth>
-        <DialogTitle>Edit Scheduled Job</DialogTitle>
-        <form onSubmit={handleUpdateJob}>
-          <DialogContent>
-            <Stack spacing={3}>
-              <TextField
-                label="Job Name"
-                value={editForm.name}
-                onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
-                required
-                fullWidth
-                size="medium"
-                InputProps={{
-                  sx: { fontSize: '1.1rem' },
-                }}
-                InputLabelProps={{
-                  sx: { fontSize: '1.1rem' },
-                }}
-              />
-
-              <MultiRepositorySelector
-                repositories={repositories}
-                selectedIds={editForm.repository_ids}
-                onChange={(ids) => setEditForm((prev) => ({ ...prev, repository_ids: ids }))}
-                label="Repositories"
-                placeholder="Select repositories..."
-                helperText="Choose repositories to backup. Use arrows to change backup order for multi-repository schedules."
-                required
-                size="medium"
-                allowReorder={true}
-                filterMode="observe"
-              />
-
-              <Box>
-                <TextField
-                  label="Schedule"
-                  value={editForm.cron_expression}
-                  onChange={(e) =>
-                    setEditForm((prev) => ({ ...prev, cron_expression: e.target.value }))
-                  }
-                  required
-                  fullWidth
-                  size="medium"
-                  InputProps={{
-                    sx: {
-                      fontFamily: 'monospace',
-                      fontSize: '1.1rem',
-                      letterSpacing: '0.1em',
-                    },
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <CronBuilderDialog
-                          value={editForm.cron_expression}
-                          onChange={(localCron) =>
-                            setEditForm((prev) => ({ ...prev, cron_expression: localCron }))
-                          }
-                          dialogTitle="Configure Schedule"
-                        />
-                      </InputAdornment>
-                    ),
-                  }}
-                  InputLabelProps={{
-                    sx: { fontSize: '1.1rem' },
-                  }}
-                />
-              </Box>
-
-              <TextField
-                label="Description"
-                value={editForm.description}
-                onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))}
-                multiline
-                rows={2}
-                fullWidth
-                size="medium"
-                InputProps={{
-                  sx: { fontSize: '1.1rem' },
-                }}
-                InputLabelProps={{
-                  sx: { fontSize: '1.1rem' },
-                }}
-              />
-
-              <TextField
-                label="Archive Name Template"
-                value={editForm.archive_name_template}
-                onChange={(e) =>
-                  setEditForm((prev) => ({ ...prev, archive_name_template: e.target.value }))
-                }
-                fullWidth
-                size="medium"
-                helperText="Customize archive naming. Available placeholders: {job_name}, {now}, {date}, {time}, {timestamp}"
-                InputProps={{
-                  sx: { fontSize: '1.1rem', fontFamily: 'monospace' },
-                }}
-                InputLabelProps={{
-                  sx: { fontSize: '1.1rem' },
-                }}
-              />
-
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={editForm.enabled}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({ ...prev, enabled: e.target.checked }))
-                    }
-                  />
-                }
-                label="Enabled"
-              />
-
-              {/* Multi-Repo Scripts Section */}
-              {editForm.repository_ids.length > 0 && (
-                <Box sx={{ mt: 2, p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                  <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-                    Schedule-Level Scripts
-                  </Typography>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    display="block"
-                    sx={{ mb: 2 }}
-                  >
-                    These scripts run once per schedule (e.g., wake server before all backups,
-                    shutdown after)
-                  </Typography>
-
-                  <Stack spacing={2}>
-                    <FormControl fullWidth size="medium">
-                      <InputLabel sx={{ fontSize: '1.1rem' }}>
-                        Pre-Backup Script (runs once before all backups)
-                      </InputLabel>
-                      <Select
-                        value={editForm.pre_backup_script_id || ''}
-                        onChange={(e) =>
-                          setEditForm((prev) => ({
-                            ...prev,
-                            pre_backup_script_id: e.target.value ? Number(e.target.value) : null,
-                          }))
-                        }
-                        label="Pre-Backup Script (runs once before all backups)"
-                        sx={{ fontSize: '1.1rem', minHeight: 56 }}
-                      >
-                        <MenuItem value="">
-                          <em>None</em>
-                        </MenuItem>
-                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                        {scriptsData?.data?.map((script: any) => (
-                          <MenuItem key={script.id} value={script.id}>
-                            {script.name}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-
-                    <FormControl fullWidth size="medium">
-                      <InputLabel sx={{ fontSize: '1.1rem' }}>
-                        Post-Backup Script (runs once after all backups)
-                      </InputLabel>
-                      <Select
-                        value={editForm.post_backup_script_id || ''}
-                        onChange={(e) =>
-                          setEditForm((prev) => ({
-                            ...prev,
-                            post_backup_script_id: e.target.value ? Number(e.target.value) : null,
-                          }))
-                        }
-                        label="Post-Backup Script (runs once after all backups)"
-                        sx={{ fontSize: '1.1rem', minHeight: 56 }}
-                      >
-                        <MenuItem value="">
-                          <em>None</em>
-                        </MenuItem>
-                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                        {scriptsData?.data?.map((script: any) => (
-                          <MenuItem key={script.id} value={script.id}>
-                            {script.name}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={editForm.run_repository_scripts}
-                          onChange={(e) =>
-                            setEditForm((prev) => ({
-                              ...prev,
-                              run_repository_scripts: e.target.checked,
-                            }))
-                          }
-                        />
-                      }
-                      label={
-                        <Box>
-                          <Typography variant="body2">Run repository-level scripts</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            If enabled, each repository's pre/post scripts will run during its
-                            backup
-                          </Typography>
-                        </Box>
-                      }
-                    />
-                  </Stack>
-                </Box>
-              )}
-
-              {/* Maintenance Section */}
-              <Box sx={{ mt: 2, p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-                  Maintenance Options
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
-                  Automatically run prune and compact operations after successful backups
-                </Typography>
-
-                <Stack spacing={2}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={editForm.run_prune_after}
-                        onChange={(e) =>
-                          setEditForm((prev) => ({ ...prev, run_prune_after: e.target.checked }))
-                        }
-                      />
-                    }
-                    label="Run prune after backup"
-                  />
-
-                  {editForm.run_prune_after && (
-                    <Box
-                      sx={{ pl: 4, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}
-                    >
-                      <TextField
-                        label="Keep Hourly"
-                        type="number"
-                        value={editForm.prune_keep_hourly}
-                        onChange={(e) => {
-                          const value = parseInt(e.target.value, 10)
-                          setEditForm((prev) => ({
-                            ...prev,
-                            prune_keep_hourly: isNaN(value) ? 0 : Math.max(0, value),
-                          }))
-                        }}
-                        inputProps={{ min: 0 }}
-                        size="small"
-                        helperText="Hourly backups to keep (0 = disabled)"
-                      />
-                      <TextField
-                        label="Keep Daily"
-                        type="number"
-                        value={editForm.prune_keep_daily}
-                        onChange={(e) =>
-                          setEditForm((prev) => ({
-                            ...prev,
-                            prune_keep_daily: parseInt(e.target.value) || 0,
-                          }))
-                        }
-                        inputProps={{ min: 0 }}
-                        size="small"
-                        helperText="Daily backups to keep"
-                      />
-                      <TextField
-                        label="Keep Weekly"
-                        type="number"
-                        value={editForm.prune_keep_weekly}
-                        onChange={(e) =>
-                          setEditForm((prev) => ({
-                            ...prev,
-                            prune_keep_weekly: parseInt(e.target.value) || 0,
-                          }))
-                        }
-                        inputProps={{ min: 0 }}
-                        size="small"
-                        helperText="Weekly backups to keep"
-                      />
-                      <TextField
-                        label="Keep Monthly"
-                        type="number"
-                        value={editForm.prune_keep_monthly}
-                        onChange={(e) =>
-                          setEditForm((prev) => ({
-                            ...prev,
-                            prune_keep_monthly: parseInt(e.target.value) || 0,
-                          }))
-                        }
-                        inputProps={{ min: 0 }}
-                        size="small"
-                        helperText="Monthly backups to keep"
-                      />
-                      <TextField
-                        label="Keep Quarterly"
-                        type="number"
-                        value={editForm.prune_keep_quarterly}
-                        onChange={(e) => {
-                          const value = parseInt(e.target.value, 10)
-                          setEditForm((prev) => ({
-                            ...prev,
-                            prune_keep_quarterly: isNaN(value) ? 0 : Math.max(0, value),
-                          }))
-                        }}
-                        inputProps={{ min: 0 }}
-                        size="small"
-                        helperText="Quarterly backups to keep (0 = disabled)"
-                      />
-                      <TextField
-                        label="Keep Yearly"
-                        type="number"
-                        value={editForm.prune_keep_yearly}
-                        onChange={(e) =>
-                          setEditForm((prev) => ({
-                            ...prev,
-                            prune_keep_yearly: parseInt(e.target.value) || 0,
-                          }))
-                        }
-                        inputProps={{ min: 0 }}
-                        size="small"
-                        helperText="Yearly backups to keep"
-                      />
-                    </Box>
-                  )}
-
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={editForm.run_compact_after}
-                        onChange={(e) =>
-                          setEditForm((prev) => ({ ...prev, run_compact_after: e.target.checked }))
-                        }
-                      />
-                    }
-                    label="Run compact after prune"
-                  />
-                  {editForm.run_compact_after && (
-                    <Alert severity="info" sx={{ ml: 4 }}>
-                      Compact will reclaim disk space after removing old archives
-                    </Alert>
-                  )}
-                </Stack>
-              </Box>
-            </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setEditingJob(null)}>Cancel</Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={updateJobMutation.isPending}
-              startIcon={updateJobMutation.isPending ? <CircularProgress size={16} /> : null}
-            >
-              {updateJobMutation.isPending ? 'Updating...' : 'Update Job'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
-
       {/* Delete Confirmation Dialog */}
-      <Dialog
+      <DeleteScheduleDialog
         open={!!deleteConfirmJob}
+        job={deleteConfirmJob}
         onClose={() => setDeleteConfirmJob(null)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>
-          <Stack direction="row" spacing={2} alignItems="center">
-            <Box
-              sx={{
-                width: 48,
-                height: 48,
-                borderRadius: '50%',
-                backgroundColor: 'error.lighter',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <AlertCircle size={24} color="#d32f2f" />
-            </Box>
-            <Typography variant="h6" fontWeight={600}>
-              Delete Scheduled Job
-            </Typography>
-          </Stack>
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2">
-            Are you sure you want to delete the scheduled job{' '}
-            <strong>"{deleteConfirmJob?.name}"</strong>?
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            This action cannot be undone. The job will no longer run automatically.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteConfirmJob(null)}>Cancel</Button>
-          <Button
-            onClick={handleDeleteJob}
-            variant="contained"
-            color="error"
-            disabled={deleteJobMutation.isPending}
-            startIcon={
-              deleteJobMutation.isPending ? <CircularProgress size={16} /> : <Trash2 size={16} />
-            }
-          >
-            {deleteJobMutation.isPending ? 'Deleting...' : 'Delete Job'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={handleDeleteJob}
+        isDeleting={deleteJobMutation.isPending}
+      />
+
+      {/* Schedule Wizard */}
+      <ScheduleWizard
+        open={showScheduleWizard}
+        onClose={() => setShowScheduleWizard(false)}
+        mode={wizardMode}
+        scheduledJob={editingJobForWizard}
+        repositories={repositories || []}
+        scripts={scriptsData?.data || []}
+        onSubmit={handleWizardSubmit}
+      />
     </Box>
   )
 }

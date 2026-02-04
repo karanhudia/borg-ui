@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Float, BigInteger, Table
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Float, BigInteger, Table, UniqueConstraint, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.database.database import Base
@@ -237,6 +237,8 @@ class ScheduledJob(Base):
     run_repository_scripts = Column(Boolean, default=False, nullable=False)  # Whether to run per-repository pre/post scripts
     pre_backup_script_id = Column(Integer, ForeignKey("scripts.id"), nullable=True)  # Schedule-level pre-backup script (runs once)
     post_backup_script_id = Column(Integer, ForeignKey("scripts.id"), nullable=True)  # Schedule-level post-backup script (runs once)
+    pre_backup_script_parameters = Column(JSON, nullable=True)  # Parameters for pre-backup script (JSON dict)
+    post_backup_script_parameters = Column(JSON, nullable=True)  # Parameters for post-backup script (JSON dict)
 
     # Prune and compact settings
     run_prune_after = Column(Boolean, default=False)  # Run prune after backup
@@ -260,6 +262,9 @@ class ScheduledJob(Base):
 class ScheduledJobRepository(Base):
     """Junction table for multi-repository scheduled jobs"""
     __tablename__ = "scheduled_job_repositories"
+    __table_args__ = (
+        UniqueConstraint('scheduled_job_id', 'repository_id', name='uq_schedule_repository'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     scheduled_job_id = Column(Integer, ForeignKey("scheduled_jobs.id", ondelete="CASCADE"), nullable=False, index=True)
