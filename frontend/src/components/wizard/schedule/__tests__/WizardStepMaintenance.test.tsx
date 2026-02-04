@@ -115,9 +115,7 @@ describe('WizardStepMaintenance', () => {
 
     render(<WizardStepMaintenance {...defaultProps} data={dataWithCompact} />)
 
-    expect(
-      screen.getByText(/Compact reclaims disk space after prune/i)
-    ).toBeInTheDocument()
+    expect(screen.getByText(/Compact reclaims disk space after prune/i)).toBeInTheDocument()
   })
 
   it('does not display compact info alert when compact is disabled', () => {
