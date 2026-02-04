@@ -9,7 +9,7 @@ description: "Configure Redis cache for 600x faster archive browsing"
 
 {: .no_toc }
 
-Borg Web UI uses Redis-based caching to dramatically improve performance when browsing large archives. Without cache, navigating folders in a repository with 1M+ files can take 60-90 seconds. With cache, it takes less than 100ms (600x faster).
+Redis caching improves archive browsing from 60-90 seconds → <100ms for large repositories (600x faster). Redis is included in the recommended [installation](installation) setup.
 
 ---
 
@@ -21,84 +21,31 @@ Borg Web UI uses Redis-based caching to dramatically improve performance when br
 
 ---
 
-## Quick Start
+## Do I Need This?
 
-**Complete docker-compose.yml with Redis:**
+**Redis is already included** in the recommended `docker-compose.yml` from the [Installation Guide](installation). It works automatically with no configuration needed.
 
-```yaml
-version: '3.8'
+**Skip this guide if:**
+- You're using the recommended installation (Redis is already set up)
+- Your repositories have less than 100,000 files
+- Archive browsing speed is acceptable
 
-services:
-  app:
-    image: ainullcode/borg-ui:latest
-    container_name: borg-web-ui
-    restart: unless-stopped
-    ports:
-      - "8081:8081"
-    volumes:
-      - borg_data:/data
-      - borg_cache:/home/borg/.cache/borg
-      - /home/yourusername:/local:rw  # Replace with your path
-    environment:
-      - PUID=1000
-      - PGID=1000
-      # Redis connection (uses redis service below)
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_DB=0
-      # Cache defaults (override in Settings → Cache UI)
-      - CACHE_TTL_SECONDS=7200
-      - CACHE_MAX_SIZE_MB=2048
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - borg_network
-
-  redis:
-    image: redis:7-alpine
-    container_name: borg-redis
-    restart: unless-stopped
-    command: >
-      redis-server
-      --maxmemory 2gb
-      --maxmemory-policy allkeys-lru
-      --save ""
-      --appendonly no
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
-    networks:
-      - borg_network
-
-networks:
-  borg_network:
-    driver: bridge
-
-volumes:
-  borg_data:
-    driver: local
-  borg_cache:
-    driver: local
-```
-
-Start: `docker compose up -d`
-
-Then configure cache settings in **Settings → Cache** tab.
+**Use this guide for:**
+- Setting up external Redis for repositories with 1M+ files
+- Troubleshooting cache issues
+- Advanced performance tuning
 
 ---
 
-## Quick Facts
+## Quick Performance Check
 
-- **Performance:** 60-90 seconds → <100ms for folder navigation
-- **Default:** 2-hour cache TTL, 2GB size limit
-- **Backends:** External Redis → Local Redis (Docker) → In-memory fallback
-- **Configuration:** Via UI (Settings → Cache tab) or environment variables
+Browse an archive twice - if the second time is instant, your cache is working.
+
+| Archive Size | Files | Without Cache | With Cache |
+|-------------|-------|---------------|------------|
+| Small | 1,000 | ~1 second | <100ms |
+| Medium | 100,000 | ~10 seconds | <100ms |
+| Large | 1,000,000 | 60-90 seconds | <100ms |
 
 ---
 

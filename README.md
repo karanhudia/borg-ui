@@ -1,10 +1,23 @@
 <div align="center">
-  
-**A modern web interface for [Borg Backup](https://borgbackup.readthedocs.io/)**
+    <h2>
+        <img src="logo.png" alt="Borg UI Logo" width="80" height="80" style="background-color: #00dd00; border-radius: 50%; padding: 10px; vertical-align: middle;">
+        <span style="vertical-align: middle;">BORG UI</span>
+    </h2>
+</div>
 
-Zero-configuration deployment - just run and go.
+---
 
-**[📚 Documentation](https://karanhudia.github.io/borg-ui)** • **[🐳 Docker Hub](https://hub.docker.com/r/ainullcode/borg-ui)** • **[💬 Discord](https://discord.gg/5KfVa5QkdQ)**
+<div align="center">
+  <h5>
+      <a href="https://karanhudia.github.io/borg-ui">Documentation</a>
+      <span> | </span>
+      <a href="https://hub.docker.com/r/ainullcode/borg-ui">Docker Hub</a>
+      <span> | </span>
+      <a href="https://discord.gg/5KfVa5QkdQ">Discord</a>
+  </h5>
+</div>
+
+<div align="center">
 
 [![Docker Hub](https://img.shields.io/docker/pulls/ainullcode/borg-ui)](https://hub.docker.com/r/ainullcode/borg-ui)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](LICENSE)
@@ -12,6 +25,16 @@ Zero-configuration deployment - just run and go.
 [![Tests](https://github.com/karanhudia/borg-ui/workflows/Tests/badge.svg)](https://github.com/karanhudia/borg-ui/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/karanhudia/borg-ui/branch/main/graph/badge.svg)](https://codecov.io/gh/karanhudia/borg-ui)
 [![Discord](https://img.shields.io/discord/1331215029498732686?color=5865F2&logo=discord&logoColor=white&label=Discord)](https://discord.gg/5KfVa5QkdQ)
+
+</div>
+
+<p align="center">
+    <strong>A modern web interface for <a href="https://borgbackup.readthedocs.io/">Borg Backup</a></strong>
+</p>
+
+<p align="center">
+    Zero-configuration deployment - just run and go.
+</p>
 
 </div>
 
@@ -99,145 +122,38 @@ Create and manage automated backup schedules with visual cron builder. Configure
 
 ---
 
-## Quick Start
+## Getting Started
 
-### Docker Compose (Recommended)
-
-Create `docker-compose.yml`:
-
-```yaml
-version: '3.8'
-
-services:
-  borg-ui:
-    image: ainullcode/borg-ui:latest
-    container_name: borg-web-ui
-    restart: unless-stopped
-    ports:
-      - "8081:8081"
-    volumes:
-      - borg_data:/data
-      - borg_cache:/home/borg/.cache/borg
-      # Mount directories you want to backup (REPLACE with your actual paths)
-      - /home/yourusername:/local:rw           # Replace with your directory path
-      # - /mnt/data:/local/data:rw             # Additional directories as needed
-    environment:
-      - TZ=America/Chicago  # Set your timezone
-      - PUID=1000
-      - PGID=1000
-
-volumes:
-  borg_data:
-  borg_cache:
-```
-
-**⚠️ Security Note:** Replace `/home/yourusername` with your actual directory path. Only mount directories you want to backup. See the [Configuration Guide](https://karanhudia.github.io/borg-ui/configuration) for more examples and security best practices.
-
-**📝 Remote-to-Remote Backups:** Backing up from one remote machine to another (via SSH URLs) is supported out-of-the-box. The docker-compose.yml includes FUSE support for mounting remote filesystems.
-
-Start the container:
+**Installation is simple with Docker:**
 
 ```bash
-docker compose up -d
-```
-
-Access at `http://localhost:8081`
-
-**Default credentials:** `admin` / `admin123` (you'll be prompted to change on first login)
-
----
-
-### Docker Run
-
-```bash
-docker volume create borg_data
-docker volume create borg_cache
-
+# Pull and run
 docker run -d \
   --name borg-web-ui \
-  --restart unless-stopped \
   -p 8081:8081 \
-  -e TZ=America/Chicago \
-  -e PUID=1000 \
-  -e PGID=1000 \
-  --cap-add SYS_ADMIN \
-  --device /dev/fuse \
   -v borg_data:/data \
   -v borg_cache:/home/borg/.cache/borg \
   -v /home/yourusername:/local:rw \
   ainullcode/borg-ui:latest
 ```
 
-**Notes:**
-- Replace `/home/yourusername` with your actual directory path (e.g., `/home/john`, `/Users/sarah`, `/mnt/data`)
-- Replace `1000` with your user/group ID. Find yours with `id -u && id -g`
-- Add more `-v` flags for additional directories you want to backup
-- See [Configuration Guide](https://karanhudia.github.io/borg-ui/configuration) for security best practices
+Access at `http://localhost:8081` • Default credentials: `admin` / `admin123`
+
+**📖 [Installation Guide](https://karanhudia.github.io/borg-ui/installation)** - Complete setup with Docker Compose, Redis, Portainer, Unraid
 
 ---
 
 ## Documentation
 
-**[Full Documentation](https://karanhudia.github.io/borg-ui)** - Complete guides and tutorials
+**[📚 Full Documentation](https://karanhudia.github.io/borg-ui)** - Complete guides and tutorials
 
-- [Installation Guide](https://karanhudia.github.io/borg-ui/installation) - Detailed installation for all platforms
-- [Configuration Guide](https://karanhudia.github.io/borg-ui/configuration) - Environment variables and setup options
-- [Docker Container Hooks](docs/docker-hooks.md) - Stop/start Docker containers during backups
-- [Notifications Setup](https://karanhudia.github.io/borg-ui/notifications) - Configure alerts via email, Slack, Discord, and more
-- [SSH Keys Guide](https://karanhudia.github.io/borg-ui/ssh-keys) - Setting up SSH for remote backups
-- [Security Guide](https://karanhudia.github.io/borg-ui/security) - Best practices and security recommendations
-- [API Documentation](http://localhost:8081/api/docs) - Interactive API docs (after installation)
-
----
-
-## Configuration
-
-### Auto-Configured on First Run
-
-- **SECRET_KEY** - Randomly generated and persisted
-- **Database** - SQLite at `/data/borg.db` (includes encrypted SSH keys)
-- **SSH Keys** - Stored encrypted in database, deployed to `/home/borg/.ssh` at runtime
-
-### Optional Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` | Application port | `8081` |
-| `TZ` | Timezone (e.g., `America/Chicago`, `Europe/London`, `Asia/Kolkata`) | Host timezone |
-| `PUID` | User ID for file permissions | `1001` |
-| `PGID` | Group ID for file permissions | `1001` |
-| `LOG_LEVEL` | Logging level | `INFO` |
-
----
-
-## Data Persistence
-
-Two volumes are used for persistent data:
-
-- **`borg_data`** - Application data, database, SSH keys, logs
-- **`borg_cache`** - Borg repository caches for better performance
-
-### Volume Mounts for Backup Sources
-
-**⚠️ Important Security Consideration:**
-
-The container needs access to directories you want to backup. Instead of mounting your entire filesystem (`/:/local:rw`), **mount only specific directories** you need:
-
-```yaml
-volumes:
-  # ✅ Recommended: Mount specific directories
-  - /home/yourusername:/local:rw       # Replace with your path
-  - /mnt/data:/local/data:rw           # Additional directories
-
-  # ❌ NOT Recommended: Full filesystem access
-  # - /:/local:rw  # Security risk - avoid unless absolutely necessary
-```
-
-**Best Practices:**
-- Mount only directories that contain data to backup
-- Use read-only (`:ro`) for backup-only directories if you don't need to restore to them
-- For multiple directories, add multiple volume mounts instead of mounting root
-- See the [Configuration Guide](https://karanhudia.github.io/borg-ui/configuration/) for detailed examples
+Quick links:
+- [Installation Guide](https://karanhudia.github.io/borg-ui/installation) - Detailed setup for all platforms
+- [Configuration Guide](https://karanhudia.github.io/borg-ui/configuration) - Environment variables and customization
+- [Usage Guide](https://karanhudia.github.io/borg-ui/usage-guide) - Creating your first backup
+- [Notifications Setup](https://karanhudia.github.io/borg-ui/notifications) - Email, Slack, Discord alerts
+- [SSH Keys Guide](https://karanhudia.github.io/borg-ui/ssh-keys) - Remote backup setup
+- [Security Guide](https://karanhudia.github.io/borg-ui/security) - Best practices
 
 ---
 
@@ -250,39 +166,9 @@ volumes:
 
 ---
 
-## Development
+## Contributing
 
-For developers who want to contribute:
-
-### Quick Start (Docker - No Hot Reload)
-
-```bash
-git clone https://github.com/karanhudia/borg-ui.git
-cd borg-ui
-docker compose up -d --build
-```
-
-### Development with Hot Reload
-
-For active development with automatic code reloading.
-
-**Prerequisites:** Python 3.11+, Node.js 20.19+, Redis (or Docker for Redis only)
-
-```bash
-# Run everything with one command (starts Redis, backend, and frontend)
-./scripts/dev.sh
-
-# Or run frontend and backend separately:
-./scripts/backend-dev.sh  # Terminal 1: Backend on :8081
-cd frontend && npm run dev  # Terminal 2: Frontend on :7879
-```
-
-- Frontend: http://localhost:7879 (Vite HMR)
-- Backend: http://localhost:8081 (Uvicorn reload)
-
-See [Development Guide](https://karanhudia.github.io/borg-ui/development) for detailed setup.
-
-See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for contribution guidelines.
+Want to help improve Borg Web UI? See our [Contributing Guide](.github/CONTRIBUTING.md) and [Development Guide](https://karanhudia.github.io/borg-ui/development) to get started.
 
 ---
 
