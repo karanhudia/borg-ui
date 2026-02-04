@@ -100,9 +100,7 @@ describe('WizardStepScheduleConfig', () => {
   it('displays helper text for cron expression', () => {
     render(<WizardStepScheduleConfig {...defaultProps} />)
 
-    expect(
-      screen.getByText(/Click the clock icon to use the visual builder/i)
-    ).toBeInTheDocument()
+    expect(screen.getByText(/Click the clock icon to use the visual builder/i)).toBeInTheDocument()
   })
 
   it('passes jobName to ArchiveNameTemplateInput', () => {

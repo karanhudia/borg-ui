@@ -66,9 +66,7 @@ describe('WizardStepBasicInfo', () => {
   it('displays warning when no repositories are selected', () => {
     render(<WizardStepBasicInfo {...defaultProps} data={defaultData} />)
 
-    expect(
-      screen.getByText(/Select at least one repository to continue/i)
-    ).toBeInTheDocument()
+    expect(screen.getByText(/Select at least one repository to continue/i)).toBeInTheDocument()
   })
 
   it('does not display warning when repositories are selected', () => {
