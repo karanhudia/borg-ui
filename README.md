@@ -1,8 +1,8 @@
 <div align="center">
-    <h2>
-        <img src="logo.png" alt="Borg UI Logo" width="80" height="80" style="background-color: #00dd00; border-radius: 50%; padding: 10px; vertical-align: middle;">
-        <span style="vertical-align: middle;">BORG UI</span>
-    </h2>
+    <h1>
+        <img src="LogoWithBackground.png" alt="Borg UI Logo" width="80" style="vertical-align: middle;">
+        BORG UI
+    </h1>
 </div>
 
 ---
