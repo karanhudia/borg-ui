@@ -360,13 +360,14 @@ services:
       # Option 1: External Redis URL (highest priority)
       # Takes precedence over host/port settings
       - REDIS_URL=redis://192.168.1.100:6379/0
+      # With password:
+      # - REDIS_URL=redis://:your-password@192.168.1.100:6379/0
 
-      # Option 2: Local Redis connection details
+      # Option 2: Local Redis (without password only)
       # Used if REDIS_URL is not set
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_DB=0
-      - REDIS_PASSWORD=optional-password
 
       # Cache behavior
       - CACHE_TTL_SECONDS=7200        # 2 hours

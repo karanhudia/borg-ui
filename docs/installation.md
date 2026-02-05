@@ -244,6 +244,18 @@ environment:
   - PGID=1000
 ```
 
+### Connect to External Redis
+
+If Redis is in a separate Docker stack or external server, use `REDIS_URL`:
+
+```yaml
+environment:
+  - REDIS_URL=redis://192.168.1.100:6379/0
+
+  # With password:
+  - REDIS_URL=redis://:your-password@192.168.1.100:6379/0
+```
+
 ---
 
 ## Updating
