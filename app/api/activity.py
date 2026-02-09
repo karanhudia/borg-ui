@@ -573,11 +573,11 @@ async def delete_job(
     if not job:
         raise HTTPException(status_code=404, detail=f"{job_type.capitalize()} job not found")
 
-    # Prevent deletion of running or pending jobs
-    if job.status in ['running', 'pending']:
+    # Prevent deletion of running jobs (allow pending to clean up stuck jobs)
+    if job.status == 'running':
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot delete {job.status} job. Wait for the job to complete or cancel it first."
+            detail=f"Cannot delete running job. Cancel it first or wait for completion."
         )
 
     # Delete log file if it exists
