@@ -132,6 +132,42 @@ async def install_package(
                     error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to start installation: {str(e)}")
 
+@router.put("/{package_id}", response_model=PackageResponse)
+async def update_package(
+    package_id: int,
+    package: PackageCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update package details"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    existing_package = db.query(InstalledPackage).filter(InstalledPackage.id == package_id).first()
+    if not existing_package:
+        raise HTTPException(status_code=404, detail="Package not found")
+
+    # Check if name conflicts with another package
+    if package.name != existing_package.name:
+        name_conflict = db.query(InstalledPackage).filter(
+            InstalledPackage.name == package.name,
+            InstalledPackage.id != package_id
+        ).first()
+        if name_conflict:
+            raise HTTPException(status_code=400, detail=f"Package name '{package.name}' already exists")
+
+    # Update package details
+    existing_package.name = package.name
+    existing_package.install_command = package.install_command
+    existing_package.description = package.description
+    existing_package.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(existing_package)
+
+    logger.info("Package updated", package_id=package_id, name=package.name, user=current_user.username)
+    return existing_package
+
 @router.delete("/{package_id}")
 async def delete_package(
     package_id: int,
