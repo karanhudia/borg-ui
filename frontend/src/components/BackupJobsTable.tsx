@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Box, Typography, Chip, Tooltip } from '@mui/material'
 import { Eye, Download, Trash2, Lock, Play, AlertCircle, Clock, Calendar, User } from 'lucide-react'
 import { toast } from 'react-hot-toast'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, useQuery } from '@tanstack/react-query'
 import DataTable, { Column, ActionButton } from './DataTable'
 import StatusBadge from './StatusBadge'
 import RepositoryCell from './RepositoryCell'
@@ -12,6 +12,8 @@ import ErrorDetailsDialog from './ErrorDetailsDialog'
 import LogViewerDialog from './LogViewerDialog'
 import CancelJobDialog from './CancelJobDialog'
 import DeleteJobDialog from './DeleteJobDialog'
+import LockErrorDialog from './LockErrorDialog'
+import { repositoriesAPI } from '../services/api'
 
 interface EmptyState {
   icon?: React.ReactNode
@@ -127,11 +129,22 @@ export const BackupJobsTable = <T extends Job = Job>({
 }: BackupJobsTableProps<T>) => {
   const queryClient = useQueryClient()
 
+  // Fetch repositories (needed for break lock)
+  const { data: repositoriesData } = useQuery({
+    queryKey: ['repositories'],
+    queryFn: repositoriesAPI.list,
+    enabled: actions.breakLock !== false, // Only fetch if break lock action is enabled
+  })
+
   // Internal state for dialogs
   const [errorJob, setErrorJob] = useState<T | null>(null)
   const [logJob, setLogJob] = useState<T | null>(null)
   const [cancelJob, setCancelJob] = useState<T | null>(null)
   const [deleteJob, setDeleteJob] = useState<T | null>(null)
+  const [lockError, setLockError] = useState<{
+    repositoryId: number
+    repositoryName: string
+  } | null>(null)
 
   // Internal error handler (can be overridden by onErrorDetails prop)
   const handleErrorClick = (job: T) => {
@@ -301,6 +314,28 @@ export const BackupJobsTable = <T extends Job = Job>({
 
   const handleCloseDeleteDialog = () => {
     setDeleteJob(null)
+  }
+
+  // Internal break lock handler (can be overridden by onBreakLock prop)
+  const handleBreakLockClick = async (job: T) => {
+    if (onBreakLock) {
+      onBreakLock(job)
+    } else {
+      // Default implementation: extract repo path from error message and show dialog
+      const repoPath = job.error_message?.match(/LOCK_ERROR::(.+)/)?.[1].split('\n')[0]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const repo = repositoriesData?.data?.repositories?.find((r: any) => r.path === repoPath)
+      if (!repo) {
+        toast.error('Repository not found')
+        return
+      }
+
+      // Show LockErrorDialog
+      setLockError({
+        repositoryId: repo.id,
+        repositoryName: repo.name,
+      })
+    }
   }
 
   // Build columns array based on options
@@ -489,14 +524,14 @@ export const BackupJobsTable = <T extends Job = Job>({
     })
   }
 
-  if (actions.breakLock !== false && onBreakLock) {
+  if (actions.breakLock !== false) {
     actionButtons.push({
       icon: <Lock size={18} />,
       label: 'Break Lock',
-      onClick: onBreakLock,
+      onClick: handleBreakLockClick,
       color: 'warning',
       tooltip: 'Break Lock',
-      show: (job) => job.status === 'running',
+      show: (job) => job.status === 'failed' && !!job.error_message?.includes('LOCK_ERROR::'),
     })
   }
 
@@ -589,6 +624,23 @@ export const BackupJobsTable = <T extends Job = Job>({
         jobId={deleteJob?.id}
         jobType={deleteJob?.type}
       />
+
+      {/* Lock Error Dialog */}
+      {lockError && (
+        <LockErrorDialog
+          open={!!lockError}
+          onClose={() => setLockError(null)}
+          repositoryId={lockError.repositoryId}
+          repositoryName={lockError.repositoryName}
+          onLockBroken={() => {
+            setLockError(null)
+            queryClient.invalidateQueries({ queryKey: ['activity'] })
+            queryClient.invalidateQueries({ queryKey: ['backup-status'] })
+            queryClient.invalidateQueries({ queryKey: ['backup-status-manual'] })
+            queryClient.invalidateQueries({ queryKey: ['backup-status-scheduled'] })
+          }}
+        />
+      )}
     </>
   )
 }
