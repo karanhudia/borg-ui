@@ -1,62 +1,43 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useLocation, useNavigate } from 'react-router-dom'
-import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  Button,
-  CircularProgress,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Stack,
-  IconButton,
-  Alert,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  TextField,
-  alpha,
-} from '@mui/material'
-import {
-  Trash2,
-  AlertCircle,
-  FolderOpen,
-  Eye,
-  Folder,
-  Archive as ArchiveIcon,
-  Database,
-  Gauge,
-  Layers,
-  RotateCcw,
-  HardDrive,
-} from 'lucide-react'
-import { archivesAPI, repositoriesAPI, browseAPI, mountsAPI } from '../services/api'
+import { useLocation } from 'react-router-dom'
+import { Box, Typography, CircularProgress } from '@mui/material'
+import { Folder } from 'lucide-react'
+import { archivesAPI, repositoriesAPI, mountsAPI, restoreAPI } from '../services/api'
+import RepositorySelectorCard from '../components/RepositorySelectorCard'
+import RepositoryStatsGrid from '../components/RepositoryStatsGrid'
+import ArchivesList from '../components/ArchivesList'
+import LastRestoreSection from '../components/LastRestoreSection'
+import DeleteArchiveDialog from '../components/DeleteArchiveDialog'
+import MountArchiveDialog from '../components/MountArchiveDialog'
+import ArchiveContentsDialog from '../components/ArchiveContentsDialog'
 import { toast } from 'react-hot-toast'
-import { Archive, Repository } from '../types'
+import { Archive, Repository } from '@/types'
 import LockErrorDialog from '../components/LockErrorDialog'
-import { formatDate, formatDateCompact, formatBytes as formatBytesUtil } from '../utils/dateUtils'
 import { useMatomo } from '../hooks/useMatomo'
+import ArchiveBrowserDialog from '../components/ArchiveBrowserDialog'
+import RestoreWizard, { RestoreData } from '../components/RestoreWizard'
 
 const Archives: React.FC = () => {
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(null)
   const [selectedRepository, setSelectedRepository] = useState<Repository | null>(null)
   const [viewArchive, setViewArchive] = useState<Archive | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
-  const [currentPath, setCurrentPath] = useState<string>('/')
   const [lockError, setLockError] = useState<{
     repositoryId: number
     repositoryName: string
   } | null>(null)
   const [mountDialogArchive, setMountDialogArchive] = useState<Archive | null>(null)
   const [customMountPoint, setCustomMountPoint] = useState<string>('')
+
+  // Restore functionality
+  const [restoreArchive, setRestoreArchive] = useState<Archive | null>(null)
+  const [selectedPaths, setSelectedPaths] = useState<string[]>([])
+  const [showBrowser, setShowBrowser] = useState<boolean>(false)
+  const [showRestoreWizard, setShowRestoreWizard] = useState<boolean>(false)
+
   const queryClient = useQueryClient()
   const location = useLocation()
-  const navigate = useNavigate()
   const { trackArchive, EventAction } = useMatomo()
 
   // Get repositories list
@@ -100,6 +81,13 @@ const Archives: React.FC = () => {
     retry: false,
   })
 
+  // Get restore jobs
+  const { data: restoreJobsData } = useQuery({
+    queryKey: ['restore-jobs'],
+    queryFn: restoreAPI.getRestoreJobs,
+    refetchInterval: 3000, // Refresh every 3 seconds for live progress
+  })
+
   // Handle repo info error
   React.useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -110,19 +98,6 @@ const Archives: React.FC = () => {
       })
     }
   }, [repoInfoError, selectedRepositoryId, selectedRepository?.name])
-
-  // Get archive contents for current path (on-demand, one level at a time)
-  const { data: archiveContents, isLoading: loadingArchiveContents } = useQuery({
-    queryKey: ['archive-contents', selectedRepositoryId, viewArchive?.name, currentPath],
-    queryFn: async () => {
-      if (!selectedRepositoryId || !viewArchive) {
-        throw new Error('Repository or archive not selected')
-      }
-      const path = currentPath === '/' ? '' : currentPath.replace(/^\//, '')
-      return await browseAPI.getContents(selectedRepositoryId, viewArchive.name, path)
-    },
-    enabled: !!selectedRepositoryId && !!viewArchive,
-  })
 
   // Delete archive mutation
   const deleteArchiveMutation = useMutation({
@@ -196,6 +171,37 @@ const Archives: React.FC = () => {
     },
   })
 
+  // Restore mutation
+  const restoreMutation = useMutation({
+    mutationFn: ({
+      repository,
+      archive,
+      destination,
+      paths,
+    }: {
+      repository: string
+      archive: string
+      destination: string
+      paths: string[]
+    }) => restoreAPI.startRestore(repository, archive, paths, destination),
+    onSuccess: () => {
+      toast.success('Restore job started! Check the Activity tab to monitor progress.', {
+        duration: 6000, // Show longer so user can read it
+      })
+      trackArchive(EventAction.START, selectedRepository?.name)
+
+      setRestoreArchive(null)
+      setSelectedPaths([])
+      setShowRestoreWizard(false)
+
+      queryClient.refetchQueries({ queryKey: ['restore-jobs'] })
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (error: any) => {
+      toast.error(`Failed to start restore: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
   // Handle repository selection
   const handleRepositoryChange = (repositoryId: number) => {
     setSelectedRepositoryId(repositoryId)
@@ -235,6 +241,52 @@ const Archives: React.FC = () => {
     setCustomMountPoint(safeName)
   }
 
+  // Handle archive browser path selection
+  const handlePathsSelected = (paths: string[]) => {
+    setSelectedPaths(paths)
+    setShowBrowser(false)
+    setShowRestoreWizard(true)
+  }
+
+  // Open archive browser for restore
+  const handleRestoreArchiveClick = React.useCallback(
+    (archive: Archive) => {
+      // Always reset paths when opening browser
+      setSelectedPaths([])
+      setRestoreArchive(archive)
+      setShowBrowser(true)
+      setShowRestoreWizard(false)
+      trackArchive(EventAction.VIEW, selectedRepository?.name)
+    },
+    [selectedRepository, trackArchive, EventAction]
+  )
+
+  // Handle restore from wizard
+  const handleRestoreFromWizard = (data: RestoreData) => {
+    if (!selectedRepository || !restoreArchive) {
+      toast.error('Repository or archive not selected')
+      return
+    }
+
+    // Determine destination based on restore strategy
+    let destinationPath: string
+    if (data.restore_strategy === 'custom' && data.custom_path) {
+      destinationPath = data.custom_path
+    } else {
+      // For "original location", extract to root (/)
+      destinationPath = '/'
+    }
+
+    restoreMutation.mutate({
+      repository: selectedRepository.path,
+      archive: restoreArchive.name,
+      destination: destinationPath,
+      paths: selectedPaths,
+    })
+
+    setShowRestoreWizard(false)
+  }
+
   // Get repositories from API response
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const repositories = React.useMemo(
@@ -261,75 +313,28 @@ const Archives: React.FC = () => {
     return new Date(b.start).getTime() - new Date(a.start).getTime()
   })
 
-  // File browser helper functions
-  const getFilesInCurrentPath = () => {
-    if (!archiveContents?.data?.items) return { folders: [], files: [] }
+  // Get last restore job for selected repository
+  const lastRestoreJob = React.useMemo(() => {
+    if (!selectedRepository || !restoreJobsData?.data?.jobs) return null
 
-    const items = archiveContents.data.items
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const folders: any[] = []
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const files: any[] = []
+    // Filter restore jobs for this repository and get the most recent one
+    const repoJobs = restoreJobsData.data.jobs.filter(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (job: any) => job.repository === selectedRepository.path
+    )
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    items.forEach((item: any) => {
-      if (item.type === 'directory') {
-        folders.push({
-          name: item.name,
-          path: item.path,
-          size: item.size,
-          type: 'd',
-        })
-      } else {
-        files.push({
-          name: item.name,
-          path: item.path,
-          size: item.size,
-          mtime: item.mtime,
-          type: 'f',
-        })
-      }
-    })
+    return repoJobs.length > 0 ? repoJobs[0] : null
+  }, [selectedRepository, restoreJobsData])
 
-    return { folders, files }
-  }
-
-  const navigateToPath = (path: string) => {
-    setCurrentPath(path)
-  }
-
-  const getBreadcrumbs = () => {
-    if (currentPath === '/') return [{ label: 'Root', path: '/' }]
-
-    const parts = currentPath.split('/').filter(Boolean)
-    const breadcrumbs = [{ label: 'Root', path: '/' }]
-
-    let accumulatedPath = ''
-    parts.forEach((part) => {
-      accumulatedPath += `/${part}`
-      breadcrumbs.push({ label: part, path: accumulatedPath })
-    })
-
-    return breadcrumbs
-  }
-
-  // Reset path when opening a new archive
+  // Handle viewing archive contents
   const handleViewArchive = (archive: Archive) => {
     setViewArchive(archive)
-    setCurrentPath('/')
     trackArchive(EventAction.VIEW, selectedRepository?.name)
   }
 
   const handleRestoreArchive = (archive: Archive) => {
-    if (selectedRepository) {
-      navigate('/restore', {
-        state: {
-          repositoryPath: selectedRepository.path,
-          repositoryId: selectedRepository.id,
-          archiveName: archive.name,
-        },
-      })
-    }
+    // Open restore wizard flow instead of navigating to separate page
+    handleRestoreArchiveClick(archive)
   }
 
   return (
@@ -345,62 +350,12 @@ const Archives: React.FC = () => {
       </Box>
 
       {/* Repository Selector */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
-            <Database size={20} color="#2e7d32" />
-            <Typography variant="h6" fontWeight={600}>
-              Select Repository
-            </Typography>
-          </Stack>
-          <FormControl fullWidth sx={{ minWidth: { xs: '100%', sm: 300 } }}>
-            <InputLabel id="repository-select-label" sx={{ color: 'text.primary' }}>
-              Repository
-            </InputLabel>
-            <Select
-              labelId="repository-select-label"
-              value={selectedRepositoryId || ''}
-              onChange={(e) => handleRepositoryChange(e.target.value as number)}
-              label="Repository"
-              disabled={loadingRepositories}
-              sx={{ height: { xs: 48, sm: 56 } }}
-            >
-              <MenuItem value="" disabled>
-                {loadingRepositories ? 'Loading repositories...' : 'Select a repository...'}
-              </MenuItem>
-              {repositories.map((repo: Repository) => (
-                <MenuItem key={repo.id} value={repo.id} disabled={repo.has_running_maintenance}>
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Database size={16} />
-                    <Box>
-                      <Typography variant="body2" fontWeight={500}>
-                        {repo.name}
-                        {repo.has_running_maintenance && (
-                          <Typography
-                            component="span"
-                            variant="caption"
-                            color="warning.main"
-                            sx={{ ml: 1 }}
-                          >
-                            (Maintenance Running)
-                          </Typography>
-                        )}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ fontFamily: 'monospace' }}
-                      >
-                        {repo.path}
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </CardContent>
-      </Card>
+      <RepositorySelectorCard
+        repositories={repositories}
+        selectedRepositoryId={selectedRepositoryId}
+        onRepositoryChange={handleRepositoryChange}
+        loading={loadingRepositories}
+      />
 
       {/* Repository Statistics */}
       {selectedRepositoryId && loadingRepoInfo && (
@@ -421,117 +376,15 @@ const Archives: React.FC = () => {
         </Box>
       )}
       {selectedRepositoryId && !loadingRepoInfo && repoInfo?.data?.info?.cache?.stats && (
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(5, 1fr)' },
-            gap: 2,
-            mb: 4,
-          }}
-        >
-          {/* Total Archives */}
-          <Card sx={{ backgroundColor: '#e3f2fd' }}>
-            <CardContent>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <ArchiveIcon size={32} color="#1565c0" />
-                <Box>
-                  <Typography variant="body2" color="primary.dark" fontWeight={500}>
-                    Total Archives
-                  </Typography>
-                  <Typography variant="h4" fontWeight={700} color="primary.dark">
-                    {archivesList.length}
-                  </Typography>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
+        <RepositoryStatsGrid
+          stats={repoInfo.data.info.cache.stats}
+          archivesCount={archivesList.length}
+        />
+      )}
 
-          {/* Space Used on Disk */}
-          <Card sx={{ backgroundColor: '#e8f5e9' }}>
-            <CardContent>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Database size={32} color="#2e7d32" />
-                <Box>
-                  <Typography variant="body2" color="success.dark" fontWeight={500}>
-                    Space Used
-                  </Typography>
-                  <Typography
-                    variant="h4"
-                    fontWeight={700}
-                    color="success.dark"
-                    sx={{ fontSize: '1.5rem' }}
-                  >
-                    {formatBytesUtil(repoInfo.data.info.cache.stats.unique_csize)}
-                  </Typography>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
-
-          {/* Space Saved */}
-          <Card sx={{ backgroundColor: '#e1f5fe' }}>
-            <CardContent>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Database size={32} color="#0277bd" />
-                <Box>
-                  <Typography variant="body2" sx={{ color: '#0277bd' }} fontWeight={500}>
-                    Space Saved
-                  </Typography>
-                  <Typography
-                    variant="h4"
-                    fontWeight={700}
-                    sx={{ color: '#0277bd', fontSize: '1.5rem' }}
-                  >
-                    {(() => {
-                      const saved =
-                        (repoInfo.data.info.cache.stats.total_size || 0) -
-                        (repoInfo.data.info.cache.stats.unique_csize || 0)
-                      return saved > 0 ? formatBytesUtil(saved) : '0 B'
-                    })()}
-                  </Typography>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
-
-          {/* Compression */}
-          <Card sx={{ backgroundColor: '#f3e5f5' }}>
-            <CardContent>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Gauge size={32} color="#7b1fa2" />
-                <Box>
-                  <Typography variant="body2" color="purple" fontWeight={500}>
-                    Compression
-                  </Typography>
-                  <Typography variant="h4" fontWeight={700} color="purple">
-                    {repoInfo.data.info.cache.stats.unique_size > 0
-                      ? `${((1 - repoInfo.data.info.cache.stats.unique_csize / repoInfo.data.info.cache.stats.unique_size) * 100).toFixed(1)}%`
-                      : '0%'}
-                  </Typography>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
-
-          {/* Deduplication */}
-          <Card sx={{ backgroundColor: '#fff3e0' }}>
-            <CardContent>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Layers size={32} color="#e65100" />
-                <Box>
-                  <Typography variant="body2" sx={{ color: '#e65100' }} fontWeight={500}>
-                    Deduplication
-                  </Typography>
-                  <Typography variant="h4" fontWeight={700} sx={{ color: '#e65100' }}>
-                    {repoInfo.data.info.cache.stats.total_size > 0
-                      ? `${((1 - repoInfo.data.info.cache.stats.unique_size / repoInfo.data.info.cache.stats.total_size) * 100).toFixed(1)}%`
-                      : '0%'}
-                  </Typography>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Box>
+      {/* Last Restore Job for Selected Repository */}
+      {selectedRepositoryId && restoreJobsData?.data?.jobs && (
+        <LastRestoreSection restoreJob={lastRestoreJob} />
       )}
 
       {/* No Repository Selected State */}
@@ -556,485 +409,50 @@ const Archives: React.FC = () => {
 
       {/* Archives Section */}
       {selectedRepositoryId && (
-        <>
-          {/* Header with count */}
-          <Box
-            sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-          >
-            <Typography variant="h6" fontWeight={600}>
-              Archives for {selectedRepository?.name}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {archivesList.length} {archivesList.length === 1 ? 'archive' : 'archives'}
-            </Typography>
-          </Box>
-
-          {/* Loading State */}
-          {loadingArchives ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
-              <CircularProgress size={48} />
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                Loading archives...
-              </Typography>
-            </Box>
-          ) : archivesList.length === 0 ? (
-            /* Empty State */
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                textAlign: 'center',
-                py: 8,
-                color: 'text.secondary',
-              }}
-            >
-              <FolderOpen size={48} style={{ marginBottom: 16 }} />
-              <Typography variant="body1" color="text.secondary">
-                No archives found in this repository
-              </Typography>
-            </Box>
-          ) : (
-            /* Archives List */
-            <Stack spacing={2}>
-              {archivesList.map((archive: Archive) => (
-                <Card
-                  key={archive.id}
-                  variant="outlined"
-                  sx={{
-                    border: 1,
-                    borderColor: 'divider',
-                    transition: 'all 0.2s',
-                    '&:hover': {
-                      borderColor: 'primary.main',
-                      boxShadow: 1,
-                    },
-                  }}
-                >
-                  <CardContent sx={{ py: 2 }}>
-                    <Stack direction="row" alignItems="center" justifyContent="space-between">
-                      {/* Archive Info */}
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="h6" fontWeight={600} sx={{ mb: 0.5 }}>
-                          {archive.name}
-                        </Typography>
-                        <Stack direction="row" spacing={2} alignItems="center">
-                          <Typography variant="body2" color="text.secondary">
-                            {formatDate(archive.start)}
-                          </Typography>
-                        </Stack>
-                      </Box>
-
-                      {/* Actions */}
-                      <Stack direction="row" spacing={1}>
-                        <Button
-                          variant="contained"
-                          size="small"
-                          startIcon={<Eye size={16} />}
-                          onClick={() => handleViewArchive(archive)}
-                          sx={{ textTransform: 'none' }}
-                        >
-                          View
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          color="success"
-                          startIcon={<RotateCcw size={16} />}
-                          onClick={() => handleRestoreArchive(archive)}
-                          sx={{ textTransform: 'none' }}
-                        >
-                          Restore
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          color="info"
-                          startIcon={<HardDrive size={16} />}
-                          onClick={() => openMountDialog(archive)}
-                          sx={{ textTransform: 'none' }}
-                          disabled={mountArchiveMutation.isPending}
-                        >
-                          Mount
-                        </Button>
-                        <IconButton
-                          color="error"
-                          size="small"
-                          onClick={() => setShowDeleteConfirm(archive.archive)}
-                        >
-                          <Trash2 size={18} />
-                        </IconButton>
-                      </Stack>
-                    </Stack>
-                  </CardContent>
-                </Card>
-              ))}
-            </Stack>
-          )}
-        </>
+        <ArchivesList
+          archives={archivesList}
+          repositoryName={selectedRepository?.name || ''}
+          loading={loadingArchives}
+          onViewArchive={handleViewArchive}
+          onRestoreArchive={handleRestoreArchive}
+          onMountArchive={openMountDialog}
+          onDeleteArchive={(archiveName) => setShowDeleteConfirm(archiveName)}
+          mountDisabled={mountArchiveMutation.isPending}
+        />
       )}
 
       {/* View Contents Modal */}
-      <Dialog
+      <ArchiveContentsDialog
         open={!!viewArchive}
+        archive={viewArchive}
+        repositoryId={selectedRepositoryId}
         onClose={() => setViewArchive(null)}
-        maxWidth="md"
-        fullWidth
-        PaperProps={{
-          sx: {
-            maxHeight: '80vh',
-          },
+        onDownloadFile={(archiveName, filePath) => {
+          if (selectedRepository) {
+            archivesAPI.downloadFile(selectedRepository.path, archiveName, filePath)
+          }
         }}
-      >
-        <DialogTitle>
-          <Stack direction="row" alignItems="center" spacing={2}>
-            <FolderOpen size={24} />
-            <Box>
-              <Typography variant="h6" fontWeight={600}>
-                Archive Contents
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {viewArchive?.name}
-              </Typography>
-            </Box>
-          </Stack>
-        </DialogTitle>
-        <DialogContent
-          dividers
-          sx={{
-            height: 600,
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
-          {loadingArchiveContents ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
-              <CircularProgress size={48} />
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                Loading archive contents...
-              </Typography>
-            </Box>
-          ) : archiveContents?.data?.items ? (
-            <Stack spacing={2} sx={{ height: '100%', overflow: 'hidden' }}>
-              {/* Breadcrumb Navigation - Always visible for navigation */}
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: 0.5,
-                  flexShrink: 0,
-                }}
-              >
-                {getBreadcrumbs().map((crumb, index) => (
-                  <React.Fragment key={crumb.path}>
-                    {index > 0 && (
-                      <Typography variant="body2" color="text.secondary">
-                        /
-                      </Typography>
-                    )}
-                    <Typography
-                      variant="body2"
-                      onClick={() => navigateToPath(crumb.path)}
-                      sx={{
-                        cursor: 'pointer',
-                        color: 'primary.main',
-                        textDecoration: 'underline',
-                        '&:hover': {
-                          color: 'primary.dark',
-                        },
-                      }}
-                    >
-                      {crumb.label}
-                    </Typography>
-                  </React.Fragment>
-                ))}
-              </Box>
-
-              {/* Interactive File Browser */}
-              {archiveContents?.data?.items && archiveContents.data.items.length > 0 ? (
-                <Box sx={{ flex: 1, overflow: 'hidden' }}>
-                  {/* Files and Folders List */}
-                  <Box sx={{ height: '100%', overflowY: 'auto' }}>
-                    {(() => {
-                      const { folders, files } = getFilesInCurrentPath()
-
-                      if (folders.length === 0 && files.length === 0) {
-                        return (
-                          <Box sx={{ textAlign: 'center', py: 4 }}>
-                            <Typography variant="body2" color="text.secondary">
-                              This directory is empty
-                            </Typography>
-                          </Box>
-                        )
-                      }
-
-                      return (
-                        <Stack spacing={0.5}>
-                          {/* Folders */}
-                          {folders.map((folder, index) => (
-                            <Box
-                              key={`folder-${index}`}
-                              onClick={() => {
-                                navigateToPath(folder.path)
-                              }}
-                              sx={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                p: 1.5,
-                                borderRadius: 1,
-                                cursor: 'pointer',
-                                userSelect: 'none',
-                                backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.1),
-                                '&:hover': {
-                                  backgroundColor: (theme) =>
-                                    alpha(theme.palette.primary.main, 0.2),
-                                },
-                              }}
-                            >
-                              <Stack
-                                direction="row"
-                                spacing={1.5}
-                                alignItems="center"
-                                sx={{ color: 'text.primary', flex: 1 }}
-                              >
-                                <Folder size={20} />
-                                <Typography variant="body2" fontWeight={500}>
-                                  {folder.name}
-                                </Typography>
-                              </Stack>
-                              <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
-                                {formatBytesUtil(folder.size)}
-                              </Typography>
-                            </Box>
-                          ))}
-
-                          {/* Files */}
-                          {files.map((file, index) => (
-                            <Box
-                              key={`file-${index}`}
-                              sx={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                p: 1.5,
-                                borderRadius: 1,
-                                userSelect: 'none',
-                                backgroundColor: 'action.hover',
-                                '&:hover': {
-                                  backgroundColor: 'action.selected',
-                                },
-                              }}
-                            >
-                              <Stack
-                                direction="row"
-                                spacing={1.5}
-                                alignItems="center"
-                                sx={{ flex: 1, minWidth: 0, color: 'text.primary' }}
-                              >
-                                <FolderOpen size={20} />
-                                <Typography
-                                  variant="body2"
-                                  sx={{
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                >
-                                  {file.name}
-                                </Typography>
-                              </Stack>
-                              <Stack direction="row" spacing={2} alignItems="center">
-                                <Typography
-                                  variant="body2"
-                                  color="text.secondary"
-                                  sx={{
-                                    minWidth: 165,
-                                    textAlign: 'right',
-                                    fontFamily: 'monospace',
-                                    fontSize: '0.8rem',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                >
-                                  {file.mtime ? formatDateCompact(file.mtime) : '-'}
-                                </Typography>
-                                <Typography
-                                  variant="body2"
-                                  color="text.secondary"
-                                  sx={{ width: 80, textAlign: 'right' }}
-                                >
-                                  {file.size ? formatBytesUtil(file.size) : '0 B'}
-                                </Typography>
-                                <IconButton
-                                  size="small"
-                                  sx={{ color: 'text.secondary' }}
-                                  onClick={() => {
-                                    if (selectedRepository && viewArchive) {
-                                      archivesAPI.downloadFile(
-                                        selectedRepository.path,
-                                        viewArchive.name,
-                                        file.path
-                                      )
-                                    }
-                                  }}
-                                  title="Download file"
-                                >
-                                  <svg
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                  >
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                    <polyline points="7 10 12 15 17 10" />
-                                    <line x1="12" y1="15" x2="12" y2="3" />
-                                  </svg>
-                                </IconButton>
-                              </Stack>
-                            </Box>
-                          ))}
-                        </Stack>
-                      )
-                    })()}
-                  </Box>
-                </Box>
-              ) : (
-                <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
-                  <AlertCircle size={48} style={{ display: 'block', margin: '0 auto 16px auto' }} />
-                  <Typography variant="h6" color="text.secondary" gutterBottom>
-                    This archive is empty
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    No files were backed up in this archive. This may happen if the source directory
-                    was empty or inaccessible during the backup.
-                  </Typography>
-                </Box>
-              )}
-            </Stack>
-          ) : (
-            <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
-              <AlertCircle size={48} style={{ display: 'block', margin: '0 auto 16px auto' }} />
-              <Typography variant="body1" color="text.secondary">
-                No archive information available
-              </Typography>
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setViewArchive(null)}>Close</Button>
-        </DialogActions>
-      </Dialog>
+      />
 
       {/* Mount Archive Dialog */}
-      <Dialog
+      <MountArchiveDialog
         open={!!mountDialogArchive}
+        archive={mountDialogArchive}
+        mountPoint={customMountPoint}
+        onMountPointChange={setCustomMountPoint}
         onClose={() => setMountDialogArchive(null)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>
-          <Stack direction="row" spacing={2} alignItems="center">
-            <HardDrive size={24} />
-            <Box>
-              <Typography variant="h6" fontWeight={600}>
-                Mount Archive
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {mountDialogArchive?.name}
-              </Typography>
-            </Box>
-          </Stack>
-        </DialogTitle>
-        <DialogContent>
-          <Stack spacing={3} sx={{ mt: 1 }}>
-            <Alert severity="info">
-              The archive will be mounted as a read-only filesystem inside the container. You'll
-              receive a command to access it via terminal.
-            </Alert>
-            <TextField
-              label="Mount Name"
-              value={customMountPoint}
-              onChange={(e) => setCustomMountPoint(e.target.value)}
-              placeholder="my-backup-2024"
-              helperText={`Will be mounted at: /data/mounts/${customMountPoint || '<name>'}`}
-              fullWidth
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setMountDialogArchive(null)}>Cancel</Button>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={handleMountArchive}
-            disabled={mountArchiveMutation.isPending}
-            startIcon={<HardDrive size={18} />}
-          >
-            {mountArchiveMutation.isPending ? 'Mounting...' : 'Mount'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={handleMountArchive}
+        mounting={mountArchiveMutation.isPending}
+      />
 
       {/* Delete Confirmation Dialog */}
-      <Dialog
+      <DeleteArchiveDialog
         open={!!showDeleteConfirm}
+        archiveName={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(null)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>
-          <Stack direction="row" spacing={2} alignItems="center">
-            <Box
-              sx={{
-                width: 48,
-                height: 48,
-                borderRadius: '50%',
-                backgroundColor: 'error.lighter',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <AlertCircle size={24} color="#d32f2f" />
-            </Box>
-            <Typography variant="h6" fontWeight={600}>
-              Delete Archive
-            </Typography>
-          </Stack>
-        </DialogTitle>
-        <DialogContent>
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            This action cannot be undone!
-          </Alert>
-          <Typography variant="body2" gutterBottom>
-            Are you sure you want to delete the archive <strong>"{showDeleteConfirm}"</strong>?
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            The deletion will run in the background. You can close this dialog and continue working.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowDeleteConfirm(null)}>Cancel</Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={() => handleDeleteArchive(showDeleteConfirm!)}
-            disabled={deleteArchiveMutation.isPending}
-            startIcon={
-              deleteArchiveMutation.isPending ? (
-                <CircularProgress size={16} color="inherit" />
-              ) : (
-                <Trash2 size={16} />
-              )
-            }
-          >
-            {deleteArchiveMutation.isPending ? 'Starting...' : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={handleDeleteArchive}
+        deleting={deleteArchiveMutation.isPending}
+      />
 
       {/* Lock Error Dialog */}
       {lockError && (
@@ -1050,6 +468,42 @@ const Archives: React.FC = () => {
             })
             queryClient.invalidateQueries({ queryKey: ['repository-info', lockError.repositoryId] })
           }}
+        />
+      )}
+
+      {/* Archive Browser Dialog */}
+      {restoreArchive && selectedRepository && (
+        <ArchiveBrowserDialog
+          open={showBrowser}
+          onClose={() => setShowBrowser(false)}
+          repositoryId={selectedRepository.id}
+          archiveName={restoreArchive.name}
+          onSelect={handlePathsSelected}
+          initialSelectedPaths={selectedPaths}
+        />
+      )}
+
+      {/* Restore Wizard */}
+      {restoreArchive && selectedRepository && (
+        <RestoreWizard
+          open={showRestoreWizard}
+          onClose={() => {
+            setShowRestoreWizard(false)
+            // Allow user to go back to browser by reopening it
+            setShowBrowser(true)
+          }}
+          archiveName={restoreArchive.name}
+          repositoryId={selectedRepository.id}
+          selectedFiles={selectedPaths.map((path) => ({
+            path,
+            mode: '',
+            user: '',
+            group: '',
+            size: 0,
+            mtime: '',
+            healthy: true,
+          }))}
+          onRestore={handleRestoreFromWizard}
         />
       )}
     </Box>

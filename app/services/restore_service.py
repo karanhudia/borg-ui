@@ -309,30 +309,68 @@ class RestoreService:
                     except Exception as e:
                         logger.warning("Failed to send restore success notification", error=str(e))
                 elif process.returncode == 1 or (100 <= process.returncode <= 127):
-                    # Warning (legacy exit code 1 or modern exit codes 100-127)
-                    job.status = "completed_with_warnings"
-                    job.progress = 100
-                    job.progress_percent = 100.0
-                    job.completed_at = datetime.now(timezone.utc)
+                    # Exit code 1 or 100-127 can be warnings OR errors
+                    # If no files were restored, treat as failure (likely permission/path error)
                     stderr_output = "\n".join(stderr_lines)
-                    job.error_message = f"Restore completed with warnings (exit code {process.returncode})"
-                    job.logs = f"STDOUT:\n{chr(10).join(stdout_lines)}\n\nSTDERR:\n{stderr_output}"
 
-                    logger.warning("Restore completed with warnings",
-                               job_id=job_id,
-                               repository=repository_path,
-                               archive=archive_name,
-                               destination=destination,
-                               exit_code=process.returncode,
-                               nfiles=nfiles)
+                    if nfiles == 0:
+                        # No files restored - this is a failure, not a warning
+                        job.status = "failed"
 
-                    # Send warning notification (use success notification with note about warnings)
-                    try:
-                        await notification_service.send_restore_success(
-                            db_session, repository_path, archive_name, destination, None, None
-                        )
-                    except Exception as e:
-                        logger.warning("Failed to send restore warning notification", error=str(e))
+                        # Try to extract meaningful error from stderr
+                        error_hint = "Check logs for details."
+                        if "permission denied" in stderr_output.lower():
+                            error_hint = "Permission denied - you may need root access or different destination path."
+                        elif "no such file" in stderr_output.lower():
+                            error_hint = "Path not found in archive or destination doesn't exist."
+                        elif not stderr_output.strip():
+                            error_hint = "No error output from borg. Files may not exist in archive or permission denied."
+
+                        job.error_message = f"Restore failed: 0 files extracted (exit code {process.returncode}). {error_hint}"
+                        job.completed_at = datetime.now(timezone.utc)
+                        job.logs = f"STDOUT:\n{chr(10).join(stdout_lines) if stdout_lines else '(no output)'}\n\nSTDERR:\n{stderr_output if stderr_output else '(no output)'}"
+
+                        logger.error("Restore failed - no files extracted",
+                                   job_id=job_id,
+                                   repository=repository_path,
+                                   archive=archive_name,
+                                   destination=destination,
+                                   exit_code=process.returncode,
+                                   nfiles=nfiles)
+
+                        # Send failure notification
+                        try:
+                            await notification_service.send_restore_failure(
+                                db_session, repository_path, archive_name,
+                                f"0 files restored. Exit code {process.returncode}. Likely permission or path error.",
+                                None
+                            )
+                        except Exception as e:
+                            logger.warning("Failed to send restore failure notification", error=str(e))
+                    else:
+                        # Files were restored, but with warnings
+                        job.status = "completed_with_warnings"
+                        job.progress = 100
+                        job.progress_percent = 100.0
+                        job.completed_at = datetime.now(timezone.utc)
+                        job.error_message = f"Restore completed with warnings (exit code {process.returncode})"
+                        job.logs = f"STDOUT:\n{chr(10).join(stdout_lines)}\n\nSTDERR:\n{stderr_output}"
+
+                        logger.warning("Restore completed with warnings",
+                                   job_id=job_id,
+                                   repository=repository_path,
+                                   archive=archive_name,
+                                   destination=destination,
+                                   exit_code=process.returncode,
+                                   nfiles=nfiles)
+
+                        # Send warning notification (use success notification with note about warnings)
+                        try:
+                            await notification_service.send_restore_success(
+                                db_session, repository_path, archive_name, destination, None, None
+                            )
+                        except Exception as e:
+                            logger.warning("Failed to send restore warning notification", error=str(e))
                 else:
                     job.status = "failed"
                     stderr_output = "\n".join(stderr_lines)

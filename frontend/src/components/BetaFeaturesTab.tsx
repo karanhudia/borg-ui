@@ -16,6 +16,7 @@ import { settingsAPI } from '../services/api'
 const BetaFeaturesTab: React.FC = () => {
   const queryClient = useQueryClient()
   const [bypassLockOnInfo, setBypassLockOnInfo] = useState(false)
+  const [showRestoreTab, setShowRestoreTab] = useState(false)
 
   // Fetch system settings
   const { data: systemData, isLoading: systemLoading } = useQuery({
@@ -32,15 +33,14 @@ const BetaFeaturesTab: React.FC = () => {
   useEffect(() => {
     if (systemSettings) {
       setBypassLockOnInfo(systemSettings.bypass_lock_on_info ?? false)
+      setShowRestoreTab(systemSettings.show_restore_tab ?? false)
     }
   }, [systemSettings])
 
   // Save settings mutation
   const saveSettingsMutation = useMutation({
-    mutationFn: async (value: boolean) => {
-      await settingsAPI.updateSystemSettings({
-        bypass_lock_on_info: value,
-      })
+    mutationFn: async (settings: { bypass_lock_on_info?: boolean; show_restore_tab?: boolean }) => {
+      await settingsAPI.updateSystemSettings(settings)
     },
     onSuccess: () => {
       toast.success('Setting updated successfully')
@@ -51,13 +51,19 @@ const BetaFeaturesTab: React.FC = () => {
       // Revert on error
       if (systemSettings) {
         setBypassLockOnInfo(systemSettings.bypass_lock_on_info ?? false)
+        setShowRestoreTab(systemSettings.show_restore_tab ?? false)
       }
     },
   })
 
   const handleToggle = (checked: boolean) => {
     setBypassLockOnInfo(checked)
-    saveSettingsMutation.mutate(checked)
+    saveSettingsMutation.mutate({ bypass_lock_on_info: checked })
+  }
+
+  const handleRestoreTabToggle = (checked: boolean) => {
+    setShowRestoreTab(checked)
+    saveSettingsMutation.mutate({ show_restore_tab: checked })
   }
 
   if (systemLoading) {
@@ -107,6 +113,36 @@ const BetaFeaturesTab: React.FC = () => {
                       Adds <code>--bypass-lock</code> to all <code>borg info</code> commands. This
                       prevents lock contention when multiple operations try to access SSH
                       repositories simultaneously. Enable if you see "Repository is locked" errors.
+                    </Typography>
+                  </Box>
+                }
+              />
+            </Box>
+
+            {/* Show Restore Tab */}
+            <Box>
+              <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
+                Show Legacy Restore Tab
+              </Typography>
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={showRestoreTab}
+                    onChange={(e) => handleRestoreTabToggle(e.target.checked)}
+                    disabled={saveSettingsMutation.isPending}
+                    color="primary"
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body1">
+                      Show the dedicated Restore tab in navigation
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Enable this to access the legacy Restore tab. Restore functionality is now
+                      integrated into the Archives page, but this option allows you to use the old
+                      interface if preferred.
                     </Typography>
                   </Box>
                 }
