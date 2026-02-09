@@ -1,5 +1,6 @@
-import { Card, CardContent, Stack, Typography, Box } from '@mui/material'
-import { RotateCcw } from 'lucide-react'
+import { Card, CardContent, Stack, Typography, Box, Button } from '@mui/material'
+import { RotateCcw, ExternalLink } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import RestoreJobCard from './RestoreJobCard'
 
 interface RestoreJob {
@@ -26,6 +27,8 @@ interface LastRestoreSectionProps {
 }
 
 export default function LastRestoreSection({ restoreJob }: LastRestoreSectionProps) {
+  const navigate = useNavigate()
+
   if (!restoreJob) {
     return (
       <Card sx={{ mb: 4, border: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
@@ -44,17 +47,30 @@ export default function LastRestoreSection({ restoreJob }: LastRestoreSectionPro
   }
 
   return (
-    <Card sx={{ mb: 4, border: 1, borderColor: 'divider' }}>
-      <CardContent>
-        <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
-          <RotateCcw size={24} color="#9c27b0" />
+    <Box sx={{ mb: 4 }}>
+      <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <RotateCcw size={20} color="#9c27b0" />
           <Typography variant="h6" fontWeight={600}>
             Last Restore
           </Typography>
         </Stack>
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<ExternalLink size={16} />}
+          onClick={() => navigate('/activity')}
+          sx={{ textTransform: 'none' }}
+        >
+          View All Restores
+        </Button>
+      </Stack>
 
-        <RestoreJobCard job={restoreJob} showJobId={false} />
-      </CardContent>
-    </Card>
+      <Card sx={{ border: 1, borderColor: 'divider' }}>
+        <CardContent>
+          <RestoreJobCard job={restoreJob} showJobId={false} />
+        </CardContent>
+      </Card>
+    </Box>
   )
 }
