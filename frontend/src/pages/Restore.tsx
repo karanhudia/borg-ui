@@ -18,7 +18,7 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Paper,
+  Chip,
 } from '@mui/material'
 import {
   Database,
@@ -32,20 +32,14 @@ import {
 import { restoreAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useMatomo } from '../hooks/useMatomo'
-import { useAuth } from '../hooks/useAuth'
-import {
-  formatDate,
-  formatBytes as formatBytesUtil,
-  formatTimeRange,
-  formatDurationSeconds,
-} from '../utils/dateUtils'
+import { formatDate, formatBytes as formatBytesUtil, formatTimeRange } from '../utils/dateUtils'
 import RepositoryInfo from '../components/RepositoryInfo'
 import PathSelectorField from '../components/PathSelectorField'
 import LockErrorDialog from '../components/LockErrorDialog'
 import { Archive, Repository } from '../types'
 import ArchiveBrowserDialog from '../components/ArchiveBrowserDialog'
-import BackupJobsTable from '../components/BackupJobsTable'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
+import RestoreJobCard from '../components/RestoreJobCard'
 
 interface RestoreJob {
   id: number
@@ -57,7 +51,6 @@ interface RestoreJob {
   completed_at?: string
   progress?: number
   error?: string
-  logs?: string
   progress_details?: {
     nfiles: number
     current_file: string
@@ -69,7 +62,6 @@ interface RestoreJob {
 
 const Restore: React.FC = () => {
   const { trackArchive, EventAction } = useMatomo()
-  const { user } = useAuth()
   const [selectedRepository, setSelectedRepository] = useState<string>('')
   const [selectedRepoData, setSelectedRepoData] = useState<Repository | null>(null)
   const [restoreArchive, setRestoreArchive] = useState<Archive | null>(null)
@@ -299,6 +291,22 @@ const Restore: React.FC = () => {
     return archiveInfo.data.archive.stats
   }, [archiveInfo])
 
+  // Get status color for Chip
+  const getStatusColor = (status: string): 'info' | 'success' | 'error' | 'default' => {
+    switch (status) {
+      case 'running':
+        return 'info'
+      case 'completed':
+        return 'success'
+      case 'failed':
+        return 'error'
+      case 'cancelled':
+        return 'default'
+      default:
+        return 'default'
+    }
+  }
+
   // Get status icon
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -349,6 +357,72 @@ const Restore: React.FC = () => {
       onClick: (archive) => handleRestoreArchiveClick(archive),
       color: 'primary',
       tooltip: 'Restore this archive',
+    },
+  ]
+
+  // Recent Restore Jobs table columns
+  const restoreJobsColumns: Column<RestoreJob>[] = [
+    {
+      id: 'id',
+      label: 'Job ID',
+      render: (job) => (
+        <Typography variant="body2" fontWeight={600} color="primary">
+          #{job.id}
+        </Typography>
+      ),
+    },
+    {
+      id: 'archive',
+      label: 'Archive',
+      render: (job) => (
+        <Typography variant="body2" fontWeight={500}>
+          {job.archive}
+        </Typography>
+      ),
+    },
+    {
+      id: 'destination',
+      label: 'Destination',
+      render: (job) => (
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
+        >
+          {job.destination}
+        </Typography>
+      ),
+    },
+    {
+      id: 'status',
+      label: 'Status',
+      render: (job) => (
+        <Chip
+          icon={getStatusIcon(job.status)}
+          label={job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+          color={getStatusColor(job.status)}
+          size="small"
+          sx={{ fontWeight: 500 }}
+        />
+      ),
+    },
+    {
+      id: 'duration',
+      label: 'Duration',
+      render: (job) => (
+        <Typography variant="body2" color="text.secondary">
+          {formatTimeRange(job.started_at, job.completed_at, job.status)}
+        </Typography>
+      ),
+    },
+    {
+      id: 'started',
+      label: 'Started',
+      render: (job) => (
+        <Typography variant="body2" color="text.secondary">
+          {job.started_at ? formatDate(job.started_at) : 'N/A'}
+        </Typography>
+      ),
     },
   ]
 
@@ -471,126 +545,7 @@ const Restore: React.FC = () => {
 
             <Stack spacing={3}>
               {runningJobs.map((job: RestoreJob) => (
-                <Paper key={`running-${job.id}`} variant="outlined" sx={{ p: 3 }}>
-                  <Stack
-                    direction="row"
-                    justifyContent="space-between"
-                    alignItems="flex-start"
-                    sx={{ mb: 2 }}
-                  >
-                    <Stack direction="row" spacing={2} alignItems="center">
-                      <Box sx={{ color: 'info.main' }}>{getStatusIcon(job.status)}</Box>
-                      <Box>
-                        <Typography variant="body1" fontWeight={500}>
-                          Restore Job #{job.id}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          Archive: {job.archive}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          Destination: {job.destination}
-                        </Typography>
-                      </Box>
-                    </Stack>
-                  </Stack>
-
-                  <Box sx={{ mb: 2 }}>
-                    <Stack
-                      direction="row"
-                      justifyContent="space-between"
-                      alignItems="center"
-                      sx={{ mb: 1.5 }}
-                    >
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <Box
-                          sx={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: '50%',
-                            bgcolor: 'info.main',
-                            animation: 'pulse 2s ease-in-out infinite',
-                            '@keyframes pulse': {
-                              '0%, 100%': { opacity: 1 },
-                              '50%': { opacity: 0.5 },
-                            },
-                          }}
-                        />
-                        <Typography variant="body2" fontWeight={500} color="info.main">
-                          Restoring files...
-                        </Typography>
-                      </Stack>
-                      <Typography variant="body2" color="text.secondary">
-                        {formatTimeRange(job.started_at, job.completed_at, job.status)}
-                      </Typography>
-                    </Stack>
-                  </Box>
-
-                  {job.progress_details?.current_file && (
-                    <Alert severity="info" sx={{ mb: 2, py: 0.5 }}>
-                      <Typography variant="caption" fontWeight={500}>
-                        Current File:
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          fontFamily: 'monospace',
-                          display: 'block',
-                          mt: 0.5,
-                          wordBreak: 'break-all',
-                        }}
-                      >
-                        {job.progress_details.current_file}
-                      </Typography>
-                    </Alert>
-                  )}
-
-                  <Box
-                    sx={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                      gap: 2,
-                    }}
-                  >
-                    <Box>
-                      <Typography variant="body2" color="text.secondary">
-                        Files Restored:
-                      </Typography>
-                      <Typography variant="body2" fontWeight={500}>
-                        {job.progress_details?.nfiles?.toLocaleString() || '0'}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" color="text.secondary">
-                        Progress:
-                      </Typography>
-                      <Typography variant="body2" fontWeight={500} color="primary.main">
-                        {job.progress_details?.progress_percent?.toFixed(1) || '0'}%
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" color="text.secondary">
-                        Speed:
-                      </Typography>
-                      <Typography variant="body2" fontWeight={500} color="primary.main">
-                        {job.status === 'running' && job.progress_details?.restore_speed
-                          ? `${job.progress_details.restore_speed.toFixed(2)} MB/s`
-                          : 'N/A'}
-                      </Typography>
-                    </Box>
-                    {(job.progress_details?.estimated_time_remaining || 0) > 0 && (
-                      <Box>
-                        <Typography variant="body2" color="text.secondary">
-                          ETA:
-                        </Typography>
-                        <Typography variant="body2" fontWeight={500} color="success.main">
-                          {formatDurationSeconds(
-                            job.progress_details?.estimated_time_remaining || 0
-                          )}
-                        </Typography>
-                      </Box>
-                    )}
-                  </Box>
-                </Paper>
+                <RestoreJobCard key={job.id} job={job} showJobId={true} />
               ))}
             </Stack>
           </CardContent>
@@ -612,30 +567,17 @@ const Restore: React.FC = () => {
             </Typography>
           </Stack>
 
-          <BackupJobsTable
-            jobs={recentJobs.map((job: RestoreJob) => ({
-              ...job,
-              type: 'restore',
-              repository_path: job.repository,
-              archive_name: job.archive,
-              error_message: job.error,
-              has_logs: !!job.logs, // Set has_logs flag based on logs field
-            }))}
-            loading={false}
-            actions={{
-              viewLogs: true,
-              downloadLogs: true,
-              errorInfo: true,
-              delete: true,
-            }}
-            isAdmin={user?.is_admin || false}
-            getRowKey={(job) => `recent-${job.id}`}
-            headerBgColor="background.default"
-            enableHover={true}
+          <DataTable
+            data={recentJobs}
+            columns={restoreJobsColumns}
+            getRowKey={(job) => job.id.toString()}
             emptyState={{
               icon: <Clock size={48} />,
               title: 'No restore jobs found',
             }}
+            headerBgColor="background.default"
+            enableHover={true}
+            variant="outlined"
           />
         </CardContent>
       </Card>

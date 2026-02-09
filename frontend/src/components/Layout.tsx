@@ -26,7 +26,6 @@ import {
   Home,
   FileText,
   Archive,
-  Download,
   Clock,
   Menu,
   Database,
@@ -49,8 +48,10 @@ import {
   Zap,
   HardDrive,
   Sliders,
+  RotateCcw,
 } from 'lucide-react'
-import api from '../services/api'
+import api, { settingsAPI } from '../services/api'
+import { useQuery } from '@tanstack/react-query'
 
 const drawerWidth = 240
 
@@ -60,14 +61,7 @@ interface NavigationItem {
   href?: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   icon: React.ComponentType<any>
-  key:
-    | 'dashboard'
-    | 'connections'
-    | 'repositories'
-    | 'backups'
-    | 'archives'
-    | 'restore'
-    | 'schedule'
+  key: 'dashboard' | 'connections' | 'repositories' | 'backups' | 'archives' | 'schedule'
   subItems?: Array<{
     name: string
     href: string
@@ -76,78 +70,7 @@ interface NavigationItem {
   }>
 }
 
-// Navigation sections with headings
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const navigationSections: any[] = [
-  {
-    segment: 'dashboard',
-    items: [
-      { name: 'Dashboard', href: '/dashboard', icon: Home, key: 'dashboard' as const },
-      { name: 'Activity', href: '/activity', icon: History, key: 'dashboard' as const },
-    ],
-  },
-  {
-    heading: 'BACKUP',
-    items: [
-      {
-        name: 'Remote Machines',
-        href: '/ssh-connections',
-        icon: Computer,
-        key: 'connections' as const,
-      },
-      { name: 'Repositories', href: '/repositories', icon: Database, key: 'repositories' as const },
-      { name: 'Backup', href: '/backup', icon: FileText, key: 'backups' as const },
-      { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },
-      { name: 'Restore', href: '/restore', icon: Download, key: 'restore' as const },
-      { name: 'Schedule', href: '/schedule', icon: Clock, key: 'schedule' as const },
-    ],
-  },
-  {
-    heading: 'SETTINGS',
-    items: [
-      {
-        name: 'Personal',
-        icon: User,
-        key: 'dashboard' as const,
-        subItems: [
-          { name: 'Account', href: '/settings/account', icon: User },
-          { name: 'Appearance', href: '/settings/appearance', icon: Palette },
-          { name: 'Notifications', href: '/settings/notifications', icon: Bell },
-          { name: 'Preferences', href: '/settings/preferences', icon: Sliders },
-        ],
-      },
-      {
-        name: 'System',
-        icon: SettingsIcon,
-        key: 'dashboard' as const,
-        subItems: [
-          { name: 'System', href: '/settings/system', icon: SettingsIcon },
-          { name: 'Cache', href: '/settings/cache', icon: Server },
-          { name: 'Logs', href: '/settings/logs', icon: FileText },
-          { name: 'Packages', href: '/settings/packages', icon: Package },
-        ],
-      },
-      {
-        name: 'Management',
-        icon: HardDrive,
-        key: 'dashboard' as const,
-        subItems: [
-          { name: 'Mounts', href: '/settings/mounts', icon: HardDrive },
-          { name: 'Scripts', href: '/settings/scripts', icon: FileCode },
-          { name: 'Users', href: '/settings/users', icon: Users },
-          { name: 'Export/Import', href: '/settings/export', icon: DownloadIcon },
-        ],
-      },
-      {
-        name: 'Advanced',
-        icon: Zap,
-        key: 'dashboard' as const,
-        subItems: [{ name: 'Beta', href: '/settings/beta', icon: Zap }],
-      },
-    ],
-  },
-]
+// Navigation sections with headings - will be built dynamically in component
 
 interface SystemInfo {
   app_version: string
@@ -162,6 +85,108 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation()
   const { user, logout } = useAuth()
   const { tabEnablement, getTabDisabledReason } = useTabEnablement()
+
+  // Fetch system settings to check beta features
+  const { data: systemData } = useQuery({
+    queryKey: ['systemSettings'],
+    queryFn: async () => {
+      const response = await settingsAPI.getSystemSettings()
+      return response.data
+    },
+  })
+
+  const showRestoreTab = systemData?.settings?.show_restore_tab ?? false
+
+  // Build navigation sections dynamically
+  const navigationSections = React.useMemo(() => {
+    const backupItems: Array<{
+      name: string
+      href: string
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      icon: React.ComponentType<any>
+      key: 'connections' | 'repositories' | 'backups' | 'archives' | 'schedule'
+    }> = [
+      {
+        name: 'Remote Machines',
+        href: '/ssh-connections',
+        icon: Computer,
+        key: 'connections' as const,
+      },
+      { name: 'Repositories', href: '/repositories', icon: Database, key: 'repositories' as const },
+      { name: 'Backup', href: '/backup', icon: FileText, key: 'backups' as const },
+      { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },
+    ]
+
+    // Conditionally add Restore tab
+    if (showRestoreTab) {
+      backupItems.push({
+        name: 'Restore',
+        href: '/restore',
+        icon: RotateCcw,
+        key: 'archives' as const,
+      })
+    }
+
+    backupItems.push({ name: 'Schedule', href: '/schedule', icon: Clock, key: 'schedule' as const })
+
+    return [
+      {
+        segment: 'dashboard',
+        items: [
+          { name: 'Dashboard', href: '/dashboard', icon: Home, key: 'dashboard' as const },
+          { name: 'Activity', href: '/activity', icon: History, key: 'dashboard' as const },
+        ],
+      },
+      {
+        heading: 'BACKUP',
+        items: backupItems,
+      },
+      {
+        heading: 'SETTINGS',
+        items: [
+          {
+            name: 'Personal',
+            icon: User,
+            key: 'dashboard' as const,
+            subItems: [
+              { name: 'Account', href: '/settings/account', icon: User },
+              { name: 'Appearance', href: '/settings/appearance', icon: Palette },
+              { name: 'Notifications', href: '/settings/notifications', icon: Bell },
+              { name: 'Preferences', href: '/settings/preferences', icon: Sliders },
+            ],
+          },
+          {
+            name: 'System',
+            icon: SettingsIcon,
+            key: 'dashboard' as const,
+            subItems: [
+              { name: 'System', href: '/settings/system', icon: SettingsIcon },
+              { name: 'Cache', href: '/settings/cache', icon: Server },
+              { name: 'Logs', href: '/settings/logs', icon: FileText },
+              { name: 'Packages', href: '/settings/packages', icon: Package },
+            ],
+          },
+          {
+            name: 'Management',
+            icon: HardDrive,
+            key: 'dashboard' as const,
+            subItems: [
+              { name: 'Mounts', href: '/settings/mounts', icon: HardDrive },
+              { name: 'Scripts', href: '/settings/scripts', icon: FileCode },
+              { name: 'Users', href: '/settings/users', icon: Users },
+              { name: 'Export/Import', href: '/settings/export', icon: DownloadIcon },
+            ],
+          },
+          {
+            name: 'Advanced',
+            icon: Zap,
+            key: 'dashboard' as const,
+            subItems: [{ name: 'Beta', href: '/settings/beta', icon: Zap }],
+          },
+        ],
+      },
+    ]
+  }, [showRestoreTab])
 
   // Check if we need to show analytics consent banner
   useEffect(() => {
