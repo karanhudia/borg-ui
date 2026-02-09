@@ -8,6 +8,7 @@ Reference: https://borgbackup.readthedocs.io/en/stable/usage/general.html#return
 """
 
 # Exit code mappings (modern exit codes)
+# Source: https://borgbackup.readthedocs.io/en/stable/internals/frontends.html#message-ids
 BORG_EXIT_CODES = {
     0: "Success",
     1: "Warning (legacy)",
@@ -15,8 +16,15 @@ BORG_EXIT_CODES = {
     # Modern exit codes (3-99 are errors)
     13: "Repository does not exist",
     14: "Repository already exists",
-    15: "Repository is locked",
+    15: "Invalid repository",  # NOT lock error!
     17: "Repository incompatible with this version",
+    # Lock errors (70-75)
+    70: "Failed to acquire the lock",
+    71: "Failed to acquire the lock (with traceback)",
+    72: "Failed to create/acquire the lock",
+    73: "Failed to create/acquire the lock (timeout)",
+    74: "Failed to release the lock (was not locked)",
+    75: "Failed to release the lock (not by me)",
     # 100-127 are warnings in modern mode
     100: "Warning: Some files changed during backup",
     101: "Warning: Minor issues encountered",
@@ -174,6 +182,33 @@ def get_exit_code_message(exit_code: int) -> str:
         return f"Warning (exit code {exit_code})"
     else:
         return f"Unknown error (exit code {exit_code})"
+
+
+def is_lock_error(exit_code: int = None, msgid: str = None, stderr: str = None) -> bool:
+    """
+    Check if an error is a lock-related error
+
+    Args:
+        exit_code: Borg process exit code
+        msgid: Borg message ID
+        stderr: Standard error output
+
+    Returns:
+        True if this is a lock error, False otherwise
+    """
+    # Check exit code (70-75 are all lock-related)
+    if exit_code is not None and 70 <= exit_code <= 75:
+        return True
+
+    # Check message ID
+    if msgid in ['LockError', 'LockErrorT', 'LockFailed', 'LockTimeout', 'NotLocked', 'NotMyLock']:
+        return True
+
+    # Fallback: check stderr text
+    if stderr and "lock" in stderr.lower() and "timeout" in stderr.lower():
+        return True
+
+    return False
 
 
 def format_error_message(msgid: str = None, original_message: str = None, exit_code: int = None) -> str:

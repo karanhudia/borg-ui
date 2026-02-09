@@ -12,6 +12,7 @@ from app.database.database import get_db, SessionLocal
 from app.database.models import User, Repository, CheckJob, CompactJob, PruneJob, SystemSettings
 from app.core.security import get_current_user
 from app.core.borg import BorgInterface
+from app.core.borg_errors import is_lock_error
 from app.config import settings
 from app.services.check_service import check_service
 from app.services.compact_service import compact_service
@@ -1946,9 +1947,9 @@ async def list_repository_archives(
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
 
-                # Check if it's a lock timeout error - return special error for user prompt
-                if "lock" in error_msg.lower() and "timeout" in error_msg.lower():
-                    logger.warning(f"Lock timeout detected on attempt {attempt + 1}/{max_retries}",
+                # Check if it's a lock error - return special error for user prompt
+                if is_lock_error(exit_code=process.returncode, stderr=error_msg):
+                    logger.warning(f"Lock error detected on attempt {attempt + 1}/{max_retries}",
                                  repo_id=repo_id,
                                  borg_exit_code=process.returncode,
                                  error=error_msg)
@@ -2077,9 +2078,9 @@ async def get_repository_info(
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
 
-                # Check if it's a lock timeout error - return special error for user prompt
-                if "lock" in error_msg.lower() and "timeout" in error_msg.lower():
-                    logger.warning(f"Lock timeout detected on attempt {attempt + 1}/{max_retries}",
+                # Check if it's a lock error - return special error for user prompt
+                if is_lock_error(exit_code=process.returncode, stderr=error_msg):
+                    logger.warning(f"Lock error detected on attempt {attempt + 1}/{max_retries}",
                                  repo_id=repo_id,
                                  borg_exit_code=process.returncode,
                                  error=error_msg)
