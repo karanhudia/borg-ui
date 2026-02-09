@@ -52,10 +52,16 @@ class RestoreService:
             # Get repository details for passphrase and remote_path
             repository = db_session.query(Repository).filter(Repository.path == repository_path).first()
 
-            # Update job status to running
-            job.status = "running"
-            job.started_at = datetime.now(timezone.utc)
-            db_session.commit()
+            # Update job status to running - may fail if job was deleted after we queried it
+            try:
+                job.status = "running"
+                job.started_at = datetime.now(timezone.utc)
+                db_session.commit()
+            except Exception as status_error:
+                # Job was deleted while starting - exit gracefully
+                logger.warning("Could not update job to running status (job may have been deleted)",
+                              job_id=job_id, error=str(status_error))
+                return
 
             logger.info("Starting restore operation",
                        job_id=job_id,
@@ -422,8 +428,13 @@ class RestoreService:
                         )
                     except Exception as notif_error:
                         logger.warning("Failed to send restore failure notification", error=str(notif_error))
+                else:
+                    logger.warning("Could not update job status - job was deleted during execution", job_id=job_id)
             except Exception as update_error:
-                logger.error("Failed to update job status", error=str(update_error))
+                # Job may have been deleted while running - that's okay
+                logger.warning("Could not update job status (job may have been deleted during execution)",
+                              job_id=job_id, error=str(update_error))
+                db_session.rollback()
         finally:
             # Remove from running processes
             if job_id in self.running_processes:

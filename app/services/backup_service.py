@@ -264,7 +264,7 @@ class BackupService:
         except Exception as e:
             logger.error("Log rotation failed", error=str(e))
 
-    def get_log_buffer(self, job_id: int, tail_lines: int = 500) -> list:
+    def get_log_buffer(self, job_id: int, tail_lines: int = 500) -> tuple[list, bool]:
         """
         Get the last N lines from the in-memory log buffer for a running job.
 
@@ -273,14 +273,25 @@ class BackupService:
             tail_lines: Number of lines to return from the end of buffer (default 500)
 
         Returns:
-            List of log lines (most recent tail_lines lines)
+            Tuple of (log_lines, buffer_exists)
+            - log_lines: List of log lines (most recent tail_lines lines)
+            - buffer_exists: True if buffer was created (even if empty), False if job hasn't started yet
         """
+        buffer_exists = job_id in self.log_buffers
         buffer = self.log_buffers.get(job_id, [])
-        if not buffer:
-            return []
 
-        # Return last N lines (tail)
-        return buffer[-tail_lines:] if len(buffer) > tail_lines else buffer
+        # Debug logging
+        logger.info(
+            "get_log_buffer called",
+            job_id=job_id,
+            buffer_exists=buffer_exists,
+            buffer_size=len(buffer),
+            all_job_ids=list(self.log_buffers.keys())
+        )
+
+        # Return last N lines (tail) and existence flag
+        tail = buffer[-tail_lines:] if len(buffer) > tail_lines else buffer
+        return (tail, buffer_exists)
 
     async def _update_archive_stats(self, db: Session, job_id: int, repository_path: str, archive_name: str, env: dict):
         """Update backup job with final archive statistics"""
@@ -1080,9 +1091,16 @@ class BackupService:
                 return
 
             # No log files - maximum performance
-            job.status = "running"
-            job.started_at = datetime.utcnow()
-            db.commit()
+            # Try to update status - may fail if job was deleted after we queried it
+            try:
+                job.status = "running"
+                job.started_at = datetime.utcnow()
+                db.commit()
+            except Exception as status_error:
+                # Job was deleted while starting - exit gracefully
+                logger.warning("Could not update job to running status (job may have been deleted)",
+                              job_id=job_id, error=str(status_error))
+                return
 
             # Build borg create command directly
             # Format: borg create --progress --stats --list REPOSITORY::ARCHIVE PATH [PATH ...]
@@ -1482,6 +1500,7 @@ class BackupService:
 
             # Store buffer reference for external access (Activity page)
             self.log_buffers[job_id] = log_buffer
+            logger.info("Created log buffer for job", job_id=job_id, buffer_id=id(log_buffer))
 
             # Create temporary log file to capture ALL logs (not just buffer)
             temp_log_file = self.log_dir / f"backup_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
@@ -1540,6 +1559,10 @@ class BackupService:
                         log_buffer.append(line_str)
                         if len(log_buffer) > MAX_BUFFER_SIZE:
                             log_buffer.pop(0)  # Remove oldest line
+
+                        # Debug: Log first line added to buffer
+                        if len(log_buffer) == 1:
+                            logger.info("First log line added to buffer", job_id=job_id, buffer_id=id(log_buffer))
 
                         # PERFORMANCE OPTIMIZATION: Fast JSON detection (check first char only)
                         # Parse JSON progress messages only
@@ -2082,18 +2105,25 @@ class BackupService:
                 except Exception:
                     pass
 
-            job.status = "failed"
-            job.error_message = str(e)
-            job.completed_at = datetime.utcnow()
-            db.commit()
-
-            # Send failure notification
+            # Try to update job status - may fail if job was deleted during execution
             try:
-                await notification_service.send_backup_failure(
-                    db, repository, str(e), job_id, job_name
-                )
-            except Exception as notif_error:
-                logger.warning("Failed to send backup failure notification", error=str(notif_error))
+                job.status = "failed"
+                job.error_message = str(e)
+                job.completed_at = datetime.utcnow()
+                db.commit()
+
+                # Send failure notification
+                try:
+                    await notification_service.send_backup_failure(
+                        db, repository, str(e), job_id, job_name
+                    )
+                except Exception as notif_error:
+                    logger.warning("Failed to send backup failure notification", error=str(notif_error))
+            except Exception as commit_error:
+                # Job may have been deleted while running - that's okay
+                logger.warning("Could not update job status (job may have been deleted during execution)",
+                              job_id=job_id, error=str(commit_error))
+                db.rollback()
         finally:
             # Ensure log file handle is closed
             if 'log_file_handle' in locals() and log_file_handle:

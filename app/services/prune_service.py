@@ -54,10 +54,16 @@ class PruneService:
                 db.commit()
                 return
 
-            # Update job status
-            job.status = "running"
-            job.started_at = datetime.utcnow()
-            db.commit()
+            # Update job status - may fail if job was deleted after we queried it
+            try:
+                job.status = "running"
+                job.started_at = datetime.utcnow()
+                db.commit()
+            except Exception as status_error:
+                # Job was deleted while starting - exit gracefully
+                logger.warning("Could not update job to running status (job may have been deleted)",
+                              job_id=job_id, error=str(status_error))
+                return
 
             # Set environment variables for borg
             env = os.environ.copy()
@@ -261,10 +267,18 @@ class PruneService:
 
         except Exception as e:
             logger.error("Prune execution failed", job_id=job_id, error=str(e))
-            job.status = "failed"
-            job.error_message = str(e)
-            job.completed_at = datetime.utcnow()
-            db.commit()
+
+            # Try to update job status - may fail if job was deleted during execution
+            try:
+                job.status = "failed"
+                job.error_message = str(e)
+                job.completed_at = datetime.utcnow()
+                db.commit()
+            except Exception as commit_error:
+                # Job may have been deleted while running - that's okay
+                logger.warning("Could not update job status (job may have been deleted during execution)",
+                              job_id=job_id, error=str(commit_error))
+                db.rollback()
         finally:
             # Remove from running processes
             if job_id in self.running_processes:
