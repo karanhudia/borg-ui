@@ -128,7 +128,12 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
       )}
 
       {job.status === 'completed' && job.completed_at && (
-        <Stack direction="row" spacing={1.5} alignItems="baseline" sx={{ flexWrap: 'wrap', gap: 1 }}>
+        <Stack
+          direction="row"
+          spacing={1.5}
+          alignItems="baseline"
+          sx={{ flexWrap: 'wrap', gap: 1 }}
+        >
           <Typography variant="body2" color="success.main" fontWeight={500}>
             ✓ Completed
           </Typography>

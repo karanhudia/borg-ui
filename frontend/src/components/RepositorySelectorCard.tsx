@@ -7,6 +7,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Box,
 } from '@mui/material'
 import { Database } from 'lucide-react'
 
@@ -14,6 +15,7 @@ interface Repository {
   id: number
   name: string
   path: string
+  has_running_maintenance?: boolean
 }
 
 interface RepositorySelectorCardProps {
@@ -54,8 +56,32 @@ export default function RepositorySelectorCard({
               {loading ? 'Loading repositories...' : 'Select a repository...'}
             </MenuItem>
             {repositories.map((repo) => (
-              <MenuItem key={repo.id} value={repo.id}>
-                {repo.name}
+              <MenuItem key={repo.id} value={repo.id} disabled={repo.has_running_maintenance}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Database size={16} />
+                  <Box>
+                    <Typography variant="body2" fontWeight={500}>
+                      {repo.name}
+                      {repo.has_running_maintenance && (
+                        <Typography
+                          component="span"
+                          variant="caption"
+                          color="warning.main"
+                          sx={{ ml: 1 }}
+                        >
+                          (Maintenance Running)
+                        </Typography>
+                      )}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ fontFamily: 'monospace' }}
+                    >
+                      {repo.path}
+                    </Typography>
+                  </Box>
+                </Stack>
               </MenuItem>
             ))}
           </Select>
