@@ -648,3 +648,109 @@ async def test_json_webhook_receives_pure_json(test_db, mock_apprise, mock_repos
     assert '```json' not in body
     assert '**📊 JSON Data' not in body
     assert '<details>' not in body
+
+
+@pytest.mark.asyncio
+async def test_webhook_json_has_correct_repository_name_when_called_with_path(test_db, mock_apprise):
+    """
+    Test for bug: When notification is called with repository PATH,
+    the JSON webhook should have repository_name as the NAME (not path).
+
+    This simulates the real scenario where backup_service calls
+    notification_service.send_backup_start(db, repository_path, ...)
+    but the webhook JSON should have the friendly name.
+    """
+    # Create a repository where name != path (important for this test)
+    repo = Repository(name="My Backup Repo", path="/tmp/backup-repo")
+    test_db.add(repo)
+    test_db.commit()
+    test_db.refresh(repo)
+
+    # Setup JSON webhook notification
+    setting = NotificationSettings(
+        name="JSON Webhook",
+        service_url="jsons://webhook.site/test",
+        enabled=True,
+        notify_on_backup_start=True,
+        notify_on_backup_success=True,
+        notify_on_backup_failure=True,
+        notify_on_restore_success=True,
+        monitor_all_repositories=True
+    )
+    test_db.add(setting)
+    test_db.commit()
+
+    # Setup mock
+    apprise_instance = mock_apprise.return_value
+    apprise_instance.add.return_value = True
+    apprise_instance.notify.return_value = True
+
+    # ========== Test send_backup_start ==========
+    # Call with PATH (this is how backup_service actually calls it)
+    await notification_service.send_backup_start(
+        test_db,
+        repo.path,  # <-- Passing PATH, not name
+        "archive-2024",
+        source_directories=["/home/user/data"],
+        expected_size=1024,
+        job_name="Daily Backup"
+    )
+
+    # Parse the JSON body
+    call_args = apprise_instance.notify.call_args[1]
+    body = call_args['body']
+    parsed = json_module.loads(body)
+
+    # Assert: repository_name should be the NAME, not the PATH
+    assert parsed["repository_name"] == "My Backup Repo", \
+        f"Expected repository_name='My Backup Repo', got '{parsed['repository_name']}'"
+    assert parsed["repository_path"] == "/tmp/backup-repo", \
+        f"Expected repository_path='/tmp/backup-repo', got '{parsed['repository_path']}'"
+
+    # ========== Test send_backup_success ==========
+    await notification_service.send_backup_success(
+        test_db,
+        repo.path,  # <-- Passing PATH, not name
+        "archive-2024",
+        stats={"original_size": 1024},
+        job_name="Daily Backup"
+    )
+
+    body = apprise_instance.notify.call_args[1]['body']
+    parsed = json_module.loads(body)
+
+    assert parsed["repository_name"] == "My Backup Repo", \
+        f"Expected repository_name='My Backup Repo', got '{parsed['repository_name']}'"
+    assert parsed["repository_path"] == "/tmp/backup-repo"
+
+    # ========== Test send_backup_failure ==========
+    await notification_service.send_backup_failure(
+        test_db,
+        repo.path,  # <-- Passing PATH, not name
+        "Test error",
+        job_id=123,
+        job_name="Daily Backup"
+    )
+
+    body = apprise_instance.notify.call_args[1]['body']
+    parsed = json_module.loads(body)
+
+    assert parsed["repository_name"] == "My Backup Repo", \
+        f"Expected repository_name='My Backup Repo', got '{parsed['repository_name']}'"
+    assert parsed["repository_path"] == "/tmp/backup-repo"
+
+    # ========== Test send_restore_success ==========
+    await notification_service.send_restore_success(
+        test_db,
+        repo.path,  # <-- Passing PATH, not name
+        "archive-2024",
+        "/restore/dest",
+        job_name="Restore Job"
+    )
+
+    body = apprise_instance.notify.call_args[1]['body']
+    parsed = json_module.loads(body)
+
+    assert parsed["repository_name"] == "My Backup Repo", \
+        f"Expected repository_name='My Backup Repo', got '{parsed['repository_name']}'"
+    assert parsed["repository_path"] == "/tmp/backup-repo"

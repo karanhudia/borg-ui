@@ -462,8 +462,8 @@ class NotificationService:
             # Add JSON data if enabled
             if _should_include_json(setting):
                 json_data = _build_json_data("backup_start", {
-                    "repository_name": repository_name,
-                    "repository_path": repo.path if repo else None,
+                    "repository_name": repo.name if repo else repository_name,
+                    "repository_path": repo.path if repo else repository_name,
                     "archive_name": archive_name,
                     "job_name": job_name,
                     "source_directories": source_directories,
@@ -594,8 +594,8 @@ class NotificationService:
             # Add JSON data if enabled
             if _should_include_json(setting):
                 json_data = _build_json_data("backup_success", {
-                    "repository_name": repository_name,
-                    "repository_path": repo.path if repo else None,
+                    "repository_name": repo.name if repo else repository_name,
+                    "repository_path": repo.path if repo else repository_name,
                     "archive_name": archive_name,
                     "job_name": job_name,
                     "stats": stats,
@@ -700,8 +700,8 @@ class NotificationService:
             # Add JSON data if enabled
             if _should_include_json(setting):
                 json_data = _build_json_data("backup_failure", {
-                    "repository_name": repository_name,
-                    "repository_path": repo.path if repo else None,
+                    "repository_name": repo.name if repo else repository_name,
+                    "repository_path": repo.path if repo else repository_name,
                     "job_name": job_name,
                     "job_id": job_id,
                     "error_message": error_message,
@@ -840,8 +840,8 @@ class NotificationService:
             # Add JSON data if enabled
             if _should_include_json(setting):
                 json_data = _build_json_data("backup_warning", {
-                    "repository_name": repository_name,
-                    "repository_path": repo.path if repo else None,
+                    "repository_name": repo.name if repo else repository_name,
+                    "repository_path": repo.path if repo else repository_name,
                     "archive_name": archive_name,
                     "job_name": job_name,
                     "warning_message": warning_message,
@@ -930,8 +930,8 @@ class NotificationService:
             # Add JSON data if enabled
             if _should_include_json(setting):
                 json_data = _build_json_data("restore_success", {
-                    "repository_name": repository_name,
-                    "repository_path": repo.path if repo else None,
+                    "repository_name": repo.name if repo else repository_name,
+                    "repository_path": repo.path if repo else repository_name,
                     "archive_name": archive_name,
                     "job_name": job_name,
                     "target_path": target_path,
@@ -1032,8 +1032,8 @@ class NotificationService:
             # Add JSON data if enabled
             if _should_include_json(setting):
                 json_data = _build_json_data("restore_failure", {
-                    "repository_name": repository_name,
-                    "repository_path": repo.path if repo else None,
+                    "repository_name": repo.name if repo else repository_name,
+                    "repository_path": repo.path if repo else repository_name,
                     "archive_name": archive_name,
                     "job_name": job_name,
                     "error_message": error_message,
@@ -1132,8 +1132,8 @@ class NotificationService:
             if _should_include_json(setting):
                 json_data = _build_json_data("schedule_failure", {
                     "schedule_name": schedule_name,
-                    "repository_name": repository_name,
-                    "repository_path": repo.path if repo else None,
+                    "repository_name": repo.name if repo else repository_name,
+                    "repository_path": repo.path if repo else repository_name,
                     "error_message": error_message,
                     "failed_at": failure_time.isoformat()
                 }, compact=_is_json_webhook(setting.service_url))
