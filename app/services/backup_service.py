@@ -857,6 +857,9 @@ class BackupService:
         Prepare source paths for backup by mounting SSH URLs via SSHFS
         Uses the new mount_service with proper SSH key authentication.
 
+        Optimized to mount multiple paths from the same SSH connection under a single shared temp root,
+        which allows proper working directory usage and avoids exclude pattern conflicts.
+
         Args:
             source_paths: List of paths to prepare (may include SSH URLs)
             job_id: Backup job ID
@@ -869,6 +872,7 @@ class BackupService:
         """
         from app.services.mount_service import mount_service
         from app.database.models import SSHConnection
+        from collections import defaultdict
 
         processed_paths = []
         mount_ids = []
@@ -876,6 +880,10 @@ class BackupService:
 
         db = SessionLocal()
         try:
+            # First pass: Parse and group SSH paths by connection_id
+            ssh_paths_by_connection = defaultdict(list)  # connection_id -> [(ssh_url, parsed_data), ...]
+            local_paths = []
+
             for path in source_paths:
                 if path.startswith('ssh://'):
                     # Parse SSH URL: ssh://user@host:port/path
@@ -917,55 +925,75 @@ class BackupService:
                             )
                             continue
 
-                    # Mount using mount service with SSH key authentication
-                    try:
-                        temp_root, mount_id = await mount_service.mount_ssh_directory(
-                            connection_id=connection.id,
-                            remote_path=parsed['path'],
-                            job_id=job_id
-                        )
+                    ssh_paths_by_connection[connection.id].append((path, parsed, connection))
+                else:
+                    # Local path - use as-is
+                    local_paths.append(path)
 
-                        # Compute relative path that preserves original structure
-                        # remote_path: /var/snap/docker/.../portainer/_data
-                        # relative_path: var/snap/docker/.../portainer/_data (no leading slash)
-                        # Special case: / (root) -> . (backup everything from cwd)
-                        relative_path = parsed['path'].lstrip('/')
-                        if not relative_path:
-                            # Backing up root directory - use "." to backup everything
-                            relative_path = '.'
+            # Second pass: Mount SSH paths using shared temp root for same connection
+            for connection_id, paths_data in ssh_paths_by_connection.items():
+                remote_paths = [parsed['path'] for _, parsed, _ in paths_data]
+                connection = paths_data[0][2]  # Get connection from first item
 
+                logger.info(
+                    "Mounting SSH paths from same connection",
+                    connection_id=connection_id,
+                    host=connection.host,
+                    path_count=len(remote_paths),
+                    remote_paths=remote_paths,
+                    job_id=job_id
+                )
+
+                try:
+                    # Mount all paths from this connection under a single shared temp root
+                    temp_root, mount_info_list = await mount_service.mount_ssh_paths_shared(
+                        connection_id=connection_id,
+                        remote_paths=remote_paths,
+                        job_id=job_id
+                    )
+
+                    # Process mount results
+                    for (mount_id, relative_path), (original_url, parsed, _) in zip(mount_info_list, paths_data):
                         processed_paths.append(relative_path)
                         mount_ids.append(mount_id)
                         ssh_mount_info.append((temp_root, relative_path))
 
                         logger.info(
-                            "Mounted SSH path for backup",
-                            original=path,
+                            "Mounted SSH path for backup (shared temp root)",
+                            original=original_url,
                             temp_root=temp_root,
                             relative_path=relative_path,
                             mount_id=mount_id,
-                            connection_id=connection.id,
+                            connection_id=connection_id,
                             job_id=job_id
                         )
 
-                    except Exception as e:
-                        logger.error(
-                            "Failed to mount SSH path",
-                            path=path,
-                            connection_id=connection.id if connection else None,
-                            remote_path=parsed['path'],
-                            error=str(e),
-                            error_type=type(e).__name__,
-                            job_id=job_id
-                        )
-                        # Don't add this path - skip it
-                else:
-                    # Local path - use as-is
-                    processed_paths.append(path)
+                except Exception as e:
+                    logger.error(
+                        "Failed to mount SSH paths from connection",
+                        connection_id=connection_id,
+                        path_count=len(remote_paths),
+                        error=str(e),
+                        error_type=type(e).__name__,
+                        job_id=job_id
+                    )
+                    # Skip all paths from this connection
+
+            # Add local paths at the end
+            processed_paths.extend(local_paths)
 
             # Store mount_ids for cleanup
             if mount_ids:
                 self.ssh_mounts[job_id] = mount_ids
+
+            logger.info(
+                "Source paths prepared",
+                total_paths=len(source_paths),
+                ssh_path_count=len(ssh_mount_info),
+                local_path_count=len(local_paths),
+                connection_count=len(ssh_paths_by_connection),
+                job_id=job_id
+            )
 
             return processed_paths, ssh_mount_info
 
