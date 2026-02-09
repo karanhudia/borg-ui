@@ -1,6 +1,12 @@
-import { render, screen } from '@testing-library/react'
-import { describe, it, expect } from 'vitest'
+import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
 import LastRestoreSection from '../LastRestoreSection'
+
+// Mock react-router-dom
+const mockNavigate = vi.fn()
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => mockNavigate,
+}))
 
 // Mock RestoreJobCard since it's tested separately
 vi.mock('../RestoreJobCard', () => ({
@@ -20,6 +26,10 @@ describe('LastRestoreSection', () => {
     completed_at: '2024-01-15T10:30:00Z',
     progress: 100,
   }
+
+  beforeEach(() => {
+    mockNavigate.mockClear()
+  })
 
   it('renders "no restores" message when restoreJob is null', () => {
     render(<LastRestoreSection restoreJob={null} />)
@@ -87,5 +97,26 @@ describe('LastRestoreSection', () => {
     render(<LastRestoreSection restoreJob={failedJob} />)
 
     expect(screen.getByTestId('restore-job-card')).toBeInTheDocument()
+  })
+
+  it('renders "View All Restores" button when job exists', () => {
+    render(<LastRestoreSection restoreJob={mockRestoreJob} />)
+
+    expect(screen.getByRole('button', { name: /view all restores/i })).toBeInTheDocument()
+  })
+
+  it('does not render "View All Restores" button when no job', () => {
+    render(<LastRestoreSection restoreJob={null} />)
+
+    expect(screen.queryByRole('button', { name: /view all restores/i })).not.toBeInTheDocument()
+  })
+
+  it('navigates to activity page when button is clicked', () => {
+    render(<LastRestoreSection restoreJob={mockRestoreJob} />)
+
+    const button = screen.getByRole('button', { name: /view all restores/i })
+    fireEvent.click(button)
+
+    expect(mockNavigate).toHaveBeenCalledWith('/activity')
   })
 })
