@@ -1949,7 +1949,9 @@ async def list_repository_archives(
                 # Check if it's a lock timeout error - return special error for user prompt
                 if "lock" in error_msg.lower() and "timeout" in error_msg.lower():
                     logger.warning(f"Lock timeout detected on attempt {attempt + 1}/{max_retries}",
-                                 repo_id=repo_id, error=error_msg)
+                                 repo_id=repo_id,
+                                 borg_exit_code=process.returncode,
+                                 error=error_msg)
                     raise HTTPException(
                         status_code=423,  # 423 Locked status code
                         detail={
@@ -2078,7 +2080,9 @@ async def get_repository_info(
                 # Check if it's a lock timeout error - return special error for user prompt
                 if "lock" in error_msg.lower() and "timeout" in error_msg.lower():
                     logger.warning(f"Lock timeout detected on attempt {attempt + 1}/{max_retries}",
-                                 repo_id=repo_id, error=error_msg)
+                                 repo_id=repo_id,
+                                 borg_exit_code=process.returncode,
+                                 error=error_msg)
                     raise HTTPException(
                         status_code=423,  # 423 Locked status code
                         detail={
