@@ -1,6 +1,8 @@
+import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { AxiosResponse } from 'axios'
 import ArchiveContentsDialog from '../ArchiveContentsDialog'
 import * as browseAPI from '../../services/api'
 
@@ -65,7 +67,7 @@ describe('ArchiveContentsDialog', () => {
   it('renders dialog when open', () => {
     vi.mocked(browseAPI.browseAPI.getContents).mockResolvedValue({
       data: { items: [] },
-    } as any)
+    } as AxiosResponse)
 
     renderWithProviders(
       <ArchiveContentsDialog
@@ -98,7 +100,7 @@ describe('ArchiveContentsDialog', () => {
   it('displays empty archive message when no items', async () => {
     vi.mocked(browseAPI.browseAPI.getContents).mockResolvedValue({
       data: { items: [] },
-    } as any)
+    } as AxiosResponse)
 
     renderWithProviders(
       <ArchiveContentsDialog
@@ -133,7 +135,7 @@ describe('ArchiveContentsDialog', () => {
           },
         ],
       },
-    } as any)
+    } as AxiosResponse)
 
     renderWithProviders(
       <ArchiveContentsDialog
@@ -162,7 +164,7 @@ describe('ArchiveContentsDialog', () => {
           },
         ],
       },
-    } as any)
+    } as AxiosResponse)
 
     renderWithProviders(
       <ArchiveContentsDialog
@@ -192,7 +194,7 @@ describe('ArchiveContentsDialog', () => {
   it('displays breadcrumb navigation', async () => {
     vi.mocked(browseAPI.browseAPI.getContents).mockResolvedValue({
       data: { items: [] },
-    } as any)
+    } as AxiosResponse)
 
     renderWithProviders(
       <ArchiveContentsDialog
@@ -221,7 +223,7 @@ describe('ArchiveContentsDialog', () => {
           },
         ],
       },
-    } as any)
+    } as AxiosResponse)
 
     renderWithProviders(
       <ArchiveContentsDialog
@@ -245,7 +247,7 @@ describe('ArchiveContentsDialog', () => {
   it('calls onClose when Close button is clicked', async () => {
     vi.mocked(browseAPI.browseAPI.getContents).mockResolvedValue({
       data: { items: [] },
-    } as any)
+    } as AxiosResponse)
 
     renderWithProviders(
       <ArchiveContentsDialog
@@ -267,7 +269,7 @@ describe('ArchiveContentsDialog', () => {
   it('resets path when dialog opens with new archive', async () => {
     vi.mocked(browseAPI.browseAPI.getContents).mockResolvedValue({
       data: { items: [] },
-    } as any)
+    } as AxiosResponse)
 
     const { rerender } = renderWithProviders(
       <ArchiveContentsDialog
@@ -313,7 +315,7 @@ describe('ArchiveContentsDialog', () => {
           },
         ],
       },
-    } as any)
+    } as AxiosResponse)
 
     renderWithProviders(
       <ArchiveContentsDialog

@@ -34,6 +34,14 @@ interface FileItem {
   type: string
 }
 
+interface RawFileItem {
+  name: string
+  path: string
+  size: number
+  type: string
+  mtime?: string
+}
+
 export default function ArchiveContentsDialog({
   open,
   archive,
@@ -72,7 +80,7 @@ export default function ArchiveContentsDialog({
     const folders: FileItem[] = []
     const files: FileItem[] = []
 
-    items.forEach((item: any) => {
+    items.forEach((item: RawFileItem) => {
       if (item.type === 'directory') {
         folders.push({
           name: item.name,

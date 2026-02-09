@@ -1,3 +1,4 @@
+import React from 'react'
 import { Card, CardContent, Typography, Box } from '@mui/material'
 import { Clock } from 'lucide-react'
 import DataTable, { Column, ActionButton } from './DataTable'
@@ -45,4 +46,4 @@ const ScheduledJobsTable = <T extends { id: number | string }>({
 
 export default ScheduledJobsTable as <T extends { id: number | string }>(
   props: ScheduledJobsTableProps<T>
-) => JSX.Element
+) => React.JSX.Element
