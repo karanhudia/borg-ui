@@ -48,7 +48,13 @@ export default function LastRestoreSection({ restoreJob }: LastRestoreSectionPro
 
   return (
     <Box sx={{ mb: 4 }}>
-      <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+      <Stack
+        direction="row"
+        spacing={1.5}
+        alignItems="center"
+        justifyContent="space-between"
+        sx={{ mb: 2 }}
+      >
         <Stack direction="row" spacing={1.5} alignItems="center">
           <RotateCcw size={20} color="#9c27b0" />
           <Typography variant="h6" fontWeight={600}>
