@@ -29,7 +29,7 @@ const WizardStepScheduleConfig: React.FC<WizardStepScheduleConfigProps> = ({
         times.push(interval.next().toDate().toLocaleString())
       }
       return times
-    } catch (error) {
+    } catch {
       return null
     }
   }, [data.cronExpression])
