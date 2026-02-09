@@ -1947,8 +1947,8 @@ async def list_repository_archives(
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
 
-                # Check if it's a lock error - return special error for user prompt
-                if is_lock_error(exit_code=process.returncode, stderr=error_msg):
+                # Check if it's a lock error (exit codes 70-75) - return special error for user prompt
+                if is_lock_error(exit_code=process.returncode):
                     logger.warning(f"Lock error detected on attempt {attempt + 1}/{max_retries}",
                                  repo_id=repo_id,
                                  borg_exit_code=process.returncode,
@@ -2078,8 +2078,8 @@ async def get_repository_info(
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
 
-                # Check if it's a lock error - return special error for user prompt
-                if is_lock_error(exit_code=process.returncode, stderr=error_msg):
+                # Check if it's a lock error (exit codes 70-75) - return special error for user prompt
+                if is_lock_error(exit_code=process.returncode):
                     logger.warning(f"Lock error detected on attempt {attempt + 1}/{max_retries}",
                                  repo_id=repo_id,
                                  borg_exit_code=process.returncode,
