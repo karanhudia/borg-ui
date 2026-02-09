@@ -27,7 +27,6 @@ import {
   parseBytes,
 } from '../utils/dateUtils'
 import { generateBorgCreateCommand } from '../utils/borgUtils'
-import LockErrorDialog from '../components/LockErrorDialog'
 import { BackupJob } from '../types'
 import BackupJobsTable from '../components/BackupJobsTable'
 import { useMatomo } from '../hooks/useMatomo'
@@ -35,10 +34,6 @@ import { useAuth } from '../hooks/useAuth'
 
 const Backup: React.FC = () => {
   const [selectedRepository, setSelectedRepository] = useState<string>('')
-  const [lockError, setLockError] = useState<{
-    repositoryId: number
-    repositoryName: string
-  } | null>(null)
   const queryClient = useQueryClient()
   const location = useLocation()
   const { trackBackup, EventAction } = useMatomo()
@@ -56,11 +51,12 @@ const Backup: React.FC = () => {
   }, [location.state])
 
   // Get backup status and history (manual backups only)
-  const { data: backupStatus, isLoading: loadingStatus } = useQuery({
+  const { data: backupStatusResponse, isLoading: loadingStatus } = useQuery({
     queryKey: ['backup-status-manual'],
     queryFn: backupAPI.getManualJobs,
     refetchInterval: 1000, // Poll every 1 second for real-time updates
   })
+  const backupStatus = backupStatusResponse?.data?.jobs
 
   // Get repositories
   const { data: repositoriesData, isLoading: loadingRepositories } = useQuery({
@@ -154,32 +150,8 @@ const Backup: React.FC = () => {
     })
   }
 
-  const runningJobs =
-    backupStatus?.data?.jobs?.filter((job: BackupJob) => job.status === 'running') || []
-  const recentJobs = backupStatus?.data?.jobs || []
-
-  // Handle break lock action
-  const handleBreakLock = async (job: BackupJob) => {
-    const repoPath = job.error_message?.match(/LOCK_ERROR::(.+)/)?.[1].split('\n')[0]
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const repo = repositoriesData?.data?.repositories?.find((r: any) => r.path === repoPath)
-    if (!repo) return
-
-    if (
-      window.confirm(
-        'Are you CERTAIN no backup is currently running on this repository? Breaking the lock while a backup is running can corrupt your repository!'
-      )
-    ) {
-      try {
-        await repositoriesAPI.breakLock(repo.id)
-        toast.success('Lock removed successfully! You can now start a new backup.')
-        queryClient.invalidateQueries({ queryKey: ['backup-status'] })
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (error: any) {
-        toast.error(error.response?.data?.detail || 'Failed to break lock')
-      }
-    }
-  }
+  const runningJobs = backupStatus?.filter((job: BackupJob) => job.status === 'running') || []
+  const recentJobs = backupStatus || []
 
   return (
     <Box>
@@ -573,7 +545,6 @@ const Backup: React.FC = () => {
               errorInfo: true,
               delete: true,
             }}
-            onBreakLock={handleBreakLock}
             isAdmin={user?.is_admin || false}
             getRowKey={(job) => String(job.id)}
             headerBgColor="background.default"
@@ -590,22 +561,6 @@ const Backup: React.FC = () => {
           />
         </CardContent>
       </Card>
-
-      {/* Lock Error Dialog */}
-      {lockError && (
-        <LockErrorDialog
-          open={!!lockError}
-          onClose={() => setLockError(null)}
-          repositoryId={lockError.repositoryId}
-          repositoryName={lockError.repositoryName}
-          onLockBroken={() => {
-            queryClient.invalidateQueries({
-              queryKey: ['repository-archives', lockError.repositoryId],
-            })
-            queryClient.invalidateQueries({ queryKey: ['repository-info', lockError.repositoryId] })
-          }}
-        />
-      )}
     </Box>
   )
 }

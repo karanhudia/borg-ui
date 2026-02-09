@@ -140,6 +140,7 @@ const Activity: React.FC = () => {
             viewLogs: true,
             downloadLogs: true,
             errorInfo: true,
+            breakLock: true,
             delete: true,
           }}
           isAdmin={user?.is_admin || false}
@@ -158,6 +159,7 @@ const Activity: React.FC = () => {
             viewLogs: true,
             downloadLogs: true,
             errorInfo: true,
+            breakLock: true,
             delete: true,
           }}
           isAdmin={user?.is_admin || false}

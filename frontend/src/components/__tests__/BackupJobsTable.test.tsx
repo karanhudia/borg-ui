@@ -381,16 +381,32 @@ describe('BackupJobsTable', () => {
     }
   })
 
-  it('shows Break Lock only for running jobs', () => {
+  it('shows Break Lock only for failed jobs with lock errors', () => {
+    const jobsWithLockError = [
+      ...mockJobs,
+      {
+        id: 4,
+        repository: '/backup/repo4',
+        repository_path: '/backup/repo4',
+        type: 'backup',
+        status: 'failed',
+        started_at: '2024-01-20T12:00:00Z',
+        completed_at: '2024-01-20T12:05:00Z',
+        triggered_by: 'manual',
+        error_message:
+          'LOCK_ERROR::/backup/repo4\n[Exit Code 73] Failed to create/acquire the lock (timeout)',
+      },
+    ]
+
     renderWithProviders(
       <BackupJobsTable
-        jobs={mockJobs}
+        jobs={jobsWithLockError}
         actions={{ breakLock: true }}
         onBreakLock={mockCallbacks.onBreakLock}
       />
     )
 
-    // Only job 2 has status: 'running'
+    // Only job 4 has status: 'failed' with LOCK_ERROR:: in error message
     const breakLockButtons = screen.getAllByRole('button', { name: 'Break Lock' })
     expect(breakLockButtons.length).toBe(1)
   })
