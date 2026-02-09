@@ -169,6 +169,64 @@ async def create_scheduled_job(
         raise HTTPException(status_code=403, detail="Admin access required")
 
     try:
+        logger.info("STEP 0: Schedule creation request received",
+                   job_name=job_data.name,
+                   user=current_user.username,
+                   repository_ids=job_data.repository_ids,
+                   repository_id=job_data.repository_id,
+                   repository=job_data.repository)
+
+        # Check for orphaned schedules (diagnostic)
+        try:
+            # Find schedules with no junction entries
+            all_schedules = db.query(ScheduledJob).all()
+            orphaned_schedules = []
+
+            for sched in all_schedules:
+                junction_count = db.query(ScheduledJobRepository).filter_by(
+                    scheduled_job_id=sched.id
+                ).count()
+
+                # Check if this is a multi-repo schedule (has repository_ids but no legacy fields)
+                is_multi_repo = not sched.repository_id and not sched.repository
+
+                if is_multi_repo and junction_count == 0:
+                    orphaned_schedules.append({
+                        'id': sched.id,
+                        'name': sched.name,
+                        'created_at': str(sched.created_at) if hasattr(sched, 'created_at') else None
+                    })
+
+            if orphaned_schedules:
+                logger.warning("STEP 0.1: Found orphaned schedules in database",
+                             count=len(orphaned_schedules),
+                             orphaned=orphaned_schedules[:5])  # Limit to first 5
+            else:
+                logger.info("STEP 0.1: No orphaned schedules found in database")
+
+            # Check for orphaned junction entries (entries pointing to non-existent schedules)
+            all_junction_entries = db.query(ScheduledJobRepository).all()
+            orphaned_junctions = []
+
+            for junction in all_junction_entries:
+                schedule_exists = db.query(ScheduledJob).filter_by(id=junction.scheduled_job_id).first()
+                if not schedule_exists:
+                    orphaned_junctions.append({
+                        'scheduled_job_id': junction.scheduled_job_id,
+                        'repository_id': junction.repository_id,
+                        'execution_order': junction.execution_order
+                    })
+
+            if orphaned_junctions:
+                logger.error("STEP 0.2: Found orphaned junction entries (pointing to deleted schedules)",
+                            count=len(orphaned_junctions),
+                            orphaned=orphaned_junctions[:10])  # Limit to first 10
+            else:
+                logger.info("STEP 0.2: No orphaned junction entries found")
+
+        except Exception as check_error:
+            logger.warning("STEP 0.3: Could not check for orphaned data", error=str(check_error))
+
         # Validate cron expression
         try:
             cron = croniter.croniter(job_data.cron_expression, datetime.now(timezone.utc))
@@ -200,6 +258,11 @@ async def create_scheduled_job(
         # Check multi-repo and deduplicate
         unique_repo_ids = None
         if job_data.repository_ids:
+            logger.info("STEP 1: Received repository_ids from frontend",
+                       repository_ids=job_data.repository_ids,
+                       count=len(job_data.repository_ids),
+                       job_name=job_data.name)
+
             # Remove duplicates while preserving order
             seen = set()
             unique_repo_ids = []
@@ -208,11 +271,15 @@ async def create_scheduled_job(
                     seen.add(repo_id)
                     unique_repo_ids.append(repo_id)
 
-            # Log if duplicates were found
+            # Log deduplication results
             if len(unique_repo_ids) != len(job_data.repository_ids):
-                logger.warning("Removed duplicate repository IDs from create request",
+                logger.warning("STEP 2: Removed duplicate repository IDs",
                              original=job_data.repository_ids,
-                             cleaned=unique_repo_ids)
+                             cleaned=unique_repo_ids,
+                             removed_count=len(job_data.repository_ids) - len(unique_repo_ids))
+            else:
+                logger.info("STEP 2: No duplicates found, using all repository IDs",
+                          unique_repo_ids=unique_repo_ids)
 
             # Validate repositories
             for repo_id in unique_repo_ids:
@@ -249,21 +316,72 @@ async def create_scheduled_job(
             prune_keep_yearly=job_data.prune_keep_yearly
         )
 
+        logger.info("STEP 3: Adding ScheduledJob to database",
+                   job_name=job_data.name,
+                   repository_field=job_data.repository,
+                   repository_id_field=job_data.repository_id)
+
         db.add(scheduled_job)
         db.commit()
         db.refresh(scheduled_job)
 
+        logger.info("STEP 4: ScheduledJob committed successfully (FIRST COMMIT)",
+                   schedule_id=scheduled_job.id,
+                   schedule_name=scheduled_job.name)
+
         # Create junction table entries for multi-repo schedule with deduplicated list
         if unique_repo_ids:
+            # Check if there are any existing junction entries for this schedule_id (shouldn't be any)
+            existing_entries = db.query(ScheduledJobRepository).filter_by(
+                scheduled_job_id=scheduled_job.id
+            ).all()
+
+            if existing_entries:
+                logger.error("STEP 5: UNEXPECTED - Found existing junction entries for newly created schedule!",
+                           schedule_id=scheduled_job.id,
+                           existing_count=len(existing_entries),
+                           existing_entries=[(e.repository_id, e.execution_order) for e in existing_entries])
+            else:
+                logger.info("STEP 5: No existing junction entries (as expected)",
+                          schedule_id=scheduled_job.id)
+
+            logger.info("STEP 6: Creating junction table entries",
+                       schedule_id=scheduled_job.id,
+                       repository_ids=unique_repo_ids,
+                       count=len(unique_repo_ids))
             for order, repo_id in enumerate(unique_repo_ids):
+                logger.debug("STEP 6.%d: Creating junction entry", order,
+                           schedule_id=scheduled_job.id,
+                           repository_id=repo_id,
+                           execution_order=order)
+
                 repo_link = ScheduledJobRepository(
                     scheduled_job_id=scheduled_job.id,
                     repository_id=repo_id,
                     execution_order=order
                 )
                 db.add(repo_link)
+
+            # Check what's pending in the session before commit
+            pending_entries = [obj for obj in db.new if isinstance(obj, ScheduledJobRepository)]
+            logger.info("STEP 7: Junction entries in session before SECOND COMMIT",
+                       count=len(pending_entries),
+                       entries=[(e.scheduled_job_id, e.repository_id, e.execution_order) for e in pending_entries])
+
             db.commit()
-            logger.info("Created multi-repo schedule", schedule_id=scheduled_job.id, repo_count=len(unique_repo_ids))
+
+            logger.info("STEP 8: Junction entries committed successfully (SECOND COMMIT)",
+                       schedule_id=scheduled_job.id,
+                       repo_count=len(unique_repo_ids))
+
+            # Verify what was actually saved
+            saved_entries = db.query(ScheduledJobRepository).filter_by(
+                scheduled_job_id=scheduled_job.id
+            ).all()
+            logger.info("STEP 9: Verification - Junction entries in database after commit",
+                       schedule_id=scheduled_job.id,
+                       saved_count=len(saved_entries),
+                       saved_entries=[(e.repository_id, e.execution_order) for e in saved_entries])
         
         logger.info("Scheduled job created", name=job_data.name, user=current_user.username)
         
@@ -282,8 +400,44 @@ async def create_scheduled_job(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to create scheduled job", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to create scheduled job: {str(e)}")
+        error_msg = str(e)
+        error_type = type(e).__name__
+
+        # Comprehensive error logging
+        logger.error("ERROR: Failed to create scheduled job",
+                    error_type=error_type,
+                    error_msg=error_msg,
+                    job_name=job_data.name,
+                    received_repository_ids=job_data.repository_ids,
+                    unique_repository_ids=unique_repo_ids if 'unique_repo_ids' in locals() else None,
+                    schedule_id=scheduled_job.id if 'scheduled_job' in locals() and hasattr(scheduled_job, 'id') else None)
+
+        # Check for UNIQUE constraint error
+        if "UNIQUE constraint failed" in error_msg:
+            logger.error("ERROR: UNIQUE constraint violation detected",
+                        full_error=error_msg,
+                        job_data=job_data.dict())
+
+            # Try to find what's in the database
+            if 'scheduled_job' in locals() and hasattr(scheduled_job, 'id'):
+                try:
+                    existing_junction = db.query(ScheduledJobRepository).filter_by(
+                        scheduled_job_id=scheduled_job.id
+                    ).all()
+                    logger.error("ERROR: Current junction entries for this schedule_id",
+                               schedule_id=scheduled_job.id,
+                               count=len(existing_junction),
+                               entries=[(e.repository_id, e.execution_order) for e in existing_junction])
+                except Exception as check_error:
+                    logger.error("ERROR: Could not check junction entries", error=str(check_error))
+
+            raise HTTPException(
+                status_code=500,
+                detail=f"Database constraint error: {error_msg}. Please check logs for details or contact support."
+            )
+
+        logger.error("Failed to create scheduled job", error=error_msg)
+        raise HTTPException(status_code=500, detail=f"Failed to create scheduled job: {error_msg}")
 
 @router.get("/cron-presets")
 async def get_cron_presets(current_user: User = Depends(get_current_user)):
