@@ -142,7 +142,7 @@ describe('Restore Page - Speed and ETA Display', () => {
     })
   })
 
-  it('displays N/A for speed when job is not running', async () => {
+  it('displays N/A for speed when restore_speed is 0', async () => {
     const mockJobs = {
       jobs: [
         {
@@ -150,8 +150,8 @@ describe('Restore Page - Speed and ETA Display', () => {
           repository: '/test/repo',
           archive: 'test-archive',
           destination: '/test/dest',
-          status: 'pending',
-          started_at: null,
+          status: 'running',
+          started_at: '2026-01-30T10:00:00Z',
           completed_at: null,
           progress: 0,
           error_message: null,
@@ -173,9 +173,9 @@ describe('Restore Page - Speed and ETA Display', () => {
     renderWithProviders(<Restore />)
 
     await waitFor(() => {
-      // Verify Speed label and N/A are both present (job is pending)
+      // Verify Speed label and N/A are both present (restore_speed is 0)
       expect(screen.getByText('Speed:')).toBeInTheDocument()
-      expect(screen.getAllByText('N/A').length).toBeGreaterThan(0)
+      expect(screen.getByText('N/A')).toBeInTheDocument()
     })
   })
 
