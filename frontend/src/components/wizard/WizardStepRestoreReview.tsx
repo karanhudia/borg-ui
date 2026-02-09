@@ -1,3 +1,4 @@
+import React from 'react'
 import { Box, Typography, Alert, Paper, Chip, Divider } from '@mui/material'
 import { HardDrive, Cloud, FolderOpen, FileCheck, CheckCircle } from 'lucide-react'
 

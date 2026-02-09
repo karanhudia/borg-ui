@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import LastRestoreSection from '../LastRestoreSection'
 
 // Mock react-router-dom
@@ -10,7 +10,7 @@ vi.mock('react-router-dom', () => ({
 
 // Mock RestoreJobCard since it's tested separately
 vi.mock('../RestoreJobCard', () => ({
-  default: ({ job }: { job: any }) => (
+  default: ({ job }: { job: { archive: string } }) => (
     <div data-testid="restore-job-card">Restore Job: {job.archive}</div>
   ),
 }))

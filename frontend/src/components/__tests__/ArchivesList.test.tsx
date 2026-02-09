@@ -4,7 +4,7 @@ import ArchivesList from '../ArchivesList'
 
 // Mock ArchiveCard since it's tested separately
 vi.mock('../ArchiveCard', () => ({
-  default: ({ archive }: { archive: any }) => (
+  default: ({ archive }: { archive: { id: string; name: string } }) => (
     <div data-testid={`archive-card-${archive.id}`}>Archive: {archive.name}</div>
   ),
 }))
