@@ -184,28 +184,26 @@ def get_exit_code_message(exit_code: int) -> str:
         return f"Unknown error (exit code {exit_code})"
 
 
-def is_lock_error(exit_code: int = None, msgid: str = None, stderr: str = None) -> bool:
+def is_lock_error(exit_code: int = None, msgid: str = None) -> bool:
     """
     Check if an error is a lock-related error
 
+    Uses ONLY exit code and msgid - no fuzzy text matching to avoid false positives.
+
     Args:
-        exit_code: Borg process exit code
-        msgid: Borg message ID
-        stderr: Standard error output
+        exit_code: Borg process exit code (70-75 are lock errors)
+        msgid: Borg message ID (LockError, LockTimeout, etc.)
 
     Returns:
         True if this is a lock error, False otherwise
     """
-    # Check exit code (70-75 are all lock-related)
+    # Primary: Check exit code (70-75 are all lock-related)
+    # This is the most reliable and definitive method
     if exit_code is not None and 70 <= exit_code <= 75:
         return True
 
-    # Check message ID
+    # Secondary: Check message ID (for operations using --log-json)
     if msgid in ['LockError', 'LockErrorT', 'LockFailed', 'LockTimeout', 'NotLocked', 'NotMyLock']:
-        return True
-
-    # Fallback: check stderr text
-    if stderr and "lock" in stderr.lower() and "timeout" in stderr.lower():
         return True
 
     return False
