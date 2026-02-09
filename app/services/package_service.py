@@ -75,11 +75,17 @@ class PackageInstallService:
                 logger.error("Job or package not found", job_id=job_id, package_id=package_id)
                 return
 
-            # Update job status to installing
-            job.status = "installing"
-            job.started_at = datetime.utcnow()
-            package.status = "installing"
-            db.commit()
+            # Update job status to installing - may fail if job was deleted after we queried it
+            try:
+                job.status = "installing"
+                job.started_at = datetime.utcnow()
+                package.status = "installing"
+                db.commit()
+            except Exception as status_error:
+                # Job was deleted while starting - exit gracefully
+                logger.warning("Could not update job to installing status (job may have been deleted)",
+                              job_id=job_id, error=str(status_error))
+                return
 
             logger.info("Starting package installation", job_id=job_id, package=package_name)
 
@@ -141,19 +147,27 @@ class PackageInstallService:
 
         except Exception as e:
             logger.error("Package installation error", job_id=job_id, error=str(e))
-            if job:
-                job.status = "failed"
-                job.error_message = str(e)
-                job.completed_at = datetime.utcnow()
-                db.commit()
 
-            # Update package status
-            package = db.query(InstalledPackage).filter(InstalledPackage.id == package_id).first()
-            if package:
-                package.status = "failed"
-                package.install_log = f"Error: {str(e)}"
-                package.last_check = datetime.utcnow()
-                db.commit()
+            # Try to update job status - may fail if job was deleted during execution
+            try:
+                if job:
+                    job.status = "failed"
+                    job.error_message = str(e)
+                    job.completed_at = datetime.utcnow()
+                    db.commit()
+
+                # Update package status
+                package = db.query(InstalledPackage).filter(InstalledPackage.id == package_id).first()
+                if package:
+                    package.status = "failed"
+                    package.install_log = f"Error: {str(e)}"
+                    package.last_check = datetime.utcnow()
+                    db.commit()
+            except Exception as commit_error:
+                # Job or package may have been deleted while running - that's okay
+                logger.warning("Could not update job/package status (may have been deleted during execution)",
+                              job_id=job_id, error=str(commit_error))
+                db.rollback()
 
         finally:
             db.close()

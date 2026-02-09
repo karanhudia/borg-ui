@@ -61,10 +61,16 @@ class CheckService:
                 db.commit()
                 return
 
-            # Update job status
-            job.status = "running"
-            job.started_at = datetime.utcnow()
-            db.commit()
+            # Update job status - may fail if job was deleted after we queried it
+            try:
+                job.status = "running"
+                job.started_at = datetime.utcnow()
+                db.commit()
+            except Exception as status_error:
+                # Job was deleted while starting - exit gracefully
+                logger.warning("Could not update job to running status (job may have been deleted)",
+                              job_id=job_id, error=str(status_error))
+                return
 
             # Set environment variables for borg
             env = os.environ.copy()
@@ -346,31 +352,39 @@ class CheckService:
 
         except Exception as e:
             logger.error("Check execution failed", job_id=job_id, error=str(e))
-            job.status = "failed"
-            job.error_message = str(e)
-            job.completed_at = datetime.utcnow()
-            db.commit()
 
-            # Send failure notification
+            # Try to update job status - may fail if job was deleted during execution
             try:
-                duration_seconds = None
-                if job.started_at and job.completed_at:
-                    duration_seconds = int((job.completed_at - job.started_at).total_seconds())
+                job.status = "failed"
+                job.error_message = str(e)
+                job.completed_at = datetime.utcnow()
+                db.commit()
 
-                check_type = "scheduled" if job.scheduled_check else "manual"
+                # Send failure notification
+                try:
+                    duration_seconds = None
+                    if job.started_at and job.completed_at:
+                        duration_seconds = int((job.completed_at - job.started_at).total_seconds())
 
-                await NotificationService.send_check_completion(
-                    db=db,
-                    repository_name=repository.name if repository else "Unknown",
-                    repository_path=repository.path if repository else "Unknown",
-                    status="failed",
-                    duration_seconds=duration_seconds,
-                    error_message=str(e),
-                    check_type=check_type
-                )
-                logger.info("Check failure notification sent", job_id=job_id)
-            except Exception as notif_error:
-                logger.error("Failed to send check failure notification", job_id=job_id, error=str(notif_error))
+                    check_type = "scheduled" if job.scheduled_check else "manual"
+
+                    await NotificationService.send_check_completion(
+                        db=db,
+                        repository_name=repository.name if repository else "Unknown",
+                        repository_path=repository.path if repository else "Unknown",
+                        status="failed",
+                        duration_seconds=duration_seconds,
+                        error_message=str(e),
+                        check_type=check_type
+                    )
+                    logger.info("Check failure notification sent", job_id=job_id)
+                except Exception as notif_error:
+                    logger.error("Failed to send check failure notification", job_id=job_id, error=str(notif_error))
+            except Exception as commit_error:
+                # Job may have been deleted while running - that's okay
+                logger.warning("Could not update job status (job may have been deleted during execution)",
+                              job_id=job_id, error=str(commit_error))
+                db.rollback()
         finally:
             # Remove from running processes
             if job_id in self.running_processes:
