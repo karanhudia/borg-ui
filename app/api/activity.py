@@ -349,17 +349,46 @@ async def get_job_logs(
     if job.status == 'running':
         if job_type == 'backup':
             # For running backups, try to get log buffer (last 500 lines)
-            log_buffer = backup_service.get_log_buffer(job_id, tail_lines=500)
+            log_buffer, buffer_exists = backup_service.get_log_buffer(job_id, tail_lines=500)
 
-            if log_buffer:
-                # Return last 500 lines from in-memory buffer
-                return {
-                    'lines': [{'line_number': i + 1, 'content': line} for i, line in enumerate(log_buffer)],
-                    'total_lines': len(log_buffer),
-                    'has_more': False  # Always show tail for running jobs
-                }
+            logger.info(
+                "Retrieved log buffer for running backup",
+                job_id=job_id,
+                buffer_exists=buffer_exists,
+                buffer_length=len(log_buffer),
+                buffer_type=type(log_buffer).__name__
+            )
+
+            # Check if buffer exists (True means buffer was created, even if empty)
+            # Empty buffer means backup started but no logs output yet
+            if buffer_exists:
+                if len(log_buffer) > 0:
+                    # Return last 500 lines from in-memory buffer
+                    response = {
+                        'lines': [{'line_number': i + 1, 'content': line} for i, line in enumerate(log_buffer)],
+                        'total_lines': len(log_buffer),
+                        'has_more': False  # Always show tail for running jobs
+                    }
+                    logger.info(
+                        "Returning log buffer data",
+                        job_id=job_id,
+                        lines_count=len(response['lines']),
+                        first_line=log_buffer[0] if log_buffer else None
+                    )
+                    return response
+                else:
+                    # Buffer exists but empty - backup command started, waiting for first output
+                    logger.info("Buffer exists but empty, returning processing message", job_id=job_id)
+                    lines = [
+                        "Backup is running...",
+                        "",
+                        "Processing started, waiting for first log output...",
+                        "",
+                        "Note: Showing last 500 lines from in-memory buffer. Full logs not saved to disk."
+                    ]
             else:
-                # No buffer yet (job just started)
+                # Buffer not created yet - backup job hasn't started borg command
+                logger.info("Buffer not created yet, returning waiting message", job_id=job_id)
                 lines = [
                     "Backup is currently running...",
                     "",
