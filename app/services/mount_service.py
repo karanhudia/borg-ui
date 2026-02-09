@@ -301,6 +301,185 @@ class MountService:
         finally:
             db.close()
 
+    async def mount_ssh_paths_shared(
+        self,
+        connection_id: int,
+        remote_paths: List[str],
+        job_id: Optional[int] = None
+    ) -> Tuple[str, List[Tuple[str, str]]]:
+        """
+        Mount multiple remote SSH directories from the same connection under a single shared temp root.
+        This is more efficient than mounting each path separately and allows proper working directory usage.
+
+        Args:
+            connection_id: SSHConnection ID to use
+            remote_paths: List of remote paths to mount (all from the same connection)
+            job_id: Optional backup job ID for tracking
+
+        Returns:
+            Tuple of (temp_root, mount_info_list)
+            - temp_root: Shared temporary directory root for all mounts
+            - mount_info_list: List of (mount_id, relative_path) tuples for each mounted path
+
+        Raises:
+            Exception: If any mount fails
+        """
+        if not remote_paths:
+            raise ValueError("remote_paths cannot be empty")
+
+        db = SessionLocal()
+        try:
+            # Get SSH connection
+            connection = db.query(SSHConnection).filter(
+                SSHConnection.id == connection_id
+            ).first()
+
+            if not connection:
+                raise Exception(f"SSH connection {connection_id} not found")
+
+            # Get SSH key
+            ssh_key = db.query(SSHKey).filter(
+                SSHKey.id == connection.ssh_key_id
+            ).first()
+
+            if not ssh_key:
+                raise Exception(
+                    f"SSH key {connection.ssh_key_id} not found for connection {connection_id}"
+                )
+
+            # Check if SSHFS is available
+            if not await self._check_sshfs_available():
+                raise Exception(
+                    "SSHFS not found - install SSHFS package or rebuild Docker image"
+                )
+
+            # Decrypt SSH key
+            temp_key_file = self._decrypt_and_write_key(ssh_key)
+
+            # Create ONE shared temporary directory for all mounts from this connection
+            temp_root = tempfile.mkdtemp(prefix=f"sshfs_mount_{job_id or 'user'}_")
+
+            logger.info(
+                "Mounting multiple SSH paths under shared temp root",
+                connection_id=connection_id,
+                host=connection.host,
+                remote_paths=remote_paths,
+                temp_root=temp_root,
+                job_id=job_id
+            )
+
+            mount_info_list = []
+            mounted_successfully = []
+
+            try:
+                for remote_path in remote_paths:
+                    # Strip leading slash from remote_path to create relative path under temp_root
+                    relative_remote_path = remote_path.lstrip('/')
+                    if relative_remote_path:
+                        mount_dir = os.path.join(temp_root, relative_remote_path)
+                        os.makedirs(mount_dir, exist_ok=True)
+                    else:
+                        # Backing up root directory - mount directly to temp_root
+                        mount_dir = temp_root
+
+                    mount_id = str(uuid.uuid4())
+
+                    logger.info(
+                        "Mounting SSH directory via SSHFS (shared temp root)",
+                        mount_id=mount_id,
+                        connection_id=connection_id,
+                        host=connection.host,
+                        remote_path=remote_path,
+                        mount_point=mount_dir,
+                        temp_root=temp_root,
+                        job_id=job_id
+                    )
+
+                    # Mount with SSH key authentication
+                    await self._execute_sshfs_mount(
+                        connection=connection,
+                        remote_path=remote_path,
+                        mount_point=mount_dir,
+                        temp_key_file=temp_key_file
+                    )
+
+                    # Verify mount with READ-ONLY check (NEVER write to user data!)
+                    await self._verify_mount_readable(mount_dir)
+
+                    # Compute relative path for backup command
+                    relative_path = remote_path.lstrip('/')
+                    if not relative_path:
+                        relative_path = '.'
+
+                    # Track mount
+                    self.active_mounts[mount_id] = MountInfo(
+                        mount_id=mount_id,
+                        mount_type=MountType.SSHFS,
+                        mount_point=mount_dir,
+                        source=f"ssh://{connection.username}@{connection.host}:{connection.port}{remote_path}",
+                        created_at=datetime.now(timezone.utc),
+                        job_id=job_id,
+                        temp_root=temp_root,
+                        temp_key_file=temp_key_file,
+                        connection_id=connection_id
+                    )
+
+                    mount_info_list.append((mount_id, relative_path))
+                    mounted_successfully.append(mount_id)
+
+                    logger.info(
+                        "Successfully mounted SSH directory (shared temp root)",
+                        mount_id=mount_id,
+                        mount_point=mount_dir,
+                        relative_path=relative_path,
+                        temp_root=temp_root,
+                        job_id=job_id
+                    )
+
+                # Persist state
+                self._save_state()
+
+                logger.info(
+                    "Successfully mounted all SSH paths under shared temp root",
+                    connection_id=connection_id,
+                    temp_root=temp_root,
+                    mount_count=len(mount_info_list),
+                    job_id=job_id
+                )
+
+                return temp_root, mount_info_list
+
+            except Exception as e:
+                # Cleanup all mounts on failure
+                logger.error(
+                    "Failed to mount one or more SSH directories, cleaning up",
+                    connection_id=connection_id,
+                    error=str(e),
+                    mounted_count=len(mounted_successfully),
+                    job_id=job_id
+                )
+
+                # Unmount any successfully mounted paths
+                for mount_id in mounted_successfully:
+                    try:
+                        mount_info = self.active_mounts.get(mount_id)
+                        if mount_info:
+                            await self._unmount_fuse(mount_info.mount_point, force=True)
+                            del self.active_mounts[mount_id]
+                    except Exception as cleanup_error:
+                        logger.warning(
+                            "Failed to cleanup mount during error recovery",
+                            mount_id=mount_id,
+                            error=str(cleanup_error)
+                        )
+
+                # Cleanup temp files
+                self._cleanup_temp_files(temp_root, temp_key_file)
+                raise
+
+        finally:
+            db.close()
+
     async def mount_borg_archive(
         self,
         repository_id: int,

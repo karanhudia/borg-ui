@@ -100,7 +100,20 @@ export default function CommandPreview({
 
   // For remote source backup flow
   if (isRemoteSource && repositoryMode === 'full') {
-    const sshfsMount = `sshfs ${sourceSshConnection.username}@${sourceSshConnection.host}:${sourceDirs[0] || '/path'} /tmp/sshfs_mount/ -p ${sourceSshConnection.port}`
+    // Show mount commands for each source directory
+    const sshfsMountCommands = sourceDirs.length > 0
+      ? sourceDirs.map(
+          (dir) =>
+            `sshfs ${sourceSshConnection.username}@${sourceSshConnection.host}:${dir} /tmp/sshfs_mount/${getPreservedRemotePath(dir)} -p ${sourceSshConnection.port}`
+        )
+      : [
+          `sshfs ${sourceSshConnection.username}@${sourceSshConnection.host}:/path /tmp/sshfs_mount/path -p ${sourceSshConnection.port}`,
+        ]
+
+    const mountDisplayText =
+      sourceDirs.length > 1
+        ? `${sourceDirs.length} directories mounted under shared temp root`
+        : 'Temporarily mounts remote directory via SSHFS (preserves full path structure)'
 
     return (
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
@@ -130,12 +143,12 @@ export default function CommandPreview({
             sx={{ mb: 0.5, display: 'block' }}
           >
             {mode === 'create'
-              ? 'Step 2: Mount Remote Directory'
-              : 'Step 1: Mount Remote Directory'}
+              ? `Step 2: Mount Remote ${sourceDirs.length > 1 ? 'Directories' : 'Directory'}`
+              : `Step 1: Mount Remote ${sourceDirs.length > 1 ? 'Directories' : 'Directory'}`}
           </Typography>
-          <CommandBox>{sshfsMount}</CommandBox>
+          <CommandBox>{sshfsMountCommands.join('\n')}</CommandBox>
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-            Temporarily mounts remote directory via SSHFS (preserves full path structure)
+            {mountDisplayText}
           </Typography>
         </Box>
 
