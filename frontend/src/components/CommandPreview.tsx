@@ -101,14 +101,15 @@ export default function CommandPreview({
   // For remote source backup flow
   if (isRemoteSource && repositoryMode === 'full') {
     // Show mount commands for each source directory
-    const sshfsMountCommands = sourceDirs.length > 0
-      ? sourceDirs.map(
-          (dir) =>
-            `sshfs ${sourceSshConnection.username}@${sourceSshConnection.host}:${dir} /tmp/sshfs_mount/${getPreservedRemotePath(dir)} -p ${sourceSshConnection.port}`
-        )
-      : [
-          `sshfs ${sourceSshConnection.username}@${sourceSshConnection.host}:/path /tmp/sshfs_mount/path -p ${sourceSshConnection.port}`,
-        ]
+    const sshfsMountCommands =
+      sourceDirs.length > 0
+        ? sourceDirs.map(
+            (dir) =>
+              `sshfs ${sourceSshConnection.username}@${sourceSshConnection.host}:${dir} /tmp/sshfs_mount/${getPreservedRemotePath(dir)} -p ${sourceSshConnection.port}`
+          )
+        : [
+            `sshfs ${sourceSshConnection.username}@${sourceSshConnection.host}:/path /tmp/sshfs_mount/path -p ${sourceSshConnection.port}`,
+          ]
 
     const mountDisplayText =
       sourceDirs.length > 1
