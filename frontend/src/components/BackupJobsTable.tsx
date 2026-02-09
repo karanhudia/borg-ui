@@ -439,9 +439,12 @@ export const BackupJobsTable = <T extends Job = Job>({
       color: 'primary',
       tooltip: 'View Logs',
       show: (job) => {
-        // Show logs button only when logs exist
-        // Check has_logs flag or log_file_path, and status is not pending
-        return (job.has_logs === true || !!job.log_file_path) && job.status !== 'pending'
+        // Show logs button for running and completed jobs (when logs exist)
+        // Check has_logs flag or log_file_path, exclude only pending status
+        return (
+          (job.has_logs === true || !!job.log_file_path || job.status === 'running') &&
+          job.status !== 'pending'
+        )
       },
     })
   }
@@ -454,9 +457,12 @@ export const BackupJobsTable = <T extends Job = Job>({
       color: 'info',
       tooltip: 'Download Logs',
       show: (job) => {
-        // Show download button only when logs exist
-        // Check has_logs flag or log_file_path, and status is not pending
-        return (job.has_logs === true || !!job.log_file_path) && job.status !== 'pending'
+        // Show download button for running and completed jobs (when logs exist)
+        // Check has_logs flag or log_file_path, exclude only pending status
+        return (
+          (job.has_logs === true || !!job.log_file_path || job.status === 'running') &&
+          job.status !== 'pending'
+        )
       },
     })
   }

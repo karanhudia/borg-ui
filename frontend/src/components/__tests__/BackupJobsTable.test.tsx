@@ -307,10 +307,10 @@ describe('BackupJobsTable', () => {
       />
     )
 
-    // Download button shows only for jobs with has_logs=true or log_file_path
-    // Only job 1 has has_logs: true
+    // Download button shows for jobs with has_logs=true or log_file_path, AND for running jobs
+    // Job 1 has has_logs: true (completed), Job 2 has status: 'running'
     const downloadButtons = screen.getAllByRole('button', { name: 'Download Logs' })
-    expect(downloadButtons.length).toBe(1)
+    expect(downloadButtons.length).toBe(2)
   })
 
   it('shows Error Details only for failed jobs with error message', () => {
@@ -472,8 +472,8 @@ describe('BackupJobsTable', () => {
       renderWithProviders(<BackupJobsTable jobs={mockJobs} actions={{ viewLogs: true }} />)
 
       // Actions now work with internal handlers, so buttons should appear
-      // Only job 1 has has_logs: true, so only 1 button should show
-      expect(screen.getAllByRole('button', { name: /View Logs/i }).length).toBe(1)
+      // Job 1 has has_logs: true (completed), Job 2 has status: 'running'
+      expect(screen.getAllByRole('button', { name: /View Logs/i }).length).toBe(2)
     })
 
     it('shows multiple actions when configured', () => {
