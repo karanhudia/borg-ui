@@ -10,24 +10,104 @@ Reference: https://borgbackup.readthedocs.io/en/stable/usage/general.html#return
 # Exit code mappings (modern exit codes)
 # Source: https://borgbackup.readthedocs.io/en/stable/internals/frontends.html#message-ids
 BORG_EXIT_CODES = {
+    # Success
     0: "Success",
+
+    # Legacy codes
     1: "Warning (legacy)",
     2: "Error (legacy)",
-    # Modern exit codes (3-99 are errors)
+
+    # Runtime errors (3-6)
+    3: "Cancelled by user",
+    4: "Command error",
+    5: "Formatting error",
+    6: "Invalid placeholder",
+
+    # Repository errors (10-21)
+    10: "Repository already exists",
+    11: "Attic repository detected",
+    12: "Repository check needed",
     13: "Repository does not exist",
-    14: "Repository already exists",
-    15: "Invalid repository",  # NOT lock error!
-    17: "Repository incompatible with this version",
-    # Lock errors (70-75)
+    14: "Insufficient free space",
+    15: "Invalid repository",
+    16: "Invalid repository config",
+    17: "Object not found in repository",
+    18: "Parent path does not exist",
+    19: "Path already exists",
+    20: "Storage quota exceeded",
+    21: "Permission denied",
+
+    # Feature/Manifest errors (25-27)
+    25: "Unsupported repository feature",
+    26: "Repository has no manifest",
+    27: "Unsupported manifest envelope",
+
+    # Archive errors (30-32)
+    30: "Archive already exists",
+    31: "Archive does not exist",
+    32: "Filesystem encoding error",
+
+    # Key errors (40-48)
+    40: "Invalid key data",
+    41: "Key file mismatch",
+    42: "Key file not found",
+    43: "Not a Borg key backup",
+    44: "Repository key not found",
+    45: "Repository ID mismatch",
+    46: "Key management not available for unencrypted repos",
+    47: "Unknown key type",
+    48: "Unsupported payload type",
+
+    # Passphrase errors (50-53)
+    50: "Cannot acquire passphrase",
+    51: "Passcommand failed",
+    52: "Passphrase incorrect",
+    53: "Password retries exceeded",
+
+    # Cache errors (60-64)
+    60: "Cache initialization aborted",
+    61: "Encryption method mismatch",
+    62: "Repository access aborted",
+    63: "Repository ID not unique",
+    64: "Cache replay attack detected",
+
+    # Lock errors (70-75) ⚠️ IMPORTANT
     70: "Failed to acquire the lock",
     71: "Failed to acquire the lock (with traceback)",
     72: "Failed to create/acquire the lock",
     73: "Failed to create/acquire the lock (timeout)",
     74: "Failed to release the lock (was not locked)",
     75: "Failed to release the lock (not by me)",
-    # 100-127 are warnings in modern mode
-    100: "Warning: Some files changed during backup",
-    101: "Warning: Minor issues encountered",
+
+    # Connection/RPC errors (80-87)
+    80: "Connection closed by remote host",
+    81: "Connection closed with hint",
+    82: "Invalid RPC method",
+    83: "Path not allowed",
+    84: "Remote Borg server outdated",
+    85: "Unexpected RPC data format from client",
+    86: "Unexpected RPC data format from server",
+    87: "Connection broken",
+
+    # Integrity errors (90-99)
+    90: "Data integrity error",
+    91: "File integrity error",
+    92: "Decompression error",
+    95: "Archive TAM invalid",
+    96: "Archive authentication required",
+    97: "Manifest TAM invalid",
+    98: "Manifest authentication required",
+    99: "Unsupported authentication suite",
+
+    # Warnings (100-107)
+    100: "Warning: File changed during backup",
+    101: "Warning: Include pattern never matched",
+    102: "Warning: Backup error",
+    103: "Warning: Backup race condition",
+    104: "Warning: Backup OS error",
+    105: "Warning: Backup permission error",
+    106: "Warning: Backup IO error",
+    107: "Warning: Backup file not found",
 }
 
 # Message ID to user-friendly error messages
