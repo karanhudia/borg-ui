@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.database.models import BackupJob, Repository, RepositoryScript, SystemSettings
 from app.database.database import SessionLocal
 from app.config import settings
-from app.core.borg_errors import format_error_message, get_error_details
+from app.core.borg_errors import format_error_message, is_lock_error, get_error_details
 from app.services.notification_service import notification_service
 from app.services.script_executor import execute_script
 from app.services.script_library_executor import ScriptLibraryExecutor
@@ -1912,7 +1912,7 @@ class BackupService:
                 job.status = "failed"
                 # Build comprehensive error message with msgid details
                 error_parts = []
-                is_lock_error = False
+                lock_error_detected = False
 
                 # Check if we have captured error msgids
                 if job_id in self.error_msgids and self.error_msgids[job_id]:
@@ -1920,9 +1920,9 @@ class BackupService:
                     errors = self.error_msgids[job_id]
                     primary_error = next((e for e in errors if e['levelname'] == 'CRITICAL'), errors[0])
 
-                    # Check if this is a lock error
-                    if primary_error['msgid'] in ['LockTimeout', 'LockError']:
-                        is_lock_error = True
+                    # Check if this is a lock error (checks msgid and exit code)
+                    if is_lock_error(exit_code=actual_returncode, msgid=primary_error['msgid']):
+                        lock_error_detected = True
                         # Store repository path in error message for easy access
                         error_parts.append(f"LOCK_ERROR::{repository}")
 
@@ -1946,11 +1946,12 @@ class BackupService:
                 job.error_message = "\n".join(error_parts)
 
                 # Log lock error for visibility
-                if is_lock_error:
-                    logger.warning("Backup failed due to lock timeout",
+                if lock_error_detected:
+                    msgid = primary_error['msgid'] if job_id in self.error_msgids and self.error_msgids[job_id] else None
+                    logger.warning("Backup failed due to lock error",
                                  job_id=job_id,
                                  repository=repository,
-                                 msgid=primary_error['msgid'],
+                                 msgid=msgid,
                                  borg_exit_code=actual_returncode)
 
                 # Run post-backup hooks on FAILURE (solves #85!)
