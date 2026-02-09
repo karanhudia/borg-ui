@@ -20,8 +20,9 @@ class TestBackupServiceLogBuffer:
         service.log_buffers[job_id] = [f"line {i}" for i in range(100)]
 
         # Get last 10 lines
-        result = service.get_log_buffer(job_id, tail_lines=10)
+        result, buffer_exists = service.get_log_buffer(job_id, tail_lines=10)
 
+        assert buffer_exists is True
         assert len(result) == 10
         assert result[0] == "line 90"
         assert result[-1] == "line 99"
@@ -37,21 +38,41 @@ class TestBackupServiceLogBuffer:
         service.log_buffers[job_id] = ["line 1", "line 2", "line 3"]
 
         # Request 500 lines
-        result = service.get_log_buffer(job_id, tail_lines=500)
+        result, buffer_exists = service.get_log_buffer(job_id, tail_lines=500)
 
+        assert buffer_exists is True
         assert len(result) == 3
         assert result == ["line 1", "line 2", "line 3"]
 
     def test_get_log_buffer_empty_for_nonexistent_job(self):
-        """Test that get_log_buffer returns empty list for nonexistent job"""
+        """Test that get_log_buffer returns empty list and False for nonexistent job"""
         from app.services.backup_service import BackupService
 
         service = BackupService()
 
         # Request buffer for job that doesn't exist
-        result = service.get_log_buffer(999, tail_lines=500)
+        result, buffer_exists = service.get_log_buffer(999, tail_lines=500)
 
+        assert buffer_exists is False
         assert result == []
+
+    def test_get_log_buffer_exists_but_empty(self):
+        """Test that get_log_buffer distinguishes between 'buffer exists but empty' vs 'buffer doesn't exist'"""
+        from app.services.backup_service import BackupService
+
+        service = BackupService()
+
+        # Create an empty buffer (job started but no logs yet)
+        job_id = 789
+        service.log_buffers[job_id] = []
+
+        # Request buffer
+        result, buffer_exists = service.get_log_buffer(job_id, tail_lines=500)
+
+        # Buffer exists (True) but is empty
+        assert buffer_exists is True
+        assert result == []
+        assert len(result) == 0
 
 
 @pytest.mark.unit
