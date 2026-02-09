@@ -1950,7 +1950,8 @@ class BackupService:
                     logger.warning("Backup failed due to lock timeout",
                                  job_id=job_id,
                                  repository=repository,
-                                 msgid=primary_error['msgid'])
+                                 msgid=primary_error['msgid'],
+                                 borg_exit_code=actual_returncode)
 
                 # Run post-backup hooks on FAILURE (solves #85!)
                 # Scripts with run_on='failure' or run_on='always' will execute
