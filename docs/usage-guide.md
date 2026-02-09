@@ -662,7 +662,7 @@ Each job entry shows:
 
 **Restrictions:**
 - ❌ Cannot delete running jobs - must cancel or wait for completion
-- ❌ Cannot delete pending jobs - must cancel or wait for start
+- ✅ Can delete pending jobs - useful for cleaning up stuck jobs
 - ❌ Non-admin users cannot see delete button
 - ❌ API returns 403 Forbidden if non-admin attempts deletion
 

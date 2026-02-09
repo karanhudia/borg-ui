@@ -151,8 +151,8 @@ class TestDeleteJobEndpoint:
         job_still_exists = test_db.query(BackupJob).filter(BackupJob.id == job.id).first()
         assert job_still_exists is not None
 
-    def test_delete_pending_job_fails(self, test_client, admin_headers, test_db):
-        """Test cannot delete pending job"""
+    def test_delete_pending_job_succeeds(self, test_client, admin_headers, test_db):
+        """Test can delete pending job (useful for cleaning up stuck jobs)"""
         from app.database.models import BackupJob
         from datetime import datetime
 
@@ -166,19 +166,19 @@ class TestDeleteJobEndpoint:
         test_db.commit()
         test_db.refresh(job)
 
-        # Try to delete pending job
+        # Delete pending job (should succeed now)
         response = test_client.delete(
             f"/api/activity/backup/{job.id}",
             headers=admin_headers
         )
 
-        assert response.status_code == 400
+        assert response.status_code == 200
         data = response.json()
-        assert "pending" in data["detail"].lower()
+        assert data["message"] == "Backup job deleted successfully"
 
-        # Verify job is NOT deleted
-        job_still_exists = test_db.query(BackupJob).filter(BackupJob.id == job.id).first()
-        assert job_still_exists is not None
+        # Verify job IS deleted
+        job_deleted = test_db.query(BackupJob).filter(BackupJob.id == job.id).first()
+        assert job_deleted is None
 
     def test_delete_failed_job_success(self, test_client, admin_headers, test_db):
         """Test admin can delete failed job"""
