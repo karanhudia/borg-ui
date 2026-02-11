@@ -67,6 +67,9 @@ class MountService:
         # Clean up stale mounts (mounts in state file but not actually mounted)
         self._cleanup_stale_mounts()
 
+        # Clean up orphaned temp directories (from crashed processes)
+        self._cleanup_orphaned_temp_dirs()
+
     def _load_state(self):
         """Load mount state from disk"""
         if not self.state_file.exists():
@@ -116,6 +119,54 @@ class MountService:
                 error=str(e)
             )
 
+    def _cleanup_orphaned_temp_dirs(self):
+        """
+        Clean up orphaned /tmp/sshfs_mount_* directories from crashed processes.
+        Only removes directories that aren't being tracked by active mounts.
+        """
+        try:
+            import glob
+
+            # Find all sshfs_mount temp directories
+            temp_dirs = glob.glob("/tmp/sshfs_mount_*")
+
+            # Get all temp_roots that are currently tracked
+            tracked_temp_roots = set()
+            for mount_info in self.active_mounts.values():
+                if mount_info.temp_root:
+                    tracked_temp_roots.add(mount_info.temp_root)
+
+            # Remove orphaned directories
+            orphaned_count = 0
+            for temp_dir in temp_dirs:
+                if temp_dir not in tracked_temp_roots:
+                    try:
+                        # Check if directory is empty or can be safely removed
+                        shutil.rmtree(temp_dir, ignore_errors=True)
+                        orphaned_count += 1
+                        logger.debug(
+                            "Cleaned up orphaned temp directory",
+                            temp_dir=temp_dir
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to cleanup orphaned temp directory",
+                            temp_dir=temp_dir,
+                            error=str(e)
+                        )
+
+            if orphaned_count > 0:
+                logger.info(
+                    "Cleaned up orphaned temp directories from previous sessions",
+                    count=orphaned_count
+                )
+
+        except Exception as e:
+            logger.error(
+                "Failed to cleanup orphaned temp directories",
+                error=str(e)
+            )
+
     def _cleanup_stale_mounts(self):
         """Remove mounts from state that are no longer active in the system"""
         try:
@@ -155,15 +206,20 @@ class MountService:
                     )
                     stale_mounts.append(mount_id)
 
-            # Remove stale mounts
+            # Remove stale mounts and cleanup temp files
             for mount_id in stale_mounts:
+                mount_info = self.active_mounts[mount_id]
+
+                # Clean up temp files for stale mount
+                self._cleanup_temp_files(mount_info.temp_root, mount_info.temp_key_file)
+
                 del self.active_mounts[mount_id]
 
             if stale_mounts:
                 # Save updated state
                 self._save_state()
                 logger.info(
-                    "Cleaned up stale mounts",
+                    "Cleaned up stale mounts and temp files",
                     count=len(stale_mounts)
                 )
 
@@ -373,24 +429,54 @@ class MountService:
 
             try:
                 for remote_path in remote_paths:
-                    # Strip leading slash from remote_path to create relative path under temp_root
-                    relative_remote_path = remote_path.lstrip('/')
-                    if relative_remote_path:
-                        mount_dir = os.path.join(temp_root, relative_remote_path)
-                        os.makedirs(mount_dir, exist_ok=True)
+                    # First, check if this path is a file using fallback-safe method
+                    is_file = await self._check_remote_is_file(connection, remote_path, temp_key_file)
+
+                    # Decide what to mount based on file type
+                    if is_file:
+                        # For files: mount the parent directory
+                        parent_dir = os.path.dirname(remote_path)
+                        mount_remote_path = parent_dir if parent_dir else '/'
+
+                        relative_parent = parent_dir.lstrip('/')
+                        if relative_parent:
+                            mount_dir = os.path.join(temp_root, relative_parent)
+                            os.makedirs(mount_dir, exist_ok=True)
+                        else:
+                            # File in root directory
+                            mount_dir = temp_root
+
+                        # Relative path for backup is the full file path
+                        relative_path = remote_path.lstrip('/')
                     else:
-                        # Backing up root directory - mount directly to temp_root
-                        mount_dir = temp_root
+                        # For directories: mount the directory itself
+                        mount_remote_path = remote_path
+
+                        relative_remote_path = remote_path.lstrip('/')
+                        if relative_remote_path:
+                            mount_dir = os.path.join(temp_root, relative_remote_path)
+                            os.makedirs(mount_dir, exist_ok=True)
+                        else:
+                            # Backing up root directory - mount directly to temp_root
+                            mount_dir = temp_root
+
+                        # Compute relative path for backup command
+                        relative_path = remote_path.lstrip('/')
+                        if not relative_path:
+                            relative_path = '.'
 
                     mount_id = str(uuid.uuid4())
 
                     logger.info(
-                        "Mounting SSH directory via SSHFS (shared temp root)",
+                        "Mounting SSH path via SSHFS (shared temp root)",
                         mount_id=mount_id,
                         connection_id=connection_id,
                         host=connection.host,
-                        remote_path=remote_path,
+                        original_path=remote_path,
+                        mount_remote_path=mount_remote_path,
+                        is_file=is_file,
                         mount_point=mount_dir,
+                        backup_path=relative_path,
                         temp_root=temp_root,
                         job_id=job_id
                     )
@@ -398,18 +484,13 @@ class MountService:
                     # Mount with SSH key authentication
                     await self._execute_sshfs_mount(
                         connection=connection,
-                        remote_path=remote_path,
+                        remote_path=mount_remote_path,
                         mount_point=mount_dir,
                         temp_key_file=temp_key_file
                     )
 
                     # Verify mount with READ-ONLY check (NEVER write to user data!)
                     await self._verify_mount_readable(mount_dir)
-
-                    # Compute relative path for backup command
-                    relative_path = remote_path.lstrip('/')
-                    if not relative_path:
-                        relative_path = '.'
 
                     # Track mount
                     self.active_mounts[mount_id] = MountInfo(
@@ -428,10 +509,11 @@ class MountService:
                     mounted_successfully.append(mount_id)
 
                     logger.info(
-                        "Successfully mounted SSH directory (shared temp root)",
+                        "Successfully mounted SSH path (shared temp root)",
                         mount_id=mount_id,
                         mount_point=mount_dir,
                         relative_path=relative_path,
+                        is_file=is_file,
                         temp_root=temp_root,
                         job_id=job_id
                     )
@@ -927,6 +1009,163 @@ class MountService:
             return process.returncode == 0
         except Exception:
             return False
+
+    async def _check_remote_is_file(
+        self,
+        connection: SSHConnection,
+        remote_path: str,
+        temp_key_file: str
+    ) -> bool:
+        """
+        Check if a remote path is a file (not a directory)
+
+        Uses SSH shell commands first (fast), falls back to SFTP if shell access denied.
+        This ensures compatibility with SFTP-only servers (like Hetzner Storage Boxes).
+
+        Args:
+            connection: SSH connection
+            remote_path: Remote path to check
+            temp_key_file: Path to temporary SSH key file
+
+        Returns:
+            True if path is a file, False if directory or doesn't exist
+        """
+        try:
+            # Method 1: Try SSH shell command first (fast, but requires shell access)
+            cmd = [
+                "ssh",
+                "-i", temp_key_file,
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "UserKnownHostsFile=/dev/null",
+                "-o", "ConnectTimeout=10",
+                "-p", str(connection.port),
+                f"{connection.username}@{connection.host}",
+                f"test -f '{remote_path}' && echo 'FILE' || echo 'DIR'"
+            ]
+
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=10)
+
+            # Check if SSH command succeeded
+            if process.returncode == 0:
+                result = stdout.decode().strip()
+                is_file = result == 'FILE'
+                logger.debug(
+                    "Checked remote path type via SSH shell",
+                    remote_path=remote_path,
+                    is_file=is_file
+                )
+                return is_file
+            else:
+                # Shell command failed (possibly SFTP-only server)
+                stderr_msg = stderr.decode() if stderr else ""
+                logger.info(
+                    "SSH shell check failed (possibly SFTP-only), will use SFTP stat",
+                    remote_path=remote_path,
+                    stderr=stderr_msg
+                )
+                # Fall through to SFTP method
+
+        except asyncio.TimeoutError:
+            logger.warning(
+                "SSH check timeout, will try SFTP method",
+                remote_path=remote_path
+            )
+        except Exception as e:
+            logger.warning(
+                "SSH check failed, will try SFTP method",
+                remote_path=remote_path,
+                error=str(e)
+            )
+
+        # Method 2: Use SFTP stat (works on SFTP-only servers)
+        try:
+            return await self._check_remote_is_file_via_sftp(
+                connection, remote_path, temp_key_file
+            )
+        except Exception as e:
+            logger.warning(
+                "SFTP check also failed, assuming directory",
+                remote_path=remote_path,
+                error=str(e)
+            )
+            return False
+
+    async def _check_remote_is_file_via_sftp(
+        self,
+        connection: SSHConnection,
+        remote_path: str,
+        temp_key_file: str
+    ) -> bool:
+        """
+        Check if remote path is file using SFTP protocol (works on SFTP-only servers)
+
+        Args:
+            connection: SSH connection
+            remote_path: Remote path to check
+            temp_key_file: Path to temporary SSH key file
+
+        Returns:
+            True if file, False if directory
+        """
+        import stat as stat_module
+
+        # Use SFTP subsystem via SSH
+        cmd = [
+            "sftp",
+            "-i", temp_key_file,
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "UserKnownHostsFile=/dev/null",
+            "-o", "ConnectTimeout=10",
+            "-P", str(connection.port),
+            f"{connection.username}@{connection.host}"
+        ]
+
+        # Send stat command via stdin
+        sftp_commands = f"stat '{remote_path}'\nquit\n"
+
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+
+        stdout, _ = await asyncio.wait_for(
+            process.communicate(input=sftp_commands.encode()),
+            timeout=15
+        )
+
+        output = stdout.decode()
+
+        # Parse SFTP stat output
+        # Look for "File type:" or mode bits to determine if it's a file
+        # SFTP stat output includes: "Flags: 0x0000000X" where X indicates type
+        # Or "Permissions:" line with mode bits
+
+        # Simple heuristic: if output contains directory indicators
+        is_directory = any(indicator in output.lower() for indicator in [
+            'directory',
+            'type: directory',
+            'd---------',  # Mode bits starting with 'd'
+            'drwx',
+        ])
+
+        is_file = not is_directory and 'cannot' not in output.lower()
+
+        logger.debug(
+            "Checked remote path type via SFTP",
+            remote_path=remote_path,
+            is_file=is_file,
+            is_directory=is_directory
+        )
+
+        return is_file
 
     def _decrypt_and_write_key(self, ssh_key: SSHKey) -> str:
         """

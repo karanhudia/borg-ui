@@ -101,6 +101,7 @@ export default function CommandPreview({
   // For remote source backup flow
   if (isRemoteSource && repositoryMode === 'full') {
     // Show mount commands for each source directory
+    // Note: For files, the parent directory is mounted
     const sshfsMountCommands =
       sourceDirs.length > 0
         ? sourceDirs.map(
@@ -113,8 +114,8 @@ export default function CommandPreview({
 
     const mountDisplayText =
       sourceDirs.length > 1
-        ? `${sourceDirs.length} directories mounted under shared temp root`
-        : 'Temporarily mounts remote directory via SSHFS (preserves full path structure)'
+        ? `${sourceDirs.length} paths mounted under shared temp root (files mount their parent directory)`
+        : 'Temporarily mounts remote path via SSHFS (files mount their parent directory)'
 
     return (
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>

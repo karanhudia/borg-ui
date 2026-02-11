@@ -1014,6 +1014,9 @@ class BackupService:
     async def _cleanup_ssh_mounts(self, job_id: int):
         """
         Cleanup all SSH mounts for a job using mount_service
+
+        IMPORTANT: Unmounts in reverse depth order (deepest paths first) to avoid
+        "Device or resource busy" errors when parent directories have nested mounts.
         """
         from app.services.mount_service import mount_service
 
@@ -1023,15 +1026,37 @@ class BackupService:
         mount_ids = self.ssh_mounts[job_id]
         logger.info("Cleaning up SSH mounts", job_id=job_id, mount_count=len(mount_ids))
 
+        # Get mount info for all mounts and sort by path depth (deepest first)
+        mount_infos = []
         for mount_id in mount_ids:
+            mount_info = mount_service.get_mount(mount_id)
+            if mount_info:
+                mount_infos.append((mount_id, mount_info))
+            else:
+                logger.warning("Mount not found in active mounts", mount_id=mount_id, job_id=job_id)
+
+        # Sort by mount point path length (longer = deeper = unmount first)
+        # This correctly handles parent-child relationships:
+        # - /tmp/.../home/karanhudia/test-backup-source (longer)
+        # - /tmp/.../home/karanhudia (shorter, is parent, unmount last)
+        mount_infos.sort(key=lambda x: len(x[1].mount_point), reverse=True)
+
+        logger.debug(
+            "Unmounting in depth order",
+            job_id=job_id,
+            order=[mi.mount_point for _, mi in mount_infos]
+        )
+
+        # Unmount in sorted order (deepest first)
+        for mount_id, mount_info in mount_infos:
             try:
                 success = await mount_service.unmount(mount_id)
                 if success:
-                    logger.debug("Successfully unmounted", mount_id=mount_id, job_id=job_id)
+                    logger.debug("Successfully unmounted", mount_id=mount_id, mount_point=mount_info.mount_point, job_id=job_id)
                 else:
-                    logger.warning("Failed to unmount", mount_id=mount_id, job_id=job_id)
+                    logger.warning("Failed to unmount", mount_id=mount_id, mount_point=mount_info.mount_point, job_id=job_id)
             except Exception as e:
-                logger.error("Error during unmount", mount_id=mount_id, error=str(e), job_id=job_id)
+                logger.error("Error during unmount", mount_id=mount_id, mount_point=mount_info.mount_point, error=str(e), job_id=job_id)
 
         # Remove from tracking
         del self.ssh_mounts[job_id]

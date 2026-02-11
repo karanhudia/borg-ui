@@ -672,12 +672,12 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         title={
           wizardState.sourceSshConnectionId && wizardState.dataSource === 'local'
             ? 'Select Source Directories (Remote Machine)'
-            : 'Select Source Directories'
+            : 'Select Source Directories or Files'
         }
         initialPath="/"
         multiSelect={true}
         connectionType="local"
-        selectMode="directories"
+        selectMode="both"
         showSshMountPoints={
           wizardState.repositoryLocation !== 'ssh' &&
           (!!wizardState.sourceSshConnectionId || wizardState.sourceDirs.length === 0)
@@ -710,12 +710,12 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
                 })
                 setShowRemoteSourceExplorer(false)
               }}
-              title="Select Source Directories (Remote)"
+              title="Select Source Directories or Files (Remote)"
               initialPath="/"
               multiSelect={true}
               connectionType="ssh"
               sshConfig={config}
-              selectMode="directories"
+              selectMode="both"
             />
           )
         })()}

@@ -15,8 +15,8 @@ describe('SourceDirectoriesInput', () => {
   describe('Rendering', () => {
     it('renders title and description', () => {
       render(<SourceDirectoriesInput directories={[]} onChange={mockOnChange} />)
-      expect(screen.getByText('Source Directories')).toBeInTheDocument()
-      expect(screen.getByText(/Specify which directories to backup/)).toBeInTheDocument()
+      expect(screen.getByText('Source Directories & Files')).toBeInTheDocument()
+      expect(screen.getByText(/Specify which directories or files to backup/)).toBeInTheDocument()
     })
 
     it('renders required asterisk when required=true', () => {
@@ -33,13 +33,15 @@ describe('SourceDirectoriesInput', () => {
 
     it('shows warning alert when required and no directories', () => {
       render(<SourceDirectoriesInput directories={[]} onChange={mockOnChange} required={true} />)
-      expect(screen.getByText(/At least one source directory is required/)).toBeInTheDocument()
+      expect(
+        screen.getByText(/At least one source directory or file is required/)
+      ).toBeInTheDocument()
     })
 
     it('does not show warning alert when required=false and no directories', () => {
       render(<SourceDirectoriesInput directories={[]} onChange={mockOnChange} required={false} />)
       expect(
-        screen.queryByText(/At least one source directory is required/)
+        screen.queryByText(/At least one source directory or file is required/)
       ).not.toBeInTheDocument()
     })
 
@@ -65,7 +67,9 @@ describe('SourceDirectoriesInput', () => {
 
     it('renders input field with placeholder', () => {
       render(<SourceDirectoriesInput directories={[]} onChange={mockOnChange} />)
-      expect(screen.getByPlaceholderText('/home/user/documents')).toBeInTheDocument()
+      expect(
+        screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
+      ).toBeInTheDocument()
     })
 
     it('renders Add button', () => {
@@ -81,12 +85,12 @@ describe('SourceDirectoriesInput', () => {
           onBrowseClick={mockOnBrowseClick}
         />
       )
-      expect(screen.getByTitle('Browse directories')).toBeInTheDocument()
+      expect(screen.getByTitle('Browse directories and files')).toBeInTheDocument()
     })
 
     it('does not render browse button when onBrowseClick not provided', () => {
       render(<SourceDirectoriesInput directories={[]} onChange={mockOnChange} />)
-      expect(screen.queryByTitle('Browse directories')).not.toBeInTheDocument()
+      expect(screen.queryByTitle('Browse directories and files')).not.toBeInTheDocument()
     })
   })
 
@@ -95,7 +99,7 @@ describe('SourceDirectoriesInput', () => {
       const user = userEvent.setup()
       render(<SourceDirectoriesInput directories={[]} onChange={mockOnChange} />)
 
-      const input = screen.getByPlaceholderText('/home/user/documents')
+      const input = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
       await user.type(input, '/new/directory')
       await user.click(screen.getByRole('button', { name: /Add/i }))
 
@@ -106,7 +110,7 @@ describe('SourceDirectoriesInput', () => {
       const user = userEvent.setup()
       render(<SourceDirectoriesInput directories={[]} onChange={mockOnChange} />)
 
-      const input = screen.getByPlaceholderText('/home/user/documents')
+      const input = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
       await user.type(input, '/new/directory{enter}')
 
       expect(mockOnChange).toHaveBeenCalledWith(['/new/directory'])
@@ -116,7 +120,7 @@ describe('SourceDirectoriesInput', () => {
       const user = userEvent.setup()
       render(<SourceDirectoriesInput directories={['/existing/dir']} onChange={mockOnChange} />)
 
-      const input = screen.getByPlaceholderText('/home/user/documents')
+      const input = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
       await user.type(input, '/new/directory')
       await user.click(screen.getByRole('button', { name: /Add/i }))
 
@@ -127,7 +131,7 @@ describe('SourceDirectoriesInput', () => {
       const user = userEvent.setup()
       render(<SourceDirectoriesInput directories={[]} onChange={mockOnChange} />)
 
-      const input = screen.getByPlaceholderText('/home/user/documents')
+      const input = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
       await user.type(input, '  /new/directory  ')
       await user.click(screen.getByRole('button', { name: /Add/i }))
 
@@ -138,7 +142,7 @@ describe('SourceDirectoriesInput', () => {
       const user = userEvent.setup()
       render(<SourceDirectoriesInput directories={[]} onChange={mockOnChange} />)
 
-      const input = screen.getByPlaceholderText('/home/user/documents')
+      const input = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
       await user.type(input, '/new/directory')
       await user.click(screen.getByRole('button', { name: /Add/i }))
 
@@ -158,7 +162,7 @@ describe('SourceDirectoriesInput', () => {
       const user = userEvent.setup()
       render(<SourceDirectoriesInput directories={[]} onChange={mockOnChange} />)
 
-      const input = screen.getByPlaceholderText('/home/user/documents')
+      const input = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
       await user.type(input, '   ')
       await user.click(screen.getByRole('button', { name: /Add/i }))
 
@@ -239,7 +243,7 @@ describe('SourceDirectoriesInput', () => {
         />
       )
 
-      await user.click(screen.getByTitle('Browse directories'))
+      await user.click(screen.getByTitle('Browse directories and files'))
 
       expect(mockOnBrowseClick).toHaveBeenCalledTimes(1)
     })
@@ -248,7 +252,7 @@ describe('SourceDirectoriesInput', () => {
   describe('Disabled state', () => {
     it('disables input when disabled=true', () => {
       render(<SourceDirectoriesInput directories={[]} onChange={mockOnChange} disabled={true} />)
-      expect(screen.getByPlaceholderText('/home/user/documents')).toBeDisabled()
+      expect(screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')).toBeDisabled()
     })
 
     it('disables Add button when disabled=true', () => {
@@ -281,7 +285,7 @@ describe('SourceDirectoriesInput', () => {
           disabled={true}
         />
       )
-      expect(screen.getByTitle('Browse directories')).toBeDisabled()
+      expect(screen.getByTitle('Browse directories and files')).toBeDisabled()
     })
   })
 })

@@ -321,7 +321,7 @@ describe('RepositoryWizard', () => {
         expect(screen.getByText('Remote Client')).toBeInTheDocument()
       })
 
-      it('shows Source Directories section', async () => {
+      it('shows Source Directories & Files section', async () => {
         const user = userEvent.setup()
         renderWizard('create')
 
@@ -331,7 +331,7 @@ describe('RepositoryWizard', () => {
 
         await goToStep2(user)
 
-        expect(screen.getByText('Source Directories')).toBeInTheDocument()
+        expect(screen.getByText('Source Directories & Files')).toBeInTheDocument()
       })
 
       it('shows required asterisk for source directories', async () => {
@@ -357,7 +357,7 @@ describe('RepositoryWizard', () => {
 
         await goToStep2(user)
 
-        expect(screen.getByText(/At least one source directory is required/i)).toBeInTheDocument()
+        expect(screen.getByText(/At least one source directory or file is required/i)).toBeInTheDocument()
       })
 
       it('Next button is disabled without source directories', async () => {
@@ -383,7 +383,7 @@ describe('RepositoryWizard', () => {
 
         await goToStep2(user)
 
-        const dirInput = screen.getByPlaceholderText('/home/user/documents')
+        const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
         await user.type(dirInput, '/home/user/data')
         await user.click(screen.getByRole('button', { name: /Add/i }))
 
@@ -420,12 +420,12 @@ describe('RepositoryWizard', () => {
         // Step 2: Wait for Data Source step and add source directory
         await waitFor(
           () => {
-            expect(screen.getByText('Source Directories')).toBeInTheDocument()
+            expect(screen.getByText('Source Directories & Files')).toBeInTheDocument()
           },
           { timeout: 5000 }
         )
 
-        const dirInput = screen.getByPlaceholderText('/home/user/documents')
+        const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
         await user.type(dirInput, '/home/user')
         await user.click(screen.getByRole('button', { name: /Add/i }))
 
@@ -525,12 +525,12 @@ describe('RepositoryWizard', () => {
         // Step 2
         await waitFor(
           () => {
-            expect(screen.getByText('Source Directories')).toBeInTheDocument()
+            expect(screen.getByText('Source Directories & Files')).toBeInTheDocument()
           },
           { timeout: 5000 }
         )
 
-        const dirInput = screen.getByPlaceholderText('/home/user/documents')
+        const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
         await user.type(dirInput, '/home/user')
         await user.click(screen.getByRole('button', { name: /Add/i }))
 
@@ -622,12 +622,12 @@ describe('RepositoryWizard', () => {
         // Step 2
         await waitFor(
           () => {
-            expect(screen.getByText('Source Directories')).toBeInTheDocument()
+            expect(screen.getByText('Source Directories & Files')).toBeInTheDocument()
           },
           { timeout: 5000 }
         )
 
-        const dirInput = screen.getByPlaceholderText('/home/user/documents')
+        const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
         await user.type(dirInput, '/home/user')
         await user.click(screen.getByRole('button', { name: /Add/i }))
 
@@ -781,11 +781,11 @@ describe('RepositoryWizard', () => {
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         await waitFor(() => {
-          expect(screen.getByText('Source Directories')).toBeInTheDocument()
+          expect(screen.getByText('Source Directories & Files')).toBeInTheDocument()
         })
       }
 
-      it('shows Source Directories as required', async () => {
+      it('shows Source Directories & Files as required', async () => {
         const user = userEvent.setup()
         renderWizard('import')
 
@@ -828,9 +828,9 @@ describe('RepositoryWizard', () => {
 
         // Step 2
         await waitFor(() => {
-          expect(screen.getByText('Source Directories')).toBeInTheDocument()
+          expect(screen.getByText('Source Directories & Files')).toBeInTheDocument()
         })
-        const dirInput = screen.getByPlaceholderText('/home/user/documents')
+        const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
         await user.type(dirInput, '/data/important')
         await user.click(screen.getByRole('button', { name: /Add/i }))
         await user.click(screen.getByRole('button', { name: /Next/i }))
@@ -1007,13 +1007,13 @@ describe('RepositoryWizard', () => {
 
         await waitFor(
           () => {
-            expect(screen.getByText('Source Directories')).toBeInTheDocument()
+            expect(screen.getByText('Source Directories & Files')).toBeInTheDocument()
           },
           { timeout: 5000 }
         )
       }
 
-      it('shows Source Directories as optional', async () => {
+      it('shows Source Directories & Files as optional', async () => {
         const user = userEvent.setup()
         renderWizard('import')
 
@@ -1029,7 +1029,7 @@ describe('RepositoryWizard', () => {
         await goToStep2Observe(user)
 
         expect(
-          screen.queryByText(/At least one source directory is required/i)
+          screen.queryByText(/At least one source directory or file is required/i)
         ).not.toBeInTheDocument()
       })
 
@@ -1049,7 +1049,7 @@ describe('RepositoryWizard', () => {
 
         await goToStep2Observe(user)
 
-        const dirInput = screen.getByPlaceholderText('/home/user/documents')
+        const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
         await user.type(dirInput, '/optional/dir')
         await user.click(screen.getByRole('button', { name: /Add/i }))
 
@@ -1149,7 +1149,7 @@ describe('RepositoryWizard', () => {
           },
           { timeout: 5000 }
         )
-        const dirInput = screen.getByPlaceholderText('/home/user/documents')
+        const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
         await user.type(dirInput, '/optional/source')
         await user.click(screen.getByRole('button', { name: /Add/i }))
         await user.click(screen.getByRole('button', { name: /Next/i }))
@@ -1240,7 +1240,7 @@ describe('RepositoryWizard', () => {
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await waitFor(
         () => {
-          expect(screen.getByText('Source Directories')).toBeInTheDocument()
+          expect(screen.getByText('Source Directories & Files')).toBeInTheDocument()
         },
         { timeout: 5000 }
       )
@@ -1292,7 +1292,7 @@ describe('RepositoryWizard', () => {
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await waitFor(
         () => {
-          expect(screen.getByText('Source Directories')).toBeInTheDocument()
+          expect(screen.getByText('Source Directories & Files')).toBeInTheDocument()
         },
         { timeout: 5000 }
       )
@@ -1620,10 +1620,10 @@ describe('RepositoryWizard', () => {
       })
 
       // Local source directories should be available
-      expect(screen.getByText('Source Directories')).toBeInTheDocument()
+      expect(screen.getByText('Source Directories & Files')).toBeInTheDocument()
 
       // Should be able to add local directories
-      const dirInput = screen.getByPlaceholderText('/home/user/documents')
+      const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
       await user.type(dirInput, '/local/data')
       await user.click(screen.getByRole('button', { name: /Add/i }))
 
@@ -1674,10 +1674,10 @@ describe('RepositoryWizard', () => {
 
       // Step 2 - Add local source directories
       await waitFor(() => {
-        expect(screen.getByText('Source Directories')).toBeInTheDocument()
+        expect(screen.getByText('Source Directories & Files')).toBeInTheDocument()
       })
 
-      const dirInput = screen.getByPlaceholderText('/home/user/documents')
+      const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
       await user.type(dirInput, '/home/user/important')
       await user.click(screen.getByRole('button', { name: /Add/i }))
       await user.click(screen.getByRole('button', { name: /Next/i }))
@@ -1815,10 +1815,10 @@ describe('RepositoryWizard', () => {
 
       // Add remote source directory
       await waitFor(() => {
-        expect(screen.getByPlaceholderText('/home/user/documents')).toBeInTheDocument()
+        expect(screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')).toBeInTheDocument()
       })
 
-      const dirInput = screen.getByPlaceholderText('/home/user/documents')
+      const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
       await user.type(dirInput, '/remote/data')
       await user.click(screen.getByRole('button', { name: /Add/i }))
       await user.click(screen.getByRole('button', { name: /Next/i }))
@@ -2000,7 +2000,7 @@ describe('RepositoryWizard', () => {
       })
 
       // Add a local source directory
-      const pathInput = screen.getByPlaceholderText('/home/user/documents')
+      const pathInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
       await user.type(pathInput, '/home/user/data')
       await user.click(screen.getByRole('button', { name: /Add/i }))
 
@@ -2054,7 +2054,7 @@ describe('RepositoryWizard', () => {
         expect(screen.getByText(/Where is the data you want to back up/i)).toBeInTheDocument()
       })
 
-      const pathInput = screen.getByPlaceholderText('/home/user/documents')
+      const pathInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
       await user.type(pathInput, '/home/user/data')
       await user.click(screen.getByRole('button', { name: /Add/i }))
 
