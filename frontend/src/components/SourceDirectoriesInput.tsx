@@ -51,7 +51,7 @@ export default function SourceDirectoriesInput({
   return (
     <Box>
       <Typography variant="subtitle2" gutterBottom>
-        Source Directories
+        Source Directories & Files
         {required && (
           <Box component="span" sx={{ color: 'error.main' }}>
             {' '}
@@ -60,13 +60,14 @@ export default function SourceDirectoriesInput({
         )}
       </Typography>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-        Specify which directories to backup to this repository
+        Specify which directories or files to backup to this repository
         {required ? ' (at least one required)' : ' (optional)'}
       </Typography>
 
       {required && directories.length === 0 && (
         <Alert severity="warning" sx={{ mb: 1.5 }}>
-          At least one source directory is required. Add the directories you want to backup.
+          At least one source directory or file is required. Add the directories or files you want
+          to backup.
         </Alert>
       )}
 
@@ -90,7 +91,7 @@ export default function SourceDirectoriesInput({
           value={newDir}
           onChange={(e) => setNewDir(e.target.value)}
           onKeyPress={handleKeyPress}
-          placeholder="/home/user/documents"
+          placeholder="/home/user/documents or /var/log/app.log"
           size="small"
           fullWidth
           disabled={disabled}
@@ -101,7 +102,7 @@ export default function SourceDirectoriesInput({
                   onClick={onBrowseClick}
                   edge="end"
                   size="small"
-                  title="Browse directories"
+                  title="Browse directories and files"
                   disabled={disabled}
                 >
                   <FolderOpenIcon fontSize="small" />
