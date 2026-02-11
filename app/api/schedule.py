@@ -205,27 +205,42 @@ async def create_scheduled_job(
                 logger.info("STEP 0.1: No orphaned schedules found in database")
 
             # Check for orphaned junction entries (entries pointing to non-existent schedules)
+            # AND clean them up immediately to prevent UNIQUE constraint errors
             all_junction_entries = db.query(ScheduledJobRepository).all()
-            orphaned_junctions = []
+            orphaned_junctions_objects = []  # Store actual objects for deletion
+            orphaned_junctions_info = []     # Store info for logging
 
             for junction in all_junction_entries:
                 schedule_exists = db.query(ScheduledJob).filter_by(id=junction.scheduled_job_id).first()
                 if not schedule_exists:
-                    orphaned_junctions.append({
+                    orphaned_junctions_objects.append(junction)  # Save object for deletion
+                    orphaned_junctions_info.append({
+                        'id': junction.id,
                         'scheduled_job_id': junction.scheduled_job_id,
                         'repository_id': junction.repository_id,
                         'execution_order': junction.execution_order
                     })
 
-            if orphaned_junctions:
+            if orphaned_junctions_info:
                 logger.error("STEP 0.2: Found orphaned junction entries (pointing to deleted schedules)",
-                            count=len(orphaned_junctions),
-                            orphaned=orphaned_junctions[:10])  # Limit to first 10
+                            count=len(orphaned_junctions_info),
+                            orphaned=orphaned_junctions_info[:10])  # Limit to first 10
+
+                # STEP 0.3: Clean up orphans immediately (don't wait for migration)
+                logger.warning("STEP 0.3: Cleaning up orphaned junction entries before creating schedule",
+                             count=len(orphaned_junctions_objects))
+
+                for junction in orphaned_junctions_objects:
+                    db.delete(junction)
+
+                db.commit()
+                logger.info("STEP 0.3: Orphaned junction entries cleaned up successfully")
             else:
                 logger.info("STEP 0.2: No orphaned junction entries found")
 
         except Exception as check_error:
-            logger.warning("STEP 0.3: Could not check for orphaned data", error=str(check_error))
+            logger.warning("STEP 0.4: Could not check/clean orphaned data", error=str(check_error))
+            # Continue anyway - the atomic transaction + rollback will protect us
 
         # Validate cron expression
         try:
@@ -322,10 +337,10 @@ async def create_scheduled_job(
                    repository_id_field=job_data.repository_id)
 
         db.add(scheduled_job)
-        db.commit()
+        db.flush()  # Assign ID without committing
         db.refresh(scheduled_job)
 
-        logger.info("STEP 4: ScheduledJob committed successfully (FIRST COMMIT)",
+        logger.info("STEP 4: ScheduledJob flushed (ID assigned, not committed yet)",
                    schedule_id=scheduled_job.id,
                    schedule_name=scheduled_job.name)
 
@@ -364,13 +379,14 @@ async def create_scheduled_job(
 
             # Check what's pending in the session before commit
             pending_entries = [obj for obj in db.new if isinstance(obj, ScheduledJobRepository)]
-            logger.info("STEP 7: Junction entries in session before SECOND COMMIT",
+            logger.info("STEP 7: Junction entries in session before COMMIT",
                        count=len(pending_entries),
                        entries=[(e.scheduled_job_id, e.repository_id, e.execution_order) for e in pending_entries])
 
+            # Commit everything together (schedule + junction entries) - atomic transaction
             db.commit()
 
-            logger.info("STEP 8: Junction entries committed successfully (SECOND COMMIT)",
+            logger.info("STEP 8: Schedule and junction entries committed successfully (ATOMIC COMMIT)",
                        schedule_id=scheduled_job.id,
                        repo_count=len(unique_repo_ids))
 
@@ -382,7 +398,12 @@ async def create_scheduled_job(
                        schedule_id=scheduled_job.id,
                        saved_count=len(saved_entries),
                        saved_entries=[(e.repository_id, e.execution_order) for e in saved_entries])
-        
+        else:
+            # No multi-repo setup (legacy single-repo), commit now
+            db.commit()
+            logger.info("STEP 5: Legacy single-repo schedule committed",
+                       schedule_id=scheduled_job.id)
+
         logger.info("Scheduled job created", name=job_data.name, user=current_user.username)
         
         return {
@@ -398,19 +419,29 @@ async def create_scheduled_job(
             }
         }
     except HTTPException:
+        db.rollback()
         raise
     except Exception as e:
+        # Capture schedule_id BEFORE rollback (to avoid PendingRollbackError when accessing .id)
+        schedule_id_for_logging = None
+        try:
+            if 'scheduled_job' in locals() and hasattr(scheduled_job, 'id'):
+                schedule_id_for_logging = scheduled_job.id
+        except:
+            pass  # Ignore if we can't get the ID
+
+        db.rollback()  # Rollback any partial changes
         error_msg = str(e)
         error_type = type(e).__name__
 
         # Comprehensive error logging
-        logger.error("ERROR: Failed to create scheduled job",
+        logger.error("ERROR: Failed to create scheduled job - rolled back transaction",
                     error_type=error_type,
                     error_msg=error_msg,
                     job_name=job_data.name,
                     received_repository_ids=job_data.repository_ids,
                     unique_repository_ids=unique_repo_ids if 'unique_repo_ids' in locals() else None,
-                    schedule_id=scheduled_job.id if 'scheduled_job' in locals() and hasattr(scheduled_job, 'id') else None)
+                    schedule_id=schedule_id_for_logging)
 
         # Check for UNIQUE constraint error
         if "UNIQUE constraint failed" in error_msg:
@@ -418,18 +449,8 @@ async def create_scheduled_job(
                         full_error=error_msg,
                         job_data=job_data.dict())
 
-            # Try to find what's in the database
-            if 'scheduled_job' in locals() and hasattr(scheduled_job, 'id'):
-                try:
-                    existing_junction = db.query(ScheduledJobRepository).filter_by(
-                        scheduled_job_id=scheduled_job.id
-                    ).all()
-                    logger.error("ERROR: Current junction entries for this schedule_id",
-                               schedule_id=scheduled_job.id,
-                               count=len(existing_junction),
-                               entries=[(e.repository_id, e.execution_order) for e in existing_junction])
-                except Exception as check_error:
-                    logger.error("ERROR: Could not check junction entries", error=str(check_error))
+            # Note: Cannot query database after rollback (would cause PendingRollbackError)
+            # The diagnostic logs in STEP 5 already show existing entries
 
             raise HTTPException(
                 status_code=500,
@@ -756,9 +777,11 @@ async def update_scheduled_job(
             "message": "Scheduled job updated successfully"
         }
     except HTTPException:
+        db.rollback()
         raise
     except Exception as e:
-        logger.error("Failed to update scheduled job", error=str(e))
+        db.rollback()  # Rollback any partial changes
+        logger.error("Failed to update scheduled job - rolled back transaction", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to update scheduled job: {str(e)}")
 
 @router.delete("/{job_id}")
@@ -775,19 +798,34 @@ async def delete_scheduled_job(
         job = db.query(ScheduledJob).filter(ScheduledJob.id == job_id).first()
         if not job:
             raise HTTPException(status_code=404, detail="Scheduled job not found")
-        
+
+        # Step 1: Set scheduled_job_id to NULL for all backup jobs linked to this schedule
+        # This preserves backup history while breaking the link
+        from app.database.models import BackupJob
+        db.query(BackupJob).filter_by(scheduled_job_id=job_id).update(
+            {"scheduled_job_id": None},
+            synchronize_session=False
+        )
+
+        # Step 2: Manually delete junction table entries
+        # (CASCADE doesn't work if tables were created before foreign keys were enabled)
+        db.query(ScheduledJobRepository).filter_by(scheduled_job_id=job_id).delete()
+
+        # Step 3: Now delete the schedule
         db.delete(job)
         db.commit()
-        
+
         logger.info("Scheduled job deleted", job_id=job_id, user=current_user.username)
-        
+
         return {
             "success": True,
             "message": "Scheduled job deleted successfully"
         }
     except HTTPException:
+        db.rollback()
         raise
     except Exception as e:
+        db.rollback()
         logger.error("Failed to delete scheduled job", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to delete scheduled job: {str(e)}")
 
@@ -879,7 +917,7 @@ async def duplicate_scheduled_job(
         )
 
         db.add(duplicated_job)
-        db.commit()
+        db.flush()  # Assign ID without committing
         db.refresh(duplicated_job)
 
         # Copy multi-repo associations if they exist
@@ -889,18 +927,40 @@ async def duplicate_scheduled_job(
             .all()
 
         if original_repo_links:
+            # Deduplicate repository IDs while preserving order
+            seen = set()
+            unique_repo_links = []
             for link in original_repo_links:
+                if link.repository_id not in seen:
+                    seen.add(link.repository_id)
+                    unique_repo_links.append(link)
+
+            # Log if duplicates were found
+            if len(unique_repo_links) != len(original_repo_links):
+                logger.warning("Removed duplicate repository entries from original schedule",
+                             original_job_id=job_id,
+                             original_count=len(original_repo_links),
+                             unique_count=len(unique_repo_links),
+                             removed_count=len(original_repo_links) - len(unique_repo_links))
+
+            # Create junction entries with deduplicated list
+            for order, link in enumerate(unique_repo_links):
                 new_link = ScheduledJobRepository(
                     scheduled_job_id=duplicated_job.id,
                     repository_id=link.repository_id,
-                    execution_order=link.execution_order
+                    execution_order=order  # Use sequential order
                 )
                 db.add(new_link)
+
+            # Commit everything together (schedule + junction entries)
             db.commit()
             logger.info("Duplicated multi-repo associations",
                        original_job_id=job_id,
                        new_job_id=duplicated_job.id,
-                       repo_count=len(original_repo_links))
+                       repo_count=len(unique_repo_links))
+        else:
+            # No multi-repo associations (legacy single-repo), commit now
+            db.commit()
 
         logger.info("Scheduled job duplicated",
                    original_job_id=job_id,
@@ -919,9 +979,11 @@ async def duplicate_scheduled_job(
             }
         }
     except HTTPException:
+        db.rollback()
         raise
     except Exception as e:
-        logger.error("Failed to duplicate scheduled job", error=str(e))
+        db.rollback()  # Rollback any partial changes
+        logger.error("Failed to duplicate scheduled job - rolled back transaction", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to duplicate scheduled job: {str(e)}")
 
 @router.post("/{job_id}/run-now")

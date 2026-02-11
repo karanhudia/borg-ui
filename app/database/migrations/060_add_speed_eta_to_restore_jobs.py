@@ -16,38 +16,57 @@ These fields enable the same progress display as backup jobs.
 from sqlalchemy import text
 
 
+def column_exists(db, table_name, column_name):
+    """Check if a column exists in a table"""
+    result = db.execute(text(f"PRAGMA table_info({table_name})"))
+    columns = [row[1] for row in result.fetchall()]
+    return column_name in columns
+
+
 def upgrade(db):
     """Add speed and ETA tracking columns to restore jobs"""
     print("Running migration 060: Add speed and ETA tracking to restore jobs")
 
     try:
-        # Add original_size column (total bytes to restore)
-        db.execute(text("""
-            ALTER TABLE restore_jobs
-            ADD COLUMN original_size BIGINT DEFAULT 0
-        """))
-        print("  ✓ Added original_size column")
+        # Add original_size column (idempotent)
+        if not column_exists(db, "restore_jobs", "original_size"):
+            db.execute(text("""
+                ALTER TABLE restore_jobs
+                ADD COLUMN original_size BIGINT DEFAULT 0
+            """))
+            print("  ✓ Added original_size column")
+        else:
+            print("  ℹ Column original_size already exists, skipping")
 
-        # Add restored_size column (bytes restored so far)
-        db.execute(text("""
-            ALTER TABLE restore_jobs
-            ADD COLUMN restored_size BIGINT DEFAULT 0
-        """))
-        print("  ✓ Added restored_size column")
+        # Add restored_size column (idempotent)
+        if not column_exists(db, "restore_jobs", "restored_size"):
+            db.execute(text("""
+                ALTER TABLE restore_jobs
+                ADD COLUMN restored_size BIGINT DEFAULT 0
+            """))
+            print("  ✓ Added restored_size column")
+        else:
+            print("  ℹ Column restored_size already exists, skipping")
 
-        # Add restore_speed column (MB/s)
-        db.execute(text("""
-            ALTER TABLE restore_jobs
-            ADD COLUMN restore_speed FLOAT DEFAULT 0.0
-        """))
-        print("  ✓ Added restore_speed column")
+        # Add restore_speed column (idempotent)
+        if not column_exists(db, "restore_jobs", "restore_speed"):
+            db.execute(text("""
+                ALTER TABLE restore_jobs
+                ADD COLUMN restore_speed FLOAT DEFAULT 0.0
+            """))
+            print("  ✓ Added restore_speed column")
+        else:
+            print("  ℹ Column restore_speed already exists, skipping")
 
-        # Add estimated_time_remaining column (seconds)
-        db.execute(text("""
-            ALTER TABLE restore_jobs
-            ADD COLUMN estimated_time_remaining INTEGER DEFAULT 0
-        """))
-        print("  ✓ Added estimated_time_remaining column")
+        # Add estimated_time_remaining column (idempotent)
+        if not column_exists(db, "restore_jobs", "estimated_time_remaining"):
+            db.execute(text("""
+                ALTER TABLE restore_jobs
+                ADD COLUMN estimated_time_remaining INTEGER DEFAULT 0
+            """))
+            print("  ✓ Added estimated_time_remaining column")
+        else:
+            print("  ℹ Column estimated_time_remaining already exists, skipping")
 
         db.commit()
         print("✓ Migration 060 completed successfully")

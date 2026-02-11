@@ -16,17 +16,27 @@ Users can disable for Synology NAS and other systems that don't support SFTP mod
 from sqlalchemy import text
 
 
+def column_exists(db, table_name, column_name):
+    """Check if a column exists in a table"""
+    result = db.execute(text(f"PRAGMA table_info({table_name})"))
+    columns = [row[1] for row in result.fetchall()]
+    return column_name in columns
+
+
 def upgrade(db):
     """Add use_sftp_mode column to SSH connections"""
     print("Running migration 059: Add use_sftp_mode to SSH connections")
 
     try:
-        # Add use_sftp_mode column (default True for backward compatibility)
-        db.execute(text("""
-            ALTER TABLE ssh_connections
-            ADD COLUMN use_sftp_mode BOOLEAN NOT NULL DEFAULT TRUE
-        """))
-        print("  ✓ Added use_sftp_mode column (default: TRUE)")
+        # Add use_sftp_mode column (idempotent)
+        if not column_exists(db, "ssh_connections", "use_sftp_mode"):
+            db.execute(text("""
+                ALTER TABLE ssh_connections
+                ADD COLUMN use_sftp_mode BOOLEAN NOT NULL DEFAULT TRUE
+            """))
+            print("  ✓ Added use_sftp_mode column (default: TRUE)")
+        else:
+            print("  ℹ Column use_sftp_mode already exists, skipping")
 
         db.commit()
         print("✓ Migration 059 completed successfully")
