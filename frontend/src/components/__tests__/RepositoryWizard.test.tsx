@@ -357,7 +357,9 @@ describe('RepositoryWizard', () => {
 
         await goToStep2(user)
 
-        expect(screen.getByText(/At least one source directory or file is required/i)).toBeInTheDocument()
+        expect(
+          screen.getByText(/At least one source directory or file is required/i)
+        ).toBeInTheDocument()
       })
 
       it('Next button is disabled without source directories', async () => {
@@ -1815,7 +1817,9 @@ describe('RepositoryWizard', () => {
 
       // Add remote source directory
       await waitFor(() => {
-        expect(screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')).toBeInTheDocument()
+        expect(
+          screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
+        ).toBeInTheDocument()
       })
 
       const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
