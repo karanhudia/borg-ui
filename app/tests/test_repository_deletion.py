@@ -258,9 +258,9 @@ def test_delete_repository_preserves_backup_job_history(db_session: Session, tes
     """Test: BackupJob records should be unlinked, not deleted (preserve history)"""
 
     # Create a BackupJob for this repository
+    # Note: BackupJob stores repository path (string), not repository_id (int)
     backup_job = BackupJob(
-        repository_id=test_repository.id,
-        repository=test_repository.path,
+        repository=test_repository.path,  # Uses path, not ID
         status="completed",
         started_at=datetime.utcnow()
     )
@@ -271,14 +271,14 @@ def test_delete_repository_preserves_backup_job_history(db_session: Session, tes
 
     # Verify BackupJob exists
     assert db_session.query(BackupJob).filter(BackupJob.id == backup_job_id).count() == 1
-    assert backup_job.repository_id == test_repository.id
+    assert backup_job.repository == test_repository.path
 
-    # Simulate deletion logic - unlink BackupJobs (set FK to NULL)
+    # Simulate deletion logic - unlink BackupJobs (set path to NULL)
     backup_jobs = db_session.query(BackupJob).filter(
-        BackupJob.repository_id == test_repository.id
+        BackupJob.repository == test_repository.path
     ).all()
     for job in backup_jobs:
-        job.repository_id = None
+        job.repository = None
 
     # Delete repository
     db_session.delete(test_repository)
@@ -289,7 +289,7 @@ def test_delete_repository_preserves_backup_job_history(db_session: Session, tes
 
     backup_job_after = db_session.query(BackupJob).filter(BackupJob.id == backup_job_id).first()
     assert backup_job_after is not None  # Job still exists
-    assert backup_job_after.repository_id is None  # But FK is NULL
+    assert backup_job_after.repository is None  # But path is NULL
 
 
 def test_delete_repository_with_scheduled_job_link(db_session: Session, test_repository: Repository):
