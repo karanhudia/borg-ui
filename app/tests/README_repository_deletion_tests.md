@@ -82,8 +82,8 @@ db.delete(repository)  # ❌ FAILS if any job records exist
 After fix (commit e7bb99d):
 ```python
 # Clean up ALL related records first
-delete RestoreJob, CheckJob, PruneJob, CompactJob
-set BackupJob.repository_id = NULL (preserve history)
+delete RestoreJob (filter by path), CheckJob, PruneJob, CompactJob
+set BackupJob.repository = NULL (preserve history, stores path not FK)
 set ScheduledJob.repository_id = NULL
 delete ScheduledJobRepository junction entries
 delete RepositoryScript
@@ -94,11 +94,11 @@ db.delete(repository)  # ✅ NOW SUCCEEDS
 
 | Table | FK Column | Has CASCADE? | Fix Action |
 |-------|-----------|--------------|------------|
-| RestoreJob | repository_id | ❌ NO | Delete job |
+| RestoreJob | repository (String path) | ❌ NO FK | Delete job |
 | CheckJob | repository_id | ❌ NO | Delete job |
 | PruneJob | repository_id | ❌ NO | Delete job |
 | CompactJob | repository_id | ❌ NO | Delete job |
-| BackupJob | repository_id | ❌ NO (nullable) | Set to NULL |
+| BackupJob | repository (String path) | ❌ NO FK | Set to NULL (preserve history) |
 | ScheduledJob | repository_id | ❌ NO (nullable) | Set to NULL |
 | ScheduledJobRepository | repository_id | ✅ YES | Delete (manual) |
 | RepositoryScript | repository_id | ✅ YES | Delete (manual) |

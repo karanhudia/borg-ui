@@ -1274,10 +1274,11 @@ async def delete_repository(
         if compact_jobs:
             logger.info("Deleted compact jobs", repo_id=repo_id, count=len(compact_jobs))
 
-        # 2. Set nullable repository_id to NULL (preserve historical backup jobs)
-        backup_jobs = db.query(BackupJob).filter(BackupJob.repository_id == repo_id).all()
+        # 2. Set repository path to NULL (preserve historical backup jobs)
+        # Note: BackupJob stores repository path (string), not repository_id (int)
+        backup_jobs = db.query(BackupJob).filter(BackupJob.repository == repository.path).all()
         for job in backup_jobs:
-            job.repository_id = None
+            job.repository = None
         if backup_jobs:
             logger.info("Unlinked backup jobs", repo_id=repo_id, count=len(backup_jobs))
 
