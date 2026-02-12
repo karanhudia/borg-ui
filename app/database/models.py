@@ -114,6 +114,7 @@ class SSHConnection(Base):
     username = Column(String)
     port = Column(Integer, default=22)
     default_path = Column(String, nullable=True)  # Default starting path for SSH browsing (e.g., /home for Hetzner Storage Box)
+    ssh_path_prefix = Column(String, nullable=True)  # Path prefix for SSH commands (e.g., /volume1 for Synology). SFTP uses path as-is, SSH prepends this prefix.
     mount_point = Column(String, nullable=True)  # Logical mount point (e.g., /hetzner, /homeserver)
     status = Column(String, default="unknown")  # connected, failed, testing, unknown
     last_test = Column(DateTime, nullable=True)
