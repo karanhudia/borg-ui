@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import {
   Alert,
   alpha,
@@ -29,14 +29,15 @@ import {
 import { generateBorgCreateCommand } from '../utils/borgUtils'
 import { BackupJob } from '../types'
 import BackupJobsTable from '../components/BackupJobsTable'
+import LogViewerDialog from '../components/LogViewerDialog'
 import { useMatomo } from '../hooks/useMatomo'
 import { useAuth } from '../hooks/useAuth'
 
 const Backup: React.FC = () => {
   const [selectedRepository, setSelectedRepository] = useState<string>('')
+  const [logJob, setLogJob] = useState<BackupJob | null>(null)
   const queryClient = useQueryClient()
   const location = useLocation()
-  const navigate = useNavigate()
   const { trackBackup, EventAction } = useMatomo()
   const { user } = useAuth()
 
@@ -104,6 +105,15 @@ const Backup: React.FC = () => {
       toast.error(`Failed to cancel backup: ${error.response?.data?.detail || error.message}`)
     },
   })
+
+  // Log viewer handlers
+  const handleViewLogs = (job: BackupJob) => {
+    setLogJob(job)
+  }
+
+  const handleCloseLogs = () => {
+    setLogJob(null)
+  }
 
   // Handle repository selection
   const handleRepositoryChange = (repoPath: string) => {
@@ -356,7 +366,7 @@ const Backup: React.FC = () => {
                         color="primary"
                         size="small"
                         startIcon={<Eye size={16} />}
-                        onClick={() => navigate('/activity', { state: { jobId: job.id } })}
+                        onClick={() => handleViewLogs(job)}
                       >
                         View Logs
                       </Button>
@@ -573,6 +583,9 @@ const Backup: React.FC = () => {
           />
         </CardContent>
       </Card>
+
+      {/* Log Viewer Dialog */}
+      <LogViewerDialog job={logJob} open={Boolean(logJob)} onClose={handleCloseLogs} />
     </Box>
   )
 }
