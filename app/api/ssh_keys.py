@@ -873,6 +873,7 @@ async def get_ssh_connections(
                 "port": conn.port,
                 "use_sftp_mode": conn.use_sftp_mode,
                 "default_path": conn.default_path,
+                "ssh_path_prefix": conn.ssh_path_prefix,
                 "mount_point": conn.mount_point,
                 "status": conn.status,
                 "last_test": serialize_datetime(conn.last_test),
