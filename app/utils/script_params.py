@@ -25,6 +25,26 @@ PASSWORD_SUFFIXES = [
     '_CREDENTIALS'
 ]
 
+# System-provided variables that should NOT be treated as user parameters
+# These are automatically injected at runtime and don't need user input
+SYSTEM_VARIABLES = {
+    # Library script variables (no prefix)
+    'REPOSITORY_ID',
+    'REPOSITORY_NAME',
+    'REPOSITORY_PATH',
+    'BACKUP_STATUS',
+    'HOOK_TYPE',
+    'BORG_REPO',
+
+    # Inline script variables (BORG_UI_ prefix) - for backward compatibility
+    'BORG_UI_BACKUP_STATUS',
+    'BORG_UI_REPOSITORY_NAME',
+    'BORG_UI_REPOSITORY_PATH',
+    'BORG_UI_REPOSITORY_ID',
+    'BORG_UI_HOOK_TYPE',
+    'BORG_UI_JOB_ID',
+}
+
 
 def parse_script_parameters(script_content: str) -> List[Dict[str, Any]]:
     """
@@ -71,7 +91,15 @@ def parse_script_parameters(script_content: str) -> List[Dict[str, Any]]:
                 param_name=param_name
             )
             continue
-        
+
+        # Skip system-provided variables (automatically injected at runtime)
+        if param_name in SYSTEM_VARIABLES:
+            logger.debug(
+                "Skipping system variable (auto-provided)",
+                param_name=param_name
+            )
+            continue
+
         # Detect parameter type from naming convention
         param_type = detect_parameter_type(param_name)
         
@@ -94,9 +122,10 @@ def parse_script_parameters(script_content: str) -> List[Dict[str, Any]]:
     parameters = sorted(params_dict.values(), key=lambda x: x['name'])
     
     logger.info(
-        "Parsed script parameters",
+        "Parsed script parameters (system variables excluded)",
         param_count=len(parameters),
-        password_params=[p['name'] for p in parameters if p['type'] == 'password']
+        password_params=[p['name'] for p in parameters if p['type'] == 'password'],
+        system_vars_skipped=len([name for name, _ in matches if name in SYSTEM_VARIABLES])
     )
     
     return parameters
