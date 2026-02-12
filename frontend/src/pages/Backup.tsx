@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Alert,
   alpha,
@@ -17,7 +17,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material'
-import { Clock, Database, Info, Play, RefreshCw, Square } from 'lucide-react'
+import { Clock, Database, Eye, Info, Play, RefreshCw, Square } from 'lucide-react'
 import { backupAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import {
@@ -36,6 +36,7 @@ const Backup: React.FC = () => {
   const [selectedRepository, setSelectedRepository] = useState<string>('')
   const queryClient = useQueryClient()
   const location = useLocation()
+  const navigate = useNavigate()
   const { trackBackup, EventAction } = useMatomo()
   const { user } = useAuth()
 
@@ -349,16 +350,27 @@ const Backup: React.FC = () => {
                         </Typography>
                       </Box>
                     </Stack>
-                    <Button
-                      variant="outlined"
-                      color="error"
-                      size="small"
-                      startIcon={<Square size={16} />}
-                      onClick={() => handleCancelBackup(String(job.id))}
-                      disabled={cancelBackupMutation.isPending}
-                    >
-                      Cancel
-                    </Button>
+                    <Stack direction="row" spacing={1}>
+                      <Button
+                        variant="outlined"
+                        color="primary"
+                        size="small"
+                        startIcon={<Eye size={16} />}
+                        onClick={() => navigate('/activity', { state: { jobId: job.id } })}
+                      >
+                        View Logs
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        size="small"
+                        startIcon={<Square size={16} />}
+                        onClick={() => handleCancelBackup(String(job.id))}
+                        disabled={cancelBackupMutation.isPending}
+                      >
+                        Cancel
+                      </Button>
+                    </Stack>
                   </Stack>
 
                   {/* Backup Stage Indicator */}
