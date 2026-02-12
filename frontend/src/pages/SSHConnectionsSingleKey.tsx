@@ -61,6 +61,7 @@ interface SSHConnection {
   port: number
   use_sftp_mode: boolean
   default_path?: string
+  ssh_path_prefix?: string
   mount_point?: string
   status: string
   last_test?: string
@@ -99,6 +100,7 @@ export default function SSHConnectionsSingleKey() {
     password: '',
     use_sftp_mode: true,
     default_path: '',
+    ssh_path_prefix: '',
     mount_point: '',
   })
   const [testConnectionForm, setTestConnectionForm] = useState({
@@ -112,6 +114,7 @@ export default function SSHConnectionsSingleKey() {
     port: 22,
     use_sftp_mode: true,
     default_path: '',
+    ssh_path_prefix: '',
     mount_point: '',
   })
 
@@ -193,6 +196,7 @@ export default function SSHConnectionsSingleKey() {
         password: '',
         use_sftp_mode: true,
         default_path: '',
+        ssh_path_prefix: '',
         mount_point: '',
       })
       track(EventCategory.SSH, EventAction.CREATE, 'connection')
@@ -405,6 +409,7 @@ export default function SSHConnectionsSingleKey() {
       port: connection.port,
       use_sftp_mode: connection.use_sftp_mode,
       default_path: connection.default_path || '',
+      ssh_path_prefix: connection.ssh_path_prefix || '',
       mount_point: connection.mount_point || '',
     })
     setEditConnectionDialogOpen(true)
@@ -976,6 +981,17 @@ export default function SSHConnectionsSingleKey() {
               InputLabelProps={{ shrink: true }}
             />
             <TextField
+              label="SSH Path Prefix (Optional)"
+              fullWidth
+              value={connectionForm.ssh_path_prefix}
+              onChange={(e) =>
+                setConnectionForm({ ...connectionForm, ssh_path_prefix: e.target.value })
+              }
+              placeholder="/volume1"
+              helperText="Path prefix for SSH commands (e.g., /volume1 for Synology). SFTP browsing uses paths as-is, SSH prepends this prefix."
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
               label="Mount Point (Optional)"
               fullWidth
               value={connectionForm.mount_point}
@@ -1180,6 +1196,20 @@ export default function SSHConnectionsSingleKey() {
               }
               placeholder="/home"
               helperText="Starting directory for SSH file browsing (e.g., /home for Hetzner Storage Box)"
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="SSH Path Prefix (Optional)"
+              fullWidth
+              value={editConnectionForm.ssh_path_prefix}
+              onChange={(e) =>
+                setEditConnectionForm({
+                  ...editConnectionForm,
+                  ssh_path_prefix: e.target.value,
+                })
+              }
+              placeholder="/volume1"
+              helperText="Path prefix for SSH commands (e.g., /volume1 for Synology). SFTP browsing uses paths as-is, SSH prepends this prefix."
               InputLabelProps={{ shrink: true }}
             />
             <TextField
