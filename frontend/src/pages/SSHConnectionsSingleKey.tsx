@@ -980,6 +980,7 @@ export default function SSHConnectionsSingleKey() {
               helperText="Starting directory for SSH file browsing (e.g., /home for Hetzner Storage Box)"
               InputLabelProps={{ shrink: true }}
             />
+            {/* Temporarily disabled - feature not fully working yet
             <TextField
               label="SSH Path Prefix (Optional)"
               fullWidth
@@ -991,6 +992,7 @@ export default function SSHConnectionsSingleKey() {
               helperText="Path prefix for SSH commands (e.g., /volume1 for Synology). SFTP browsing uses paths as-is, SSH prepends this prefix."
               InputLabelProps={{ shrink: true }}
             />
+            */}
             <TextField
               label="Mount Point (Optional)"
               fullWidth
@@ -1198,6 +1200,7 @@ export default function SSHConnectionsSingleKey() {
               helperText="Starting directory for SSH file browsing (e.g., /home for Hetzner Storage Box)"
               InputLabelProps={{ shrink: true }}
             />
+            {/* Temporarily disabled - feature not fully working yet
             <TextField
               label="SSH Path Prefix (Optional)"
               fullWidth
@@ -1212,6 +1215,7 @@ export default function SSHConnectionsSingleKey() {
               helperText="Path prefix for SSH commands (e.g., /volume1 for Synology). SFTP browsing uses paths as-is, SSH prepends this prefix."
               InputLabelProps={{ shrink: true }}
             />
+            */}
             <TextField
               label="Mount Point (Optional)"
               fullWidth
