@@ -1015,8 +1015,15 @@ class BackupService:
         """
         Cleanup all SSH mounts for a job using mount_service
 
-        IMPORTANT: Unmounts in reverse depth order (deepest paths first) to avoid
-        "Device or resource busy" errors when parent directories have nested mounts.
+        NOTE: mount_ssh_paths_shared() returns duplicate mount_ids when multiple files
+        share the same parent directory. We deduplicate before unmounting to avoid
+        trying to unmount the same mount multiple times.
+
+        Example:
+          - Backup: /home/user/file1.txt, /home/user/file2.txt
+          - mount_ssh_paths_shared returns: [(mount_id_A, path1), (mount_id_A, path2)]
+          - self.ssh_mounts[job_id] = [mount_id_A, mount_id_A]
+          - We deduplicate to: [mount_id_A] before unmounting
         """
         from app.services.mount_service import mount_service
 
@@ -1024,11 +1031,31 @@ class BackupService:
             return
 
         mount_ids = self.ssh_mounts[job_id]
-        logger.info("Cleaning up SSH mounts", job_id=job_id, mount_count=len(mount_ids))
 
-        # Get mount info for all mounts and sort by path depth (deepest first)
+        # CRITICAL: Deduplicate mount_ids before unmounting
+        # mount_ssh_paths_shared() reuses mount_ids for files in the same parent,
+        # so the list can contain duplicates (e.g., [id1, id1, id1, id2, id2])
+        unique_mount_ids = list(dict.fromkeys(mount_ids))  # Preserves order, removes duplicates
+
+        logger.info(
+            "Cleaning up SSH mounts",
+            job_id=job_id,
+            total_mount_refs=len(mount_ids),
+            unique_mounts=len(unique_mount_ids)
+        )
+
+        if len(unique_mount_ids) < len(mount_ids):
+            logger.debug(
+                "Deduplicated mount_ids (multiple files shared same parent)",
+                original_count=len(mount_ids),
+                unique_count=len(unique_mount_ids),
+                duplicates_removed=len(mount_ids) - len(unique_mount_ids),
+                job_id=job_id
+            )
+
+        # Get mount info for all unique mounts and sort by path depth (deepest first)
         mount_infos = []
-        for mount_id in mount_ids:
+        for mount_id in unique_mount_ids:
             mount_info = mount_service.get_mount(mount_id)
             if mount_info:
                 mount_infos.append((mount_id, mount_info))

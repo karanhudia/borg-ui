@@ -426,6 +426,8 @@ class MountService:
 
             mount_info_list = []
             mounted_successfully = []
+            # Track which mount_dirs we've already created to avoid duplicate mounts
+            mounted_dirs = {}  # {mount_dir: mount_id}
 
             try:
                 for remote_path in remote_paths:
@@ -464,6 +466,23 @@ class MountService:
                         relative_path = remote_path.lstrip('/')
                         if not relative_path:
                             relative_path = '.'
+
+                    # Check if we've already mounted this directory
+                    if mount_dir in mounted_dirs:
+                        # Reuse existing mount
+                        existing_mount_id = mounted_dirs[mount_dir]
+                        logger.info(
+                            "Reusing existing mount for path (shared temp root)",
+                            existing_mount_id=existing_mount_id,
+                            original_path=remote_path,
+                            mount_dir=mount_dir,
+                            backup_path=relative_path,
+                            is_file=is_file,
+                            job_id=job_id
+                        )
+                        # Just add to mount_info_list with the existing mount_id
+                        mount_info_list.append((existing_mount_id, relative_path))
+                        continue
 
                     mount_id = str(uuid.uuid4())
 
@@ -507,6 +526,7 @@ class MountService:
 
                     mount_info_list.append((mount_id, relative_path))
                     mounted_successfully.append(mount_id)
+                    mounted_dirs[mount_dir] = mount_id  # Track this mount_dir
 
                     logger.info(
                         "Successfully mounted SSH path (shared temp root)",
@@ -964,13 +984,45 @@ class MountService:
                 logger.error("Unknown mount type", mount_type=mount_info.mount_type)
                 success = False
 
-            if success:
-                # Cleanup temp files
+            # Check if any other mounts are using the same temp_root
+            # CRITICAL: Don't cleanup shared temp_root while other mounts are using it
+            # This prevents hanging when trying to rmtree a directory with active FUSE mounts
+            other_mounts_using_temp_root = False
+            if mount_info.temp_root:
+                for other_id, other_info in self.active_mounts.items():
+                    if other_id != mount_id and other_info.temp_root == mount_info.temp_root:
+                        other_mounts_using_temp_root = True
+                        break
+
+            if other_mounts_using_temp_root:
+                # Don't cleanup temp_root (still in use by other mounts)
+                # Only cleanup temp_key_file if no other mount is using it
+                other_using_key = any(
+                    other_info.temp_key_file == mount_info.temp_key_file
+                    for other_id, other_info in self.active_mounts.items()
+                    if other_id != mount_id
+                )
+                if not other_using_key:
+                    self._cleanup_temp_files(None, mount_info.temp_key_file)
+
+                logger.debug(
+                    "Skipping temp_root cleanup (still in use by other mounts)",
+                    mount_id=mount_id,
+                    temp_root=mount_info.temp_root
+                )
+            else:
+                # This is the last mount using temp_root, safe to cleanup everything
                 self._cleanup_temp_files(
                     mount_info.temp_root,
                     mount_info.temp_key_file
                 )
+                logger.debug(
+                    "Cleaned up temp_root (last mount using it)",
+                    mount_id=mount_id,
+                    temp_root=mount_info.temp_root
+                )
 
+            if success:
                 # Remove from tracking
                 del self.active_mounts[mount_id]
 
@@ -980,7 +1032,15 @@ class MountService:
                 logger.info("Successfully unmounted and cleaned up", mount_id=mount_id)
                 return True
             else:
-                logger.error("Failed to unmount", mount_id=mount_id)
+                # Even if unmount failed, remove from tracking to prevent retry loops
+                del self.active_mounts[mount_id]
+                self._save_state()
+
+                logger.error(
+                    "Failed to unmount but removed from tracking",
+                    mount_id=mount_id,
+                    mount_point=mount_info.mount_point
+                )
                 return False
 
         except Exception as e:
@@ -1327,6 +1387,18 @@ class MountService:
                     return True
                 else:
                     error_msg = stderr.decode() if stderr else "Unknown error"
+
+                    # "Invalid argument" means the mount point isn't mounted or doesn't exist
+                    # Treat this as success since our goal is to ensure it's not mounted
+                    if "Invalid argument" in error_msg or "not mounted" in error_msg.lower():
+                        logger.info(
+                            "Mount point not mounted or doesn't exist (treating as success)",
+                            mount_point=mount_point,
+                            attempt=attempt + 1,
+                            error=error_msg
+                        )
+                        return True
+
                     logger.warning(
                         "Unmount attempt failed",
                         mount_point=mount_point,
