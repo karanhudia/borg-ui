@@ -273,6 +273,7 @@ class ScriptLibraryExecutor:
                 repository_id=repository.id,
                 repository_name=repository.name,
                 repository_path=repository.path,
+                backup_status=backup_result,
                 hook_type=hook_type
             )
             script_env.update(system_vars)
