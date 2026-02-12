@@ -118,9 +118,10 @@ export default function CommandPreview({
       return path
     }
 
-    const mountPaths = sourceDirs.length > 0
-      ? [...new Set(sourceDirs.map(getParentOrSelf))] // Deduplicate
-      : ['/path']
+    const mountPaths =
+      sourceDirs.length > 0
+        ? [...new Set(sourceDirs.map(getParentOrSelf))] // Deduplicate
+        : ['/path']
 
     const sshfsMountCommands = mountPaths.map(
       (dir) =>
