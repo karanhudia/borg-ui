@@ -1240,19 +1240,73 @@ async def delete_repository(
             except:
                 pass
 
-        # Manually clean up script associations (in case CASCADE doesn't work)
-        from app.database.models import RepositoryScript
+        # CRITICAL: Clean up all foreign key references before deleting repository
+        # Some tables don't have CASCADE delete, so we must manually handle them
+
+        from app.database.models import (
+            RepositoryScript, RestoreJob, CheckJob, PruneJob, CompactJob,
+            ScheduledJob, ScheduledJobRepository, BackupJob
+        )
+
+        # 1. Delete job records (these don't have CASCADE)
+        restore_jobs = db.query(RestoreJob).filter(RestoreJob.repository_id == repo_id).all()
+        for job in restore_jobs:
+            db.delete(job)
+        if restore_jobs:
+            logger.info("Deleted restore jobs", repo_id=repo_id, count=len(restore_jobs))
+
+        check_jobs = db.query(CheckJob).filter(CheckJob.repository_id == repo_id).all()
+        for job in check_jobs:
+            db.delete(job)
+        if check_jobs:
+            logger.info("Deleted check jobs", repo_id=repo_id, count=len(check_jobs))
+
+        prune_jobs = db.query(PruneJob).filter(PruneJob.repository_id == repo_id).all()
+        for job in prune_jobs:
+            db.delete(job)
+        if prune_jobs:
+            logger.info("Deleted prune jobs", repo_id=repo_id, count=len(prune_jobs))
+
+        compact_jobs = db.query(CompactJob).filter(CompactJob.repository_id == repo_id).all()
+        for job in compact_jobs:
+            db.delete(job)
+        if compact_jobs:
+            logger.info("Deleted compact jobs", repo_id=repo_id, count=len(compact_jobs))
+
+        # 2. Set nullable repository_id to NULL (preserve historical backup jobs)
+        backup_jobs = db.query(BackupJob).filter(BackupJob.repository_id == repo_id).all()
+        for job in backup_jobs:
+            job.repository_id = None
+        if backup_jobs:
+            logger.info("Unlinked backup jobs", repo_id=repo_id, count=len(backup_jobs))
+
+        # 3. Handle scheduled jobs
+        # Set ScheduledJob.repository_id to NULL (for single-repo schedules)
+        scheduled_jobs = db.query(ScheduledJob).filter(ScheduledJob.repository_id == repo_id).all()
+        for job in scheduled_jobs:
+            job.repository_id = None
+        if scheduled_jobs:
+            logger.info("Unlinked scheduled jobs", repo_id=repo_id, count=len(scheduled_jobs))
+
+        # Delete junction table entries (this has CASCADE but delete manually to be safe)
+        junction_entries = db.query(ScheduledJobRepository).filter(
+            ScheduledJobRepository.repository_id == repo_id
+        ).all()
+        for entry in junction_entries:
+            db.delete(entry)
+        if junction_entries:
+            logger.info("Deleted schedule-repository links", repo_id=repo_id, count=len(junction_entries))
+
+        # 4. Delete script associations (has CASCADE but delete manually to be explicit)
         script_associations = db.query(RepositoryScript).filter(
             RepositoryScript.repository_id == repo_id
         ).all()
-
+        for assoc in script_associations:
+            db.delete(assoc)
         if script_associations:
-            association_count = len(script_associations)
-            for assoc in script_associations:
-                db.delete(assoc)
-            logger.info("Cleaned up script associations", repo_id=repo_id, count=association_count)
+            logger.info("Deleted script associations", repo_id=repo_id, count=len(script_associations))
 
-        # Delete repository from database
+        # 5. Finally, delete the repository itself
         db.delete(repository)
         db.commit()
 
