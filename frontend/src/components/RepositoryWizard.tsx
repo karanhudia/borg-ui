@@ -720,20 +720,42 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
           )
         })()}
 
-      <FileExplorerDialog
-        open={showExcludeExplorer}
-        onClose={() => setShowExcludeExplorer(false)}
-        onSelect={(paths) => {
-          handleStateChange({
-            excludePatterns: [...wizardState.excludePatterns, ...paths],
-          })
-        }}
-        title="Select Directories/Files to Exclude"
-        initialPath="/"
-        multiSelect={true}
-        connectionType="local"
-        selectMode="both"
-      />
+      {showExcludeExplorer &&
+        (() => {
+          // For remote source, build SSH config
+          const isRemote = wizardState.dataSource === 'remote'
+          const conn = isRemote
+            ? sshConnections.find((c) => c.id === wizardState.sourceSshConnectionId)
+            : null
+          const sshConfig =
+            isRemote && conn
+              ? {
+                  ssh_key_id: conn.ssh_key_id,
+                  host: conn.host,
+                  username: conn.username,
+                  port: conn.port,
+                }
+              : undefined
+
+          return (
+            <FileExplorerDialog
+              open={true}
+              onClose={() => setShowExcludeExplorer(false)}
+              onSelect={(paths) => {
+                handleStateChange({
+                  excludePatterns: [...wizardState.excludePatterns, ...paths],
+                })
+              }}
+              title="Select Directories/Files to Exclude"
+              initialPath="/"
+              multiSelect={true}
+              connectionType={isRemote ? 'ssh' : 'local'}
+              sshConfig={sshConfig}
+              selectMode="both"
+              showSshMountPoints={false}
+            />
+          )
+        })()}
     </>
   )
 }
