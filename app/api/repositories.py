@@ -1249,7 +1249,8 @@ async def delete_repository(
         )
 
         # 1. Delete job records (these don't have CASCADE)
-        restore_jobs = db.query(RestoreJob).filter(RestoreJob.repository_id == repo_id).all()
+        # Note: RestoreJob stores repository path (string), not repository_id (int)
+        restore_jobs = db.query(RestoreJob).filter(RestoreJob.repository == repository.path).all()
         for job in restore_jobs:
             db.delete(job)
         if restore_jobs:

@@ -63,10 +63,11 @@ def test_delete_repository_with_restore_jobs(db_session: Session, test_repositor
     """Test: Repository deletion should work even with RestoreJob records"""
 
     # Create a RestoreJob for this repository
+    # Note: RestoreJob stores repository path (string), not repository_id (int)
     restore_job = RestoreJob(
-        repository_id=test_repository.id,
-        archive_name="test-archive",
-        restore_path="/restore/path",
+        repository=test_repository.path,  # Uses path, not ID
+        archive="test-archive",
+        destination="/restore/path",
         status="completed",
         started_at=datetime.utcnow()
     )
@@ -75,12 +76,12 @@ def test_delete_repository_with_restore_jobs(db_session: Session, test_repositor
 
     # Verify RestoreJob exists
     assert db_session.query(RestoreJob).filter(
-        RestoreJob.repository_id == test_repository.id
+        RestoreJob.repository == test_repository.path
     ).count() == 1
 
     # Simulate deletion logic from repositories.py
     restore_jobs = db_session.query(RestoreJob).filter(
-        RestoreJob.repository_id == test_repository.id
+        RestoreJob.repository == test_repository.path
     ).all()
     for job in restore_jobs:
         db_session.delete(job)
@@ -199,9 +200,9 @@ def test_delete_repository_with_all_job_types(db_session: Session, test_reposito
 
     # Create one of each job type
     restore_job = RestoreJob(
-        repository_id=test_repository.id,
-        archive_name="test-archive",
-        restore_path="/restore/path",
+        repository=test_repository.path,  # Uses path, not ID
+        archive="test-archive",
+        destination="/restore/path",
         status="completed",
         started_at=datetime.utcnow()
     )
@@ -226,13 +227,13 @@ def test_delete_repository_with_all_job_types(db_session: Session, test_reposito
     db_session.commit()
 
     # Verify all jobs exist
-    assert db_session.query(RestoreJob).filter(RestoreJob.repository_id == test_repository.id).count() == 1
+    assert db_session.query(RestoreJob).filter(RestoreJob.repository == test_repository.path).count() == 1
     assert db_session.query(CheckJob).filter(CheckJob.repository_id == test_repository.id).count() == 1
     assert db_session.query(PruneJob).filter(PruneJob.repository_id == test_repository.id).count() == 1
     assert db_session.query(CompactJob).filter(CompactJob.repository_id == test_repository.id).count() == 1
 
     # Simulate full deletion logic from repositories.py
-    for job in db_session.query(RestoreJob).filter(RestoreJob.repository_id == test_repository.id).all():
+    for job in db_session.query(RestoreJob).filter(RestoreJob.repository == test_repository.path).all():
         db_session.delete(job)
     for job in db_session.query(CheckJob).filter(CheckJob.repository_id == test_repository.id).all():
         db_session.delete(job)
@@ -341,18 +342,16 @@ def test_delete_repository_without_cleanup_fails(db_session: Session, test_repos
     This demonstrates the bug that was fixed
     """
 
-    # Create a RestoreJob for this repository
-    restore_job = RestoreJob(
+    # Create a CheckJob for this repository (CheckJob has repository_id FK)
+    check_job = CheckJob(
         repository_id=test_repository.id,
-        archive_name="test-archive",
-        restore_path="/restore/path",
         status="completed",
         started_at=datetime.utcnow()
     )
-    db_session.add(restore_job)
+    db_session.add(check_job)
     db_session.commit()
 
-    # Try to delete repository WITHOUT cleaning up RestoreJob first
+    # Try to delete repository WITHOUT cleaning up CheckJob first
     with pytest.raises(Exception) as exc_info:
         db_session.delete(test_repository)
         db_session.commit()
@@ -366,7 +365,7 @@ def test_delete_repository_without_cleanup_fails(db_session: Session, test_repos
 
     # Verify repository still exists (deletion failed)
     assert db_session.query(Repository).filter(Repository.id == test_repository.id).count() == 1
-    assert db_session.query(RestoreJob).filter(RestoreJob.repository_id == test_repository.id).count() == 1
+    assert db_session.query(CheckJob).filter(CheckJob.repository_id == test_repository.id).count() == 1
 
 
 if __name__ == "__main__":
