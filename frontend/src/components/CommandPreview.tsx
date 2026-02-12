@@ -100,22 +100,37 @@ export default function CommandPreview({
 
   // For remote source backup flow
   if (isRemoteSource && repositoryMode === 'full') {
-    // Show mount commands for each source directory
-    // Note: For files, the parent directory is mounted
-    const sshfsMountCommands =
-      sourceDirs.length > 0
-        ? sourceDirs.map(
-            (dir) =>
-              `sshfs ${sourceSshConnection.username}@${sourceSshConnection.host}:${dir} /tmp/sshfs_mount/${getPreservedRemotePath(dir)} -p ${sourceSshConnection.port}`
-          )
-        : [
-            `sshfs ${sourceSshConnection.username}@${sourceSshConnection.host}:/path /tmp/sshfs_mount/path -p ${sourceSshConnection.port}`,
-          ]
+    // Determine unique parent directories that will be mounted
+    // Note: SSHFS can only mount directories, not files
+    // For files like /home/user/file.txt, we mount /home/user/
+    // Multiple files in the same parent share one mount (deduplication)
+
+    const getParentOrSelf = (path: string): string => {
+      // Heuristic: if path has an extension, it's likely a file -> use parent
+      // Otherwise, treat as directory
+      const hasExtension = path.includes('.') && !path.endsWith('/')
+      if (hasExtension) {
+        // File: return parent directory
+        const lastSlash = path.lastIndexOf('/')
+        return lastSlash > 0 ? path.substring(0, lastSlash) : '/'
+      }
+      // Directory: return as-is
+      return path
+    }
+
+    const mountPaths = sourceDirs.length > 0
+      ? [...new Set(sourceDirs.map(getParentOrSelf))] // Deduplicate
+      : ['/path']
+
+    const sshfsMountCommands = mountPaths.map(
+      (dir) =>
+        `sshfs ${sourceSshConnection.username}@${sourceSshConnection.host}:${dir} /tmp/sshfs_mount_123/${getPreservedRemotePath(dir)} -p ${sourceSshConnection.port}`
+    )
 
     const mountDisplayText =
-      sourceDirs.length > 1
-        ? `${sourceDirs.length} paths mounted under shared temp root (files mount their parent directory)`
-        : 'Temporarily mounts remote path via SSHFS (files mount their parent directory)'
+      mountPaths.length === 1
+        ? 'Mounts remote directory under shared temp root'
+        : `Mounts ${mountPaths.length} unique directories under shared temp root (files share parent mount)`
 
     return (
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
@@ -145,8 +160,8 @@ export default function CommandPreview({
             sx={{ mb: 0.5, display: 'block' }}
           >
             {mode === 'create'
-              ? `Step 2: Mount Remote ${sourceDirs.length > 1 ? 'Directories' : 'Directory'}`
-              : `Step 1: Mount Remote ${sourceDirs.length > 1 ? 'Directories' : 'Directory'}`}
+              ? `Step 2: Mount Remote ${mountPaths.length > 1 ? 'Directories' : 'Directory'}`
+              : `Step 1: Mount Remote ${mountPaths.length > 1 ? 'Directories' : 'Directory'}`}
           </Typography>
           <CommandBox>{sshfsMountCommands.join('\n')}</CommandBox>
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
