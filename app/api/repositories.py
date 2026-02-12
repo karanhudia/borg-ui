@@ -28,7 +28,7 @@ borg = BorgInterface()
 def get_connection_details(connection_id: int, db: Session) -> Dict[str, Any]:
     """
     Get SSH connection details from connection_id.
-    Returns dict with host, username, port, ssh_key_id.
+    Returns dict with host, username, port, ssh_key_id, ssh_path_prefix.
     Raises HTTPException if connection not found.
     """
     from app.database.models import SSHConnection
@@ -41,7 +41,8 @@ def get_connection_details(connection_id: int, db: Session) -> Dict[str, Any]:
         "host": connection.host,
         "username": connection.username,
         "port": connection.port,
-        "ssh_key_id": connection.ssh_key_id
+        "ssh_key_id": connection.ssh_key_id,
+        "ssh_path_prefix": connection.ssh_path_prefix
     }
 
 # Helper function to get standard SSH options
@@ -497,6 +498,21 @@ async def create_repository(
                     # Fallback: strip ssh:// and extract path after host
                     repo_path = repo_path.split("/", 3)[-1] if "/" in repo_path else repo_path
 
+            # Apply SSH path prefix if configured (e.g., /volume1 for Synology)
+            # The prefix is prepended ONLY for SSH commands, not for SFTP browsing
+            ssh_path_prefix = connection_details.get("ssh_path_prefix")
+            if ssh_path_prefix:
+                # Ensure both prefix and path start with / and combine them
+                ssh_path_prefix = ssh_path_prefix.strip()
+                if ssh_path_prefix and not ssh_path_prefix.startswith("/"):
+                    ssh_path_prefix = f"/{ssh_path_prefix}"
+                repo_path_for_ssh = f"{ssh_path_prefix}/{repo_path.lstrip('/')}"
+                logger.info("Applying SSH path prefix",
+                           original_path=repo_path,
+                           prefix=ssh_path_prefix,
+                           final_path=repo_path_for_ssh)
+                repo_path = repo_path_for_ssh
+
             repo_path = f"ssh://{ssh_username}@{ssh_host}:{ssh_port}/{repo_path.lstrip('/')}"
 
         # Check if repository name already exists
@@ -732,6 +748,19 @@ async def import_repository(
                     repo_path = match.group(1)
                 else:
                     repo_path = repo_path.split("/", 3)[-1] if "/" in repo_path else repo_path
+
+            # Apply SSH path prefix if configured (e.g., /volume1 for Synology)
+            ssh_path_prefix = connection_details.get("ssh_path_prefix")
+            if ssh_path_prefix:
+                ssh_path_prefix = ssh_path_prefix.strip()
+                if ssh_path_prefix and not ssh_path_prefix.startswith("/"):
+                    ssh_path_prefix = f"/{ssh_path_prefix}"
+                repo_path_for_ssh = f"{ssh_path_prefix}/{repo_path.lstrip('/')}"
+                logger.info("Applying SSH path prefix",
+                           original_path=repo_path,
+                           prefix=ssh_path_prefix,
+                           final_path=repo_path_for_ssh)
+                repo_path = repo_path_for_ssh
 
             repo_path = f"ssh://{ssh_username}@{ssh_host}:{ssh_port}/{repo_path.lstrip('/')}"
 
@@ -1043,6 +1072,17 @@ async def update_repository(
                         path_to_use = match.group(1)
                     else:
                         path_to_use = path_to_use.split("/", 3)[-1] if "/" in path_to_use else path_to_use
+
+                # Apply SSH path prefix if configured
+                ssh_path_prefix = connection_details.get("ssh_path_prefix")
+                if ssh_path_prefix:
+                    ssh_path_prefix = ssh_path_prefix.strip()
+                    if ssh_path_prefix and not ssh_path_prefix.startswith("/"):
+                        ssh_path_prefix = f"/{ssh_path_prefix}"
+                    path_to_use = f"{ssh_path_prefix}/{path_to_use.lstrip('/')}"
+                    logger.info("Applying SSH path prefix",
+                               original_path=path_to_use,
+                               prefix=ssh_path_prefix)
 
                 # Reconstruct SSH URL
                 final_path = f"ssh://{connection_details['username']}@{connection_details['host']}:{connection_details['port']}/{path_to_use.lstrip('/')}"

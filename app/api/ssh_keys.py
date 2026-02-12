@@ -218,6 +218,7 @@ class SSHConnectionCreate(BaseModel):
     port: int = 22
     password: str
     default_path: Optional[str] = None  # Default starting path for SSH browsing
+    ssh_path_prefix: Optional[str] = Field(default=None, description="Path prefix for SSH commands (e.g., /volume1 for Synology). SFTP uses path as-is, SSH prepends this prefix.")
     mount_point: Optional[str] = None  # Logical mount point (e.g., /hetzner)
     use_sftp_mode: bool = Field(default=True, description="Use SFTP mode for ssh-copy-id (required by Hetzner, disable for Synology/older systems)")
 
@@ -231,6 +232,7 @@ class SSHConnectionUpdate(BaseModel):
     username: Optional[str] = None
     port: Optional[int] = None
     default_path: Optional[str] = None  # Default starting path for SSH browsing
+    ssh_path_prefix: Optional[str] = None  # Path prefix for SSH commands
     mount_point: Optional[str] = None  # Logical mount point
     use_sftp_mode: Optional[bool] = None
 
@@ -250,6 +252,7 @@ class SSHConnectionInfo(BaseModel):
     username: str
     port: int
     default_path: Optional[str]  # Default starting path for SSH browsing
+    ssh_path_prefix: Optional[str]  # Path prefix for SSH commands
     mount_point: Optional[str]  # Logical mount point
     status: str
     last_test: Optional[str]
@@ -789,6 +792,7 @@ async def deploy_ssh_key(
                 port=connection_data.port,
                 use_sftp_mode=connection_data.use_sftp_mode,
                 default_path=connection_data.default_path,
+                ssh_path_prefix=connection_data.ssh_path_prefix,
                 mount_point=connection_data.mount_point,
                 status="testing",
                 last_test=datetime.utcnow()
@@ -976,6 +980,8 @@ async def update_ssh_connection(
             connection.port = connection_data.port
         if connection_data.default_path is not None:
             connection.default_path = connection_data.default_path
+        if connection_data.ssh_path_prefix is not None:
+            connection.ssh_path_prefix = connection_data.ssh_path_prefix
         if connection_data.mount_point is not None:
             connection.mount_point = connection_data.mount_point
         if connection_data.use_sftp_mode is not None:
