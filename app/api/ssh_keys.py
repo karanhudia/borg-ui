@@ -780,6 +780,8 @@ async def deploy_ssh_key(
             existing_connection.use_sftp_mode = connection_data.use_sftp_mode
             if connection_data.default_path is not None:
                 existing_connection.default_path = connection_data.default_path
+            if connection_data.ssh_path_prefix is not None:
+                existing_connection.ssh_path_prefix = connection_data.ssh_path_prefix
             if connection_data.mount_point is not None:
                 existing_connection.mount_point = connection_data.mount_point
             db.commit()
