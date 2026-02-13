@@ -557,7 +557,7 @@ class ScriptExecution(Base):
     id = Column(Integer, primary_key=True, index=True)
     script_id = Column(Integer, ForeignKey("scripts.id"), nullable=False, index=True)
     repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=True, index=True)  # NULL for standalone runs
-    backup_job_id = Column(Integer, ForeignKey("backup_jobs.id"), nullable=True, index=True)  # NULL for standalone runs
+    backup_job_id = Column(Integer, ForeignKey("backup_jobs.id", ondelete="CASCADE"), nullable=True, index=True)  # NULL for standalone runs
 
     # Execution details
     hook_type = Column(String(50), nullable=True)  # 'pre-backup', 'post-backup', 'standalone', 'maintenance'
