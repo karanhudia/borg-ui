@@ -274,28 +274,40 @@ class ScriptLibraryExecutor:
                 repository_name=repository.name,
                 repository_path=repository.path,
                 backup_status=backup_result,
-                hook_type=hook_type
+                hook_type=hook_type,
+                job_id=backup_job_id
             )
+            logger.info("Setting system variables in script environment",
+                       script_id=script.id,
+                       system_vars=system_vars)
             script_env.update(system_vars)
             
             # Add script parameters as environment variables
             if script.parameters:
                 try:
+                    from app.utils.script_params import SYSTEM_VARIABLES
+
                     # Parse parameter definitions
                     parameters = json.loads(script.parameters)
-                    
+
                     # Get parameter values (may be encrypted)
                     parameter_values = json.loads(repo_script.parameter_values) if repo_script.parameter_values else {}
-                    
+
                     # Decrypt password-type parameters and add to environment
                     for param_def in parameters:
                         param_name = param_def['name']
+
+                        # Skip system variables - they're already set above
+                        if param_name in SYSTEM_VARIABLES:
+                            logger.debug("Skipping system variable (already set)", param_name=param_name)
+                            continue
+
                         param_type = param_def.get('type', 'text')
                         default_value = param_def.get('default', '')
-                        
+
                         # Get value from parameter_values or use default
                         value = parameter_values.get(param_name, default_value) if parameter_values else default_value
-                        
+
                         # Decrypt password-type parameters
                         if param_type == 'password' and value:
                             try:
@@ -306,7 +318,7 @@ class ScriptLibraryExecutor:
                                 logger.error("Failed to decrypt password parameter",
                                            param_name=param_name, error=str(e))
                                 raise
-                        
+
                         # Add to environment (bash will handle ${VAR:-default} syntax)
                         script_env[param_name] = value or ''
                     
