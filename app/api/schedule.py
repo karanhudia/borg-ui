@@ -1131,16 +1131,33 @@ async def validate_cron_expression(
         raise HTTPException(status_code=500, detail=f"Failed to validate cron expression: {str(e)}")
 
 # Background task to check and run scheduled jobs
-async def run_script_from_library(script: Script, db: Session, job_id: int = None):
+async def run_script_from_library(
+    script: Script,
+    db: Session,
+    job_id: int = None,
+    repository: Optional[Repository] = None,
+    hook_type: Optional[str] = None,
+    backup_result: Optional[str] = None,
+    script_parameters: Optional[Dict[str, str]] = None
+):
     """Execute a script from the library
 
     Args:
         script: Script object from database
         db: Database session
         job_id: Optional backup job ID for context
+        repository: Optional repository for BORG_UI_ variables
+        hook_type: Optional hook type ('pre-backup' or 'post-backup')
+        backup_result: Optional backup result ('success', 'failure', 'warning')
+        script_parameters: Optional parameter values for the script
     """
     from app.services.script_executor import execute_script
+    from app.services.template_service import get_system_variables
+    from app.utils.script_params import SYSTEM_VARIABLES
+    from app.core.security import decrypt_secret
     from pathlib import Path
+    import os
+    import json
 
     try:
         logger.info("Executing schedule script", script_id=script.id, script_name=script.name)
@@ -1151,10 +1168,66 @@ async def run_script_from_library(script: Script, db: Session, job_id: int = Non
             raise Exception(f"Script file not found: {script.file_path}")
         script_content = full_path.read_text()
 
-        # Execute script
+        # Build environment with system variables
+        script_env = os.environ.copy()
+
+        # Add BORG_UI_ system variables if repository context is provided
+        if repository or hook_type or backup_result or job_id:
+            system_vars = get_system_variables(
+                repository_id=repository.id if repository else None,
+                repository_name=repository.name if repository else None,
+                repository_path=repository.path if repository else None,
+                backup_status=backup_result,
+                hook_type=hook_type,
+                job_id=job_id
+            )
+            script_env.update(system_vars)
+            logger.info("Added system variables to schedule script environment",
+                       script_id=script.id,
+                       system_vars=list(system_vars.keys()))
+
+        # Add script parameters if provided
+        if script.parameters and script_parameters:
+            try:
+                parameters = json.loads(script.parameters)
+
+                for param_def in parameters:
+                    param_name = param_def['name']
+
+                    # Skip system variables - they're already set above
+                    if param_name in SYSTEM_VARIABLES:
+                        continue
+
+                    param_type = param_def.get('type', 'text')
+                    default_value = param_def.get('default', '')
+
+                    # Get value from script_parameters or use default
+                    value = script_parameters.get(param_name, default_value)
+
+                    # Decrypt password-type parameters
+                    if param_type == 'password' and value:
+                        try:
+                            value = decrypt_secret(value)
+                        except Exception as e:
+                            logger.error("Failed to decrypt password parameter",
+                                       param_name=param_name, error=str(e))
+                            raise
+
+                    # Add to environment
+                    script_env[param_name] = value or ''
+
+                logger.info("Added script parameters to environment",
+                           script_id=script.id,
+                           param_count=len(parameters))
+            except Exception as e:
+                logger.error("Failed to prepare script parameters", script_id=script.id, error=str(e))
+                raise
+
+        # Execute script with environment
         result = await execute_script(
             script=script_content,
             timeout=float(script.timeout),
+            env=script_env,
             context=f"schedule:{script.name}"
         )
 
@@ -1230,8 +1303,18 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
         try:
             script = db.query(Script).filter_by(id=scheduled_job.pre_backup_script_id).first()
             if script:
-                await run_script_from_library(script, db)
-                logger.info("Pre-backup script completed", script_name=script.name)
+                # Execute schedule-level pre-backup script with parameters
+                result = await run_script_from_library(
+                    script=script,
+                    db=db,
+                    hook_type="pre-backup",
+                    script_parameters=scheduled_job.pre_backup_script_parameters
+                )
+                logger.info("Pre-backup script completed",
+                           script_name=script.name,
+                           exit_code=result.get("exit_code"),
+                           stdout=result.get("stdout"),
+                           stderr=result.get("stderr"))
             else:
                 logger.warning("Pre-backup script not found", script_id=scheduled_job.pre_backup_script_id)
         except Exception as e:
@@ -1294,7 +1377,18 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                         for repo_script in library_scripts:
                             script = db.query(Script).filter_by(id=repo_script.script_id).first()
                             if script:
-                                await run_script_from_library(script, db, job_id=backup_job.id)
+                                # Parse parameter values for this repository script
+                                import json
+                                param_values = json.loads(repo_script.parameter_values) if repo_script.parameter_values else None
+
+                                await run_script_from_library(
+                                    script=script,
+                                    db=db,
+                                    job_id=backup_job.id,
+                                    repository=repo,
+                                    hook_type="pre-backup",
+                                    script_parameters=param_values
+                                )
                                 logger.info("Repository library pre-script completed",
                                           repo_name=repo.name, script_name=script.name)
                     elif repo.pre_backup_script:
@@ -1344,11 +1438,33 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                     ).order_by(RepositoryScript.execution_order).all()
 
                     if library_scripts:
+                        # Map backup status to backup_result
+                        if backup_job.status == "completed":
+                            result_status = "success"
+                        elif backup_job.status == "completed_with_warnings":
+                            result_status = "warning"
+                        elif backup_job.status == "failed":
+                            result_status = "failure"
+                        else:
+                            result_status = None
+
                         # Execute library scripts in order
                         for repo_script in library_scripts:
                             script = db.query(Script).filter_by(id=repo_script.script_id).first()
                             if script:
-                                await run_script_from_library(script, db, job_id=backup_job.id)
+                                # Parse parameter values for this repository script
+                                import json
+                                param_values = json.loads(repo_script.parameter_values) if repo_script.parameter_values else None
+
+                                await run_script_from_library(
+                                    script=script,
+                                    db=db,
+                                    job_id=backup_job.id,
+                                    repository=repo,
+                                    hook_type="post-backup",
+                                    backup_result=result_status,
+                                    script_parameters=param_values
+                                )
                                 logger.info("Repository library post-script completed",
                                           repo_name=repo.name, script_name=script.name)
                     elif repo.post_backup_script:
@@ -1500,8 +1616,18 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
         try:
             script = db.query(Script).filter_by(id=scheduled_job.post_backup_script_id).first()
             if script:
-                await run_script_from_library(script, db)
-                logger.info("Post-backup script completed", script_name=script.name)
+                # Execute schedule-level post-backup script with parameters
+                result = await run_script_from_library(
+                    script=script,
+                    db=db,
+                    hook_type="post-backup",
+                    script_parameters=scheduled_job.post_backup_script_parameters
+                )
+                logger.info("Post-backup script completed",
+                           script_name=script.name,
+                           exit_code=result.get("exit_code"),
+                           stdout=result.get("stdout"),
+                           stderr=result.get("stderr"))
             else:
                 logger.warning("Post-backup script not found", script_id=scheduled_job.post_backup_script_id)
         except Exception as e:
