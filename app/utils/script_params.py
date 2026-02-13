@@ -27,16 +27,8 @@ PASSWORD_SUFFIXES = [
 
 # System-provided variables that should NOT be treated as user parameters
 # These are automatically injected at runtime and don't need user input
+# All Borg UI variables use BORG_UI_ prefix
 SYSTEM_VARIABLES = {
-    # Library script variables (no prefix)
-    'REPOSITORY_ID',
-    'REPOSITORY_NAME',
-    'REPOSITORY_PATH',
-    'BACKUP_STATUS',
-    'HOOK_TYPE',
-    'BORG_REPO',
-
-    # Inline script variables (BORG_UI_ prefix) - for backward compatibility
     'BORG_UI_BACKUP_STATUS',
     'BORG_UI_REPOSITORY_NAME',
     'BORG_UI_REPOSITORY_PATH',
@@ -220,31 +212,56 @@ def validate_parameter_value(
     return True, None
 
 
+def filter_system_variables_from_params(
+    parameters: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """
+    Filter out system variables from a parameter list.
+
+    This is used when returning parameters to the frontend to ensure
+    that scripts created before the SYSTEM_VARIABLES filter was added
+    don't show system variables as required parameters.
+
+    Args:
+        parameters: List of parameter definitions
+
+    Returns:
+        List of parameters with system variables removed
+    """
+    if not parameters:
+        return []
+
+    return [
+        param for param in parameters
+        if param.get('name') not in SYSTEM_VARIABLES
+    ]
+
+
 def mask_password_values(
     parameters: List[Dict[str, Any]],
     parameter_values: Dict[str, str]
 ) -> Dict[str, str]:
     """
     Mask password-type parameter values for API responses.
-    
+
     Args:
         parameters: List of parameter definitions
         parameter_values: Dict of parameter values
-        
+
     Returns:
         Dict with password values masked as '***'
     """
     if not parameter_values:
         return {}
-    
+
     masked_values = parameter_values.copy()
-    
+
     # Create lookup of password-type parameters
     password_params = {p['name'] for p in parameters if p.get('type') == 'password'}
-    
+
     # Mask password values
     for param_name in password_params:
         if param_name in masked_values and masked_values[param_name]:
             masked_values[param_name] = '***'
-    
+
     return masked_values
