@@ -18,7 +18,7 @@ from app.database.models import Script, RepositoryScript, ScriptExecution, Repos
 from app.core.security import get_current_user, encrypt_secret
 from app.config import settings
 from app.services.script_executor import execute_script
-from app.utils.script_params import parse_script_parameters, mask_password_values
+from app.utils.script_params import parse_script_parameters, mask_password_values, filter_system_variables_from_params
 import structlog
 import json
 
@@ -160,7 +160,9 @@ async def list_scripts(
             is_template=script.is_template,
             created_at=script.created_at,
             updated_at=script.updated_at,
-            parameters=json.loads(script.parameters) if script.parameters else None
+            parameters=filter_system_variables_from_params(
+                json.loads(script.parameters) if script.parameters else []
+            ) or None
         )
         for script in scripts
     ]
@@ -243,7 +245,9 @@ async def get_script(
         is_template=script.is_template,
         created_at=script.created_at,
         updated_at=script.updated_at,
-        parameters=json.loads(script.parameters) if script.parameters else None,
+        parameters=filter_system_variables_from_params(
+            json.loads(script.parameters) if script.parameters else []
+        ) or None,
         content=content,
         repositories=repositories,
         recent_executions=recent_executions
@@ -328,9 +332,11 @@ async def create_script(
         stored_params=script.parameters
     )
 
-    # Parse from database to ensure consistency
-    response_parameters = json.loads(script.parameters) if script.parameters else None
-    
+    # Parse from database to ensure consistency and filter system variables
+    response_parameters = filter_system_variables_from_params(
+        json.loads(script.parameters) if script.parameters else []
+    ) or None
+
     return ScriptResponse(
         id=script.id,
         name=script.name,
@@ -443,7 +449,9 @@ async def update_script(
         is_template=script.is_template,
         created_at=script.created_at,
         updated_at=script.updated_at,
-        parameters=json.loads(script.parameters) if script.parameters else None
+        parameters=filter_system_variables_from_params(
+            json.loads(script.parameters) if script.parameters else []
+        ) or None
     )
 
 @router.delete("/scripts/{script_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -540,26 +548,27 @@ async def test_script(
 
     # Prepare environment variables with parameters and system vars
     import os
+    from app.services.template_service import get_system_variables
+
     script_env = os.environ.copy()
-    
+
+    # ALWAYS add system variables (not just when there are parameters)
+    system_vars = get_system_variables(
+        repository_id=1,
+        repository_name="[TEST] My Repository",
+        repository_path="/test/repository/path",
+        backup_status="success",  # Test with success status
+        hook_type="post-backup",  # Test as post-backup to include status
+        job_id=12345
+    )
+    script_env.update(system_vars)
+
+    # Add user-provided test parameter values if script has parameters
     if script.parameters and test_data.parameter_values:
         try:
-            from app.services.template_service import get_system_variables
-            
             # Parse parameter definitions
             parameters = json.loads(script.parameters)
-            
-            # Build test system variables
-            system_vars = get_system_variables(
-                repository_id=None,
-                repository_name="test-repository",
-                repository_path="/test/path",
-                hook_type="pre-backup"
-            )
-            
-            # Add system variables to environment
-            script_env.update(system_vars)
-            
+
             # Add user-provided test parameter values to environment
             # Test values aren't encrypted, so use them directly
             for param in parameters:
@@ -568,23 +577,28 @@ async def test_script(
                     script_env[param_name] = test_data.parameter_values[param_name]
                 elif 'default' in param and param['default']:
                     script_env[param_name] = param['default']
-            
-            logger.info("Prepared test script environment",
+
+            logger.info("Prepared test script environment with parameters",
                        script_id=script_id,
                        param_count=len(parameters),
                        env_vars=len(script_env))
         except Exception as e:
-            logger.error("Failed to prepare test script environment", script_id=script_id, error=str(e))
-            raise HTTPException(status_code=400, detail=f"Failed to prepare script environment: {str(e)}")
+            logger.error("Failed to prepare test script parameters", script_id=script_id, error=str(e))
+            raise HTTPException(status_code=400, detail=f"Failed to prepare script parameters: {str(e)}")
 
-    # Execute script with environment
+    logger.info("Test script environment prepared",
+               script_id=script_id,
+               system_vars=list(system_vars.keys()),
+               total_env_vars=len(script_env))
+
+    # Execute script with environment (ALWAYS pass env, not conditionally)
     test_timeout = test_data.timeout or script.timeout
     try:
         result = await execute_script(
             script=content,
             timeout=float(test_timeout),
             context=f"test:{script.name}",
-            env=script_env if (script.parameters and test_data.parameter_values) else None
+            env=script_env  # Always pass environment with system variables
         )
 
         return {
@@ -624,13 +638,14 @@ async def get_repository_scripts(
     ).options(joinedload(RepositoryScript.script)).order_by(RepositoryScript.execution_order).all()
 
     def format_script(rs):
-        # Get script parameters for masking
-        script_params = json.loads(rs.script.parameters) if rs.script.parameters else []
-        
+        # Get script parameters and filter out system variables
+        raw_params = json.loads(rs.script.parameters) if rs.script.parameters else []
+        script_params = filter_system_variables_from_params(raw_params)
+
         # Get parameter values and mask passwords
         param_values = json.loads(rs.parameter_values) if rs.parameter_values else {}
         masked_values = mask_password_values(script_params, param_values) if param_values else None
-        
+
         return {
             "id": rs.id,
             "script_id": rs.script_id,
@@ -692,8 +707,9 @@ async def assign_script_to_repository(
     if assignment.parameter_values:
         from app.utils.script_params import validate_parameter_value
 
-        # Get script parameter definitions
-        script_params = json.loads(script.parameters) if script.parameters else []
+        # Get script parameter definitions and filter out system variables
+        raw_params = json.loads(script.parameters) if script.parameters else []
+        script_params = filter_system_variables_from_params(raw_params)
 
         # Create dict to store processed values
         processed_values = {}
