@@ -11,7 +11,7 @@ import {
   InputAdornment,
   IconButton,
 } from '@mui/material'
-import { FolderOpen, FileCheck, AlertCircle } from 'lucide-react'
+import { FolderOpen, FileCheck } from 'lucide-react'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 
 interface ArchiveFile {
@@ -209,19 +209,11 @@ export default function WizardStepRestorePath({
               ),
             }}
           />
-          {!data.customPath && (
-            <Alert severity="info">
-              <Typography variant="body2">
-                <strong>Tip:</strong> Create a new directory for restored files to avoid overwriting
-                existing ones. For example: <code>/Users/yourusername/restored-files</code>
-              </Typography>
-            </Alert>
-          )}
         </>
       )}
 
       {/* Preview of destination paths */}
-      {selectedFiles.length > 0 ? (
+      {selectedFiles.length > 0 && (
         <Box>
           <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600, mb: 1 }}>
             Preview
@@ -267,61 +259,12 @@ export default function WizardStepRestorePath({
             </Box>
           </Paper>
         </Box>
-      ) : (
-        <Alert severity="info">
-          <Typography variant="body2">
-            <strong>Restoring entire archive:</strong> All files and directories from the archive
-            will be restored to their original paths
-            {data.restoreStrategy === 'custom' && data.customPath
-              ? ` under ${data.customPath}`
-              : ''}
-            .
-          </Typography>
-        </Alert>
-      )}
-
-      {/* Info/Warning Alerts */}
-      {data.restoreStrategy === 'original' && selectedFiles.length > 0 && (
-        <Alert severity="warning" icon={<AlertCircle size={18} />}>
-          <Typography variant="body2" gutterBottom>
-            <strong>Warning:</strong> Files will be restored to:
-          </Typography>
-          <Typography
-            variant="body2"
-            sx={{ fontFamily: 'monospace', bgcolor: 'background.default', p: 1, borderRadius: 1 }}
-          >
-            /{selectedFiles[0].path}
-          </Typography>
-          <Typography variant="body2" sx={{ mt: 1 }}>
-            This requires write permissions at root level. If restore fails with 0 files, you likely
-            don't have the necessary permissions. Use <strong>Custom Location</strong> instead.
-          </Typography>
-        </Alert>
-      )}
-
-      {data.restoreStrategy === 'original' && selectedFiles.length === 0 && (
-        <Alert severity="warning" icon={<AlertCircle size={18} />}>
-          <Typography variant="body2">
-            <strong>Warning:</strong> The entire archive will be extracted starting from root (/).
-            This requires write permissions to create the full directory structure. If you don't
-            have root access, use <strong>Custom Location</strong> instead.
-          </Typography>
-        </Alert>
-      )}
-
-      {data.restoreStrategy === 'custom' && data.customPath && (
-        <Alert severity="warning" icon={<AlertCircle size={18} />}>
-          <Typography variant="body2">
-            <strong>Note:</strong> Only the filenames will be preserved. The original directory
-            structure will not be recreated under the custom path.
-          </Typography>
-        </Alert>
       )}
 
       {destinationType === 'ssh' && !destinationConnectionId && (
         <Alert severity="error">
           <Typography variant="body2">
-            Please select an SSH connection in the previous step before proceeding.
+            Please select an SSH connection in the previous step.
           </Typography>
         </Alert>
       )}

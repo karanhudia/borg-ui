@@ -7,6 +7,7 @@ export { default as WizardStepReview } from './WizardStepReview'
 export { default as BackupFlowPreview } from './BackupFlowPreview'
 
 // Restore Wizard Steps
+export { default as WizardStepRestoreFiles } from './WizardStepRestoreFiles'
 export { default as WizardStepRestoreDestination } from './WizardStepRestoreDestination'
 export { default as WizardStepRestorePath } from './WizardStepRestorePath'
 export { default as WizardStepRestoreOptions } from './WizardStepRestoreOptions'
@@ -19,6 +20,7 @@ export type { BackupConfigStepData } from './WizardStepBackupConfig'
 export type { WizardReviewData } from './WizardStepReview'
 
 // Restore Wizard Types
+export type { RestoreFilesStepData } from './WizardStepRestoreFiles'
 export type { RestoreDestinationStepData } from './WizardStepRestoreDestination'
 export type { RestorePathStepData } from './WizardStepRestorePath'
 export type { RestoreOptionsStepData } from './WizardStepRestoreOptions'

@@ -86,7 +86,8 @@ class TestRestoreOperation:
                 "repository": str(repo_path),
                 "archive": latest_archive,
                 "paths": [],  # Full restore
-                "destination": str(restore_dest)
+                "destination": str(restore_dest),
+                "repository_id": repo.id
             }
             
             restore_response = test_client.post(
@@ -162,7 +163,8 @@ class TestRestoreSpeedETAIntegration:
                 "repository": str(repo_path),
                 "archive": latest_archive,
                 "paths": [],
-                "destination": str(restore_dest)
+                "destination": str(restore_dest),
+                "repository_id": repo.id
             },
             headers=admin_headers
         )
@@ -204,7 +206,8 @@ class TestRestoreSpeedETAIntegration:
                 "repository": str(repo_path),
                 "archive": latest_archive,
                 "paths": [],
-                "destination": str(restore_dest)
+                "destination": str(restore_dest),
+                "repository_id": repo.id
             },
             headers=admin_headers
         )
@@ -260,7 +263,8 @@ class TestRestoreSpeedETAIntegration:
                 "repository": str(repo_path),
                 "archive": latest_archive,
                 "paths": [],
-                "destination": str(restore_dest)
+                "destination": str(restore_dest),
+                "repository_id": repo.id
             },
             headers=admin_headers
         )
@@ -314,7 +318,8 @@ class TestRestoreSpeedETAIntegration:
                 "repository": str(repo_path),
                 "archive": latest_archive,
                 "paths": [],
-                "destination": str(restore_dest)
+                "destination": str(restore_dest),
+                "repository_id": repo.id
             },
             headers=admin_headers
         )
@@ -394,7 +399,8 @@ class TestRestoreLogsIntegration:
                 "repository": str(repo_path),
                 "archive": latest_archive,
                 "paths": [],
-                "destination": str(restore_dest)
+                "destination": str(restore_dest),
+                "repository_id": repo.id
             }
             
             response = test_client.post(
@@ -466,7 +472,8 @@ class TestRestoreLogsIntegration:
                 "repository": str(repo_path),
                 "archive": latest_archive,
                 "paths": [],
-                "destination": str(restore_dest)
+                "destination": str(restore_dest),
+                "repository_id": repo.id
             }
             
             response = test_client.post(
@@ -533,7 +540,8 @@ class TestRestoreLogsIntegration:
                 "repository": str(repo_path),
                 "archive": latest_archive,
                 "paths": [],
-                "destination": str(restore_dest)
+                "destination": str(restore_dest),
+                "repository_id": repo.id
             }
             
             response = test_client.post(

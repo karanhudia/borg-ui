@@ -188,8 +188,24 @@ export const restoreAPI = {
     }),
   previewRestore: (repository: string, archive: string, paths: string[]) =>
     api.post('/restore/preview', { repository, archive, paths }),
-  startRestore: (repository: string, archive: string, paths: string[], destination: string) =>
-    api.post('/restore/start', { repository, archive, paths, destination }),
+  startRestore: (
+    repository: string,
+    archive: string,
+    paths: string[],
+    destination: string,
+    repository_id: number,
+    destination_type: string = 'local',
+    destination_connection_id: number | null = null
+  ) =>
+    api.post('/restore/start', {
+      repository,
+      archive,
+      paths,
+      destination,
+      repository_id,
+      destination_type,
+      destination_connection_id,
+    }),
   getRestoreJobs: () => api.get('/restore/jobs'),
   getRestoreStatus: (jobId: number) => api.get(`/restore/status/${jobId}`),
 }
