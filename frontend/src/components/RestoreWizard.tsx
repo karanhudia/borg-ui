@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -8,9 +8,10 @@ import {
   Button,
   Typography,
 } from '@mui/material'
-import { HardDrive, FolderOpen, CheckCircle } from 'lucide-react'
+import { Files, HardDrive, FolderOpen, CheckCircle } from 'lucide-react'
 import {
   WizardStepIndicator,
+  WizardStepRestoreFiles,
   WizardStepRestoreDestination,
   WizardStepRestorePath,
   WizardStepRestoreReview,
@@ -45,11 +46,12 @@ interface RestoreWizardProps {
   onClose: () => void
   archiveName: string
   repositoryId: number
-  selectedFiles: ArchiveFile[]
+  repositoryType: string
   onRestore: (data: RestoreData) => void
 }
 
 export interface RestoreData {
+  selected_paths: string[]
   destination_type: 'local' | 'ssh'
   destination_connection_id: number | null
   restore_strategy: 'original' | 'custom'
@@ -57,6 +59,9 @@ export interface RestoreData {
 }
 
 interface WizardState {
+  // Step 0: Files
+  selectedPaths: string[]
+
   // Step 1: Destination
   destinationType: 'local' | 'ssh'
   destinationConnectionId: number | ''
@@ -67,6 +72,7 @@ interface WizardState {
 }
 
 const initialState: WizardState = {
+  selectedPaths: [],
   destinationType: 'local',
   destinationConnectionId: '',
   restoreStrategy: 'original',
@@ -78,13 +84,14 @@ const RestoreWizard = ({
   onClose,
   archiveName,
   repositoryId,
-  selectedFiles,
+  repositoryType,
   onRestore,
 }: RestoreWizardProps) => {
   const { track, EventCategory, EventAction } = useMatomo()
   const [activeStep, setActiveStep] = useState(0)
   const [wizardState, setWizardState] = useState<WizardState>(initialState)
   const [sshConnections, setSshConnections] = useState<SSHConnection[]>([])
+  const wasOpenRef = useRef(false)
 
   // File explorer state
   const [showPathExplorer, setShowPathExplorer] = useState(false)
@@ -92,6 +99,7 @@ const RestoreWizard = ({
   // Step definitions
   const steps = useMemo(
     () => [
+      { key: 'files', label: 'Files', icon: <Files size={14} /> },
       { key: 'destination', label: 'Destination', icon: <HardDrive size={14} /> },
       { key: 'path', label: 'Path', icon: <FolderOpen size={14} /> },
       { key: 'review', label: 'Review', icon: <CheckCircle size={14} /> },
@@ -111,17 +119,37 @@ const RestoreWizard = ({
     }
   }
 
-  // Initialize/reset on dialog open/close or archive change
+  // Initialize and reset on dialog open
   useEffect(() => {
-    if (open) {
+    if (open && !wasOpenRef.current) {
+      // Dialog just opened (was closed before)
       setActiveStep(0)
       setWizardState(initialState)
       loadSshConnections()
+      wasOpenRef.current = true
+    } else if (!open && wasOpenRef.current) {
+      // Dialog just closed
+      wasOpenRef.current = false
     }
-  }, [open, archiveName, repositoryId])
+  }, [open])
+
+  // Force destinationType to 'local' for SSH repositories (SSH-to-SSH not supported)
+  useEffect(() => {
+    if (open && repositoryType === 'ssh' && wizardState.destinationType === 'ssh') {
+      setWizardState((prev) => ({
+        ...prev,
+        destinationType: 'local',
+        destinationConnectionId: '',
+      }))
+    }
+  }, [open, repositoryType, wizardState.destinationType])
 
   // Handle state changes
   const handleStateChange = (updates: Partial<WizardState>) => {
+    // Prevent SSH destination for SSH repositories
+    if (repositoryType === 'ssh' && updates.destinationType === 'ssh') {
+      return // Silently ignore
+    }
     setWizardState((prev) => ({ ...prev, ...updates }))
   }
 
@@ -141,6 +169,10 @@ const RestoreWizard = ({
     const currentStepKey = steps[activeStep]?.key
 
     switch (currentStepKey) {
+      case 'files':
+        // Must have at least one file selected
+        return wizardState.selectedPaths.length > 0
+
       case 'destination':
         if (wizardState.destinationType === 'ssh' && !wizardState.destinationConnectionId) {
           return false
@@ -171,6 +203,7 @@ const RestoreWizard = ({
 
   const handleSubmit = () => {
     const data: RestoreData = {
+      selected_paths: wizardState.selectedPaths,
       destination_type: wizardState.destinationType,
       destination_connection_id:
         wizardState.destinationType === 'ssh' && wizardState.destinationConnectionId
@@ -189,7 +222,30 @@ const RestoreWizard = ({
   const renderStepContent = () => {
     const currentStepKey = steps[activeStep]?.key
 
+    // Convert selectedPaths to ArchiveFile format for compatibility
+    const selectedFiles: ArchiveFile[] = wizardState.selectedPaths.map((path) => ({
+      path,
+      mode: '',
+      user: '',
+      group: '',
+      size: 0,
+      mtime: '',
+      healthy: true,
+    }))
+
     switch (currentStepKey) {
+      case 'files':
+        return (
+          <WizardStepRestoreFiles
+            repositoryId={repositoryId}
+            archiveName={archiveName}
+            data={{
+              selectedPaths: wizardState.selectedPaths,
+            }}
+            onChange={handleStateChange}
+          />
+        )
+
       case 'destination':
         return (
           <WizardStepRestoreDestination
@@ -198,6 +254,7 @@ const RestoreWizard = ({
               destinationConnectionId: wizardState.destinationConnectionId,
             }}
             sshConnections={sshConnections}
+            repositoryType={repositoryType}
             onChange={(updates) => {
               // Handle SSH connection selection
               if (
@@ -287,7 +344,15 @@ const RestoreWizard = ({
             />
 
             {/* Step Content - Fixed height to prevent layout shift */}
-            <Box sx={{ height: 450, overflow: 'auto', p: 3 }}>{renderStepContent()}</Box>
+            <Box sx={{ height: 450, overflow: 'auto' }}>
+              {activeStep === 0 ? (
+                // Files step fills entire height with its own layout
+                <Box sx={{ height: '100%', px: 3, py: 2 }}>{renderStepContent()}</Box>
+              ) : (
+                // Other steps just need padding and scroll naturally
+                <Box sx={{ px: 3, py: 2 }}>{renderStepContent()}</Box>
+              )}
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>

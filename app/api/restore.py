@@ -24,6 +24,9 @@ class RestoreRequest(BaseModel):
     paths: List[str]
     destination: str
     dry_run: bool = False
+    repository_id: int  # Repository ID for fetching repository details
+    destination_type: str = 'local'  # 'local' or 'ssh'
+    destination_connection_id: Optional[int] = None  # SSH connection ID for SSH destinations
 
 @router.post("/preview")
 async def preview_restore(
@@ -62,12 +65,44 @@ async def start_restore(
 ):
     """Start a restore operation and return job ID"""
     try:
-        # Create restore job record
+        # Fetch repository to determine repository_type
+        repository = db.query(Repository).filter(Repository.id == restore_request.repository_id).first()
+        if not repository:
+            raise HTTPException(status_code=404, detail="Repository not found")
+
+        # Validate scenario: SSH repository → SSH destination is not supported
+        if repository.repository_type == 'ssh' and restore_request.destination_type == 'ssh':
+            raise HTTPException(
+                status_code=400,
+                detail="Restoring from SSH repository to SSH destination is not supported. "
+                       "Please select a local destination for SSH repositories."
+            )
+
+        # Determine execution_mode based on repository_type + destination_type
+        execution_mode = f"{repository.repository_type}_to_{restore_request.destination_type}"
+
+        # Fetch destination hostname if SSH destination
+        destination_hostname = None
+        destination_connection = None
+        if restore_request.destination_type == 'ssh' and restore_request.destination_connection_id:
+            from app.database.models import SSHConnection
+            destination_connection = db.query(SSHConnection).filter(
+                SSHConnection.id == restore_request.destination_connection_id
+            ).first()
+            if destination_connection:
+                destination_hostname = destination_connection.host
+
+        # Create restore job record with new fields
         restore_job = RestoreJob(
             repository=restore_request.repository,
             archive=restore_request.archive,
             destination=restore_request.destination,
-            status="pending"
+            status="pending",
+            destination_type=restore_request.destination_type,
+            destination_connection_id=restore_request.destination_connection_id,
+            execution_mode=execution_mode,
+            destination_hostname=destination_hostname,
+            repository_type=repository.repository_type
         )
         db.add(restore_job)
         db.commit()
@@ -81,11 +116,18 @@ async def start_restore(
                 restore_request.repository,
                 restore_request.archive,
                 restore_request.destination,
-                restore_request.paths
+                restore_request.paths,
+                repository_type=repository.repository_type,
+                destination_type=restore_request.destination_type,
+                destination_connection_id=restore_request.destination_connection_id,
+                ssh_connection_id=repository.ssh_connection_id if repository.repository_type == 'ssh' else None
             )
         )
 
-        logger.info("Restore job created", job_id=restore_job.id, user=current_user.username)
+        logger.info("Restore job created",
+                   job_id=restore_job.id,
+                   user=current_user.username,
+                   execution_mode=execution_mode)
 
         return {
             "job_id": restore_job.id,

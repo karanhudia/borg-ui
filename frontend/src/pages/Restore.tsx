@@ -167,12 +167,14 @@ const Restore: React.FC = () => {
       archive,
       destination,
       paths,
+      repository_id,
     }: {
       repository: string
       archive: string
       destination: string
       paths: string[]
-    }) => restoreAPI.startRestore(repository, archive, paths, destination),
+      repository_id: number
+    }) => restoreAPI.startRestore(repository, archive, paths, destination, repository_id),
     onSuccess: () => {
       toast.success('Restore job started!')
       // Track restore started
@@ -208,12 +210,13 @@ const Restore: React.FC = () => {
       toast.error('Please select a destination path')
       return
     }
-    if (selectedRepository && restoreArchive) {
+    if (selectedRepository && restoreArchive && selectedRepoData) {
       restoreMutation.mutate({
         repository: selectedRepository,
         archive: restoreArchive.name,
         destination,
         paths: selectedPaths,
+        repository_id: selectedRepoData.id,
       })
     }
   }

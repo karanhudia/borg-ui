@@ -218,6 +218,15 @@ class RestoreJob(Base):
     restore_speed = Column(Float, default=0.0)  # Current restore speed in MB/s
     estimated_time_remaining = Column(Integer, default=0)  # Estimated seconds remaining
 
+    # Remote restore fields
+    destination_type = Column(String(50), default='local')  # 'local' or 'ssh'
+    destination_connection_id = Column(Integer, ForeignKey('ssh_connections.id'), nullable=True)
+    destination_connection = relationship('SSHConnection', foreign_keys=[destination_connection_id])
+    execution_mode = Column(String(50), default='local_to_local')  # 'local_to_local', 'ssh_to_local', 'local_to_ssh'
+    temp_extraction_path = Column(String(255), nullable=True)  # For local→SSH two-phase restore
+    destination_hostname = Column(String(255), nullable=True)  # For display purposes
+    repository_type = Column(String(50), default='local')  # 'local' or 'ssh'
+
     created_at = Column(DateTime, default=utc_now)
 
 class ScheduledJob(Base):

@@ -15,7 +15,6 @@ import { toast } from 'react-hot-toast'
 import { Archive, Repository } from '@/types'
 import LockErrorDialog from '../components/LockErrorDialog'
 import { useMatomo } from '../hooks/useMatomo'
-import ArchiveBrowserDialog from '../components/ArchiveBrowserDialog'
 import RestoreWizard, { RestoreData } from '../components/RestoreWizard'
 
 const Archives: React.FC = () => {
@@ -32,8 +31,6 @@ const Archives: React.FC = () => {
 
   // Restore functionality
   const [restoreArchive, setRestoreArchive] = useState<Archive | null>(null)
-  const [selectedPaths, setSelectedPaths] = useState<string[]>([])
-  const [showBrowser, setShowBrowser] = useState<boolean>(false)
   const [showRestoreWizard, setShowRestoreWizard] = useState<boolean>(false)
 
   const queryClient = useQueryClient()
@@ -178,12 +175,27 @@ const Archives: React.FC = () => {
       archive,
       destination,
       paths,
+      repository_id,
+      destination_type,
+      destination_connection_id,
     }: {
       repository: string
       archive: string
       destination: string
       paths: string[]
-    }) => restoreAPI.startRestore(repository, archive, paths, destination),
+      repository_id: number
+      destination_type: string
+      destination_connection_id: number | null
+    }) =>
+      restoreAPI.startRestore(
+        repository,
+        archive,
+        paths,
+        destination,
+        repository_id,
+        destination_type,
+        destination_connection_id
+      ),
     onSuccess: () => {
       toast.success('Restore job started! Check the Activity tab to monitor progress.', {
         duration: 6000, // Show longer so user can read it
@@ -191,14 +203,16 @@ const Archives: React.FC = () => {
       trackArchive(EventAction.START, selectedRepository?.name)
 
       setRestoreArchive(null)
-      setSelectedPaths([])
       setShowRestoreWizard(false)
 
       queryClient.refetchQueries({ queryKey: ['restore-jobs'] })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(`Failed to start restore: ${error.response?.data?.detail || error.message}`)
+      const errorDetail = error.response?.data?.detail || error.message || 'Unknown error'
+      const errorMessage =
+        typeof errorDetail === 'string' ? errorDetail : JSON.stringify(errorDetail)
+      toast.error(`Failed to start restore: ${errorMessage}`)
     },
   })
 
@@ -241,21 +255,11 @@ const Archives: React.FC = () => {
     setCustomMountPoint(safeName)
   }
 
-  // Handle archive browser path selection
-  const handlePathsSelected = (paths: string[]) => {
-    setSelectedPaths(paths)
-    setShowBrowser(false)
-    setShowRestoreWizard(true)
-  }
-
-  // Open archive browser for restore
+  // Open restore wizard directly
   const handleRestoreArchiveClick = React.useCallback(
     (archive: Archive) => {
-      // Always reset paths when opening browser
-      setSelectedPaths([])
       setRestoreArchive(archive)
-      setShowBrowser(true)
-      setShowRestoreWizard(false)
+      setShowRestoreWizard(true)
       trackArchive(EventAction.VIEW, selectedRepository?.name)
     },
     [selectedRepository, trackArchive, EventAction]
@@ -281,7 +285,10 @@ const Archives: React.FC = () => {
       repository: selectedRepository.path,
       archive: restoreArchive.name,
       destination: destinationPath,
-      paths: selectedPaths,
+      paths: data.selected_paths,
+      repository_id: selectedRepository.id,
+      destination_type: data.destination_type,
+      destination_connection_id: data.destination_connection_id,
     })
 
     setShowRestoreWizard(false)
@@ -471,38 +478,14 @@ const Archives: React.FC = () => {
         />
       )}
 
-      {/* Archive Browser Dialog */}
-      {restoreArchive && selectedRepository && (
-        <ArchiveBrowserDialog
-          open={showBrowser}
-          onClose={() => setShowBrowser(false)}
-          repositoryId={selectedRepository.id}
-          archiveName={restoreArchive.name}
-          onSelect={handlePathsSelected}
-          initialSelectedPaths={selectedPaths}
-        />
-      )}
-
       {/* Restore Wizard */}
       {restoreArchive && selectedRepository && (
         <RestoreWizard
           open={showRestoreWizard}
-          onClose={() => {
-            setShowRestoreWizard(false)
-            // Allow user to go back to browser by reopening it
-            setShowBrowser(true)
-          }}
+          onClose={() => setShowRestoreWizard(false)}
           archiveName={restoreArchive.name}
           repositoryId={selectedRepository.id}
-          selectedFiles={selectedPaths.map((path) => ({
-            path,
-            mode: '',
-            user: '',
-            group: '',
-            size: 0,
-            mtime: '',
-            healthy: true,
-          }))}
+          repositoryType={selectedRepository.repository_type || 'local'}
           onRestore={handleRestoreFromWizard}
         />
       )}

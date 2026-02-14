@@ -32,15 +32,23 @@ export interface RestoreDestinationStepData {
 interface WizardStepRestoreDestinationProps {
   data: RestoreDestinationStepData
   sshConnections: SSHConnection[]
+  repositoryType: string
   onChange: (data: Partial<RestoreDestinationStepData>) => void
 }
 
 export default function WizardStepRestoreDestination({
   data,
   sshConnections,
+  repositoryType,
   onChange,
 }: WizardStepRestoreDestinationProps) {
+  const isSSHRepository = repositoryType === 'ssh'
   const handleLocationChange = (location: 'local' | 'ssh') => {
+    // Prevent SSH-to-SSH restore
+    if (isSSHRepository && location === 'ssh') {
+      return
+    }
+
     onChange({
       destinationType: location,
       destinationConnectionId: '',
@@ -117,62 +125,76 @@ export default function WizardStepRestoreDestination({
           </CardActionArea>
         </Card>
 
-        <Card
-          variant="outlined"
-          sx={{
-            flex: 1,
-            border: data.destinationType === 'ssh' ? 2 : 1,
-            borderColor: data.destinationType === 'ssh' ? '#1976d2' : 'divider',
-            boxShadow:
-              data.destinationType === 'ssh' ? `0 4px 12px ${alpha('#1976d2', 0.2)}` : 'none',
-            bgcolor:
-              data.destinationType === 'ssh'
-                ? (theme) => alpha('#1976d2', theme.palette.mode === 'dark' ? 0.12 : 0.08)
-                : 'background.paper',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            transform: data.destinationType === 'ssh' ? 'translateY(-2px)' : 'none',
-            '&:hover': {
-              transform: 'translateY(-2px)',
-              boxShadow: (theme) => `0 4px 12px ${alpha(theme.palette.text.primary, 0.08)}`,
-              borderColor: data.destinationType === 'ssh' ? '#1976d2' : 'text.primary',
-            },
-          }}
-        >
-          <CardActionArea onClick={() => handleLocationChange('ssh')} sx={{ p: 1 }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: 48,
-                    height: 48,
-                    borderRadius: 3,
-                    bgcolor: data.destinationType === 'ssh' ? '#1976d2' : 'action.hover',
-                    color: data.destinationType === 'ssh' ? 'white' : 'text.secondary',
-                    transition: 'all 0.3s ease',
-                    boxShadow:
-                      data.destinationType === 'ssh'
-                        ? `0 4px 12px ${alpha('#1976d2', 0.4)}`
-                        : 'none',
-                  }}
-                >
-                  <Cloud size={28} />
+        {!isSSHRepository && (
+          <Card
+            variant="outlined"
+            sx={{
+              flex: 1,
+              border: data.destinationType === 'ssh' ? 2 : 1,
+              borderColor: data.destinationType === 'ssh' ? '#1976d2' : 'divider',
+              boxShadow:
+                data.destinationType === 'ssh' ? `0 4px 12px ${alpha('#1976d2', 0.2)}` : 'none',
+              bgcolor:
+                data.destinationType === 'ssh'
+                  ? (theme) => alpha('#1976d2', theme.palette.mode === 'dark' ? 0.12 : 0.08)
+                  : 'background.paper',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              transform: data.destinationType === 'ssh' ? 'translateY(-2px)' : 'none',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: (theme) => `0 4px 12px ${alpha(theme.palette.text.primary, 0.08)}`,
+                borderColor: data.destinationType === 'ssh' ? '#1976d2' : 'text.primary',
+              },
+            }}
+          >
+            <CardActionArea onClick={() => handleLocationChange('ssh')} sx={{ p: 1 }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 48,
+                      height: 48,
+                      borderRadius: 3,
+                      bgcolor: data.destinationType === 'ssh' ? '#1976d2' : 'action.hover',
+                      color: data.destinationType === 'ssh' ? 'white' : 'text.secondary',
+                      transition: 'all 0.3s ease',
+                      boxShadow:
+                        data.destinationType === 'ssh'
+                          ? `0 4px 12px ${alpha('#1976d2', 0.4)}`
+                          : 'none',
+                    }}
+                  >
+                    <Cloud size={28} />
+                  </Box>
+                  <Box>
+                    <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
+                      Remote Machine
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ fontSize: '0.8125rem' }}
+                    >
+                      Restore to a remote machine via SSH
+                    </Typography>
+                  </Box>
                 </Box>
-                <Box>
-                  <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
-                    Remote Machine
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
-                    Restore to a remote machine via SSH
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </CardActionArea>
-        </Card>
+              </CardContent>
+            </CardActionArea>
+          </Card>
+        )}
       </Box>
+
+      {/* SSH Repository Info Alert */}
+      {isSSHRepository && (
+        <Alert severity="info">
+          SSH-to-SSH restore is not supported. Only local destinations are available for SSH
+          repositories.
+        </Alert>
+      )}
 
       {/* SSH Connection Selection */}
       {data.destinationType === 'ssh' && (

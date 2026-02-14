@@ -198,7 +198,7 @@ describe('CommandPreview', () => {
         />
       )
 
-      expect(screen.getByText(/Temporarily mounts remote path via SSHFS/)).toBeInTheDocument()
+      expect(screen.getByText(/Mounts remote directory under shared temp root/)).toBeInTheDocument()
       expect(screen.getByText(/Archives preserve original paths/)).toBeInTheDocument()
       expect(
         screen.getByText(/Unmounts remote directory after backup completes/)
