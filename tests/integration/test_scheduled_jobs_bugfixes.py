@@ -373,10 +373,10 @@ class TestRepositoryLibraryScripts:
         # Track execution
         library_script_executed = False
 
-        async def mock_run_script_from_library(script_obj, db, job_id=None):
+        async def mock_run_script_from_library(script, db, job_id=None, repository=None, hook_type=None, backup_result=None, script_parameters=None):
             nonlocal library_script_executed
             library_script_executed = True
-            assert script_obj.name == "Pre-Backup Library Script"
+            assert script.name == "Pre-Backup Library Script"
             return {"success": True, "stdout": "Library script executed"}
 
         with patch('app.api.schedule.run_script_from_library', new=mock_run_script_from_library):
@@ -535,7 +535,7 @@ class TestScheduleLevelScripts:
         # Track executions
         schedule_script_count = 0
 
-        async def mock_run_script_from_library(script_obj, db, job_id=None):
+        async def mock_run_script_from_library(script, db, job_id=None, repository=None, hook_type=None, backup_result=None, script_parameters=None):
             nonlocal schedule_script_count
             schedule_script_count += 1
             return {"success": True, "stdout": "Script executed"}
@@ -633,22 +633,22 @@ class TestCombinedScenarios:
         # Track execution order
         execution_order = []
 
-        async def mock_library_script(script_obj, db, job_id=None):
-            execution_order.append(f"schedule:{script_obj.name}")
+        async def mock_library_script(script, db, job_id=None, repository=None, hook_type=None, backup_result=None, script_parameters=None):
+            execution_order.append(f"schedule:{script.name}")
             return {"success": True}
 
-        async def mock_repo_library_script(script_obj, db, job_id=None):
-            execution_order.append(f"repo-library:{script_obj.name}")
+        async def mock_repo_library_script(script, db, job_id=None, repository=None, hook_type=None, backup_result=None, script_parameters=None):
+            execution_order.append(f"repo-library:{script.name}")
             return {"success": True}
 
         # We need different mocks for schedule vs repo scripts
         original_run_script = None
 
-        async def smart_mock_script(script_obj, db, job_id=None):
-            if script_obj.name in ["Schedule Pre", "Schedule Post"]:
-                execution_order.append(f"schedule:{script_obj.name}")
+        async def smart_mock_script(script, db, job_id=None, repository=None, hook_type=None, backup_result=None, script_parameters=None):
+            if script.name in ["Schedule Pre", "Schedule Post"]:
+                execution_order.append(f"schedule:{script.name}")
             else:
-                execution_order.append(f"repo-library:{script_obj.name}")
+                execution_order.append(f"repo-library:{script.name}")
             return {"success": True}
 
         async def mock_backup(*args, **kwargs):
