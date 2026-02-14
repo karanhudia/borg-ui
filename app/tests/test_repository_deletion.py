@@ -134,7 +134,6 @@ def test_delete_repository_with_prune_jobs(db_session: Session, test_repository:
     # Create a PruneJob for this repository
     prune_job = PruneJob(
         repository_id=test_repository.id,
-        keep_daily=7,
         status="completed",
         started_at=datetime.utcnow()
     )
@@ -213,7 +212,6 @@ def test_delete_repository_with_all_job_types(db_session: Session, test_reposito
     )
     prune_job = PruneJob(
         repository_id=test_repository.id,
-        keep_daily=7,
         status="completed",
         started_at=datetime.utcnow()
     )
