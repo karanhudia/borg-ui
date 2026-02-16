@@ -83,6 +83,7 @@ export interface SystemSettings {
   backup_timeout?: number
   stats_refresh_interval_minutes?: number
   bypass_lock_on_info?: boolean
+  bypass_lock_on_list?: boolean
   [key: string]: unknown
 }
 
