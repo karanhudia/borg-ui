@@ -41,7 +41,11 @@ const BetaFeaturesTab: React.FC = () => {
 
   // Save settings mutation
   const saveSettingsMutation = useMutation({
-    mutationFn: async (settings: { bypass_lock_on_info?: boolean; bypass_lock_on_list?: boolean; show_restore_tab?: boolean }) => {
+    mutationFn: async (settings: {
+      bypass_lock_on_info?: boolean
+      bypass_lock_on_list?: boolean
+      show_restore_tab?: boolean
+    }) => {
       await settingsAPI.updateSystemSettings(settings)
     },
     onSuccess: () => {
