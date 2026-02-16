@@ -195,7 +195,7 @@ jobs:
 
       - name: Run integration tests
         run: |
-          python3 test_app.py --url http://localhost:8082
+          python3 tests/manual/test_app.py --url http://localhost:8082
         env:
           TEST_BASE_URL: http://localhost:8082
 
