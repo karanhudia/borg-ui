@@ -98,6 +98,7 @@ class SystemSettingsUpdate(BaseModel):
     cleanup_retention_days: Optional[int] = None
     use_new_wizard: Optional[bool] = None
     bypass_lock_on_info: Optional[bool] = None  # Use --bypass-lock for all borg info commands (beta)
+    bypass_lock_on_list: Optional[bool] = None  # Use --bypass-lock for all borg list commands (beta)
     show_restore_tab: Optional[bool] = None  # Show legacy Restore tab in navigation (beta)
     stats_refresh_interval_minutes: Optional[int] = None  # How often to refresh repository stats (0 = disabled)
 
@@ -210,6 +211,7 @@ async def get_system_settings(
                 "cleanup_retention_days": settings.cleanup_retention_days,
                 "use_new_wizard": settings.use_new_wizard,
                 "bypass_lock_on_info": settings.bypass_lock_on_info,
+                "bypass_lock_on_list": settings.bypass_lock_on_list,
                 "show_restore_tab": settings.show_restore_tab,
                 "stats_refresh_interval_minutes": settings.stats_refresh_interval_minutes if settings.stats_refresh_interval_minutes is not None else 60,
                 "last_stats_refresh": serialize_datetime(settings.last_stats_refresh),
@@ -319,6 +321,8 @@ async def update_system_settings(
             settings.use_new_wizard = settings_update.use_new_wizard
         if settings_update.bypass_lock_on_info is not None:
             settings.bypass_lock_on_info = settings_update.bypass_lock_on_info
+        if settings_update.bypass_lock_on_list is not None:
+            settings.bypass_lock_on_list = settings_update.bypass_lock_on_list
         if settings_update.show_restore_tab is not None:
             settings.show_restore_tab = settings_update.show_restore_tab
         if settings_update.stats_refresh_interval_minutes is not None:
