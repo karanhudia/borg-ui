@@ -447,6 +447,7 @@ async def test_4_cleanup_with_duplicate_mount_ids():
         mount_type=MountType.SSHFS,
         mount_point="/tmp/test/home/user",
         source="ssh://user@host/home/user",
+        created_at=datetime.now(timezone.utc),
         temp_root="/tmp/test",
         temp_key_file="/tmp/key"
     )
