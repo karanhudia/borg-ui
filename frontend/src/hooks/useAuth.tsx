@@ -1,5 +1,5 @@
 import React, { useState, useEffect, createContext, useContext } from 'react'
-import { authAPI } from '../services/api'
+import { authAPI, setProxyAuthMode } from '../services/api'
 
 interface User {
   id: number
@@ -14,6 +14,7 @@ interface AuthContextType {
   isAuthenticated: boolean
   isLoading: boolean
   mustChangePassword: boolean
+  proxyAuthEnabled: boolean
   login: (username: string, password: string) => Promise<boolean>
   logout: () => Promise<void>
 }
@@ -23,25 +24,72 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [proxyAuthEnabled, setProxyAuthEnabled] = useState(false)
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token')
-    if (token) {
-      authAPI
-        .getProfile()
-        .then((response) => {
-          setUser(response.data)
-        })
-        .catch(() => {
-          console.error('Failed to get profile')
-          localStorage.removeItem('access_token')
-        })
-        .finally(() => {
-          setIsLoading(false)
-        })
-    } else {
-      setIsLoading(false)
+    const initAuth = async () => {
+      try {
+        // First, check if proxy authentication is enabled
+        const configResponse = await authAPI.getAuthConfig()
+        const { proxy_auth_enabled } = configResponse.data
+        setProxyAuthEnabled(proxy_auth_enabled)
+        setProxyAuthMode(proxy_auth_enabled) // Update API interceptor
+
+        if (proxy_auth_enabled) {
+          // Proxy auth mode: backend auto-creates default user if no proxy header present
+          // Just try to get the profile - backend will handle everything
+          let retries = 3
+          let success = false
+
+          while (retries > 0 && !success) {
+            try {
+              const profileResponse = await authAPI.getProfile()
+              setUser(profileResponse.data)
+              success = true
+            } catch (error) {
+              console.error('Failed to get profile in proxy auth mode, retrying...', error)
+              retries--
+              if (retries > 0) {
+                await new Promise((resolve) => setTimeout(resolve, 1000)) // Wait 1 second before retry
+              }
+            }
+          }
+
+          if (!success) {
+            console.error('Failed to authenticate after retries')
+          }
+        } else {
+          // JWT auth mode: check for token
+          const token = localStorage.getItem('access_token')
+          if (token) {
+            try {
+              const profileResponse = await authAPI.getProfile()
+              setUser(profileResponse.data)
+            } catch (error) {
+              console.error('Failed to get profile with JWT:', error)
+              localStorage.removeItem('access_token')
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check auth config:', error)
+        // Default to JWT auth mode if config check fails
+        setProxyAuthEnabled(false)
+        const token = localStorage.getItem('access_token')
+        if (token) {
+          try {
+            const profileResponse = await authAPI.getProfile()
+            setUser(profileResponse.data)
+          } catch (err) {
+            localStorage.removeItem('access_token')
+          }
+        }
+      } finally {
+        setIsLoading(false)
+      }
     }
+
+    initAuth()
   }, [])
 
   const login = async (username: string, password: string): Promise<boolean> => {
@@ -71,6 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAuthenticated: !!user,
     isLoading,
     mustChangePassword: user?.must_change_password || false,
+    proxyAuthEnabled,
     login,
     logout,
   }
