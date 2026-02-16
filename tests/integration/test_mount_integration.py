@@ -531,6 +531,264 @@ async def test_4_cleanup_with_duplicate_mount_ids():
     return True
 
 
+async def test_5_overlapping_paths_no_shadowing():
+    """
+    Test: Overlapping paths (parent + child) should NOT cause mount shadowing
+    This is the CRITICAL test for the data loss bug reported in GitHub issue
+
+    Bug scenario: User backs up /etc/cron.d/ and /etc/passwd
+    - Without fix: /etc/cron.d mounted first, then /etc mounted (shadows child)
+    - With fix: /etc mounted first (parent), /etc/cron.d reuses parent mount
+    """
+    print("\n" + "="*80)
+    print("INTEGRATION TEST 5: Overlapping paths (parent/child) - NO SHADOWING")
+    print("="*80)
+    print("\nThis test verifies the fix for the critical data loss bug:")
+    print("GitHub issue: Mounting /etc after /etc/cron.d causes shadowing")
+
+    test = IntegrationTest()
+    service = MountService()
+
+    with patch('app.services.mount_service.SessionLocal') as mock_db:
+        mock_session = Mock()
+        mock_db.return_value = mock_session
+
+        mock_connection = Mock()
+        mock_connection.id = 1
+        mock_connection.host = "test-host"
+        mock_connection.username = "testuser"
+        mock_connection.port = 22
+        mock_connection.ssh_key_id = 1
+
+        mock_key = Mock()
+        mock_key.id = 1
+        mock_key.private_key = "encrypted_key_data"
+
+        def query_side_effect(model):
+            mock_query = Mock()
+            if model.__name__ == 'SSHConnection':
+                mock_query.filter.return_value.first.return_value = mock_connection
+            elif model.__name__ == 'SSHKey':
+                mock_query.filter.return_value.first.return_value = mock_key
+            return mock_query
+
+        mock_session.query.side_effect = query_side_effect
+
+        # Mock file type check: /etc/passwd is file, /etc/cron.d/ is directory
+        file_checks = [True, False]  # passwd (file), cron.d (directory)
+        check_index = [0]
+
+        async def mock_check_file(conn, path, key):
+            result = file_checks[check_index[0]]
+            check_index[0] += 1
+            return result
+
+        with patch.object(service, '_check_sshfs_available', return_value=True):
+            with patch.object(service, '_decrypt_and_write_key', return_value='/tmp/test_key'):
+                with patch.object(service, '_check_remote_is_file', side_effect=mock_check_file):
+                    with patch.object(service, '_execute_sshfs_mount', new_callable=AsyncMock):
+                        with patch.object(service, '_verify_mount_readable', new_callable=AsyncMock):
+
+                            # TEST: Overlapping paths that caused the data loss bug
+                            remote_paths = [
+                                "/etc/passwd",      # file, requires parent /etc
+                                "/etc/cron.d/",     # directory, child of /etc
+                            ]
+
+                            print(f"\nInput paths (unsorted, as user would specify):")
+                            print(f"  {remote_paths[0]} (file - needs parent /etc)")
+                            print(f"  {remote_paths[1]} (directory - child of /etc)")
+                            print(f"\nExpected behavior WITH FIX:")
+                            print(f"  1. Sort by depth: /etc/passwd (depth=2) comes first")
+                            print(f"  2. Mount /etc (parent of passwd)")
+                            print(f"  3. Detect /etc/cron.d is child of already-mounted /etc")
+                            print(f"  4. Reuse /etc mount for /etc/cron.d (no second mount)")
+
+                            temp_root, mount_info_list = await service.mount_ssh_paths_shared(
+                                connection_id=1,
+                                remote_paths=remote_paths,
+                                job_id=150
+                            )
+
+                            mount_ids = [mid for mid, _ in mount_info_list]
+                            unique_mount_ids = set(mount_ids)
+                            backup_paths = [path for _, path in mount_info_list]
+
+                            print(f"\nResults:")
+                            print(f"  mount_info_list: {mount_info_list}")
+                            print(f"  unique mount_ids: {len(unique_mount_ids)}")
+                            print(f"  actual mounts created: {len(service.active_mounts)}")
+                            print(f"  backup_paths: {backup_paths}")
+
+                            # VERIFY: Should have 2 entries (one per path)
+                            test.assert_equal(
+                                len(mount_info_list),
+                                2,
+                                "Should have 2 entries in mount_info_list"
+                            )
+
+                            # CRITICAL VERIFY: Should have only ONE mount (parent /etc)
+                            test.assert_equal(
+                                len(unique_mount_ids),
+                                1,
+                                "CRITICAL: Should only have 1 mount (parent /etc, child reuses it)"
+                            )
+
+                            test.assert_equal(
+                                len(service.active_mounts),
+                                1,
+                                "Should only have 1 actual mount in active_mounts"
+                            )
+
+                            # VERIFY: Both paths use same mount_id
+                            test.assert_equal(
+                                mount_ids[0],
+                                mount_ids[1],
+                                "Both paths should use the same mount_id (parent mount)"
+                            )
+
+                            # VERIFY: Backup paths are correct
+                            test.assert_in(
+                                'etc/passwd',
+                                backup_paths,
+                                "Backup path for passwd should be etc/passwd"
+                            )
+                            test.assert_in(
+                                'etc/cron.d',
+                                backup_paths,
+                                "Backup path for cron.d should be etc/cron.d"
+                            )
+
+                            # Cleanup
+                            print(f"\nCleaning up...")
+                            with patch.object(service, '_unmount_fuse', return_value=True):
+                                for mount_id in set(mount_ids):  # Deduplicate for cleanup
+                                    await service.unmount(mount_id)
+
+                            test.assert_equal(
+                                len(service.active_mounts),
+                                0,
+                                "All mounts cleaned up"
+                            )
+
+                            print("\n✅ TEST PASSED - NO SHADOWING OCCURRED")
+                            print("   The fix successfully prevents parent from shadowing child!")
+                            return True
+
+
+async def test_6_deeply_nested_paths():
+    """
+    Test: Multiple levels of nesting should all reuse the shallowest parent
+    Example: /var, /var/log, /var/log/app, /var/log/app/debug.log
+    Expected: Only /var is mounted, all others reuse it
+    """
+    print("\n" + "="*80)
+    print("INTEGRATION TEST 6: Deeply nested paths")
+    print("="*80)
+
+    test = IntegrationTest()
+    service = MountService()
+
+    with patch('app.services.mount_service.SessionLocal') as mock_db:
+        mock_session = Mock()
+        mock_db.return_value = mock_session
+
+        mock_connection = Mock()
+        mock_connection.id = 1
+        mock_connection.host = "test-host"
+        mock_connection.username = "testuser"
+        mock_connection.port = 22
+        mock_connection.ssh_key_id = 1
+
+        mock_key = Mock()
+        mock_key.id = 1
+        mock_key.private_key = "encrypted_key_data"
+
+        def query_side_effect(model):
+            mock_query = Mock()
+            if model.__name__ == 'SSHConnection':
+                mock_query.filter.return_value.first.return_value = mock_connection
+            elif model.__name__ == 'SSHKey':
+                mock_query.filter.return_value.first.return_value = mock_key
+            return mock_query
+
+        mock_session.query.side_effect = query_side_effect
+
+        # All are directories
+        async def mock_check_file(conn, path, key):
+            return False
+
+        with patch.object(service, '_check_sshfs_available', return_value=True):
+            with patch.object(service, '_decrypt_and_write_key', return_value='/tmp/test_key'):
+                with patch.object(service, '_check_remote_is_file', side_effect=mock_check_file):
+                    with patch.object(service, '_execute_sshfs_mount', new_callable=AsyncMock):
+                        with patch.object(service, '_verify_mount_readable', new_callable=AsyncMock):
+
+                            # TEST: Deeply nested paths
+                            remote_paths = [
+                                "/var/log/app/debug.log",  # Deepest (depth=4)
+                                "/var/log",                # Middle (depth=2)
+                                "/var/log/app",            # Middle (depth=3)
+                                "/var",                    # Shallowest (depth=1)
+                            ]
+
+                            print(f"\nInput paths (random order):")
+                            for p in remote_paths:
+                                depth = len([x for x in p.strip('/').split('/') if x])
+                                print(f"  {p} (depth={depth})")
+
+                            print(f"\nExpected: Sort by depth, mount only /var, others reuse it")
+
+                            temp_root, mount_info_list = await service.mount_ssh_paths_shared(
+                                connection_id=1,
+                                remote_paths=remote_paths,
+                                job_id=151
+                            )
+
+                            mount_ids = [mid for mid, _ in mount_info_list]
+                            unique_mount_ids = set(mount_ids)
+
+                            print(f"\nResults:")
+                            print(f"  mount_info_list length: {len(mount_info_list)}")
+                            print(f"  unique mount_ids: {len(unique_mount_ids)}")
+                            print(f"  actual mounts created: {len(service.active_mounts)}")
+
+                            # VERIFY: Should have 4 entries
+                            test.assert_equal(
+                                len(mount_info_list),
+                                4,
+                                "Should have 4 entries"
+                            )
+
+                            # CRITICAL: Should have only ONE mount (/var)
+                            test.assert_equal(
+                                len(unique_mount_ids),
+                                1,
+                                "Should only have 1 mount (shallowest parent /var)"
+                            )
+
+                            test.assert_equal(
+                                len(service.active_mounts),
+                                1,
+                                "Should only have 1 actual mount"
+                            )
+
+                            # Cleanup
+                            print(f"\nCleaning up...")
+                            with patch.object(service, '_unmount_fuse', return_value=True):
+                                for mount_id in set(mount_ids):
+                                    await service.unmount(mount_id)
+
+                            test.assert_equal(
+                                len(service.active_mounts),
+                                0,
+                                "All mounts cleaned up"
+                            )
+
+                            print("\n✅ TEST PASSED - Deeply nested paths handled correctly")
+                            return True
+
+
 async def main():
     """Run all integration tests"""
     print("\n" + "█"*80)
@@ -563,6 +821,18 @@ async def main():
     except Exception as e:
         print(f"\n❌ TEST FAILED: {e}")
         results.append(("Cleanup with duplicates", False))
+
+    try:
+        results.append(("Overlapping paths (NO SHADOWING)", await test_5_overlapping_paths_no_shadowing()))
+    except Exception as e:
+        print(f"\n❌ TEST FAILED: {e}")
+        results.append(("Overlapping paths (NO SHADOWING)", False))
+
+    try:
+        results.append(("Deeply nested paths", await test_6_deeply_nested_paths()))
+    except Exception as e:
+        print(f"\n❌ TEST FAILED: {e}")
+        results.append(("Deeply nested paths", False))
 
     # Summary
     print("\n" + "█"*80)
