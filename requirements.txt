@@ -5,13 +5,13 @@ coverage[toml]==7.3.2
 croniter==1.4.1
 cryptography==44.0.1
 fastapi-cache2==0.2.1
-fastapi==0.118.0
+fastapi==0.128.8
 gunicorn==23.0.0
 httpx==0.25.2
 passlib[bcrypt]==1.7.4
 psutil==5.9.6
 pydantic-settings==2.1.0
-pydantic==2.5.0
+pydantic==2.12.5
 pytest-asyncio==0.21.1
 pytest-cov==4.1.0
 pytest==7.4.3
@@ -21,6 +21,6 @@ python-multipart==0.0.20
 pyyaml==6.0.1
 redis==5.0.1
 requests==2.32.4
-sqlalchemy==2.0.23
+sqlalchemy==2.0.46
 structlog==23.2.0
 uvicorn[standard]==0.24.0
