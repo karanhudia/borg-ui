@@ -812,12 +812,20 @@ class RestoreService:
             if not ssh_key:
                 raise Exception(f"SSH key {ssh_connection.ssh_key_id} not found")
 
-            # Create temporary SSH key file
-            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.key') as key_file:
-                key_file.write(ssh_key.private_key)
-                key_file_path = key_file.name
-
-            os.chmod(key_file_path, 0o600)
+            # Create temporary SSH key file with proper permissions
+            fd, key_file_path = tempfile.mkstemp(suffix='.key', text=True)
+            try:
+                # Set permissions before writing (SSH requires 0600)
+                os.chmod(key_file_path, 0o600)
+                # Write key to file
+                with os.fdopen(fd, 'w') as key_file:
+                    key_file.write(ssh_key.private_key)
+                    # Ensure key ends with newline
+                    if not ssh_key.private_key.endswith('\n'):
+                        key_file.write('\n')
+            except Exception as e:
+                os.close(fd)
+                raise
 
             try:
                 # Build rsync command
