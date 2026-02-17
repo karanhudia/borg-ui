@@ -61,6 +61,40 @@ export default function WizardStepRestoreReview({
       ? sshConnections.find((c) => c.id === data.destinationConnectionId)
       : null
 
+  // Get SSH prefix for displaying paths
+  const sshPrefix = destinationConnection
+    ? `ssh://${destinationConnection.username}@${destinationConnection.host}:${destinationConnection.port}`
+    : ''
+
+  // Get destination path with SSH prefix if applicable
+  const getDestinationPath = (originalPath: string) => {
+    let path: string
+    if (data.restoreStrategy === 'custom' && data.customPath) {
+      // Extract filename from original path
+      const filename = originalPath.split('/').pop() || ''
+      path = `${data.customPath.replace(/\/$/, '')}/${filename}`
+    } else if (data.destinationType === 'ssh' && data.customPath) {
+      // SSH destination always requires a path
+      const filename = originalPath.split('/').pop() || ''
+      path = `${data.customPath.replace(/\/$/, '')}/${filename}`
+    } else {
+      // Original location
+      path = originalPath
+    }
+
+    // Ensure path starts with / for proper SSH URL formatting
+    if (path && !path.startsWith('/')) {
+      path = '/' + path
+    }
+
+    // Add SSH prefix if restoring to SSH destination
+    return sshPrefix ? `${sshPrefix}${path}` : path
+  }
+
+  // Get example paths to show
+  const examplePaths = selectedFiles.length > 0 ? selectedFiles.slice(0, 3).map((f) => f.path) : []
+  const hasMoreFiles = selectedFiles.length > 3
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* Success Alert */}
@@ -136,6 +170,81 @@ export default function WizardStepRestoreReview({
         </Box>
       </Paper>
 
+      {/* Restore Preview */}
+      {examplePaths.length > 0 && (
+        <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+          {/* Header */}
+          <Box
+            sx={{
+              px: 2,
+              py: 1.5,
+              bgcolor: '#ed6c0220',
+              borderBottom: 1,
+              borderColor: 'divider',
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <FileCheck size={18} />
+              <Typography variant="subtitle2" fontWeight={600}>
+                Restore Preview
+              </Typography>
+            </Box>
+          </Box>
+
+          {/* Content */}
+          <Box sx={{ p: 2 }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              gutterBottom
+              sx={{ display: 'block', mb: 1 }}
+            >
+              Preview of where your files will be restored:
+            </Typography>
+            <Box
+              sx={{
+                p: 2,
+                bgcolor: 'background.default',
+                borderRadius: 1,
+                maxHeight: 200,
+                overflow: 'auto',
+              }}
+            >
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                {examplePaths.map((path, index) => (
+                  <Box key={index} sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ fontSize: '0.75rem', fontFamily: 'monospace' }}
+                    >
+                      Original: {path}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontSize: '0.8125rem',
+                        fontFamily: 'monospace',
+                        color: '#1976d2',
+                        fontWeight: 600,
+                      }}
+                    >
+                      → {getDestinationPath(path)}
+                    </Typography>
+                  </Box>
+                ))}
+                {hasMoreFiles && (
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                    ... and {selectedFiles.length - 3} more file
+                    {selectedFiles.length - 3 !== 1 ? 's' : ''}
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+          </Box>
+        </Paper>
+      )}
+
       {/* Files Summary */}
       <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
         {/* Header */}
@@ -159,51 +268,16 @@ export default function WizardStepRestoreReview({
         {/* Content */}
         <Box sx={{ p: 2 }}>
           <SummaryRow label="Number of Items">
-            <Typography variant="body2" fontWeight={600}>
-              {selectedFiles.length === 0 ? 'All files in archive' : selectedFiles.length}
-            </Typography>
+            <Chip
+              label={
+                selectedFiles.length === 0
+                  ? 'All files in archive'
+                  : `${selectedFiles.length} file${selectedFiles.length !== 1 ? 's' : ''}`
+              }
+              size="small"
+              color="primary"
+            />
           </SummaryRow>
-
-          {selectedFiles.length > 0 && (
-            <>
-              <Divider sx={{ my: 1 }} />
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="caption" color="text.secondary" gutterBottom>
-                  Selected items:
-                </Typography>
-                <Box
-                  sx={{
-                    mt: 1,
-                    p: 1,
-                    bgcolor: 'background.default',
-                    borderRadius: 1,
-                    maxHeight: 120,
-                    overflow: 'auto',
-                  }}
-                >
-                  {selectedFiles.slice(0, 5).map((file, index) => (
-                    <Typography
-                      key={index}
-                      variant="caption"
-                      sx={{
-                        display: 'block',
-                        fontFamily: 'monospace',
-                        color: 'text.secondary',
-                        py: 0.25,
-                      }}
-                    >
-                      {file.path}
-                    </Typography>
-                  ))}
-                  {selectedFiles.length > 5 && (
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-                      ... and {selectedFiles.length - 5} more
-                    </Typography>
-                  )}
-                </Box>
-              </Box>
-            </>
-          )}
 
           {selectedFiles.length === 0 && (
             <>

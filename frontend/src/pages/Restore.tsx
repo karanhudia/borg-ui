@@ -51,6 +51,8 @@ interface RestoreJob {
   completed_at?: string
   progress?: number
   error?: string
+  error_message?: string
+  logs?: string
   progress_details?: {
     nfiles: number
     current_file: string
@@ -295,12 +297,14 @@ const Restore: React.FC = () => {
   }, [archiveInfo])
 
   // Get status color for Chip
-  const getStatusColor = (status: string): 'info' | 'success' | 'error' | 'default' => {
+  const getStatusColor = (status: string): 'info' | 'success' | 'error' | 'warning' | 'default' => {
     switch (status) {
       case 'running':
         return 'info'
       case 'completed':
         return 'success'
+      case 'completed_with_warnings':
+        return 'warning'
       case 'failed':
         return 'error'
       case 'cancelled':
@@ -317,6 +321,8 @@ const Restore: React.FC = () => {
         return <RefreshCw size={18} className="animate-spin" />
       case 'completed':
         return <CheckCircle size={18} />
+      case 'completed_with_warnings':
+        return <AlertCircle size={18} />
       case 'failed':
         return <AlertCircle size={18} />
       default:
@@ -402,7 +408,7 @@ const Restore: React.FC = () => {
       render: (job) => (
         <Chip
           icon={getStatusIcon(job.status)}
-          label={job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+          label={job.status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
           color={getStatusColor(job.status)}
           size="small"
           sx={{ fontWeight: 500 }}

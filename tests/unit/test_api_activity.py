@@ -458,7 +458,7 @@ class TestDeleteJobEndpoint:
         # Try to delete without auth
         response = test_client.delete(f"/api/activity/backup/{job.id}")
 
-        assert response.status_code == 403  # FastAPI returns 403 for auth failures
+        assert response.status_code == 401  # No authentication provided
 
         # Verify job is NOT deleted
         job_still_exists = test_db.query(BackupJob).filter(BackupJob.id == job.id).first()
