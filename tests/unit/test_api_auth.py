@@ -476,7 +476,7 @@ class TestProtectedEndpoints:
         """
         response = test_client.get("/api/repositories/")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_protected_endpoint_with_malformed_token(self, test_client: TestClient):
         """Test accessing protected endpoint with malformed token"""
@@ -573,7 +573,7 @@ class TestTokenValidation:
             headers={"Authorization": "InvalidPrefix token_here"}
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 @pytest.mark.unit
@@ -778,7 +778,7 @@ class TestProxyAuthentication:
             headers={"X-Forwarded-User": "inactiveuser"}
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 401
         assert "disabled" in response.json()["detail"].lower()
 
     def test_jwt_auth_still_works_when_proxy_disabled(

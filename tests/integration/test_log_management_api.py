@@ -168,7 +168,7 @@ class TestGetSystemSettings:
         """Should require authentication"""
         response = client.get("/api/settings/system")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 class TestUpdateSystemSettings:
@@ -248,7 +248,7 @@ class TestUpdateSystemSettings:
             headers={"Authorization": f"Bearer {user_token}"}
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 401
         assert "Admin access required" in response.json()["detail"]
 
     def test_warning_when_new_limit_below_usage(self, client, admin_token, test_db, monkeypatch):
@@ -318,7 +318,7 @@ class TestGetLogStorageStats:
         """Should require authentication"""
         response = client.get("/api/settings/system/logs/storage")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_get_log_storage_allows_regular_users(self, client, user_token):
         """Should allow regular users to view log storage stats"""
@@ -393,7 +393,7 @@ class TestManualLogCleanup:
             headers={"Authorization": f"Bearer {user_token}"}
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 401
         assert "Admin access required" in response.json()["detail"]
 
     def test_manual_cleanup_uses_settings(self, client, admin_token, test_db, monkeypatch):

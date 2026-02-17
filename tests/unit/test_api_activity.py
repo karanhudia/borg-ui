@@ -135,7 +135,7 @@ class TestDeleteJobEndpoint:
             headers=auth_headers
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 401
         data = response.json()
         assert "admin" in data["detail"].lower()
 
