@@ -608,7 +608,9 @@ class NotificationService:
         archive_name: str,
         stats: Optional[dict] = None,
         completion_time: Optional[datetime] = None,
-        job_name: Optional[str] = None
+        job_name: Optional[str] = None,
+        started_at: Optional[datetime] = None,
+        nfiles: Optional[int] = None
     ) -> None:
         """
         Send notification for successful backup.
