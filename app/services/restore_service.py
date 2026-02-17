@@ -356,7 +356,7 @@ class RestoreService:
                     job.progress = 100
                     job.progress_percent = 100.0
                     job.completed_at = datetime.now(timezone.utc)
-                    job.logs = "\n".join(stderr_lines) if stderr_lines else "Restore completed successfully"
+                    job.logs = f"STDOUT:\n{chr(10).join(stdout_lines) if stdout_lines else '(no output)'}\n\nSTDERR:\n{chr(10).join(stderr_lines) if stderr_lines else '(no output)'}"
 
                     logger.info("Restore completed successfully",
                                job_id=job_id,
@@ -417,6 +417,8 @@ class RestoreService:
                         job.progress = 100
                         job.progress_percent = 100.0
                         job.completed_at = datetime.now(timezone.utc)
+
+                        stderr_output = "\n".join(stderr_lines)
                         job.error_message = f"Restore completed with warnings (exit code {process.returncode})"
                         job.logs = f"STDOUT:\n{chr(10).join(stdout_lines)}\n\nSTDERR:\n{stderr_output}"
 
@@ -564,13 +566,13 @@ class RestoreService:
         destination_connection_id: int = None
     ):
         """
-        Execute restore from local repository to SSH destination
-        Two-phase approach:
-        1. Extract to temporary directory (0-80% progress)
-        2. Transfer to remote via rsync (80-100% progress)
+        Execute restore from local repository to SSH destination using SSHFS.
+        Single-phase approach: Mount SSH destination and extract directly (no temp storage needed).
         """
+        from app.services.mount_service import mount_service
+
         db_session = SessionLocal()
-        temp_path = None
+        mount_id = None
 
         try:
             # Get job record
@@ -601,23 +603,39 @@ class RestoreService:
                 logger.warning("Could not update job to running status", job_id=job_id, error=str(status_error))
                 return
 
-            logger.info("Starting local→SSH restore (two-phase)",
+            logger.info("Starting local→SSH restore via SSHFS",
                        job_id=job_id,
                        repository=repository_path,
                        archive=archive_name,
                        ssh_destination=f"{ssh_connection.username}@{ssh_connection.host}:{destination}")
 
-            # ===== PHASE 1: Extract to temporary directory (0-80%) =====
-            temp_path = f"/tmp/restore_{job_id}"
-            os.makedirs(temp_path, exist_ok=True)
-
-            # Store temp path in job for cleanup
-            job.temp_extraction_path = temp_path
+            # Mount SSH destination via SSHFS
+            job.current_file = "Mounting SSH destination..."
             db_session.commit()
 
-            logger.info("Phase 1: Extracting to temporary directory", temp_path=temp_path)
+            logger.info("Mounting SSH destination", destination=destination)
 
-            # Build borg extract command
+            temp_root, mount_info_list = await mount_service.mount_ssh_paths_shared(
+                connection_id=destination_connection_id,
+                remote_paths=[destination],
+                job_id=job_id
+            )
+
+            if not mount_info_list:
+                raise Exception("Failed to mount SSH destination")
+
+            mount_id, relative_path = mount_info_list[0]
+            mount_path = os.path.join(temp_root, relative_path)
+
+            logger.info("SSH destination mounted",
+                       mount_path=mount_path,
+                       mount_id=mount_id,
+                       destination=destination)
+
+            # Ensure mount directory exists
+            os.makedirs(mount_path, exist_ok=True)
+
+            # Build borg extract command (same as local restore)
             cmd = ["borg", "extract", "--progress", "--log-json"]
 
             if repository and repository.remote_path:
@@ -642,15 +660,15 @@ class RestoreService:
             ssh_opts = ["-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-o", "LogLevel=ERROR"]
             env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
 
-            logger.info("Executing extraction command", command=" ".join(cmd), cwd=temp_path)
+            logger.info("Executing extraction to SSHFS mount", command=" ".join(cmd), cwd=mount_path)
 
-            # Execute extraction
+            # Execute extraction (same logic as local restore)
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 stdin=asyncio.subprocess.PIPE,
-                cwd=temp_path,
+                cwd=mount_path,
                 env=env
             )
 
@@ -659,7 +677,7 @@ class RestoreService:
 
             self.running_processes[job_id] = process
 
-            # Track extraction progress (map to 0-80%)
+            # Track extraction progress
             current_file = ""
             stderr_lines = []
             last_update_time = datetime.now(timezone.utc)
@@ -720,10 +738,8 @@ class RestoreService:
                                         job.restored_size = restored_size
                                         job.original_size = original_size
 
-                                        # Map extraction progress to 0-80%
                                         if original_size > 0:
-                                            extraction_percent = min(100.0, (restored_size / original_size) * 100.0)
-                                            job.progress_percent = extraction_percent * 0.8  # Scale to 0-80%
+                                            job.progress_percent = min(100.0, (restored_size / original_size) * 100.0)
 
                                         if current_file and current_file not in seen_files:
                                             seen_files.add(current_file)
@@ -758,7 +774,7 @@ class RestoreService:
                                             try:
                                                 db_session.commit()
                                                 last_update_time = now
-                                                logger.info("Phase 1 progress",
+                                                logger.info("Restore progress",
                                                           job_id=job_id,
                                                           percent=job.progress_percent,
                                                           file=current_file[:50] if current_file else '')
@@ -774,155 +790,54 @@ class RestoreService:
             await asyncio.gather(read_stderr(), read_stdout())
             await process.wait()
 
-            # Exit code 1 = success with warnings (e.g., xattr warnings on non-macOS systems)
-            # Exit codes 100-127 = partial success
+            # Check exit code (same logic as local restore)
             if process.returncode == 0 or process.returncode == 1 or (100 <= process.returncode <= 127):
                 if process.returncode == 1:
-                    # Extract only warning/error messages (not JSON progress)
                     warning_msgs = [
                         line for line in stderr_lines
                         if not line.strip().startswith('{') and line.strip()
                     ]
                     if warning_msgs:
                         logger.warning(
-                            "Phase 1 completed with warnings",
-                            temp_path=temp_path,
+                            "Restore completed with warnings",
+                            mount_path=mount_path,
                             nfiles=nfiles,
-                            warnings=warning_msgs[-5:]  # Last 5 warnings
+                            warnings=warning_msgs[-5:]
                         )
-                logger.info("Phase 1 completed: Extraction successful", temp_path=temp_path, nfiles=nfiles)
+                logger.info("Restore extraction successful", mount_path=mount_path, nfiles=nfiles)
             else:
-                # Extract only error messages (not JSON progress)
                 error_msgs = [
                     line for line in stderr_lines
                     if not line.strip().startswith('{') and line.strip()
                 ]
                 raise Exception(f"Extraction failed with code {process.returncode}: {' '.join(error_msgs[-10:])}")
 
-            # Update progress to 80% before starting transfer
-            job.progress_percent = 80.0
-            job.current_file = "Preparing transfer to remote server..."
+            # Mark as completed
+            job.status = "completed" if process.returncode == 0 else "completed_with_warnings"
+            if process.returncode == 1:
+                job.error_message = f"Restore completed with warnings (exit code 1)"
+            job.progress = 100
+            job.progress_percent = 100.0
+            job.completed_at = datetime.now(timezone.utc)
+            job.current_file = "Restore completed"
+            job.logs = '\n'.join(stderr_lines[-100:])
             db_session.commit()
 
-            # ===== PHASE 2: Transfer to remote via rsync (80-100%) =====
-            logger.info("Phase 2: Transferring to remote server")
+            logger.info("Local→SSH restore completed successfully via SSHFS",
+                       job_id=job_id,
+                       repository=repository_path,
+                       archive=archive_name,
+                       destination=f"{ssh_connection.host}:{destination}",
+                       nfiles=nfiles)
 
-            # Get SSH key
-            ssh_key = db_session.query(SSHKey).filter(SSHKey.id == ssh_connection.ssh_key_id).first()
-            if not ssh_key:
-                raise Exception(f"SSH key {ssh_connection.ssh_key_id} not found")
-
-            # Create temporary SSH key file with proper permissions
-            fd, key_file_path = tempfile.mkstemp(suffix='.key', text=True)
+            # Send success notification
             try:
-                # Set permissions before writing (SSH requires 0600)
-                os.chmod(key_file_path, 0o600)
-                # Write key to file
-                with os.fdopen(fd, 'w') as key_file:
-                    key_file.write(ssh_key.private_key)
-                    # Ensure key ends with newline
-                    if not ssh_key.private_key.endswith('\n'):
-                        key_file.write('\n')
-            except Exception as e:
-                os.close(fd)
-                raise
-
-            try:
-                # Build rsync command
-                rsync_cmd = [
-                    "rsync",
-                    "-avz",
-                    "--progress",
-                    "-e", f"ssh -i {key_file_path} -p {ssh_connection.port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null",
-                    f"{temp_path}/",  # Source (trailing slash = contents of directory)
-                    f"{ssh_connection.username}@{ssh_connection.host}:{destination}/"  # Destination
-                ]
-
-                logger.info("Executing rsync transfer", command=" ".join(rsync_cmd))
-
-                # Execute rsync
-                rsync_process = await asyncio.create_subprocess_exec(
-                    *rsync_cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
+                await notification_service.send_restore_success(
+                    db_session, repository_path, archive_name,
+                    f"{ssh_connection.host}:{destination}", None, None
                 )
-
-                self.running_processes[job_id] = rsync_process
-
-                # Track rsync progress (map to 80-100%)
-                rsync_stderr_lines = []
-                rsync_stdout_lines = []
-
-                async def read_rsync_output():
-                    # rsync outputs progress to stdout
-                    async for line in rsync_process.stdout:
-                        line_str = line.decode('utf-8', errors='replace').strip()
-                        rsync_stdout_lines.append(line_str)
-
-                        # Try to parse rsync progress (format: "  1,234,567  12%  123.45kB/s    0:00:12")
-                        # This is basic parsing - rsync progress is not as structured as borg's
-                        if '%' in line_str:
-                            try:
-                                parts = line_str.split()
-                                for part in parts:
-                                    if part.endswith('%'):
-                                        percent_str = part.replace('%', '')
-                                        rsync_percent = float(percent_str)
-                                        # Map rsync 0-100% to overall 80-100%
-                                        job.progress_percent = 80.0 + (rsync_percent * 0.2)
-                                        job.current_file = f"Transferring files: {rsync_percent:.0f}%"
-                                        db_session.commit()
-                                        logger.info("Phase 2 progress",
-                                                  job_id=job_id,
-                                                  overall_percent=job.progress_percent,
-                                                  rsync_percent=rsync_percent)
-                                        break
-                            except:
-                                pass
-
-                async def read_rsync_stderr():
-                    async for line in rsync_process.stderr:
-                        line_str = line.decode('utf-8', errors='replace').strip()
-                        rsync_stderr_lines.append(line_str)
-
-                await asyncio.gather(read_rsync_output(), read_rsync_stderr())
-                await rsync_process.wait()
-
-                if rsync_process.returncode != 0:
-                    raise Exception(f"Transfer failed with code {rsync_process.returncode}: {' '.join(rsync_stderr_lines[-10:])}")
-
-                logger.info("Phase 2 completed: Transfer successful")
-
-                # Mark as completed
-                job.status = "completed"
-                job.progress = 100
-                job.progress_percent = 100.0
-                job.completed_at = datetime.now(timezone.utc)
-                job.current_file = "Restore completed"
-                job.logs = f"Extraction:\n{chr(10).join(stderr_lines[-50:])}\n\nTransfer:\n{chr(10).join(rsync_stdout_lines[-50:])}"
-                db_session.commit()
-
-                logger.info("Local→SSH restore completed successfully",
-                           job_id=job_id,
-                           repository=repository_path,
-                           archive=archive_name,
-                           destination=f"{ssh_connection.host}:{destination}")
-
-                # Send success notification
-                try:
-                    await notification_service.send_restore_success(
-                        db_session, repository_path, archive_name,
-                        f"{ssh_connection.host}:{destination}", None, None
-                    )
-                except Exception as e:
-                    logger.warning("Failed to send restore success notification", error=str(e))
-
-            finally:
-                # Clean up SSH key file
-                try:
-                    os.unlink(key_file_path)
-                except Exception as e:
-                    logger.warning("Failed to delete temporary key file", error=str(e))
+            except Exception as e:
+                logger.warning("Failed to send restore success notification", error=str(e))
 
         except Exception as e:
             logger.error("Local→SSH restore failed", job_id=job_id, error=str(e))
@@ -947,13 +862,15 @@ class RestoreService:
                 db_session.rollback()
 
         finally:
-            # Clean up temporary directory
-            if temp_path and os.path.exists(temp_path):
+            # Cleanup: Unmount SSHFS
+            if mount_id:
                 try:
-                    shutil.rmtree(temp_path)
-                    logger.info("Cleaned up temporary directory", path=temp_path)
-                except Exception as e:
-                    logger.warning("Failed to clean up temporary directory", path=temp_path, error=str(e))
+                    logger.info("Unmounting SSH destination", mount_id=mount_id)
+                    await mount_service.unmount(mount_id)
+                except Exception as unmount_error:
+                    logger.error("Failed to unmount SSH destination",
+                               mount_id=mount_id,
+                               error=str(unmount_error))
 
             # Remove from running processes
             if job_id in self.running_processes:
