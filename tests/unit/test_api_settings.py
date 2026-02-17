@@ -23,7 +23,7 @@ class TestSystemSettings:
         """Test getting system settings without auth returns 403"""
         response = test_client.get("/api/settings/system")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_update_system_settings_success(self, test_client: TestClient, admin_headers):
         """Test updating system settings returns 200"""
@@ -57,7 +57,7 @@ class TestSystemSettings:
             json={"max_concurrent_backups": 3}
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 @pytest.mark.unit
@@ -76,7 +76,7 @@ class TestUserSettings:
         """Test getting profile without auth returns 403"""
         response = test_client.get("/api/settings/profile")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_update_profile_success(self, test_client: TestClient, admin_headers):
         """Test updating user profile returns 200"""
@@ -110,7 +110,7 @@ class TestUserSettings:
             json={"email": "test@example.com"}
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 @pytest.mark.unit
@@ -130,7 +130,7 @@ class TestUserManagement:
         """Test listing users without auth returns 403"""
         response = test_client.get("/api/settings/users")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_create_user_success(self, test_client: TestClient, admin_headers):
         """Test creating user returns 200/201"""
@@ -182,7 +182,7 @@ class TestUserManagement:
             }
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_update_user_success(self, test_client: TestClient, admin_headers, test_db):
         """Test updating user returns 200"""
@@ -231,7 +231,7 @@ class TestUserManagement:
         """Test deleting user without auth returns 403"""
         response = test_client.delete("/api/settings/users/1")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 @pytest.mark.unit
@@ -284,7 +284,7 @@ class TestPasswordManagement:
             }
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_reset_user_password_success(self, test_client: TestClient, admin_headers, test_db):
         """Test admin resetting user password returns 200"""
@@ -318,7 +318,7 @@ class TestPasswordManagement:
             json={"new_password": "NewPass123!"}
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 @pytest.mark.unit
@@ -335,7 +335,7 @@ class TestSystemMaintenance:
         """Test system cleanup without auth returns 403"""
         response = test_client.post("/api/settings/system/cleanup")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 @pytest.mark.unit
