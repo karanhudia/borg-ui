@@ -1,6 +1,6 @@
 alembic==1.12.1
 apprise==1.9.6
-bcrypt==4.0.1
+bcrypt==5.0.0
 coverage[toml]==7.3.2
 croniter==1.4.1
 cryptography==46.0.5
