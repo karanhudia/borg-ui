@@ -524,7 +524,7 @@ export const BackupJobsTable = <T extends Job = Job>({
     })
   }
 
-  if (actions.breakLock !== false) {
+  if (actions.breakLock !== false && isAdmin) {
     actionButtons.push({
       icon: <Lock size={18} />,
       label: 'Break Lock',
@@ -632,6 +632,7 @@ export const BackupJobsTable = <T extends Job = Job>({
           onClose={() => setLockError(null)}
           repositoryId={lockError.repositoryId}
           repositoryName={lockError.repositoryName}
+          isAdmin={isAdmin}
           onLockBroken={() => {
             setLockError(null)
             queryClient.invalidateQueries({ queryKey: ['activity'] })
