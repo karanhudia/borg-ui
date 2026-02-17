@@ -468,7 +468,7 @@ class MountService:
                             mount_dir = temp_root
 
                         # Relative path for backup is the full file path
-                        relative_path = remote_path.lstrip('/')
+                        relative_path = remote_path.lstrip('/').rstrip('/')
                     else:
                         # For directories: mount the directory itself
                         mount_remote_path = remote_path
@@ -482,7 +482,7 @@ class MountService:
                             mount_dir = temp_root
 
                         # Compute relative path for backup command
-                        relative_path = remote_path.lstrip('/')
+                        relative_path = remote_path.lstrip('/').rstrip('/')
                         if not relative_path:
                             relative_path = '.'
 

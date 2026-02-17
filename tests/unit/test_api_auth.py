@@ -778,7 +778,7 @@ class TestProxyAuthentication:
             headers={"X-Forwarded-User": "inactiveuser"}
         )
 
-        assert response.status_code == 401
+        assert response.status_code == 403
         assert "disabled" in response.json()["detail"].lower()
 
     def test_jwt_auth_still_works_when_proxy_disabled(

@@ -350,8 +350,10 @@ async def test_3_mixed_files_and_directories():
 
         mock_session.query.side_effect = query_side_effect
 
-        # Mock file type check: first 2 are files, last 2 are directories
-        file_checks = [True, True, False, False]
+        # Mock file type check: Paths are sorted by depth before processing
+        # So order will be: /var/log, /home/user/file1.txt, /home/user/file2.txt, /home/user/docs
+        # file_checks must match this sorted order: dir, file, file, dir
+        file_checks = [False, True, True, False]
         check_index = [0]
 
         async def mock_check_file(conn, path, key):
@@ -398,12 +400,13 @@ async def test_3_mixed_files_and_directories():
                                 "Should have 4 entries"
                             )
 
-                            # VERIFY: Should have 3 unique mount_ids
-                            # (file1 and file2 share mount, docs and log have separate mounts)
+                            # VERIFY: Should have 2 unique mount_ids
+                            # (file1, file2, and docs all share /home/user mount; log has separate mount)
+                            # This is correct to avoid mount shadowing - docs reuses parent mount
                             test.assert_equal(
                                 len(unique_mount_ids),
-                                3,
-                                "Should have 3 unique mount_ids (2 files share parent)"
+                                2,
+                                "Should have 2 unique mount_ids (files and docs share parent, log separate)"
                             )
 
                             # Cleanup

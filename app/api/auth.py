@@ -1,4 +1,5 @@
 from datetime import timedelta, datetime
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -32,13 +33,13 @@ class AuthConfig(BaseModel):
 class UserCreate(BaseModel):
     username: str
     password: str
-    email: str = None
+    email: Optional[str] = None
     is_admin: bool = False
 
 class UserUpdate(BaseModel):
-    email: str = None
-    is_active: bool = None
-    is_admin: bool = None
+    email: Optional[str] = None
+    is_active: Optional[bool] = None
+    is_admin: Optional[bool] = None
 
 class PasswordChange(BaseModel):
     current_password: str
@@ -47,11 +48,11 @@ class PasswordChange(BaseModel):
 class UserResponse(BaseModel):
     id: int
     username: str
-    email: str = None
+    email: Optional[str] = None
     is_active: bool
     is_admin: bool
     must_change_password: bool = False
-    last_login: datetime = None
+    last_login: Optional[datetime] = None
     created_at: datetime
 
     class Config:
