@@ -14,7 +14,7 @@ pydantic-settings==2.1.0
 pydantic==2.12.5
 pytest-asyncio==0.21.1
 pytest-cov==4.1.0
-pytest==7.4.3
+pytest==9.0.2
 python-dotenv==1.0.0
 python-jose[cryptography]==3.4.0
 python-multipart==0.0.20
