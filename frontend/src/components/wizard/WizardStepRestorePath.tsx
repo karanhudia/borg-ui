@@ -67,7 +67,7 @@ export default function WizardStepRestorePath({
 
   // Get SSH prefix for displaying paths
   const sshPrefix = sshConnection
-    ? `ssh://${sshConnection.username}@${sshConnection.host}:${sshConnection.port}`
+    ? `ssh://${sshConnection.username}@${sshConnection.host}:${sshConnection.port}/`
     : ''
 
   // Get destination path with SSH prefix if applicable
