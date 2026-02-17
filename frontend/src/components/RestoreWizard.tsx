@@ -412,6 +412,7 @@ const RestoreWizard = ({
               : undefined
           }
           selectMode="directories"
+          showSshMountPoints={repositoryType !== 'ssh'}
         />
       )}
     </>

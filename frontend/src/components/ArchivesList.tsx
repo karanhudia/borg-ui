@@ -16,8 +16,6 @@ import {
   Chip,
   ToggleButtonGroup,
   ToggleButton,
-  Tabs,
-  Tab,
 } from '@mui/material'
 import {
   FolderOpen,
@@ -176,8 +174,8 @@ export default function ArchivesList({
     }
   }
 
-  const handleFilterChange = (_event: React.SyntheticEvent, newFilter: string) => {
-    const filterValue = newFilter as FilterType
+  const handleFilterChange = (event: { target: { value: string } }) => {
+    const filterValue = event.target.value as FilterType
     setFilter(filterValue)
     setPage(0)
     localStorage.setItem('archives-list-filter', filterValue)
@@ -256,6 +254,16 @@ export default function ArchivesList({
             </FormControl>
           )}
 
+          {/* Filter control */}
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Filter</InputLabel>
+            <Select value={filter} label="Filter" onChange={handleFilterChange}>
+              <MenuItem value="all">All Archives</MenuItem>
+              <MenuItem value="scheduled">Scheduled</MenuItem>
+              <MenuItem value="manual">Manual</MenuItem>
+            </Select>
+          </FormControl>
+
           {/* View mode toggle */}
           <ToggleButtonGroup
             value={groupingEnabled ? 'grouped' : 'flat'}
@@ -275,17 +283,27 @@ export default function ArchivesList({
         </Box>
       </Box>
 
-      {/* Filter tabs */}
-      <Box sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}>
-        <Tabs value={filter} onChange={handleFilterChange}>
-          <Tab label="All" value="all" />
-          <Tab label="Scheduled" value="scheduled" />
-          <Tab label="Manual" value="manual" />
-        </Tabs>
-      </Box>
-
-      {/* Grouped or flat list */}
-      {groupingEnabled && groupedArchives ? (
+      {/* Empty state for filtered results */}
+      {sortedArchives.length === 0 && archives.length > 0 ? (
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            py: 8,
+            color: 'text.secondary',
+          }}
+        >
+          <FolderOpen size={48} style={{ marginBottom: 16 }} />
+          <Typography variant="body1" color="text.secondary">
+            No {filter === 'scheduled' ? 'scheduled' : 'manual'} archives found
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Try selecting a different filter
+          </Typography>
+        </Box>
+      ) : groupingEnabled && groupedArchives ? (
         <Stack spacing={2} sx={{ mb: 2 }}>
           {groupedArchives.map((group) => (
             <Accordion
