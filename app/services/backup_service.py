@@ -1328,12 +1328,17 @@ class BackupService:
                 if not private_key.endswith('\n'):
                     private_key += '\n'
 
-                # Create temporary key file
-                with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.key') as f:
-                    f.write(private_key)
-                    temp_key_file = f.name
-
-                os.chmod(temp_key_file, 0o600)
+                # Create temporary key file with proper permissions
+                fd, temp_key_file = tempfile.mkstemp(suffix='.key', text=True)
+                try:
+                    os.chmod(temp_key_file, 0o600)
+                    with os.fdopen(fd, 'w') as f:
+                        f.write(private_key)
+                        if not private_key.endswith('\n'):
+                            f.write('\n')
+                except Exception:
+                    os.close(fd)
+                    raise
 
                 # Update SSH command to use the key
                 ssh_opts = [
@@ -1893,7 +1898,8 @@ class BackupService:
                             "deduplicated_size": job.deduplicated_size
                         }
                         await notification_service.send_backup_success(
-                            db, repository, archive_name, stats, job.completed_at, job_name
+                            db, repository, archive_name, stats, job.completed_at, job_name,
+                            started_at=job.started_at, nfiles=job.nfiles
                         )
                     except Exception as e:
                         logger.warning("Failed to send backup success notification", error=str(e))
@@ -1956,7 +1962,8 @@ class BackupService:
                             "deduplicated_size": job.deduplicated_size
                         }
                         await notification_service.send_backup_warning(
-                            db, repository, archive_name, job.error_message, stats, job.completed_at, job_name
+                            db, repository, archive_name, job.error_message, stats, job.completed_at, job_name,
+                            started_at=job.started_at, nfiles=job.nfiles
                         )
                     except Exception as e:
                         logger.warning("Failed to send backup warning notification", error=str(e))

@@ -429,8 +429,27 @@ class MountService:
             # Track which mount_dirs we've already created to avoid duplicate mounts
             mounted_dirs = {}  # {mount_dir: mount_id}
 
+            # CRITICAL FIX: Sort paths by depth (shallowest first) to prevent parent directories
+            # from shadowing child mounts. This fixes the data loss bug where mounting /etc after
+            # /etc/cron.d would overwrite the child mount and cause empty directories in backups.
+            # Example: ['/etc/cron.d/', '/etc/passwd'] -> ['/etc/passwd', '/etc/cron.d/']
+            # This way we mount /etc (parent) first, and reuse it for /etc/cron.d
+            def path_depth(path: str) -> int:
+                """Return the depth of a path (number of components)"""
+                return len([p for p in path.strip('/').split('/') if p])
+
+            # Sort by depth (shallowest first)
+            sorted_remote_paths = sorted(remote_paths, key=path_depth)
+
+            logger.info(
+                "Sorted paths by depth to prevent mount shadowing",
+                original_paths=remote_paths,
+                sorted_paths=sorted_remote_paths,
+                job_id=job_id
+            )
+
             try:
-                for remote_path in remote_paths:
+                for remote_path in sorted_remote_paths:
                     # First, check if this path is a file using fallback-safe method
                     is_file = await self._check_remote_is_file(connection, remote_path, temp_key_file)
 
@@ -449,7 +468,7 @@ class MountService:
                             mount_dir = temp_root
 
                         # Relative path for backup is the full file path
-                        relative_path = remote_path.lstrip('/')
+                        relative_path = remote_path.lstrip('/').rstrip('/')
                     else:
                         # For directories: mount the directory itself
                         mount_remote_path = remote_path
@@ -463,11 +482,74 @@ class MountService:
                             mount_dir = temp_root
 
                         # Compute relative path for backup command
-                        relative_path = remote_path.lstrip('/')
+                        relative_path = remote_path.lstrip('/').rstrip('/')
                         if not relative_path:
                             relative_path = '.'
 
-                    # Check if we've already mounted this directory
+                    # CRITICAL FIX: Check if a parent directory is already mounted
+                    # OR if we're about to mount a parent that would shadow existing children
+                    # This prevents mount shadowing in both directions
+                    parent_mount_id = None
+                    parent_mount_dir = None
+                    child_mounts_to_replace = []
+                    child_ids_to_replace = []  # Initialize for later use
+
+                    for existing_mount_dir, existing_mount_id in mounted_dirs.items():
+                        # Check if mount_dir is under an existing mount (new is child of existing)
+                        if mount_dir.startswith(existing_mount_dir + os.sep) or mount_dir == existing_mount_dir:
+                            parent_mount_id = existing_mount_id
+                            parent_mount_dir = existing_mount_dir
+                            break
+                        # Check if existing mount is under mount_dir (existing is child of new)
+                        elif existing_mount_dir.startswith(mount_dir + os.sep):
+                            child_mounts_to_replace.append((existing_mount_dir, existing_mount_id))
+
+                    if parent_mount_id:
+                        # Parent directory already mounted, reuse it
+                        logger.info(
+                            "Reusing parent mount for nested path (preventing shadowing)",
+                            parent_mount_id=parent_mount_id,
+                            parent_mount_dir=parent_mount_dir,
+                            original_path=remote_path,
+                            mount_dir=mount_dir,
+                            backup_path=relative_path,
+                            is_file=is_file,
+                            job_id=job_id
+                        )
+                        # Add to mount_info_list with parent mount_id
+                        mount_info_list.append((parent_mount_id, relative_path))
+                        continue
+
+                    if child_mounts_to_replace:
+                        # We're about to mount a parent that would shadow existing children
+                        # Unmount children and replace with parent mount
+                        logger.warning(
+                            "Mounting parent directory that would shadow existing child mounts",
+                            parent_path=mount_dir,
+                            child_mounts=[(d, m) for d, m in child_mounts_to_replace],
+                            original_path=remote_path,
+                            job_id=job_id
+                        )
+
+                        # Unmount each child
+                        for child_mount_dir, child_mount_id in child_mounts_to_replace:
+                            logger.info(
+                                "Unmounting child mount before mounting parent",
+                                child_mount_id=child_mount_id,
+                                child_mount_dir=child_mount_dir,
+                                parent_mount_dir=mount_dir,
+                                job_id=job_id
+                            )
+                            # Unmount without cleanup (we'll remount parent immediately)
+                            await self.unmount(child_mount_id, force=False)
+                            # Remove from mounted_dirs
+                            del mounted_dirs[child_mount_dir]
+
+                        # Note: We'll update mount_info_list entries after creating parent mount
+                        # Store child mount IDs that need to be replaced
+                        child_ids_to_replace = [mid for _, mid in child_mounts_to_replace]
+
+                    # Check if we've already mounted this exact directory
                     if mount_dir in mounted_dirs:
                         # Reuse existing mount
                         existing_mount_id = mounted_dirs[mount_dir]
@@ -527,6 +609,19 @@ class MountService:
                     mount_info_list.append((mount_id, relative_path))
                     mounted_successfully.append(mount_id)
                     mounted_dirs[mount_dir] = mount_id  # Track this mount_dir
+
+                    # If we replaced child mounts, update mount_info_list entries to use new parent
+                    if child_mounts_to_replace:
+                        for i, (existing_mount_id, existing_path) in enumerate(mount_info_list[:-1]):  # Exclude the one we just added
+                            if existing_mount_id in child_ids_to_replace:
+                                mount_info_list[i] = (mount_id, existing_path)  # Replace with parent mount_id
+                                logger.info(
+                                    "Updated mount_info entry to use parent mount",
+                                    old_mount_id=existing_mount_id,
+                                    new_mount_id=mount_id,
+                                    path=existing_path,
+                                    job_id=job_id
+                                )
 
                     logger.info(
                         "Successfully mounted SSH path (shared temp root)",
@@ -1246,13 +1341,17 @@ class MountService:
         if not private_key.endswith('\n'):
             private_key += '\n'
 
-        # Create temporary key file
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.key') as f:
-            f.write(private_key)
-            temp_key_file = f.name
-
-        # Set secure permissions
-        os.chmod(temp_key_file, 0o600)
+        # Create temporary key file with proper permissions
+        fd, temp_key_file = tempfile.mkstemp(suffix='.key', text=True)
+        try:
+            os.chmod(temp_key_file, 0o600)
+            with os.fdopen(fd, 'w') as f:
+                f.write(private_key)
+                if not private_key.endswith('\n'):
+                    f.write('\n')
+        except Exception:
+            os.close(fd)
+            raise
 
         logger.debug("Created temporary SSH key file", key_file=temp_key_file)
 

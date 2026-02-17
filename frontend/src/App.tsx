@@ -17,7 +17,7 @@ import { MatomoTracker } from './components/MatomoTracker'
 import { loadUserPreference, initMatomoIfEnabled } from './utils/matomo'
 
 function App() {
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated, isLoading, proxyAuthEnabled } = useAuth()
 
   // Load user analytics preference on mount and after login, then conditionally initialize Matomo
   useEffect(() => {
@@ -39,6 +39,16 @@ function App() {
   }
 
   if (!isAuthenticated) {
+    // If proxy auth is enabled, show loading (backend will auto-create default user)
+    if (proxyAuthEnabled) {
+      return (
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600"></div>
+        </div>
+      )
+    }
+
+    // Regular JWT auth mode - show login screen
     return (
       <>
         <MatomoTracker />
