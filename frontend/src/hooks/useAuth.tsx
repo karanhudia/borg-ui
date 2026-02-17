@@ -80,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           try {
             const profileResponse = await authAPI.getProfile()
             setUser(profileResponse.data)
-          } catch (err) {
+          } catch {
             localStorage.removeItem('access_token')
           }
         }

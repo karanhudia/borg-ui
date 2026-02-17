@@ -78,7 +78,7 @@ export function groupArchivesByTime(archives: Archive[]): GroupedArchives {
       const archiveDate = new Date(archive.start)
       const group = getTimeGroup(archiveDate, now)
       grouped[group].push(archive)
-    } catch (error) {
+    } catch {
       // If date parsing fails, put in 'older' group
       grouped.older.push(archive)
     }
