@@ -248,7 +248,7 @@ class TestUpdateSystemSettings:
             headers={"Authorization": f"Bearer {user_token}"}
         )
 
-        assert response.status_code == 401
+        assert response.status_code == 403
         assert "Admin access required" in response.json()["detail"]
 
     def test_warning_when_new_limit_below_usage(self, client, admin_token, test_db, monkeypatch):
@@ -393,7 +393,7 @@ class TestManualLogCleanup:
             headers={"Authorization": f"Bearer {user_token}"}
         )
 
-        assert response.status_code == 401
+        assert response.status_code == 403
         assert "Admin access required" in response.json()["detail"]
 
     def test_manual_cleanup_uses_settings(self, client, admin_token, test_db, monkeypatch):
