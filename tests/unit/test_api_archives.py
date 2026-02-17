@@ -28,22 +28,22 @@ class TestArchivesAuthentication:
         NOTE: FastAPI's HTTPBearer returns 403 for missing credentials.
         """
         response = test_client.get("/api/archives/list?repository=/tmp/repo")
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_get_archive_info_no_auth_returns_403(self, test_client: TestClient):
         """Verify unauthenticated archive info requests are rejected"""
         response = test_client.get("/api/archives/myarchive/info?repository=/tmp/repo")
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_get_archive_contents_no_auth_returns_403(self, test_client: TestClient):
         """Verify unauthenticated archive contents requests are rejected"""
         response = test_client.get("/api/archives/myarchive/contents?repository=/tmp/repo")
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_delete_archive_no_auth_returns_403(self, test_client: TestClient):
         """Verify unauthenticated archive deletion is rejected"""
         response = test_client.delete("/api/archives/myarchive?repository=/tmp/repo")
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 @pytest.mark.unit

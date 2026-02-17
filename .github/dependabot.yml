@@ -1,6 +1,3 @@
-# Dependabot configuration for automated dependency updates
-# See: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
-
 version: 2
 updates:
   # Frontend dependencies (npm)
@@ -12,31 +9,23 @@ updates:
       time: "09:00"
       timezone: "Europe/Berlin"
     open-pull-requests-limit: 10
-    reviewers:
-      - "karanhudia"  # Change to your GitHub username
     labels:
       - "dependencies"
       - "frontend"
+      - "automated"
     commit-message:
-      prefix: "chore(deps)"
+      prefix: "chore"
+      prefix-development: "chore"
       include: "scope"
-    # Group minor and patch updates together
+    # Group non-security updates
     groups:
-      development-dependencies:
-        dependency-type: "development"
+      frontend-minor-patch:
+        patterns:
+          - "*"
         update-types:
           - "minor"
           - "patch"
-      production-dependencies:
-        dependency-type: "production"
-        update-types:
-          - "minor"
-          - "patch"
-    # Ignore specific packages if needed
-    ignore:
-      # Example: ignore specific versions
-      # - dependency-name: "react"
-      #   versions: ["18.x"]
+    # Security updates are always separate PRs for visibility
 
   # Backend dependencies (pip)
   - package-ecosystem: "pip"
@@ -47,58 +36,33 @@ updates:
       time: "09:00"
       timezone: "Europe/Berlin"
     open-pull-requests-limit: 10
-    reviewers:
-      - "karanhudia"  # Change to your GitHub username
     labels:
       - "dependencies"
       - "backend"
+      - "automated"
     commit-message:
-      prefix: "chore(deps)"
+      prefix: "chore"
+      prefix-development: "chore"
       include: "scope"
-    # Group minor and patch updates
+    # Group non-security updates
     groups:
-      python-dependencies:
+      backend-minor-patch:
+        patterns:
+          - "*"
         update-types:
           - "minor"
           - "patch"
-    ignore:
-      # Ignore Python 3.10+ only packages (we're on Python 3.9)
-      - dependency-name: "python-multipart"
-        update-types: ["version-update:semver-minor", "version-update:semver-major"]
-      - dependency-name: "ecdsa"
-        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+    # Security updates are always separate PRs for visibility
 
-  # Docker base image updates
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-      timezone: "Europe/Berlin"
-    open-pull-requests-limit: 5
-    reviewers:
-      - "karanhudia"
-    labels:
-      - "dependencies"
-      - "docker"
-    commit-message:
-      prefix: "chore(deps)"
-      include: "scope"
-
-  # GitHub Actions updates
+  # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-      timezone: "Europe/Berlin"
-    open-pull-requests-limit: 5
-    reviewers:
-      - "karanhudia"
+      interval: "monthly"
     labels:
       - "dependencies"
-      - "ci"
+      - "github-actions"
+      - "automated"
     commit-message:
-      prefix: "chore(ci)"
+      prefix: "ci"
+      include: "scope"

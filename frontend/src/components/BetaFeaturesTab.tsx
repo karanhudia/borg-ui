@@ -16,6 +16,7 @@ import { settingsAPI } from '../services/api'
 const BetaFeaturesTab: React.FC = () => {
   const queryClient = useQueryClient()
   const [bypassLockOnInfo, setBypassLockOnInfo] = useState(false)
+  const [bypassLockOnList, setBypassLockOnList] = useState(false)
   const [showRestoreTab, setShowRestoreTab] = useState(false)
 
   // Fetch system settings
@@ -33,13 +34,18 @@ const BetaFeaturesTab: React.FC = () => {
   useEffect(() => {
     if (systemSettings) {
       setBypassLockOnInfo(systemSettings.bypass_lock_on_info ?? false)
+      setBypassLockOnList(systemSettings.bypass_lock_on_list ?? false)
       setShowRestoreTab(systemSettings.show_restore_tab ?? false)
     }
   }, [systemSettings])
 
   // Save settings mutation
   const saveSettingsMutation = useMutation({
-    mutationFn: async (settings: { bypass_lock_on_info?: boolean; show_restore_tab?: boolean }) => {
+    mutationFn: async (settings: {
+      bypass_lock_on_info?: boolean
+      bypass_lock_on_list?: boolean
+      show_restore_tab?: boolean
+    }) => {
       await settingsAPI.updateSystemSettings(settings)
     },
     onSuccess: () => {
@@ -51,6 +57,7 @@ const BetaFeaturesTab: React.FC = () => {
       // Revert on error
       if (systemSettings) {
         setBypassLockOnInfo(systemSettings.bypass_lock_on_info ?? false)
+        setBypassLockOnList(systemSettings.bypass_lock_on_list ?? false)
         setShowRestoreTab(systemSettings.show_restore_tab ?? false)
       }
     },
@@ -59,6 +66,11 @@ const BetaFeaturesTab: React.FC = () => {
   const handleToggle = (checked: boolean) => {
     setBypassLockOnInfo(checked)
     saveSettingsMutation.mutate({ bypass_lock_on_info: checked })
+  }
+
+  const handleListToggle = (checked: boolean) => {
+    setBypassLockOnList(checked)
+    saveSettingsMutation.mutate({ bypass_lock_on_list: checked })
   }
 
   const handleRestoreTabToggle = (checked: boolean) => {
@@ -113,6 +125,37 @@ const BetaFeaturesTab: React.FC = () => {
                       Adds <code>--bypass-lock</code> to all <code>borg info</code> commands. This
                       prevents lock contention when multiple operations try to access SSH
                       repositories simultaneously. Enable if you see "Repository is locked" errors.
+                    </Typography>
+                  </Box>
+                }
+              />
+            </Box>
+
+            {/* Bypass Lock on List Commands */}
+            <Box>
+              <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
+                Bypass Locks for List Commands
+              </Typography>
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={bypassLockOnList}
+                    onChange={(e) => handleListToggle(e.target.checked)}
+                    disabled={saveSettingsMutation.isPending}
+                    color="primary"
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body1">
+                      Enable bypass-lock for all borg list commands
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Adds <code>--bypass-lock</code> to all <code>borg list</code> commands. This
+                      prevents lock contention when multiple read operations (like info + list) run
+                      simultaneously. Enable if you see "Failed to acquire lock" errors. Note: May
+                      show stale data if a backup is actively running.
                     </Typography>
                   </Box>
                 }
