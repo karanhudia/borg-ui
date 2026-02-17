@@ -1898,7 +1898,8 @@ class BackupService:
                             "deduplicated_size": job.deduplicated_size
                         }
                         await notification_service.send_backup_success(
-                            db, repository, archive_name, stats, job.completed_at, job_name
+                            db, repository, archive_name, stats, job.completed_at, job_name,
+                            started_at=job.started_at, nfiles=job.nfiles
                         )
                     except Exception as e:
                         logger.warning("Failed to send backup success notification", error=str(e))
@@ -1961,7 +1962,8 @@ class BackupService:
                             "deduplicated_size": job.deduplicated_size
                         }
                         await notification_service.send_backup_warning(
-                            db, repository, archive_name, job.error_message, stats, job.completed_at, job_name
+                            db, repository, archive_name, job.error_message, stats, job.completed_at, job_name,
+                            started_at=job.started_at, nfiles=job.nfiles
                         )
                     except Exception as e:
                         logger.warning("Failed to send backup warning notification", error=str(e))
