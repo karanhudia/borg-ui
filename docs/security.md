@@ -28,7 +28,11 @@ Best practices for securing your Borg Web UI installation.
 
 ## Authentication Security
 
-### Change Default Password
+### Built-in Authentication (Default)
+
+By default, Borg Web UI uses its own JWT-based authentication system.
+
+#### Change Default Password
 
 On first login, you'll be prompted to change the default password (`admin123`).
 
@@ -38,7 +42,7 @@ On first login, you'll be prompted to change the default password (`admin123`).
 3. Enter new password (minimum 8 characters)
 4. Confirm new password
 
-### Strong Password Requirements
+#### Strong Password Requirements
 
 Use passwords with:
 - Minimum 12 characters
@@ -48,13 +52,307 @@ Use passwords with:
 
 **Example strong password:** `B0rg!Backup#2025$Secure`
 
-### User Management
+#### User Management
 
 **For multi-user setups:**
 1. Create individual accounts for each user
 2. Assign appropriate permissions (admin vs. regular user)
 3. Disable or delete inactive accounts
 4. Review user access regularly
+
+---
+
+### Proxy/OIDC Authentication
+
+{: .new }
+> **New Feature**: Proxy-based authentication for OIDC/SSO integration
+
+Borg Web UI supports **proxy-based authentication** to integrate with external authentication providers like:
+- **Authentik**
+- **Authelia**
+- **Keycloak**
+- **Authserv**
+- **Google Identity-Aware Proxy (IAP)**
+- **Azure AD Application Proxy**
+- **Cloudflare Access**
+- Any reverse proxy that provides authenticated usernames in headers
+
+#### How It Works
+
+When enabled, Borg Web UI:
+1. **Disables the login screen** - No password prompts
+2. **Trusts the reverse proxy** - Reads username from HTTP headers
+3. **Auto-creates users** - Creates accounts on first access
+4. **Maintains authorization** - Still respects admin/user permissions
+
+**Security Model:**
+- ✅ Authentication: Handled by your proxy/OIDC provider
+- ✅ Authorization: Managed by Borg Web UI (admin vs. regular user)
+- ✅ Session management: JWT tokens still used for API calls
+
+#### Configuration
+
+**1. Enable proxy authentication:**
+
+```yaml
+environment:
+  - DISABLE_AUTHENTICATION=true  # Disable built-in login screen
+  - PROXY_AUTH_HEADER=X-Forwarded-User  # Default header name
+```
+
+**2. Configure your reverse proxy to forward authenticated usernames:**
+
+The proxy must set the `X-Forwarded-User` header (or your custom header) with the authenticated username.
+
+**Supported Headers (checked in order):**
+- `X-Forwarded-User` (default, configurable via `PROXY_AUTH_HEADER`)
+- `X-Remote-User`
+- `Remote-User`
+- `X-authentik-username` (Authentik)
+
+#### Security Requirements
+
+⚠️ **CRITICAL: This feature requires proper security configuration**
+
+**You MUST:**
+1. **Bind Borg UI to localhost only:**
+   ```yaml
+   ports:
+     - "127.0.0.1:8081:8081"  # Only accessible via localhost
+   ```
+
+2. **Use firewall rules to block direct access:**
+   ```bash
+   # Block external access to port 8081
+   sudo ufw deny 8081
+   sudo ufw allow from 127.0.0.1 to any port 8081
+   ```
+
+3. **Ensure ONLY your reverse proxy can reach Borg UI**
+   - Never expose the container port to the internet
+   - Use Docker networks to isolate Borg UI from direct access
+
+**Why this matters:**
+- If Borg UI is directly accessible, anyone can set the `X-Forwarded-User` header and impersonate any user
+- The proxy MUST strip/override user-supplied headers before forwarding
+
+#### Example Configurations
+
+##### Authentik
+
+**docker-compose.yml:**
+```yaml
+services:
+  borg-ui:
+    image: ainullcode/borg-ui:latest
+    environment:
+      - DISABLE_AUTHENTICATION=true
+      - PROXY_AUTH_HEADER=X-authentik-username
+    networks:
+      - internal
+    # NO ports exposed - only accessible via proxy
+
+  authentik-proxy:
+    image: ghcr.io/goauthentik/proxy:latest
+    environment:
+      - AUTHENTIK_HOST=https://auth.example.com
+      - AUTHENTIK_INSECURE=false
+      - AUTHENTIK_TOKEN=your-outpost-token
+    ports:
+      - "8443:8443"
+    networks:
+      - internal
+      - external
+    labels:
+      - "authentik.enabled=true"
+      - "authentik.upstream=http://borg-ui:8081"
+```
+
+**Authentik Application Setup:**
+1. Create new application in Authentik
+2. Select **Proxy Provider**
+3. Set External URL: `https://backups.example.com`
+4. Set Internal URL: `http://borg-ui:8081`
+5. Enable **Forward auth (single application)**
+6. Set authorization flow and user/group bindings
+
+##### Authelia
+
+**Authelia configuration.yml:**
+```yaml
+access_control:
+  rules:
+    - domain: backups.example.com
+      policy: one_factor  # or two_factor
+      subject:
+        - "group:admins"
+        - "group:backup-users"
+```
+
+**nginx configuration:**
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name backups.example.com;
+
+    # SSL configuration...
+
+    # Authelia authentication
+    include /path/to/authelia-authrequest.conf;
+
+    location / {
+        # Forward authenticated username to Borg UI
+        proxy_set_header X-Remote-User $remote_user;
+        proxy_set_header X-Forwarded-User $remote_user;
+
+        proxy_pass http://127.0.0.1:8081;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+##### Cloudflare Access
+
+**1. Create Cloudflare Access application:**
+- Application name: Borg Backups
+- Session duration: 24 hours
+- Add policies for users/groups
+
+**2. Configure Borg UI:**
+```yaml
+environment:
+  - DISABLE_AUTHENTICATION=true
+  - PROXY_AUTH_HEADER=Cf-Access-Authenticated-User-Email
+```
+
+**3. Cloudflare Access forwards the user's email in the `Cf-Access-Authenticated-User-Email` header**
+
+##### Nginx with Basic Auth (Simple Setup)
+
+For basic HTTP authentication:
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name backups.example.com;
+
+    # SSL configuration...
+
+    auth_basic "Borg Backups";
+    auth_basic_user_file /etc/nginx/.htpasswd;
+
+    location / {
+        # Forward authenticated username
+        proxy_set_header X-Remote-User $remote_user;
+        proxy_set_header X-Forwarded-User $remote_user;
+
+        proxy_pass http://127.0.0.1:8081;
+        # Other proxy headers...
+    }
+}
+```
+
+Create users:
+```bash
+htpasswd -c /etc/nginx/.htpasswd username
+```
+
+#### User Management with Proxy Auth
+
+**First-time access:**
+- Users are auto-created when they first access the application
+- New users are created as **regular users** (not admins)
+- Users inherit the username from the proxy header
+
+**Making users admins:**
+1. Admin manually promotes users via Settings > User Management
+2. Or update database directly:
+   ```bash
+   docker exec borg-web-ui sqlite3 /data/borg.db "UPDATE users SET is_admin=1 WHERE username='alice';"
+   ```
+
+**Disabling users:**
+- Set `is_active=0` in the database
+- Or use the User Management interface (when user is admin)
+
+#### Testing Proxy Auth
+
+**Verify headers are being sent:**
+
+```bash
+# From your reverse proxy server
+curl -H "X-Forwarded-User: testuser" http://localhost:8081/api/auth/me
+```
+
+**Check application logs:**
+```bash
+docker logs borg-web-ui 2>&1 | grep "proxy"
+docker logs borg-web-ui 2>&1 | grep "X-Forwarded-User"
+```
+
+**Test with direct access (should use fallback):**
+```bash
+# Without proxy header - falls back to 'admin' user
+curl http://localhost:8081/api/auth/me
+```
+
+#### Switching Between Auth Methods
+
+**To disable proxy auth and return to built-in authentication:**
+
+1. Remove environment variables:
+   ```yaml
+   environment:
+     # - DISABLE_AUTHENTICATION=true  # Commented out
+     # - PROXY_AUTH_HEADER=X-Forwarded-User
+   ```
+
+2. Restart container:
+   ```bash
+   docker compose up -d
+   ```
+
+3. Users can now log in with passwords again
+
+**Note:** Existing users created via proxy auth will still exist, but they'll need passwords set by an admin.
+
+#### Troubleshooting
+
+**Problem: Login screen still appears**
+- Verify `DISABLE_AUTHENTICATION=true` is set
+- Check environment variables: `docker exec borg-ui env | grep DISABLE`
+- Restart container after changing environment
+
+**Problem: "Could not validate credentials" errors**
+- Check proxy is sending the authentication header
+- Verify header name matches `PROXY_AUTH_HEADER`
+- Check logs: `docker logs borg-web-ui | grep "proxy"`
+
+**Problem: Wrong user is logged in**
+- Proxy may not be stripping user-supplied headers
+- Verify Borg UI is only accessible via proxy (not directly)
+- Check firewall rules and port bindings
+
+**Problem: Users can't access after proxy auth is enabled**
+- First access auto-creates regular users (not admins)
+- Admin must manually promote users to admin
+- Check user status: `docker exec borg-web-ui sqlite3 /data/borg.db "SELECT * FROM users;"`
+
+#### Security Checklist for Proxy Auth
+
+- [ ] `DISABLE_AUTHENTICATION=true` is set
+- [ ] Borg UI bound to localhost only (`127.0.0.1:8081`)
+- [ ] Firewall blocks external access to port 8081
+- [ ] Reverse proxy is configured to authenticate users
+- [ ] Reverse proxy strips user-supplied authentication headers
+- [ ] HTTPS is enabled on the reverse proxy
+- [ ] Reverse proxy has proper access controls (groups, 2FA, etc.)
+- [ ] First admin user has been promoted manually
+- [ ] Tested that direct access falls back safely
+- [ ] Application logs reviewed for proxy auth events
 
 ---
 
