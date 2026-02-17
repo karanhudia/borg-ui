@@ -10,8 +10,16 @@ import {
   CardContent,
   CardActionArea,
   alpha,
+  TextField,
+  FormControlLabel,
+  Radio,
+  RadioGroup,
+  Paper,
+  InputAdornment,
+  IconButton,
 } from '@mui/material'
-import { Server, Cloud } from 'lucide-react'
+import { Server, Cloud, FileCheck, FolderOpen } from 'lucide-react'
+import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 
 interface SSHConnection {
   id: number
@@ -27,6 +35,8 @@ interface SSHConnection {
 export interface RestoreDestinationStepData {
   destinationType: 'local' | 'ssh'
   destinationConnectionId: number | ''
+  restoreStrategy: 'original' | 'custom'
+  customPath: string
 }
 
 interface WizardStepRestoreDestinationProps {
@@ -34,6 +44,7 @@ interface WizardStepRestoreDestinationProps {
   sshConnections: SSHConnection[]
   repositoryType: string
   onChange: (data: Partial<RestoreDestinationStepData>) => void
+  onBrowsePath: () => void
 }
 
 export default function WizardStepRestoreDestination({
@@ -41,8 +52,10 @@ export default function WizardStepRestoreDestination({
   sshConnections,
   repositoryType,
   onChange,
+  onBrowsePath,
 }: WizardStepRestoreDestinationProps) {
   const isSSHRepository = repositoryType === 'ssh'
+
   const handleLocationChange = (location: 'local' | 'ssh') => {
     // Prevent SSH-to-SSH restore
     if (isSSHRepository && location === 'ssh') {
@@ -55,6 +68,19 @@ export default function WizardStepRestoreDestination({
     })
   }
 
+  // Get selected SSH connection for preview
+  const selectedSshConnection =
+    data.destinationType === 'ssh' && data.destinationConnectionId
+      ? sshConnections.find((c) => c.id === data.destinationConnectionId)
+      : null
+
+  // Build SSH URL preview
+  const getSshUrlPreview = () => {
+    if (!selectedSshConnection || !data.customPath) return ''
+    const path = data.customPath.startsWith('/') ? data.customPath : `/${data.customPath}`
+    return `ssh://${selectedSshConnection.username}@${selectedSshConnection.host}:${selectedSshConnection.port}${path}`
+  }
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* Header */}
@@ -63,7 +89,7 @@ export default function WizardStepRestoreDestination({
           Where should files be restored?
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Select the destination where you want to restore your files
+          Select the destination and location for your restored files
         </Typography>
       </Box>
 
@@ -196,6 +222,135 @@ export default function WizardStepRestoreDestination({
         </Alert>
       )}
 
+      {/* Local Destination: Original vs Custom Location */}
+      {data.destinationType === 'local' && (
+        <FormControl>
+          <RadioGroup
+            value={data.restoreStrategy}
+            onChange={(e) => onChange({ restoreStrategy: e.target.value as 'original' | 'custom' })}
+          >
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 2,
+                mb: 2,
+                border: data.restoreStrategy === 'original' ? 2 : 1,
+                borderColor: data.restoreStrategy === 'original' ? '#1976d2' : 'divider',
+                bgcolor:
+                  data.restoreStrategy === 'original'
+                    ? (theme) => alpha('#1976d2', theme.palette.mode === 'dark' ? 0.12 : 0.08)
+                    : 'background.paper',
+                transition: 'all 0.2s',
+                cursor: 'pointer',
+                '&:hover': {
+                  borderColor: data.restoreStrategy === 'original' ? '#1976d2' : 'text.primary',
+                },
+              }}
+              onClick={() => onChange({ restoreStrategy: 'original' })}
+            >
+              <FormControlLabel
+                value="original"
+                control={<Radio />}
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <FileCheck size={18} />
+                    <Box>
+                      <Typography variant="body1" fontWeight={600}>
+                        Restore to Original Location
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Recreate full directory structure from root (/)
+                      </Typography>
+                    </Box>
+                  </Box>
+                }
+                sx={{ m: 0, width: '100%' }}
+              />
+            </Paper>
+
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 2,
+                border: data.restoreStrategy === 'custom' ? 2 : 1,
+                borderColor: data.restoreStrategy === 'custom' ? '#1976d2' : 'divider',
+                bgcolor:
+                  data.restoreStrategy === 'custom'
+                    ? (theme) => alpha('#1976d2', theme.palette.mode === 'dark' ? 0.12 : 0.08)
+                    : 'background.paper',
+                transition: 'all 0.2s',
+                cursor: 'pointer',
+                '&:hover': {
+                  borderColor: data.restoreStrategy === 'custom' ? '#1976d2' : 'text.primary',
+                },
+              }}
+              onClick={() => onChange({ restoreStrategy: 'custom' })}
+            >
+              <FormControlLabel
+                value="custom"
+                control={<Radio />}
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <FolderOpen size={18} />
+                    <Box>
+                      <Typography variant="body1" fontWeight={600}>
+                        Restore to Custom Location
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Choose where to restore files
+                      </Typography>
+                    </Box>
+                  </Box>
+                }
+                sx={{ m: 0, width: '100%' }}
+              />
+            </Paper>
+          </RadioGroup>
+        </FormControl>
+      )}
+
+      {/* Custom Path Input (for Local destination with Custom strategy) */}
+      {data.destinationType === 'local' && data.restoreStrategy === 'custom' && (
+        <>
+          <TextField
+            label="Custom Destination Path"
+            value={data.customPath}
+            onChange={(e) => onChange({ customPath: e.target.value })}
+            placeholder="/Users/yourusername/restored"
+            required
+            fullWidth
+            helperText="Choose a writable directory where files will be restored"
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    onClick={onBrowsePath}
+                    edge="end"
+                    size="small"
+                    title="Browse filesystem"
+                  >
+                    <FolderOpenIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
+          />
+          {data.customPath && (
+            <Alert severity="info" icon={<Server size={18} />} sx={{ mt: 1 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                Files will be restored to:
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{ fontFamily: 'monospace', fontWeight: 600, color: '#1976d2', mt: 0.5 }}
+              >
+                {data.customPath}
+              </Typography>
+            </Alert>
+          )}
+        </>
+      )}
+
       {/* SSH Connection Selection */}
       {data.destinationType === 'ssh' && (
         <>
@@ -255,6 +410,48 @@ export default function WizardStepRestoreDestination({
                 ))}
               </Select>
             </FormControl>
+          )}
+        </>
+      )}
+
+      {/* Path Input for SSH destination */}
+      {data.destinationType === 'ssh' && data.destinationConnectionId && (
+        <>
+          <TextField
+            label="Destination Path"
+            value={data.customPath}
+            onChange={(e) => onChange({ customPath: e.target.value })}
+            placeholder="/mnt/backup/restored"
+            required
+            fullWidth
+            helperText="Choose a writable directory on the remote machine"
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    onClick={onBrowsePath}
+                    edge="end"
+                    size="small"
+                    title="Browse remote filesystem"
+                  >
+                    <FolderOpenIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
+          />
+          {data.customPath && (
+            <Alert severity="info" icon={<Cloud size={18} />} sx={{ mt: 1 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                Files will be restored to:
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{ fontFamily: 'monospace', fontWeight: 600, color: '#1976d2', mt: 0.5 }}
+              >
+                {getSshUrlPreview()}
+              </Typography>
+            </Alert>
           )}
         </>
       )}

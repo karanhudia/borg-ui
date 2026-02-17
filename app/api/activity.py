@@ -296,7 +296,7 @@ async def get_job_logs(
         raise HTTPException(status_code=404, detail=f"{job_type.capitalize()} job not found")
 
     # For completed/failed jobs, prefer log_file_path (full borg output) over logs (hooks only)
-    if job.status in ['completed', 'failed']:
+    if job.status in ['completed', 'failed', 'completed_with_warnings']:
         # First try reading from log file (contains all borg output)
         log_file_path = getattr(job, 'log_file_path', None)
         if log_file_path and os.path.exists(log_file_path):
