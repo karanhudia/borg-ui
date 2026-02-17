@@ -476,7 +476,7 @@ class TestProtectedEndpoints:
         """
         response = test_client.get("/api/repositories/")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_protected_endpoint_with_malformed_token(self, test_client: TestClient):
         """Test accessing protected endpoint with malformed token"""
@@ -573,4 +573,283 @@ class TestTokenValidation:
             headers={"Authorization": "InvalidPrefix token_here"}
         )
 
+        assert response.status_code == 401
+
+
+@pytest.mark.unit
+class TestProxyAuthentication:
+    """Test proxy authentication (DISABLE_AUTHENTICATION mode)"""
+
+    def test_auth_config_endpoint_jwt_mode(self, test_client: TestClient):
+        """Test auth config endpoint returns JWT mode by default"""
+        response = test_client.get("/api/auth/config")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "proxy_auth_enabled" in data
+        assert "authentication_required" in data
+        assert data["proxy_auth_enabled"] is False
+        assert data["authentication_required"] is True
+
+    def test_auth_config_endpoint_proxy_mode(self, test_client: TestClient, monkeypatch):
+        """Test auth config endpoint returns proxy mode when enabled"""
+        from app import config
+        monkeypatch.setattr(config.settings, "disable_authentication", True)
+
+        response = test_client.get("/api/auth/config")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["proxy_auth_enabled"] is True
+        assert data["authentication_required"] is False
+
+    def test_proxy_auth_with_header(self, test_client: TestClient, test_db, monkeypatch):
+        """Test proxy auth with X-Forwarded-User header auto-creates and logs in user"""
+        from app import config
+        monkeypatch.setattr(config.settings, "disable_authentication", True)
+
+        # Access protected endpoint with proxy header
+        response = test_client.get(
+            "/api/auth/me",
+            headers={"X-Forwarded-User": "proxyuser"}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["username"] == "proxyuser"
+        assert data["is_admin"] is False
+
+        # Verify user was created in database
+        from app.database.models import User
+        user = test_db.query(User).filter(User.username == "proxyuser").first()
+        assert user is not None
+        assert user.username == "proxyuser"
+        assert user.email == "proxyuser@proxy.local"
+        assert user.password_hash == ""  # No password for proxy auth users
+
+    def test_proxy_auth_without_header_uses_default_admin(
+        self,
+        test_client: TestClient,
+        test_db,
+        monkeypatch
+    ):
+        """Test proxy auth without header uses default 'admin' user"""
+        from app import config
+        monkeypatch.setattr(config.settings, "disable_authentication", True)
+
+        # Access without any proxy header
+        response = test_client.get("/api/auth/me")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["username"] == "admin"
+
+        # Verify admin user was created
+        from app.database.models import User
+        user = test_db.query(User).filter(User.username == "admin").first()
+        assert user is not None
+
+    def test_proxy_auth_with_alternative_headers(
+        self,
+        test_client: TestClient,
+        test_db,
+        monkeypatch
+    ):
+        """Test proxy auth tries alternative common headers"""
+        from app import config
+        monkeypatch.setattr(config.settings, "disable_authentication", True)
+
+        # Test with X-Remote-User header (used by Authelia)
+        response = test_client.get(
+            "/api/auth/me",
+            headers={"X-Remote-User": "authelia_user"}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["username"] == "authelia_user"
+
+        # Test with Remote-User header
+        response = test_client.get(
+            "/api/auth/me",
+            headers={"Remote-User": "nginx_user"}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["username"] == "nginx_user"
+
+        # Test with X-authentik-username (Authentik specific)
+        response = test_client.get(
+            "/api/auth/me",
+            headers={"X-authentik-username": "authentik_user"}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["username"] == "authentik_user"
+
+    def test_proxy_auth_username_normalized_lowercase(
+        self,
+        test_client: TestClient,
+        test_db,
+        monkeypatch
+    ):
+        """Test proxy auth normalizes username to lowercase"""
+        from app import config
+        monkeypatch.setattr(config.settings, "disable_authentication", True)
+
+        response = test_client.get(
+            "/api/auth/me",
+            headers={"X-Forwarded-User": "JohnDoe"}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["username"] == "johndoe"  # Normalized to lowercase
+
+    def test_proxy_auth_reuses_existing_user(
+        self,
+        test_client: TestClient,
+        test_db,
+        monkeypatch
+    ):
+        """Test proxy auth reuses existing user instead of creating duplicate"""
+        from app import config
+        from app.database.models import User
+        from app.core.security import get_password_hash
+
+        # Create user first
+        existing_user = User(
+            username="existinguser",
+            password_hash=get_password_hash("somepassword"),
+            email="existing@example.com",
+            is_active=True,
+            is_admin=True
+        )
+        test_db.add(existing_user)
+        test_db.commit()
+        user_id = existing_user.id
+
+        monkeypatch.setattr(config.settings, "disable_authentication", True)
+
+        # Access with same username via proxy
+        response = test_client.get(
+            "/api/auth/me",
+            headers={"X-Forwarded-User": "existinguser"}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["username"] == "existinguser"
+        assert data["is_admin"] is True  # Preserved from original user
+        assert data["email"] == "existing@example.com"  # Preserved
+
+        # Verify no duplicate was created
+        users = test_db.query(User).filter(User.username == "existinguser").all()
+        assert len(users) == 1
+        assert users[0].id == user_id  # Same user
+
+    def test_proxy_auth_inactive_user_denied(
+        self,
+        test_client: TestClient,
+        test_db,
+        monkeypatch
+    ):
+        """Test proxy auth denies access to inactive users"""
+        from app import config
+        from app.database.models import User
+
+        # Create inactive user
+        inactive_user = User(
+            username="inactiveuser",
+            password_hash="",
+            email="inactive@proxy.local",
+            is_active=False,
+            is_admin=False
+        )
+        test_db.add(inactive_user)
+        test_db.commit()
+
+        monkeypatch.setattr(config.settings, "disable_authentication", True)
+
+        response = test_client.get(
+            "/api/auth/me",
+            headers={"X-Forwarded-User": "inactiveuser"}
+        )
+
         assert response.status_code == 403
+        assert "disabled" in response.json()["detail"].lower()
+
+    def test_jwt_auth_still_works_when_proxy_disabled(
+        self,
+        test_client: TestClient,
+        admin_headers
+    ):
+        """Test that JWT auth still works normally when proxy auth is disabled"""
+        # Proxy auth disabled by default, should use JWT
+        response = test_client.get(
+            "/api/auth/me",
+            headers=admin_headers
+        )
+
+        # Should work with JWT token
+        assert response.status_code == 200
+
+    def test_proxy_auth_custom_header_configuration(
+        self,
+        test_client: TestClient,
+        test_db,
+        monkeypatch
+    ):
+        """Test proxy auth with custom configured header"""
+        from app import config
+        monkeypatch.setattr(config.settings, "disable_authentication", True)
+        monkeypatch.setattr(config.settings, "proxy_auth_header", "X-Custom-User")
+
+        response = test_client.get(
+            "/api/auth/me",
+            headers={"X-Custom-User": "customuser"}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["username"] == "customuser"
+
+    def test_proxy_auth_updates_last_login(
+        self,
+        test_client: TestClient,
+        test_db,
+        monkeypatch
+    ):
+        """Test proxy auth updates last_login timestamp"""
+        from app import config
+        from app.database.models import User
+        import time
+
+        monkeypatch.setattr(config.settings, "disable_authentication", True)
+
+        # First access
+        response = test_client.get(
+            "/api/auth/me",
+            headers={"X-Forwarded-User": "timeuser"}
+        )
+        assert response.status_code == 200
+
+        user = test_db.query(User).filter(User.username == "timeuser").first()
+        first_login = user.last_login
+
+        time.sleep(1)  # Wait a second
+
+        # Second access
+        response = test_client.get(
+            "/api/auth/me",
+            headers={"X-Forwarded-User": "timeuser"}
+        )
+        assert response.status_code == 200
+
+        test_db.refresh(user)
+        second_login = user.last_login
+
+        # Last login should be updated
+        assert second_login > first_login

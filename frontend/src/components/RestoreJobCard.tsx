@@ -153,6 +153,38 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
         </Stack>
       )}
 
+      {job.status === 'completed_with_warnings' && job.completed_at && (
+        <Stack
+          direction="row"
+          spacing={1.5}
+          alignItems="baseline"
+          sx={{ flexWrap: 'wrap', gap: 1 }}
+        >
+          <Typography variant="body2" color="warning.main" fontWeight={500}>
+            ⚠ Completed with warnings
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {formatRelativeTime(job.completed_at)}
+          </Typography>
+          {getDurationText() && (
+            <>
+              <Typography variant="body2" color="text.secondary">
+                •
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {getDurationText()}
+              </Typography>
+            </>
+          )}
+        </Stack>
+      )}
+
+      {job.status === 'completed_with_warnings' && job.error_message && (
+        <Alert severity="warning" sx={{ mt: 2, mb: 2 }}>
+          <Typography variant="body2">{job.error_message}</Typography>
+        </Alert>
+      )}
+
       {job.status === 'failed' && job.error_message && (
         <Alert severity="error" sx={{ mb: 2 }}>
           <Typography variant="body2">{job.error_message}</Typography>

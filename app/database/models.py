@@ -395,6 +395,7 @@ class SystemSettings(Base):
     # Beta features
     use_new_wizard = Column(Boolean, default=False, nullable=False)  # Enable new repository wizard (beta)
     bypass_lock_on_info = Column(Boolean, default=False, nullable=False)  # Use --bypass-lock for all borg info commands (beta fix for SSH lock issues)
+    bypass_lock_on_list = Column(Boolean, default=False, nullable=False)  # Use --bypass-lock for all borg list commands (beta fix for concurrent operation lock issues)
     show_restore_tab = Column(Boolean, default=False, nullable=False)  # Show legacy Restore tab in navigation (beta feature)
 
     created_at = Column(DateTime, default=utc_now)

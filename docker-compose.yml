@@ -107,6 +107,9 @@ services:
       - CACHE_TTL_SECONDS=7200 # 2 hours
       - CACHE_MAX_SIZE_MB=2048 # 2GB
 
+      # Disable authentication
+      # - DISABLE_AUTHENTICATION=true
+
     healthcheck:
       test: ["CMD", "sh", "-c", "curl -f http://localhost:$${PORT:-8081}/"]
       interval: 30s

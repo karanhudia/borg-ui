@@ -81,6 +81,11 @@ export default function WizardStepRestorePath({
       path = originalPath
     }
 
+    // Ensure path starts with / for proper SSH URL formatting
+    if (path && !path.startsWith('/')) {
+      path = '/' + path
+    }
+
     // Add SSH prefix if restoring to SSH destination
     return sshPrefix ? `${sshPrefix}${path}` : path
   }

@@ -79,6 +79,58 @@ environment:
 
 **Note:** If not set, defaults to `admin123`. You'll be prompted to change it on first login.
 
+### Proxy/OIDC Authentication
+
+{: .new }
+> **New Feature**: Integrate with external authentication providers (Authentik, Authelia, Keycloak, etc.)
+
+Disable the built-in login screen and use your reverse proxy for authentication:
+
+```yaml
+environment:
+  - DISABLE_AUTHENTICATION=true          # Disable built-in login screen
+  - PROXY_AUTH_HEADER=X-Forwarded-User   # Header containing authenticated username (optional, default shown)
+```
+
+**How it works:**
+- Borg UI reads the authenticated username from HTTP headers set by your reverse proxy
+- Users are auto-created on first access
+- New users are created as regular users (not admins)
+- Admin must manually promote users to admin via Settings > User Management
+
+**Supported authentication providers:**
+- **Authentik** (header: `X-authentik-username`)
+- **Authelia** (header: `X-Remote-User`)
+- **Keycloak** (header: `X-Forwarded-User`)
+- **Cloudflare Access** (header: `Cf-Access-Authenticated-User-Email`)
+- **Google IAP** (header: `X-Goog-Authenticated-User-Email`)
+- **Azure AD** (header: `X-MS-CLIENT-PRINCIPAL-NAME`)
+- Any proxy that sets authentication headers
+
+**Security Requirements:**
+
+⚠️ **CRITICAL**: You MUST ensure Borg UI is only accessible through your authenticated proxy:
+
+```yaml
+ports:
+  - "127.0.0.1:8081:8081"  # Only accessible via localhost
+```
+
+And block direct access with firewall rules:
+
+```bash
+sudo ufw deny 8081
+sudo ufw allow from 127.0.0.1 to any port 8081
+```
+
+**Why:** If Borg UI is directly accessible, anyone can spoof the authentication header and gain access.
+
+See [Security Guide - Proxy/OIDC Authentication](security.md#proxyoidc-authentication) for:
+- Complete setup examples (Authentik, Authelia, Cloudflare Access, etc.)
+- Security best practices
+- Troubleshooting guide
+- User management
+
 ### Reverse Proxy / BASE_PATH
 
 {: .new }

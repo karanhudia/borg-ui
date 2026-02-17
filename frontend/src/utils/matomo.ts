@@ -108,9 +108,17 @@ let preferenceLoaded = false
  */
 export const loadUserPreference = async (): Promise<void> => {
   try {
+    // Check if proxy auth is enabled
+    const authConfigResponse = await fetch('/api/auth/config')
+    const authConfig = await authConfigResponse.json()
+    const proxyAuthEnabled = authConfig.proxy_auth_enabled
+
     const token = localStorage.getItem('access_token')
-    if (!token) {
-      // PRIVACY FIRST: No tracking on login page
+
+    // In proxy auth mode, we can fetch preferences without a token
+    // In JWT mode, we need a token
+    if (!token && !proxyAuthEnabled) {
+      // PRIVACY FIRST: No tracking on login page (JWT mode without token)
       // User's opt-out preference is stored server-side (requires auth to fetch)
       // Default to NO tracking until user logs in and we can verify their preference
       userOptedOut = true
@@ -119,8 +127,14 @@ export const loadUserPreference = async (): Promise<void> => {
       return
     }
 
+    const headers: Record<string, string> = {}
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
+    // In proxy auth mode without token, the backend will use proxy headers
+
     const response = await fetch('/api/settings/preferences', {
-      headers: { Authorization: `Bearer ${token}` },
+      headers,
     })
 
     if (response.ok) {

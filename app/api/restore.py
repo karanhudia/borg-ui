@@ -120,7 +120,7 @@ async def start_restore(
                 repository_type=repository.repository_type,
                 destination_type=restore_request.destination_type,
                 destination_connection_id=restore_request.destination_connection_id,
-                ssh_connection_id=repository.ssh_connection_id if repository.repository_type == 'ssh' else None
+                ssh_connection_id=repository.connection_id if repository.repository_type == 'ssh' else None
             )
         )
 
