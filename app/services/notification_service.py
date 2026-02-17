@@ -74,19 +74,138 @@ def _format_bytes(bytes_value: int) -> str:
     return f"{bytes_value:.2f} PB"
 
 
+def _format_duration(started_at: datetime, completed_at: datetime) -> str:
+    """
+    Format duration as human-readable string.
+
+    Examples: '2h 34m', '5m 32s', '45s'
+    """
+    delta = completed_at - started_at
+    total_seconds = int(delta.total_seconds())
+
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+
+    if hours > 0:
+        return f"{hours}h {minutes}m"
+    elif minutes > 0:
+        return f"{minutes}m {seconds}s"
+    else:
+        return f"{seconds}s"
+
+
+def _calculate_compression_ratio(original_size: int, compressed_size: int) -> str:
+    """
+    Calculate and format compression ratio.
+
+    Returns: String like "28.5% (saved 2.1 GB)" or "No compression" if sizes are equal
+    """
+    if not original_size or original_size == 0:
+        return "N/A"
+
+    if compressed_size >= original_size:
+        return "No compression"
+
+    savings_bytes = original_size - compressed_size
+    ratio = (savings_bytes / original_size) * 100
+
+    return f"{ratio:.1f}% (saved {_format_bytes(savings_bytes)})"
+
+
+def _calculate_backup_speed(total_bytes: int, duration_seconds: int) -> str:
+    """
+    Calculate average backup speed.
+
+    Returns: String like "45.6 MB/s" or "N/A" if duration is zero
+    """
+    if not duration_seconds or duration_seconds == 0:
+        return "N/A"
+
+    bytes_per_second = total_bytes / duration_seconds
+
+    # Convert to appropriate unit
+    for unit in ['B/s', 'KB/s', 'MB/s', 'GB/s']:
+        if bytes_per_second < 1024.0:
+            return f"{bytes_per_second:.1f} {unit}"
+        bytes_per_second /= 1024.0
+
+    return f"{bytes_per_second:.1f} TB/s"
+
+
+def _get_status_badge(status_type: str, is_html: bool = False) -> str:
+    """
+    Get professional status badge (text-based, no emojis).
+
+    Args:
+        status_type: One of 'success', 'failed', 'warning', 'info', 'started'
+        is_html: If True, returns HTML span with color. If False, returns plain text badge.
+
+    Returns:
+        Professional status badge like "[SUCCESS]" or HTML colored badge
+    """
+    badge_configs = {
+        'success': {'text': '[SUCCESS]', 'color': '#28a745'},
+        'failed': {'text': '[FAILED]', 'color': '#dc3545'},
+        'error': {'text': '[ERROR]', 'color': '#dc3545'},
+        'warning': {'text': '[WARNING]', 'color': '#ffc107'},
+        'info': {'text': '[INFO]', 'color': '#17a2b8'},
+        'started': {'text': '[STARTED]', 'color': '#007bff'},
+    }
+
+    config = badge_configs.get(status_type.lower(), badge_configs['info'])
+
+    if is_html:
+        return f'<span style="background-color: {config["color"]}; color: white; padding: 3px 8px; border-radius: 3px; font-weight: 600; font-size: 12px;">{config["text"]}</span>'
+    else:
+        return config['text']
+
+
+def _get_repository_type(repo) -> str:
+    """
+    Get repository type as a readable string.
+
+    Args:
+        repo: Repository object or None
+
+    Returns:
+        String like "Local", "SSH", "SFTP", or "Unknown"
+    """
+    if not repo:
+        return "Unknown"
+
+    # Check for SSH connection
+    if hasattr(repo, 'ssh_connection_id') and repo.ssh_connection_id:
+        return "SSH"
+
+    # Check path patterns
+    if hasattr(repo, 'path'):
+        path = repo.path
+        if path.startswith('ssh://'):
+            return "SSH"
+        elif path.startswith('sftp://'):
+            return "SFTP"
+        elif '/' in path or '\\' in path:
+            return "Local"
+
+    return "Unknown"
+
+
 def _create_markdown_message(title: str, content_blocks: list, footer: str = None) -> str:
     """
     Create a well-formatted Markdown message for chat services (Slack, Discord, Telegram, etc.).
 
     Args:
-        title: Message title/header
+        title: Message title/header (NOTE: Not included in body as Apprise displays it separately)
         content_blocks: List of dicts with 'label'/'value' pairs or 'html' key (ignored for markdown)
         footer: Optional footer text
 
     Returns:
         Markdown formatted string
     """
-    lines = [f"**{title}**", ""]
+    # Note: Title is NOT included in the body because Apprise displays it separately
+    # for chat services (Telegram, Slack, Discord, etc.)
+    lines = []
 
     for block in content_blocks:
         if 'label' in block and 'value' in block:
@@ -354,7 +473,7 @@ def _append_json_to_body(body: str, json_data: str, is_html: bool, service_url: 
         <div style="margin-top: 20px; padding: 12px; background-color: #f8f9fa; border-radius: 4px;">
             <details>
                 <summary style="cursor: pointer; font-weight: 600; color: #667eea;">
-                    📊 JSON Data (for automation)
+                    JSON Data (for automation)
                 </summary>
                 <pre style="margin-top: 10px; padding: 10px; background-color: #fff; border-radius: 4px; overflow-x: auto; font-size: 11px; font-family: 'Courier New', monospace;">{json_data}</pre>
             </details>
@@ -366,7 +485,7 @@ def _append_json_to_body(body: str, json_data: str, is_html: bool, service_url: 
         body = body.replace('</div>\n</body>\n</html>', json_section)
     else:
         # For chat: use markdown code block
-        body += f"\n\n**📊 JSON Data (for automation)**\n```json\n{json_data}\n```"
+        body += f"\n\n**JSON Data (for automation)**\n```json\n{json_data}\n```"
 
     return body
 
@@ -405,12 +524,15 @@ class NotificationService:
         # Look up repository details
         repo = _get_repository(db, repository_name)
 
+        # Get repository type
+        repo_type = _get_repository_type(repo)
+
         # Build content blocks
         content_blocks = [
             {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': repo.name if repo else repository_name},
+            {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
         ]
-        
+
         # Add path if repository found
         if repo:
             content_blocks.append({'label': 'Location', 'value': repo.path})
@@ -428,16 +550,18 @@ class NotificationService:
         start_time = datetime.now()
         timestamp_str = start_time.strftime('%Y-%m-%d %H:%M:%S')
 
-        # Create HTML body for email
+        # Create HTML body for email with professional badge
+        html_title = f"{_get_status_badge('started', is_html=True)} Backup Started"
         html_body = _create_html_email(
-            title="🚀 Backup Started",
+            title=html_title,
             content_blocks=content_blocks,
             footer=f"Started at {timestamp_str}"
         )
 
-        # Create markdown body for chat services
+        # Create markdown body for chat services with professional badge
+        markdown_title = f"{_get_status_badge('started', is_html=False)} Backup Started"
         markdown_body = _create_markdown_message(
-            title="🚀 Backup Started",
+            title=markdown_title,
             content_blocks=content_blocks,
             footer=f"Started at {timestamp_str}"
         )
@@ -448,10 +572,12 @@ class NotificationService:
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
 
-            # Build title with optional job name
-            title = "🚀 Backup Started"
+            # Build title with optional job name and professional badge
+            status_badge_text = _get_status_badge('started', is_html=False)
+
+            title = f"{status_badge_text} Backup Started"
             if setting.include_job_name_in_title and job_name:
-                title = f"🚀 Backup Started - {job_name}"
+                title = f"{status_badge_text} Backup Started - {job_name}"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
 
@@ -506,15 +632,47 @@ class NotificationService:
         # Look up repository details
         repo = _get_repository(db, repository_name)
 
+        # Get repository type
+        repo_type = _get_repository_type(repo)
+
         # Build content blocks for HTML email and markdown
         content_blocks = [
             {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': repo.name if repo else repository_name},
+            {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
         ]
-        
+
         # Add path if repository found
         if repo:
             content_blocks.append({'label': 'Location', 'value': repo.path})
+
+        # Calculate derived metrics
+        elapsed_time_str = None
+        compression_ratio_str = None
+        backup_speed_str = None
+
+        if started_at and completion_time:
+            elapsed_time_str = _format_duration(started_at, completion_time)
+
+        if stats:
+            original_size = stats.get('original_size', 0)
+            compressed_size = stats.get('compressed_size', 0)
+
+            if original_size and compressed_size:
+                compression_ratio_str = _calculate_compression_ratio(original_size, compressed_size)
+
+                if started_at and completion_time:
+                    duration_seconds = (completion_time - started_at).total_seconds()
+                    backup_speed_str = _calculate_backup_speed(original_size, duration_seconds)
+
+        # Add performance metrics before stats
+        if elapsed_time_str:
+            content_blocks.append({'label': 'Duration', 'value': elapsed_time_str})
+        if nfiles:
+            content_blocks.append({'label': 'Files Processed', 'value': f"{nfiles:,}"})
+        if backup_speed_str:
+            content_blocks.append({'label': 'Average Speed', 'value': backup_speed_str})
+        if compression_ratio_str:
+            content_blocks.append({'label': 'Compression Ratio', 'value': compression_ratio_str})
 
         # Add statistics as a grid for HTML, and as simple blocks for markdown
         stats_blocks = []
@@ -552,27 +710,42 @@ class NotificationService:
         completed_at = completion_time or datetime.now()
         timestamp_str = completed_at.strftime('%Y-%m-%d %H:%M:%S')
 
-        # Create content blocks for markdown (including stats)
+        # Build footer with elapsed time if available
+        footer = f"Completed at {timestamp_str}"
+        if elapsed_time_str:
+            footer = f"Completed at {timestamp_str} (took {elapsed_time_str})"
+
+        # Create content blocks for markdown (including stats and performance metrics)
         markdown_blocks = [
             {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': repo.name if repo else repository_name},
+            {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
         ]
         if repo:
             markdown_blocks.append({'label': 'Location', 'value': repo.path})
+        if elapsed_time_str:
+            markdown_blocks.append({'label': 'Duration', 'value': elapsed_time_str})
+        if nfiles:
+            markdown_blocks.append({'label': 'Files Processed', 'value': f"{nfiles:,}"})
+        if backup_speed_str:
+            markdown_blocks.append({'label': 'Average Speed', 'value': backup_speed_str})
+        if compression_ratio_str:
+            markdown_blocks.append({'label': 'Compression Ratio', 'value': compression_ratio_str})
         markdown_blocks.extend(stats_blocks)
 
-        # Create HTML body for email
+        # Create HTML body for email with professional badge
+        html_title = f"{_get_status_badge('success', is_html=True)} Backup Successful"
         html_body = _create_html_email(
-            title="✅ Backup Successful",
+            title=html_title,
             content_blocks=content_blocks,
-            footer=f"Completed at {timestamp_str}"
+            footer=footer
         )
 
-        # Create Markdown body for chat services
+        # Create Markdown body for chat services with professional badge
+        markdown_title = f"{_get_status_badge('success', is_html=False)} Backup Successful"
         markdown_body = _create_markdown_message(
-            title="✅ Backup Successful",
+            title=markdown_title,
             content_blocks=markdown_blocks,
-            footer=f"Completed at {timestamp_str}"
+            footer=footer
         )
 
         for setting in settings:
@@ -580,10 +753,12 @@ class NotificationService:
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
 
-            # Build title with optional job name
-            title = "✅ Backup Successful"
+            # Build title with optional job name and professional badge
+            status_badge_text = _get_status_badge('success', is_html=False)
+
+            title = f"{status_badge_text} Backup Successful"
             if setting.include_job_name_in_title and job_name:
-                title = f"✅ Backup Successful - {job_name}"
+                title = f"{status_badge_text} Backup Successful - {job_name}"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
 
@@ -635,11 +810,14 @@ class NotificationService:
         # Look up repository details
         repo = _get_repository(db, repository_name)
 
+        # Get repository type
+        repo_type = _get_repository_type(repo)
+
         # Build content blocks
         content_blocks = [
-            {'label': 'Repository', 'value': repo.name if repo else repository_name},
+            {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
         ]
-        
+
         # Add path if repository found
         if repo:
             content_blocks.append({'label': 'Location', 'value': repo.path})
@@ -655,16 +833,20 @@ class NotificationService:
         </div>'''
         content_blocks.append({'html': error_html})
 
-        # Create HTML body
+        # Capture failure time
+        failure_time = datetime.now()
+
+        # Create HTML body with professional badge
+        html_title = f"{_get_status_badge('failed', is_html=True)} Backup Failed"
         html_body = _create_html_email(
-            title="❌ Backup Failed",
+            title=html_title,
             content_blocks=content_blocks,
-            footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            footer=f"Failed at {failure_time.strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
-        # Create markdown body (without HTML error box)
+        # Create markdown body with professional badge (without HTML error box)
         markdown_blocks = [
-            {'label': 'Repository', 'value': repo.name if repo else repository_name},
+            {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
         ]
         if repo:
             markdown_blocks.append({'label': 'Location', 'value': repo.path})
@@ -672,24 +854,24 @@ class NotificationService:
             markdown_blocks.append({'label': 'Job ID', 'value': str(job_id)})
         markdown_blocks.append({'label': 'Error', 'value': f"```\n{error_message}\n```"})
 
+        markdown_title = f"{_get_status_badge('failed', is_html=False)} Backup Failed"
         markdown_body = _create_markdown_message(
-            title="❌ Backup Failed",
+            title=markdown_title,
             content_blocks=markdown_blocks,
-            footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            footer=f"Failed at {failure_time.strftime('%Y-%m-%d %H:%M:%S')}"
         )
-
-        # Capture failure time for JSON
-        failure_time = datetime.now()
 
         for setting in settings:
             # Check if this notification applies to this repository
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
 
-            # Build title with optional job name
-            title = "❌ Backup Failed"
+            # Build title with optional job name and professional badge
+            status_badge_text = _get_status_badge('failed', is_html=False)
+
+            title = f"{status_badge_text} Backup Failed"
             if setting.include_job_name_in_title and job_name:
-                title = f"❌ Backup Failed - {job_name}"
+                title = f"{status_badge_text} Backup Failed - {job_name}"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
 
@@ -720,7 +902,9 @@ class NotificationService:
         warning_message: str,
         stats: Optional[dict] = None,
         completion_time: Optional[datetime] = None,
-        job_name: Optional[str] = None
+        job_name: Optional[str] = None,
+        started_at: Optional[datetime] = None,
+        nfiles: Optional[int] = None
     ) -> None:
         """
         Send notification for backup completed with warnings.
@@ -733,6 +917,8 @@ class NotificationService:
             stats: Backup statistics (optional)
             completion_time: When the backup completed (optional, defaults to now)
             job_name: Name of the job/schedule (optional, for enhanced titles)
+            started_at: When the backup started (optional, for elapsed time calculation)
+            nfiles: Number of files processed (optional)
         """
         settings = db.query(NotificationSettings).filter(
             NotificationSettings.enabled == True,
@@ -745,15 +931,47 @@ class NotificationService:
         # Look up repository details
         repo = _get_repository(db, repository_name)
 
+        # Get repository type
+        repo_type = _get_repository_type(repo)
+
         # Build content blocks for HTML email and markdown
         content_blocks = [
             {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': repo.name if repo else repository_name},
+            {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
         ]
 
         # Add path if repository found
         if repo:
             content_blocks.append({'label': 'Location', 'value': repo.path})
+
+        # Calculate derived metrics
+        elapsed_time_str = None
+        compression_ratio_str = None
+        backup_speed_str = None
+
+        if started_at and completion_time:
+            elapsed_time_str = _format_duration(started_at, completion_time)
+
+        if stats:
+            original_size = stats.get('original_size', 0)
+            compressed_size = stats.get('compressed_size', 0)
+
+            if original_size and compressed_size:
+                compression_ratio_str = _calculate_compression_ratio(original_size, compressed_size)
+
+                if started_at and completion_time:
+                    duration_seconds = (completion_time - started_at).total_seconds()
+                    backup_speed_str = _calculate_backup_speed(original_size, duration_seconds)
+
+        # Add performance metrics before stats
+        if elapsed_time_str:
+            content_blocks.append({'label': 'Duration', 'value': elapsed_time_str})
+        if nfiles:
+            content_blocks.append({'label': 'Files Processed', 'value': f"{nfiles:,}"})
+        if backup_speed_str:
+            content_blocks.append({'label': 'Average Speed', 'value': backup_speed_str})
+        if compression_ratio_str:
+            content_blocks.append({'label': 'Compression Ratio', 'value': compression_ratio_str})
 
         # Add statistics as a grid for HTML, and as simple blocks for markdown
         stats_blocks = []
@@ -790,46 +1008,63 @@ class NotificationService:
         # Add warning box for HTML
         warning_html = f'''
         <div class="warning-box" style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin: 10px 0; border-radius: 4px;">
-            <strong style="color: #856404;">⚠️ Warning:</strong>
+            <strong style="color: #856404;">Warning Details:</strong>
             <pre style="margin: 8px 0 0 0; color: #856404;">{warning_message}</pre>
         </div>'''
         content_blocks.append({'html': warning_html})
 
-        # Create HTML body
+        # Capture completion time
+        completed_at = completion_time or datetime.now()
+
+        # Build footer with elapsed time if available
+        footer = f"Completed at {completed_at.strftime('%Y-%m-%d %H:%M:%S')}"
+        if elapsed_time_str:
+            footer = f"Completed at {completed_at.strftime('%Y-%m-%d %H:%M:%S')} (took {elapsed_time_str})"
+
+        # Create HTML body with professional badge
+        html_title = f"{_get_status_badge('warning', is_html=True)} Backup Completed with Warnings"
         html_body = _create_html_email(
-            title="⚠️ Backup Completed with Warnings",
+            title=html_title,
             content_blocks=content_blocks,
-            footer=f"Completed at {(completion_time or datetime.now()).strftime('%Y-%m-%d %H:%M:%S')}"
+            footer=footer
         )
 
-        # Create markdown body
+        # Create markdown body with professional badge
         markdown_blocks = [
             {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': repo.name if repo else repository_name},
+            {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
         ]
         if repo:
             markdown_blocks.append({'label': 'Location', 'value': repo.path})
+        if elapsed_time_str:
+            markdown_blocks.append({'label': 'Duration', 'value': elapsed_time_str})
+        if nfiles:
+            markdown_blocks.append({'label': 'Files Processed', 'value': f"{nfiles:,}"})
+        if backup_speed_str:
+            markdown_blocks.append({'label': 'Average Speed', 'value': backup_speed_str})
+        if compression_ratio_str:
+            markdown_blocks.append({'label': 'Compression Ratio', 'value': compression_ratio_str})
         markdown_blocks.extend(stats_blocks)
         markdown_blocks.append({'label': 'Warning', 'value': f"```\n{warning_message}\n```"})
 
+        markdown_title = f"{_get_status_badge('warning', is_html=False)} Backup Completed with Warnings"
         markdown_body = _create_markdown_message(
-            title="⚠️ Backup Completed with Warnings",
+            title=markdown_title,
             content_blocks=markdown_blocks,
-            footer=f"Completed at {(completion_time or datetime.now()).strftime('%Y-%m-%d %H:%M:%S')}"
+            footer=footer
         )
-
-        # Capture completion time for JSON
-        completed_at = completion_time or datetime.now()
 
         for setting in settings:
             # Check if this notification applies to this repository
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
 
-            # Build title with optional job name
-            title = "⚠️ Backup Completed with Warnings"
+            # Build title with optional job name and professional badge
+            status_badge_text = _get_status_badge('warning', is_html=False)
+
+            title = f"{status_badge_text} Backup Completed with Warnings"
             if setting.include_job_name_in_title and job_name:
-                title = f"⚠️ Backup Completed with Warnings - {job_name}"
+                title = f"{status_badge_text} Backup Completed with Warnings - {job_name}"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
 
@@ -884,29 +1119,34 @@ class NotificationService:
         # Look up repository details
         repo = _get_repository(db, repository_name)
 
+        # Get repository type
+        repo_type = _get_repository_type(repo)
+
         # Build content blocks
         content_blocks = [
             {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': repo.name if repo else repository_name},
+            {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
         ]
         # Add path if repository found
         if repo:
             content_blocks.append({'label': 'Location', 'value': repo.path})
-            
+
         content_blocks.append({'label': 'Destination', 'value': target_path})
 
         # Use provided completion time or current time as fallback
         completed_at = completion_time or datetime.now()
         timestamp_str = completed_at.strftime('%Y-%m-%d %H:%M:%S')
 
+        html_title = f"{_get_status_badge('success', is_html=True)} Restore Successful"
         html_body = _create_html_email(
-            title="✅ Restore Successful",
+            title=html_title,
             content_blocks=content_blocks,
             footer=f"Completed at {timestamp_str}"
         )
 
+        markdown_title = f"{_get_status_badge('success', is_html=False)} Restore Successful"
         markdown_body = _create_markdown_message(
-            title="✅ Restore Successful",
+            title=markdown_title,
             content_blocks=content_blocks,
             footer=f"Completed at {timestamp_str}"
         )
@@ -916,10 +1156,12 @@ class NotificationService:
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
 
-            # Build title with optional job name
-            title = "✅ Restore Successful"
+            # Build title with optional job name and professional badge
+            status_badge_text = _get_status_badge('success', is_html=False)
+
+            title = f"{status_badge_text} Restore Successful"
             if setting.include_job_name_in_title and job_name:
-                title = f"✅ Restore Successful - {job_name}"
+                title = f"{status_badge_text} Restore Successful - {job_name}"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
 
@@ -971,10 +1213,13 @@ class NotificationService:
         # Look up repository details
         repo = _get_repository(db, repository_name)
 
+        # Get repository type
+        repo_type = _get_repository_type(repo)
+
         # Build content blocks
         content_blocks = [
             {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': repo.name if repo else repository_name},
+            {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
         ]
 
         # Add path if repository found
@@ -988,8 +1233,9 @@ class NotificationService:
         </div>'''
         content_blocks.append({'html': error_html})
 
+        html_title = f"{_get_status_badge('failed', is_html=True)} Restore Failed"
         html_body = _create_html_email(
-            title="❌ Restore Failed",
+            title=html_title,
             content_blocks=content_blocks,
             footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
@@ -997,15 +1243,16 @@ class NotificationService:
         # Create markdown body
         markdown_blocks = [
             {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': repo.name if repo else repository_name},
+            {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
         ]
         if repo:
             markdown_blocks.append({'label': 'Location', 'value': repo.path})
-            
+
         markdown_blocks.append({'label': 'Error', 'value': f"```\n{error_message}\n```"})
 
+        markdown_title = f"{_get_status_badge('failed', is_html=False)} Restore Failed"
         markdown_body = _create_markdown_message(
-            title="❌ Restore Failed",
+            title=markdown_title,
             content_blocks=markdown_blocks,
             footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
@@ -1018,10 +1265,12 @@ class NotificationService:
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
 
-            # Build title with optional job name
-            title = "❌ Restore Failed"
+            # Build title with optional job name and professional badge
+            status_badge_text = _get_status_badge('failed', is_html=False)
+
+            title = f"{status_badge_text} Restore Failed"
             if setting.include_job_name_in_title and job_name:
-                title = f"❌ Restore Failed - {job_name}"
+                title = f"{status_badge_text} Restore Failed - {job_name}"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
 
@@ -1087,8 +1336,9 @@ class NotificationService:
         </div>'''
         content_blocks.append({'html': error_html})
 
+        html_title = f"{_get_status_badge('failed', is_html=True)} Scheduled Backup Failed"
         html_body = _create_html_email(
-            title="❌ Scheduled Backup Failed",
+            title=html_title,
             content_blocks=content_blocks,
             footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
@@ -1103,8 +1353,9 @@ class NotificationService:
             
         markdown_blocks.append({'label': 'Error', 'value': f"```\n{error_message}\n```"})
 
+        markdown_title = f"{_get_status_badge('failed', is_html=False)} Scheduled Backup Failed"
         markdown_body = _create_markdown_message(
-            title="❌ Scheduled Backup Failed",
+            title=markdown_title,
             content_blocks=markdown_blocks,
             footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
@@ -1117,10 +1368,12 @@ class NotificationService:
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
 
-            # Build title with optional schedule name (using schedule_name as job_name)
-            title = "❌ Scheduled Backup Failed"
+            # Build title with optional schedule name and professional badge
+            status_badge_text = _get_status_badge('failed', is_html=False)
+
+            title = f"{status_badge_text} Scheduled Backup Failed"
             if setting.include_job_name_in_title and schedule_name:
-                title = f"❌ Scheduled Backup Failed - {schedule_name}"
+                title = f"{status_badge_text} Scheduled Backup Failed - {schedule_name}"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
 
@@ -1367,24 +1620,26 @@ class NotificationService:
         completion_time = datetime.now()
         timestamp_str = completion_time.strftime('%Y-%m-%d %H:%M:%S')
 
-        # Choose title and emoji based on status
+        # Choose title and badge based on status
         if status == "completed":
-            emoji = "✅"
+            badge_type = "success"
             title_text = "Check Completed"
         else:
-            emoji = "❌"
+            badge_type = "failed"
             title_text = "Check Failed"
 
-        # Create HTML body for email
+        # Create HTML body for email with professional badge
+        html_title = f"{_get_status_badge(badge_type, is_html=True)} Repository {title_text}"
         html_body = _create_html_email(
-            title=f"{emoji} Repository {title_text}",
+            title=html_title,
             content_blocks=content_blocks,
             footer=f"Completed at {timestamp_str}"
         )
 
-        # Create markdown body for chat services
+        # Create markdown body for chat services with professional badge
+        markdown_title = f"{_get_status_badge(badge_type, is_html=False)} Repository {title_text}"
         markdown_body = _create_markdown_message(
-            title=f"{emoji} Repository {title_text}",
+            title=markdown_title,
             content_blocks=content_blocks,
             footer=f"Completed at {timestamp_str}"
         )
@@ -1395,10 +1650,12 @@ class NotificationService:
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
 
-            # Build title with optional job name
-            title = f"{emoji} Repository {title_text}"
+            # Build title with optional job name and professional badge
+            status_badge_text = _get_status_badge(badge_type, is_html=False)
+
+            title = f"{status_badge_text} Repository {title_text}"
             if setting.include_job_name_in_title and job_name:
-                title = f"{emoji} Repository {title_text} - {job_name}"
+                title = f"{status_badge_text} Repository {title_text} - {job_name}"
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
 
