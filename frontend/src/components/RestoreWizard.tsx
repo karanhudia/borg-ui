@@ -8,12 +8,11 @@ import {
   Button,
   Typography,
 } from '@mui/material'
-import { Files, HardDrive, FolderOpen, CheckCircle } from 'lucide-react'
+import { Files, HardDrive, CheckCircle } from 'lucide-react'
 import {
   WizardStepIndicator,
   WizardStepRestoreFiles,
   WizardStepRestoreDestination,
-  WizardStepRestorePath,
   WizardStepRestoreReview,
 } from './wizard'
 import FileExplorerDialog from './FileExplorerDialog'
@@ -101,7 +100,6 @@ const RestoreWizard = ({
     () => [
       { key: 'files', label: 'Files', icon: <Files size={14} /> },
       { key: 'destination', label: 'Destination', icon: <HardDrive size={14} /> },
-      { key: 'path', label: 'Path', icon: <FolderOpen size={14} /> },
       { key: 'review', label: 'Review', icon: <CheckCircle size={14} /> },
     ],
     []
@@ -174,13 +172,20 @@ const RestoreWizard = ({
         return wizardState.selectedPaths.length > 0
 
       case 'destination':
+        // Validate SSH connection selection
         if (wizardState.destinationType === 'ssh' && !wizardState.destinationConnectionId) {
           return false
         }
-        return true
-
-      case 'path':
-        if (wizardState.restoreStrategy === 'custom' && !wizardState.customPath.trim()) {
+        // Validate custom path (for both local custom and SSH destinations)
+        if (
+          wizardState.destinationType === 'local' &&
+          wizardState.restoreStrategy === 'custom' &&
+          !wizardState.customPath.trim()
+        ) {
+          return false
+        }
+        // Validate SSH destination path
+        if (wizardState.destinationType === 'ssh' && !wizardState.customPath.trim()) {
           return false
         }
         return true
@@ -252,6 +257,8 @@ const RestoreWizard = ({
             data={{
               destinationType: wizardState.destinationType,
               destinationConnectionId: wizardState.destinationConnectionId,
+              restoreStrategy: wizardState.restoreStrategy,
+              customPath: wizardState.customPath,
             }}
             sshConnections={sshConnections}
             repositoryType={repositoryType}
@@ -266,21 +273,6 @@ const RestoreWizard = ({
                 handleStateChange(updates)
               }
             }}
-          />
-        )
-
-      case 'path':
-        return (
-          <WizardStepRestorePath
-            data={{
-              restoreStrategy: wizardState.restoreStrategy,
-              customPath: wizardState.customPath,
-            }}
-            selectedFiles={selectedFiles}
-            destinationType={wizardState.destinationType}
-            destinationConnectionId={wizardState.destinationConnectionId}
-            sshConnections={sshConnections}
-            onChange={handleStateChange}
             onBrowsePath={() => setShowPathExplorer(true)}
           />
         )
@@ -412,6 +404,7 @@ const RestoreWizard = ({
               : undefined
           }
           selectMode="directories"
+          showSshMountPoints={false}
         />
       )}
     </>

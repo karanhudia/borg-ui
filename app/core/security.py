@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import HTTPException, status, Depends
+from fastapi import HTTPException, status, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 import structlog
@@ -53,43 +53,141 @@ def verify_token(token: str) -> Optional[str]:
         return None
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
     db: Session = Depends(get_db)
 ) -> User:
-    """Get the current authenticated user"""
+    """Get the current authenticated user (supports both JWT and proxy auth)"""
+
+    # Check if proxy authentication is enabled
+    if settings.disable_authentication:
+        # Use proxy authentication
+        return await get_current_user_proxy(request, db)
+
+    # Use JWT authentication
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    
+
+    # Extract token from Authorization header
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise credentials_exception
+
+    token = auth_header.split(" ")[1]
+
     try:
-        username = verify_token(credentials.credentials)
+        username = verify_token(token)
         if username is None:
             raise credentials_exception
-        
+
         user = db.query(User).filter(User.username == username).first()
         if user is None:
             raise credentials_exception
-        
+
         if not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Inactive user"
             )
-        
+
         return user
     except JWTError:
         raise credentials_exception
 
-async def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
+
+async def get_current_user_proxy(
+    request: Request,
+    db: Session
+) -> User:
+    """
+    Get the current authenticated user from reverse proxy headers.
+    Used when DISABLE_AUTHENTICATION is enabled.
+
+    Security: Ensure Borg UI is only accessible through your reverse proxy
+    by binding to localhost (127.0.0.1) or using firewall rules.
+    """
+
+    # Read username from configured proxy header
+    username = request.headers.get(settings.proxy_auth_header)
+
+    # Try alternative headers if configured one isn't present
+    if not username:
+        alternative_headers = ["X-Remote-User", "Remote-User", "X-authentik-username", "X-Forwarded-User"]
+        for header in alternative_headers:
+            if header != settings.proxy_auth_header:
+                username = request.headers.get(header)
+                if username:
+                    logger.debug("Found username in alternative header", header=header)
+                    break
+
+    # If no username found in any header, use default user for direct access
+    if not username:
+        logger.info("No proxy header found, using default user for direct access")
+        username = "admin"  # Default user when accessing directly without proxy
+
+    # Normalize username
+    username = username.strip().lower()
+
+    if not username:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Empty username in proxy header"
+        )
+
+    # Check if user exists
+    user = db.query(User).filter(User.username == username).first()
+
+    # Auto-create user if they don't exist
+    if not user:
+        logger.info("Auto-creating user from proxy authentication", username=username)
+
+        user = User(
+            username=username,
+            password_hash="",  # No password for proxy auth users
+            email=f"{username}@proxy.local",
+            is_admin=False,
+            is_active=True,
+            must_change_password=False
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        logger.info("User auto-created successfully", username=username)
+
+    # Check if user is active
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is disabled"
+        )
+
+    # Update last login timestamp
+    from datetime import timezone
+    user.last_login = datetime.now(timezone.utc)
+    db.commit()
+
+    return user
+
+async def get_current_active_user(
+    request: Request,
+    db: Session = Depends(get_db)
+) -> User:
     """Get the current active user"""
+    current_user = await get_current_user(request, db)
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
 
-async def get_current_admin_user(current_user: User = Depends(get_current_user)) -> User:
+
+async def get_current_admin_user(
+    request: Request,
+    db: Session = Depends(get_db)
+) -> User:
     """Get the current admin user"""
+    current_user = await get_current_user(request, db)
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

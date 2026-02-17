@@ -70,7 +70,7 @@ async def test_send_backup_success_email(test_db, mock_apprise, mock_repository,
     assert apprise_instance.add.call_count == 1
     # Verify mock was called with HTML format
     call_args = apprise_instance.notify.call_args[1]
-    assert call_args['title'] == "[Borg] ✅ Backup Successful"
+    assert call_args['title'] == "[Borg] [SUCCESS] Backup Successful"
     assert "1.00 MB" in call_args['body']  # Formatted original size
     assert "512.00 KB" in call_args['body'] # Formatted compressed size
     assert "<html>" in call_args['body']
@@ -97,7 +97,7 @@ async def test_send_backup_failure_discord(test_db, mock_apprise, mock_repositor
     assert apprise_instance.add.call_count == 1
     # Verify mock was called with Markdown format (implicit for non-email)
     call_args = apprise_instance.notify.call_args[1]
-    assert call_args['title'] == "❌ Backup Failed"
+    assert call_args['title'] == "[FAILED] Backup Failed"
     assert error_msg in call_args['body']
     assert str(job_id) in call_args['body']
     assert "```" in call_args['body'] # Markdown code block
@@ -274,7 +274,7 @@ class TestHelperFunctions:
 
         assert '<details>' in result
         assert '<summary' in result
-        assert '📊 JSON Data' in result
+        assert 'JSON Data' in result
         assert json_data in result
         assert '<pre' in result
 
@@ -285,7 +285,7 @@ class TestHelperFunctions:
 
         result = _append_json_to_body(markdown_body, json_data, is_html=False, service_url='slack://token/channel')
 
-        assert '**📊 JSON Data' in result
+        assert '**JSON Data' in result
         assert '```json' in result
         assert json_data in result
         assert '```' in result
@@ -309,7 +309,7 @@ class TestHelperFunctions:
         result = _append_json_to_body(body, json_data, is_html=False, service_url='jsons://webhook.site/abc123')
         assert result == json_data
         assert '```json' not in result
-        assert '**📊 JSON Data' not in result
+        assert '**JSON Data' not in result
 
         # Test with json:// webhook (insecure)
         result = _append_json_to_body(body, json_data, is_html=False, service_url='json://myserver.com/webhook')
@@ -331,7 +331,7 @@ class TestHelperFunctions:
         result = _append_json_to_body(body, json_data, is_html=False, service_url='https://webhook.site/abc123')
         assert result != json_data
         assert '```json' in result
-        assert '**📊 JSON Data' in result
+        assert '**JSON Data' in result
 
         # Test form:// webhook - should get markdown formatting
         result = _append_json_to_body(body, json_data, is_html=False, service_url='form://webhook.site/abc123')
@@ -371,7 +371,7 @@ async def test_job_name_in_title_when_enabled(test_db, mock_apprise, mock_reposi
 
     # Assert
     call_args = apprise_instance.notify.call_args[1]
-    assert call_args['title'] == "✅ Backup Successful - Daily Backup"
+    assert call_args['title'] == "[SUCCESS] Backup Successful - Daily Backup"
 
 
 @pytest.mark.asyncio
@@ -406,7 +406,7 @@ async def test_job_name_not_in_title_when_disabled(test_db, mock_apprise, mock_r
 
     # Assert
     call_args = apprise_instance.notify.call_args[1]
-    assert call_args['title'] == "✅ Backup Successful"
+    assert call_args['title'] == "[SUCCESS] Backup Successful"
     assert "Daily Backup" not in call_args['title']
 
 
@@ -454,7 +454,7 @@ async def test_json_data_in_body_for_json_webhook(test_db, mock_apprise, mock_re
     assert parsed["stats"]["original_size"] == 1024
 
     # Should NOT contain markdown formatting
-    assert '📊 JSON Data' not in body
+    assert 'JSON Data' not in body
     assert '```json' not in body
 
 
@@ -492,7 +492,7 @@ async def test_json_data_not_in_body_for_non_json_services(test_db, mock_apprise
     body = call_args['body']
 
     # Check JSON is NOT present
-    assert '📊 JSON Data' not in body
+    assert 'JSON Data' not in body
     assert '```json' not in body
     assert '"event_type"' not in body
 
@@ -539,7 +539,7 @@ async def test_json_format_for_json_webhook_uses_compact_format(test_db, mock_ap
     # Should NOT contain HTML or markdown formatting
     assert '<details>' not in body
     assert '```json' not in body
-    assert '📊 JSON Data' not in body
+    assert 'JSON Data' not in body
 
 
 @pytest.mark.asyncio
@@ -646,7 +646,7 @@ async def test_json_webhook_receives_pure_json(test_db, mock_apprise, mock_repos
 
     # Should NOT contain markdown formatting
     assert '```json' not in body
-    assert '**📊 JSON Data' not in body
+    assert '**JSON Data' not in body
     assert '<details>' not in body
 
 

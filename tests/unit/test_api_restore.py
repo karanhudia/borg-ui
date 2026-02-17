@@ -35,7 +35,7 @@ class TestRestoreRepositories:
         """Test listing repositories without auth returns 403"""
         response = test_client.get("/api/restore/repositories")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 @pytest.mark.unit
@@ -69,7 +69,7 @@ class TestRestoreArchives:
         """Test listing archives without auth returns 403"""
         response = test_client.get("/api/restore/archives/1")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 @pytest.mark.unit
@@ -129,7 +129,7 @@ class TestRestoreContents:
         """Test listing contents without auth returns 403"""
         response = test_client.get("/api/restore/contents/1/test-archive")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_list_contents_empty_archive_name(self, test_client: TestClient, admin_headers, test_db):
         """Test listing contents with empty archive name"""
@@ -207,7 +207,7 @@ class TestRestorePreview:
             }
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_preview_restore_empty_files_list(self, test_client: TestClient, admin_headers, test_db):
         """Test previewing restore with empty files list"""
@@ -305,7 +305,7 @@ class TestRestoreStart:
             }
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_start_restore_empty_files_list(self, test_client: TestClient, admin_headers, test_db):
         """Test starting restore with empty files list"""
@@ -370,7 +370,7 @@ class TestRestoreJobs:
         """Test getting job status without auth returns 403"""
         response = test_client.get("/api/restore/status/1")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_cancel_restore_nonexistent(self, test_client: TestClient, admin_headers):
         """Test canceling non-existent restore job"""

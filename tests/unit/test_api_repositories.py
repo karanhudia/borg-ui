@@ -83,7 +83,7 @@ class TestRepositoriesListAndGet:
         """Test listing repositories without authentication returns 403"""
         response = test_client.get("/api/repositories/")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_list_repositories_pagination(self, test_client: TestClient, admin_headers, test_db):
         """Test listing repositories with pagination"""
@@ -327,7 +327,7 @@ class TestRepositoriesCreate:
             json={"name": "Test", "path": "/test", "encryption": "none"}
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_create_repository_duplicate_path(self, test_client: TestClient, admin_headers, test_db):
         """Test creating repository with duplicate path"""
@@ -727,7 +727,7 @@ class TestRepositoriesDelete:
         """Test deleting repository without authentication returns 403"""
         response = test_client.delete("/api/repositories/1")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_delete_repository_twice(self, test_client: TestClient, admin_headers, test_db):
         """Test deleting repository twice returns 404 on second attempt"""
@@ -806,13 +806,13 @@ class TestRepositoriesStatistics:
         """Test getting repository stats without authentication returns 403"""
         response = test_client.get("/api/repositories/1/stats")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_get_info_no_auth(self, test_client: TestClient):
         """Test getting repository info without authentication returns 403"""
         response = test_client.get("/api/repositories/1/info")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 @pytest.mark.unit
@@ -836,7 +836,7 @@ class TestRepositoriesImport:
             json={"name": "Test", "path": "/test", "encryption": "none"}
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 @pytest.mark.unit
