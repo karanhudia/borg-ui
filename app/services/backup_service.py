@@ -1328,12 +1328,17 @@ class BackupService:
                 if not private_key.endswith('\n'):
                     private_key += '\n'
 
-                # Create temporary key file
-                with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.key') as f:
-                    f.write(private_key)
-                    temp_key_file = f.name
-
-                os.chmod(temp_key_file, 0o600)
+                # Create temporary key file with proper permissions
+                fd, temp_key_file = tempfile.mkstemp(suffix='.key', text=True)
+                try:
+                    os.chmod(temp_key_file, 0o600)
+                    with os.fdopen(fd, 'w') as f:
+                        f.write(private_key)
+                        if not private_key.endswith('\n'):
+                            f.write('\n')
+                except Exception:
+                    os.close(fd)
+                    raise
 
                 # Update SSH command to use the key
                 ssh_opts = [
