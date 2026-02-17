@@ -774,10 +774,30 @@ class RestoreService:
             await asyncio.gather(read_stderr(), read_stdout())
             await process.wait()
 
-            if process.returncode != 0:
-                raise Exception(f"Extraction failed with code {process.returncode}: {' '.join(stderr_lines[-10:])}")
-
-            logger.info("Phase 1 completed: Extraction successful", temp_path=temp_path, nfiles=nfiles)
+            # Exit code 1 = success with warnings (e.g., xattr warnings on non-macOS systems)
+            # Exit codes 100-127 = partial success
+            if process.returncode == 0 or process.returncode == 1 or (100 <= process.returncode <= 127):
+                if process.returncode == 1:
+                    # Extract only warning/error messages (not JSON progress)
+                    warning_msgs = [
+                        line for line in stderr_lines
+                        if not line.strip().startswith('{') and line.strip()
+                    ]
+                    if warning_msgs:
+                        logger.warning(
+                            "Phase 1 completed with warnings",
+                            temp_path=temp_path,
+                            nfiles=nfiles,
+                            warnings=warning_msgs[-5:]  # Last 5 warnings
+                        )
+                logger.info("Phase 1 completed: Extraction successful", temp_path=temp_path, nfiles=nfiles)
+            else:
+                # Extract only error messages (not JSON progress)
+                error_msgs = [
+                    line for line in stderr_lines
+                    if not line.strip().startswith('{') and line.strip()
+                ]
+                raise Exception(f"Extraction failed with code {process.returncode}: {' '.join(error_msgs[-10:])}")
 
             # Update progress to 80% before starting transfer
             job.progress_percent = 80.0
