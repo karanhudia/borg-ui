@@ -10,10 +10,20 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 import structlog
 import socket
+import re
 
 from app.database.models import NotificationSettings, Repository
 
 logger = structlog.get_logger()
+
+
+def _sanitize_ssh_url(url: str) -> str:
+    """
+    Remove username from SSH URL to prevent @ mentions in chat services.
+
+    Example: ssh://user@host:23/path -> ssh://host:23/path
+    """
+    return re.sub(r'://([^@]+)@', r'://', url)
 
 
 def _get_repository(db: Session, name_or_path: str) -> Optional[Repository]:
@@ -535,7 +545,7 @@ class NotificationService:
 
         # Add path if repository found
         if repo:
-            content_blocks.append({'label': 'Location', 'value': repo.path})
+            content_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
 
         # Add source directories if provided
         if source_directories:
@@ -645,7 +655,7 @@ class NotificationService:
 
         # Add path if repository found
         if repo:
-            content_blocks.append({'label': 'Location', 'value': repo.path})
+            content_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
 
         # Calculate derived metrics
         elapsed_time_str = None
@@ -723,7 +733,7 @@ class NotificationService:
             {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
         ]
         if repo:
-            markdown_blocks.append({'label': 'Location', 'value': repo.path})
+            markdown_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
         if elapsed_time_str:
             markdown_blocks.append({'label': 'Duration', 'value': elapsed_time_str})
         if nfiles:
@@ -822,7 +832,7 @@ class NotificationService:
 
         # Add path if repository found
         if repo:
-            content_blocks.append({'label': 'Location', 'value': repo.path})
+            content_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
 
         if job_id:
             content_blocks.append({'label': 'Job ID', 'value': str(job_id)})
@@ -851,7 +861,7 @@ class NotificationService:
             {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
         ]
         if repo:
-            markdown_blocks.append({'label': 'Location', 'value': repo.path})
+            markdown_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
         if job_id:
             markdown_blocks.append({'label': 'Job ID', 'value': str(job_id)})
         markdown_blocks.append({'label': 'Error', 'value': f"```\n{error_message}\n```"})
@@ -944,7 +954,7 @@ class NotificationService:
 
         # Add path if repository found
         if repo:
-            content_blocks.append({'label': 'Location', 'value': repo.path})
+            content_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
 
         # Calculate derived metrics
         elapsed_time_str = None
@@ -1037,7 +1047,7 @@ class NotificationService:
             {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
         ]
         if repo:
-            markdown_blocks.append({'label': 'Location', 'value': repo.path})
+            markdown_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
         if elapsed_time_str:
             markdown_blocks.append({'label': 'Duration', 'value': elapsed_time_str})
         if nfiles:
@@ -1131,7 +1141,7 @@ class NotificationService:
         ]
         # Add path if repository found
         if repo:
-            content_blocks.append({'label': 'Location', 'value': repo.path})
+            content_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
 
         content_blocks.append({'label': 'Destination', 'value': target_path})
 
@@ -1226,7 +1236,7 @@ class NotificationService:
 
         # Add path if repository found
         if repo:
-            content_blocks.append({'label': 'Location', 'value': repo.path})
+            content_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
 
         error_html = f'''
         <div class="error-box">
@@ -1248,7 +1258,7 @@ class NotificationService:
             {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
         ]
         if repo:
-            markdown_blocks.append({'label': 'Location', 'value': repo.path})
+            markdown_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
 
         markdown_blocks.append({'label': 'Error', 'value': f"```\n{error_message}\n```"})
 
@@ -1329,7 +1339,7 @@ class NotificationService:
         ]
         # Add path if repository found
         if repo:
-            content_blocks.append({'label': 'Location', 'value': repo.path})
+            content_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
 
         error_html = f'''
         <div class="error-box">
@@ -1351,7 +1361,7 @@ class NotificationService:
             {'label': 'Repository', 'value': repo.name if repo else repository_name},
         ]
         if repo:
-            markdown_blocks.append({'label': 'Location', 'value': repo.path})
+            markdown_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
             
         markdown_blocks.append({'label': 'Error', 'value': f"```\n{error_message}\n```"})
 
