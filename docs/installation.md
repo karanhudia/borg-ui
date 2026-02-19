@@ -7,17 +7,24 @@ description: "How to install Borg Web UI on various platforms"
 
 # Installation Guide
 
-Choose your platform and copy-paste the configuration. Access at `http://localhost:8081` with credentials: `admin` / `admin123`
+Borg Web UI runs as a Docker container. Choose your setup below, configure your volume mounts, and run `docker compose up -d`.
 
 ---
 
 ## Docker Compose (Recommended)
 
-Create `docker-compose.yml` and run `docker compose up -d`:
+Pick one of the three options below, create `docker-compose.yml`, and run `docker compose up -d`.
+
+> **`/local`** is where borg-ui reads files to back up — mount your existing data directories here.
+> **Backup repositories** (where borg actually stores backups) are configured in the UI after setup.
+
+---
+
+### Option 1 — No Redis (Simple)
+
+Good for occasional use. Uses in-memory caching.
 
 ```yaml
-version: '3.8'
-
 services:
   borg-ui:
     image: ainullcode/borg-ui:latest
@@ -28,20 +35,47 @@ services:
     volumes:
       - borg_data:/data
       - borg_cache:/home/borg/.cache/borg
-      - /mnt/backup-source:/local:rw
+      - /path/to/your/data:/local:rw   # replace with the directory you want to back up
     environment:
-      - TZ=America/Chicago
-      - PUID=1000
-      - PGID=1000
-    # Optional: Remove these 3 lines if you don't want Redis
+      - TZ=America/Chicago             # replace with your timezone
+      - PUID=1000                      # replace with your user ID: run `id -u`
+      - PGID=1000                      # replace with your group ID: run `id -g`
+
+volumes:
+  borg_data:
+  borg_cache:
+```
+
+---
+
+### Option 2 — With Redis (Recommended)
+
+Redis speeds up archive browsing ~600x. Recommended if you browse archives regularly.
+
+```yaml
+services:
+  borg-ui:
+    image: ainullcode/borg-ui:latest
+    container_name: borg-web-ui
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    volumes:
+      - borg_data:/data
+      - borg_cache:/home/borg/.cache/borg
+      - /path/to/your/data:/local:rw   # replace with the directory you want to back up
+    environment:
+      - TZ=America/Chicago             # replace with your timezone
+      - PUID=1000                      # replace with your user ID: run `id -u`
+      - PGID=1000                      # replace with your group ID: run `id -g`
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
       redis:
         condition: service_healthy
     networks:
       - borg_network
 
-  # Optional: Redis speeds up archive browsing 600x
-  # Remove this entire section if you don't need it
   redis:
     image: redis:7-alpine
     container_name: borg-redis
@@ -63,11 +97,69 @@ volumes:
   borg_cache:
 ```
 
-**First time setup:** Create the backup source directory:
-```bash
-sudo mkdir -p /mnt/backup-source
-sudo chown -R 1000:1000 /mnt/backup-source
+---
+
+### Option 3 — External Redis
+
+If you want Redis on a separate machine or Docker stack. Run the Redis compose on the Redis machine, and the borg-ui compose on the borg-ui machine.
+
+**On the Redis machine** — `docker-compose.redis.yml`:
+
+```yaml
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: borg-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
 ```
+
+**On the borg-ui machine** — `docker-compose.yml`:
+
+```yaml
+services:
+  borg-ui:
+    image: ainullcode/borg-ui:latest
+    container_name: borg-web-ui
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    volumes:
+      - borg_data:/data
+      - borg_cache:/home/borg/.cache/borg
+      - /path/to/your/data:/local:rw   # replace with the directory you want to back up
+    environment:
+      - TZ=America/Chicago             # replace with your timezone
+      - PUID=1000                      # replace with your user ID: run `id -u`
+      - PGID=1000                      # replace with your group ID: run `id -g`
+      - REDIS_URL=redis://192.168.1.100:6379/0   # replace with your Redis machine's IP
+      # With password:
+      # - REDIS_URL=redis://:your-password@192.168.1.100:6379/0
+
+volumes:
+  borg_data:
+  borg_cache:
+```
+
+---
+
+**Mount multiple directories** — you can add as many volume entries as you need:
+
+```yaml
+volumes:
+  - /home/john:/local:rw
+  - /var/www:/local/www:ro
+  - /mnt/photos:/local/photos:rw
+```
+
+**Permission errors?** Run `id -u && id -g` on your host to find the right `PUID`/`PGID`.
 
 ---
 
@@ -75,7 +167,7 @@ sudo chown -R 1000:1000 /mnt/backup-source
 
 1. **Stacks** > **Add Stack**
 2. Name: `borg-ui`
-3. Paste the Docker Compose configuration above
+3. Paste one of the Docker Compose configurations above (with your directories and timezone filled in)
 4. **Deploy the stack**
 5. Access: `http://your-server-ip:8081`
 
@@ -91,8 +183,6 @@ sudo chown -R 1000:1000 /mnt/backup-source
 4. Paste:
 
 ```yaml
-version: '3.8'
-
 services:
   borg-ui:
     image: ainullcode/borg-ui:latest
@@ -103,20 +193,17 @@ services:
     volumes:
       - /mnt/user/appdata/borg-ui:/data
       - /mnt/user/appdata/borg-ui/cache:/home/borg/.cache/borg
-      - /mnt/user:/local:rw  # Customize to specific shares if needed
+      - /mnt/user:/local:rw  # or mount specific shares
     environment:
-      - TZ=America/Chicago
+      - TZ=America/Chicago   # replace with your timezone
       - PUID=99
       - PGID=100
-    # Optional: Remove these 3 lines if you don't want Redis
     depends_on:
       redis:
         condition: service_healthy
     networks:
       - borg_network
 
-  # Optional: Redis speeds up archive browsing 600x
-  # Remove this entire section if you don't need it
   redis:
     image: redis:7-alpine
     container_name: borg-redis
@@ -177,15 +264,11 @@ docker run -d \
   -e PGID=1000 \
   -v borg_data:/data \
   -v borg_cache:/home/borg/.cache/borg \
-  -v /mnt/backup-source:/local:rw \
+  -v /path/to/your/data:/local:rw \
   ainullcode/borg-ui:latest
 ```
 
-**First time setup:**
-```bash
-sudo mkdir -p /mnt/backup-source
-sudo chown -R 1000:1000 /mnt/backup-source
-```
+Replace `/path/to/your/data` with the directory you want to back up (e.g. `/home/john` or `/mnt/photos`).
 
 ---
 
@@ -205,8 +288,6 @@ See [Usage Guide](usage-guide.md)
 ## Customization
 
 ### Mount Your Directories
-
-Replace `/mnt/backup-source` with your actual directories:
 
 ```yaml
 volumes:
@@ -242,18 +323,6 @@ Update environment with your IDs:
 environment:
   - PUID=1000
   - PGID=1000
-```
-
-### Connect to External Redis
-
-If Redis is in a separate Docker stack or external server, use `REDIS_URL`:
-
-```yaml
-environment:
-  - REDIS_URL=redis://192.168.1.100:6379/0
-
-  # With password:
-  - REDIS_URL=redis://:your-password@192.168.1.100:6379/0
 ```
 
 ---
