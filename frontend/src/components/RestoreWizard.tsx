@@ -176,16 +176,8 @@ const RestoreWizard = ({
         if (wizardState.destinationType === 'ssh' && !wizardState.destinationConnectionId) {
           return false
         }
-        // Validate custom path (for both local custom and SSH destinations)
-        if (
-          wizardState.destinationType === 'local' &&
-          wizardState.restoreStrategy === 'custom' &&
-          !wizardState.customPath.trim()
-        ) {
-          return false
-        }
-        // Validate SSH destination path
-        if (wizardState.destinationType === 'ssh' && !wizardState.customPath.trim()) {
+        // Validate custom path when custom strategy is selected (applies to both local and SSH)
+        if (wizardState.restoreStrategy === 'custom' && !wizardState.customPath.trim()) {
           return false
         }
         return true

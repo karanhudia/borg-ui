@@ -70,19 +70,17 @@ export default function WizardStepRestoreReview({
   const getDestinationPath = (originalPath: string) => {
     let path: string
     if (data.restoreStrategy === 'custom' && data.customPath) {
-      // Extract filename from original path
-      const filename = originalPath.split('/').pop() || ''
-      path = `${data.customPath.replace(/\/$/, '')}/${filename}`
-    } else if (data.destinationType === 'ssh' && data.customPath) {
-      // SSH destination always requires a path
-      const filename = originalPath.split('/').pop() || ''
-      path = `${data.customPath.replace(/\/$/, '')}/${filename}`
+      // Borg recreates the full archive path structure under the custom destination.
+      // Archive paths have no leading slash (e.g. "home/user/file.txt"), so the result
+      // is customPath + "/" + archivePath (e.g. "/mnt/disk/home/user/file.txt").
+      const archivePath = originalPath.startsWith('/') ? originalPath.slice(1) : originalPath
+      path = `${data.customPath.replace(/\/$/, '')}/${archivePath}`
     } else {
-      // Original location
+      // Original location: borg extracts to cwd=/, preserving the full archive path.
       path = originalPath
     }
 
-    // Ensure path starts with / for proper SSH URL formatting
+    // Ensure path starts with / for proper display
     if (path && !path.startsWith('/')) {
       path = '/' + path
     }
