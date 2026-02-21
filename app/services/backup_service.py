@@ -14,6 +14,7 @@ from app.core.borg_errors import format_error_message, is_lock_error, get_error_
 from app.services.notification_service import notification_service
 from app.services.script_executor import execute_script
 from app.services.script_library_executor import ScriptLibraryExecutor
+from app.services.mqtt_service import mqtt_service
 
 logger = structlog.get_logger()
 
@@ -412,6 +413,9 @@ class BackupService:
 
             db.commit()
             logger.info("Repository statistics updated", repository=repository_path)
+
+            # Publish a full DB-derived MQTT snapshot immediately after stats changes.
+            mqtt_service.sync_state_with_db(db, reason="repository stats updated")
 
         except asyncio.TimeoutError:
             logger.warning("Timeout while updating repository stats", repository=repository_path)
@@ -1154,6 +1158,7 @@ class BackupService:
                 job.status = "running"
                 job.started_at = datetime.utcnow()
                 db.commit()
+                mqtt_service.sync_state_with_db(db, reason="backup started")
             except Exception as status_error:
                 # Job was deleted while starting - exit gracefully
                 logger.warning("Could not update job to running status (job may have been deleted)",
@@ -1441,6 +1446,7 @@ class BackupService:
                 job.error_message = "Failed to prepare source paths: all SSH mounts failed or no valid paths"
                 job.completed_at = datetime.utcnow()
                 db.commit()
+                mqtt_service.sync_state_with_db(db, reason="backup failed: no valid source paths")
                 return
             logger.info("Source paths prepared", original_count=len(source_paths), processed_count=len(processed_source_paths), ssh_mount_count=len(ssh_mount_info), job_id=job_id)
 
@@ -1913,6 +1919,7 @@ class BackupService:
                         )
                     except Exception as e:
                         logger.warning("Failed to send backup success notification", error=str(e))
+
             elif actual_returncode == 1 or (100 <= actual_returncode <= 127):
                 # Warning (legacy exit code 1 or modern exit codes 100-127)
                 job.status = "completed_with_warnings"
@@ -2156,6 +2163,7 @@ class BackupService:
 
             db.commit()
             logger.info("Backup completed", job_id=job_id, status=job.status)
+            mqtt_service.sync_state_with_db(db, reason="backup completed")
 
             # Send failure notification if backup failed
             if job.status == "failed":
@@ -2182,6 +2190,7 @@ class BackupService:
                 job.error_message = str(e)
                 job.completed_at = datetime.utcnow()
                 db.commit()
+                mqtt_service.sync_state_with_db(db, reason="backup failed with exception")
 
                 # Send failure notification
                 try:

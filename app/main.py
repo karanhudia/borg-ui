@@ -207,6 +207,42 @@ async def startup_event():
     app.state.background_tasks.append(task3)
     logger.info("Stats refresh scheduler started")
 
+    # Initialize MQTT service from database settings (using new implementation)
+    from app.services.mqtt_service import mqtt_service, build_mqtt_runtime_config
+    from app.database.database import SessionLocal
+    from app.database.models import SystemSettings
+    try:
+        db = SessionLocal()
+        try:
+            settings_obj = db.query(SystemSettings).first()
+            if settings_obj:
+                mqtt_config = build_mqtt_runtime_config(settings_obj)
+                mqtt_service.configure(mqtt_config)
+                logger.info("MQTT service configured from database", 
+                          enabled=settings_obj.mqtt_enabled,
+                          broker_url=settings_obj.mqtt_broker_url)
+                
+                # If MQTT is enabled (and beta toggle on), publish ...
+                if settings_obj.mqtt_enabled and settings_obj.mqtt_beta_enabled:
+                    try:
+                        mqtt_service.sync_state_with_db(db, reason="startup")
+                        logger.info("Published MQTT DB-derived state on startup")
+                    except Exception as sync_error:
+                        logger.warning("Failed to publish MQTT DB-derived state on startup", 
+                                     error=str(sync_error))
+            else:
+                logger.info("No system settings found, MQTT service not configured")
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning("Failed to configure MQTT service from database", error=str(e))
+    
+    # Start MQTT sync scheduler (background task)
+    from app.services.mqtt_sync_scheduler import start_mqtt_sync_scheduler
+    task4 = asyncio.create_task(start_mqtt_sync_scheduler())
+    app.state.background_tasks.append(task4)
+    logger.info("MQTT sync scheduler started")
+
     logger.info("Borg Web UI started successfully")
 
 @app.on_event("shutdown")
@@ -228,6 +264,14 @@ async def shutdown_event():
             logger.info("Background tasks cancelled")
         except Exception as e:
             logger.warning("Error waiting for background tasks to cancel", error=str(e))
+
+        # Cleanup MQTT service on shutdown
+        from app.services.mqtt_service import mqtt_service
+        try:
+            mqtt_service.disconnect()
+            logger.info("MQTT service disconnected")
+        except Exception as e:
+            logger.warning("Error disconnecting MQTT service", error=str(e))
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
