@@ -14,7 +14,13 @@ import SSHConnectionsSingleKey from './pages/SSHConnectionsSingleKey'
 import Activity from './pages/Activity'
 import Settings from './pages/Settings'
 import { MatomoTracker } from './components/MatomoTracker'
-import { loadUserPreference, initMatomoIfEnabled, setUserId, anonymizeEntityName, getOrCreateInstallId } from './utils/matomo'
+import {
+  loadUserPreference,
+  initMatomoIfEnabled,
+  setUserId,
+  anonymizeEntityName,
+  getOrCreateInstallId,
+} from './utils/matomo'
 
 function App() {
   const { isAuthenticated, isLoading, proxyAuthEnabled, user } = useAuth()
