@@ -20,6 +20,7 @@ interface LockErrorDialogProps {
   repositoryId: number
   repositoryName: string
   onLockBroken?: () => void
+  isAdmin?: boolean
 }
 
 export default function LockErrorDialog({
@@ -28,6 +29,7 @@ export default function LockErrorDialog({
   repositoryId,
   repositoryName,
   onLockBroken,
+  isAdmin = false,
 }: LockErrorDialogProps) {
   const [breaking, setBreaking] = useState(false)
 
@@ -106,6 +108,15 @@ export default function LockErrorDialog({
           <li>Check that no other client is accessing this repository</li>
           <li>This will break both repository and cache locks</li>
         </Typography>
+
+        {!isAdmin && (
+          <Alert severity="info" sx={{ mt: 2 }}>
+            <Typography variant="body2">
+              <strong>Admin privileges required:</strong> Only administrators can break repository
+              locks. Please contact your admin for assistance.
+            </Typography>
+          </Alert>
+        )}
       </DialogContent>
 
       <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -116,8 +127,9 @@ export default function LockErrorDialog({
           variant="contained"
           color="warning"
           onClick={handleBreakLock}
-          disabled={breaking}
+          disabled={breaking || !isAdmin}
           startIcon={breaking ? <CircularProgress size={16} /> : <Unlock size={16} />}
+          title={!isAdmin ? 'Admin privileges required to break locks' : ''}
         >
           {breaking ? 'Breaking Lock...' : 'Break Lock'}
         </Button>

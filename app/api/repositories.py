@@ -148,12 +148,17 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
     Returns True if successful, False otherwise.
     """
     try:
+        # Check system-wide bypass_lock_on_list setting
+        from app.database.models import SystemSettings
+        system_settings = db.query(SystemSettings).first()
+        use_bypass_lock = repository.bypass_lock or (system_settings and system_settings.bypass_lock_on_list)
+
         # Get archive list and count
         list_result = await borg.list_archives(
             repository.path,
             remote_path=repository.remote_path,
             passphrase=repository.passphrase,
-            bypass_lock=repository.bypass_lock
+            bypass_lock=use_bypass_lock
         )
 
         archive_count = 0
@@ -976,8 +981,13 @@ async def get_repository(
         if not repository:
             raise HTTPException(status_code=404, detail="Repository not found")
 
+        # Check system-wide bypass_lock_on_list setting
+        from app.database.models import SystemSettings
+        system_settings = db.query(SystemSettings).first()
+        use_bypass_lock = repository.bypass_lock or (system_settings and system_settings.bypass_lock_on_list)
+
         # Get repository statistics
-        stats = await get_repository_stats(repository.path, bypass_lock=repository.bypass_lock)
+        stats = await get_repository_stats(repository.path, bypass_lock=use_bypass_lock)
 
         return {
             "success": True,
@@ -1267,8 +1277,13 @@ async def delete_repository(
         if not repository:
             raise HTTPException(status_code=404, detail="Repository not found")
 
+        # Check system-wide bypass_lock_on_list setting
+        from app.database.models import SystemSettings
+        system_settings = db.query(SystemSettings).first()
+        use_bypass_lock = repository.bypass_lock or (system_settings and system_settings.bypass_lock_on_list)
+
         # Check if repository has archives
-        archives_result = await borg.list_archives(repository.path, remote_path=repository.remote_path, bypass_lock=repository.bypass_lock)
+        archives_result = await borg.list_archives(repository.path, remote_path=repository.remote_path, bypass_lock=use_bypass_lock)
         if archives_result["success"]:
             try:
                 archives_data = archives_result["stdout"]
@@ -1601,8 +1616,13 @@ async def get_repository_statistics(
         if not repository:
             raise HTTPException(status_code=404, detail="Repository not found")
 
+        # Check system-wide bypass_lock_on_list setting
+        from app.database.models import SystemSettings
+        system_settings = db.query(SystemSettings).first()
+        use_bypass_lock = repository.bypass_lock or (system_settings and system_settings.bypass_lock_on_list)
+
         # Get detailed statistics
-        stats = await get_repository_stats(repository.path, bypass_lock=repository.bypass_lock)
+        stats = await get_repository_stats(repository.path, bypass_lock=use_bypass_lock)
 
         return {
             "success": True,
@@ -2006,6 +2026,11 @@ async def list_repository_archives(
             if not repository:
                 raise HTTPException(status_code=404, detail="Repository not found")
 
+            # Get system settings for global bypass_lock_on_list setting
+            from app.database.models import SystemSettings
+            system_settings = db.query(SystemSettings).first()
+            use_bypass_lock = repository.bypass_lock or (system_settings and system_settings.bypass_lock_on_list)
+
             # Build borg list command
             cmd = ["borg", "list"]
 
@@ -2013,8 +2038,8 @@ async def list_repository_archives(
             if repository.remote_path:
                 cmd.extend(["--remote-path", repository.remote_path])
 
-            # Add --bypass-lock for read-only storage access
-            if repository.bypass_lock:
+            # Add --bypass-lock for read-only storage access (repo-specific or system-wide)
+            if use_bypass_lock:
                 cmd.append("--bypass-lock")
 
             cmd.extend(["--json", repository.path])
@@ -2028,6 +2053,15 @@ async def list_repository_archives(
 
             # Get timeouts from DB settings (with fallback to config)
             timeouts = get_operation_timeouts(db)
+
+            # Log the command being executed (including bypass-lock status)
+            logger.info(
+                "Executing borg list command",
+                repo_id=repo_id,
+                command=" ".join(cmd),
+                bypass_lock=use_bypass_lock,
+                source="repo_setting" if repository.bypass_lock else ("system_setting" if (system_settings and system_settings.bypass_lock_on_list) else "none")
+            )
 
             # Execute command with increased timeout to match BORG_LOCK_WAIT
             process = await asyncio.create_subprocess_exec(
@@ -2357,10 +2391,15 @@ async def get_archive_info(
 
         # Optionally fetch file listing using borg list
         if include_files:
+            # Get system settings for global bypass_lock_on_list setting
+            from app.database.models import SystemSettings
+            system_settings = db.query(SystemSettings).first()
+            use_bypass_lock_for_list = repository.bypass_lock or (system_settings and system_settings.bypass_lock_on_list)
+
             list_cmd = ["borg", "list"]
             if repository.remote_path:
                 list_cmd.extend(["--remote-path", repository.remote_path])
-            if repository.bypass_lock:
+            if use_bypass_lock_for_list:
                 list_cmd.append("--bypass-lock")
             list_cmd.extend(["--json-lines", archive_path])
 
@@ -2457,6 +2496,11 @@ async def list_archive_files(
         if not repository:
             raise HTTPException(status_code=404, detail="Repository not found")
 
+        # Get system settings for global bypass_lock_on_list setting
+        from app.database.models import SystemSettings
+        system_settings = db.query(SystemSettings).first()
+        use_bypass_lock = repository.bypass_lock or (system_settings and system_settings.bypass_lock_on_list)
+
         # Build borg list command with repo::archive format
         archive_path = f"{repository.path}::{archive_name}"
         cmd = ["borg", "list"]
@@ -2465,8 +2509,8 @@ async def list_archive_files(
         if repository.remote_path:
             cmd.extend(["--remote-path", repository.remote_path])
 
-        # Add --bypass-lock for read-only storage access
-        if repository.bypass_lock:
+        # Add --bypass-lock for read-only storage access (repo-specific or system-wide)
+        if use_bypass_lock:
             cmd.append("--bypass-lock")
 
         # Use --json-lines for file listing
