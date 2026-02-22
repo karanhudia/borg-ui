@@ -19,7 +19,7 @@ python-dotenv==1.0.0
 python-jose[cryptography]==3.4.0
 python-multipart==0.0.20
 pyyaml==6.0.1
-redis==5.0.1
+redis==7.1.1
 requests==2.32.4
 sqlalchemy==2.0.46
 structlog==25.5.0
