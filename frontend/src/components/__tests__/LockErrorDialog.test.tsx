@@ -297,6 +297,7 @@ describe('LockErrorDialog', () => {
     })
 
     it('disables Break Lock button when isAdmin is undefined (defaults to false)', () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { isAdmin, ...propsWithoutAdmin } = defaultProps
       render(<LockErrorDialog {...propsWithoutAdmin} />)
       const breakLockButton = screen.getByRole('button', { name: /Break Lock/ })
