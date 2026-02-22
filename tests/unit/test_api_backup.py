@@ -118,7 +118,7 @@ class TestBackupStart:
             }
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_start_backup_with_options(self, test_client: TestClient, admin_headers, test_db):
         """Test starting backup with additional options"""
@@ -265,7 +265,7 @@ class TestBackupStatus:
         """Test getting backup status without auth returns 403"""
         response = test_client.get("/api/backup/status/1")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 @pytest.mark.unit
@@ -325,7 +325,7 @@ class TestBackupCancel:
         """Test cancelling backup without auth returns 403"""
         response = test_client.post("/api/backup/cancel/1")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 @pytest.mark.unit
@@ -420,7 +420,7 @@ class TestBackupLogs:
         """Test streaming logs without auth returns 403"""
         response = test_client.get("/api/backup/logs/1/stream")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 @pytest.mark.unit

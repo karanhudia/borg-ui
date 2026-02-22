@@ -94,19 +94,23 @@ Before creating backups, ensure:
 - A storage location on your Docker host machine
 - The path to that storage (e.g., `/mnt/usb-drive`, `/mnt/nas`)
 
-### Understanding `/local` Mount
+### Understanding Volume Mounts
 
-**Key Concept:** The container automatically mounts your host filesystem at `/local`.
+Container paths have no magic — they contain exactly what you mounted in your `docker-compose.yml`. You can name them anything that makes sense to you.
 
-By default:
-- **Host path**: `/` (your entire filesystem)
-- **Container path**: `/local`
+For example, if you have three drives on one machine:
+```yaml
+volumes:
+  - /mnt/photos:/photos:rw
+  - /mnt/nas:/nas:rw
+  - /mnt/external:/external:rw
+environment:
+  - LOCAL_MOUNT_POINTS=/photos,/nas,/external
+```
 
-This means:
-- Host `/home/user/backups` → Container `/local/home/user/backups`
-- Host `/mnt/usb-drive/borg` → Container `/local/mnt/usb-drive/borg`
+Inside borg-ui, `/photos` is your photos drive, `/nas` is your NAS, `/external` is your external drive. `LOCAL_MOUNT_POINTS` tells borg-ui about all of them so the file browser picks them up.
 
-You can customize this via the `LOCAL_STORAGE_PATH` environment variable (see [Configuration](#customizing-local-mount)).
+Use these container paths when creating repositories or selecting source paths in the UI.
 
 ---
 
@@ -231,9 +235,7 @@ Now that your repository is created, let's create your first backup (called an "
 
 ### Customizing Local Mount for Security
 
-By default, the entire host filesystem (`/`) is mounted at `/local` with read-write access. **For security-conscious deployments, you should restrict this to only the directories you need.**
-
-⚠️ **Security Recommendation**: Follow the principle of least privilege by mounting only the directories necessary for your backup operations.
+**For security-conscious deployments, mount only the directories you need** — both the source data and the backup destination, with appropriate permissions.
 
 **Edit `docker-compose.yml`:**
 
