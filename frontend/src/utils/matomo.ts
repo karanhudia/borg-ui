@@ -108,9 +108,17 @@ let preferenceLoaded = false
  */
 export const loadUserPreference = async (): Promise<void> => {
   try {
+    // Check if proxy auth is enabled
+    const authConfigResponse = await fetch('/api/auth/config')
+    const authConfig = await authConfigResponse.json()
+    const proxyAuthEnabled = authConfig.proxy_auth_enabled
+
     const token = localStorage.getItem('access_token')
-    if (!token) {
-      // PRIVACY FIRST: No tracking on login page
+
+    // In proxy auth mode, we can fetch preferences without a token
+    // In JWT mode, we need a token
+    if (!token && !proxyAuthEnabled) {
+      // PRIVACY FIRST: No tracking on login page (JWT mode without token)
       // User's opt-out preference is stored server-side (requires auth to fetch)
       // Default to NO tracking until user logs in and we can verify their preference
       userOptedOut = true
@@ -119,8 +127,14 @@ export const loadUserPreference = async (): Promise<void> => {
       return
     }
 
+    const headers: Record<string, string> = {}
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
+    // In proxy auth mode without token, the backend will use proxy headers
+
     const response = await fetch('/api/settings/preferences', {
-      headers: { Authorization: `Bearer ${token}` },
+      headers,
     })
 
     if (response.ok) {
@@ -238,6 +252,23 @@ export const setAppVersion = (version: string): void => {
   if (!config.enabled || !window._paq) return
 
   window._paq.push(['setCustomDimension', 1, version])
+}
+
+const INSTALL_ID_KEY = 'borg_ui_install_id'
+
+/**
+ * Get (or lazily create) a random UUID that uniquely identifies this browser/installation.
+ * Stored in localStorage so it survives page reloads and logouts.
+ * Used to namespace the Matomo user ID so that two separate borg-ui instances both running
+ * as "admin" are counted as different unique users.
+ */
+export const getOrCreateInstallId = (): string => {
+  let id = localStorage.getItem(INSTALL_ID_KEY)
+  if (!id) {
+    id = crypto.randomUUID()
+    localStorage.setItem(INSTALL_ID_KEY, id)
+  }
+  return id
 }
 
 /**
