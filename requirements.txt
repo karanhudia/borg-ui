@@ -22,5 +22,5 @@ pyyaml==6.0.1
 redis==5.0.1
 requests==2.32.4
 sqlalchemy==2.0.46
-structlog==23.2.0
+structlog==25.5.0
 uvicorn[standard]==0.24.0
