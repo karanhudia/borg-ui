@@ -14,10 +14,16 @@ import SSHConnectionsSingleKey from './pages/SSHConnectionsSingleKey'
 import Activity from './pages/Activity'
 import Settings from './pages/Settings'
 import { MatomoTracker } from './components/MatomoTracker'
-import { loadUserPreference, initMatomoIfEnabled } from './utils/matomo'
+import {
+  loadUserPreference,
+  initMatomoIfEnabled,
+  setUserId,
+  anonymizeEntityName,
+  getOrCreateInstallId,
+} from './utils/matomo'
 
 function App() {
-  const { isAuthenticated, isLoading, proxyAuthEnabled } = useAuth()
+  const { isAuthenticated, isLoading, proxyAuthEnabled, user } = useAuth()
 
   // Load user analytics preference on mount and after login, then conditionally initialize Matomo
   useEffect(() => {
@@ -26,9 +32,19 @@ function App() {
       // Only initialize Matomo if user has NOT opted out
       // If opted out, no scripts are loaded, no network requests made
       initMatomoIfEnabled()
+
+      // Set a stable anonymous user ID so Matomo can count unique users.
+      // cookies are disabled, so without setUserId every page load would be
+      // a new "visitor". We hash the username to avoid sending PII.
+      if (isAuthenticated && user?.username) {
+        // Combine a per-installation UUID with the username so that two separate
+        // borg-ui instances both running as "admin" get distinct Matomo user IDs.
+        const installId = getOrCreateInstallId()
+        setUserId(anonymizeEntityName(installId + user.username))
+      }
     }
     initAnalytics()
-  }, [isAuthenticated]) // Re-run when user logs in/out
+  }, [isAuthenticated, user?.username]) // Re-run when user logs in/out
 
   if (isLoading) {
     return (

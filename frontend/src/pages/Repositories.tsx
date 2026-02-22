@@ -320,8 +320,8 @@ export default function Repositories() {
             toast.success('Repository imported and keyfile uploaded successfully')
           } catch (keyfileError) {
             // Repository was imported but keyfile upload failed
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const errorDetail =
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (keyfileError as any)?.response?.data?.detail || 'Failed to upload keyfile'
             toast.error(`Repository imported, but ${errorDetail}`)
           }

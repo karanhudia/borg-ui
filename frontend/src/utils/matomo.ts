@@ -254,6 +254,23 @@ export const setAppVersion = (version: string): void => {
   window._paq.push(['setCustomDimension', 1, version])
 }
 
+const INSTALL_ID_KEY = 'borg_ui_install_id'
+
+/**
+ * Get (or lazily create) a random UUID that uniquely identifies this browser/installation.
+ * Stored in localStorage so it survives page reloads and logouts.
+ * Used to namespace the Matomo user ID so that two separate borg-ui instances both running
+ * as "admin" are counted as different unique users.
+ */
+export const getOrCreateInstallId = (): string => {
+  let id = localStorage.getItem(INSTALL_ID_KEY)
+  if (!id) {
+    id = crypto.randomUUID()
+    localStorage.setItem(INSTALL_ID_KEY, id)
+  }
+  return id
+}
+
 /**
  * Set user ID for tracking authenticated users
  */
