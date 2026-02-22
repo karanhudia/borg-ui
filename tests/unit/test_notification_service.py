@@ -70,7 +70,7 @@ async def test_send_backup_success_email(test_db, mock_apprise, mock_repository,
     assert apprise_instance.add.call_count == 1
     # Verify mock was called with HTML format
     call_args = apprise_instance.notify.call_args[1]
-    assert call_args['title'] == "[Borg] ✅ Backup Successful"
+    assert call_args['title'] == "[Borg] [SUCCESS] Backup Successful"
     assert "1.00 MB" in call_args['body']  # Formatted original size
     assert "512.00 KB" in call_args['body'] # Formatted compressed size
     assert "<html>" in call_args['body']
@@ -97,7 +97,7 @@ async def test_send_backup_failure_discord(test_db, mock_apprise, mock_repositor
     assert apprise_instance.add.call_count == 1
     # Verify mock was called with Markdown format (implicit for non-email)
     call_args = apprise_instance.notify.call_args[1]
-    assert call_args['title'] == "❌ Backup Failed"
+    assert call_args['title'] == "[FAILED] Backup Failed"
     assert error_msg in call_args['body']
     assert str(job_id) in call_args['body']
     assert "```" in call_args['body'] # Markdown code block
@@ -162,7 +162,8 @@ from app.services.notification_service import (
     _should_include_json,
     _build_json_data,
     _append_json_to_body,
-    _is_json_webhook
+    _is_json_webhook,
+    _sanitize_ssh_url
 )
 from datetime import datetime
 import json as json_module
@@ -274,7 +275,7 @@ class TestHelperFunctions:
 
         assert '<details>' in result
         assert '<summary' in result
-        assert '📊 JSON Data' in result
+        assert 'JSON Data' in result
         assert json_data in result
         assert '<pre' in result
 
@@ -285,7 +286,7 @@ class TestHelperFunctions:
 
         result = _append_json_to_body(markdown_body, json_data, is_html=False, service_url='slack://token/channel')
 
-        assert '**📊 JSON Data' in result
+        assert '**JSON Data' in result
         assert '```json' in result
         assert json_data in result
         assert '```' in result
@@ -309,7 +310,7 @@ class TestHelperFunctions:
         result = _append_json_to_body(body, json_data, is_html=False, service_url='jsons://webhook.site/abc123')
         assert result == json_data
         assert '```json' not in result
-        assert '**📊 JSON Data' not in result
+        assert '**JSON Data' not in result
 
         # Test with json:// webhook (insecure)
         result = _append_json_to_body(body, json_data, is_html=False, service_url='json://myserver.com/webhook')
@@ -331,12 +332,60 @@ class TestHelperFunctions:
         result = _append_json_to_body(body, json_data, is_html=False, service_url='https://webhook.site/abc123')
         assert result != json_data
         assert '```json' in result
-        assert '**📊 JSON Data' in result
+        assert '**JSON Data' in result
 
         # Test form:// webhook - should get markdown formatting
         result = _append_json_to_body(body, json_data, is_html=False, service_url='form://webhook.site/abc123')
         assert result != json_data
         assert '```json' in result
+
+    def test_sanitize_ssh_url_removes_username(self):
+        """Test that SSH URL sanitization removes username to prevent @ mentions"""
+        # SSH URL with username
+        url = "ssh://u331525-sub1@u331525-sub1.your-storagebox.de:23/home/BorgTestRepoKaran"
+        result = _sanitize_ssh_url(url)
+        assert result == "ssh://u331525-sub1.your-storagebox.de:23/home/BorgTestRepoKaran"
+        assert "@" not in result
+
+        # Another SSH URL
+        url = "ssh://user@example.com/path/to/repo"
+        result = _sanitize_ssh_url(url)
+        assert result == "ssh://example.com/path/to/repo"
+        assert "@" not in result
+
+    def test_sanitize_ssh_url_preserves_non_ssh_urls(self):
+        """Test that non-SSH URLs are unchanged by sanitization"""
+        # Local path
+        url = "/local/path/to/repo"
+        result = _sanitize_ssh_url(url)
+        assert result == "/local/path/to/repo"
+
+        # File URL
+        url = "file:///local/path"
+        result = _sanitize_ssh_url(url)
+        assert result == "file:///local/path"
+
+        # HTTP URL (should not be affected)
+        url = "http://example.com/path"
+        result = _sanitize_ssh_url(url)
+        assert result == "http://example.com/path"
+
+    def test_sanitize_ssh_url_handles_edge_cases(self):
+        """Test edge cases for SSH URL sanitization"""
+        # URL without username (already clean)
+        url = "ssh://host.com:22/path"
+        result = _sanitize_ssh_url(url)
+        assert result == "ssh://host.com:22/path"
+
+        # SFTP URL with username
+        url = "sftp://user@host.com/path"
+        result = _sanitize_ssh_url(url)
+        assert result == "sftp://host.com/path"
+
+        # Empty string
+        url = ""
+        result = _sanitize_ssh_url(url)
+        assert result == ""
 
 
 @pytest.mark.asyncio
@@ -371,7 +420,7 @@ async def test_job_name_in_title_when_enabled(test_db, mock_apprise, mock_reposi
 
     # Assert
     call_args = apprise_instance.notify.call_args[1]
-    assert call_args['title'] == "✅ Backup Successful - Daily Backup"
+    assert call_args['title'] == "[SUCCESS] Backup Successful - Daily Backup"
 
 
 @pytest.mark.asyncio
@@ -406,7 +455,7 @@ async def test_job_name_not_in_title_when_disabled(test_db, mock_apprise, mock_r
 
     # Assert
     call_args = apprise_instance.notify.call_args[1]
-    assert call_args['title'] == "✅ Backup Successful"
+    assert call_args['title'] == "[SUCCESS] Backup Successful"
     assert "Daily Backup" not in call_args['title']
 
 
@@ -454,7 +503,7 @@ async def test_json_data_in_body_for_json_webhook(test_db, mock_apprise, mock_re
     assert parsed["stats"]["original_size"] == 1024
 
     # Should NOT contain markdown formatting
-    assert '📊 JSON Data' not in body
+    assert 'JSON Data' not in body
     assert '```json' not in body
 
 
@@ -492,7 +541,7 @@ async def test_json_data_not_in_body_for_non_json_services(test_db, mock_apprise
     body = call_args['body']
 
     # Check JSON is NOT present
-    assert '📊 JSON Data' not in body
+    assert 'JSON Data' not in body
     assert '```json' not in body
     assert '"event_type"' not in body
 
@@ -539,7 +588,7 @@ async def test_json_format_for_json_webhook_uses_compact_format(test_db, mock_ap
     # Should NOT contain HTML or markdown formatting
     assert '<details>' not in body
     assert '```json' not in body
-    assert '📊 JSON Data' not in body
+    assert 'JSON Data' not in body
 
 
 @pytest.mark.asyncio
@@ -646,7 +695,7 @@ async def test_json_webhook_receives_pure_json(test_db, mock_apprise, mock_repos
 
     # Should NOT contain markdown formatting
     assert '```json' not in body
-    assert '**📊 JSON Data' not in body
+    assert '**JSON Data' not in body
     assert '<details>' not in body
 
 
@@ -754,3 +803,149 @@ async def test_webhook_json_has_correct_repository_name_when_called_with_path(te
     assert parsed["repository_name"] == "My Backup Repo", \
         f"Expected repository_name='My Backup Repo', got '{parsed['repository_name']}'"
     assert parsed["repository_path"] == "/tmp/backup-repo"
+
+
+@pytest.mark.asyncio
+async def test_ssh_url_sanitization_in_notifications(test_db, mock_apprise):
+    """Test that SSH URLs in notifications have username removed to prevent @ mentions"""
+    # Create SSH repository with username in path
+    ssh_repo = Repository(
+        name="SSH Backup Repo",
+        path="ssh://u331525-sub1@u331525-sub1.your-storagebox.de:23/home/BorgTestRepoKaran"
+    )
+    test_db.add(ssh_repo)
+    test_db.commit()
+    test_db.refresh(ssh_repo)
+
+    # Setup notification setting
+    setting = NotificationSettings(
+        name="Discord Alert",
+        service_url="discord://webhook_id/token",
+        enabled=True,
+        notify_on_backup_start=True,
+        notify_on_backup_success=True,
+        notify_on_backup_failure=True,
+        notify_on_restore_success=True,
+        notify_on_restore_failure=True,
+        monitor_all_repositories=True
+    )
+    test_db.add(setting)
+    test_db.commit()
+
+    # Setup mock
+    apprise_instance = mock_apprise.return_value
+    apprise_instance.add.return_value = True
+    apprise_instance.notify.return_value = True
+
+    # Test backup_start
+    await notification_service.send_backup_start(
+        test_db,
+        ssh_repo.name,
+        "archive-2024",
+        source_directories=["/data"]
+    )
+    call_args = apprise_instance.notify.call_args[1]
+    body = call_args['body']
+    assert "ssh://u331525-sub1.your-storagebox.de:23" in body  # Username removed
+    # Verify username @ is not in Location line
+    for line in body.split('\n'):
+        if 'Location' in line and 'ssh://' in line:
+            assert '@' not in line, f"Found @ in Location line: {line}"
+
+    # Test backup_success
+    await notification_service.send_backup_success(
+        test_db,
+        ssh_repo.name,
+        "archive-2024",
+        stats={"original_size": 1024}
+    )
+    call_args = apprise_instance.notify.call_args[1]
+    body = call_args['body']
+    assert "ssh://u331525-sub1.your-storagebox.de:23" in body
+    for line in body.split('\n'):
+        if 'Location' in line and 'ssh://' in line:
+            assert '@' not in line, f"Found @ in Location line: {line}"
+
+    # Test backup_failure
+    await notification_service.send_backup_failure(
+        test_db,
+        ssh_repo.name,
+        "Connection error",
+        job_id=123
+    )
+    call_args = apprise_instance.notify.call_args[1]
+    body = call_args['body']
+    assert "ssh://u331525-sub1.your-storagebox.de:23" in body
+    for line in body.split('\n'):
+        if 'Location' in line and 'ssh://' in line:
+            assert '@' not in line, f"Found @ in Location line: {line}"
+
+    # Test restore_success
+    await notification_service.send_restore_success(
+        test_db,
+        ssh_repo.name,
+        "archive-2024",
+        "/restore/dest"
+    )
+    call_args = apprise_instance.notify.call_args[1]
+    body = call_args['body']
+    assert "ssh://u331525-sub1.your-storagebox.de:23" in body
+    for line in body.split('\n'):
+        if 'Location' in line and 'ssh://' in line:
+            assert '@' not in line, f"Found @ in Location line: {line}"
+
+    # Test restore_failure
+    await notification_service.send_restore_failure(
+        test_db,
+        ssh_repo.name,
+        "archive-2024",
+        "Restore failed"
+    )
+    call_args = apprise_instance.notify.call_args[1]
+    body = call_args['body']
+    assert "ssh://u331525-sub1.your-storagebox.de:23" in body
+    for line in body.split('\n'):
+        if 'Location' in line and 'ssh://' in line:
+            assert '@' not in line, f"Found @ in Location line: {line}"
+
+
+@pytest.mark.asyncio
+async def test_local_repo_urls_unchanged(test_db, mock_apprise):
+    """Test that local repository paths are not affected by SSH sanitization"""
+    # Create local repository
+    local_repo = Repository(
+        name="Local Backup Repo",
+        path="/local/path/to/repo"
+    )
+    test_db.add(local_repo)
+    test_db.commit()
+    test_db.refresh(local_repo)
+
+    # Setup notification setting
+    setting = NotificationSettings(
+        name="Slack Alert",
+        service_url="slack://token/channel",
+        enabled=True,
+        notify_on_backup_success=True,
+        monitor_all_repositories=True
+    )
+    test_db.add(setting)
+    test_db.commit()
+
+    # Setup mock
+    apprise_instance = mock_apprise.return_value
+    apprise_instance.add.return_value = True
+    apprise_instance.notify.return_value = True
+
+    # Test
+    await notification_service.send_backup_success(
+        test_db,
+        local_repo.name,
+        "archive-2024",
+        stats={"original_size": 1024}
+    )
+
+    # Assert - local path should be unchanged
+    call_args = apprise_instance.notify.call_args[1]
+    body = call_args['body']
+    assert "/local/path/to/repo" in body

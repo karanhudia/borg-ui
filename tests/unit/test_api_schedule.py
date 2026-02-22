@@ -48,7 +48,7 @@ class TestScheduleList:
         """Test listing schedules without authentication returns 403"""
         response = test_client.get("/api/schedule/")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 @pytest.mark.unit
@@ -113,7 +113,7 @@ class TestScheduleCreate:
             }
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 @pytest.mark.unit
@@ -155,7 +155,7 @@ class TestScheduleGet:
         """Test getting schedule without authentication returns 403"""
         response = test_client.get("/api/schedule/1")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 @pytest.mark.unit
@@ -237,7 +237,7 @@ class TestScheduleUpdate:
             json={"enabled": False}
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 @pytest.mark.unit
@@ -275,7 +275,7 @@ class TestScheduleDelete:
         """Test deleting schedule without authentication returns 403"""
         response = test_client.delete("/api/schedule/1")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 @pytest.mark.unit
@@ -313,7 +313,7 @@ class TestScheduleToggle:
         """Test toggling schedule without authentication returns 403"""
         response = test_client.post("/api/schedule/1/toggle")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 @pytest.mark.unit
@@ -330,7 +330,7 @@ class TestScheduleRunNow:
         """Test running schedule without authentication returns 403"""
         response = test_client.post("/api/schedule/1/run-now")
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 @pytest.mark.unit
@@ -383,10 +383,10 @@ class TestScheduleHelpers:
         )
 
         # Auth is checked before validation
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_get_upcoming_jobs_unauthorized(self, test_client: TestClient):
         """Test getting upcoming jobs without authentication returns 403"""
         response = test_client.get("/api/schedule/upcoming-jobs")
 
-        assert response.status_code == 403
+        assert response.status_code == 401

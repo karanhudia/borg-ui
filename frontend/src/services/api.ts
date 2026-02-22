@@ -2,6 +2,13 @@ import axios from 'axios'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
 
+// Track if proxy auth is enabled (set during auth config check)
+let proxyAuthMode = false
+
+export const setProxyAuthMode = (enabled: boolean) => {
+  proxyAuthMode = enabled
+}
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -23,8 +30,16 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     // Only redirect to login for 401 errors on authenticated endpoints
-    // Don't redirect if we're already trying to login (avoid swallowing login errors)
-    if (error.response?.status === 401 && error.config?.url !== '/auth/login') {
+    // Don't redirect if:
+    // 1. We're trying to login
+    // 2. We're checking auth config
+    // 3. We're in proxy auth mode (backend handles auth via proxy headers)
+    if (
+      error.response?.status === 401 &&
+      error.config?.url !== '/auth/login' &&
+      error.config?.url !== '/auth/config' &&
+      !proxyAuthMode // Don't redirect in proxy auth mode
+    ) {
       localStorage.removeItem('access_token')
       window.location.href = '/login'
     }
@@ -68,6 +83,7 @@ export interface SystemSettings {
   backup_timeout?: number
   stats_refresh_interval_minutes?: number
   bypass_lock_on_info?: boolean
+  bypass_lock_on_list?: boolean
   [key: string]: unknown
 }
 
@@ -75,6 +91,8 @@ export interface SystemSettings {
 type ApiData = Record<string, unknown>
 
 export const authAPI = {
+  getAuthConfig: () => api.get('/auth/config'),
+
   login: (username: string, password: string) =>
     api.post(
       '/auth/login',

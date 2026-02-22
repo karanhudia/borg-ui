@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440  # 24 hours
 
+    # Proxy authentication settings
+    disable_authentication: bool = False  # Disable built-in auth, trust reverse proxy headers
+    proxy_auth_header: str = "X-Forwarded-User"  # Header containing authenticated username
+
     # Database settings - auto-derived from data_dir
     database_url: str = ""  # Will be auto-derived from data_dir
 
