@@ -402,6 +402,7 @@ Go to **Settings → System** to configure timeouts with a user-friendly interfa
 | List Timeout | Listing archives and files | 600s (10 min) |
 | Init Timeout | Creating new repositories | 300s (5 min) |
 | Backup/Restore Timeout | Backup and restore operations | 3600s (1 hour) |
+| Source Size Timeout | `du`-based source size calculation before backup | 3600s (1 hour) |
 
 **Advantages of UI configuration:**
 - No container restart required
@@ -420,6 +421,7 @@ environment:
   - BORG_INIT_TIMEOUT=900       # 15 min for borg init (default: 300 = 5 min)
   - BORG_EXTRACT_TIMEOUT=7200   # 2 hours for restore (default: 3600 = 1 hour)
   - SCRIPT_TIMEOUT=300          # 5 min for hooks (default: 120 = 2 min)
+  - SOURCE_SIZE_TIMEOUT=7200    # 2 hours for source size calc (default: 3600 = 1 hour)
 ```
 
 ##### Priority Order
@@ -443,6 +445,7 @@ The system checks settings in the following order:
 | List | Listing archives/files, restore browser | 10 min | 30-60 min |
 | Init | Creating new repositories | 5 min | 10-15 min |
 | Backup/Restore | Backup and restore operations | 1 hour | 2-4 hours |
+| Source Size | `du`-based source size calculation before backup | 1 hour | 2+ hours (10TB+ sources) |
 
 **Example for very large repository (via UI):**
 1. Go to **Settings → System**

@@ -40,6 +40,7 @@ class BackupService:
             "info_timeout": settings.borg_info_timeout,
             "list_timeout": settings.borg_list_timeout,
             "backup_timeout": settings.backup_timeout,
+            "source_size_timeout": settings.source_size_timeout,
         }
 
         try:
@@ -59,6 +60,8 @@ class BackupService:
                         timeouts["list_timeout"] = system_settings.list_timeout
                     if system_settings.backup_timeout:
                         timeouts["backup_timeout"] = system_settings.backup_timeout
+                    if system_settings.source_size_timeout:
+                        timeouts["source_size_timeout"] = system_settings.source_size_timeout
             finally:
                 if close_session:
                     db.close()
@@ -440,6 +443,9 @@ class BackupService:
             if exclude_patterns is None:
                 exclude_patterns = []
 
+            # Resolve effective timeout (DB setting > env var > config default)
+            source_size_timeout = self._get_operation_timeouts()["source_size_timeout"]
+
             logger.info("Starting source size calculation",
                        paths=source_paths,
                        path_count=len(source_paths),
@@ -482,7 +488,7 @@ class BackupService:
                                 stderr=asyncio.subprocess.PIPE
                             )
 
-                            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=settings.script_timeout)
+                            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=source_size_timeout)
 
                             if process.returncode == 0:
                                 output = stdout.decode().strip()
@@ -515,7 +521,7 @@ class BackupService:
                             stderr=asyncio.subprocess.PIPE
                         )
 
-                        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=120)
+                        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=source_size_timeout)
 
                         if process.returncode == 0:
                             # Parse output: "1234567\t/path/to/dir"
@@ -529,9 +535,9 @@ class BackupService:
                             logger.warning("Failed to calculate directory size", path=path, stderr=stderr.decode())
 
                 except asyncio.TimeoutError:
-                    logger.warning("Timeout while calculating directory size (120s timeout exceeded)",
+                    logger.warning("Timeout while calculating directory size",
                                  path=path,
-                                 timeout_seconds=120)
+                                 timeout_seconds=source_size_timeout)
                 except Exception as e:
                     logger.warning("Error calculating directory size",
                                  path=path,
@@ -1686,8 +1692,12 @@ class BackupService:
 
                                         if file_duration > 3.0:
                                             # Large/slow file - worth showing to user
-                                            job.current_file = current_path
-                                            last_shown_file = current_path
+                                            if current_path != job.current_file:
+                                                job.current_file = current_path
+                                                last_shown_file = current_path
+                                                # Commit immediately so frontend sees it on next poll
+                                                db.commit()
+                                                last_commit_time = asyncio.get_event_loop().time()
                                         elif current_path != last_shown_file:
                                             # Fast file - don't show it, keep showing last large file or clear it
                                             if last_shown_file and last_shown_file not in file_start_times:

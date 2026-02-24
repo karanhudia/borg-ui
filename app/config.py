@@ -95,6 +95,7 @@ class Settings(BaseSettings):
     borg_init_timeout: int = 300      # 5 minutes - for borg init operations (new repo creation)
     borg_extract_timeout: int = 3600  # 1 hour - for borg extract operations (restore)
     script_timeout: int = 120         # 2 minutes - for pre/post backup scripts
+    source_size_timeout: int = 3600   # 1 hour - for du-based source size calculation (large datasets)
 
     # Health check settings
     health_check_interval: int = 30

@@ -29,6 +29,7 @@ const SystemSettingsTab: React.FC = () => {
   const [listTimeout, setListTimeout] = useState(600)
   const [initTimeout, setInitTimeout] = useState(300)
   const [backupTimeout, setBackupTimeout] = useState(3600)
+  const [sourceSizeTimeout, setSourceSizeTimeout] = useState(3600)
 
   // Local state for stats refresh
   const [statsRefreshInterval, setStatsRefreshInterval] = useState(60)
@@ -115,6 +116,7 @@ const SystemSettingsTab: React.FC = () => {
       setListTimeout(systemSettings.list_timeout || 600)
       setInitTimeout(systemSettings.init_timeout || 300)
       setBackupTimeout(systemSettings.backup_timeout || 3600)
+      setSourceSizeTimeout(systemSettings.source_size_timeout || 3600)
       setStatsRefreshInterval(systemSettings.stats_refresh_interval_minutes ?? 60)
       setHasChanges(false)
     }
@@ -132,7 +134,8 @@ const SystemSettingsTab: React.FC = () => {
         infoTimeout !== (systemSettings.info_timeout || 600) ||
         listTimeout !== (systemSettings.list_timeout || 600) ||
         initTimeout !== (systemSettings.init_timeout || 300) ||
-        backupTimeout !== (systemSettings.backup_timeout || 3600)
+        backupTimeout !== (systemSettings.backup_timeout || 3600) ||
+        sourceSizeTimeout !== (systemSettings.source_size_timeout || 3600)
 
       const statsRefreshChanged =
         statsRefreshInterval !== (systemSettings.stats_refresh_interval_minutes ?? 60)
@@ -147,6 +150,7 @@ const SystemSettingsTab: React.FC = () => {
     listTimeout,
     initTimeout,
     backupTimeout,
+    sourceSizeTimeout,
     statsRefreshInterval,
     cacheStats,
     systemSettings,
@@ -168,7 +172,14 @@ const SystemSettingsTab: React.FC = () => {
     if (browseMaxMemoryMb < MIN_MEMORY || browseMaxMemoryMb > MAX_MEMORY) {
       return `Max memory must be between ${MIN_MEMORY} MB and ${MAX_MEMORY} MB`
     }
-    const timeouts = [mountTimeout, infoTimeout, listTimeout, initTimeout, backupTimeout]
+    const timeouts = [
+      mountTimeout,
+      infoTimeout,
+      listTimeout,
+      initTimeout,
+      backupTimeout,
+      sourceSizeTimeout,
+    ]
     if (timeouts.some((t) => t < MIN_TIMEOUT || t > MAX_TIMEOUT)) {
       return `Timeouts must be between ${MIN_TIMEOUT} seconds and ${MAX_TIMEOUT} seconds (24 hours)`
     }
@@ -217,6 +228,7 @@ const SystemSettingsTab: React.FC = () => {
         list_timeout: listTimeout,
         init_timeout: initTimeout,
         backup_timeout: backupTimeout,
+        source_size_timeout: sourceSizeTimeout,
         stats_refresh_interval_minutes: statsRefreshInterval,
       })
     },
@@ -437,6 +449,22 @@ const SystemSettingsTab: React.FC = () => {
                     <>
                       For backup/restore. {formatTimeout(backupTimeout)}
                       {renderSourceLabel(timeoutSources?.backup_timeout)}
+                    </>
+                  }
+                />
+
+                <TextField
+                  label="Source Size Timeout (seconds)"
+                  type="number"
+                  fullWidth
+                  value={sourceSizeTimeout}
+                  onChange={(e) => setSourceSizeTimeout(Number(e.target.value))}
+                  inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 300 }}
+                  error={sourceSizeTimeout < MIN_TIMEOUT || sourceSizeTimeout > MAX_TIMEOUT}
+                  helperText={
+                    <>
+                      For source size calculation (du). {formatTimeout(sourceSizeTimeout)}
+                      {renderSourceLabel(timeoutSources?.source_size_timeout)}
                     </>
                   }
                 />
