@@ -49,6 +49,7 @@ interface Repository extends RepositoryData {
   mode: 'full' | 'observe'
   custom_flags?: string | null
   has_running_maintenance?: boolean
+  has_keyfile?: boolean
   remote_path?: string
   pre_backup_script?: string
   post_backup_script?: string
@@ -310,24 +311,18 @@ export default function Repositories() {
         await repositoriesAPI.updateRepository(wizardRepository.id, data)
         toast.success('Repository updated successfully')
       } else if (wizardMode === 'import') {
-        const response = await repositoriesAPI.importRepository(data)
-        const repositoryId = response.data?.repository?.id
-
-        // Upload keyfile if provided
-        if (keyfile && repositoryId) {
-          try {
-            await repositoriesAPI.uploadKeyfile(repositoryId, keyfile)
-            toast.success('Repository imported and keyfile uploaded successfully')
-          } catch (keyfileError) {
-            // Repository was imported but keyfile upload failed
-            const errorDetail =
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              (keyfileError as any)?.response?.data?.detail || 'Failed to upload keyfile'
-            toast.error(`Repository imported, but ${errorDetail}`)
-          }
-        } else {
-          toast.success('Repository imported successfully')
+        // Include keyfile content in the import request so the backend can write it
+        // to disk before running `borg info` to verify the repository.
+        const importData = { ...data }
+        if (keyfile) {
+          importData.keyfile_content = await keyfile.text()
         }
+        await repositoriesAPI.importRepository(importData)
+        toast.success(
+          keyfile
+            ? 'Repository imported and keyfile saved successfully'
+            : 'Repository imported successfully'
+        )
       } else {
         await repositoriesAPI.createRepository(data)
         toast.success('Repository created successfully')

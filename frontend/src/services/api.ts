@@ -310,6 +310,7 @@ export const repositoriesAPI = {
       },
     })
   },
+  downloadKeyfile: (id: number) => api.get(`/repositories/${id}/keyfile`, { responseType: 'blob' }),
   getRepository: (id: number) => api.get(`/repositories/${id}`),
   updateRepository: (id: number, data: RepositoryData) => api.put(`/repositories/${id}`, data),
   deleteRepository: (id: number) => api.delete(`/repositories/${id}`),

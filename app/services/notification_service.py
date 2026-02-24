@@ -1606,7 +1606,7 @@ class NotificationService:
         # Build content blocks
         content_blocks = [
             {'label': 'Repository', 'value': repository_name},
-            {'label': 'Path', 'value': repository_path},
+            {'label': 'Path', 'value': _sanitize_ssh_url(repository_path)},
             {'label': 'Type', 'value': check_type.capitalize()},
         ]
 
