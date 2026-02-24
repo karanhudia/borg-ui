@@ -48,6 +48,13 @@ services:
       # - /home/yourusername:/local:rw
       # - /var/www:/local/www:ro
       # - /mnt/data:/local/data:rw
+      #
+      # Any container path works — /local is just a convention.
+      # If you use a different path, update LOCAL_MOUNT_POINTS below to match.
+      # Example with custom paths:
+      # - /mnt/disk1:/disk1:rw
+      # - /home/user:/home:rw
+      # (also set: LOCAL_MOUNT_POINTS=/disk1,/home)
 
       # Optional: Docker container management in backup scripts
       # Required for stopping/starting containers during backups

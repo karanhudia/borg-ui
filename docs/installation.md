@@ -15,7 +15,8 @@ Borg Web UI runs as a Docker container. Choose your setup below, configure your 
 
 Pick one of the three options below, create `docker-compose.yml`, and run `docker compose up -d`.
 
-> **`/local`** is where borg-ui reads files to back up — mount your existing data directories here.
+> **Mount your data** at any container path you like — `/local` is just the convention used in these examples, not a requirement.
+> Set `LOCAL_MOUNT_POINTS` in environment to match whatever path(s) you mount (default: `/local`).
 > **Backup repositories** (where borg actually stores backups) are configured in the UI after setup.
 
 ---
@@ -150,13 +151,23 @@ volumes:
 
 ---
 
-**Mount multiple directories** — you can add as many volume entries as you need:
+**Mount multiple directories** — you can add as many volume entries as you need.
+
+The container path can be anything — `/local` is just the default. If you use a different path, update `LOCAL_MOUNT_POINTS` to match:
 
 ```yaml
+# Option A — nest everything under /local (default, no extra config needed)
 volumes:
   - /home/john:/local:rw
   - /var/www:/local/www:ro
   - /mnt/photos:/local/photos:rw
+
+# Option B — use your own paths (update LOCAL_MOUNT_POINTS accordingly)
+volumes:
+  - /home/john:/home:rw
+  - /mnt/disk1:/disk1:rw
+environment:
+  - LOCAL_MOUNT_POINTS=/home,/disk1
 ```
 
 **Permission errors?** Run `id -u && id -g` on your host to find the right `PUID`/`PGID`.
@@ -289,11 +300,21 @@ See [Usage Guide](usage-guide.md)
 
 ### Mount Your Directories
 
+`/local` is the default container path used in the examples, but any path works. If you use a different container path, add `LOCAL_MOUNT_POINTS` to your environment:
+
 ```yaml
+# Using /local (default — no extra config needed)
 volumes:
   - /home/john:/local:rw
   - /var/www:/local/www:ro
   - /mnt/photos:/local/photos:rw
+
+# Using custom paths
+volumes:
+  - /home/john:/home:rw
+  - /mnt/disk1:/disk1:rw
+environment:
+  - LOCAL_MOUNT_POINTS=/home,/disk1
 ```
 
 ### Change Timezone
