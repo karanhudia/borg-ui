@@ -20,6 +20,9 @@ def backup_service_fixture(mock_db_session):
         mock_conf.data_dir = "/tmp/borg-data"
         mock_conf.backup_timeout = 3600
         mock_conf.script_timeout = 60 # Fix for size calculation
+        mock_conf.borg_info_timeout = 60
+        mock_conf.borg_list_timeout = 60
+        mock_conf.source_size_timeout = 120
         
         with patch("app.services.backup_service.Path") as mock_path:
              # Mock filesystem paths
