@@ -20,6 +20,10 @@ class TestBackupService:
         """Create a BackupService instance"""
         with patch('app.services.backup_service.settings') as mock_settings:
             mock_settings.data_dir = tempfile.mkdtemp()
+            mock_settings.borg_info_timeout = 60
+            mock_settings.borg_list_timeout = 60
+            mock_settings.backup_timeout = 3600
+            mock_settings.source_size_timeout = 120
             service = BackupService()
             yield service
 
