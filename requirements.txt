@@ -1,14 +1,13 @@
 alembic==1.12.1
 apprise==1.9.6
 bcrypt==5.0.0
-coverage[toml]==7.3.2
+coverage[toml]==7.10.7
 croniter==6.0.0
 cryptography==46.0.5
 fastapi-cache2==0.2.1
 fastapi==0.128.8
 gunicorn==25.1.0
 httpx==0.25.2
-passlib[bcrypt]==1.7.4
 psutil==7.2.2
 pydantic-settings==2.1.0
 pydantic==2.12.5
