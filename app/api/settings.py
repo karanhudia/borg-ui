@@ -26,6 +26,7 @@ DEFAULT_TIMEOUTS = {
     "list_timeout": 600,
     "init_timeout": 300,
     "backup_timeout": 3600,
+    "source_size_timeout": 3600,
 }
 
 def get_effective_timeout(db_value, env_value, default_value):
@@ -86,6 +87,7 @@ class SystemSettingsUpdate(BaseModel):
     info_timeout: Optional[int] = None
     list_timeout: Optional[int] = None
     init_timeout: Optional[int] = None
+    source_size_timeout: Optional[int] = None
 
     max_concurrent_backups: Optional[int] = None
     log_retention_days: Optional[int] = None
@@ -181,6 +183,11 @@ async def get_system_settings(
             app_settings.backup_timeout,
             DEFAULT_TIMEOUTS["backup_timeout"]
         )
+        source_size_timeout, source_size_source = get_effective_timeout(
+            settings.source_size_timeout,
+            app_settings.source_size_timeout,
+            DEFAULT_TIMEOUTS["source_size_timeout"]
+        )
 
         return {
             "success": True,
@@ -191,6 +198,7 @@ async def get_system_settings(
                 "info_timeout": info_timeout,
                 "list_timeout": list_timeout,
                 "init_timeout": init_timeout,
+                "source_size_timeout": source_size_timeout,
                 # Timeout sources: "saved" (from DB), "env" (from env var), or null (default)
                 "timeout_sources": {
                     "backup_timeout": backup_source,
@@ -198,6 +206,7 @@ async def get_system_settings(
                     "info_timeout": info_source,
                     "list_timeout": list_source,
                     "init_timeout": init_source,
+                    "source_size_timeout": source_size_source,
                 },
                 # Other settings
                 "max_concurrent_backups": settings.max_concurrent_backups,
@@ -298,6 +307,11 @@ async def update_system_settings(
                 settings.backup_timeout = None
             else:
                 settings.backup_timeout = settings_update.backup_timeout
+        if settings_update.source_size_timeout is not None:
+            if settings_update.source_size_timeout in (DEFAULT_TIMEOUTS["source_size_timeout"], app_settings.source_size_timeout):
+                settings.source_size_timeout = None
+            else:
+                settings.source_size_timeout = settings_update.source_size_timeout
         # Other settings
         if settings_update.max_concurrent_backups is not None:
             settings.max_concurrent_backups = settings_update.max_concurrent_backups
