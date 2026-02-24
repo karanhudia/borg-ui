@@ -1,7 +1,7 @@
 alembic==1.12.1
 apprise==1.9.6
 bcrypt==5.0.0
-coverage[toml]==7.3.2
+coverage[toml]==7.10.7
 croniter==6.0.0
 cryptography==46.0.5
 fastapi-cache2==0.2.1
