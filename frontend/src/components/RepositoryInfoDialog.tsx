@@ -9,6 +9,8 @@ import {
   Card,
   CardContent,
   Alert,
+  IconButton,
+  Tooltip,
 } from '@mui/material'
 import {
   Storage,
@@ -18,12 +20,16 @@ import {
   DataUsage,
   Compress,
   Inventory,
+  FileDownload,
 } from '@mui/icons-material'
 import { formatDateShort, formatBytes } from '../utils/dateUtils'
+import { repositoriesAPI } from '../services/api'
+import { toast } from 'react-hot-toast'
 
 interface Repository {
   id: number
   name: string
+  has_keyfile?: boolean
 }
 
 interface RepositoryInfo {
@@ -60,6 +66,38 @@ export default function RepositoryInfoDialog({
   isLoading,
   onClose,
 }: RepositoryInfoDialogProps) {
+  const handleDownloadKeyfile = async () => {
+    if (!repository) return
+    try {
+      const response = await repositoriesAPI.downloadKeyfile(repository.id)
+      const blob = response.data instanceof Blob ? response.data : new Blob([response.data])
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `borg_keyfile_${repository.name}`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 100)
+    } catch (err: unknown) {
+      let message = 'Failed to download keyfile'
+      const errData = (err as { response?: { data?: unknown } })?.response?.data
+      if (errData instanceof Blob) {
+        // With responseType:'blob', error bodies also come back as Blob
+        try {
+          const text = await errData.text()
+          const json = JSON.parse(text)
+          message = json.detail || message
+        } catch {
+          // ignore parse errors
+        }
+      } else if (errData && typeof errData === 'object') {
+        message = (errData as { detail?: string }).detail || message
+      }
+      toast.error(message)
+    }
+  }
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>
@@ -84,11 +122,41 @@ export default function RepositoryInfoDialog({
               {/* Encryption */}
               <Card sx={{ backgroundColor: '#f3e5f5' }}>
                 <CardContent sx={{ py: 2 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
-                    <Lock sx={{ color: '#7b1fa2', fontSize: 28 }} />
-                    <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                      Encryption
-                    </Typography>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      mb: 1,
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Lock sx={{ color: '#7b1fa2', fontSize: 28 }} />
+                      <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                        Encryption
+                      </Typography>
+                    </Box>
+                    {repository?.has_keyfile && (
+                      <Tooltip title="Export keyfile — keep this safe!" arrow placement="top">
+                        <IconButton
+                          onClick={handleDownloadKeyfile}
+                          size="small"
+                          sx={{
+                            backgroundColor: '#7b1fa2',
+                            color: 'white',
+                            width: 30,
+                            height: 30,
+                            '&:hover': {
+                              backgroundColor: '#4a148c',
+                              transform: 'scale(1.1)',
+                            },
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          <FileDownload sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </Box>
                   <Typography variant="h6" fontWeight={700} sx={{ color: '#7b1fa2', ml: 5 }}>
                     {repositoryInfo.encryption?.mode || 'N/A'}

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -46,6 +47,24 @@ def get_connection_details(connection_id: int, db: Session) -> Dict[str, Any]:
     }
 
 # Helper function to get standard SSH options
+def _borg_keyfile_name(repo_path: str) -> str:
+    """Derive a keyfile filename from the repository path.
+
+    Matches the convention used by existing keyfiles:
+      /local/Users/foo/test-backups/my-repo  →  local_Users_foo_test_backups_my_repo
+      ssh://user@host:22/backups/repo        →  user_host_22_backups_repo
+
+    Rules: strip the ssh:// scheme or leading slash, then replace all
+    non-alphanumeric characters with '_'. No prefix added, no file extension.
+    """
+    import re
+    if repo_path.startswith("ssh://"):
+        path = repo_path[len("ssh://"):]
+    else:
+        path = repo_path.lstrip('/')
+    return re.sub(r'[^a-zA-Z0-9]', '_', path)
+
+
 def get_standard_ssh_opts(include_key_path=None):
     """Get standardized SSH options for Borg operations
 
@@ -319,6 +338,7 @@ class RepositoryImport(BaseModel):
     bypass_lock: bool = False  # Use --bypass-lock for read-only storage access (observe-only repos)
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create (e.g., "--stats --list")
     source_connection_id: Optional[int] = None  # SSH connection ID for remote data source (pull-based backups)
+    keyfile_content: Optional[str] = None  # Content of borg keyfile for keyfile/keyfile-blake2 encryption
 
 class RepositoryUpdate(BaseModel):
     name: Optional[str] = None
@@ -412,6 +432,7 @@ async def get_repositories(
                 "bypass_lock": repo.bypass_lock or False,
                 "custom_flags": repo.custom_flags,
                 "has_running_maintenance": has_check or has_compact or has_prune,
+                "has_keyfile": repo.has_keyfile or False,
                 "source_ssh_connection_id": repo.source_ssh_connection_id
             })
 
@@ -641,6 +662,10 @@ async def create_repository(
         db.commit()
         db.refresh(repository)
 
+        if repo_data.encryption in ['keyfile', 'keyfile-blake2']:
+            repository.has_keyfile = True
+            db.commit()
+
         # Determine response message
         already_existed = init_result.get("already_existed", False)
         if already_existed:
@@ -782,6 +807,18 @@ async def import_repository(
                 detail=f"Repository path already exists in database with name '{existing_path.name}'"
             )
 
+        # Write keyfile to disk before verification so borg can find it
+        keyfile_path = None
+        if repo_data.keyfile_content:
+            keyfile_dir = os.path.expanduser("~/.config/borg/keys")
+            os.makedirs(keyfile_dir, exist_ok=True)
+            keyfile_name = _borg_keyfile_name(repo_path)
+            keyfile_path = os.path.join(keyfile_dir, keyfile_name)
+            with open(keyfile_path, 'w') as f:
+                f.write(repo_data.keyfile_content)
+            os.chmod(keyfile_path, 0o600)
+            logger.info("Wrote keyfile before verification", keyfile_path=keyfile_path)
+
         # Verify repository is accessible by running borg info
         logger.info("Verifying repository accessibility", path=repo_path)
         verify_result = await verify_existing_repository(
@@ -793,6 +830,11 @@ async def import_repository(
         )
 
         if not verify_result["success"]:
+            # Clean up keyfile we wrote — verification failed so don't leave it on disk
+            if keyfile_path and os.path.exists(keyfile_path):
+                os.unlink(keyfile_path)
+                logger.info("Removed keyfile after failed verification", keyfile_path=keyfile_path)
+
             error_msg = verify_result.get("error", "Unknown error")
 
             # Provide helpful error messages
@@ -855,6 +897,10 @@ async def import_repository(
         db.add(repository)
         db.commit()
         db.refresh(repository)
+
+        if keyfile_path:
+            repository.has_keyfile = True
+            db.commit()
 
         # Update archive count by listing archives (non-blocking - don't fail import)
         try:
@@ -923,20 +969,13 @@ async def upload_keyfile(
         if not content:
             raise HTTPException(status_code=400, detail="Keyfile is empty")
 
-        # Extract repository ID from repository path to generate keyfile name
-        # Borg uses the repository ID in keyfile names
-        import re
-        import hashlib
+        keyfile_name = _borg_keyfile_name(repository.path)
 
-        # For local paths: generate a simple filename
-        # For SSH paths: extract host and path
-        safe_name = re.sub(r'[^\w\-_.]', '_', repository.path)
-        keyfile_name = f"{safe_name}.key"
-
-        # Store keyfile in /data/borg_keys/
-        # The entrypoint.sh creates a symlink: ~/.config/borg/keys -> /data/borg_keys
-        # This makes keyfiles persistent across container restarts and maintains backwards compatibility
-        keyfile_dir = os.path.join(settings.data_dir, "borg_keys")
+        # Store keyfile in ~/.config/borg/keys/ — the standard Borg keyfile location.
+        # In Docker, entrypoint.sh symlinks ~/.config/borg/keys -> /data/borg_keys so files
+        # go to the persistent volume automatically.  Running natively this resolves to the
+        # real ~/.config/borg/keys/ directory that borg already scans.
+        keyfile_dir = os.path.expanduser("~/.config/borg/keys")
         os.makedirs(keyfile_dir, exist_ok=True)
 
         keyfile_path = os.path.join(keyfile_dir, keyfile_name)
@@ -968,6 +1007,73 @@ async def upload_keyfile(
     except Exception as e:
         logger.error("Failed to upload keyfile", repo_id=repo_id, error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to upload keyfile: {str(e)}")
+
+@router.get("/{repo_id}/keyfile")
+async def download_keyfile(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Export and download the keyfile for a repository that uses keyfile encryption.
+
+    Uses 'borg key export' so it works regardless of what the keyfile is named on disk
+    (Borg-created repos use a hash-based filename; imported repos use our path-based convention).
+    """
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    repository = db.query(Repository).filter(Repository.id == repo_id).first()
+    if not repository:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
+    if not repository.has_keyfile:
+        raise HTTPException(status_code=404, detail="This repository has no keyfile")
+
+    try:
+        import tempfile
+
+        env = os.environ.copy()
+        if repository.passphrase:
+            env["BORG_PASSPHRASE"] = repository.passphrase
+        env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+        env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".key") as tmp:
+            tmp_path = tmp.name
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                "borg", "key", "export", repository.path, tmp_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env
+            )
+            _, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+
+            if process.returncode != 0:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to export keyfile: {stderr.decode().strip()[:120]}"
+                )
+
+            with open(tmp_path, "rb") as f:
+                content = f.read()
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+        download_name = _borg_keyfile_name(repository.path)
+        return Response(
+            content=content,
+            media_type="text/plain",
+            headers={"Content-Disposition": f'attachment; filename="{download_name}"'}
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to download keyfile", repo_id=repo_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to export keyfile")
 
 @router.get("/{repo_id}")
 async def get_repository(
@@ -1002,6 +1108,7 @@ async def get_repository(
                 "archive_count": repository.archive_count,
                 "created_at": format_datetime(repository.created_at),
                 "updated_at": format_datetime(repository.updated_at),
+                "has_keyfile": repository.has_keyfile or False,
                 "source_ssh_connection_id": repository.source_ssh_connection_id,
                 "stats": stats
             }

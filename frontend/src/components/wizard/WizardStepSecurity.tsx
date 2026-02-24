@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   Box,
   TextField,
@@ -8,8 +9,10 @@ import {
   Typography,
   Alert,
   Button,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material'
-import { Shield, Key, FileKey } from 'lucide-react'
+import { Shield, Key, FileKey, Upload, FileText } from 'lucide-react'
 
 export interface SecurityStepData {
   encryption: string
@@ -25,6 +28,26 @@ interface WizardStepSecurityProps {
 }
 
 export default function WizardStepSecurity({ mode, data, onChange }: WizardStepSecurityProps) {
+  const [keyfileMode, setKeyfileMode] = useState<'file' | 'paste'>('file')
+  const [keyfileText, setKeyfileText] = useState('')
+
+  const handleKeyfileModeChange = (_: unknown, newMode: 'file' | 'paste' | null) => {
+    if (newMode === null) return
+    setKeyfileMode(newMode)
+    setKeyfileText('')
+    onChange({ selectedKeyfile: null })
+  }
+
+  const handleKeyfileTextChange = (text: string) => {
+    setKeyfileText(text)
+    if (text.trim()) {
+      const file = new File([text], 'borg_keyfile', { type: 'text/plain' })
+      onChange({ selectedKeyfile: file })
+    } else {
+      onChange({ selectedKeyfile: null })
+    }
+  }
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* Encryption Selection - Only for create mode */}
@@ -132,38 +155,71 @@ export default function WizardStepSecurity({ mode, data, onChange }: WizardStepS
             Borg Keyfile (Optional)
           </Typography>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-            Upload keyfile if using keyfile/keyfile-blake2 encryption (found in
-            ~/.config/borg/keys/)
+            Borg keyfiles are typically stored without a file extension in ~/.config/borg/keys/
           </Typography>
-          <Button
-            variant="outlined"
-            component="label"
-            fullWidth
-            startIcon={<FileKey size={18} />}
-            sx={{
-              justifyContent: 'flex-start',
-              py: 1.5,
-              borderStyle: 'dashed',
-              '&:hover': {
-                borderStyle: 'solid',
-              },
-            }}
+
+          <ToggleButtonGroup
+            value={keyfileMode}
+            exclusive
+            onChange={handleKeyfileModeChange}
+            size="small"
+            sx={{ mb: 1.5 }}
           >
-            {data.selectedKeyfile ? `Selected: ${data.selectedKeyfile.name}` : 'Choose Keyfile'}
-            <input
-              type="file"
-              hidden
-              accept=".key,*"
-              onChange={(e) => {
-                if (e.target.files && e.target.files[0]) {
-                  onChange({ selectedKeyfile: e.target.files[0] })
-                }
+            <ToggleButton value="file">
+              <Upload size={16} style={{ marginRight: 6 }} />
+              Upload File
+            </ToggleButton>
+            <ToggleButton value="paste">
+              <FileText size={16} style={{ marginRight: 6 }} />
+              Paste Content
+            </ToggleButton>
+          </ToggleButtonGroup>
+
+          {keyfileMode === 'file' ? (
+            <Button
+              variant="outlined"
+              component="label"
+              fullWidth
+              startIcon={<FileKey size={18} />}
+              sx={{
+                justifyContent: 'flex-start',
+                py: 1.5,
+                borderStyle: 'dashed',
+                '&:hover': {
+                  borderStyle: 'solid',
+                },
+              }}
+            >
+              {data.selectedKeyfile ? `Selected: ${data.selectedKeyfile.name}` : 'Choose Keyfile'}
+              <input
+                type="file"
+                hidden
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    onChange({ selectedKeyfile: e.target.files[0] })
+                  }
+                }}
+              />
+            </Button>
+          ) : (
+            <TextField
+              multiline
+              rows={6}
+              fullWidth
+              placeholder="BORG_KEY ..."
+              value={keyfileText}
+              onChange={(e) => handleKeyfileTextChange(e.target.value)}
+              inputProps={{
+                style: { fontFamily: 'monospace', fontSize: '0.85rem' },
               }}
             />
-          </Button>
+          )}
+
           {data.selectedKeyfile && (
             <Alert severity="success" sx={{ mt: 1.5 }}>
-              Keyfile will be uploaded after import
+              {keyfileMode === 'file'
+                ? 'Keyfile will be uploaded after import'
+                : 'Keyfile content will be saved after import'}
             </Alert>
           )}
         </Box>
