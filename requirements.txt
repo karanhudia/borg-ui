@@ -8,7 +8,6 @@ fastapi-cache2==0.2.1
 fastapi==0.128.8
 gunicorn==25.1.0
 httpx==0.25.2
-passlib[bcrypt]==1.7.4
 psutil==7.2.2
 pydantic-settings==2.1.0
 pydantic==2.12.5
