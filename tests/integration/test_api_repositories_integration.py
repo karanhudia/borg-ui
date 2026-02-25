@@ -680,10 +680,10 @@ class TestKeyfileEncryption:
 
         assert repo_data["encryption"] == "keyfile"
 
-        # Verify keyfile was created in /data/borg_keys/
-        # (In Docker, symlink ensures Borg finds it at ~/.config/borg/keys/)
+        # Verify Borg keyfile directory exists at the standard location.
+        # In Docker, entrypoint.sh symlinks ~/.config/borg/keys -> /data/borg_keys.
         import os
-        borg_keys_dir = os.path.join(os.environ.get("DATA_DIR", "/data"), "borg_keys")
+        borg_keys_dir = os.path.expanduser("~/.config/borg/keys")
         os.makedirs(borg_keys_dir, exist_ok=True)  # Ensure it exists for test
         assert os.path.exists(borg_keys_dir), "Borg keys directory should exist"
 
@@ -754,10 +754,12 @@ class TestKeyfileEncryption:
         keyfile_borg_repo
     ):
         """
-        Verify keyfile is stored in /data/borg_keys/ (symlinked location)
+        Verify keyfile is stored in ~/.config/borg/keys/ (standard Borg keyfile location).
+        In Docker, entrypoint.sh symlinks ~/.config/borg/keys -> /data/borg_keys so files
+        land on the persistent volume automatically.
 
-        WHY: Ensures keyfiles are stored persistently and in the correct location
-        PREVENTS: Keyfiles lost on container restart
+        WHY: Ensures keyfiles are stored where Borg expects to find them
+        PREVENTS: Keyfiles lost on container restart / "No key file found" errors
         TESTS: Storage location and permissions
         """
         repo_path, test_data_path, passphrase, keyfile_path = keyfile_borg_repo
@@ -789,15 +791,17 @@ class TestKeyfileEncryption:
 
         assert upload_response.status_code == 200, f"Upload failed: {upload_response.json()}"
 
-        # Verify keyfile exists in /data/borg_keys/
+        # Verify keyfile exists in ~/.config/borg/keys/ (no file extension, path-based name)
         import os
-        import glob
-        borg_keys_dir = os.path.join(os.environ.get("DATA_DIR", "/data"), "borg_keys")
+        borg_keys_dir = os.path.expanduser("~/.config/borg/keys")
 
-        # Ensure directory exists
-        os.makedirs(borg_keys_dir, exist_ok=True)
+        assert os.path.exists(borg_keys_dir), f"Borg keys directory should exist at {borg_keys_dir}"
 
-        keyfiles = glob.glob(os.path.join(borg_keys_dir, "*.key"))
+        keyfiles = [
+            os.path.join(borg_keys_dir, f)
+            for f in os.listdir(borg_keys_dir)
+            if os.path.isfile(os.path.join(borg_keys_dir, f))
+        ]
 
         assert len(keyfiles) > 0, f"Keyfile should exist in {borg_keys_dir}"
 
