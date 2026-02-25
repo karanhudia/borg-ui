@@ -115,7 +115,7 @@ describe('WizardStepSecurity', () => {
     it('renders keyfile upload option', () => {
       render(<WizardStepSecurity mode="import" data={defaultData} onChange={vi.fn()} />)
 
-      expect(screen.getByText(/Borg Keyfile/i)).toBeInTheDocument()
+      expect(screen.getByText(/Borg Keyfile \(Optional\)/i)).toBeInTheDocument()
       expect(screen.getByText(/Choose Keyfile/i)).toBeInTheDocument()
     })
 
