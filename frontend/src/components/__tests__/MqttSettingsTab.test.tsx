@@ -219,7 +219,8 @@ describe('MqttSettingsTab', () => {
 
       // Find the visibility toggle button by checking parent structure
       // The button contains the Eye/EyeOff icon within the password field's endAdornment
-      const passwordField = passwordInput.closest('.MuiTextField-root') || passwordInput.parentElement?.parentElement
+      const passwordField =
+        passwordInput.closest('.MuiTextField-root') || passwordInput.parentElement?.parentElement
       const visibilityToggle = passwordField?.querySelector('button')
 
       if (visibilityToggle) {
