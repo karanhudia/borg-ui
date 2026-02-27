@@ -112,12 +112,12 @@ describe('BetaFeaturesTab', () => {
       renderWithProviders(<BetaFeaturesTab />)
 
       await waitFor(() => {
-        const switches = screen.getAllByRole('switch')
-        const infoSwitch = switches.find((sw) =>
-          sw.parentElement?.textContent?.includes('Enable bypass-lock for all borg info commands')
-        )
-        expect(infoSwitch).not.toBeChecked()
+        expect(screen.getByText('Enable bypass-lock for all borg info commands')).toBeInTheDocument()
       })
+
+      const switches = screen.getAllByRole('switch')
+      const infoSwitch = switches[0] // First switch is bypass lock on info
+      expect(infoSwitch).not.toBeChecked()
     })
 
     it('can enable bypass lock on info', async () => {
@@ -202,7 +202,11 @@ describe('BetaFeaturesTab', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText(/Adds --bypass-lock to all borg info commands/)
+          screen.getByText((_, element) => {
+            const hasText = element?.textContent?.includes('Adds --bypass-lock to all borg info commands')
+            const isDescription = element?.tagName === 'P' && element?.textContent?.includes('This prevents lock contention')
+            return (hasText && isDescription) ?? false
+          })
         ).toBeInTheDocument()
       })
     })
@@ -213,12 +217,12 @@ describe('BetaFeaturesTab', () => {
       renderWithProviders(<BetaFeaturesTab />)
 
       await waitFor(() => {
-        const switches = screen.getAllByRole('switch')
-        const listSwitch = switches.find((sw) =>
-          sw.parentElement?.textContent?.includes('Enable bypass-lock for all borg list commands')
-        )
-        expect(listSwitch).not.toBeChecked()
+        expect(screen.getByText('Enable bypass-lock for all borg list commands')).toBeInTheDocument()
       })
+
+      const switches = screen.getAllByRole('switch')
+      const listSwitch = switches[1] // Second switch is bypass lock on list
+      expect(listSwitch).not.toBeChecked()
     })
 
     it('can enable bypass lock on list', async () => {
@@ -252,7 +256,11 @@ describe('BetaFeaturesTab', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText(/Adds --bypass-lock to all borg list commands/)
+          screen.getByText((_, element) => {
+            const hasText = element?.textContent?.includes('Adds --bypass-lock to all borg list commands')
+            const isDescription = element?.tagName === 'P' && element?.textContent?.includes('This prevents lock contention')
+            return (hasText && isDescription) ?? false
+          })
         ).toBeInTheDocument()
       })
     })
@@ -263,12 +271,12 @@ describe('BetaFeaturesTab', () => {
       renderWithProviders(<BetaFeaturesTab />)
 
       await waitFor(() => {
-        const switches = screen.getAllByRole('switch')
-        const restoreSwitch = switches.find((sw) =>
-          sw.parentElement?.textContent?.includes('Show the dedicated Restore tab in navigation')
-        )
-        expect(restoreSwitch).not.toBeChecked()
+        expect(screen.getByText('Show the dedicated Restore tab in navigation')).toBeInTheDocument()
       })
+
+      const switches = screen.getAllByRole('switch')
+      const restoreSwitch = switches[2] // Third switch is restore tab
+      expect(restoreSwitch).not.toBeChecked()
     })
 
     it('can enable restore tab', async () => {
@@ -315,12 +323,12 @@ describe('BetaFeaturesTab', () => {
       renderWithProviders(<BetaFeaturesTab />)
 
       await waitFor(() => {
-        const switches = screen.getAllByRole('switch')
-        const mqttSwitch = switches.find((sw) =>
-          sw.parentElement?.textContent?.includes('Enable MQTT')
-        )
-        expect(mqttSwitch).not.toBeChecked()
+        expect(screen.getByText('Enable MQTT')).toBeInTheDocument()
       })
+
+      const switches = screen.getAllByRole('switch')
+      const mqttSwitch = switches[3] // Fourth switch is MQTT
+      expect(mqttSwitch).not.toBeChecked()
     })
 
     it('can enable MQTT', async () => {

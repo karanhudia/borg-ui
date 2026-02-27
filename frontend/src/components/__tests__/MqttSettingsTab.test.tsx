@@ -103,17 +103,14 @@ describe('MqttSettingsTab', () => {
         expect(screen.getByLabelText('Enable MQTT Publishing')).toBeInTheDocument()
       })
 
-      const enableCheckbox = screen.getByLabelText('Enable MQTT Publishing')
-      await user.click(enableCheckbox)
+      await user.click(screen.getByLabelText('Enable MQTT Publishing'))
 
-      await waitFor(() => {
-        expect(screen.getByLabelText('Broker URL')).toBeInTheDocument()
-        expect(screen.getByLabelText('Broker Port')).toBeInTheDocument()
-        expect(screen.getByLabelText('Username')).toBeInTheDocument()
-        expect(screen.getByLabelText('Password')).toBeInTheDocument()
-        expect(screen.getByLabelText('Client ID')).toBeInTheDocument()
-        expect(screen.getByLabelText('QoS Level')).toBeInTheDocument()
-      })
+      expect(screen.getByLabelText(/Broker URL/i)).toBeInTheDocument()
+      expect(screen.getByLabelText('Broker Port')).toBeInTheDocument()
+      expect(screen.getByLabelText('Username')).toBeInTheDocument()
+      expect(screen.getByLabelText('Password')).toBeInTheDocument()
+      expect(screen.getByLabelText('Client ID')).toBeInTheDocument()
+      expect(screen.getByLabelText('QoS Level')).toBeInTheDocument()
     })
 
     it('hides MQTT connection fields when MQTT is disabled', async () => {
@@ -137,7 +134,7 @@ describe('MqttSettingsTab', () => {
 
       await user.click(screen.getByLabelText('Enable MQTT Publishing'))
 
-      const brokerUrlInput = screen.getByLabelText('Broker URL')
+      const brokerUrlInput = screen.getByLabelText(/Broker URL/i)
       await user.clear(brokerUrlInput)
       await user.type(brokerUrlInput, 'mqtt.example.com')
 
@@ -220,9 +217,10 @@ describe('MqttSettingsTab', () => {
       const passwordInput = screen.getByLabelText('Password')
       await user.type(passwordInput, 'testpass')
 
-      // Find the visibility toggle button (eye icon)
-      const toggleButtons = screen.getAllByRole('button')
-      const visibilityToggle = toggleButtons.find((btn) => btn.getAttribute('aria-label') === null)
+      // Find the visibility toggle button by checking parent structure
+      // The button contains the Eye/EyeOff icon within the password field's endAdornment
+      const passwordField = passwordInput.closest('.MuiTextField-root') || passwordInput.parentElement?.parentElement
+      const visibilityToggle = passwordField?.querySelector('button')
 
       if (visibilityToggle) {
         await user.click(visibilityToggle)
@@ -398,7 +396,7 @@ describe('MqttSettingsTab', () => {
 
       await user.click(screen.getByLabelText('Enable MQTT Publishing'))
 
-      const brokerUrlInput = screen.getByLabelText('Broker URL')
+      const brokerUrlInput = screen.getByLabelText(/Broker URL/i)
       await user.type(brokerUrlInput, 'mqtt.example.com')
 
       const saveButton = screen.getByRole('button', { name: /Save Settings/i })
@@ -613,7 +611,7 @@ describe('MqttSettingsTab', () => {
 
       await waitFor(() => {
         expect(screen.getByLabelText('Enable MQTT Publishing')).toBeChecked()
-        expect(screen.getByLabelText('Broker URL')).toHaveValue('existing.mqtt.com')
+        expect(screen.getByLabelText(/Broker URL/i)).toHaveValue('existing.mqtt.com')
         expect(screen.getByLabelText('Broker Port')).toHaveValue(8883)
         expect(screen.getByLabelText('Username')).toHaveValue('existinguser')
         expect(screen.getByLabelText('Client ID')).toHaveValue('custom-id')
