@@ -76,6 +76,15 @@ class StatsRefreshScheduler:
                 settings.last_stats_refresh = datetime.utcnow()
                 db.commit()
 
+            # Publish one full MQTT snapshot after batch refresh commits.
+            try:
+                from app.services.mqtt_service import mqtt_service
+
+                mqtt_service.sync_state_with_db(db, reason="repository refresh")
+                logger.info("Synced MQTT state after stats refresh")
+            except Exception as mqtt_error:
+                logger.warning("Failed to sync MQTT state after stats refresh", error=str(mqtt_error))
+
             logger.info("Completed repository stats refresh",
                        total=len(repos),
                        success=success_count,

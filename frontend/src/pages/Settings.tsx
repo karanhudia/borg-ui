@@ -35,6 +35,7 @@ import CacheManagementTab from '../components/CacheManagementTab'
 import MountsManagementTab from '../components/MountsManagementTab'
 import SystemSettingsTab from '../components/SystemSettingsTab'
 import BetaFeaturesTab from '../components/BetaFeaturesTab'
+import MqttSettingsTab from '../components/MqttSettingsTab'
 import Scripts from './Scripts'
 import Activity from './Activity'
 import { formatDateShort } from '../utils/dateUtils'
@@ -55,6 +56,15 @@ const Settings: React.FC = () => {
   const { mode, setTheme } = useTheme()
   const queryClient = useQueryClient()
   const { tab } = useParams<{ tab?: string }>()
+  const { data: systemSettingsData } = useQuery({
+    queryKey: ['systemSettings'],
+    queryFn: async () => {
+      const response = await settingsAPI.getSystemSettings()
+      return response.data
+    },
+  })
+  const systemSettings = systemSettingsData?.settings
+  const mqttBetaEnabled = systemSettings?.mqtt_beta_enabled ?? false
 
   // Get tab order based on user role
   const getTabOrder = React.useCallback(() => {
@@ -63,6 +73,7 @@ const Settings: React.FC = () => {
       return [
         ...baseTabs,
         'system',
+        ...(mqttBetaEnabled ? ['mqtt'] : []),
         'beta',
         'cache',
         'logs',
@@ -75,20 +86,25 @@ const Settings: React.FC = () => {
       ]
     }
     return [...baseTabs, 'mounts', 'scripts', 'export', 'activity']
-  }, [user?.is_admin])
+  }, [user?.is_admin, mqttBetaEnabled])
+
+  const tabOrder = React.useMemo(() => getTabOrder(), [getTabOrder])
 
   // Determine active tab from URL or default to 'account'
   const getTabIndexFromPath = React.useCallback(
     (tabPath?: string): number => {
       if (!tabPath) return 0
-      const tabOrder = getTabOrder()
       const index = tabOrder.indexOf(tabPath)
       return index >= 0 ? index : 0
     },
-    [getTabOrder]
+    [tabOrder]
   )
 
-  const [activeTab, setActiveTab] = useState(getTabIndexFromPath(tab))
+  const [activeTab, setActiveTab] = useState(() => getTabIndexFromPath(tab))
+
+  const currentTabId = React.useMemo(() => {
+    return tabOrder[activeTab] ?? tabOrder[0]
+  }, [activeTab, tabOrder])
 
   // Update active tab when URL changes
   useEffect(() => {
@@ -333,7 +349,7 @@ const Settings: React.FC = () => {
       {/* Content is controlled by sidebar navigation */}
 
       {/* Profile Tab */}
-      {activeTab === 0 && (
+      {currentTabId === 'account' && (
         <Box>
           <Box>
             <Typography variant="h6" fontWeight={600} gutterBottom>
@@ -430,7 +446,7 @@ const Settings: React.FC = () => {
       )}
 
       {/* Appearance Tab */}
-      {activeTab === 1 && (
+      {currentTabId === 'appearance' && (
         <Box>
           <Box>
             <Typography variant="h6" fontWeight={600} gutterBottom>
@@ -483,37 +499,40 @@ const Settings: React.FC = () => {
       )}
 
       {/* Preferences Tab */}
-      {activeTab === 2 && <PreferencesTab />}
+      {currentTabId === 'preferences' && <PreferencesTab />}
 
       {/* Notifications Tab */}
-      {activeTab === 3 && <NotificationsTab />}
+      {currentTabId === 'notifications' && <NotificationsTab />}
 
       {/* System Settings Tab - Admin Only */}
-      {activeTab === 4 && user?.is_admin && <SystemSettingsTab />}
+      {currentTabId === 'system' && user?.is_admin && <SystemSettingsTab />}
+
+      {/* MQTT Settings Tab - Admin Only */}
+      {currentTabId === 'mqtt' && user?.is_admin && mqttBetaEnabled && <MqttSettingsTab />}
 
       {/* Beta Features Tab - Admin Only */}
-      {activeTab === 5 && user?.is_admin && <BetaFeaturesTab />}
+      {currentTabId === 'beta' && user?.is_admin && <BetaFeaturesTab />}
 
       {/* Cache Management Tab - Admin Only */}
-      {activeTab === 6 && user?.is_admin && <CacheManagementTab />}
+      {currentTabId === 'cache' && user?.is_admin && <CacheManagementTab />}
 
       {/* Log Management Tab - Admin Only */}
-      {activeTab === 7 && user?.is_admin && <LogManagementTab />}
+      {currentTabId === 'logs' && user?.is_admin && <LogManagementTab />}
 
       {/* Mounts Management Tab */}
-      {activeTab === (user?.is_admin ? 8 : 4) && <MountsManagementTab />}
+      {currentTabId === 'mounts' && <MountsManagementTab />}
 
       {/* System Packages Tab - Admin Only */}
-      {activeTab === 9 && user?.is_admin && <PackagesTab />}
+      {currentTabId === 'packages' && user?.is_admin && <PackagesTab />}
 
       {/* Scripts Tab */}
-      {activeTab === (user?.is_admin ? 10 : 5) && <Scripts />}
+      {currentTabId === 'scripts' && <Scripts />}
 
       {/* Export/Import Tab */}
-      {activeTab === (user?.is_admin ? 11 : 6) && <ExportImportTab />}
+      {currentTabId === 'export' && <ExportImportTab />}
 
       {/* User Management Tab - Admin Only */}
-      {activeTab === 12 && user?.is_admin && (
+      {currentTabId === 'users' && user?.is_admin && (
         <Box>
           <Box
             sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}
@@ -543,7 +562,7 @@ const Settings: React.FC = () => {
       )}
 
       {/* Activity Tab */}
-      {activeTab === (user?.is_admin ? 13 : 7) && <Activity />}
+      {currentTabId === 'activity' && <Activity />}
 
       {/* Create/Edit User Modal */}
       <Dialog

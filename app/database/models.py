@@ -398,8 +398,40 @@ class SystemSettings(Base):
     bypass_lock_on_info = Column(Boolean, default=False, nullable=False)  # Use --bypass-lock for all borg info commands (beta fix for SSH lock issues)
     bypass_lock_on_list = Column(Boolean, default=False, nullable=False)  # Use --bypass-lock for all borg list commands (beta fix for concurrent operation lock issues)
     show_restore_tab = Column(Boolean, default=False, nullable=False)  # Show legacy Restore tab in navigation (beta feature)
+    mqtt_beta_enabled = Column(Boolean, default=False, nullable=False)  # Expose MQTT under beta features
+
+    # MQTT settings
+    mqtt_enabled = Column(Boolean, default=False, nullable=False)  # Enable MQTT publishing
+    mqtt_broker_url = Column(String, nullable=True)  # MQTT broker URL (e.g., mqtt://broker.example.com)
+    mqtt_broker_port = Column(Integer, default=1883, nullable=False)  # MQTT broker port
+    mqtt_username = Column(String, nullable=True)  # MQTT username
+    mqtt_password = Column(String, nullable=True)  # MQTT password
+    mqtt_client_id = Column(String, default='borg-ui', nullable=False)  # MQTT client ID
+    mqtt_base_topic = Column(String, default='borg-ui', nullable=False)  # Base topic for all MQTT messages
+    mqtt_qos = Column(Integer, default=1, nullable=False)  # Quality of Service (0, 1, or 2)
+    mqtt_retain = Column(Boolean, default=False, nullable=False)  # Retain messages
+    mqtt_tls_enabled = Column(Boolean, default=False, nullable=False)  # Enable TLS
+    mqtt_tls_ca_cert = Column(String, nullable=True)  # Path to CA certificate file
+    mqtt_tls_client_cert = Column(String, nullable=True)  # Path to client certificate file
+    mqtt_tls_client_key = Column(String, nullable=True)  # Path to client key file
 
     created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+
+
+class MQTTSyncState(Base):
+    """
+    Persistent MQTT synchronization metadata.
+
+    Stores compact sync markers so cleanup can be derived from DB state
+    even if MQTT/Home Assistant were unavailable when a change happened.
+    """
+
+    __tablename__ = "mqtt_sync_state"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sync_key = Column(String, unique=True, nullable=False, index=True)
+    sync_value = Column(Text, nullable=False)  # JSON payload
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
 

@@ -49,6 +49,7 @@ import {
   HardDrive,
   Sliders,
   RotateCcw,
+  Wifi,
 } from 'lucide-react'
 import api, { settingsAPI } from '../services/api'
 import { useQuery } from '@tanstack/react-query'
@@ -96,6 +97,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   })
 
   const showRestoreTab = systemData?.settings?.show_restore_tab ?? false
+  const showMqttNav = systemData?.settings?.mqtt_beta_enabled ?? false
 
   // Build navigation sections dynamically
   const navigationSections = React.useMemo(() => {
@@ -161,6 +163,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             key: 'dashboard' as const,
             subItems: [
               { name: 'System', href: '/settings/system', icon: SettingsIcon },
+              ...(showMqttNav ? [{ name: 'MQTT', href: '/settings/mqtt', icon: Wifi }] : []),
               { name: 'Cache', href: '/settings/cache', icon: Server },
               { name: 'Logs', href: '/settings/logs', icon: FileText },
               { name: 'Packages', href: '/settings/packages', icon: Package },
@@ -186,7 +189,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         ],
       },
     ]
-  }, [showRestoreTab])
+  }, [showRestoreTab, showMqttNav])
 
   // Check if we need to show analytics consent banner
   useEffect(() => {
@@ -216,6 +219,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         setExpandedMenus((prev) => ({ ...prev, Personal: true }))
       } else if (
         path.includes('/system') ||
+        path.includes('/mqtt') ||
         path.includes('/cache') ||
         path.includes('/logs') ||
         path.includes('/packages')
