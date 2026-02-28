@@ -104,6 +104,22 @@ class SystemSettingsUpdate(BaseModel):
     show_restore_tab: Optional[bool] = None  # Show legacy Restore tab in navigation (beta)
     stats_refresh_interval_minutes: Optional[int] = None  # How often to refresh repository stats (0 = disabled)
 
+    # MQTT settings
+    mqtt_enabled: Optional[bool] = None
+    mqtt_broker_url: Optional[str] = None
+    mqtt_broker_port: Optional[int] = None
+    mqtt_username: Optional[str] = None
+    mqtt_password: Optional[str] = None
+    mqtt_client_id: Optional[str] = None
+    mqtt_base_topic: Optional[str] = None
+    mqtt_qos: Optional[int] = None
+    mqtt_retain: Optional[bool] = None
+    mqtt_tls_enabled: Optional[bool] = None
+    mqtt_tls_ca_cert: Optional[str] = None
+    mqtt_tls_client_cert: Optional[str] = None
+    mqtt_tls_client_key: Optional[str] = None
+    mqtt_beta_enabled: Optional[bool] = None
+
 @router.get("/system")
 async def get_system_settings(
     current_user: User = Depends(get_current_user),
@@ -225,7 +241,23 @@ async def get_system_settings(
                 "stats_refresh_interval_minutes": settings.stats_refresh_interval_minutes if settings.stats_refresh_interval_minutes is not None else 60,
                 "last_stats_refresh": serialize_datetime(settings.last_stats_refresh),
                 "borg_version": borg.get_version(),
-                "app_version": "1.36.1"
+                "app_version": "1.36.1",
+                
+                # MQTT settings
+                "mqtt_enabled": settings.mqtt_enabled,
+                "mqtt_broker_url": settings.mqtt_broker_url,
+                "mqtt_broker_port": settings.mqtt_broker_port,
+                "mqtt_username": settings.mqtt_username,
+                "mqtt_client_id": settings.mqtt_client_id,
+                "mqtt_base_topic": settings.mqtt_base_topic,
+                "mqtt_qos": settings.mqtt_qos,
+                "mqtt_retain": settings.mqtt_retain,
+                "mqtt_tls_enabled": settings.mqtt_tls_enabled,
+                "mqtt_tls_ca_cert": settings.mqtt_tls_ca_cert,
+                "mqtt_tls_client_cert": settings.mqtt_tls_client_cert,
+                "mqtt_tls_client_key": settings.mqtt_tls_client_key,
+                "mqtt_beta_enabled": settings.mqtt_beta_enabled,
+                "mqtt_password_set": bool(settings.mqtt_password)  # Indicate if password is set (without exposing it)
             },
             "log_storage": log_storage_info
         }
@@ -342,8 +374,55 @@ async def update_system_settings(
         if settings_update.stats_refresh_interval_minutes is not None:
             settings.stats_refresh_interval_minutes = settings_update.stats_refresh_interval_minutes
 
+        # MQTT settings
+        if settings_update.mqtt_beta_enabled is not None:
+            settings.mqtt_beta_enabled = settings_update.mqtt_beta_enabled
+        if settings_update.mqtt_enabled is not None:
+            settings.mqtt_enabled = settings_update.mqtt_enabled
+        if settings_update.mqtt_broker_url is not None:
+            settings.mqtt_broker_url = settings_update.mqtt_broker_url
+        if settings_update.mqtt_broker_port is not None:
+            settings.mqtt_broker_port = settings_update.mqtt_broker_port
+        if settings_update.mqtt_username is not None:
+            settings.mqtt_username = settings_update.mqtt_username
+        if settings_update.mqtt_password is not None:
+            if settings_update.mqtt_password == "":
+                settings.mqtt_password = None
+            else:
+                settings.mqtt_password = settings_update.mqtt_password
+        if settings_update.mqtt_client_id is not None:
+            settings.mqtt_client_id = settings_update.mqtt_client_id
+        if settings_update.mqtt_base_topic is not None:
+            settings.mqtt_base_topic = settings_update.mqtt_base_topic
+        if settings_update.mqtt_qos is not None:
+            settings.mqtt_qos = settings_update.mqtt_qos
+        if settings_update.mqtt_retain is not None:
+            settings.mqtt_retain = settings_update.mqtt_retain
+        if settings_update.mqtt_tls_enabled is not None:
+            settings.mqtt_tls_enabled = settings_update.mqtt_tls_enabled
+        if settings_update.mqtt_tls_ca_cert is not None:
+            settings.mqtt_tls_ca_cert = settings_update.mqtt_tls_ca_cert
+        if settings_update.mqtt_tls_client_cert is not None:
+            settings.mqtt_tls_client_cert = settings_update.mqtt_tls_client_cert
+        if settings_update.mqtt_tls_client_key is not None:
+            settings.mqtt_tls_client_key = settings_update.mqtt_tls_client_key
+
         settings.updated_at = datetime.utcnow()
         db.commit()
+        db.refresh(settings)
+
+        # Reconfigure MQTT runtime immediately so in-memory enabled state tracks
+        # changes to both mqtt_enabled and mqtt_beta_enabled without restart.
+        try:
+            from app.services.mqtt_service import mqtt_service, build_mqtt_runtime_config
+
+            mqtt_config = build_mqtt_runtime_config(settings)
+            mqtt_service.configure(mqtt_config)
+
+            if mqtt_config["enabled"]:
+                mqtt_service.sync_state_with_db(db, reason="settings_update")
+        except Exception as mqtt_error:
+            logger.warning("Failed to apply MQTT runtime reconfiguration", error=str(mqtt_error))
 
         logger.info("System settings updated", user=current_user.username)
 
@@ -1228,4 +1307,3 @@ async def update_cache_settings(
                     user=current_user.username,
                     error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to update cache settings: {str(e)}")
-

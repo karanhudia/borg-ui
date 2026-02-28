@@ -17,6 +17,7 @@ from app.core.borg_errors import is_lock_error
 from app.config import settings
 from app.services.check_service import check_service
 from app.services.compact_service import compact_service
+from app.services.mqtt_service import mqtt_service
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
@@ -675,6 +676,13 @@ async def create_repository(
             message = "Repository created successfully"
             logger.info("Repository created", name=repo_data.name, path=repo_path, user=current_user.username)
 
+        # Sync repositories with MQTT to publish new repository
+        try:
+            mqtt_service.sync_state_with_db(db, reason="repository creation")
+            logger.info("Synced repositories with MQTT after creation", repo_id=repository.id)
+        except Exception as e:
+            logger.warning("Failed to sync repositories with MQTT after creation", repo_id=repository.id, error=str(e))
+
         return {
             "success": True,
             "message": message,
@@ -915,6 +923,13 @@ async def import_repository(
                    name=repo_data.name,
                    path=repo_path,
                    user=current_user.username)
+
+        # Sync repositories with MQTT to publish new repository
+        try:
+            mqtt_service.sync_state_with_db(db, reason="repository import")
+            logger.info("Synced repositories with MQTT after import", repo_id=repository.id)
+        except Exception as e:
+            logger.warning("Failed to sync repositories with MQTT after import", repo_id=repository.id, error=str(e))
 
         return {
             "success": True,
@@ -1359,6 +1374,13 @@ async def update_repository(
 
         logger.info("Repository updated", repo_id=repo_id, user=current_user.username)
 
+        # Publish full MQTT state from DB after repository changes.
+        try:
+            mqtt_service.sync_state_with_db(db, reason="repository update")
+            logger.info("Synced repositories with MQTT after update", repo_id=repo_id)
+        except Exception as e:
+            logger.warning("Failed to sync repositories with MQTT after update", repo_id=repo_id, error=str(e))
+
         return {
             "success": True,
             "message": "Repository updated successfully"
@@ -1475,6 +1497,14 @@ async def delete_repository(
         db.commit()
 
         logger.info("Repository deleted", repo_id=repo_id, user=current_user.username)
+
+        # Queue + publish MQTT cleanup for deleted repository
+        try:
+            mqtt_service.queue_deleted_repository_cleanup(db, repo_id)
+            mqtt_service.sync_state_with_db(db, reason="repository deletion")
+            logger.info("Queued MQTT cleanup for deleted repository", repo_id=repo_id)
+        except Exception as e:
+            logger.warning("Failed to queue/publish MQTT cleanup for deleted repository", repo_id=repo_id, error=str(e))
 
         return {
             "success": True,
