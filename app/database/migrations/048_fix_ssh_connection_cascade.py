@@ -17,6 +17,9 @@ def upgrade(connection):
     print("⚠️  Fixing ssh_connections foreign key constraint...")
 
     try:
+        # Guard: drop any stale temp table left by a previously interrupted run
+        connection.execute(text("DROP TABLE IF EXISTS ssh_connections_new"))
+
         # Step 1: Create new table without CASCADE DELETE
         connection.execute(text("""
             CREATE TABLE ssh_connections_new (
