@@ -30,7 +30,9 @@ const MqttSettingsTab: React.FC = () => {
   const [mqttUsername, setMqttUsername] = useState('')
   const [mqttPassword, setMqttPassword] = useState('')
   const [mqttClientId, setMqttClientId] = useState('borg-ui')
+  const [mqttBaseTopic, setMqttBaseTopic] = useState('borg-ui')
   const [mqttQos, setMqttQos] = useState(1)
+  const [mqttRetain, setMqttRetain] = useState(false)
   const [mqttTlsEnabled, setMqttTlsEnabled] = useState(false)
   const [mqttTlsCaCert, setMqttTlsCaCert] = useState('')
   const [mqttTlsClientCert, setMqttTlsClientCert] = useState('')
@@ -58,7 +60,9 @@ const MqttSettingsTab: React.FC = () => {
       setMqttBrokerPort(systemSettings.mqtt_broker_port || 1883)
       setMqttUsername(systemSettings.mqtt_username || '')
       setMqttClientId(systemSettings.mqtt_client_id || 'borg-ui')
+      setMqttBaseTopic(systemSettings.mqtt_base_topic || 'borg-ui')
       setMqttQos(systemSettings.mqtt_qos || 1)
+      setMqttRetain(systemSettings.mqtt_retain || false)
       setMqttTlsEnabled(systemSettings.mqtt_tls_enabled || false)
       setMqttTlsCaCert(systemSettings.mqtt_tls_ca_cert || '')
       setMqttTlsClientCert(systemSettings.mqtt_tls_client_cert || '')
@@ -77,7 +81,9 @@ const MqttSettingsTab: React.FC = () => {
         mqttBrokerPort !== (systemSettings.mqtt_broker_port || 1883) ||
         mqttUsername !== (systemSettings.mqtt_username || '') ||
         mqttClientId !== (systemSettings.mqtt_client_id || 'borg-ui') ||
+        mqttBaseTopic !== (systemSettings.mqtt_base_topic || 'borg-ui') ||
         mqttQos !== (systemSettings.mqtt_qos || 1) ||
+        mqttRetain !== (systemSettings.mqtt_retain || false) ||
         mqttTlsEnabled !== (systemSettings.mqtt_tls_enabled || false) ||
         mqttTlsCaCert !== (systemSettings.mqtt_tls_ca_cert || '') ||
         mqttTlsClientCert !== (systemSettings.mqtt_tls_client_cert || '') ||
@@ -92,7 +98,9 @@ const MqttSettingsTab: React.FC = () => {
     mqttBrokerPort,
     mqttUsername,
     mqttClientId,
+    mqttBaseTopic,
     mqttQos,
+    mqttRetain,
     mqttTlsEnabled,
     mqttTlsCaCert,
     mqttTlsClientCert,
@@ -111,7 +119,9 @@ const MqttSettingsTab: React.FC = () => {
         mqtt_username: mqttUsername || null,
         mqtt_password: passwordChanged ? mqttPassword : undefined,
         mqtt_client_id: mqttClientId,
+        mqtt_base_topic: mqttBaseTopic,
         mqtt_qos: mqttQos,
+        mqtt_retain: mqttRetain,
         mqtt_tls_enabled: mqttTlsEnabled,
         mqtt_tls_ca_cert: mqttTlsCaCert || null,
         mqtt_tls_client_cert: mqttTlsClientCert || null,
@@ -203,6 +213,7 @@ const MqttSettingsTab: React.FC = () => {
               <Divider />
 
               <FormControlLabel
+                sx={{ ml: -1 }}
                 control={
                   <Checkbox
                     checked={mqttEnabled}
@@ -214,6 +225,7 @@ const MqttSettingsTab: React.FC = () => {
               />
 
               {mqttEnabled && (
+                <>
                 <Box
                   sx={{
                     display: 'grid',
@@ -248,17 +260,13 @@ const MqttSettingsTab: React.FC = () => {
                     onChange={(e) => setMqttUsername(e.target.value)}
                     fullWidth
                     helperText="Optional MQTT username"
-                    InputProps={
-                      mqttUsername
-                        ? {
-                            startAdornment: (
-                              <InputAdornment position="start">
-                                <Key size={16} color="#666" />
-                              </InputAdornment>
-                            ),
-                          }
-                        : {}
-                    }
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Key size={16} color="#666" />
+                        </InputAdornment>
+                      ),
+                    }}
                   />
 
                   <TextField
@@ -272,28 +280,24 @@ const MqttSettingsTab: React.FC = () => {
                         ? 'Password is set'
                         : 'Optional MQTT password'
                     }
-                    InputProps={
-                      mqttPassword || systemSettings?.mqtt_password_set
-                        ? {
-                            startAdornment: (
-                              <InputAdornment position="start">
-                                <Lock size={16} color="#666" />
-                              </InputAdornment>
-                            ),
-                            endAdornment: (
-                              <InputAdornment position="end">
-                                <IconButton
-                                  onClick={togglePasswordVisibility}
-                                  edge="end"
-                                  size="small"
-                                >
-                                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                                </IconButton>
-                              </InputAdornment>
-                            ),
-                          }
-                        : {}
-                    }
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Lock size={16} color="#666" />
+                        </InputAdornment>
+                      ),
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            onClick={togglePasswordVisibility}
+                            edge="end"
+                            size="small"
+                          >
+                            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
                   />
 
                   <TextField
@@ -305,15 +309,36 @@ const MqttSettingsTab: React.FC = () => {
                   />
 
                   <TextField
+                    label="Base Topic"
+                    value={mqttBaseTopic}
+                    onChange={(e) => setMqttBaseTopic(e.target.value)}
+                    fullWidth
+                    helperText="Root topic prefix for all MQTT messages"
+                  />
+
+                  <TextField
                     label="QoS Level"
                     type="number"
                     value={mqttQos}
                     onChange={(e) => setMqttQos(Math.min(Math.max(0, Number(e.target.value)), 2))}
                     fullWidth
                     inputProps={{ min: 0, max: 2, step: 1 }}
-                    helperText="Quality of Service (0 = at most once, 1 = at least once, 2 = exactly once)"
+                    helperText="0 = at most once, 1 = at least once, 2 = exactly once"
                   />
                 </Box>
+
+                <FormControlLabel
+                  sx={{ ml: -1 }}
+                  control={
+                    <Checkbox
+                      checked={mqttRetain}
+                      onChange={(e) => setMqttRetain(e.target.checked)}
+                      color="primary"
+                    />
+                  }
+                  label="Retain messages"
+                />
+                </>
               )}
             </Stack>
           </CardContent>
@@ -335,6 +360,7 @@ const MqttSettingsTab: React.FC = () => {
                 <Divider />
 
                 <FormControlLabel
+                  sx={{ ml: -1 }}
                   control={
                     <Checkbox
                       checked={mqttTlsEnabled}
