@@ -52,6 +52,10 @@ def upgrade(db):
             ALTER TABLE system_settings
             ADD COLUMN mqtt_client_id TEXT DEFAULT 'borg-ui' NOT NULL
         """),
+        ("mqtt_base_topic", """
+            ALTER TABLE system_settings
+            ADD COLUMN mqtt_base_topic TEXT DEFAULT 'borg-ui' NOT NULL
+        """),
         ("mqtt_qos", """
             ALTER TABLE system_settings
             ADD COLUMN mqtt_qos INTEGER DEFAULT 1 NOT NULL
@@ -82,7 +86,7 @@ def upgrade(db):
         _add_column(db, name, ddl)
 
     db.commit()
-    logger.info("Migration 070_add_mqtt_beta_enabled completed successfully")
+    logger.info("Migration 071_add_mqtt_beta_enabled completed successfully")
 
 
 def downgrade(db):
