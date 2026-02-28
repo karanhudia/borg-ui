@@ -226,118 +226,114 @@ const MqttSettingsTab: React.FC = () => {
 
               {mqttEnabled && (
                 <>
-                <Box
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
-                    gap: 3,
-                  }}
-                >
-                  <TextField
-                    label="Broker URL"
-                    placeholder="broker.example.com or localhost"
-                    value={mqttBrokerUrl}
-                    onChange={(e) => setMqttBrokerUrl(e.target.value)}
-                    fullWidth
-                    required
-                    helperText="MQTT broker hostname or IP address"
-                  />
-
-                  <TextField
-                    label="Broker Port"
-                    type="number"
-                    value={mqttBrokerPort}
-                    onChange={(e) => setMqttBrokerPort(Number(e.target.value))}
-                    fullWidth
-                    inputProps={{ min: 1, max: 65535, step: 1 }}
-                    helperText="MQTT broker port (1883 for standard, 8883 for TLS)"
-                  />
-
-                  <TextField
-                    label="Username"
-                    placeholder="Optional username"
-                    value={mqttUsername}
-                    onChange={(e) => setMqttUsername(e.target.value)}
-                    fullWidth
-                    helperText="Optional MQTT username"
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <Key size={16} color="#666" />
-                        </InputAdornment>
-                      ),
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                      gap: 3,
                     }}
-                  />
-
-                  <TextField
-                    label="Password"
-                    type={showPassword ? 'text' : 'password'}
-                    value={mqttPassword}
-                    onChange={handlePasswordChange}
-                    fullWidth
-                    helperText={
-                      systemSettings?.mqtt_password_set
-                        ? 'Password is set'
-                        : 'Optional MQTT password'
-                    }
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <Lock size={16} color="#666" />
-                        </InputAdornment>
-                      ),
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton
-                            onClick={togglePasswordVisibility}
-                            edge="end"
-                            size="small"
-                          >
-                            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-
-                  <TextField
-                    label="Client ID"
-                    value={mqttClientId}
-                    onChange={(e) => setMqttClientId(e.target.value)}
-                    fullWidth
-                    helperText="MQTT client identifier"
-                  />
-
-                  <TextField
-                    label="Base Topic"
-                    value={mqttBaseTopic}
-                    onChange={(e) => setMqttBaseTopic(e.target.value)}
-                    fullWidth
-                    helperText="Root topic prefix for all MQTT messages"
-                  />
-
-                  <TextField
-                    label="QoS Level"
-                    type="number"
-                    value={mqttQos}
-                    onChange={(e) => setMqttQos(Math.min(Math.max(0, Number(e.target.value)), 2))}
-                    fullWidth
-                    inputProps={{ min: 0, max: 2, step: 1 }}
-                    helperText="0 = at most once, 1 = at least once, 2 = exactly once"
-                  />
-                </Box>
-
-                <FormControlLabel
-                  sx={{ ml: -1 }}
-                  control={
-                    <Checkbox
-                      checked={mqttRetain}
-                      onChange={(e) => setMqttRetain(e.target.checked)}
-                      color="primary"
+                  >
+                    <TextField
+                      label="Broker URL"
+                      placeholder="broker.example.com or localhost"
+                      value={mqttBrokerUrl}
+                      onChange={(e) => setMqttBrokerUrl(e.target.value)}
+                      fullWidth
+                      required
+                      helperText="MQTT broker hostname or IP address"
                     />
-                  }
-                  label="Retain messages"
-                />
+
+                    <TextField
+                      label="Broker Port"
+                      type="number"
+                      value={mqttBrokerPort}
+                      onChange={(e) => setMqttBrokerPort(Number(e.target.value))}
+                      fullWidth
+                      inputProps={{ min: 1, max: 65535, step: 1 }}
+                      helperText="MQTT broker port (1883 for standard, 8883 for TLS)"
+                    />
+
+                    <TextField
+                      label="Username"
+                      placeholder="Optional username"
+                      value={mqttUsername}
+                      onChange={(e) => setMqttUsername(e.target.value)}
+                      fullWidth
+                      helperText="Optional MQTT username"
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <Key size={16} color="#666" />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+
+                    <TextField
+                      label="Password"
+                      type={showPassword ? 'text' : 'password'}
+                      value={mqttPassword}
+                      onChange={handlePasswordChange}
+                      fullWidth
+                      helperText={
+                        systemSettings?.mqtt_password_set
+                          ? 'Password is set'
+                          : 'Optional MQTT password'
+                      }
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <Lock size={16} color="#666" />
+                          </InputAdornment>
+                        ),
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton onClick={togglePasswordVisibility} edge="end" size="small">
+                              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+
+                    <TextField
+                      label="Client ID"
+                      value={mqttClientId}
+                      onChange={(e) => setMqttClientId(e.target.value)}
+                      fullWidth
+                      helperText="MQTT client identifier"
+                    />
+
+                    <TextField
+                      label="Base Topic"
+                      value={mqttBaseTopic}
+                      onChange={(e) => setMqttBaseTopic(e.target.value)}
+                      fullWidth
+                      helperText="Root topic prefix for all MQTT messages"
+                    />
+
+                    <TextField
+                      label="QoS Level"
+                      type="number"
+                      value={mqttQos}
+                      onChange={(e) => setMqttQos(Math.min(Math.max(0, Number(e.target.value)), 2))}
+                      fullWidth
+                      inputProps={{ min: 0, max: 2, step: 1 }}
+                      helperText="0 = at most once, 1 = at least once, 2 = exactly once"
+                    />
+                  </Box>
+
+                  <FormControlLabel
+                    sx={{ ml: -1 }}
+                    control={
+                      <Checkbox
+                        checked={mqttRetain}
+                        onChange={(e) => setMqttRetain(e.target.checked)}
+                        color="primary"
+                      />
+                    }
+                    label="Retain messages"
+                  />
                 </>
               )}
             </Stack>
