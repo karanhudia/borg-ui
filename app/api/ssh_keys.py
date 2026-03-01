@@ -11,7 +11,7 @@ from cryptography.fernet import Fernet
 import base64
 
 from app.database.database import get_db
-from app.database.models import User, SSHKey, SSHConnection
+from app.database.models import User, SSHKey, SSHConnection, Repository, BackupJob, RestoreJob, ScheduledJob
 from app.core.security import get_current_user
 from app.config import settings
 from app.utils.datetime_utils import serialize_datetime
@@ -1265,6 +1265,24 @@ async def delete_ssh_connection(
             raise HTTPException(status_code=404, detail="SSH connection not found")
 
         host = connection.host
+
+        # Null out FK references so child records are preserved after deletion
+        db.query(Repository).filter(Repository.connection_id == connection_id).update(
+            {"connection_id": None}, synchronize_session=False
+        )
+        db.query(Repository).filter(Repository.source_ssh_connection_id == connection_id).update(
+            {"source_ssh_connection_id": None}, synchronize_session=False
+        )
+        db.query(BackupJob).filter(BackupJob.source_ssh_connection_id == connection_id).update(
+            {"source_ssh_connection_id": None}, synchronize_session=False
+        )
+        db.query(RestoreJob).filter(RestoreJob.destination_connection_id == connection_id).update(
+            {"destination_connection_id": None}, synchronize_session=False
+        )
+        db.query(ScheduledJob).filter(ScheduledJob.source_ssh_connection_id == connection_id).update(
+            {"source_ssh_connection_id": None}, synchronize_session=False
+        )
+
         db.delete(connection)
         db.commit()
 
