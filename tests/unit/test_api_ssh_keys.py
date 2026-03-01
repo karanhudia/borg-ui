@@ -575,3 +575,104 @@ class TestCollectStorageInfo:
                             result = await collect_storage_info(mock_connection, mock_ssh_key)
 
         assert unlink_called
+
+
+@pytest.mark.unit
+class TestSSHConnectionDelete:
+    """Tests for SSH connection deletion and FK cleanup (issue #305)"""
+
+    def test_delete_connection_nullifies_fk_references(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        """Deleting an SSH connection must succeed even when backup_jobs,
+        restore_jobs, repositories, and scheduled_jobs still reference it.
+        All FK columns must be NULLed before the DELETE so no constraint fires.
+        """
+        from app.database.models import (
+            SSHConnection, Repository, BackupJob, RestoreJob, ScheduledJob,
+        )
+
+        conn = SSHConnection(host="test-host.example.com", username="testuser", port=22)
+        test_db.add(conn)
+        test_db.commit()
+        test_db.refresh(conn)
+        conn_id = conn.id
+
+        repo = Repository(
+            name="ssh-repo",
+            path="/tmp/ssh-repo",
+            encryption="none",
+            connection_id=conn_id,
+            source_ssh_connection_id=conn_id,
+        )
+        test_db.add(repo)
+
+        backup_job = BackupJob(
+            repository="/tmp/ssh-repo",
+            status="completed",
+            source_ssh_connection_id=conn_id,
+        )
+        test_db.add(backup_job)
+
+        restore_job = RestoreJob(
+            repository="/tmp/ssh-repo",
+            archive="test-archive",
+            destination="/tmp/restore",
+            status="completed",
+            destination_connection_id=conn_id,
+        )
+        test_db.add(restore_job)
+
+        scheduled_job = ScheduledJob(
+            name="test-schedule",
+            cron_expression="0 2 * * *",
+            source_ssh_connection_id=conn_id,
+        )
+        test_db.add(scheduled_job)
+        test_db.commit()
+
+        repo_id = repo.id
+        backup_job_id = backup_job.id
+        restore_job_id = restore_job.id
+        scheduled_job_id = scheduled_job.id
+
+        response = test_client.delete(
+            f"/api/ssh-keys/connections/{conn_id}",
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+        assert response.json().get("success") is True
+
+        test_db.expire_all()
+
+        assert test_db.query(SSHConnection).filter(SSHConnection.id == conn_id).first() is None
+
+        repo_after = test_db.query(Repository).filter(Repository.id == repo_id).first()
+        assert repo_after is not None
+        assert repo_after.connection_id is None
+        assert repo_after.source_ssh_connection_id is None
+
+        backup_after = test_db.query(BackupJob).filter(BackupJob.id == backup_job_id).first()
+        assert backup_after is not None
+        assert backup_after.source_ssh_connection_id is None
+
+        restore_after = test_db.query(RestoreJob).filter(RestoreJob.id == restore_job_id).first()
+        assert restore_after is not None
+        assert restore_after.destination_connection_id is None
+
+        scheduled_after = test_db.query(ScheduledJob).filter(ScheduledJob.id == scheduled_job_id).first()
+        assert scheduled_after is not None
+        assert scheduled_after.source_ssh_connection_id is None
+
+    def test_delete_connection_not_found(self, test_client: TestClient, admin_headers):
+        """Deleting a non-existent connection returns 404"""
+        response = test_client.delete(
+            "/api/ssh-keys/connections/999999",
+            headers=admin_headers,
+        )
+        assert response.status_code == 404
+
+    def test_delete_connection_unauthorized(self, test_client: TestClient):
+        """Deleting a connection without authentication is rejected"""
+        response = test_client.delete("/api/ssh-keys/connections/1")
+        assert response.status_code in [401, 403]
