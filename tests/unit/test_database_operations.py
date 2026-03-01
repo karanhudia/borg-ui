@@ -2,6 +2,7 @@
 Unit tests for database CRUD operations
 """
 import pytest
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.database.models import Repository, User
@@ -134,3 +135,126 @@ class TestUserCRUD:
 
         with pytest.raises(Exception):  # Will raise IntegrityError
             db_session.commit()
+
+
+@pytest.mark.unit
+class TestMigration048:
+    """Tests for migration 048: fix ssh_connections FK cascade (issue #308)
+
+    The migration runner has no tracking — every migration runs on every
+    startup.  Migration 048 must therefore be fully idempotent and must work
+    regardless of how many columns ssh_connections currently has.
+    """
+
+    def _make_engine(self, ddl: str):
+        """Return an in-memory SQLite engine with ssh_keys + ssh_connections."""
+        from sqlalchemy import create_engine
+        from sqlalchemy.pool import StaticPool
+
+        engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        with engine.connect() as conn:
+            conn.execute(text("CREATE TABLE ssh_keys (id INTEGER PRIMARY KEY, name TEXT)"))
+            conn.execute(text(ddl))
+            conn.commit()
+        return engine
+
+    def test_fixes_cascade_to_set_null(self):
+        """CASCADE FK is replaced with SET NULL after upgrade runs."""
+        import importlib
+        m048 = importlib.import_module("app.database.migrations.048_fix_ssh_connection_cascade")
+
+        engine = self._make_engine("""
+            CREATE TABLE ssh_connections (
+                id INTEGER PRIMARY KEY,
+                ssh_key_id INTEGER,
+                host TEXT NOT NULL,
+                username TEXT NOT NULL,
+                port INTEGER DEFAULT 22 NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                FOREIGN KEY (ssh_key_id) REFERENCES ssh_keys(id) ON DELETE CASCADE
+            )
+        """)
+
+        with engine.connect() as conn:
+            m048.upgrade(conn)
+            conn.commit()
+            fk_rows = conn.execute(text("PRAGMA foreign_key_list(ssh_connections)")).fetchall()
+
+        on_delete_actions = [row[6] for row in fk_rows]
+        assert "CASCADE" not in on_delete_actions
+        assert "SET NULL" in on_delete_actions
+
+    def test_idempotent_when_already_set_null(self):
+        """Running upgrade again after it already ran must not raise."""
+        import importlib
+        m048 = importlib.import_module("app.database.migrations.048_fix_ssh_connection_cascade")
+
+        engine = self._make_engine("""
+            CREATE TABLE ssh_connections (
+                id INTEGER PRIMARY KEY,
+                ssh_key_id INTEGER,
+                host TEXT NOT NULL,
+                username TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                FOREIGN KEY (ssh_key_id) REFERENCES ssh_keys(id) ON DELETE SET NULL
+            )
+        """)
+
+        with engine.connect() as conn:
+            m048.upgrade(conn)  # should be a no-op
+            conn.commit()
+            fk_rows = conn.execute(text("PRAGMA foreign_key_list(ssh_connections)")).fetchall()
+
+        on_delete_actions = [row[6] for row in fk_rows]
+        assert "CASCADE" not in on_delete_actions
+
+    def test_handles_extra_columns(self):
+        """Upgrade works when the table has extra columns added by later migrations."""
+        import importlib
+        m048 = importlib.import_module("app.database.migrations.048_fix_ssh_connection_cascade")
+
+        # Simulate the real-world case: table already has use_sftp_mode and
+        # ssh_path_prefix (added by migrations 059 and 066) plus CASCADE still present.
+        engine = self._make_engine("""
+            CREATE TABLE ssh_connections (
+                id INTEGER PRIMARY KEY,
+                ssh_key_id INTEGER,
+                host TEXT NOT NULL,
+                username TEXT NOT NULL,
+                port INTEGER DEFAULT 22 NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                FOREIGN KEY (ssh_key_id) REFERENCES ssh_keys(id) ON DELETE CASCADE
+            )
+        """)
+        with engine.connect() as conn:
+            conn.execute(text(
+                "ALTER TABLE ssh_connections ADD COLUMN use_sftp_mode BOOLEAN NOT NULL DEFAULT 1"
+            ))
+            conn.execute(text(
+                "ALTER TABLE ssh_connections ADD COLUMN ssh_path_prefix TEXT"
+            ))
+            conn.execute(text(
+                "INSERT INTO ssh_connections (host, username) VALUES ('host1', 'user1')"
+            ))
+            conn.commit()
+
+        with engine.connect() as conn:
+            m048.upgrade(conn)
+            conn.commit()
+
+            fk_rows = conn.execute(text("PRAGMA foreign_key_list(ssh_connections)")).fetchall()
+            rows = conn.execute(text("SELECT * FROM ssh_connections")).fetchall()
+            col_names = [d[1] for d in conn.execute(text("PRAGMA table_info(ssh_connections)")).fetchall()]
+
+        on_delete_actions = [row[6] for row in fk_rows]
+        assert "CASCADE" not in on_delete_actions
+        assert "SET NULL" in on_delete_actions
+        # Data and extra columns preserved
+        assert len(rows) == 1
+        assert "use_sftp_mode" in col_names
+        assert "ssh_path_prefix" in col_names

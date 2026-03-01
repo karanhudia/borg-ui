@@ -3,6 +3,11 @@
 This migration removes the CASCADE DELETE behavior from the ssh_key_id
 foreign key in ssh_connections table, so connections are preserved when
 an SSH key is deleted.
+
+The migration is fully idempotent:
+- Skips immediately if the CASCADE is already gone (subsequent startups).
+- Builds the new table DDL from PRAGMA table_info so it is immune to
+  columns added by later migrations (e.g. use_sftp_mode, ssh_path_prefix).
 """
 
 from sqlalchemy import text
@@ -11,57 +16,63 @@ from sqlalchemy import text
 def upgrade(connection):
     """Remove CASCADE DELETE from ssh_connections.ssh_key_id foreign key"""
 
-    # SQLite doesn't support DROP CONSTRAINT, so we need to recreate the table
-    # This is the standard SQLite approach for modifying foreign keys
+    # ── Idempotency guard ────────────────────────────────────────────────────
+    # PRAGMA foreign_key_list returns rows:
+    #   (id, seq, table, from, to, on_update, on_delete, match)
+    fk_rows = connection.execute(
+        text("PRAGMA foreign_key_list(ssh_connections)")
+    ).fetchall()
+
+    has_cascade = any(row[6] == "CASCADE" for row in fk_rows)
+
+    if not has_cascade:
+        print("✓ ssh_connections FK already uses SET NULL — skipping migration 048")
+        return
 
     print("⚠️  Fixing ssh_connections foreign key constraint...")
 
     try:
-        # Guard: drop any stale temp table left by a previously interrupted run
+        # ── Build new table DDL from the live schema ─────────────────────────
+        # PRAGMA table_info rows: (cid, name, type, notnull, dflt_value, pk)
+        col_rows = connection.execute(
+            text("PRAGMA table_info(ssh_connections)")
+        ).fetchall()
+
+        col_defs = []
+        for _cid, name, type_, notnull, dflt_value, pk in col_rows:
+            if pk:
+                col_defs.append(f"    {name} {type_} PRIMARY KEY")
+            else:
+                parts = [f"    {name}", type_]
+                if notnull:
+                    parts.append("NOT NULL")
+                if dflt_value is not None:
+                    parts.append(f"DEFAULT {dflt_value}")
+                col_defs.append(" ".join(parts))
+
+        # Append the corrected FK (SET NULL instead of CASCADE)
+        col_defs.append(
+            "    FOREIGN KEY (ssh_key_id) REFERENCES ssh_keys(id) ON DELETE SET NULL"
+        )
+
+        new_ddl = "CREATE TABLE ssh_connections_new (\n" + ",\n".join(col_defs) + "\n)"
+
+        # ── Guard against stale temp table from a previous interrupted run ───
         connection.execute(text("DROP TABLE IF EXISTS ssh_connections_new"))
+        connection.execute(text(new_ddl))
 
-        # Step 1: Create new table without CASCADE DELETE
-        connection.execute(text("""
-            CREATE TABLE ssh_connections_new (
-                id INTEGER PRIMARY KEY,
-                ssh_key_id INTEGER,
-                host TEXT NOT NULL,
-                username TEXT NOT NULL,
-                port INTEGER DEFAULT 22 NOT NULL,
-                default_path TEXT,
-                mount_point TEXT,
-                status TEXT DEFAULT 'unknown' NOT NULL,
-                last_test TIMESTAMP,
-                last_success TIMESTAMP,
-                error_message TEXT,
-                storage_total BIGINT,
-                storage_used BIGINT,
-                storage_available BIGINT,
-                storage_percent_used REAL,
-                last_storage_check TIMESTAMP,
-                is_backup_source BOOLEAN DEFAULT 0 NOT NULL,
-                borg_binary_path TEXT DEFAULT '/usr/bin/borg' NOT NULL,
-                borg_version TEXT,
-                last_borg_check TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-                FOREIGN KEY (ssh_key_id) REFERENCES ssh_keys(id) ON DELETE SET NULL
-            )
-        """))
+        # ── Copy using explicit column names (avoids SELECT * count mismatch) ─
+        col_names = ", ".join(row[1] for row in col_rows)
+        connection.execute(text(
+            f"INSERT INTO ssh_connections_new ({col_names})"
+            f" SELECT {col_names} FROM ssh_connections"
+        ))
 
-        # Step 2: Copy data from old table to new table
-        connection.execute(text("""
-            INSERT INTO ssh_connections_new
-            SELECT * FROM ssh_connections
-        """))
-
-        # Step 3: Drop old table
+        # ── Swap tables ───────────────────────────────────────────────────────
         connection.execute(text("DROP TABLE ssh_connections"))
-
-        # Step 4: Rename new table to original name
         connection.execute(text("ALTER TABLE ssh_connections_new RENAME TO ssh_connections"))
 
-        # Step 5: Recreate indexes
+        # ── Recreate index ────────────────────────────────────────────────────
         connection.execute(text("""
             CREATE INDEX IF NOT EXISTS ix_ssh_connections_ssh_key_id
             ON ssh_connections(ssh_key_id)
