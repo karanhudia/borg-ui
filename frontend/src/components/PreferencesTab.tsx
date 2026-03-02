@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
@@ -10,11 +11,22 @@ import {
   Stack,
   Alert,
   CircularProgress,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
 } from '@mui/material'
-import { BarChart3, Info } from 'lucide-react'
+import { BarChart3, Info, Globe } from 'lucide-react'
 import { settingsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
-import { resetOptOutCache, trackOptOut } from '../utils/matomo'
+import { resetOptOutCache, trackOptOut, trackLanguageChange } from '../utils/matomo'
+import i18n from '../i18n'
+
+const LANGUAGES = [
+  { code: 'en', label: 'English' },
+  { code: 'es', label: 'Español' },
+  { code: 'de', label: 'Deutsch' },
+]
 
 interface Preferences {
   analytics_enabled: boolean
@@ -22,8 +34,12 @@ interface Preferences {
 }
 
 export default function PreferencesTab() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [analyticsEnabled, setAnalyticsEnabled] = useState(true)
+  const [currentLanguage, setCurrentLanguage] = useState(
+    localStorage.getItem('i18nextLng')?.split('-')[0] || i18n.language?.split('-')[0] || 'en'
+  )
 
   // Fetch user preferences
   const { data: preferencesData, isLoading } = useQuery({
@@ -45,7 +61,7 @@ export default function PreferencesTab() {
   const updatePreferencesMutation = useMutation({
     mutationFn: (preferences: Preferences) => settingsAPI.updatePreferences(preferences),
     onSuccess: async () => {
-      toast.success('Preferences updated successfully')
+      toast.success(t('preferences.updatedSuccessfully'))
       queryClient.invalidateQueries({ queryKey: ['preferences'] })
 
       // Reset Matomo opt-out cache so new preference takes effect immediately
@@ -71,6 +87,14 @@ export default function PreferencesTab() {
     updatePreferencesMutation.mutate({ analytics_enabled: checked })
   }
 
+  const handleLanguageChange = (langCode: string) => {
+    trackLanguageChange(langCode)
+    setCurrentLanguage(langCode)
+    i18n.changeLanguage(langCode)
+    localStorage.setItem('i18nextLng', langCode)
+    toast.success(t('preferences.languageSaved'))
+  }
+
   if (isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -83,12 +107,43 @@ export default function PreferencesTab() {
     <Box>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5" fontWeight={700} gutterBottom>
-          Preferences
+          {t('preferences.title')}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Customize your experience and manage your privacy settings
+          {t('preferences.subtitle')}
         </Typography>
       </Box>
+
+      {/* Language Section */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Stack direction="row" spacing={2} alignItems="flex-start">
+            <Globe size={24} />
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="h6" fontWeight={600} gutterBottom>
+                {t('preferences.languageTitle')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {t('preferences.languageDescription')}
+              </Typography>
+              <FormControl size="small" sx={{ minWidth: 200 }}>
+                <InputLabel>{t('preferences.languageLabel')}</InputLabel>
+                <Select
+                  value={currentLanguage}
+                  label={t('preferences.languageLabel')}
+                  onChange={(e) => handleLanguageChange(e.target.value)}
+                >
+                  {LANGUAGES.map((lang) => (
+                    <MenuItem key={lang.code} value={lang.code}>
+                      {lang.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
 
       {/* Analytics Section */}
       <Card sx={{ mb: 3 }}>
@@ -97,12 +152,10 @@ export default function PreferencesTab() {
             <BarChart3 size={24} />
             <Box sx={{ flex: 1 }}>
               <Typography variant="h6" fontWeight={600} gutterBottom>
-                Anonymous Usage Analytics
+                {t('preferences.analyticsTitle')}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Help us improve Borg UI by sharing anonymous usage data. We collect page views,
-                feature clicks, and browser type—without tracking IP addresses, hostnames, cookies,
-                or any personally identifiable information.
+                {t('preferences.analyticsDescription')}
               </Typography>
 
               <>
@@ -114,7 +167,7 @@ export default function PreferencesTab() {
                       disabled={updatePreferencesMutation.isPending}
                     />
                   }
-                  label="Enable analytics"
+                  label={t('preferences.enableAnalytics')}
                 />
 
                 <Alert severity="info" icon={<Info size={20} />} sx={{ mt: 2 }}>

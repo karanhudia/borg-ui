@@ -1,0 +1,1782 @@
+{
+  "common": {
+    "buttons": {
+      "save": "Save",
+      "cancel": "Cancel",
+      "delete": "Delete",
+      "edit": "Edit",
+      "create": "Create",
+      "update": "Update",
+      "close": "Close",
+      "confirm": "Confirm",
+      "back": "Back",
+      "next": "Next",
+      "finish": "Finish",
+      "add": "Add",
+      "remove": "Remove",
+      "copy": "Copy",
+      "import": "Import",
+      "export": "Export",
+      "generate": "Generate",
+      "test": "Test",
+      "run": "Run",
+      "stop": "Stop",
+      "refresh": "Refresh",
+      "clear": "Clear",
+      "reset": "Reset",
+      "deploy": "Deploy",
+      "view": "View"
+    },
+    "status": {
+      "loading": "Loading...",
+      "saving": "Saving...",
+      "deleting": "Deleting...",
+      "creating": "Creating...",
+      "updating": "Updating...",
+      "running": "Running...",
+      "starting": "Starting...",
+      "submitting": "Submitting..."
+    },
+    "never": "Never",
+    "na": "N/A",
+    "unknown": "Unknown",
+    "yes": "Yes",
+    "no": "No",
+    "none": "None",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "active": "Active",
+    "inactive": "Inactive",
+    "optional": "Optional",
+    "required": "Required",
+    "default": "Default:",
+    "path_one": "path",
+    "path_other": "paths",
+    "actions": "Actions",
+    "name": "Name",
+    "description": "Description",
+    "type": "Type",
+    "status": "Status",
+    "repository": "Repository",
+    "schedule": "Schedule",
+    "created": "Created",
+    "lastLogin": "Last Login",
+    "undoneWarning": "This action cannot be undone.",
+    "version": "Version"
+  },
+  "login": {
+    "title": "Borg Web UI",
+    "subtitle": "Sign in to manage your backups",
+    "username": "Username",
+    "password": "Password",
+    "submit": "Sign in",
+    "submitting": "Signing in...",
+    "errors": {
+      "usernameRequired": "Username is required",
+      "passwordRequired": "Password is required"
+    },
+    "success": "Login successful!",
+    "successChangePassword": "Login successful! Please change your password.",
+    "failed": "Login failed"
+  },
+  "navigation": {
+    "appName": "Borg UI",
+    "sections": {
+      "dashboard": "DASHBOARD",
+      "backup": "BACKUP",
+      "settings": "SETTINGS"
+    },
+    "items": {
+      "dashboard": "Dashboard",
+      "activity": "Activity",
+      "remoteMachines": "Remote Machines",
+      "repositories": "Repositories",
+      "backup": "Backup",
+      "archives": "Archives",
+      "restore": "Restore",
+      "schedule": "Schedule"
+    },
+    "settings": {
+      "personal": "Personal",
+      "system": "System",
+      "management": "Management",
+      "advanced": "Advanced",
+      "account": "Account",
+      "appearance": "Appearance",
+      "notifications": "Notifications",
+      "preferences": "Preferences",
+      "systemLabel": "System",
+      "mqtt": "MQTT",
+      "cache": "Cache",
+      "logs": "Logs",
+      "packages": "Packages",
+      "mounts": "Mounts",
+      "scripts": "Scripts",
+      "users": "Users",
+      "exportImport": "Export/Import",
+      "beta": "Beta"
+    },
+    "versionInfo": "Version Info",
+    "app": "App:",
+    "loading": "Loading...",
+    "welcome": "Welcome,",
+    "logout": "Logout"
+  },
+  "status": {
+    "completed": "Completed",
+    "completedWithWarnings": "Completed with Warnings",
+    "failed": "Failed",
+    "running": "Running",
+    "pending": "Pending",
+    "cancelled": "Cancelled"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "Comprehensive overview of your backup infrastructure",
+    "stats": {
+      "repositories": "Repositories",
+      "sshRemote": "SSH remote",
+      "activeSchedules": "Active Schedules",
+      "ofTotal": "of {{count}} total",
+      "successRate": "Success Rate (30d)",
+      "failed30d": "Failed (Last 30d)",
+      "requiresAttention": "Requires attention"
+    },
+    "storageBreakdown": "Storage Breakdown",
+    "systemResources": "System Resources",
+    "cpu": "CPU",
+    "memory": "Memory",
+    "disk": "Disk",
+    "repositoryHealth": {
+      "title": "Repository Health",
+      "upToDate": "Backups up to date",
+      "needsAttention": "Needs attention",
+      "next24h": "Next 24 hours",
+      "maintenanceNeeded": "Maintenance Needed",
+      "allHealthy": "All systems healthy!",
+      "neverBackedUp": "Never backed up",
+      "archives": "archives",
+      "neverChecked": "Never checked",
+      "neverCompacted": "Never compacted"
+    },
+    "noRepositories": "No repositories configured yet. Create your first repository to start backing up!",
+    "moreRepositories": "+{{count}} more repositories",
+    "moreAlerts": "+{{count}} more alerts",
+    "moreScheduled": "+{{count}} more scheduled",
+    "recentActivity": {
+      "title": "Recent Activity",
+      "empty": "No recent activity",
+      "viewAll": "View All Activity"
+    },
+    "upcomingAndMaintenance": "Upcoming & Maintenance",
+    "activityMessages": {
+      "backup_completed": "Backup completed",
+      "backup_failed": "Backup failed",
+      "backup_running": "Backup running",
+      "backup_pending": "Backup pending",
+      "check_completed": "Check completed",
+      "check_failed": "Check failed",
+      "check_running": "Check running",
+      "check_pending": "Check pending",
+      "compact_completed": "Compact completed",
+      "compact_failed": "Compact failed",
+      "compact_running": "Compact running",
+      "compact_pending": "Compact pending",
+      "prune_completed": "Prune completed",
+      "prune_failed": "Prune failed",
+      "prune_running": "Prune running",
+      "prune_pending": "Prune pending",
+      "restore_completed": "Restore completed",
+      "restore_failed": "Restore failed",
+      "restore_running": "Restore running",
+      "restore_pending": "Restore pending"
+    }
+  },
+  "backup": {
+    "title": "Backup Operations",
+    "subtitle": "Manage and monitor your backup jobs",
+    "manualBackup": {
+      "title": "Manual Backup",
+      "subtitle": "Select a repository and start a backup job",
+      "repository": "Repository",
+      "loadingRepositories": "Loading repositories...",
+      "selectRepository": "Select a repository...",
+      "maintenanceRunning": "Maintenance Running",
+      "startBackup": "Start Backup",
+      "starting": "Starting...",
+      "observeOnlyHidden": "Some repositories are hidden because they are configured for observability only.",
+      "noRepositories": {
+        "title": "No Repositories Found",
+        "subtitle": "Create a repository in the Repositories page before starting a backup"
+      }
+    },
+    "commandPreview": "Command Preview",
+    "runningJobs": {
+      "title": "Running Jobs",
+      "subtitle": "Currently active backup operations",
+      "jobTitle": "Backup Job {{id}}",
+      "repositoryPath": "Repository: {{path}}",
+      "viewLogs": "View Logs",
+      "cancel": "Cancel",
+      "progress": {
+        "initializing": "Initializing backup...",
+        "processing": "Processing files...",
+        "finalizing": "Finalizing...",
+        "currentFile": "Current File:",
+        "filesProcessed": "Files Processed:",
+        "originalSize": "Original Size:",
+        "compressed": "Compressed:",
+        "deduplicated": "Deduplicated:",
+        "totalSourceSize": "Total Source Size:",
+        "speed": "Speed:",
+        "eta": "ETA:"
+      }
+    },
+    "recentJobs": {
+      "title": "Recent Jobs",
+      "subtitle": "History of backup operations",
+      "empty": "No backup jobs found"
+    }
+  },
+  "archives": {
+    "title": "Archive Browser",
+    "subtitle": "Browse and manage your backup archives",
+    "loadingStats": "Loading repository statistics...",
+    "noRepositories": "No repositories found. Create a repository first.",
+    "selectRepository": "Select a repository to view its archives",
+    "deletionStarted": "Archive deletion started in background (Job ID: {{id}})",
+    "mountTimeout": "Mount timeout: Large repositories may need more time to mount.",
+    "mountFailed": "Failed to mount archive: {{error}}",
+    "restoreStarted": "Restore job started! Check the Activity tab to monitor progress."
+  },
+  "restore": {
+    "title": "Restore Archives",
+    "subtitle": "Select an archive to restore from backup",
+    "selectRepository": "Select Repository",
+    "loadingRepositories": "Loading repositories...",
+    "selectRepositoryPlaceholder": "Select a repository...",
+    "maintenanceRunning": "Maintenance Running",
+    "maintenanceRunningParens": "(Maintenance Running)",
+    "repositoryInfo": "Repository Info",
+    "selectArchive": "Select an archive below to restore its contents. The entire archive will be restored to the destination path you specify.",
+    "noArchives": "No archives found in this repository",
+    "activeRestores": {
+      "title": "Active Restores",
+      "subtitle": "Pending and running restore operations"
+    },
+    "recentRestores": {
+      "title": "Recent Restores",
+      "empty": "No restore jobs found"
+    },
+    "dialog": {
+      "title": "Restore Archive",
+      "archiveInfo": "Archive Information",
+      "files": "Files:",
+      "size": "Size:",
+      "selectedItems": "Selected Items ({{count}})",
+      "changeSelection": "Change Selection",
+      "important": "Important",
+      "fullRestoreWarning": "This will restore the entire archive to the destination path. Existing files may be overwritten.",
+      "selectSpecific": "Select Specific Files/Folders",
+      "destinationPath": "Destination Path",
+      "cancel": "Cancel",
+      "starting": "Starting...",
+      "start": "Start Restore"
+    }
+  },
+  "schedule": {
+    "title": "Schedule",
+    "subtitle": "Manage automated backups and repository checks",
+    "createBackup": "Create Backup Schedule",
+    "addCheck": "Add Check Schedule",
+    "tabs": {
+      "backupJobs": "Backup Jobs",
+      "repositoryChecks": "Repository Checks"
+    },
+    "noRepositories": "You need to create at least one repository before scheduling backups.",
+    "maintenance": {
+      "pruning": "Pruning archives...",
+      "pruneCompleted": "Prune completed",
+      "pruneFailed": "Prune failed",
+      "compacting": "Compacting repository...",
+      "compactCompleted": "Compact completed",
+      "compactFailed": "Compact failed",
+      "completed": "Maintenance completed"
+    },
+    "table": {
+      "status": "Status",
+      "jobName": "Job Name",
+      "repository": "Repository",
+      "schedule": "Schedule",
+      "lastRun": "Last Run",
+      "nextRun": "Next Run",
+      "enabled": "Enabled",
+      "runNow": "Run Now",
+      "edit": "Edit",
+      "duplicate": "Duplicate",
+      "delete": "Delete",
+      "never": "Never"
+    }
+  },
+  "repositories": {
+    "title": "Repository Management",
+    "subtitle": "A repository is where your backed-up data will be stored. The files from your configured sources will be backed up here.",
+    "createRepository": "Create Repository",
+    "importExisting": "Import Existing",
+    "search": "Search repositories...",
+    "sort": {
+      "label": "Sort By",
+      "nameAZ": "Name (A-Z)",
+      "nameZA": "Name (Z-A)",
+      "lastBackupRecent": "Last Backup (Recent)",
+      "lastBackupOldest": "Last Backup (Oldest)",
+      "createdNewest": "Created (Newest)",
+      "createdOldest": "Created (Oldest)"
+    },
+    "group": {
+      "label": "Group By",
+      "none": "None",
+      "hostname": "Location (Hostname)",
+      "type": "Repository Type",
+      "mode": "Backup Mode"
+    },
+    "loading": "Loading repositories...",
+    "empty": {
+      "title": "No Repositories Yet",
+      "subtitle": "Create your first Borg repository to start backing up your data.",
+      "hint": "Create a local repository or remote repository via SSH."
+    },
+    "noMatch": {
+      "title": "No Matching Repositories",
+      "message": "No repositories match \"{{search}}\". Try a different search term.",
+      "fallback": "No repositories found.",
+      "clearSearch": "Clear Search"
+    },
+    "groups": {
+      "local": "Local Repositories",
+      "remote": "Remote Repositories (SSH)",
+      "full": "Full Backup Repositories",
+      "observeOnly": "Observe-Only Repositories",
+      "localMachine": "Local Machine",
+      "remoteSsh": "Remote (SSH)"
+    },
+    "moreCount": "+{{count}} more",
+    "labels": {
+      "archives": "Archives",
+      "totalSize": "Total Size",
+      "lastBackup": "Last Backup",
+      "nextBackup": "Next Backup",
+      "location": "Location",
+      "encryption": "Encryption"
+    },
+    "observeOnly": "Observe Only",
+    "buttons": {
+      "info": "Info",
+      "check": "Check",
+      "prune": "Prune",
+      "compact": "Compact"
+    }
+  },
+  "activity": {
+    "title": "Activity",
+    "subtitle": "View all operations and their logs",
+    "filters": {
+      "type": "Type",
+      "status": "Status",
+      "allTypes": "All Types",
+      "allStatus": "All Status",
+      "types": {
+        "backup": "Backup",
+        "restore": "Restore",
+        "check": "Check",
+        "compact": "Compact",
+        "prune": "Prune",
+        "package": "Package"
+      },
+      "statuses": {
+        "completed": "Completed",
+        "failed": "Failed",
+        "running": "Running",
+        "pending": "Pending"
+      }
+    },
+    "empty": {
+      "title": "No activity found",
+      "message": "There are no operations matching your filters"
+    }
+  },
+  "settings": {
+    "password": {
+      "title": "Change Password",
+      "subtitle": "Update your password to keep your account secure",
+      "current": "Current Password",
+      "new": "New Password",
+      "confirm": "Confirm New Password",
+      "submit": "Change Password",
+      "submitting": "Changing Password...",
+      "noMatch": "Passwords do not match"
+    },
+    "appearance": {
+      "title": "Appearance",
+      "subtitle": "Customize the look and feel of the application",
+      "theme": "Theme",
+      "chooseTheme": "Choose a theme"
+    },
+    "users": {
+      "title": "User Management",
+      "addUser": "Add User",
+      "table": {
+        "user": "User",
+        "status": "Status",
+        "role": "Role",
+        "created": "Created",
+        "lastLogin": "Last Login"
+      },
+      "roles": {
+        "admin": "Admin",
+        "user": "User"
+      },
+      "status": {
+        "active": "Active",
+        "inactive": "Inactive"
+      },
+      "actions": {
+        "edit": "Edit User",
+        "resetPassword": "Reset Password",
+        "delete": "Delete User"
+      },
+      "createDialog": {
+        "title": "Create User"
+      },
+      "editDialog": {
+        "title": "Edit User"
+      },
+      "fields": {
+        "username": "Username",
+        "email": "Email",
+        "password": "Password",
+        "isAdmin": "Admin User"
+      },
+      "buttons": {
+        "cancel": "Cancel",
+        "create": "Create",
+        "update": "Update"
+      },
+      "resetPasswordDialog": {
+        "title": "Reset Password"
+      },
+      "deleteDialog": {
+        "title": "Delete User",
+        "message": "Are you sure you want to delete the user {{username}}?",
+        "warning": "This action cannot be undone.",
+        "deleting": "Deleting...",
+        "confirm": "Delete"
+      }
+    }
+  },
+  "sshConnections": {
+    "title": "Remote Machines",
+    "subtitle": "Manage remote machines with storage monitoring and logical mount points",
+    "singleKeySystem": {
+      "title": "Single-Key System",
+      "description": "This system uses one SSH key for all remote connections. Generate the system key once, then deploy it to as many remote servers as needed."
+    },
+    "stats": {
+      "totalConnections": "Total Connections",
+      "active": "Active",
+      "failed": "Failed"
+    },
+    "systemKey": {
+      "title": "System SSH Key",
+      "noKey": "No system SSH key found. Generate a new one or import an existing one.",
+      "generate": "Generate System SSH Key",
+      "import": "Import Existing Key",
+      "type": "Key Type",
+      "fingerprint": "Fingerprint",
+      "publicKey": "Public Key",
+      "actions": {
+        "deploy": "Deploy to Server",
+        "addManual": "Add Manual Connection",
+        "copy": "Copy Key",
+        "delete": "Delete Key"
+      }
+    },
+    "generateDialog": {
+      "title": "Generate System SSH Key",
+      "keyType": "Key Type",
+      "ed25519": "ED25519 (Recommended)",
+      "rsa": "RSA",
+      "ecdsa": "ECDSA",
+      "generating": "Generating...",
+      "generate": "Generate Key"
+    },
+    "importDialog": {
+      "title": "Import Existing SSH Key",
+      "keyName": "Key Name",
+      "privateKeyPath": "Private Key Path",
+      "publicKeyPath": "Public Key Path (Optional)",
+      "description": "Description",
+      "importing": "Importing...",
+      "import": "Import Key"
+    },
+    "deployDialog": {
+      "title": "Deploy SSH Key to Server",
+      "host": "Host",
+      "username": "Username",
+      "port": "Port",
+      "password": "Password",
+      "sftpMode": "Use SFTP mode for key deployment",
+      "defaultPath": "Default Path (Optional)",
+      "mountPoint": "Mount Point (Optional)",
+      "deploying": "Deploying...",
+      "deploy": "Deploy Key"
+    },
+    "manualConnectionDialog": {
+      "title": "Add Manual Connection",
+      "instructions": {
+        "title": "Before adding this connection:",
+        "step1": "Copy the public key from above",
+        "step2": "SSH into your server",
+        "step3": "Add it to ~/.ssh/authorized_keys"
+      },
+      "submit": "Test & Add Connection"
+    },
+    "editConnectionDialog": {
+      "title": "Edit SSH Connection",
+      "submit": "Update Connection"
+    },
+    "deleteConnectionDialog": {
+      "title": "Delete SSH Connection",
+      "delete": "Delete",
+      "deleting": "Deleting..."
+    },
+    "deleteKeyDialog": {
+      "title": "Delete System SSH Key",
+      "confirm": "Are you sure you want to delete this SSH key?",
+      "warning1": "Remove the SSH key from database and filesystem",
+      "warning2": "Connection records will be preserved."
+    }
+  },
+  "scripts": {
+    "title": "Script Library",
+    "subtitle": "Reusable scripts for backup hooks and maintenance",
+    "newScript": "New Script",
+    "empty": "No scripts created yet. Scripts can be assigned to repositories for pre-backup and post-backup hooks.",
+    "table": {
+      "name": "Name",
+      "description": "Description",
+      "category": "Category",
+      "runOn": "Run On",
+      "timeout": "Timeout",
+      "usage": "Usage",
+      "actions": "Actions",
+      "timeoutSeconds": "{{timeout}}s",
+      "paramCount": "{{count}} param(s)",
+      "usageCount": "{{count}} places used"
+    },
+    "actions": {
+      "test": "Test Script",
+      "edit": "Edit Script",
+      "delete": "Delete Script",
+      "cannotDeleteTemplates": "Cannot delete templates"
+    },
+    "usedInCount": "Script is used in {{count}} place(s)",
+    "runOn": {
+      "success": "Success - Only after successful backups",
+      "failure": "Failure - Only after failed backups",
+      "warning": "Warning - Only after backups with warnings",
+      "always": "Always - Run regardless of result",
+      "note": "Note: The 'Run On' condition only applies to Post-Backup hooks."
+    },
+    "createDialog": {
+      "title": "Create Script"
+    },
+    "editDialog": {
+      "title": "Edit Script"
+    },
+    "fields": {
+      "name": "Name",
+      "description": "Description",
+      "runOn": "Run On",
+      "timeout": "Timeout (seconds)",
+      "timeoutHint": "Maximum execution time (30-3600 seconds)",
+      "content": "Script Content",
+      "contentHint": "Use ${PARAM_NAME} or ${PARAM_NAME:-default} for parameters",
+      "parameters": "Script Parameters",
+      "parametersHint": "Check the box for parameters that contain sensitive data.",
+      "treatAsSecret": "Treat as secret"
+    },
+    "usedInPlaces": "This script is used in {{count}} place(s). Changes will affect all assignments.",
+    "buttons": {
+      "cancel": "Cancel",
+      "create": "Create",
+      "update": "Update"
+    },
+    "testDialog": {
+      "title": "Test Script",
+      "hasParams": "This script has parameters. Provide values below to test.",
+      "noParams": "This script has no parameters. Click 'Run Test' to execute it.",
+      "running": "Running...",
+      "runTest": "Run Test",
+      "runningScript": "Running script...",
+      "success": "Script executed successfully",
+      "failed": "Script execution failed",
+      "exitCode": "Exit code: {{code}} | Execution time: {{time}}s",
+      "stdout": "Standard Output:",
+      "stderr": "Standard Error:",
+      "testAgain": "Test Again",
+      "close": "Close"
+    }
+  },
+  "repositoryCard": {
+    "archives": "Archives",
+    "totalSize": "Total Size",
+    "lastBackup": "Last Backup",
+    "nextBackup": "Next Backup",
+    "observeOnly": "Observe Only",
+    "buttons": {
+      "info": "Info",
+      "check": "Check",
+      "prune": "Prune",
+      "compact": "Compact"
+    }
+  },
+  "dialogs": {
+    "deleteJob": {
+      "titleBackup": "Delete Backup Entry?",
+      "titleJob": "Delete Job Entry?",
+      "jobId": "(ID: {{id}})",
+      "warnings": {
+        "undone": "This action cannot be undone",
+        "removeRecord": "This will remove the job record from the system",
+        "noAffect": "This will NOT affect any actual backup data"
+      },
+      "confirm": "Delete Permanently"
+    },
+    "deleteArchive": {
+      "title": "Delete Archive?",
+      "subtitle": "Are you sure you want to delete this archive?",
+      "archiveName": "Archive: {{name}}",
+      "warning": "This action cannot be undone. The archive data will be permanently removed from the repository.",
+      "confirm": "Delete Archive",
+      "deleting": "Deleting..."
+    },
+    "deleteSchedule": {
+      "title": "Delete Schedule?",
+      "message": "Are you sure you want to delete this schedule?",
+      "warning": "This action cannot be undone.",
+      "confirm": "Delete",
+      "deleting": "Deleting..."
+    },
+    "cancelJob": {
+      "title": "Cancel Job?",
+      "message": "Are you sure you want to cancel this job?",
+      "confirm": "Cancel Job",
+      "cancelling": "Cancelling..."
+    },
+    "checkWarning": {
+      "title": "Repository Check",
+      "message": "Running a full repository check can take a long time for large repositories.",
+      "confirm": "Run Check",
+      "cancel": "Cancel"
+    },
+    "compactWarning": {
+      "title": "Compact Repository",
+      "message": "Compacting the repository will free up space but may take some time.",
+      "confirm": "Compact",
+      "cancel": "Cancel"
+    },
+    "lockError": {
+      "title": "Repository Locked",
+      "message": "The repository is currently locked. This may be due to an interrupted operation.",
+      "breakLock": "Break Lock",
+      "cancel": "Cancel"
+    },
+    "errorDetails": {
+      "title": "Error Details",
+      "close": "Close"
+    },
+    "pruneRepository": {
+      "title": "Prune Repository",
+      "confirm": "Run Prune",
+      "cancel": "Cancel"
+    },
+    "repositoryInfo": {
+      "title": "Repository Information",
+      "close": "Close",
+      "loadingInfo": "Loading repository info...",
+      "encryption": "Encryption",
+      "lastModified": "Last Modified",
+      "repositoryLocation": "Repository Location",
+      "storageStatistics": "Storage Statistics",
+      "totalSize": "Total Size",
+      "usedOnDisk": "Used on Disk",
+      "uniqueData": "Unique Data",
+      "totalChunks": "Total Chunks",
+      "uniqueChunks": "Unique Chunks",
+      "noBackupsYet": "No backups yet",
+      "noBackupsDesc": "This repository has been initialized but contains no archives. Storage statistics will appear here after you create your first backup.",
+      "loadFailed": "Failed to load repository information. Make sure the repository is accessible and properly initialized.",
+      "exportKeyfileTooltip": "Export keyfile \u2014 keep this safe!"
+    },
+    "mountArchive": {
+      "title": "Mount Archive",
+      "mountPoint": "Mount Point",
+      "mount": "Mount",
+      "mounting": "Mounting...",
+      "cancel": "Cancel"
+    },
+    "logViewer": {
+      "title": "Log Viewer",
+      "close": "Close"
+    }
+  },
+  "backupJobsTable": {
+    "columns": {
+      "status": "Status",
+      "jobName": "Job Name",
+      "repository": "Repository",
+      "schedule": "Schedule",
+      "lastRun": "Last Run",
+      "nextRun": "Next Run",
+      "enabled": "Enabled"
+    },
+    "actions": {
+      "runNow": "Run Now",
+      "edit": "Edit",
+      "duplicate": "Duplicate",
+      "delete": "Delete"
+    },
+    "never": "Never",
+    "empty": "No backup jobs found"
+  },
+  "scheduledJobsTable": {
+    "columns": {
+      "status": "Status",
+      "jobName": "Job Name",
+      "repository": "Repository",
+      "schedule": "Schedule",
+      "lastRun": "Last Run",
+      "nextRun": "Next Run",
+      "enabled": "Enabled"
+    },
+    "actions": {
+      "runNow": "Run Now",
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "never": "Never"
+  },
+  "archiveCard": {
+    "files": "Files:",
+    "size": "Size:",
+    "restore": "Restore",
+    "browse": "Browse",
+    "mount": "Mount",
+    "delete": "Delete"
+  },
+  "archivesList": {
+    "empty": "No archives found",
+    "loading": "Loading archives..."
+  },
+  "repositoryInfo": {
+    "title": "Repository Information",
+    "encryption": "Encryption",
+    "location": "Location",
+    "totalSize": "Total Size",
+    "archives": "Archives",
+    "lastModified": "Last Modified"
+  },
+  "systemSettings": {
+    "title": "System Settings",
+    "borgBinary": {
+      "label": "Borg Binary Path",
+      "hint": "Path to the borg binary"
+    },
+    "save": "Save Settings",
+    "saving": "Saving...",
+    "savedSuccessfully": "System settings saved successfully",
+    "refreshNow": "Refresh Now",
+    "refreshing": "Refreshing..."
+  },
+  "notifications": {
+    "title": "Notification Services",
+    "subtitle": "Configure notification services for backup and restore alerts",
+    "settingsTitle": "Notification Settings",
+    "email": {
+      "title": "Email Notifications",
+      "enabled": "Enable email notifications",
+      "smtp": {
+        "host": "SMTP Host",
+        "port": "SMTP Port",
+        "username": "Username",
+        "password": "Password",
+        "from": "From Address",
+        "to": "To Address",
+        "tls": "Use TLS"
+      }
+    },
+    "save": "Save",
+    "test": "Send Test",
+    "saving": "Saving...",
+    "addService": "Add Service",
+    "editService": "Edit Notification Service",
+    "addServiceTitle": "Add Notification Service",
+    "deleteServiceTitle": "Delete Notification Service?",
+    "noServicesTitle": "No Notification Services Configured",
+    "noServicesSubtitle": "Add your first notification service to get alerts about backup failures and other important events.",
+    "serviceAddedSuccessfully": "Notification service added successfully",
+    "serviceUpdatedSuccessfully": "Notification service updated successfully",
+    "serviceDeletedSuccessfully": "Notification service deleted successfully",
+    "testSentSuccessfully": "Test notification sent successfully! Check your service.",
+    "failedToAdd": "Failed to add notification service",
+    "failedToUpdate": "Failed to update notification service",
+    "failedToDelete": "Failed to delete notification service",
+    "failedToTest": "Failed to test notification",
+    "nameAndUrlRequired": "Name and Service URL are required",
+    "cancel": "Cancel",
+    "update": "Update",
+    "add": "Add",
+    "delete": "Delete",
+    "table": {
+      "service": "Service",
+      "status": "Status",
+      "events": "Events",
+      "repositories": "Repositories",
+      "lastUsed": "Last Used"
+    }
+  },
+  "preferences": {
+    "title": "Preferences",
+    "subtitle": "Customize your experience and manage your privacy settings",
+    "timezone": "Timezone",
+    "dateFormat": "Date Format",
+    "save": "Save Preferences",
+    "saving": "Saving...",
+    "updatedSuccessfully": "Preferences updated successfully",
+    "analyticsTitle": "Anonymous Usage Analytics",
+    "analyticsDescription": "Help us improve Borg UI by sharing anonymous usage data. We collect page views, feature clicks, and browser type—without tracking IP addresses, hostnames, cookies, or any personally identifiable information.",
+    "enableAnalytics": "Enable analytics",
+    "languageTitle": "Language",
+    "languageDescription": "Choose the interface language",
+    "languageLabel": "Interface Language",
+    "languageSaved": "Language updated successfully"
+  },
+  "betaFeatures": {
+    "title": "Beta Features",
+    "subtitle": "Enable experimental features (may be unstable)",
+    "description": "Try experimental features before they're released to everyone. These features are still in development and may change.",
+    "save": "Save",
+    "saving": "Saving...",
+    "settingUpdatedSuccessfully": "Setting updated successfully"
+  },
+  "exportImport": {
+    "title": "Export / Import",
+    "export": {
+      "title": "Export Configuration",
+      "subtitle": "Download your current configuration",
+      "description": "Export your repositories, backup schedules, and settings to a borgmatic-compatible YAML file.",
+      "button": "Export Configuration",
+      "exporting": "Exporting...",
+      "success": "Configuration exported successfully"
+    },
+    "import": {
+      "title": "Import Configuration",
+      "subtitle": "Restore configuration from a file",
+      "description": "Import borgmatic YAML configurations or Borg UI exports. Supports both standard borgmatic format and Borg UI exports.",
+      "button": "Import Configuration",
+      "importing": "Importing...",
+      "selectFile": "Select file..."
+    }
+  },
+  "logManagement": {
+    "title": "Log Management",
+    "retention": "Log Retention (days)",
+    "save": "Save Settings",
+    "saving": "Saving...",
+    "savedSuccessfully": "Log management settings saved successfully",
+    "clearLogs": "Run Cleanup Now",
+    "clearing": "Running Cleanup..."
+  },
+  "cacheManagement": {
+    "title": "Archive Cache Management",
+    "clearCache": "Clear All Cache",
+    "clearing": "Clearing...",
+    "cacheSize": "Cache Size",
+    "save": "Save Settings",
+    "saving": "Saving..."
+  },
+  "mountsManagement": {
+    "title": "Active Mounts",
+    "subtitle": "Manage mounted Borg archives. Archives are automatically unmounted on container restart.",
+    "empty": "No Active Mounts",
+    "unmount": "Unmount",
+    "unmounting": "Unmounting...",
+    "unmountedSuccessfully": "Archive unmounted successfully"
+  },
+  "mqttSettings": {
+    "title": "MQTT Settings",
+    "enabled": "Enable MQTT",
+    "broker": "Broker URL",
+    "username": "Username",
+    "password": "Password",
+    "topic": "Topic Prefix",
+    "save": "Save Settings",
+    "saving": "Saving...",
+    "savedSuccessfully": "MQTT settings saved successfully",
+    "test": "Test Connection",
+    "testing": "Testing..."
+  },
+  "repositoryScriptsTab": {
+    "title": "Repository Scripts",
+    "preBackup": "Pre-Backup Script",
+    "postBackup": "Post-Backup Script",
+    "save": "Save",
+    "saving": "Saving...",
+    "noScript": "No script selected",
+    "loading": "Loading scripts...",
+    "failedToLoad": "Failed to load assigned scripts",
+    "assignedSuccessfully": "Script assigned successfully",
+    "removedSuccessfully": "Script removed successfully",
+    "parametersUpdatedSuccessfully": "Parameters updated successfully"
+  },
+  "cronBuilder": {
+    "title": "Cron Expression Builder",
+    "minutes": "Minutes",
+    "hours": "Hours",
+    "dayOfMonth": "Day of Month",
+    "month": "Month",
+    "dayOfWeek": "Day of Week",
+    "expression": "Cron Expression",
+    "preview": "Preview",
+    "apply": "Apply",
+    "cancel": "Cancel"
+  },
+  "sourceDirectories": {
+    "label": "Source Directories",
+    "add": "Add Directory",
+    "empty": "No source directories added yet",
+    "placeholder": "Enter directory path",
+    "path_one": "{{count}} path",
+    "path_other": "{{count}} paths"
+  },
+  "excludePatterns": {
+    "label": "Exclude Patterns",
+    "add": "Add Pattern",
+    "empty": "No exclude patterns",
+    "placeholder": "e.g., *.log, /tmp/**"
+  },
+  "pruneSettings": {
+    "title": "Prune Settings",
+    "keepHourly": "Keep Hourly",
+    "keepDaily": "Keep Daily",
+    "keepWeekly": "Keep Weekly",
+    "keepMonthly": "Keep Monthly",
+    "keepYearly": "Keep Yearly"
+  },
+  "compressionSettings": {
+    "title": "Compression",
+    "method": "Compression Method",
+    "level": "Compression Level"
+  },
+  "archiveNameTemplate": {
+    "label": "Archive Name Template",
+    "hint": "Use {now} for current date/time"
+  },
+  "remoteMachineCard": {
+    "status": {
+      "connected": "Connected",
+      "failed": "Failed",
+      "unknown": "Unknown"
+    },
+    "storage": "Storage",
+    "mountPoint": "Mount Point",
+    "actions": {
+      "edit": "Edit",
+      "delete": "Delete",
+      "deploy": "Deploy Key"
+    }
+  },
+  "restoreJobCard": {
+    "title": "Restore Job",
+    "status": "Status",
+    "archive": "Archive",
+    "destination": "Destination",
+    "cancel": "Cancel",
+    "restoringFiles": "Restoring files...",
+    "completed": "Completed",
+    "completedWithWarnings": "Completed with warnings",
+    "filesRestored": "Files Restored:",
+    "progress": "Progress:",
+    "speed": "Speed:",
+    "eta": "ETA:",
+    "currentFile": "Current File:",
+    "duration": "Duration:"
+  },
+  "analyticsConsent": {
+    "title": "Help Improve Borg UI",
+    "message": "We collect anonymous usage data to understand how Borg UI is used and make it better. No personal information, IP addresses, hostnames, or backup data is ever collected.",
+    "accept": "Accept",
+    "decline": "Decline",
+    "learnMore": "Learn more",
+    "viewDashboard": "View our public analytics dashboard",
+    "viewDashboardSuffix": "to see exactly what we collect.",
+    "enableToggle": "Enable anonymous analytics",
+    "continue": "Continue",
+    "saving": "Saving...",
+    "changeAnytime": "You can change this anytime in Settings \u2192 Preferences"
+  },
+  "lastRestoreSection": {
+    "title": "Last Restore",
+    "noRestores": "No recent restores",
+    "status": "Status",
+    "archive": "Archive",
+    "destination": "Destination",
+    "completed": "Completed",
+    "viewAll": "View All Restores"
+  },
+  "runningBackups": {
+    "title": "Running Backups",
+    "empty": "No backups currently running",
+    "jobId": "Job #{{id}}",
+    "cancel": "Cancel",
+    "sectionTitle": "Running Scheduled Backups",
+    "activeCount": "{{count}} active",
+    "realtimeProgress": "Real-time progress for scheduled backup jobs",
+    "running": "Running",
+    "started": "Started:",
+    "cancelBackup": "Cancel Backup",
+    "currentFile": "Current File:",
+    "filesProcessed": "Files Processed:",
+    "originalSize": "Original Size:",
+    "compressed": "Compressed:",
+    "deduplicated": "Deduplicated:",
+    "totalSourceSize": "Total Source Size:",
+    "speed": "Speed:",
+    "eta": "ETA:"
+  },
+  "backupHistory": {
+    "title": "Backup History",
+    "empty": "No recent backup history",
+    "viewAll": "View All",
+    "showing": "Showing {{filtered}} of {{total}} backup jobs",
+    "showingFiltered": "Showing {{filtered}} of {{total}} backup jobs (filtered)",
+    "allSchedules": "All Schedules",
+    "allRepositories": "All Repositories",
+    "allStatus": "All Status",
+    "completed": "Completed",
+    "failed": "Failed",
+    "warning": "Warning",
+    "noJobsFound": "No backup jobs found"
+  },
+  "scheduledChecks": {
+    "title": "Scheduled Checks",
+    "empty": "No scheduled checks",
+    "nextRun": "Next Run",
+    "lastRun": "Last Run",
+    "repository": "Repository",
+    "schedule": "Schedule",
+    "lastCheck": "Last Check",
+    "nextCheck": "Next Check",
+    "notConfigured": "Not configured",
+    "notScheduled": "Not scheduled",
+    "never": "Never",
+    "editCheckSchedule": "Edit Check Schedule",
+    "addCheckSchedule": "Add Check Schedule",
+    "checkScheduleLabel": "Check Schedule",
+    "maxDuration": "Max Duration (seconds)",
+    "maxDurationHint": "Time limit for check operation (3600 = 1 hour)",
+    "notificationHint": "Notification settings for check jobs can be configured in Settings \u2192 Notifications",
+    "noScheduledChecks": "No scheduled checks",
+    "noScheduledChecksDesc": "Configure automatic repository checks to ensure data integrity",
+    "needRepository": "You need to create at least one repository before scheduling checks.",
+    "disableConfirm": "Disable scheduled check for {{name}}?",
+    "update": "Update",
+    "create": "Create"
+  },
+  "repositorySelectorCard": {
+    "title": "Select Repository",
+    "empty": "No repositories available",
+    "loading": "Loading repositories..."
+  },
+  "multiRepositorySelector": {
+    "title": "Select Repositories",
+    "selectAll": "Select All",
+    "deselectAll": "Deselect All",
+    "selected": "{{count}} selected"
+  },
+  "wizard": {
+    "steps": {
+      "repository": "Repository",
+      "dataSource": "Data Source",
+      "location": "Location",
+      "schedule": "Schedule",
+      "review": "Review"
+    },
+    "buttons": {
+      "back": "Back",
+      "next": "Next",
+      "finish": "Finish",
+      "cancel": "Cancel"
+    },
+    "borgUiServer": "Borg UI Server",
+    "remoteClient": "Remote Client",
+    "noSshConnections": "No SSH connections configured. Please configure SSH connections in the SSH Keys page first.",
+    "backupFlowPreview": {
+      "localToLocal": "Back up local data to local repository",
+      "localToRemote": "Back up local data to remote repository",
+      "remoteToLocal": "Back up remote data to local repository via SSHFS",
+      "default": "Back up data to repository",
+      "remoteStorage": "Remote Storage",
+      "viaSSHFS": "via SSHFS",
+      "dirs_one": "{{count}} dir",
+      "dirs_other": "{{count}} dirs"
+    },
+    "backupConfig": {
+      "remoteSshfsNote": "Remote directories are mounted via SSHFS preserving their original paths. Exclude patterns work the same as local sources (e.g., */var/cache/*)."
+    },
+    "dataSource": {
+      "title": "Where is the data you want to back up?",
+      "localDescription": "Back up data from this server (local or mounted filesystems)",
+      "removeRemoteDirsFirst": "Remove remote directories first to switch",
+      "remoteToRemoteDisabledTooltip": "Remote-to-remote backups are not supported. Select a local repository or use the same remote machine.",
+      "notAvailableRemoteRepo": "Not available when repository is on a remote client",
+      "remoteDescription": "Back up data from a remote machine via SSH",
+      "removeLocalDirsFirst": "Remove local directories first to switch",
+      "remoteToRemoteTitle": "Why is \"Remote Client\" disabled?",
+      "remoteToRemoteBody": "When the repository is stored on a remote server, the data source must be the Borg UI server. Remote-to-remote backups are not supported.",
+      "selectRemoteClient": "Select Remote Client",
+      "browseRemoteNote": "Browse remote directories or enter full paths manually (e.g., /home/user/documents, /var/www)",
+      "remoteSshNote": "The Borg UI server will SSH into the remote machine to browse and back up the selected directories. Ensure the SSH connection is properly configured with the necessary permissions."
+    },
+    "location": {
+      "repositoryNameLabel": "Repository Name",
+      "repositoryNameHelper": "A friendly name to identify this repository",
+      "repositoryModeLabel": "Repository Mode",
+      "fullRepository": "Full Repository",
+      "fullRepositoryDesc": "Create backups and browse archives",
+      "observabilityOnly": "Observability Only",
+      "observabilityOnlyDesc": "Browse and restore only (no backups)",
+      "observabilityInfo": "Observability-only repositories can browse and restore existing archives but cannot create new backups.",
+      "readOnlyStorageLabel": "Read-only storage access",
+      "readOnlyStorageDesc": "Enable if the storage is read-only or locked by another process (adds --bypass-lock)",
+      "whereToStore": "Where should backups be stored?",
+      "borgUiServerDesc": "Store backups on this server's local storage",
+      "remoteClientDesc": "Store backups on a remote machine via SSH",
+      "remoteDisabledInfo": "This repository is configured to back up data from a remote machine. Remote-to-remote backups (backing up from one remote machine to another) are not supported. Please keep the repository on the Borg UI Server.",
+      "selectSshConnection": "Select SSH Connection",
+      "repositoryPathLabel": "Repository Path",
+      "repositoryPathHelper": "Path where the repository will be stored"
+    },
+    "restoreDestination": {
+      "title": "Where should files be restored?",
+      "subtitle": "Select the destination and location for your restored files",
+      "borgUiServerDesc": "Restore to this server's local storage",
+      "remoteMachine": "Remote Machine",
+      "remoteMachineDesc": "Restore to a remote machine via SSH",
+      "sshToSshNotSupported": "SSH-to-SSH restore is not supported. Only local destinations are available for SSH repositories.",
+      "selectSshConnection": "Select SSH Connection",
+      "restoreToOriginal": "Restore to Original Location",
+      "restoreToOriginalDescLocal": "Recreate full directory structure from root (/)",
+      "restoreToOriginalDescRemote": "Recreate full directory structure from root (/) on the remote machine",
+      "restoreToCustom": "Restore to Custom Location",
+      "restoreToCustomDesc": "Choose where to restore files",
+      "customPathLabel": "Custom Destination Path",
+      "customPathHelperLocal": "Choose a writable directory where files will be restored",
+      "customPathHelperRemote": "Choose a writable directory on the remote machine",
+      "browseFilesystem": "Browse filesystem",
+      "browseRemoteFilesystem": "Browse remote filesystem",
+      "filesWillBeRestoredTo": "Files will be restored to:"
+    },
+    "restoreFiles": {
+      "title": "Select files to restore",
+      "subtitle": "Browse the archive and select the files or folders you want to restore",
+      "noItemsFound": "No items found in this directory",
+      "root": "Root",
+      "itemsSelected_one": "{{count}} item selected",
+      "itemsSelected_other": "{{count}} items selected",
+      "noItemsSelected": "No items selected",
+      "clearAll": "Clear all",
+      "selectDirTooltip": "Select directory and all contents",
+      "helpText": "Click files to select them, or click folders to navigate. Use the checkbox next to folders to select entire directories."
+    },
+    "restorePath": {
+      "title": "Choose restore location",
+      "subtitle": "Restore files to their original paths or select a custom destination",
+      "restoreToOriginal": "Restore to Original Location",
+      "restoreToOriginalDesc": "Recreate full directory structure from root (/)",
+      "restoreToCustom": "Restore to Custom Location",
+      "restoreToCustomDesc": "Choose where to restore files",
+      "customPathLabel": "Custom Destination Path",
+      "customPathHelper": "Choose a writable directory where files will be restored",
+      "browseFilesystem": "Browse filesystem",
+      "preview": "Preview",
+      "original": "Original:",
+      "andMoreFiles_one": "... and {{count}} more file",
+      "andMoreFiles_other": "... and {{count}} more files",
+      "noSshConnection": "Please select an SSH connection in the previous step."
+    },
+    "restoreReview": {
+      "readyEntireArchive": "Ready to restore entire archive from {{archiveName}}",
+      "readyFiles_one": "Ready to restore {{count}} file from {{archiveName}}",
+      "readyFiles_other": "Ready to restore {{count}} files from {{archiveName}}",
+      "restoreDestination": "Restore Destination",
+      "destinationType": "Destination Type",
+      "borgUiServer": "Borg UI Server",
+      "remoteMachine": "Remote Machine",
+      "sshConnection": "SSH Connection",
+      "restoreStrategy": "Restore Strategy",
+      "originalLocation": "Original Location",
+      "customLocation": "Custom Location",
+      "customPath": "Custom Path",
+      "notSet": "(not set)",
+      "restorePreview": "Restore Preview",
+      "previewNote": "Preview of where your files will be restored:",
+      "andMoreFiles_one": "... and {{count}} more file",
+      "andMoreFiles_other": "... and {{count}} more files",
+      "filesToRestore": "Files to Restore",
+      "numberOfItems": "Number of Items",
+      "allFilesInArchive": "All files in archive",
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files",
+      "entireArchiveNote": "The entire archive will be restored with all files and directories.",
+      "everythingLooksGood": "Everything looks good! Click \"Restore Files\" to begin the restore operation."
+    },
+    "review": {
+      "configurationSummary": "Configuration Summary",
+      "repository": "REPOSITORY",
+      "name": "Name",
+      "mode": "Mode",
+      "full": "Full",
+      "observeOnly": "Observe Only",
+      "location": "Location",
+      "path": "Path",
+      "notSet": "(not set)",
+      "borgUiServer": "Borg UI Server",
+      "sshRemote": "SSH Remote",
+      "dataSource": "DATA SOURCE",
+      "source": "Source",
+      "remoteClient": "Remote Client",
+      "directories": "Directories",
+      "directoriesCount": "{{count}} configured",
+      "excludePatterns": "Exclude Patterns",
+      "security": "SECURITY",
+      "encryption": "Encryption",
+      "encryptionRepokey": "Repokey",
+      "encryptionKeyfile": "Keyfile",
+      "encryptionNone": "None",
+      "passphrase": "Passphrase",
+      "passphraseSet": "••••••••",
+      "passphraseNotSet": "(not set)",
+      "backupConfiguration": "BACKUP CONFIGURATION",
+      "compression": "Compression",
+      "customFlags": "Custom Flags",
+      "repositoryInitialized": "Repository will be initialized",
+      "repositoryImportNote": "Repository will be verified before import. Ensure the passphrase is correct.",
+      "repositoryEditNote": "Changes will be saved to the repository configuration."
+    },
+    "security": {
+      "encryptionMethodLabel": "Encryption Method",
+      "repokey": "Repokey (Recommended)",
+      "repokeyDesc": "Key stored in repository, protected by passphrase",
+      "keyfile": "Keyfile",
+      "keyfileDesc": "Key stored separately, requires passphrase + keyfile",
+      "none": "None (Unencrypted)",
+      "noneDesc": "No encryption - data stored in plaintext",
+      "securityWarningTitle": "Security Warning",
+      "securityWarningBody": "Your backup data will be stored without encryption. Anyone with access to the repository can read your files. This is not recommended for sensitive data.",
+      "encryptionReadonly": "Encryption settings cannot be changed after repository creation.",
+      "passphraseOptional": "Passphrase (Optional)",
+      "passphraseRequired": "Passphrase",
+      "passphrasePlaceholderEdit": "Leave blank to keep last saved passphrase",
+      "passphrasePlaceholderCreate": "Enter passphrase",
+      "passphraseHelperEdit": "Optional - leave blank to keep last saved passphrase",
+      "passphraseHelperCreate": "Keep this safe - you cannot access backups without it!",
+      "borgKeyfileTitle": "Borg Keyfile (Optional)",
+      "borgKeyfileDesc": "Borg keyfiles are typically stored without a file extension in ~/.config/borg/keys/",
+      "uploadFile": "Upload File",
+      "pasteContent": "Paste Content",
+      "chooseKeyfile": "Choose Keyfile",
+      "selectedKeyfile": "Selected: {{name}}",
+      "keyfileUploadNote": "Keyfile will be uploaded after import",
+      "keyfileContentNote": "Keyfile content will be saved after import",
+      "remoteBorgPath": "Remote Borg Path (Optional)",
+      "remoteBorgPathHelper": "Path to borg executable on remote (if not in PATH)"
+    },
+    "scheduleWizard": {
+      "basicInfo": {
+        "jobNameLabel": "Job Name",
+        "jobNamePlaceholder": "Daily backup",
+        "descriptionLabel": "Description",
+        "descriptionPlaceholder": "Optional description",
+        "repositoriesLabel": "Repositories",
+        "repositoriesPlaceholder": "Select repositories...",
+        "repositoriesHelper": "Use arrows to change backup order.",
+        "selectAtLeastOne": "Select at least one repository to continue."
+      },
+      "maintenance": {
+        "title": "Maintenance Options",
+        "subtitle": "Run prune and compact after backups to manage disk space.",
+        "info": "Prune removes old archives. Compact reclaims disk space.",
+        "pruneAfterBackup": "Run prune after backup",
+        "pruneAfterBackupDesc": "Remove old archives based on retention policy",
+        "pruneCaution": "Pruning permanently deletes old backups.",
+        "compactAfterPrune": "Run compact after prune",
+        "compactAfterPruneDesc": "Reclaim disk space by freeing segments",
+        "compactInfo": "Compact reclaims disk space after prune. May take time on large repositories."
+      },
+      "config": {
+        "scheduleLabel": "Schedule (Cron Expression)",
+        "scheduleHelper": "Click the clock icon to use the visual builder.",
+        "nextRunTimes": "Next 3 Run Times:"
+      },
+      "review": {
+        "readyToCreate": "Ready to create schedule!",
+        "reviewAndConfirm": "Review and confirm below.",
+        "jobSummary": "Job Summary",
+        "name": "Name",
+        "repositories": "Repositories ({{count}})",
+        "schedule": "Schedule",
+        "archiveNameTemplate": "Archive Name Template",
+        "scriptsConfiguration": "Scripts Configuration",
+        "preBackupScript": "Pre-Backup Script",
+        "postBackupScript": "Post-Backup Script",
+        "repositoryLevelScripts": "Repository-Level Scripts",
+        "maintenanceSettings": "Maintenance Settings",
+        "pruneAfterBackup": "Prune After Backup",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "compactAfterPrune": "Compact After Prune",
+        "none": "None"
+      },
+      "scripts": {
+        "scheduleLevelNote": "Schedule-level: runs once per schedule. Repository-level: runs for each repository.",
+        "selectRepoFirst": "Select at least one repository in Step 1 to configure scripts."
+      }
+    }
+  },
+  "repositoryStatsGrid": {
+    "totalArchives": "Total Archives",
+    "spaceUsed": "Space Used",
+    "spaceSaved": "Space Saved",
+    "compression": "Compression",
+    "deduplication": "Deduplication"
+  },
+  "upcomingJobs": {
+    "title": "Upcoming Jobs (Next 24 Hours)",
+    "repositories": "{{count}} repositories"
+  },
+  "scheduledJobsTableSection": {
+    "title": "All Scheduled Jobs",
+    "noJobsFound": "No scheduled jobs found",
+    "noJobsDesc": "Create your first scheduled backup job"
+  },
+  "advancedRepositoryOptions": {
+    "title": "Advanced Options",
+    "subtitle": "Configure remote borg path, custom flags, and backup hooks for advanced use cases",
+    "remoteBorgPath": "Remote Borg Path (Optional)",
+    "remoteBorgPathHint": "Path to borg binary on remote server (leave empty for default)",
+    "customFlags": "Custom Flags (Optional)",
+    "customFlagsHint": "Custom command-line flags for borg create (e.g., --stats, --progress, --list)",
+    "scripts": "Scripts",
+    "scriptsOptional": "(Optional)",
+    "scriptsHint": "Configure inline scripts or assign reusable scripts from your Script Library.",
+    "preBackupScript": "Pre-Backup Script",
+    "postBackupScript": "Post-Backup Script"
+  },
+  "archiveBrowser": {
+    "title": "Browse Archive",
+    "selectAllVisible": "Select All Visible",
+    "clearSelection": "Clear Selection",
+    "selectionInfo": "Select specific files or folders to restore. Click folders to browse, click checkboxes to select. If no selection is made, the entire archive will be restored.",
+    "archiveTooLarge": "Archive Too Large",
+    "archiveTooLargeDesc": "This archive contains too many files to browse safely in the UI.",
+    "emptyDirectory": "This directory is empty",
+    "selectedCount": "{{count}} selected",
+    "root": "Root",
+    "selected": "Selected",
+    "notSelected": "Not selected",
+    "continueWithSelected": "Continue with {{count}} selected",
+    "continueRestoreAll": "Continue (Restore All)"
+  },
+  "archiveContents": {
+    "title": "Archive Contents",
+    "loading": "Loading archive contents...",
+    "emptyDirectory": "This directory is empty",
+    "emptyArchive": "This archive is empty",
+    "emptyArchiveDesc": "No files were backed up in this archive. This may happen if the source directory was empty or inaccessible during the backup.",
+    "noInfo": "No archive information available",
+    "root": "Root"
+  },
+  "archiveNameTemplate": {
+    "label": "Archive Name Template",
+    "hint": "Customize archive naming. Available placeholders: {job_name}, {now}, {date}, {time}, {timestamp}",
+    "preview": "Preview:"
+  },
+  "codeEditor": {
+    "loading": "Loading editor..."
+  },
+  "commandPreview": {
+    "howBackupWillWork": "How backup will work:",
+    "howBackupWorks": "How backup works:",
+    "step1InitRepo": "Step 1: Initialize Repository",
+    "step1MountRemote": "Step 1: Mount Remote {{type}}",
+    "step2MountRemote": "Step 2: Mount Remote {{type}}",
+    "step2RunBackup": "Step 2: Run Backup",
+    "step3RunBackup": "Step 3: Run Backup",
+    "step3Cleanup": "Step 3: Cleanup",
+    "step4Cleanup": "Step 4: Cleanup",
+    "stepRunBackup": "Run Backup",
+    "initRepositoryDesc": "Creates encrypted repository at the specified location",
+    "mountDirectory": "Directory",
+    "mountDirectories": "Directories",
+    "mountDisplayText": "Mounts remote directory under shared temp root",
+    "mountDisplayTextMultiple": "Mounts {{count}} unique directories under shared temp root (files share parent mount)",
+    "archivesPreserve": "Archives preserve original paths (excludes work intuitively)",
+    "cleanupDesc": "Unmounts remote directory after backup completes",
+    "backupSourceDirs": "Backs up source directories to the repository",
+    "futureBackups": "This command will be used for future backups"
+  },
+  "compressionSettings": {
+    "title": "Compression Settings",
+    "algorithmLabel": "Compression Algorithm",
+    "algorithmNone": "none - Do not compress",
+    "algorithmLz4": "lz4 - Very high speed, very low compression (default)",
+    "algorithmZstd": "zstd - Modern wide-range algorithm (default level 3)",
+    "algorithmZlib": "zlib - Medium speed, medium compression (default level 6)",
+    "algorithmLzma": "lzma - Low speed, high compression (default level 6)",
+    "algorithmAuto": "auto - Automatic compression selection",
+    "algorithmObfuscate": "obfuscate - Obfuscate compressed data",
+    "levelLabel": "Compression Level (Optional)",
+    "levelPlaceholderZstd": "1-22 (default: 3)",
+    "levelPlaceholderZlib": "0-9 (default: 6)",
+    "levelPlaceholderLzma": "0-9 (default: 6, max useful: 6)",
+    "levelPlaceholderDefault": "Leave empty for default",
+    "levelHelperAuto": "Auto algorithm uses lz4 as fallback. Level setting not applicable.",
+    "levelHelperZstd": "zstd: Level 1-22. Higher = better compression but slower.",
+    "levelHelperZlib": "zlib: Level 0-9. Level 0 means no compression (use \"none\" instead).",
+    "levelHelperLzma": "lzma: Level 0-9. Levels above 6 are pointless and waste CPU/RAM.",
+    "levelHelperDefault": "Leave empty to use default level.",
+    "autoDetect": "Auto-detect compressibility (auto,C[,L])",
+    "autoDetectDesc": "Uses lz4 to test if data is compressible. For incompressible data (e.g., media files), uses \"none\". For compressible data, uses your selected algorithm.",
+    "obfuscateLabel": "Obfuscate Spec (Optional)",
+    "obfuscatePlaceholder": "e.g., 110, 250",
+    "obfuscateHelper": "Obfuscate compressed chunk sizes to make fingerprinting attacks harder. Must be used with encryption. Repo will be bigger.",
+    "finalSpec": "Final compression spec:"
+  },
+  "cronBuilderComponent": {
+    "runEvery": "Run every",
+    "minutesSuffix": "minutes.",
+    "hoursAtMinute": "hours at minute",
+    "pastTheHour": "past the hour.",
+    "runDailyAt": "Run daily at",
+    "runOn": "Run on",
+    "at": "at",
+    "runOnDay": "Run on day"
+  },
+  "cronBuilderDialog": {
+    "openScheduleBuilder": "Open schedule builder",
+    "applySchedule": "Apply Schedule",
+    "configureSchedule": "Configure Schedule"
+  },
+  "dataTable": {
+    "actions": "Actions",
+    "rowsPerPage": "Rows per page:"
+  },
+  "excludePatterns": {
+    "title": "Exclude Patterns (Optional)",
+    "hint": "Specify patterns to exclude from backup (e.g., *.log, *.tmp, __pycache__, node_modules)",
+    "placeholder": "*.log or /path/to/exclude",
+    "browseToExclude": "Browse to exclude",
+    "add": "Add"
+  },
+  "multiRepositorySelector": {
+    "selectedCount": "Selected repositories ({{count}})",
+    "selectedCountWithOrder": "Selected repositories ({{count}}) - Use arrows to change backup order",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "remove": "Remove",
+    "searchOrAddMore": "Search or add more..."
+  },
+  "packages": {
+    "title": "System Packages",
+    "subtitle": "Install system packages that can be used in your backup scripts. Packages are automatically reinstalled when the container is recreated.",
+    "hint": "Simply enter a package name (e.g., wakeonlan, curl) and it will be installed using sudo apt-get install -y. For advanced cases, you can enable custom install commands.",
+    "installedPackages": "Installed Packages",
+    "addPackage": "Add Package",
+    "empty": "No packages installed",
+    "emptyDesc": "Add system packages to use in your backup scripts",
+    "columns": {
+      "package": "Package",
+      "status": "Status",
+      "installed": "Installed"
+    },
+    "status": {
+      "installed": "Installed",
+      "pending": "Pending",
+      "installing": "Installing",
+      "failed": "Failed"
+    },
+    "actions": {
+      "install": "Install",
+      "installTooltip": "Install Package",
+      "reinstall": "Reinstall",
+      "reinstallTooltip": "Reinstall Package",
+      "edit": "Edit",
+      "editTooltip": "Edit Package",
+      "delete": "Delete",
+      "deleteTooltip": "Delete Package"
+    },
+    "createDialog": {
+      "titleAdd": "Add System Package",
+      "titleEdit": "Edit Package"
+    },
+    "fields": {
+      "packageName": "Package Name",
+      "packageNameHintAdvanced": "Package name for reference",
+      "packageNameHintSimple": "e.g., wakeonlan, curl, jq (will run: sudo apt-get update && sudo apt-get install -y <name>)",
+      "advancedMode": "Advanced: Custom install command",
+      "installCommand": "Install Command",
+      "installCommandHint": "e.g., apt-get install -y wakeonlan or pip install some-package",
+      "description": "Description (Optional)",
+      "descriptionHint": "Brief description of what this package does"
+    },
+    "buttons": {
+      "updating": "Updating...",
+      "updatePackage": "Update Package",
+      "adding": "Adding...",
+      "addPackage": "Add Package"
+    },
+    "deleteDialog": {
+      "title": "Delete Package",
+      "message": "Are you sure you want to remove \"{{name}}\" from the list?",
+      "note": "This will not uninstall the package from the system, only remove it from the list.",
+      "deleting": "Deleting...",
+      "confirm": "Delete"
+    },
+    "resultDialog": {
+      "successful": "Installation Successful",
+      "failed": "Installation Failed",
+      "installing": "Installing...",
+      "installingDesc": "Installing package... This may take a few minutes.",
+      "stdout": "Standard Output:",
+      "stderr": "Standard Error:",
+      "exitCode": "Exit Code: {{code}}",
+      "close": "Close"
+    },
+    "toasts": {
+      "addedSuccessfully": "Package added successfully",
+      "updatedSuccessfully": "Package updated successfully",
+      "removedSuccessfully": "Package removed successfully"
+    }
+  },
+  "protectedRoute": {
+    "unavailable": "This feature is currently unavailable"
+  },
+  "pruneSettings": {
+    "keepHourly": "Keep Hourly",
+    "keepHourlyHint": "Hourly backups to keep (0 = disabled)",
+    "keepDaily": "Keep Daily",
+    "keepDailyHint": "Daily backups to keep",
+    "keepWeekly": "Keep Weekly",
+    "keepWeeklyHint": "Weekly backups to keep",
+    "keepMonthly": "Keep Monthly",
+    "keepMonthlyHint": "Monthly backups to keep",
+    "keepQuarterly": "Keep Quarterly",
+    "keepQuarterlyHint": "Quarterly backups to keep (0 = disabled)",
+    "keepYearly": "Keep Yearly",
+    "keepYearlyHint": "Yearly backups to keep"
+  },
+  "repositoryCell": {
+    "noPath": "No path information"
+  },
+  "repositoryScriptsSection": {
+    "preBackup": "Pre-Backup Scripts",
+    "postBackup": "Post-Backup Scripts",
+    "createFirst": "Create the repository first to add library scripts",
+    "addFromLibrary": "Add script from library",
+    "add": "Add",
+    "inlineScript": "Inline Script",
+    "configured": "Configured"
+  },
+  "repositorySelectorCard": {
+    "title": "Select Repository",
+    "loading": "Loading repositories...",
+    "placeholder": "Select a repository...",
+    "maintenanceRunning": "(Maintenance Running)"
+  },
+  "scriptEditor": {
+    "testRun": "Test Run",
+    "testing": "Testing...",
+    "timeoutLabel": "Timeout (seconds)",
+    "timeoutHint": "Maximum time to wait for script execution",
+    "continueOnFailure": "Continue backup if script fails",
+    "testPassed": "Test Passed",
+    "testWarnings": "Test Completed with Warnings",
+    "testFailed": "Test Failed",
+    "stdout": "Standard Output:",
+    "stderr": "Standard Error:",
+    "save": "Save"
+  },
+  "scriptParameters": {
+    "title": "Script Parameters",
+    "paramCount_one": "{{count}} parameter",
+    "paramCount_other": "{{count}} parameters",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password"
+  },
+  "scriptSelector": {
+    "title": "Schedule-Level Scripts",
+    "subtitle": "These scripts run once per schedule (e.g., wake server before all backups, shutdown after)",
+    "preBackup": "Pre-Backup Script (runs once before all backups)",
+    "postBackup": "Post-Backup Script (runs once after all backups)",
+    "runRepoScripts": "Run repository-level scripts",
+    "runRepoScriptsDesc": "If enabled, each repository's pre/post scripts will run during its backup"
+  },
+  "sourceDirectories": {
+    "title": "Source Directories & Files",
+    "subtitle": "Specify which directories or files to backup to this repository",
+    "atLeastOneRequired": "(at least one required)",
+    "optionalSuffix": "(optional)",
+    "warning": "At least one source directory or file is required. Add the directories or files you want to backup.",
+    "placeholder": "/home/user/documents or /var/log/app.log",
+    "browseTitle": "Browse directories and files",
+    "add": "Add"
+  },
+  "repositoryWizard": {
+    "titleCreate": "Create Repository",
+    "titleEdit": "Edit Repository",
+    "titleImport": "Import Repository",
+    "steps": {
+      "location": "Location",
+      "source": "Source",
+      "security": "Security",
+      "config": "Config",
+      "review": "Review"
+    },
+    "finalButtonCreate": "Create Repository",
+    "finalButtonEdit": "Save Changes",
+    "finalButtonImport": "Import Repository",
+    "fileExplorer": {
+      "selectRepoPath": "Select Repository Path",
+      "selectSourceDirs": "Select Source Directories or Files",
+      "selectSourceDirsRemote": "Select Source Directories (Remote Machine)",
+      "selectSourceDirsOrFilesRemote": "Select Source Directories or Files (Remote)",
+      "selectExclude": "Select Directories/Files to Exclude"
+    }
+  },
+  "restoreWizard": {
+    "title": "Restore Files",
+    "fromArchive": "From archive: {{archiveName}}",
+    "steps": {
+      "files": "Files",
+      "destination": "Destination",
+      "review": "Review"
+    },
+    "buttons": {
+      "restore": "Restore Files"
+    },
+    "fileExplorer": {
+      "selectRestoreDestination": "Select Restore Destination"
+    }
+  },
+  "scheduleWizard": {
+    "titleCreate": "Create Backup Schedule",
+    "titleEdit": "Edit Backup Schedule",
+    "steps": {
+      "basic": "Basic",
+      "schedule": "Schedule",
+      "scripts": "Scripts",
+      "maintenance": "Maintenance",
+      "review": "Review"
+    },
+    "finalButtonCreate": "Create Schedule",
+    "finalButtonEdit": "Save Changes"
+  },
+  "terminalLogViewer": {
+    "title": "Backup Logs",
+    "tailLabel": "Showing last 500 of {{total}} lines (live tail)",
+    "linesLabel": "{{count}} of {{total}} lines",
+    "copyLogs": "Copy Logs",
+    "download": "Download",
+    "liveStreaming": "Live Streaming (Last 500 lines)",
+    "linesDisplayed": "{{count}} lines displayed",
+    "showingLast": "Showing last 500 of {{total}} lines (errors typically appear at end)",
+    "jumpToStart": "Jump to Start",
+    "waitingForLogs": "Waiting for logs...",
+    "noLogsAvailable": "No logs available",
+    "newLogsAvailable": "New logs available - Click to scroll to bottom",
+    "toasts": {
+      "logsCopied": "Logs copied to clipboard",
+      "logsDownloaded": "Logs downloaded",
+      "failedToLoad": "Failed to load logs"
+    }
+  },
+  "fileExplorer": {
+    "defaultTitle": "Select Directory",
+    "searchPlaceholder": "Search...",
+    "newFolder": "New Folder",
+    "loading": "Loading...",
+    "noItemsFound": "No items found",
+    "tryDifferentSearch": "Try a different search",
+    "emptyDirectory": "Empty directory",
+    "sshInfoAlert": "SSH connections are shown below. Configure mount points in SSH Keys page for cleaner display names.",
+    "selectedCount": "{{count}} selected",
+    "cancel": "Cancel",
+    "useCurrent": "Use Current",
+    "select": "Select",
+    "selectWithCount": "Select ({{count}})",
+    "createFolderTitle": "Create New Folder",
+    "folderNameLabel": "Folder Name",
+    "folderNamePlaceholder": "Enter folder name",
+    "creating": "Creating...",
+    "create": "Create",
+    "chips": {
+      "remote": "Remote",
+      "host": "Host",
+      "borg": "Borg"
+    }
+  },
+  "scheduledChecks": {
+    "title": "Scheduled Checks",
+    "empty": "No scheduled checks",
+    "nextRun": "Next Run",
+    "lastRun": "Last Run",
+    "repository": "Repository",
+    "schedule": "Schedule",
+    "lastCheck": "Last Check",
+    "nextCheck": "Next Check",
+    "notConfigured": "Not configured",
+    "notScheduled": "Not scheduled",
+    "never": "Never",
+    "editCheckSchedule": "Edit Check Schedule",
+    "addCheckSchedule": "Add Check Schedule",
+    "checkScheduleLabel": "Check Schedule",
+    "maxDuration": "Max Duration (seconds)",
+    "maxDurationHint": "Time limit for check operation (3600 = 1 hour)",
+    "notificationHint": "Notification settings for check jobs can be configured in Settings \u2192 Notifications",
+    "noScheduledChecks": "No scheduled checks",
+    "noScheduledChecksDesc": "Configure automatic repository checks to ensure data integrity",
+    "needRepository": "You need to create at least one repository before scheduling checks.",
+    "disableConfirm": "Disable scheduled check for {{name}}?",
+    "noRepositoriesAvailable": "No repositories available",
+    "update": "Update",
+    "create": "Create",
+    "toasts": {
+      "scheduleUpdated": "Check schedule updated",
+      "checkStarted": "Check started"
+    },
+    "validation": {
+      "selectRepository": "Please select a repository"
+    }
+  },
+  "cronExpressionInput": {
+    "label": "Schedule"
+  },
+  "pathSelectorField": {
+    "browseFilesystem": "Browse filesystem",
+    "selectDirectory": "Select Directory",
+    "selectFile": "Select File",
+    "selectPath": "Select Path"
+  }
+}
