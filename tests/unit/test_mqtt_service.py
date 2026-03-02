@@ -953,7 +953,6 @@ class TestMQTTServiceConfiguration:
         settings.mqtt_username = "user"
         settings.mqtt_password = "pass"
         settings.mqtt_client_id = "client"
-        settings.mqtt_base_topic = "topic"
         settings.mqtt_qos = 2
         settings.mqtt_tls_enabled = True
         settings.mqtt_tls_ca_cert = "/ca.crt"
@@ -978,7 +977,6 @@ class TestMQTTServiceConfiguration:
         settings.mqtt_username = None
         settings.mqtt_password = None
         settings.mqtt_client_id = "client"
-        settings.mqtt_base_topic = "topic"
         settings.mqtt_qos = 1
         settings.mqtt_tls_enabled = False
         settings.mqtt_tls_ca_cert = None
