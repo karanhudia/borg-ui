@@ -1823,11 +1823,27 @@ class BackupService:
                     db.commit()
                     logger.debug("Final commit after stream_logs completed", job_id=job_id)
 
-            # Run both tasks concurrently
+            # Define a task to periodically sync state with DB for MQTT
+            async def periodic_sync_state():
+                """Periodically sync state with DB for MQTT progress updates"""
+                nonlocal cancelled
+                try:
+                    while not cancelled and process.returncode is None:
+                        # Sync state with DB every 15 seconds to publish progress updates
+                        mqtt_service.sync_state_with_db(db, reason="backup progress update")
+                        await asyncio.sleep(15)
+                except asyncio.CancelledError:
+                    logger.info("Periodic sync state task cancelled", job_id=job_id)
+                    raise
+                except Exception as e:
+                    logger.error("Error in periodic sync state task", job_id=job_id, error=str(e))
+
+            # Run all tasks concurrently
             try:
                 await asyncio.gather(
                     check_cancellation(),
                     stream_logs(),
+                    periodic_sync_state(),
                     return_exceptions=True
                 )
             except asyncio.CancelledError:

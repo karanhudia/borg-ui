@@ -45,7 +45,7 @@ REPOSITORY_SENSOR_DEFINITIONS = [
         "suffix": "size",
         "topic_suffix": "size",
         "name": "Size",
-        "value_template": "{{ value_json.used }}",
+        "value_template": "{{ value_json.total }}",
         "unit_of_measurement": "B",
         "device_class": "data_size",
         "icon": "mdi:harddisk",
@@ -662,8 +662,6 @@ class RepositoryStatePublisher:
             if not self._mqtt_service.publish_repository_size(
                 repository.id,
                 size_bytes,
-                0,
-                size_bytes,
             ):
                 success = False
 
@@ -1220,12 +1218,12 @@ class MQTTService:
             payload["archive"] = archive
         return self.publish(f"repositories/{repository_id}/status", payload, qos=1)
 
-    def publish_repository_size(self, repository_id: int, used: int, free: int, total: int):
+    def publish_repository_size(self, repository_id: int, total: int):
         if not self.config["enabled"]:
             return False
         return self.publish(
             f"repositories/{repository_id}/size",
-            {"used": used, "free": free, "total": total},
+            {"total": total},
             qos=1,
         )
 
