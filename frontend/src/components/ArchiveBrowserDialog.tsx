@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link as RouterLink } from 'react-router-dom'
 import {
   Dialog,
@@ -51,6 +52,7 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
   onSelect,
   initialSelectedPaths = [],
 }) => {
+  const { t } = useTranslation()
   const [currentPath, setCurrentPath] = useState<string>('')
   const [items, setItems] = useState<ArchiveItem[]>([])
   const [loading, setLoading] = useState<boolean>(false)
@@ -203,7 +205,7 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Box>
             <Typography variant="h6" fontWeight={600}>
-              Browse Archive
+              {t('archiveBrowser.title')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
               {archiveName}
@@ -211,7 +213,7 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
           </Box>
           <Stack direction="row" spacing={1}>
             <Chip
-              label={`${selectedPaths.size} selected`}
+              label={t('archiveBrowser.selectedCount', { count: selectedPaths.size })}
               color={selectedPaths.size > 0 ? 'primary' : 'default'}
               size="small"
             />
@@ -244,7 +246,7 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
               }}
             >
               <Home size={16} />
-              Root
+              {t('archiveBrowser.root')}
             </Link>
             {pathParts.map((part, index) => (
               <Link
@@ -267,7 +269,7 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
         {/* Action buttons */}
         <Stack direction="row" spacing={1} sx={{ mb: 2, flexShrink: 0 }}>
           <Button size="small" variant="outlined" onClick={selectAllVisible} disabled={loading}>
-            Select All Visible
+            {t('archiveBrowser.selectAllVisible')}
           </Button>
           <Button
             size="small"
@@ -275,15 +277,14 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
             onClick={clearSelection}
             disabled={selectedPaths.size === 0 || loading}
           >
-            Clear Selection
+            {t('archiveBrowser.clearSelection')}
           </Button>
         </Stack>
 
         {/* Info alert */}
         <Alert severity="info" sx={{ mb: 2, flexShrink: 0 }}>
           <Typography variant="body2">
-            Select specific files or folders to restore. Click folders to browse, click checkboxes
-            to select. If no selection is made, the entire archive will be restored.
+            {t('archiveBrowser.selectionDescription')}
           </Typography>
         </Alert>
 
@@ -299,15 +300,14 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
             <Alert severity="error">
               {isSizeLimitError ? (
                 <>
-                  <AlertTitle>Archive Too Large</AlertTitle>
-                  This archive contains too many files to browse safely in the UI.
+                  <AlertTitle>{t('archiveBrowser.archiveTooLarge')}</AlertTitle>
+                  {t('archiveBrowser.archiveTooLargeDesc')}
                   <Box sx={{ mt: 1 }}>
-                    You can increase the limit in{' '}
+                    {t('archiveBrowser.sizeLimitPre')}{' '}
                     <Link component={RouterLink} to="/settings/system" onClick={onClose}>
-                      Settings &gt; System
+                      {t('archiveBrowser.sizeLimitSettingsLink')}
                     </Link>
-                    , or use command-line tools like <code>borg mount</code> for very large
-                    archives.
+                    {t('archiveBrowser.sizeLimitPost')}
                   </Box>
                 </>
               ) : (
@@ -315,7 +315,7 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
               )}
             </Alert>
           ) : items.length === 0 ? (
-            <Alert severity="info">This directory is empty</Alert>
+            <Alert severity="info">{t('archiveBrowser.emptyDirectory')}</Alert>
           ) : (
             <List sx={{ flexGrow: 1, overflow: 'auto' }}>
               {items.map((item) => (
@@ -329,7 +329,7 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
                     }}
                   >
                     <ListItemIcon sx={{ minWidth: 40 }}>
-                      <Tooltip title={isSelected(item.path) ? 'Selected' : 'Not selected'}>
+                      <Tooltip title={isSelected(item.path) ? t('archiveBrowser.selected') : t('archiveBrowser.notSelected')}>
                         <IconButton
                           size="small"
                           onClick={(e) => {
@@ -369,11 +369,11 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
       </DialogContent>
 
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
         <Button variant="contained" color="primary" onClick={handleConfirm}>
           {selectedPaths.size > 0
-            ? `Continue with ${selectedPaths.size} selected`
-            : 'Continue (Restore All)'}
+            ? t('archiveBrowser.continueWithSelected', { count: selectedPaths.size })
+            : t('archiveBrowser.continueRestoreAll')}
         </Button>
       </DialogActions>
     </Dialog>

@@ -12,6 +12,7 @@ import {
   ListItemText,
 } from '@mui/material'
 import { Warning, Compress, Lock } from '@mui/icons-material'
+import { useTranslation } from 'react-i18next'
 
 interface CompactWarningDialogProps {
   open: boolean
@@ -28,24 +29,25 @@ export default function CompactWarningDialog({
   onCancel,
   isLoading = false,
 }: CompactWarningDialogProps) {
+  const { t } = useTranslation()
   return (
     <Dialog open={open} onClose={onCancel} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <Warning color="warning" />
-        Confirm Repository Compaction
+        {t('dialogs.compactWarning.title')}
       </DialogTitle>
       <DialogContent>
         <Typography variant="body1" gutterBottom>
-          Compact repository: <strong>{repositoryName}</strong>
+          {t('dialogs.compact.description', { repositoryName })}
         </Typography>
 
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          Compaction removes unused segments and reclaims disk space from deleted archives.
+          {t('dialogs.compact.explanation')}
         </Typography>
 
         <Box sx={{ mt: 1.5 }}>
           <Typography variant="subtitle2" gutterBottom>
-            Important:
+            {t('dialogs.compact.important')}
           </Typography>
           <List dense sx={{ py: 0 }}>
             <ListItem sx={{ py: 0.5 }}>
@@ -53,8 +55,8 @@ export default function CompactWarningDialog({
                 <Lock fontSize="small" color="action" />
               </ListItemIcon>
               <ListItemText
-                primary="Repository will be locked"
-                secondary="Other operations (info, archives, backup) will not be available until compaction completes"
+                primary={t('dialogs.compact.repoWillBeLocked')}
+                secondary={t('dialogs.compact.otherOperationsUnavailable')}
               />
             </ListItem>
             <ListItem sx={{ py: 0.5 }}>
@@ -62,21 +64,20 @@ export default function CompactWarningDialog({
                 <Compress fontSize="small" color="action" />
               </ListItemIcon>
               <ListItemText
-                primary="Progress tracking"
-                secondary="You can monitor progress in real-time"
+                primary={t('dialogs.compact.progressTracking')}
+                secondary={t('dialogs.compact.progressTrackingDetail')}
               />
             </ListItem>
           </List>
         </Box>
 
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          Tip: Run compaction after pruning old archives to free up space. Other repositories will
-          remain accessible.
+          {t('dialogs.compact.tip')}
         </Typography>
       </DialogContent>
       <DialogActions>
         <Button onClick={onCancel} disabled={isLoading}>
-          Cancel
+          {t('dialogs.compactWarning.cancel')}
         </Button>
         <Button
           onClick={onConfirm}
@@ -85,7 +86,7 @@ export default function CompactWarningDialog({
           disabled={isLoading}
           startIcon={isLoading ? <Compress className="animate-spin" /> : <Compress />}
         >
-          {isLoading ? 'Starting...' : 'Start Compacting'}
+          {isLoading ? t('common.status.starting') : t('dialogs.compactWarning.confirm')}
         </Button>
       </DialogActions>
     </Dialog>

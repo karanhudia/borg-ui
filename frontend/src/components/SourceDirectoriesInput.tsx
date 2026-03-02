@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { useState } from 'react'
 import {
   Box,
@@ -28,6 +29,7 @@ export default function SourceDirectoriesInput({
   disabled = false,
   required = true,
 }: SourceDirectoriesInputProps) {
+  const { t } = useTranslation()
   const [newDir, setNewDir] = useState('')
 
   const handleAdd = () => {
@@ -51,7 +53,7 @@ export default function SourceDirectoriesInput({
   return (
     <Box>
       <Typography variant="subtitle2" gutterBottom>
-        Source Directories & Files
+        {t('sourceDirectories.title')}
         {required && (
           <Box component="span" sx={{ color: 'error.main' }}>
             {' '}
@@ -60,14 +62,13 @@ export default function SourceDirectoriesInput({
         )}
       </Typography>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-        Specify which directories or files to backup to this repository
-        {required ? ' (at least one required)' : ' (optional)'}
+        {t('sourceDirectories.subtitle')}
+        {required ? t('sourceDirectories.atLeastOneRequired') : t('sourceDirectories.optionalSuffix')}
       </Typography>
 
       {required && directories.length === 0 && (
         <Alert severity="warning" sx={{ mb: 1.5 }}>
-          At least one source directory or file is required. Add the directories or files you want
-          to backup.
+          {t('sourceDirectories.warning')}
         </Alert>
       )}
 
@@ -91,7 +92,7 @@ export default function SourceDirectoriesInput({
           value={newDir}
           onChange={(e) => setNewDir(e.target.value)}
           onKeyPress={handleKeyPress}
-          placeholder="/home/user/documents or /var/log/app.log"
+          placeholder={t('sourceDirectories.placeholder')}
           size="small"
           fullWidth
           disabled={disabled}
@@ -102,7 +103,7 @@ export default function SourceDirectoriesInput({
                   onClick={onBrowseClick}
                   edge="end"
                   size="small"
-                  title="Browse directories and files"
+                  title={t('sourceDirectories.browseTitle')}
                   disabled={disabled}
                 >
                   <FolderOpenIcon fontSize="small" />
@@ -112,7 +113,7 @@ export default function SourceDirectoriesInput({
           }}
         />
         <Button variant="outlined" size="small" onClick={handleAdd} disabled={disabled}>
-          Add
+          {t('sourceDirectories.add')}
         </Button>
       </Box>
     </Box>

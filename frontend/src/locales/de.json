@@ -27,16 +27,7 @@
       "deploy": "Bereitstellen",
       "view": "Ansehen"
     },
-    "status": {
-      "loading": "Lädt...",
-      "saving": "Speichert...",
-      "deleting": "Löscht...",
-      "creating": "Erstellt...",
-      "updating": "Aktualisiert...",
-      "running": "Läuft...",
-      "starting": "Startet...",
-      "submitting": "Sendet..."
-    },
+    "status": "Status",
     "never": "Nie",
     "na": "N/V",
     "unknown": "Unbekannt",
@@ -56,7 +47,6 @@
     "name": "Name",
     "description": "Beschreibung",
     "type": "Typ",
-    "status": "Status",
     "repository": "Repository",
     "schedule": "Zeitplan",
     "created": "Erstellt",
@@ -316,6 +306,22 @@
       "duplicate": "Duplizieren",
       "delete": "Löschen",
       "never": "Nie"
+    },
+    "toasts": {
+      "jobCreated": "Geplante Aufgabe erfolgreich erstellt",
+      "jobCreateFailed": "Geplante Aufgabe konnte nicht erstellt werden",
+      "jobUpdated": "Geplante Aufgabe erfolgreich aktualisiert",
+      "jobUpdateFailed": "Geplante Aufgabe konnte nicht aktualisiert werden",
+      "jobDeleted": "Geplante Aufgabe erfolgreich gelöscht",
+      "jobDeleteFailed": "Geplante Aufgabe konnte nicht gelöscht werden",
+      "jobStatusUpdated": "Aufgabenstatus aktualisiert",
+      "jobToggleFailed": "Aufgabe konnte nicht umgeschaltet werden",
+      "jobStarted": "Aufgabe erfolgreich gestartet",
+      "jobRunFailed": "Aufgabe konnte nicht ausgeführt werden",
+      "jobDuplicated": "Geplante Aufgabe erfolgreich dupliziert",
+      "jobDuplicateFailed": "Aufgabe konnte nicht dupliziert werden",
+      "backupCancelled": "Sicherung erfolgreich abgebrochen",
+      "backupCancelFailed": "Sicherung konnte nicht abgebrochen werden"
     }
   },
   "repositories": {
@@ -420,7 +426,8 @@
       "title": "Erscheinungsbild",
       "subtitle": "Passe das Aussehen und das Gefühl der Anwendung an",
       "theme": "Design",
-      "chooseTheme": "Design auswählen"
+      "chooseTheme": "Design auswählen",
+      "themeAriaLabel": "Design-Modus"
     },
     "users": {
       "title": "Benutzerverwaltung",
@@ -471,7 +478,24 @@
         "warning": "Diese Aktion kann nicht rückgängig gemacht werden.",
         "deleting": "Löscht...",
         "confirm": "Löschen"
+      },
+      "emptyState": {
+        "title": "Keine Benutzer gefunden",
+        "description": "Erstelle deinen ersten Benutzer, um zu beginnen"
       }
+    },
+    "toasts": {
+      "passwordChanged": "Passwort erfolgreich geändert",
+      "failedToChangePassword": "Passwort konnte nicht geändert werden",
+      "userCreated": "Benutzer erfolgreich erstellt",
+      "failedToCreateUser": "Benutzer konnte nicht erstellt werden",
+      "userUpdated": "Benutzer erfolgreich aktualisiert",
+      "failedToUpdateUser": "Benutzer konnte nicht aktualisiert werden",
+      "userDeleted": "Benutzer erfolgreich gelöscht",
+      "failedToDeleteUser": "Benutzer konnte nicht gelöscht werden",
+      "passwordReset": "Passwort erfolgreich zurückgesetzt",
+      "failedToResetPassword": "Passwort konnte nicht zurückgesetzt werden",
+      "passwordsDoNotMatch": "Neue Passwörter stimmen nicht überein"
     }
   },
   "sshConnections": {
@@ -604,7 +628,9 @@
       "contentHint": "Verwende ${PARAM_NAME} oder ${PARAM_NAME:-standard} für Parameter",
       "parameters": "Skriptparameter",
       "parametersHint": "Markiere Parameter, die sensible Daten enthalten.",
-      "treatAsSecret": "Als Geheimnis behandeln"
+      "treatAsSecret": "Als Geheimnis behandeln",
+      "nameHelperText": "Ein eindeutiger Name für dieses Skript",
+      "descriptionHelperText": "Optionale Beschreibung, was dieses Skript macht"
     },
     "usedInPlaces": "Dieses Skript wird an {{count}} Stelle(n) verwendet. Änderungen betreffen alle Zuweisungen.",
     "buttons": {
@@ -626,7 +652,17 @@
       "stderr": "Fehlerausgabe:",
       "testAgain": "Erneut testen",
       "close": "Schließen"
-    }
+    },
+    "errors": {
+      "failedToLoad": "Skripte konnten nicht geladen werden",
+      "failedToLoadDetails": "Skriptdetails konnten nicht geladen werden"
+    },
+    "toasts": {
+      "scriptUpdated": "Skript erfolgreich aktualisiert",
+      "scriptCreated": "Skript erfolgreich erstellt",
+      "scriptDeleted": "Skript erfolgreich gelöscht"
+    },
+    "confirmDelete": "Bist du sicher, dass du \"{{name}}\" löschen möchtest?"
   },
   "repositoryCard": {
     "archives": "Archive",
@@ -638,8 +674,19 @@
       "info": "Info",
       "check": "Prüfen",
       "prune": "Bereinigen",
-      "compact": "Komprimieren"
-    }
+      "compact": "Komprimieren",
+      "backupNow": "Jetzt sichern",
+      "viewArchives": "Archive anzeigen",
+      "delete": "Löschen"
+    },
+    "edit": "Bearbeiten",
+    "lastCheck": "Letzte Überprüfung",
+    "lastCompact": "Letzte Komprimierung",
+    "encryption": "Verschlüsselung",
+    "compression": "Komprimierung",
+    "sourcePaths": "Quellpfade",
+    "path": "Pfad",
+    "paths": "Pfade"
   },
   "dialogs": {
     "deleteJob": {
@@ -649,7 +696,10 @@
       "warnings": {
         "undone": "Diese Aktion kann nicht rückgängig gemacht werden",
         "removeRecord": "Dadurch wird der Aufgabeneintrag aus dem System entfernt",
-        "noAffect": "Dies wirkt sich NICHT auf tatsächliche Sicherungsdaten aus"
+        "noAffect": "Dies wirkt sich NICHT auf tatsächliche Sicherungsdaten aus",
+        "historyRemoved": "Der Auftragsverlauf wird dauerhaft entfernt",
+        "logsDeleted": "Zugehörige Protokolldateien werden gelöscht",
+        "cannotRecover": "Diese Informationen können nicht wiederhergestellt werden"
       },
       "confirm": "Dauerhaft löschen"
     },
@@ -675,10 +725,19 @@
       "cancelling": "Bricht ab..."
     },
     "checkWarning": {
-      "title": "Repository-Überprüfung",
+      "title": "Repository-Integrität überprüfen",
       "message": "Eine vollständige Repository-Überprüfung kann bei großen Repositories sehr lange dauern.",
       "confirm": "Überprüfung ausführen",
-      "cancel": "Abbrechen"
+      "cancel": "Abbrechen",
+      "description": "Integrität des Repositorys überprüfen: {{repositoryName}}",
+      "important": "Wichtig:",
+      "repoWillBeLocked": "Repository wird gesperrt",
+      "otherOperationsUnavailable": "Andere Vorgänge (Info, Archive, Sicherung) sind nicht verfügbar, bis die Überprüfung abgeschlossen ist",
+      "progressTracking": "Fortschrittsverfolgung",
+      "progressTrackingDetail": "Du kannst den Fortschritt in Echtzeit überwachen. Hinweis: Überprüfungsvorgänge können nach dem Start nicht abgebrochen werden.",
+      "otherReposAccessible": "Andere Repositories bleiben während dieser Operation zugänglich.",
+      "maxDurationLabel": "Maximale Dauer (Sekunden)",
+      "maxDurationHelper": "Maximale Zeit für die Überprüfung. Standard: 3600 Sekunden (1 Stunde). 0 für unbegrenzt."
     },
     "compactWarning": {
       "title": "Repository komprimieren",
@@ -690,11 +749,27 @@
       "title": "Repository gesperrt",
       "message": "Das Repository ist derzeit gesperrt. Dies kann auf einen unterbrochenen Vorgang zurückzuführen sein.",
       "breakLock": "Sperre aufheben",
-      "cancel": "Abbrechen"
+      "cancel": "Abbrechen",
+      "breakLockWarning": "Bist du SICHER, dass gerade keine Sicherung oder Operation auf diesem Repository läuft? Das Aufheben der Sperre während einer laufenden Operation kann das Repository beschädigen!",
+      "lockRemovedSuccess": "Sperre erfolgreich entfernt! Du kannst den Vorgang jetzt erneut versuchen.",
+      "lockedDescription": "{{repositoryName}} ist durch einen anderen Prozess gesperrt oder hat eine veraltete Sperre.",
+      "staleLockInfo": "Wenn gerade keine Sicherung läuft, ist dies wahrscheinlich eine veraltete Sperre von einer abgebrochenen Sicherung.",
+      "whatCausesThis": "Was verursacht dies?",
+      "causeInterrupted": "Vorherige Sicherung wurde unterbrochen oder ist abgestürzt",
+      "causeNetworkDrop": "Netzwerkverbindung während SSH-Sicherung unterbrochen",
+      "causeContainerRestart": "Container wurde während eines Vorgangs neu gestartet",
+      "causeCacheLocks": "Repository-Cache-Sperren aus veralteten Vorgängen",
+      "beforeBreaking": "Vor dem Aufheben der Sperre:",
+      "beforeBreakingCheck1": "Sicherstellen, dass kein Sicherungsprozess läuft",
+      "beforeBreakingCheck2": "Überprüfen, dass kein anderer Client auf dieses Repository zugreift",
+      "beforeBreakingCheck3": "Dies bricht sowohl Repository- als auch Cache-Sperren",
+      "adminRequired": "Administratorrechte erforderlich:",
+      "adminRequiredDetail": "Nur Administratoren können Repository-Sperren aufheben. Bitte wende dich an deinen Administrator."
     },
     "errorDetails": {
       "title": "Fehlerdetails",
-      "close": "Schließen"
+      "close": "Schließen",
+      "viewFullLogs": "Vollständige Protokolle anzeigen"
     },
     "pruneRepository": {
       "title": "Repository bereinigen",
@@ -729,6 +804,56 @@
     "logViewer": {
       "title": "Protokoll-Viewer",
       "close": "Schließen"
+    },
+    "compact": {
+      "description": "Repository komprimieren: {{repositoryName}}",
+      "explanation": "Die Komprimierung entfernt ungenutzte Segmente und gibt Speicherplatz aus gelöschten Archiven frei.",
+      "important": "Wichtig:",
+      "repoWillBeLocked": "Repository wird gesperrt",
+      "otherOperationsUnavailable": "Andere Vorgänge (Info, Archive, Sicherung) sind nicht verfügbar, bis die Komprimierung abgeschlossen ist",
+      "progressTracking": "Fortschrittsverfolgung",
+      "progressTrackingDetail": "Du kannst den Fortschritt in Echtzeit überwachen",
+      "tip": "Tipp: Komprimierung nach dem Bereinigen alter Archive ausführen, um Speicherplatz freizugeben. Andere Repositories bleiben zugänglich."
+    },
+    "mount": {
+      "readOnlyInfo": "Das Archiv wird als schreibgeschütztes Dateisystem im Container eingehängt. Du erhältst einen Befehl für den Zugriff über das Terminal.",
+      "mountPointPlaceholder": "meine-sicherung-2024",
+      "mountPointHint": "Wird eingehängt unter: {{path}}"
+    },
+    "prune": {
+      "whatDoesPruningDo": "Was macht die Bereinigung?",
+      "explanation": "Die Bereinigung löscht automatisch alte Archive basierend auf Aufbewahrungsregeln. Dies hilft, die Repository-Größe zu verwalten, indem nur die benötigten Sicherungen behalten werden.",
+      "dryRunTip": "Tipp: Immer zuerst 'Testlauf' ausführen, um eine Vorschau der zu löschenden Elemente zu sehen!",
+      "retentionPolicy": "Aufbewahrungsrichtlinie",
+      "retentionDescription": "Angeben, wie viele Sicherungen für jeden Zeitraum behalten werden sollen",
+      "keepHourly": "Stündlich behalten",
+      "keepHourlyHelper": "Letzte N stündliche Sicherungen (0 = deaktiviert)",
+      "keepDaily": "Täglich behalten",
+      "keepDailyHelper": "Letzte N tägliche Sicherungen",
+      "keepWeekly": "Wöchentlich behalten",
+      "keepWeeklyHelper": "Letzte N wöchentliche Sicherungen",
+      "keepMonthly": "Monatlich behalten",
+      "keepMonthlyHelper": "Letzte N monatliche Sicherungen",
+      "keepQuarterly": "Vierteljährlich behalten",
+      "keepQuarterlyHelper": "Letzte N vierteljährliche Sicherungen (0 = deaktiviert)",
+      "keepYearly": "Jährlich behalten",
+      "keepYearlyHelper": "Letzte N jährliche Sicherungen",
+      "repositoryLabel": "Repository:",
+      "exampleExplanation": "Beispiel: Mit diesen Einstellungen werden die letzten 7 täglichen, 4 wöchentlichen, 6 monatlichen und 1 jährlichen Sicherung behalten. Ältere Archive werden gelöscht.",
+      "dryRunResultsTitle": "Testlauf-Ergebnisse (Vorschau)",
+      "pruneResultsTitle": "Bereinigungsergebnisse",
+      "operationFailed": "Vorgang fehlgeschlagen",
+      "outputLabel": "Ausgabe:",
+      "noOutput": "Keine Ausgabe",
+      "messagesLabel": "Nachrichten:",
+      "dryRunSuccess": "Testlauf erfolgreich abgeschlossen. Ausgabe prüfen, um zu sehen, welche Archive gelöscht würden. Wenn alles korrekt aussieht, auf 'Archive bereinigen' klicken.",
+      "warningTitle": "Warnung: Gelöschte Archive können nicht wiederhergestellt werden!",
+      "warningCompact": "Nach der Bereinigung 'Komprimieren' ausführen, um Speicherplatz tatsächlich freizugeben.",
+      "dryRunButton": "Testlauf (Vorschau)"
+    },
+    "fileExplorer": {
+      "selectDirectory": "Verzeichnis auswählen",
+      "root": "Stammverzeichnis"
     }
   },
   "backupJobsTable": {
@@ -739,16 +864,46 @@
       "schedule": "Zeitplan",
       "lastRun": "Letzte Ausführung",
       "nextRun": "Nächste Ausführung",
-      "enabled": "Aktiviert"
+      "enabled": "Aktiviert",
+      "jobId": "Aufgaben-ID",
+      "type": "Typ",
+      "trigger": "Auslöser",
+      "started": "Gestartet",
+      "duration": "Dauer"
     },
     "actions": {
       "runNow": "Jetzt ausführen",
       "edit": "Bearbeiten",
       "duplicate": "Duplizieren",
-      "delete": "Löschen"
+      "delete": "Löschen",
+      "viewLogs": "Protokolle anzeigen",
+      "downloadLogs": "Protokolle herunterladen",
+      "errorDetails": "Fehlerdetails",
+      "cancel": "Abbrechen",
+      "cancelJob": "Aufgabe abbrechen",
+      "breakLock": "Sperre aufheben"
     },
     "never": "Nie",
-    "empty": "Keine Sicherungsaufgaben gefunden"
+    "empty": "Keine Sicherungsaufgaben gefunden",
+    "types": {
+      "backup": "Sicherung",
+      "restore": "Wiederherstellung",
+      "check": "Repository-Überprüfung",
+      "compact": "Komprimieren",
+      "prune": "Bereinigen",
+      "package": "Paketinstallation"
+    },
+    "scheduledById": "Geplant (ID: {{id}})",
+    "manual": "Manuell",
+    "toasts": {
+      "authRequired": "Authentifizierung erforderlich",
+      "downloadingLogs": "Protokolle werden heruntergeladen...",
+      "failedToCancel": "Aufgabe konnte nicht abgebrochen werden",
+      "cancelSuccess": "Aufgabe erfolgreich abgebrochen",
+      "failedToDelete": "Aufgabe konnte nicht gelöscht werden",
+      "deleteSuccess": "Aufgabe erfolgreich gelöscht",
+      "repositoryNotFound": "Repository nicht gefunden"
+    }
   },
   "scheduledJobsTable": {
     "columns": {
@@ -777,7 +932,23 @@
   },
   "archivesList": {
     "empty": "Keine Archive gefunden",
-    "loading": "Lädt Archive..."
+    "loading": "Lädt Archive...",
+    "archivesFor": "Archive für {{repositoryName}}",
+    "archive": "Archiv",
+    "archives": "Archive",
+    "sortBy": "Sortieren nach",
+    "newestFirst": "Neueste zuerst",
+    "oldestFirst": "Älteste zuerst",
+    "filter": "Filtern",
+    "allArchives": "Alle Archive",
+    "scheduled": "Geplant",
+    "manual": "Manuell",
+    "grouped": "Gruppiert",
+    "list": "Liste",
+    "noScheduledArchives": "Keine geplanten Archive gefunden",
+    "noManualArchives": "Keine manuellen Archive gefunden",
+    "tryDifferentFilter": "Versuche einen anderen Filter auszuwählen",
+    "archivesPerPage": "Archive pro Seite:"
   },
   "repositoryInfo": {
     "title": "Repository-Informationen",
@@ -785,7 +956,8 @@
     "location": "Standort",
     "totalSize": "Gesamtgröße",
     "archives": "Archive",
-    "lastModified": "Zuletzt geändert"
+    "lastModified": "Zuletzt geändert",
+    "na": "N/V"
   },
   "systemSettings": {
     "title": "Systemeinstellungen",
@@ -797,7 +969,49 @@
     "saving": "Speichert...",
     "savedSuccessfully": "Systemeinstellungen erfolgreich gespeichert",
     "refreshNow": "Jetzt aktualisieren",
-    "refreshing": "Aktualisiert..."
+    "refreshing": "Aktualisiert...",
+    "subtitle": "Systemweite Einstellungen, Ressourcenlimits und Vorgangs-Timeouts konfigurieren",
+    "sourceCustomized": "[angepasst]",
+    "sourceFromEnv": "[aus Umgebung]",
+    "sourceDefault": "[Standard]",
+    "operationTimeoutsTitle": "Vorgangs-Timeouts",
+    "operationTimeoutsDescription": "Timeouts für verschiedene Borg-Vorgänge konfigurieren. Bei sehr großen Repositories (Multi-Terabyte, Hunderte von Archiven) erhöhen.",
+    "mountTimeoutLabel": "Einhänge-Timeout (Sekunden)",
+    "mountTimeoutHelper": "Für das Einhängen von Archiven.",
+    "infoTimeoutLabel": "Info-Timeout (Sekunden)",
+    "infoTimeoutHelper": "Für borg info-Befehle.",
+    "listTimeoutLabel": "List-Timeout (Sekunden)",
+    "listTimeoutHelper": "Für das Auflisten von Archiven.",
+    "initTimeoutLabel": "Init-Timeout (Sekunden)",
+    "initTimeoutHelper": "Für die Repository-Initialisierung.",
+    "backupTimeoutLabel": "Sicherung/Wiederherstellung-Timeout (Sekunden)",
+    "backupTimeoutHelper": "Für Sicherung/Wiederherstellung.",
+    "sourceSizeTimeoutLabel": "Quelldatengröße-Timeout (Sekunden)",
+    "sourceSizeTimeoutHelper": "Für die Berechnung der Quelldatengröße (du).",
+    "repositoryMonitoringTitle": "Repository-Überwachung",
+    "repositoryMonitoringDescription": "Automatische Aktualisierung der Repository-Statistiken konfigurieren. Hält Dashboard-Daten aktuell, besonders nützlich für Nur-Beobachtungs-Repositories.",
+    "statsRefreshIntervalLabel": "Statistik-Aktualisierungsintervall (Minuten)",
+    "statsRefreshDisabled": "Automatische Statistikaktualisierung ist deaktiviert",
+    "statsRefreshRangeError": "Muss zwischen 0 und {{max}} Minuten liegen",
+    "statsRefreshIntervalHelper": "Repository-Statistiken (Archivanzahl, Größe, letzte Sicherung) werden alle {{interval}} Minuten aktualisiert",
+    "lastRefreshed": "Zuletzt aktualisiert:",
+    "manualRefreshAlert": "Auf 0 setzen zum Deaktivieren der automatischen Aktualisierung. Der Zeitplaner aktualisiert Statistiken für alle Repositories, einschließlich Nur-Beobachtungs-Repositories.",
+    "archiveBrowsingLimitsTitle": "Archiv-Durchsuch-Limits",
+    "archiveBrowsingLimitsDescription": "Diese Limits verhindern Speicherfehler beim Durchsuchen von Archiven mit Millionen von Dateien. Der Borg-Prozess wird vorzeitig beendet, wenn Limits überschritten werden.",
+    "maxFilesToLoadLabel": "Maximale zu ladende Dateien",
+    "maxFilesRangeError": "Muss zwischen {{min}} und {{max}} liegen",
+    "maxFilesHelperText": "Maximale Dateien beim Durchsuchen. Aktuell: {{current}}M Dateien",
+    "maxMemoryLabel": "Maximaler Speicher (MB)",
+    "maxMemoryRangeError": "Muss zwischen {{min}} MB und {{max}} MB liegen",
+    "maxMemoryHelperText": "Maximaler Speicher zum Durchsuchen. Aktuell: {{current}} GB",
+    "warningLabel": "Warnung:",
+    "largeLimitsWarning": "Das erhebliche Erhöhen dieser Limits kann Speicherfehler verursachen und den Server zum Absturz bringen. Nur erhöhen, wenn genügend RAM vorhanden und das Durchsuchen sehr großer Archive erforderlich ist.",
+    "failedToSaveSettings": "Einstellungen konnten nicht gespeichert werden",
+    "failedToSaveBrowseLimits": "Durchsuch-Limits konnten nicht gespeichert werden",
+    "failedToSaveTimeoutSettings": "Timeout-Einstellungen konnten nicht gespeichert werden",
+    "statsRefreshStarted": "Statistikaktualisierung gestartet",
+    "statsRefreshCompleted": "Statistikaktualisierung abgeschlossen",
+    "failedToStartStatsRefresh": "Statistikaktualisierung konnte nicht gestartet werden"
   },
   "notifications": {
     "title": "Benachrichtigungsdienste",
@@ -844,6 +1058,76 @@
       "events": "Ereignisse",
       "repositories": "Repositories",
       "lastUsed": "Zuletzt verwendet"
+    },
+    "alertDescription": "Erhalte Benachrichtigungen über Sicherungsfehler, abgeschlossene Wiederherstellungen und Probleme mit geplanten Aufgaben über 100+ Dienste wie E-Mail, Slack, Discord, Telegram, Pushover und mehr.",
+    "hide": "Ausblenden",
+    "show": "Anzeigen",
+    "serviceUrlExamples": "Dienst-URL-Beispiele",
+    "appriseUrlExamplesTitle": "Apprise-URL-Beispiele:",
+    "exampleEmailGmail": "E-Mail (Gmail):",
+    "exampleSlack": "Slack:",
+    "exampleDiscord": "Discord:",
+    "exampleTelegram": "Telegram:",
+    "exampleMicrosoftTeams": "Microsoft Teams:",
+    "examplePushover": "Pushover:",
+    "exampleNtfy": "ntfy:",
+    "exampleCustomWebhook": "Benutzerdefinierter Webhook:",
+    "fullAppriseDocumentation": "Vollständige Apprise-Dokumentation",
+    "enabled": "Aktiviert",
+    "disabled": "Deaktiviert",
+    "chip": {
+      "backupStart": "Sicherungsstart",
+      "backupFail": "Sicherungsfehler",
+      "backupOk": "Sicherung OK",
+      "restoreFail": "Wiederherstellungsfehler",
+      "restoreOk": "Wiederherstellung OK",
+      "checkFail": "Überprüfungsfehler",
+      "checkOk": "Überprüfung OK",
+      "schedulerError": "Zeitplaner-Fehler",
+      "allRepositories": "Alle Repositories",
+      "repositoryCount": "{{count}} {{count, plural, one{Repository} other{Repositories}}}",
+      "noneSelected": "Keine ausgewählt"
+    },
+    "tooltip": {
+      "sendTest": "Test-Benachrichtigung senden",
+      "duplicate": "Benachrichtigung duplizieren",
+      "edit": "Benachrichtigung bearbeiten",
+      "delete": "Benachrichtigung löschen"
+    },
+    "failedToSendTest": "Test-Benachrichtigung konnte nicht gesendet werden",
+    "form": {
+      "serviceName": "Dienstname",
+      "serviceNamePlaceholder": "z.B. Slack - DevOps-Kanal",
+      "serviceUrl": "Dienst-URL",
+      "serviceUrlPlaceholder": "z.B. slack://TokenA/TokenB/TokenC/",
+      "serviceUrlHelper": "Apprise-URL-Format verwenden. Beispiele oben.",
+      "tipLabel": "Tipp:",
+      "tipText": "Für Automatisierung und Überwachung jsons:// oder json:// URLs verwenden, um automatisch reine JSON-Daten zu empfangen.",
+      "titlePrefix": "Titel-Präfix (Optional)",
+      "titlePrefixPlaceholder": "z.B. [Produktion] oder [Dev]",
+      "titlePrefixHelper": "Benutzerdefiniertes Präfix zu allen Benachrichtigungstiteln hinzufügen (z.B. '[Produktion] Sicherung erfolgreich')",
+      "enableNotifications": "Benachrichtigungen aktivieren",
+      "notificationEnhancements": "Benachrichtigungsverbesserungen",
+      "includeJobName": "Aufgaben-/Zeitplanname im Titel einschließen",
+      "includeJobNameHelper": "Fügt Aufgaben- oder Zeitplanname zu Benachrichtigungstiteln hinzu zur leichteren Identifikation (z.B. 'Sicherung erfolgreich - Tägliche Sicherung')",
+      "notifyOn": "Benachrichtigen bei:",
+      "started": "Gestartet",
+      "success": "Erfolg",
+      "failure": "Fehler",
+      "schedulerErrors": "Zeitplaner-Fehler",
+      "schedulerErrorsHelper": "Benachrichtigt, wenn der Zeitplaner eine Sicherung nicht starten kann (z.B. Systemfehler). Reguläre Sicherungsfehler werden oben behandelt.",
+      "applyToRepositories": "Auf Repositories anwenden",
+      "allRepositories": "Alle Repositories",
+      "selectedRepositoriesOnly": "Nur ausgewählte Repositories",
+      "selectRepositories": "Repositories auswählen",
+      "selectRepositoriesPlaceholder": "Zu überwachende Repositories auswählen",
+      "selectRepositoriesHelper": "Benachrichtigungen nur für Sicherungen dieser Repositories senden"
+    },
+    "category": {
+      "backupEvents": "Sicherungsereignisse",
+      "restoreEvents": "Wiederherstellungsereignisse",
+      "checkJobs": "Überprüfungsaufgaben",
+      "systemEvents": "Systemereignisse"
     }
   },
   "preferences": {
@@ -868,7 +1152,20 @@
     "description": "Probiere experimentelle Funktionen aus, bevor sie für alle veröffentlicht werden. Diese Funktionen befinden sich noch in der Entwicklung und können sich ändern.",
     "save": "Speichern",
     "saving": "Speichert...",
-    "settingUpdatedSuccessfully": "Einstellung erfolgreich aktualisiert"
+    "settingUpdatedSuccessfully": "Einstellung erfolgreich aktualisiert",
+    "bypassLocksInfoTitle": "Sperren umgehen für Info-Befehle",
+    "enableBypassLocksInfo": "Sperren umgehen für alle borg info-Befehle aktivieren",
+    "bypassLocksInfoDescription": "Fügt --bypass-lock zu allen borg info-Befehlen hinzu. Verhindert Sperrkonflikte, wenn mehrere Vorgänge gleichzeitig auf SSH-Repositories zugreifen. Aktivieren, wenn Fehler 'Repository ist gesperrt' auftreten.",
+    "bypassLocksListTitle": "Sperren umgehen für List-Befehle",
+    "enableBypassLocksList": "Sperren umgehen für alle borg list-Befehle aktivieren",
+    "bypassLocksListDescription": "Fügt --bypass-lock zu allen borg list-Befehlen hinzu. Verhindert Sperrkonflikte, wenn mehrere Lesevorgänge (wie info + list) gleichzeitig ausgeführt werden. Aktivieren, wenn Fehler 'Sperre konnte nicht erworben werden' auftreten. Hinweis: Kann veraltete Daten anzeigen, wenn eine Sicherung aktiv läuft.",
+    "showLegacyRestoreTabTitle": "Veralteten Wiederherstellungs-Tab anzeigen",
+    "showLegacyRestoreTabLabel": "Den dedizierten Wiederherstellungs-Tab in der Navigation anzeigen",
+    "showLegacyRestoreTabDescription": "Aktivieren, um auf den veralteten Wiederherstellungs-Tab zuzugreifen. Die Wiederherstellungsfunktion ist jetzt in die Archive-Seite integriert, aber diese Option ermöglicht die Nutzung der alten Oberfläche.",
+    "mqttIntegrationTitle": "MQTT-Integration",
+    "enableMqtt": "MQTT aktivieren",
+    "mqttIntegrationDescription": "Aktiviert die MQTT-Integration in der Benutzeroberfläche.",
+    "failedToUpdateSetting": "Einstellung konnte nicht aktualisiert werden: {{message}}"
   },
   "exportImport": {
     "title": "Export / Import",
@@ -887,7 +1184,37 @@
       "button": "Konfiguration importieren",
       "importing": "Importiert...",
       "selectFile": "Datei auswählen..."
-    }
+    },
+    "failedToExport": "Konfiguration konnte nicht exportiert werden",
+    "importFailed": "Import fehlgeschlagen",
+    "importCompletedWithErrors": "Import mit Fehlern abgeschlossen",
+    "importSuccess": "Konfiguration erfolgreich importiert",
+    "failedToImport": "Konfiguration konnte nicht importiert werden",
+    "selectAtLeastOneRepo": "Bitte mindestens ein Repository zum Exportieren auswählen",
+    "selectFileToImport": "Bitte eine Datei zum Importieren auswählen",
+    "selectYamlFileError": "Bitte eine YAML-Datei (.yaml oder .yml) auswählen",
+    "exportAllRepositories": "Alle Repositories exportieren",
+    "selectRepositories": "Repositories auswählen",
+    "selectAll": "Alle auswählen",
+    "clear": "Leeren",
+    "loadingRepositories": "Lädt Repositories...",
+    "noRepositoriesAvailable": "Keine Repositories verfügbar",
+    "includeSchedules": "Sicherungszeitpläne und Aufbewahrungsrichtlinien einschließen",
+    "selectYamlFile": "YAML-Datei auswählen",
+    "selectedFile": "Ausgewählt: {{name}}",
+    "conflictResolutionStrategy": "Konfliktlösungsstrategie",
+    "strategySkipDuplicates": "Duplikate überspringen - Bestehende Konfigurationen behalten",
+    "strategyReplace": "Ersetzen - Bestehende Konfigurationen überschreiben",
+    "strategyRename": "Umbenennen - Importierte Konfigurationen automatisch umbenennen",
+    "importantLabel": "Wichtig:",
+    "importSecurityWarning": "SSH-Schlüssel und Repository-Passphrasen können aus Sicherheitsgründen nicht importiert werden. Diese müssen nach dem Import manuell konfiguriert werden.",
+    "importSummary": "Import-Zusammenfassung",
+    "repositoriesCreated": "Erstellte Repositories",
+    "repositoriesUpdated": "Aktualisierte Repositories",
+    "schedulesCreated": "Erstellte Zeitpläne",
+    "schedulesUpdated": "Aktualisierte Zeitpläne",
+    "warnings": "Warnungen",
+    "errors": "Fehler"
   },
   "logManagement": {
     "title": "Protokollverwaltung",
@@ -896,7 +1223,9 @@
     "saving": "Speichert...",
     "savedSuccessfully": "Protokollverwaltungseinstellungen erfolgreich gespeichert",
     "clearLogs": "Bereinigung jetzt ausführen",
-    "clearing": "Bereinigung läuft..."
+    "clearing": "Bereinigung läuft...",
+    "cleanupCompleted": "Protokollbereinigung erfolgreich abgeschlossen",
+    "failedToRunCleanup": "Protokollbereinigung konnte nicht ausgeführt werden"
   },
   "cacheManagement": {
     "title": "Archiv-Cache-Verwaltung",
@@ -950,38 +1279,92 @@
     "expression": "Cron-Ausdruck",
     "preview": "Vorschau",
     "apply": "Anwenden",
-    "cancel": "Abbrechen"
+    "cancel": "Abbrechen",
+    "everyMinutes_one": "Alle {{count}} Minute",
+    "everyMinutes_other": "Alle {{count}} Minuten",
+    "everyHours_one": "Alle {{count}} Stunde",
+    "everyHours_other": "Alle {{count}} Stunden",
+    "dailyAt": "Täglich um {{time}}",
+    "noDaysSelected": "Keine Tage ausgewählt",
+    "daily": "Täglich",
+    "weeklyAt": "Jeden {{days}} um {{time}}",
+    "monthlyOn": "Monatlich am {{day}} um {{time}}",
+    "customSchedule": "Benutzerdefinierter Zeitplan: {{cron}}",
+    "am": "AM",
+    "pm": "PM",
+    "tabs": {
+      "minutes": "Minuten",
+      "hourly": "Stündlich",
+      "daily": "Täglich",
+      "weekly": "Wöchentlich",
+      "monthly": "Monatlich",
+      "custom": "Benutzerdefiniert"
+    },
+    "applySchedule": "Zeitplan anwenden",
+    "configureSchedule": "Zeitplan konfigurieren"
   },
   "sourceDirectories": {
-    "label": "Quellverzeichnisse",
-    "add": "Verzeichnis hinzufügen",
-    "empty": "Noch keine Quellverzeichnisse hinzugefügt",
-    "placeholder": "Verzeichnispfad eingeben",
-    "path_one": "{{count}} Pfad",
-    "path_other": "{{count}} Pfade"
+    "title": "Quellverzeichnisse und -dateien",
+    "subtitle": "Gib an, welche Verzeichnisse oder Dateien in diesem Repository gesichert werden sollen",
+    "atLeastOneRequired": "(mindestens eine erforderlich)",
+    "optionalSuffix": "(optional)",
+    "warning": "Mindestens ein Quellverzeichnis oder eine Quelldatei ist erforderlich. Füge die Verzeichnisse oder Dateien hinzu, die du sichern möchtest.",
+    "placeholder": "/home/benutzer/dokumente oder /var/log/app.log",
+    "browseTitle": "Verzeichnisse und Dateien durchsuchen",
+    "add": "Hinzufügen"
   },
   "excludePatterns": {
-    "label": "Ausschlussmuster",
-    "add": "Muster hinzufügen",
-    "empty": "Keine Ausschlussmuster",
-    "placeholder": "z.B. *.log, /tmp/**"
+    "title": "Ausschlussmuster (Optional)",
+    "hint": "Muster zum Ausschluss von der Sicherung angeben (z.B. *.log, *.tmp, __pycache__, node_modules)",
+    "placeholder": "*.log oder /pfad/zum/ausschluss",
+    "browseToExclude": "Zum Ausschließen durchsuchen",
+    "add": "Hinzufügen"
   },
   "pruneSettings": {
-    "title": "Bereinigungseinstellungen",
     "keepHourly": "Stündlich behalten",
+    "keepHourlyHint": "Stündliche Sicherungen zum Behalten (0 = deaktiviert)",
     "keepDaily": "Täglich behalten",
+    "keepDailyHint": "Tägliche Sicherungen zum Behalten",
     "keepWeekly": "Wöchentlich behalten",
+    "keepWeeklyHint": "Wöchentliche Sicherungen zum Behalten",
     "keepMonthly": "Monatlich behalten",
-    "keepYearly": "Jährlich behalten"
+    "keepMonthlyHint": "Monatliche Sicherungen zum Behalten",
+    "keepQuarterly": "Vierteljährlich behalten",
+    "keepQuarterlyHint": "Vierteljährliche Sicherungen zum Behalten (0 = deaktiviert)",
+    "keepYearly": "Jährlich behalten",
+    "keepYearlyHint": "Jährliche Sicherungen zum Behalten"
   },
   "compressionSettings": {
-    "title": "Komprimierung",
-    "method": "Komprimierungsmethode",
-    "level": "Komprimierungsstufe"
+    "title": "Komprimierungseinstellungen",
+    "algorithmLabel": "Komprimierungsalgorithmus",
+    "algorithmNone": "none - Nicht komprimieren",
+    "algorithmLz4": "lz4 - Sehr hohe Geschwindigkeit, sehr geringe Komprimierung (Standard)",
+    "algorithmZstd": "zstd - Moderner Breitbandalgorithmus (Standardstufe 3)",
+    "algorithmZlib": "zlib - Mittlere Geschwindigkeit, mittlere Komprimierung (Standardstufe 6)",
+    "algorithmLzma": "lzma - Geringe Geschwindigkeit, hohe Komprimierung (Standardstufe 6)",
+    "algorithmAuto": "auto - Automatische Komprimierungsauswahl",
+    "algorithmObfuscate": "obfuscate - Komprimierte Daten verschleiern",
+    "levelLabel": "Komprimierungsstufe (Optional)",
+    "levelPlaceholderZstd": "1-22 (Standard: 3)",
+    "levelPlaceholderZlib": "0-9 (Standard: 6)",
+    "levelPlaceholderLzma": "0-9 (Standard: 6, max. sinnvoll: 6)",
+    "levelPlaceholderDefault": "Leer lassen für Standard",
+    "levelHelperAuto": "Auto-Algorithmus verwendet lz4 als Fallback. Stufeneinstellung nicht anwendbar.",
+    "levelHelperZstd": "zstd: Stufe 1-22. Höher = bessere Komprimierung aber langsamer.",
+    "levelHelperZlib": "zlib: Stufe 0-9. Stufe 0 bedeutet keine Komprimierung (verwende stattdessen \"none\").",
+    "levelHelperLzma": "lzma: Stufe 0-9. Stufen über 6 sind nutzlos und verschwenden CPU/RAM.",
+    "levelHelperDefault": "Leer lassen, um die Standardstufe zu verwenden.",
+    "autoDetect": "Komprimierbarkeit automatisch erkennen (auto,C[,L])",
+    "autoDetectDesc": "Verwendet lz4, um zu testen, ob Daten komprimierbar sind. Für unkomprimierbare Daten (z.B. Mediendateien) wird \"none\" verwendet. Für komprimierbare Daten wird der ausgewählte Algorithmus verwendet.",
+    "obfuscateLabel": "Verschleierungsspezifikation (Optional)",
+    "obfuscatePlaceholder": "z.B. 110, 250",
+    "obfuscateHelper": "Verschleiert komprimierte Block-Größen, um Fingerabdruck-Angriffe zu erschweren. Muss mit Verschlüsselung verwendet werden. Repository wird größer.",
+    "finalSpec": "Endgültige Komprimierungsspezifikation:"
   },
   "archiveNameTemplate": {
     "label": "Archivnamen-Vorlage",
-    "hint": "Verwende {now} für das aktuelle Datum/Uhrzeit"
+    "hint": "Archivbenennung anpassen. Verfügbare Platzhalter: {job_name}, {now}, {date}, {time}, {timestamp}",
+    "preview": "Vorschau:"
   },
   "remoteMachineCard": {
     "status": {
@@ -1100,7 +1483,15 @@
     },
     "validation": {
       "selectRepository": "Bitte Repository auswählen"
-    }
+    },
+    "confirmDisable": "Geplante Überprüfung für {{repositoryName}} deaktivieren?",
+    "tooltips": {
+      "runNow": "Überprüfung jetzt ausführen",
+      "editSchedule": "Zeitplan bearbeiten",
+      "disableSchedule": "Zeitplan deaktivieren"
+    },
+    "checkScheduleHelperText": "Wann soll diese Repository-Überprüfung ausgeführt werden?",
+    "checkScheduleBuilderTitle": "Überprüfungs-Zeitplan-Builder"
   },
   "repositorySelectorCard": {
     "title": "Repository auswählen",
@@ -1413,7 +1804,11 @@
     "selected": "Ausgewählt",
     "notSelected": "Nicht ausgewählt",
     "continueWithSelected": "Mit {{count}} Ausgewählten fortfahren",
-    "continueRestoreAll": "Fortfahren (Alles wiederherstellen)"
+    "continueRestoreAll": "Fortfahren (Alles wiederherstellen)",
+    "selectionDescription": "Bestimmte Dateien oder Ordner zur Wiederherstellung auswählen. Auf Ordner klicken zum Durchsuchen, auf Kontrollkästchen klicken zum Auswählen. Ohne Auswahl wird das gesamte Archiv wiederhergestellt.",
+    "sizeLimitPre": "Das Limit kann erhöht werden in",
+    "sizeLimitSettingsLink": "Einstellungen > System",
+    "sizeLimitPost": ", oder Befehlszeilenwerkzeuge wie borg mount für sehr große Archive verwenden."
   },
   "archiveContents": {
     "title": "Archivinhalt",
@@ -1422,12 +1817,8 @@
     "emptyArchive": "Dieses Archiv ist leer",
     "emptyArchiveDesc": "In diesem Archiv wurden keine Dateien gesichert. Dies kann passieren, wenn das Quellverzeichnis während der Sicherung leer oder nicht zugänglich war.",
     "noInfo": "Keine Archivinformationen verfügbar",
-    "root": "Wurzel"
-  },
-  "archiveNameTemplate": {
-    "label": "Archivnamen-Vorlage",
-    "hint": "Archivbenennung anpassen. Verfügbare Platzhalter: {job_name}, {now}, {date}, {time}, {timestamp}",
-    "preview": "Vorschau:"
+    "root": "Wurzel",
+    "downloadFile": "Datei herunterladen"
   },
   "codeEditor": {
     "loading": "Editor wird geladen..."
@@ -1453,33 +1844,6 @@
     "backupSourceDirs": "Sichert Quellverzeichnisse im Repository",
     "futureBackups": "Dieser Befehl wird für zukünftige Sicherungen verwendet"
   },
-  "compressionSettings": {
-    "title": "Komprimierungseinstellungen",
-    "algorithmLabel": "Komprimierungsalgorithmus",
-    "algorithmNone": "none - Nicht komprimieren",
-    "algorithmLz4": "lz4 - Sehr hohe Geschwindigkeit, sehr geringe Komprimierung (Standard)",
-    "algorithmZstd": "zstd - Moderner Breitbandalgorithmus (Standardstufe 3)",
-    "algorithmZlib": "zlib - Mittlere Geschwindigkeit, mittlere Komprimierung (Standardstufe 6)",
-    "algorithmLzma": "lzma - Geringe Geschwindigkeit, hohe Komprimierung (Standardstufe 6)",
-    "algorithmAuto": "auto - Automatische Komprimierungsauswahl",
-    "algorithmObfuscate": "obfuscate - Komprimierte Daten verschleiern",
-    "levelLabel": "Komprimierungsstufe (Optional)",
-    "levelPlaceholderZstd": "1-22 (Standard: 3)",
-    "levelPlaceholderZlib": "0-9 (Standard: 6)",
-    "levelPlaceholderLzma": "0-9 (Standard: 6, max. sinnvoll: 6)",
-    "levelPlaceholderDefault": "Leer lassen für Standard",
-    "levelHelperAuto": "Auto-Algorithmus verwendet lz4 als Fallback. Stufeneinstellung nicht anwendbar.",
-    "levelHelperZstd": "zstd: Stufe 1-22. Höher = bessere Komprimierung aber langsamer.",
-    "levelHelperZlib": "zlib: Stufe 0-9. Stufe 0 bedeutet keine Komprimierung (verwende stattdessen \"none\").",
-    "levelHelperLzma": "lzma: Stufe 0-9. Stufen über 6 sind nutzlos und verschwenden CPU/RAM.",
-    "levelHelperDefault": "Leer lassen, um die Standardstufe zu verwenden.",
-    "autoDetect": "Komprimierbarkeit automatisch erkennen (auto,C[,L])",
-    "autoDetectDesc": "Verwendet lz4, um zu testen, ob Daten komprimierbar sind. Für unkomprimierbare Daten (z.B. Mediendateien) wird \"none\" verwendet. Für komprimierbare Daten wird der ausgewählte Algorithmus verwendet.",
-    "obfuscateLabel": "Verschleierungsspezifikation (Optional)",
-    "obfuscatePlaceholder": "z.B. 110, 250",
-    "obfuscateHelper": "Verschleiert komprimierte Block-Größen, um Fingerabdruck-Angriffe zu erschweren. Muss mit Verschlüsselung verwendet werden. Repository wird größer.",
-    "finalSpec": "Endgültige Komprimierungsspezifikation:"
-  },
   "cronBuilderComponent": {
     "runEvery": "Alle",
     "minutesSuffix": "Minuten ausführen.",
@@ -1498,13 +1862,6 @@
   "dataTable": {
     "actions": "Aktionen",
     "rowsPerPage": "Zeilen pro Seite:"
-  },
-  "excludePatterns": {
-    "title": "Ausschlussmuster (Optional)",
-    "hint": "Muster zum Ausschluss von der Sicherung angeben (z.B. *.log, *.tmp, __pycache__, node_modules)",
-    "placeholder": "*.log oder /pfad/zum/ausschluss",
-    "browseToExclude": "Zum Ausschließen durchsuchen",
-    "add": "Hinzufügen"
   },
   "packages": {
     "title": "Systempakete",
@@ -1581,20 +1938,6 @@
   "protectedRoute": {
     "unavailable": "Diese Funktion ist derzeit nicht verfügbar"
   },
-  "pruneSettings": {
-    "keepHourly": "Stündlich behalten",
-    "keepHourlyHint": "Stündliche Sicherungen zum Behalten (0 = deaktiviert)",
-    "keepDaily": "Täglich behalten",
-    "keepDailyHint": "Tägliche Sicherungen zum Behalten",
-    "keepWeekly": "Wöchentlich behalten",
-    "keepWeeklyHint": "Wöchentliche Sicherungen zum Behalten",
-    "keepMonthly": "Monatlich behalten",
-    "keepMonthlyHint": "Monatliche Sicherungen zum Behalten",
-    "keepQuarterly": "Vierteljährlich behalten",
-    "keepQuarterlyHint": "Vierteljährliche Sicherungen zum Behalten (0 = deaktiviert)",
-    "keepYearly": "Jährlich behalten",
-    "keepYearlyHint": "Jährliche Sicherungen zum Behalten"
-  },
   "repositoryCell": {
     "noPath": "Keine Pfadinformationen"
   },
@@ -1618,7 +1961,8 @@
     "testFailed": "Test fehlgeschlagen",
     "stdout": "Standardausgabe:",
     "stderr": "Fehlerausgabe:",
-    "save": "Speichern"
+    "save": "Speichern",
+    "exitCode": "Exit-Code: {{code}}"
   },
   "scriptParameters": {
     "title": "Skriptparameter",
@@ -1633,17 +1977,8 @@
     "preBackup": "Pre-Backup-Skript (läuft einmal vor allen Sicherungen)",
     "postBackup": "Post-Backup-Skript (läuft einmal nach allen Sicherungen)",
     "runRepoScripts": "Skripte auf Repository-Ebene ausführen",
-    "runRepoScriptsDesc": "Falls aktiviert, werden die Pre/Post-Skripte jedes Repositorys während seiner Sicherung ausgeführt"
-  },
-  "sourceDirectories": {
-    "title": "Quellverzeichnisse und -dateien",
-    "subtitle": "Gib an, welche Verzeichnisse oder Dateien in diesem Repository gesichert werden sollen",
-    "atLeastOneRequired": "(mindestens eine erforderlich)",
-    "optionalSuffix": "(optional)",
-    "warning": "Mindestens ein Quellverzeichnis oder eine Quelldatei ist erforderlich. Füge die Verzeichnisse oder Dateien hinzu, die du sichern möchtest.",
-    "placeholder": "/home/benutzer/dokumente oder /var/log/app.log",
-    "browseTitle": "Verzeichnisse und Dateien durchsuchen",
-    "add": "Hinzufügen"
+    "runRepoScriptsDesc": "Falls aktiviert, werden die Pre/Post-Skripte jedes Repositorys während seiner Sicherung ausgeführt",
+    "none": "Keine"
   },
   "repositoryWizard": {
     "titleCreate": "Repository erstellen",
@@ -1747,5 +2082,167 @@
     "selectDirectory": "Verzeichnis auswählen",
     "selectFile": "Datei auswählen",
     "selectPath": "Pfad auswählen"
+  },
+  "cache": {
+    "subtitle": "Redis-basiertes Archiv-Caching-System für schnelleres Durchsuchen überwachen und konfigurieren",
+    "cacheStatus": "Cache-Status",
+    "cachedArchives": "Gecachte Archive",
+    "memoryUsed": "Verwendeter Speicher",
+    "hitRate": "Trefferrate",
+    "totalRequests": "{{count}} Anfragen gesamt",
+    "cacheTtl": "Cache-TTL",
+    "cacheUsage": "Cache-Nutzung",
+    "cacheUsageDetail": "{{used}} MB / {{max}} MB ({{percent}}%)",
+    "highUsageWarning": "Cache-Nutzung liegt bei {{percent}}%. Erwäge das maximale Größenlimit zu erhöhen oder alte Einträge zu löschen.",
+    "inMemoryWarning": "Aktuell wird In-Memory-Cache verwendet. Redis ist nicht verfügbar oder nicht konfiguriert. In-Memory-Cache ist begrenzt und geht beim Neustart verloren.",
+    "clearAllCache": "Gesamten Cache leeren",
+    "cacheConfiguration": "Cache-Konfiguration",
+    "ttlLabel": "Cache-TTL (Minuten)",
+    "ttlHelperText": "Zeit bis gecachte Einträge ablaufen. Bereich: 1 Minute bis 7 Tage. Aktuell: {{current}}",
+    "maxSizeLabel": "Maximale Cache-Größe (MB)",
+    "maxSizeHelperText": "Maximale Cache-Größe. Bereich: 100 MB bis 10 GB. Aktuell: {{current}} GB",
+    "redisUrlLabel": "Externe Redis-URL (Optional)",
+    "redisUrlHelperText": "Format: redis://[Passwort@]host:port/db, rediss:// für TLS oder unix:// für Unix-Sockets",
+    "testing": "Testet...",
+    "testConnection": "Verbindung testen",
+    "noteLabel": "Hinweis:",
+    "ttlNoteText": "TTL-Änderungen betreffen nur neue Cache-Einträge. Bestehende Einträge behalten ihre ursprüngliche TTL bis sie ablaufen.",
+    "clearDialogTitle": "Gesamten Cache leeren?",
+    "clearConfirmCount": "Dadurch werden alle {{count}} gecachten Archiveinträge entfernt. Beim nächsten Durchsuchen eines Archivs muss der Cache neu aufgebaut werden (60-90 Sekunden für große Archive).",
+    "clearConfirmQuestion": "Bist du sicher, dass du fortfahren möchtest?",
+    "cancel": "Abbrechen",
+    "clearSuccess": "Cache erfolgreich geleert ({{count}} Einträge entfernt)",
+    "failedToClearCache": "Cache konnte nicht geleert werden",
+    "failedToSaveCacheSettings": "Cache-Einstellungen konnten nicht gespeichert werden",
+    "pleaseEnterRedisUrl": "Bitte zuerst eine Redis-URL eingeben",
+    "redisConnected": "✓ Mit Redis verbunden: {{info}}",
+    "redisConnectFailed": "Verbindung fehlgeschlagen: {{message}}",
+    "usingInMemoryFallback": "In-Memory-Fallback wird verwendet",
+    "connectionTestFailed": "Verbindungstest fehlgeschlagen"
+  },
+  "mqtt": {
+    "subtitle": "MQTT-Broker-Verbindung für die Home-Assistant-Statusveröffentlichung konfigurieren",
+    "connectionTitle": "MQTT-Verbindung",
+    "connectionDescription": "Verbindung zu deinem MQTT-Broker konfigurieren.",
+    "enableMqttPublishing": "MQTT-Veröffentlichung aktivieren",
+    "brokerUrlLabel": "Broker-URL",
+    "brokerUrlPlaceholder": "broker.example.com oder localhost",
+    "brokerUrlHelper": "MQTT-Broker-Hostname oder IP-Adresse",
+    "brokerPortLabel": "Broker-Port",
+    "brokerPortHelper": "MQTT-Broker-Port (1883 Standard, 8883 für TLS)",
+    "usernameLabel": "Benutzername",
+    "usernamePlaceholder": "Optionaler Benutzername",
+    "usernameHelper": "Optionaler MQTT-Benutzername",
+    "passwordLabel": "Passwort",
+    "passwordIsSet": "Passwort ist gesetzt",
+    "passwordHelper": "Optionales MQTT-Passwort",
+    "clientIdLabel": "Client-ID",
+    "clientIdHelper": "MQTT-Client-Kennung",
+    "baseTopicLabel": "Basis-Topic",
+    "baseTopicHelper": "Root-Topic-Präfix für alle MQTT-Nachrichten",
+    "qosLevelLabel": "QoS-Stufe",
+    "qosLevelHelper": "0 = höchstens einmal, 1 = mindestens einmal, 2 = genau einmal",
+    "retainMessages": "Nachrichten beibehalten",
+    "tlsConfigTitle": "TLS/SSL-Konfiguration",
+    "tlsConfigDescription": "TLS/SSL für sichere MQTT-Verbindungen konfigurieren. Erforderlich für verschlüsselte MQTT-Broker.",
+    "enableTls": "TLS/SSL aktivieren",
+    "caCertPathLabel": "CA-Zertifikatspfad",
+    "caCertPathHelper": "Pfad zur CA-Zertifikatsdatei (optional)",
+    "clientCertPathLabel": "Client-Zertifikatspfad",
+    "clientCertPathHelper": "Pfad zur Client-Zertifikatsdatei (optional)",
+    "clientKeyPathLabel": "Client-Schlüsselpfad",
+    "clientKeyPathHelper": "Pfad zur Client-Schlüsseldatei (optional)",
+    "noteLabel": "Hinweis:",
+    "dockerVolumesWarning": "Zertifikatspfade sind relativ zum Dateisystem des Containers. Für Docker-Bereitstellungen Zertifikate in ein Volume einbinden und den Container-Pfad referenzieren (z.B. /certs/ca.crt).",
+    "failedToSaveMqttSettings": "MQTT-Einstellungen konnten nicht gespeichert werden"
+  },
+  "remoteMachine": {
+    "used": "verwendet",
+    "free": "frei",
+    "percentUsed": "% verwendet",
+    "noStorageInfo": "Keine Speicherinformationen",
+    "refreshStorage": "Speicher aktualisieren",
+    "defaultPath": "Standardpfad",
+    "actions": {
+      "testConnection": "Verbindung testen",
+      "refreshStorage": "Speicher aktualisieren"
+    }
+  },
+  "repositoryInfoDialog": {
+    "failedToDownloadKeyfile": "Schlüsseldatei konnte nicht heruntergeladen werden",
+    "noArchivesDescription": "Dieses Repository wurde initialisiert, enthält aber keine Archive. Speicherstatistiken erscheinen hier nach der ersten Sicherung.",
+    "failedToLoad": "Repository-Informationen konnten nicht geladen werden. Stelle sicher, dass das Repository zugänglich und ordnungsgemäß initialisiert ist."
+  },
+  "analyticsBanner": {
+    "viewDashboardLink": "Unser öffentliches Analyse-Dashboard anzeigen",
+    "viewDashboardSuffix": "um genau zu sehen, was wir erfassen.",
+    "changeAnytimeNote": "Du kannst dies jederzeit in Einstellungen → Präferenzen ändern"
+  },
+  "repositoryScripts": {
+    "errors": {
+      "failedToAssign": "Skript konnte nicht zugewiesen werden",
+      "failedToRemove": "Skript konnte nicht entfernt werden"
+    },
+    "confirmRemove": "Dieses Skript aus dem Repository entfernen?",
+    "parametersConfigured": "{{count}} Parameter konfiguriert",
+    "tooltips": {
+      "parametersOutOfSync": "Parameter benötigen Aufmerksamkeit - Skriptdefinition hat sich geändert",
+      "configureParameters": "Parameter konfigurieren",
+      "remove": "Entfernen"
+    },
+    "chips": {
+      "outOfSync": "Nicht synchronisiert",
+      "continuesOnError": "Weiter bei Fehler"
+    },
+    "dialog": {
+      "assignTitle": "Skript dem Repository zuweisen",
+      "selectScriptLabel": "Skript auswählen",
+      "continueOnErrorLabel": "Sicherung fortsetzen, wenn Skript fehlschlägt",
+      "continueOnErrorHelperText": "Standard überschreiben: Wenn aktiviert, wird die Sicherung auch bei Skriptfehler fortgesetzt.",
+      "cancel": "Abbrechen",
+      "assignScript": "Skript zuweisen"
+    },
+    "parametersDialog": {
+      "title": "Skriptparameter konfigurieren: {{scriptName}}",
+      "noParameters": "Dieses Skript hat keine Parameter.",
+      "cancel": "Abbrechen",
+      "saveParameters": "Parameter speichern"
+    }
+  },
+  "layout": {
+    "systemInformation": "Systeminformationen",
+    "logoAlt": "Borg UI Logo"
+  },
+  "logViewer": {
+    "title": "{{label}} Protokolle - Aufgabe #{{jobId}}",
+    "typeBackup": "Sicherung",
+    "typeRestore": "Wiederherstellung",
+    "typeCheck": "Überprüfung",
+    "typeCompact": "Komprimieren",
+    "typePrune": "Bereinigen",
+    "typePackage": "Paket"
+  },
+  "mounts": {
+    "columns": {
+      "archive": "Archiv",
+      "mountLocation": "Einhängepunkt",
+      "mounted": "Eingehängt"
+    },
+    "actions": {
+      "copy": "Kopieren",
+      "accessCommand": "Zugriffsbefehl",
+      "copyAccessCommand": "Zugriffsbefehl kopieren",
+      "unmount": "Aushängen",
+      "unmountArchive": "Archiv aushängen",
+      "forceUnmount": "Erzwungenes Aushängen",
+      "forceUnmountTooltip": "Erzwungenes Aushängen (bei Beschäftigung verwenden)"
+    },
+    "copiedToClipboard": "{{label}} in Zwischenablage kopiert",
+    "infoAlert": "Hinweis: Eingehängte Archive erscheinen als schreibgeschützte Dateisysteme im Dateimanager. Zugriff über den Einhängepunkt-Pfad. Einhängepunkte werden beim Container-Neustart automatisch bereinigt.",
+    "emptyDescription": "Archive von der Archive-Seite einhängen, um deren Inhalt direkt im Dateimanager zu durchsuchen.",
+    "activeMounts": "Aktive Einhängepunkte"
+  },
+  "terminalLog": {
+    "inProgress": "{{type}} läuft..."
   }
 }

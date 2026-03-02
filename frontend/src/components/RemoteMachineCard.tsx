@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Card,
   CardContent,
@@ -75,6 +76,7 @@ export default function RemoteMachineCard({
   onTestConnection,
   onDeployKey,
 }: RemoteMachineCardProps) {
+  const { t } = useTranslation()
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -171,7 +173,7 @@ export default function RemoteMachineCard({
             <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
               <HardDrive size={16} />
               <Typography variant="body2" fontWeight={500}>
-                Storage
+                {t('remoteMachineCard.storage')}
               </Typography>
             </Stack>
 
@@ -179,10 +181,10 @@ export default function RemoteMachineCard({
             <Box sx={{ mb: 1 }}>
               <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
                 <Typography variant="caption" color="text.secondary">
-                  {machine.storage.used_formatted} used
+                  {machine.storage.used_formatted} {t('remoteMachine.used')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {machine.storage.available_formatted} free
+                  {machine.storage.available_formatted} {t('remoteMachine.free')}
                 </Typography>
               </Stack>
               <Box sx={{ position: 'relative' }}>
@@ -202,7 +204,7 @@ export default function RemoteMachineCard({
               </Box>
               <Stack direction="row" justifyContent="space-between" sx={{ mt: 0.5 }}>
                 <Typography variant="caption" fontWeight={500}>
-                  {machine.storage.percent_used.toFixed(1)}% used
+                  {machine.storage.percent_used.toFixed(1)}{t('remoteMachine.percentUsed')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   {machine.storage.total_formatted} total
@@ -215,9 +217,9 @@ export default function RemoteMachineCard({
             <Stack direction="row" alignItems="center" spacing={1}>
               <HardDrive size={16} />
               <Typography variant="body2" color="text.secondary">
-                No storage info
+                {t('remoteMachine.noStorageInfo')}
               </Typography>
-              <Tooltip title="Refresh storage">
+              <Tooltip title={t('remoteMachine.refreshStorage')}>
                 <IconButton size="small" onClick={() => onRefreshStorage(machine)}>
                   <RefreshCw size={14} />
                 </IconButton>
@@ -230,7 +232,7 @@ export default function RemoteMachineCard({
         {machine.default_path && (
           <Box sx={{ mt: 2 }}>
             <Typography variant="caption" color="text.secondary">
-              Default Path
+              {t('remoteMachine.defaultPath')}
             </Typography>
             <Typography
               variant="body2"
@@ -254,7 +256,7 @@ export default function RemoteMachineCard({
         {machine.mount_point && machine.mount_point !== machine.host && (
           <Box sx={{ mt: 1 }}>
             <Typography variant="caption" color="text.secondary">
-              Mount Point
+              {t('remoteMachineCard.mountPoint')}
             </Typography>
             <Typography
               variant="body2"
@@ -303,7 +305,7 @@ export default function RemoteMachineCard({
           <ListItemIcon>
             <Network size={18} />
           </ListItemIcon>
-          <ListItemText>Test Connection</ListItemText>
+          <ListItemText>{t('remoteMachine.actions.testConnection')}</ListItemText>
         </MenuItem>
         <MenuItem
           onClick={() => {
@@ -314,7 +316,7 @@ export default function RemoteMachineCard({
           <ListItemIcon>
             <Key size={18} />
           </ListItemIcon>
-          <ListItemText>Deploy Key</ListItemText>
+          <ListItemText>{t('remoteMachineCard.actions.deploy')}</ListItemText>
         </MenuItem>
         <MenuItem
           onClick={() => {
@@ -325,7 +327,7 @@ export default function RemoteMachineCard({
           <ListItemIcon>
             <RefreshCw size={18} />
           </ListItemIcon>
-          <ListItemText>Refresh Storage</ListItemText>
+          <ListItemText>{t('remoteMachine.actions.refreshStorage')}</ListItemText>
         </MenuItem>
         <MenuItem
           onClick={() => {
@@ -336,7 +338,7 @@ export default function RemoteMachineCard({
           <ListItemIcon>
             <Edit size={18} />
           </ListItemIcon>
-          <ListItemText>Edit</ListItemText>
+          <ListItemText>{t('remoteMachineCard.actions.edit')}</ListItemText>
         </MenuItem>
         <MenuItem
           onClick={() => {
@@ -347,7 +349,7 @@ export default function RemoteMachineCard({
           <ListItemIcon>
             <Trash2 size={18} />
           </ListItemIcon>
-          <ListItemText>Delete</ListItemText>
+          <ListItemText>{t('remoteMachineCard.actions.delete')}</ListItemText>
         </MenuItem>
       </Menu>
     </Card>

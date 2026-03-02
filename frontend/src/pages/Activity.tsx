@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import {
   Box,
@@ -35,6 +36,7 @@ interface ActivityItem {
 }
 
 const Activity: React.FC = () => {
+  const { t } = useTranslation()
   const { track, EventCategory, EventAction } = useMatomo()
   const { user } = useAuth()
   const [typeFilter, setTypeFilter] = useState<string>('all')
@@ -81,9 +83,9 @@ const Activity: React.FC = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <History size={32} />
           <Box>
-            <Typography variant="h4">Activity</Typography>
+            <Typography variant="h4">{t('activity.title')}</Typography>
             <Typography variant="body2" color="text.secondary">
-              View all operations and their logs
+              {t('activity.subtitle')}
             </Typography>
           </Box>
         </Box>
@@ -96,34 +98,34 @@ const Activity: React.FC = () => {
       <Card sx={{ mb: 3, p: 2 }}>
         <Box sx={{ display: 'flex', gap: 2 }}>
           <FormControl size="small" sx={{ minWidth: 150 }}>
-            <InputLabel>Type</InputLabel>
+            <InputLabel>{t('activity.filters.type')}</InputLabel>
             <Select
               value={typeFilter}
-              label="Type"
+              label={t('activity.filters.type')}
               onChange={(e) => handleTypeFilterChange(e.target.value)}
             >
-              <MenuItem value="all">All Types</MenuItem>
-              <MenuItem value="backup">Backup</MenuItem>
-              <MenuItem value="restore">Restore</MenuItem>
-              <MenuItem value="check">Check</MenuItem>
-              <MenuItem value="compact">Compact</MenuItem>
-              <MenuItem value="prune">Prune</MenuItem>
-              <MenuItem value="package">Package</MenuItem>
+              <MenuItem value="all">{t('activity.filters.allTypes')}</MenuItem>
+              <MenuItem value="backup">{t('activity.filters.types.backup')}</MenuItem>
+              <MenuItem value="restore">{t('activity.filters.types.restore')}</MenuItem>
+              <MenuItem value="check">{t('activity.filters.types.check')}</MenuItem>
+              <MenuItem value="compact">{t('activity.filters.types.compact')}</MenuItem>
+              <MenuItem value="prune">{t('activity.filters.types.prune')}</MenuItem>
+              <MenuItem value="package">{t('activity.filters.types.package')}</MenuItem>
             </Select>
           </FormControl>
 
           <FormControl size="small" sx={{ minWidth: 150 }}>
-            <InputLabel>Status</InputLabel>
+            <InputLabel>{t('activity.filters.status')}</InputLabel>
             <Select
               value={statusFilter}
-              label="Status"
+              label={t('activity.filters.status')}
               onChange={(e) => handleStatusFilterChange(e.target.value)}
             >
-              <MenuItem value="all">All Status</MenuItem>
-              <MenuItem value="completed">Completed</MenuItem>
-              <MenuItem value="failed">Failed</MenuItem>
-              <MenuItem value="running">Running</MenuItem>
-              <MenuItem value="pending">Pending</MenuItem>
+              <MenuItem value="all">{t('activity.filters.allStatus')}</MenuItem>
+              <MenuItem value="completed">{t('activity.filters.statuses.completed')}</MenuItem>
+              <MenuItem value="failed">{t('activity.filters.statuses.failed')}</MenuItem>
+              <MenuItem value="running">{t('activity.filters.statuses.running')}</MenuItem>
+              <MenuItem value="pending">{t('activity.filters.statuses.pending')}</MenuItem>
             </Select>
           </FormControl>
         </Box>
@@ -169,8 +171,8 @@ const Activity: React.FC = () => {
           tableId="activity"
           emptyState={{
             icon: <Info size={48} />,
-            title: 'No activity found',
-            description: 'There are no operations matching your filters',
+            title: t('activity.empty.title'),
+            description: t('activity.empty.message'),
           }}
         />
       )}

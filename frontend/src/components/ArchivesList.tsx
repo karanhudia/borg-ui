@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Box,
   CircularProgress,
@@ -111,6 +112,8 @@ export default function ArchivesList({
     return 'all'
   }
 
+  const { t } = useTranslation()
+
   // State
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(getInitialRowsPerPage)
@@ -187,7 +190,7 @@ export default function ArchivesList({
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
         <CircularProgress size={48} />
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          Loading archives...
+          {t('archivesList.loading')}
         </Typography>
       </Box>
     )
@@ -208,7 +211,7 @@ export default function ArchivesList({
       >
         <FolderOpen size={48} style={{ marginBottom: 16 }} />
         <Typography variant="body1" color="text.secondary">
-          No archives found in this repository
+          {t('archivesList.empty')}
         </Typography>
       </Box>
     )
@@ -230,13 +233,13 @@ export default function ArchivesList({
       >
         <Box>
           <Typography variant="h6" fontWeight={600}>
-            Archives for {repositoryName}
+            {t('archivesList.archivesFor', { repositoryName })}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {filter === 'all' || sortedArchives.length === archives.length
-              ? `${archives.length} ${archives.length === 1 ? 'archive' : 'archives'}`
+              ? `${archives.length} ${archives.length === 1 ? t('archivesList.archive') : t('archivesList.archives')}`
               : `${sortedArchives.length} of ${archives.length} ${
-                  archives.length === 1 ? 'archive' : 'archives'
+                  archives.length === 1 ? t('archivesList.archive') : t('archivesList.archives')
                 }`}
           </Typography>
         </Box>
@@ -246,21 +249,21 @@ export default function ArchivesList({
           {/* Sort control - only show in flat view */}
           {!groupingEnabled && (
             <FormControl size="small" sx={{ minWidth: 180 }}>
-              <InputLabel>Sort by</InputLabel>
-              <Select value={sortBy} label="Sort by" onChange={handleSortChange}>
-                <MenuItem value="date-desc">Newest first</MenuItem>
-                <MenuItem value="date-asc">Oldest first</MenuItem>
+              <InputLabel>{t('archivesList.sortBy')}</InputLabel>
+              <Select value={sortBy} label={t('archivesList.sortBy')} onChange={handleSortChange}>
+                <MenuItem value="date-desc">{t('archivesList.newestFirst')}</MenuItem>
+                <MenuItem value="date-asc">{t('archivesList.oldestFirst')}</MenuItem>
               </Select>
             </FormControl>
           )}
 
           {/* Filter control */}
           <FormControl size="small" sx={{ minWidth: 150 }}>
-            <InputLabel>Filter</InputLabel>
-            <Select value={filter} label="Filter" onChange={handleFilterChange}>
-              <MenuItem value="all">All Archives</MenuItem>
-              <MenuItem value="scheduled">Scheduled</MenuItem>
-              <MenuItem value="manual">Manual</MenuItem>
+            <InputLabel>{t('archivesList.filter')}</InputLabel>
+            <Select value={filter} label={t('archivesList.filter')} onChange={handleFilterChange}>
+              <MenuItem value="all">{t('archivesList.allArchives')}</MenuItem>
+              <MenuItem value="scheduled">{t('archivesList.scheduled')}</MenuItem>
+              <MenuItem value="manual">{t('archivesList.manual')}</MenuItem>
             </Select>
           </FormControl>
 
@@ -273,11 +276,11 @@ export default function ArchivesList({
           >
             <ToggleButton value="grouped">
               <Layers size={18} style={{ marginRight: 6 }} />
-              Grouped
+              {t('archivesList.grouped')}
             </ToggleButton>
             <ToggleButton value="flat">
               <List size={18} style={{ marginRight: 6 }} />
-              List
+              {t('archivesList.list')}
             </ToggleButton>
           </ToggleButtonGroup>
         </Box>
@@ -297,10 +300,12 @@ export default function ArchivesList({
         >
           <FolderOpen size={48} style={{ marginBottom: 16 }} />
           <Typography variant="body1" color="text.secondary">
-            No {filter === 'scheduled' ? 'scheduled' : 'manual'} archives found
+            {filter === 'scheduled'
+              ? t('archivesList.noScheduledArchives')
+              : t('archivesList.noManualArchives')}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            Try selecting a different filter
+            {t('archivesList.tryDifferentFilter')}
           </Typography>
         </Box>
       ) : groupingEnabled && groupedArchives ? (
@@ -390,7 +395,7 @@ export default function ArchivesList({
                 rowsPerPage={rowsPerPage}
                 onRowsPerPageChange={handleChangeRowsPerPage}
                 rowsPerPageOptions={rowsPerPageOptions}
-                labelRowsPerPage="Archives per page:"
+                labelRowsPerPage={t('archivesList.archivesPerPage')}
                 labelDisplayedRows={({ from, to, count }) =>
                   `${from}–${to} of ${count !== -1 ? count : `more than ${to}`}`
                 }

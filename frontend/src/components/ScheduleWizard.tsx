@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Dialog,
   DialogTitle,
@@ -152,19 +153,20 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
   onSubmit,
 }) => {
   const { track, EventCategory, EventAction } = useMatomo()
+  const { t } = useTranslation()
   const [activeStep, setActiveStep] = useState(0)
   const [wizardState, setWizardState] = useState<WizardState>(initialState)
 
   // Step definitions
   const steps = useMemo(
     () => [
-      { key: 'basic', label: 'Basic', icon: <FileText size={14} /> },
-      { key: 'schedule', label: 'Schedule', icon: <Clock size={14} /> },
-      { key: 'scripts', label: 'Scripts', icon: <Code size={14} /> },
-      { key: 'maintenance', label: 'Maintenance', icon: <Wrench size={14} /> },
-      { key: 'review', label: 'Review', icon: <CheckCircle size={14} /> },
+      { key: 'basic', label: t('scheduleWizard.steps.basic'), icon: <FileText size={14} /> },
+      { key: 'schedule', label: t('scheduleWizard.steps.schedule'), icon: <Clock size={14} /> },
+      { key: 'scripts', label: t('scheduleWizard.steps.scripts'), icon: <Code size={14} /> },
+      { key: 'maintenance', label: t('scheduleWizard.steps.maintenance'), icon: <Wrench size={14} /> },
+      { key: 'review', label: t('scheduleWizard.steps.review'), icon: <CheckCircle size={14} /> },
     ],
-    []
+    [t]
   )
 
   // Populate form data for edit mode
@@ -399,7 +401,7 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
     >
       <DialogTitle sx={{ pt: 3, pb: 1 }}>
         <Typography variant="h5" component="div" fontWeight={700}>
-          {mode === 'create' ? 'Create' : 'Edit'} Backup Schedule
+          {mode === 'create' ? t('scheduleWizard.titleCreate') : t('scheduleWizard.titleEdit')}
         </Typography>
       </DialogTitle>
       <DialogContent sx={{ pb: 1 }}>
@@ -420,18 +422,18 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
         </Box>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
         <Box sx={{ flex: 1 }} />
         <Button disabled={activeStep === 0} onClick={handleBack}>
-          Back
+          {t('common.buttons.back')}
         </Button>
         {activeStep < steps.length - 1 ? (
           <Button variant="contained" onClick={handleNext} disabled={!canProceed()}>
-            Next
+            {t('common.buttons.next')}
           </Button>
         ) : (
           <Button variant="contained" onClick={handleSubmit} disabled={!canProceed()}>
-            {mode === 'create' ? 'Create Schedule' : 'Save Changes'}
+            {mode === 'create' ? t('scheduleWizard.finalButtonCreate') : t('scheduleWizard.finalButtonEdit')}
           </Button>
         )}
       </DialogActions>

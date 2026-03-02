@@ -1,5 +1,6 @@
 import { Box, Typography } from '@mui/material'
 import Editor from '@monaco-editor/react'
+import { useTranslation } from 'react-i18next'
 
 interface CodeEditorProps {
   value: string
@@ -20,6 +21,7 @@ export default function CodeEditor({
   height = '180px',
   language = 'shell',
 }: CodeEditorProps) {
+  const { t } = useTranslation()
   return (
     <Box sx={{ mb: 2 }}>
       {label && (
@@ -74,7 +76,7 @@ export default function CodeEditor({
               strings: true,
             },
           }}
-          loading={<Box sx={{ p: 2, backgroundColor: '#1e1e1e' }}>Loading editor...</Box>}
+          loading={<Box sx={{ p: 2, backgroundColor: '#1e1e1e' }}>{t('codeEditor.loading')}</Box>}
         />
       </Box>
       {helperText && (

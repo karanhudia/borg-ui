@@ -18,6 +18,7 @@ import {
 } from '@mui/material'
 import { Folder, File, ChevronRight, Home, CheckSquare, Square, MinusSquare } from 'lucide-react'
 import { restoreAPI } from '../../services/api'
+import { useTranslation } from 'react-i18next'
 
 interface ArchiveItem {
   name: string
@@ -43,6 +44,7 @@ export default function WizardStepRestoreFiles({
   data,
   onChange,
 }: WizardStepRestoreFilesProps) {
+  const { t } = useTranslation()
   const [currentPath, setCurrentPath] = useState<string>('')
   const [items, setItems] = useState<ArchiveItem[]>([])
   const [loading, setLoading] = useState<boolean>(false)
@@ -133,10 +135,10 @@ export default function WizardStepRestoreFiles({
       {/* Header */}
       <Box sx={{ mb: 2 }}>
         <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-          Select files to restore
+          {t('wizard.restoreFiles.title')}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Browse the archive and select the files or folders you want to restore
+          {t('wizard.restoreFiles.subtitle')}
         </Typography>
       </Box>
 
@@ -175,7 +177,7 @@ export default function WizardStepRestoreFiles({
             }}
           >
             <Home size={16} />
-            Root
+            {t('wizard.restoreFiles.root')}
           </Link>
           {pathParts.map((part, index) => {
             const pathUpToHere = pathParts.slice(0, index + 1).join('/')
@@ -233,12 +235,12 @@ export default function WizardStepRestoreFiles({
           <CheckSquare size={16} />
           <Typography variant="body2" sx={{ fontWeight: 500 }}>
             {selectedPaths.size > 0
-              ? `${selectedPaths.size} item${selectedPaths.size !== 1 ? 's' : ''} selected`
-              : 'No items selected'}
+              ? t('wizard.restoreFiles.itemsSelected', { count: selectedPaths.size })
+              : t('wizard.restoreFiles.noItemsSelected')}
           </Typography>
           {selectedPaths.size > 0 && (
             <Chip
-              label="Clear all"
+              label={t('wizard.restoreFiles.clearAll')}
               size="small"
               onClick={() => onChange({ selectedPaths: [] })}
               sx={{ ml: 'auto', cursor: 'pointer', height: 24 }}
@@ -263,7 +265,7 @@ export default function WizardStepRestoreFiles({
           {!loading && !error && items.length === 0 && (
             <Box sx={{ p: 4, textAlign: 'center' }}>
               <Typography variant="body2" color="text.secondary">
-                No items found in this directory
+                {t('wizard.restoreFiles.noItemsFound')}
               </Typography>
             </Box>
           )}
@@ -276,7 +278,7 @@ export default function WizardStepRestoreFiles({
                   disablePadding
                   secondaryAction={
                     item.type === 'directory' ? (
-                      <Tooltip title="Select directory and all contents">
+                      <Tooltip title={t('wizard.restoreFiles.selectDirTooltip')}>
                         <IconButton
                           edge="end"
                           size="small"
@@ -323,8 +325,7 @@ export default function WizardStepRestoreFiles({
 
       {/* Help text */}
       <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-        Click files to select them, or click folders to navigate. Use the checkbox next to folders
-        to select entire directories.
+        {t('wizard.restoreFiles.helpText')}
       </Typography>
     </Box>
   )

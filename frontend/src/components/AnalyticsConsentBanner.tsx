@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Paper, Typography, Switch, Button, FormControlLabel, Link, Stack } from '@mui/material'
 import { BarChart3 } from 'lucide-react'
 import { settingsAPI } from '../services/api'
@@ -9,6 +10,7 @@ interface AnalyticsConsentBannerProps {
 }
 
 export default function AnalyticsConsentBanner({ onConsentGiven }: AnalyticsConsentBannerProps) {
+  const { t } = useTranslation()
   const [analyticsEnabled, setAnalyticsEnabled] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -54,13 +56,12 @@ export default function AnalyticsConsentBanner({ onConsentGiven }: AnalyticsCons
         <Stack direction="row" spacing={1.5} alignItems="center">
           <BarChart3 size={24} />
           <Typography variant="h6" fontWeight={600}>
-            Help Improve Borg UI
+            {t('analyticsConsent.title')}
           </Typography>
         </Stack>
 
         <Typography variant="body2" color="text.secondary">
-          We collect anonymous usage data to understand how Borg UI is used and make it better. No
-          personal information, IP addresses, hostnames, or backup data is ever collected.
+          {t('analyticsConsent.message')}
         </Typography>
 
         <Typography variant="body2" color="text.secondary">
@@ -70,9 +71,9 @@ export default function AnalyticsConsentBanner({ onConsentGiven }: AnalyticsCons
             rel="noopener noreferrer"
             sx={{ fontWeight: 500 }}
           >
-            View our public analytics dashboard
+            {t('analyticsBanner.viewDashboardLink')}
           </Link>{' '}
-          to see exactly what we collect.
+          {t('analyticsBanner.viewDashboardSuffix')}
         </Typography>
 
         <Stack
@@ -91,7 +92,7 @@ export default function AnalyticsConsentBanner({ onConsentGiven }: AnalyticsCons
             }
             label={
               <Typography variant="body2" fontWeight={500}>
-                Enable anonymous analytics
+                {t('analyticsConsent.enableToggle')}
               </Typography>
             }
           />
@@ -102,12 +103,12 @@ export default function AnalyticsConsentBanner({ onConsentGiven }: AnalyticsCons
             disabled={saving}
             sx={{ minWidth: 120 }}
           >
-            {saving ? 'Saving...' : 'Continue'}
+            {saving ? t('analyticsConsent.saving') : t('analyticsConsent.continue')}
           </Button>
         </Stack>
 
         <Typography variant="caption" color="text.secondary">
-          You can change this anytime in Settings &rarr; Preferences
+          {t('analyticsBanner.changeAnytimeNote')}
         </Typography>
       </Stack>
     </Paper>

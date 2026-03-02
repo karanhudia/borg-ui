@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '../hooks/useAuth.tsx'
 import { useTabEnablement } from '../context/AppContext'
 import { setAppVersion, hasConsentBeenGiven, loadUserPreference } from '../utils/matomo'
@@ -85,7 +86,46 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({})
   const location = useLocation()
   const { user, logout } = useAuth()
+  const { t } = useTranslation()
   const { tabEnablement, getTabDisabledReason } = useTabEnablement()
+
+  // Maps stable nav item names to localized display labels
+  const navLabel = (name: string): string => {
+    const labels: Record<string, string> = {
+      Dashboard: t('navigation.items.dashboard'),
+      Activity: t('navigation.items.activity'),
+      'Remote Machines': t('navigation.items.remoteMachines'),
+      Repositories: t('navigation.items.repositories'),
+      Backup: t('navigation.items.backup'),
+      Archives: t('navigation.items.archives'),
+      Restore: t('navigation.items.restore'),
+      Schedule: t('navigation.items.schedule'),
+      Personal: t('navigation.settings.personal'),
+      System: t('navigation.settings.systemLabel'),
+      Management: t('navigation.settings.management'),
+      Advanced: t('navigation.settings.advanced'),
+      Account: t('navigation.settings.account'),
+      Appearance: t('navigation.settings.appearance'),
+      Notifications: t('navigation.settings.notifications'),
+      Preferences: t('navigation.settings.preferences'),
+      MQTT: t('navigation.settings.mqtt'),
+      Cache: t('navigation.settings.cache'),
+      Logs: t('navigation.settings.logs'),
+      Packages: t('navigation.settings.packages'),
+      Mounts: t('navigation.settings.mounts'),
+      Scripts: t('navigation.settings.scripts'),
+      Users: t('navigation.settings.users'),
+      'Export/Import': t('navigation.settings.exportImport'),
+      Beta: t('navigation.settings.beta'),
+    }
+    return labels[name] ?? name
+  }
+
+  const sectionHeadingLabel = (heading: string): string => {
+    if (heading === 'BACKUP') return t('navigation.sections.backup')
+    if (heading === 'SETTINGS') return t('navigation.sections.settings')
+    return heading
+  }
 
   // Fetch system settings to check beta features
   const { data: systemData } = useQuery({
@@ -308,7 +348,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <Box
                 component="img"
                 src="/logo.png"
-                alt="Borg UI Logo"
+                alt={t('layout.logoAlt')}
                 sx={{
                   width: '100%',
                   height: '100%',
@@ -317,7 +357,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               />
             </Box>
             <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 600 }}>
-              Borg UI
+              {t('navigation.appName')}
             </Typography>
           </Box>
         </Toolbar>
@@ -341,7 +381,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   textTransform: 'uppercase',
                 }}
               >
-                {section.heading}
+                {sectionHeadingLabel(section.heading)}
               </Typography>
             )}
             <List sx={{ pt: 0, pb: 0, '& .MuiListItem-root': { mb: 0.125 } }}>
@@ -381,7 +421,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                             <Icon size={18} />
                           </ListItemIcon>
                           <ListItemText
-                            primary={item.name}
+                            primary={navLabel(item.name)}
                             primaryTypographyProps={{
                               fontSize: '0.8125rem',
                               fontWeight: isAnySubItemActive ? 600 : 400,
@@ -450,7 +490,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                                     <SubIcon size={16} />
                                   </ListItemIcon>
                                   <ListItemText
-                                    primary={subItem.name}
+                                    primary={navLabel(subItem.name)}
                                     primaryTypographyProps={{
                                       fontSize: '0.8125rem',
                                       fontWeight: isActive ? 500 : 400,
@@ -508,7 +548,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       {isEnabled ? <Icon size={18} /> : <Lock size={18} />}
                     </ListItemIcon>
                     <ListItemText
-                      primary={item.name}
+                      primary={navLabel(item.name)}
                       primaryTypographyProps={{
                         fontSize: '0.8125rem',
                         fontWeight: isActive ? 600 : 400,
@@ -537,11 +577,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* System Info at bottom */}
       <Box sx={{ mt: 'auto', p: 2, borderTop: 1, borderColor: 'divider' }}>
-        <Tooltip title="System Information" arrow placement="right">
+        <Tooltip title={t('layout.systemInformation')} arrow placement="right">
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
             <Info size={16} style={{ marginRight: 8, color: '#666' }} />
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-              Version Info
+              {t('navigation.versionInfo')}
             </Typography>
           </Box>
         </Tooltip>
@@ -553,7 +593,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               color="text.secondary"
               sx={{ lineHeight: 1.5 }}
             >
-              App: {systemInfo.app_version}
+              {t('navigation.app')} {systemInfo.app_version}
             </Typography>
             {systemInfo.borg_version && (
               <Typography
@@ -568,7 +608,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </Box>
         ) : (
           <Typography variant="caption" display="block" color="text.secondary" sx={{ ml: 3 }}>
-            Loading...
+            {t('navigation.loading')}
           </Typography>
         )}
       </Box>
@@ -608,7 +648,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           >
             <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 0.5 }}>
               <Typography variant="body2" color="text.secondary">
-                Welcome,
+                {t('navigation.welcome')}
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
                 {user?.email || user?.username}
@@ -629,7 +669,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 },
               }}
             >
-              Logout
+              {t('navigation.logout')}
             </Button>
           </Box>
         </Toolbar>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Dialog,
   DialogTitle,
@@ -49,6 +50,7 @@ export default function ArchiveContentsDialog({
   onClose,
   onDownloadFile,
 }: ArchiveContentsDialogProps) {
+  const { t } = useTranslation()
   const [currentPath, setCurrentPath] = useState('/')
 
   // Reset path when archive changes
@@ -107,10 +109,10 @@ export default function ArchiveContentsDialog({
   }
 
   const getBreadcrumbs = () => {
-    if (currentPath === '/') return [{ label: 'Root', path: '/' }]
+    if (currentPath === '/') return [{ label: t('archiveContents.root'), path: '/' }]
 
     const parts = currentPath.split('/').filter(Boolean)
-    const breadcrumbs = [{ label: 'Root', path: '/' }]
+    const breadcrumbs = [{ label: t('archiveContents.root'), path: '/' }]
 
     let accumulatedPath = ''
     parts.forEach((part) => {
@@ -140,7 +142,7 @@ export default function ArchiveContentsDialog({
           <FolderOpen size={24} />
           <Box>
             <Typography variant="h6" fontWeight={600}>
-              Archive Contents
+              {t('archiveContents.title')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
               {archive?.name}
@@ -160,7 +162,7 @@ export default function ArchiveContentsDialog({
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
             <CircularProgress size={48} />
             <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-              Loading archive contents...
+              {t('archiveContents.loading')}
             </Typography>
           </Box>
         ) : archiveContents?.data?.items ? (
@@ -207,7 +209,7 @@ export default function ArchiveContentsDialog({
                   {folders.length === 0 && files.length === 0 ? (
                     <Box sx={{ textAlign: 'center', py: 4 }}>
                       <Typography variant="body2" color="text.secondary">
-                        This directory is empty
+                        {t('archiveContents.emptyDirectory')}
                       </Typography>
                     </Box>
                   ) : (
@@ -313,7 +315,7 @@ export default function ArchiveContentsDialog({
                                     onDownloadFile(archive.name, file.path)
                                   }
                                 }}
-                                title="Download file"
+                                title={t('archiveContents.downloadFile')}
                               >
                                 <svg
                                   width="16"
@@ -340,11 +342,10 @@ export default function ArchiveContentsDialog({
               <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
                 <AlertCircle size={48} style={{ display: 'block', margin: '0 auto 16px auto' }} />
                 <Typography variant="h6" color="text.secondary" gutterBottom>
-                  This archive is empty
+                  {t('archiveContents.emptyArchive')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  No files were backed up in this archive. This may happen if the source directory
-                  was empty or inaccessible during the backup.
+                  {t('archiveContents.emptyArchiveDesc')}
                 </Typography>
               </Box>
             )}
@@ -353,13 +354,13 @@ export default function ArchiveContentsDialog({
           <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
             <AlertCircle size={48} style={{ display: 'block', margin: '0 auto 16px auto' }} />
             <Typography variant="body1" color="text.secondary">
-              No archive information available
+              {t('archiveContents.noInfo')}
             </Typography>
           </Box>
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Close</Button>
+        <Button onClick={onClose}>{t('common.buttons.close')}</Button>
       </DialogActions>
     </Dialog>
   )

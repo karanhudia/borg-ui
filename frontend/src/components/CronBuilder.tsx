@@ -15,6 +15,7 @@ import {
   Tooltip,
 } from '@mui/material'
 import { Clock, Calendar, CalendarDays, CalendarRange, Code, Timer } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface CronBuilderProps {
   value: string // Cron expression in LOCAL time
@@ -169,32 +170,32 @@ const buildCron = (state: CronState): string => {
   }
 }
 
-const generatePreview = (state: CronState): string => {
+const generatePreview = (state: CronState, t: (key: string, opts?: Record<string, unknown>) => string): string => {
   switch (state.frequency) {
     case 'minute':
-      return `Every ${state.minuteInterval} minute${state.minuteInterval > 1 ? 's' : ''}`
+      return t('cronBuilder.everyMinutes', { count: state.minuteInterval })
     case 'hourly':
-      return `Every ${state.hourInterval} hour${state.hourInterval > 1 ? 's' : ''}`
+      return t('cronBuilder.everyHours', { count: state.hourInterval })
     case 'daily': {
       const hour12 = state.hour === 0 ? 12 : state.hour > 12 ? state.hour - 12 : state.hour
-      const ampm = state.hour >= 12 ? 'PM' : 'AM'
+      const ampm = state.hour >= 12 ? t('cronBuilder.pm') : t('cronBuilder.am')
       const minuteStr = state.minute.toString().padStart(2, '0')
-      return `Daily at ${hour12}:${minuteStr} ${ampm}`
+      return t('cronBuilder.dailyAt', { time: `${hour12}:${minuteStr} ${ampm}` })
     }
     case 'weekly': {
       // Re-enable DAY_FULL mapping if needed or use shorter
       const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
       const selectedDayNames = dayNames.filter((_, idx) => state.selectedDays[idx])
-      if (selectedDayNames.length === 0) return 'No days selected'
+      if (selectedDayNames.length === 0) return t('cronBuilder.noDaysSelected')
       const hour12 = state.hour === 0 ? 12 : state.hour > 12 ? state.hour - 12 : state.hour
-      const ampm = state.hour >= 12 ? 'PM' : 'AM'
+      const ampm = state.hour >= 12 ? t('cronBuilder.pm') : t('cronBuilder.am')
       const minuteStr = state.minute.toString().padStart(2, '0')
-      const daysStr = selectedDayNames.length === 7 ? 'Daily' : selectedDayNames.join(', ')
-      return `Every ${daysStr} at ${hour12}:${minuteStr} ${ampm}`
+      const daysStr = selectedDayNames.length === 7 ? t('cronBuilder.daily') : selectedDayNames.join(', ')
+      return t('cronBuilder.weeklyAt', { days: daysStr, time: `${hour12}:${minuteStr} ${ampm}` })
     }
     case 'monthly': {
       const hour12 = state.hour === 0 ? 12 : state.hour > 12 ? state.hour - 12 : state.hour
-      const ampm = state.hour >= 12 ? 'PM' : 'AM'
+      const ampm = state.hour >= 12 ? t('cronBuilder.pm') : t('cronBuilder.am')
       const minuteStr = state.minute.toString().padStart(2, '0')
       const suffix =
         state.dayOfMonth === 1
@@ -204,16 +205,17 @@ const generatePreview = (state: CronState): string => {
             : state.dayOfMonth === 3
               ? 'rd'
               : 'th'
-      return `Monthly on the ${state.dayOfMonth}${suffix} at ${hour12}:${minuteStr} ${ampm}`
+      return t('cronBuilder.monthlyOn', { day: `${state.dayOfMonth}${suffix}`, time: `${hour12}:${minuteStr} ${ampm}` })
     }
     case 'custom':
-      return 'Custom schedule: ' + state.customCron
+      return t('cronBuilder.customSchedule', { cron: state.customCron })
     default:
       return ''
   }
 }
 
 export default function CronBuilder({ value, onChange, label, helperText }: CronBuilderProps) {
+  const { t } = useTranslation()
   // value is already in local time, no conversion needed
   const [state, setState] = useState<CronState>(parseCron(value))
 
@@ -297,10 +299,10 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
         }}
       >
         <MenuItem value="AM" sx={{ fontSize: '0.875rem' }}>
-          AM
+          {t('cronBuilder.am')}
         </MenuItem>
         <MenuItem value="PM" sx={{ fontSize: '0.875rem' }}>
-          PM
+          {t('cronBuilder.pm')}
         </MenuItem>
       </Select>
     </Stack>
@@ -357,31 +359,31 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
           >
             <ToggleButton value="minute">
               <Stack direction="row" spacing={0.5} alignItems="center">
-                <Timer size={14} /> <span>Minutes</span>
+                <Timer size={14} /> <span>{t('cronBuilder.tabs.minutes')}</span>
               </Stack>
             </ToggleButton>
             <ToggleButton value="hourly">
               <Stack direction="row" spacing={0.5} alignItems="center">
-                <Clock size={14} /> <span>Hourly</span>
+                <Clock size={14} /> <span>{t('cronBuilder.tabs.hourly')}</span>
               </Stack>
             </ToggleButton>
             <ToggleButton value="daily">
               <Stack direction="row" spacing={0.5} alignItems="center">
-                <Calendar size={14} /> <span>Daily</span>
+                <Calendar size={14} /> <span>{t('cronBuilder.tabs.daily')}</span>
               </Stack>
             </ToggleButton>
             <ToggleButton value="weekly">
               <Stack direction="row" spacing={0.5} alignItems="center">
-                <CalendarDays size={14} /> <span>Weekly</span>
+                <CalendarDays size={14} /> <span>{t('cronBuilder.tabs.weekly')}</span>
               </Stack>
             </ToggleButton>
             <ToggleButton value="monthly">
               <Stack direction="row" spacing={0.5} alignItems="center">
-                <CalendarRange size={14} /> <span>Monthly</span>
+                <CalendarRange size={14} /> <span>{t('cronBuilder.tabs.monthly')}</span>
               </Stack>
             </ToggleButton>
             <ToggleButton value="custom">
-              <span>Custom</span>
+              <span>{t('cronBuilder.tabs.custom')}</span>
             </ToggleButton>
           </ToggleButtonGroup>
         </Box>
@@ -398,7 +400,7 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
         >
           {state.frequency === 'minute' && (
             <Stack direction="row" spacing={1} alignItems="center">
-              <Typography variant="body2">Run every</Typography>
+              <Typography variant="body2">{t('cronBuilderComponent.runEvery')}</Typography>
               <TextField
                 type="number"
                 value={state.minuteInterval}
@@ -410,13 +412,13 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
                 size="small"
                 sx={{ width: 60, '& input': { textAlign: 'center', p: '6px' } }}
               />
-              <Typography variant="body2">minutes.</Typography>
+              <Typography variant="body2">{t('cronBuilderComponent.minutesSuffix')}</Typography>
             </Stack>
           )}
 
           {state.frequency === 'hourly' && (
             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-              <Typography variant="body2">Run every</Typography>
+              <Typography variant="body2">{t('cronBuilderComponent.runEvery')}</Typography>
               <TextField
                 type="number"
                 value={state.hourInterval}
@@ -428,7 +430,7 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
                 size="small"
                 sx={{ width: 60, '& input': { textAlign: 'center', p: '6px' } }}
               />
-              <Typography variant="body2">hours at minute</Typography>
+              <Typography variant="body2">{t('cronBuilderComponent.hoursAtMinute')}</Typography>
               <TextField
                 type="number"
                 value={state.startingMinute}
@@ -442,13 +444,13 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
                 size="small"
                 sx={{ width: 60, '& input': { textAlign: 'center', p: '6px' } }}
               />
-              <Typography variant="body2">past the hour.</Typography>
+              <Typography variant="body2">{t('cronBuilderComponent.pastTheHour')}</Typography>
             </Stack>
           )}
 
           {state.frequency === 'daily' && (
             <Stack direction="row" spacing={1} alignItems="center">
-              <Typography variant="body2">Run daily at</Typography>
+              <Typography variant="body2">{t('cronBuilderComponent.runDailyAt')}</Typography>
               <TimeInput />
             </Stack>
           )}
@@ -456,7 +458,7 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
           {state.frequency === 'weekly' && (
             <Stack spacing={1} width="100%" alignItems="center">
               <Stack direction="row" spacing={1} alignItems="center">
-                <Typography variant="body2">Run on</Typography>
+                <Typography variant="body2">{t('cronBuilderComponent.runOn')}</Typography>
 
                 {/* ... inside component ... */}
 
@@ -497,7 +499,7 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
                 </ToggleButtonGroup>
               </Stack>
               <Stack direction="row" spacing={1} alignItems="center">
-                <Typography variant="body2">at</Typography>
+                <Typography variant="body2">{t('cronBuilderComponent.at')}</Typography>
                 <TimeInput />
               </Stack>
             </Stack>
@@ -505,7 +507,7 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
 
           {state.frequency === 'monthly' && (
             <Stack direction="row" spacing={1} alignItems="center">
-              <Typography variant="body2">Run on day</Typography>
+              <Typography variant="body2">{t('cronBuilderComponent.runOnDay')}</Typography>
               <Select
                 value={state.dayOfMonth}
                 onChange={(e) => handleStateChange({ dayOfMonth: e.target.value as number })}
@@ -528,7 +530,7 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
                   </MenuItem>
                 ))}
               </Select>
-              <Typography variant="body2">at</Typography>
+              <Typography variant="body2">{t('cronBuilderComponent.at')}</Typography>
               <TimeInput />
             </Stack>
           )}
@@ -571,7 +573,7 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
               color="primary"
               sx={{ fontSize: '0.8125rem', fontWeight: 500 }}
             >
-              {generatePreview(state)}
+              {generatePreview(state, t)}
             </Typography>
           </Stack>
           <Box

@@ -1,6 +1,7 @@
 import React from 'react'
 import { Box, Typography, Alert, Paper, Chip, Divider } from '@mui/material'
 import { HardDrive, Cloud, FolderOpen, FileCheck, CheckCircle } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface SSHConnection {
   id: number
@@ -55,6 +56,8 @@ export default function WizardStepRestoreReview({
   sshConnections,
   archiveName,
 }: WizardStepRestoreReviewProps) {
+  const { t } = useTranslation()
+
   // Get destination connection details
   const destinationConnection =
     data.destinationType === 'ssh' && data.destinationConnectionId
@@ -99,8 +102,8 @@ export default function WizardStepRestoreReview({
       <Alert severity="success" icon={<CheckCircle size={20} />} sx={{ py: 0.5 }}>
         <Typography variant="body2" fontWeight={600}>
           {selectedFiles.length === 0
-            ? `Ready to restore entire archive from ${archiveName}`
-            : `Ready to restore ${selectedFiles.length} file${selectedFiles.length !== 1 ? 's' : ''} from ${archiveName}`}
+            ? t('wizard.restoreReview.readyEntireArchive', { archiveName })
+            : t('wizard.restoreReview.readyFiles', { count: selectedFiles.length, archiveName })}
         </Typography>
       </Alert>
 
@@ -119,16 +122,20 @@ export default function WizardStepRestoreReview({
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             {data.destinationType === 'local' ? <HardDrive size={18} /> : <Cloud size={18} />}
             <Typography variant="subtitle2" fontWeight={600}>
-              Restore Destination
+              {t('wizard.restoreReview.restoreDestination')}
             </Typography>
           </Box>
         </Box>
 
         {/* Content */}
         <Box sx={{ p: 2 }}>
-          <SummaryRow label="Destination Type">
+          <SummaryRow label={t('wizard.restoreReview.destinationType')}>
             <Chip
-              label={data.destinationType === 'local' ? 'Borg UI Server' : 'Remote Machine'}
+              label={
+                data.destinationType === 'local'
+                  ? t('wizard.restoreReview.borgUiServer')
+                  : t('wizard.restoreReview.remoteMachine')
+              }
               size="small"
               color="primary"
             />
@@ -137,7 +144,7 @@ export default function WizardStepRestoreReview({
           {data.destinationType === 'ssh' && destinationConnection && (
             <>
               <Divider sx={{ my: 1 }} />
-              <SummaryRow label="SSH Connection">
+              <SummaryRow label={t('wizard.restoreReview.sshConnection')}>
                 <Typography variant="body2" fontFamily="monospace">
                   {destinationConnection.username}@{destinationConnection.host}:
                   {destinationConnection.port}
@@ -147,9 +154,13 @@ export default function WizardStepRestoreReview({
           )}
 
           <Divider sx={{ my: 1 }} />
-          <SummaryRow label="Restore Strategy">
+          <SummaryRow label={t('wizard.restoreReview.restoreStrategy')}>
             <Chip
-              label={data.restoreStrategy === 'original' ? 'Original Location' : 'Custom Location'}
+              label={
+                data.restoreStrategy === 'original'
+                  ? t('wizard.restoreReview.originalLocation')
+                  : t('wizard.restoreReview.customLocation')
+              }
               size="small"
               color={data.restoreStrategy === 'original' ? 'warning' : 'default'}
             />
@@ -158,9 +169,9 @@ export default function WizardStepRestoreReview({
           {data.restoreStrategy === 'custom' && (
             <>
               <Divider sx={{ my: 1 }} />
-              <SummaryRow label="Custom Path">
+              <SummaryRow label={t('wizard.restoreReview.customPath')}>
                 <Typography variant="body2" fontFamily="monospace">
-                  {data.customPath || '(not set)'}
+                  {data.customPath || t('wizard.restoreReview.notSet')}
                 </Typography>
               </SummaryRow>
             </>
@@ -184,7 +195,7 @@ export default function WizardStepRestoreReview({
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <FileCheck size={18} />
               <Typography variant="subtitle2" fontWeight={600}>
-                Restore Preview
+                {t('wizard.restoreReview.restorePreview')}
               </Typography>
             </Box>
           </Box>
@@ -197,7 +208,7 @@ export default function WizardStepRestoreReview({
               gutterBottom
               sx={{ display: 'block', mb: 1 }}
             >
-              Preview of where your files will be restored:
+              {t('wizard.restoreReview.previewNote')}
             </Typography>
             <Box
               sx={{
@@ -233,8 +244,7 @@ export default function WizardStepRestoreReview({
                 ))}
                 {hasMoreFiles && (
                   <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-                    ... and {selectedFiles.length - 3} more file
-                    {selectedFiles.length - 3 !== 1 ? 's' : ''}
+                    {t('wizard.restoreReview.andMoreFiles', { count: selectedFiles.length - 3 })}
                   </Typography>
                 )}
               </Box>
@@ -258,19 +268,19 @@ export default function WizardStepRestoreReview({
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <FolderOpen size={18} />
             <Typography variant="subtitle2" fontWeight={600}>
-              Files to Restore
+              {t('wizard.restoreReview.filesToRestore')}
             </Typography>
           </Box>
         </Box>
 
         {/* Content */}
         <Box sx={{ p: 2 }}>
-          <SummaryRow label="Number of Items">
+          <SummaryRow label={t('wizard.restoreReview.numberOfItems')}>
             <Chip
               label={
                 selectedFiles.length === 0
-                  ? 'All files in archive'
-                  : `${selectedFiles.length} file${selectedFiles.length !== 1 ? 's' : ''}`
+                  ? t('wizard.restoreReview.allFilesInArchive')
+                  : t('wizard.restoreReview.files', { count: selectedFiles.length })
               }
               size="small"
               color="primary"
@@ -282,7 +292,7 @@ export default function WizardStepRestoreReview({
               <Divider sx={{ my: 1 }} />
               <Alert severity="info" sx={{ mt: 1 }}>
                 <Typography variant="body2">
-                  The entire archive will be restored with all files and directories.
+                  {t('wizard.restoreReview.entireArchiveNote')}
                 </Typography>
               </Alert>
             </>
@@ -293,7 +303,7 @@ export default function WizardStepRestoreReview({
       {/* Ready Alert */}
       <Alert severity="success" icon={<FileCheck size={20} />}>
         <Typography variant="body2" fontWeight={600}>
-          Everything looks good! Click "Restore Files" to begin the restore operation.
+          {t('wizard.restoreReview.everythingLooksGood')}
         </Typography>
       </Alert>
     </Box>

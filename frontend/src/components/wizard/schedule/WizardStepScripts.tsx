@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Stack, Alert } from '@mui/material'
 import ScriptSelectorSection from '../../ScriptSelectorSection'
 import { Script } from '../../ScheduleWizard'
@@ -24,11 +25,12 @@ const WizardStepScripts: React.FC<WizardStepScriptsProps> = ({
   repositoryCount,
   onChange,
 }) => {
+  const { t } = useTranslation()
+
   return (
     <Stack spacing={2}>
       <Alert severity="info" sx={{ py: 0.5 }}>
-        <strong>Schedule-level:</strong> runs once per schedule. <strong>Repository-level:</strong>{' '}
-        runs for each repository.
+        {t('wizard.scheduleWizard.scripts.scheduleLevelNote')}
       </Alert>
 
       {repositoryCount > 0 ? (
@@ -48,7 +50,7 @@ const WizardStepScripts: React.FC<WizardStepScriptsProps> = ({
         />
       ) : (
         <Alert severity="warning" sx={{ py: 0.5 }}>
-          Select at least one repository in Step 1 to configure scripts.
+          {t('wizard.scheduleWizard.scripts.selectRepoFirst')}
         </Alert>
       )}
     </Stack>

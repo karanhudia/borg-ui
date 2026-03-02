@@ -1,5 +1,6 @@
 import { Card, CardContent, Stack, Typography, Box, Button } from '@mui/material'
 import { RotateCcw, ExternalLink } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import RestoreJobCard from './RestoreJobCard'
 
@@ -27,6 +28,7 @@ interface LastRestoreSectionProps {
 }
 
 export default function LastRestoreSection({ restoreJob }: LastRestoreSectionProps) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
 
   if (!restoreJob) {
@@ -37,7 +39,7 @@ export default function LastRestoreSection({ restoreJob }: LastRestoreSectionPro
             <RotateCcw size={24} color="#757575" />
             <Box>
               <Typography variant="body2" color="text.secondary">
-                No restores performed yet from this repository
+                {t('lastRestoreSection.noRestores')}
               </Typography>
             </Box>
           </Stack>
@@ -58,7 +60,7 @@ export default function LastRestoreSection({ restoreJob }: LastRestoreSectionPro
         <Stack direction="row" spacing={1.5} alignItems="center">
           <RotateCcw size={20} color="#9c27b0" />
           <Typography variant="h6" fontWeight={600}>
-            Last Restore
+            {t('lastRestoreSection.title')}
           </Typography>
         </Stack>
         <Button
@@ -68,7 +70,7 @@ export default function LastRestoreSection({ restoreJob }: LastRestoreSectionPro
           onClick={() => navigate('/activity')}
           sx={{ textTransform: 'none' }}
         >
-          View All Restores
+          {t('lastRestoreSection.viewAll')}
         </Button>
       </Stack>
 

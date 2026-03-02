@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Stack, Box, Typography, FormControlLabel, Switch, Alert, Collapse } from '@mui/material'
 import PruneSettingsInput, { PruneSettings } from '../../PruneSettingsInput'
 
@@ -19,6 +20,8 @@ interface WizardStepMaintenanceProps {
 }
 
 const WizardStepMaintenance: React.FC<WizardStepMaintenanceProps> = ({ data, onChange }) => {
+  const { t } = useTranslation()
+
   const handlePruneSettingsChange = (values: PruneSettings) => {
     onChange({
       pruneKeepHourly: values.keepHourly,
@@ -34,15 +37,15 @@ const WizardStepMaintenance: React.FC<WizardStepMaintenanceProps> = ({ data, onC
     <Stack spacing={2}>
       <Box>
         <Typography variant="h6" fontWeight={600} gutterBottom>
-          Maintenance Options
+          {t('wizard.scheduleWizard.maintenance.title')}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Run prune and compact after backups to manage disk space.
+          {t('wizard.scheduleWizard.maintenance.subtitle')}
         </Typography>
       </Box>
 
       <Alert severity="info" sx={{ py: 0.5 }}>
-        <strong>Prune</strong> removes old archives. <strong>Compact</strong> reclaims disk space.
+        {t('wizard.scheduleWizard.maintenance.info')}
       </Alert>
 
       <Box>
@@ -56,10 +59,10 @@ const WizardStepMaintenance: React.FC<WizardStepMaintenanceProps> = ({ data, onC
           label={
             <Box>
               <Typography variant="body2" fontWeight={600}>
-                Run prune after backup
+                {t('wizard.scheduleWizard.maintenance.pruneAfterBackup')}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Remove old archives based on retention policy
+                {t('wizard.scheduleWizard.maintenance.pruneAfterBackupDesc')}
               </Typography>
             </Box>
           }
@@ -80,7 +83,7 @@ const WizardStepMaintenance: React.FC<WizardStepMaintenanceProps> = ({ data, onC
             />
             <Alert severity="warning" sx={{ mt: 2, py: 0.5 }}>
               <Typography variant="caption">
-                <strong>Caution:</strong> Pruning permanently deletes old backups.
+                <strong>Caution:</strong> {t('wizard.scheduleWizard.maintenance.pruneCaution')}
               </Typography>
             </Alert>
           </Box>
@@ -98,10 +101,10 @@ const WizardStepMaintenance: React.FC<WizardStepMaintenanceProps> = ({ data, onC
           label={
             <Box>
               <Typography variant="body2" fontWeight={600}>
-                Run compact after prune
+                {t('wizard.scheduleWizard.maintenance.compactAfterPrune')}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Reclaim disk space by freeing segments
+                {t('wizard.scheduleWizard.maintenance.compactAfterPruneDesc')}
               </Typography>
             </Box>
           }
@@ -109,7 +112,7 @@ const WizardStepMaintenance: React.FC<WizardStepMaintenanceProps> = ({ data, onC
 
         {data.runCompactAfter && (
           <Alert severity="info" sx={{ ml: 4, mt: 1, py: 0.5 }}>
-            Compact reclaims disk space after prune. May take time on large repositories.
+            {t('wizard.scheduleWizard.maintenance.compactInfo')}
           </Alert>
         )}
       </Box>

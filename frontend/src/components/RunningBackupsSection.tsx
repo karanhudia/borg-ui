@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Card,
   CardContent,
@@ -36,6 +37,8 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
   onCancelBackup,
   isCancelling,
 }) => {
+  const { t } = useTranslation()
+
   if (runningBackupJobs.length === 0) {
     return null
   }
@@ -46,17 +49,17 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
           <RefreshCw size={20} color="#1976d2" className="animate-spin" />
           <Typography variant="h6" fontWeight={600}>
-            Running Scheduled Backups
+            {t('runningBackups.sectionTitle')}
           </Typography>
           <Chip
-            label={`${runningBackupJobs.length} active`}
+            label={t('runningBackups.activeCount', { count: runningBackupJobs.length })}
             size="small"
             color="primary"
             sx={{ ml: 1 }}
           />
         </Stack>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Real-time progress for scheduled backup jobs
+          {t('runningBackups.realtimeProgress')}
         </Typography>
 
         <Stack spacing={2}>
@@ -82,7 +85,7 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
                 <Stack direction="row" spacing={2} alignItems="center">
                   <Chip
                     icon={<RefreshCw size={14} className="animate-spin" />}
-                    label="Running"
+                    label={t('runningBackups.running')}
                     color="primary"
                     size="small"
                   />
@@ -92,9 +95,9 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
                 </Stack>
                 <Stack direction="row" spacing={1} alignItems="center">
                   <Typography variant="caption" color="text.secondary">
-                    Started: {formatRelativeTime(job.started_at)}
+                    {t('runningBackups.started')} {formatRelativeTime(job.started_at)}
                   </Typography>
-                  <Tooltip title="Cancel Backup" arrow>
+                  <Tooltip title={t('runningBackups.cancelBackup')} arrow>
                     <IconButton
                       size="small"
                       color="error"
@@ -118,7 +121,7 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
               {job.progress_details?.current_file && (
                 <Alert severity="info" sx={{ mb: 2, py: 0.5 }}>
                   <Typography variant="caption" fontWeight={500}>
-                    Current File:
+                    {t('runningBackups.currentFile')}
                   </Typography>
                   <Typography
                     variant="caption"
@@ -162,7 +165,7 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
               >
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    Files Processed:
+                    {t('runningBackups.filesProcessed')}
                   </Typography>
                   <Typography variant="body2" fontWeight={500}>
                     {job.progress_details?.nfiles?.toLocaleString() || '0'}
@@ -170,7 +173,7 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
                 </Box>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    Original Size:
+                    {t('runningBackups.originalSize')}
                   </Typography>
                   <Typography variant="body2" fontWeight={500}>
                     {job.progress_details?.original_size
@@ -180,7 +183,7 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
                 </Box>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    Compressed:
+                    {t('runningBackups.compressed')}
                   </Typography>
                   <Typography variant="body2" fontWeight={500}>
                     {job.progress_details?.compressed_size !== undefined &&
@@ -191,7 +194,7 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
                 </Box>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    Deduplicated:
+                    {t('runningBackups.deduplicated')}
                   </Typography>
                   <Typography variant="body2" fontWeight={500} color="success.main">
                     {job.progress_details?.deduplicated_size !== undefined &&
@@ -204,7 +207,7 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
                   job.progress_details.total_expected_size > 0 && (
                     <Box>
                       <Typography variant="body2" color="text.secondary">
-                        Total Source Size:
+                        {t('runningBackups.totalSourceSize')}
                       </Typography>
                       <Typography variant="body2" fontWeight={500} color="info.main">
                         {formatBytesUtil(job.progress_details.total_expected_size)}
@@ -213,7 +216,7 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
                   )}
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    Speed:
+                    {t('runningBackups.speed')}
                   </Typography>
                   <Typography variant="body2" fontWeight={500} color="primary.main">
                     {job.progress_details?.backup_speed
@@ -224,7 +227,7 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
                 {(job.progress_details?.estimated_time_remaining ?? 0) > 0 && (
                   <Box>
                     <Typography variant="body2" color="text.secondary">
-                      ETA:
+                      {t('runningBackups.eta')}
                     </Typography>
                     <Typography variant="body2" fontWeight={500} color="success.main">
                       {formatDurationSeconds(job.progress_details?.estimated_time_remaining ?? 0)}

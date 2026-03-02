@@ -1,6 +1,7 @@
 import React from 'react'
 import { Box, Typography, Alert, Paper, Chip, Divider } from '@mui/material'
 import { FolderOpen, Shield, Settings, Server, Cloud, HardDrive, Laptop } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import CommandPreview from '../CommandPreview'
 import BackupFlowPreview from './BackupFlowPreview'
 
@@ -48,6 +49,8 @@ function SummaryRow({ label, children }: { label: string; children: React.ReactN
 }
 
 export default function WizardStepReview({ mode, data, sshConnections }: WizardStepReviewProps) {
+  const { t } = useTranslation()
+
   // Get source SSH connection details for command preview
   const getSourceSshConnection = () => {
     if (data.dataSource !== 'remote' || !data.sourceSshConnectionId) return null
@@ -144,7 +147,7 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
           }}
         >
           <Typography variant="subtitle2" fontWeight={600}>
-            Configuration Summary
+            {t('wizard.review.configurationSummary')}
           </Typography>
         </Box>
 
@@ -153,36 +156,36 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
             <FolderOpen size={16} />
             <Typography variant="caption" fontWeight={600} color="text.secondary">
-              REPOSITORY
+              {t('wizard.review.repository')}
             </Typography>
           </Box>
 
-          <SummaryRow label="Name">
+          <SummaryRow label={t('wizard.review.name')}>
             <Typography variant="body2" fontWeight={600}>
               {data.name}
             </Typography>
           </SummaryRow>
 
-          <SummaryRow label="Mode">
+          <SummaryRow label={t('wizard.review.mode')}>
             <Chip
-              label={data.repositoryMode === 'full' ? 'Full' : 'Observe Only'}
+              label={data.repositoryMode === 'full' ? t('wizard.review.full') : t('wizard.review.observeOnly')}
               size="small"
               color={data.repositoryMode === 'full' ? 'primary' : 'default'}
             />
           </SummaryRow>
 
-          <SummaryRow label="Location">
+          <SummaryRow label={t('wizard.review.location')}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               {data.repositoryLocation === 'local' ? <Server size={14} /> : <Cloud size={14} />}
               <Typography variant="body2" fontWeight={500}>
-                {data.repositoryLocation === 'local' ? 'Borg UI Server' : 'SSH Remote'}
+                {data.repositoryLocation === 'local' ? t('wizard.review.borgUiServer') : t('wizard.review.sshRemote')}
               </Typography>
             </Box>
           </SummaryRow>
 
-          <SummaryRow label="Path">
+          <SummaryRow label={t('wizard.review.path')}>
             <Typography variant="body2" fontFamily="monospace" fontSize="0.8rem">
-              {data.path || '(not set)'}
+              {data.path || t('wizard.review.notSet')}
             </Typography>
           </SummaryRow>
         </Box>
@@ -196,25 +199,25 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                 {data.dataSource === 'local' ? <HardDrive size={16} /> : <Laptop size={16} />}
                 <Typography variant="caption" fontWeight={600} color="text.secondary">
-                  DATA SOURCE
+                  {t('wizard.review.dataSource')}
                 </Typography>
               </Box>
 
-              <SummaryRow label="Source">
+              <SummaryRow label={t('wizard.review.source')}>
                 <Typography variant="body2" fontWeight={500}>
-                  {data.dataSource === 'local' ? 'Borg UI Server' : 'Remote Client'}
+                  {data.dataSource === 'local' ? t('wizard.review.borgUiServer') : t('wizard.review.remoteClient')}
                 </Typography>
               </SummaryRow>
 
               {data.dataSource === 'local' && (
                 <>
-                  <SummaryRow label="Directories">
-                    <Typography variant="body2">{data.sourceDirs.length} configured</Typography>
+                  <SummaryRow label={t('wizard.review.directories')}>
+                    <Typography variant="body2">{t('wizard.review.directoriesCount', { count: data.sourceDirs.length })}</Typography>
                   </SummaryRow>
 
-                  <SummaryRow label="Exclude Patterns">
+                  <SummaryRow label={t('wizard.review.excludePatterns')}>
                     <Typography variant="body2">
-                      {data.excludePatterns.length} configured
+                      {t('wizard.review.directoriesCount', { count: data.excludePatterns.length })}
                     </Typography>
                   </SummaryRow>
                 </>
@@ -230,19 +233,19 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
             <Shield size={16} />
             <Typography variant="caption" fontWeight={600} color="text.secondary">
-              SECURITY
+              {t('wizard.review.security')}
             </Typography>
           </Box>
 
           {mode === 'create' && (
-            <SummaryRow label="Encryption">
+            <SummaryRow label={t('wizard.review.encryption')}>
               <Chip
                 label={
                   data.encryption === 'repokey'
-                    ? 'Repokey'
+                    ? t('wizard.review.encryptionRepokey')
                     : data.encryption === 'keyfile'
-                      ? 'Keyfile'
-                      : 'None'
+                      ? t('wizard.review.encryptionKeyfile')
+                      : t('wizard.review.encryptionNone')
                 }
                 size="small"
                 color={data.encryption === 'none' ? 'error' : 'success'}
@@ -250,8 +253,8 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
             </SummaryRow>
           )}
 
-          <SummaryRow label="Passphrase">
-            <Typography variant="body2">{data.passphrase ? '••••••••' : '(not set)'}</Typography>
+          <SummaryRow label={t('wizard.review.passphrase')}>
+            <Typography variant="body2">{data.passphrase ? t('wizard.review.passphraseSet') : t('wizard.review.passphraseNotSet')}</Typography>
           </SummaryRow>
         </Box>
 
@@ -263,18 +266,18 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                 <Settings size={16} />
                 <Typography variant="caption" fontWeight={600} color="text.secondary">
-                  BACKUP CONFIGURATION
+                  {t('wizard.review.backupConfiguration')}
                 </Typography>
               </Box>
 
-              <SummaryRow label="Compression">
+              <SummaryRow label={t('wizard.review.compression')}>
                 <Typography variant="body2" fontFamily="monospace" fontSize="0.8rem">
                   {data.compression}
                 </Typography>
               </SummaryRow>
 
               {data.customFlags && (
-                <SummaryRow label="Custom Flags">
+                <SummaryRow label={t('wizard.review.customFlags')}>
                   <Typography variant="body2" fontFamily="monospace" fontSize="0.8rem">
                     {data.customFlags}
                   </Typography>
@@ -288,14 +291,14 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
       {/* Action Alerts */}
       {mode === 'create' && data.repositoryMode === 'full' && (
         <Alert severity="success">
-          <Typography variant="body2">Repository will be initialized</Typography>
+          <Typography variant="body2">{t('wizard.review.repositoryInitialized')}</Typography>
         </Alert>
       )}
 
       {mode === 'import' && (
         <Alert severity="info">
           <Typography variant="body2">
-            Repository will be verified before import. Ensure the passphrase is correct.
+            {t('wizard.review.repositoryImportNote')}
           </Typography>
         </Alert>
       )}
@@ -303,7 +306,7 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
       {mode === 'edit' && (
         <Alert severity="info">
           <Typography variant="body2">
-            Changes will be saved to the repository configuration.
+            {t('wizard.review.repositoryEditNote')}
           </Typography>
         </Alert>
       )}

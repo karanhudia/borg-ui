@@ -13,6 +13,7 @@ import {
 } from '@mui/material'
 import { FolderOpen, FileCheck } from 'lucide-react'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
+import { useTranslation } from 'react-i18next'
 
 interface ArchiveFile {
   path: string
@@ -55,6 +56,7 @@ export default function WizardStepRestorePath({
   onChange,
   onBrowsePath,
 }: WizardStepRestorePathProps) {
+  const { t } = useTranslation()
   // Get example paths to show
   const examplePaths = selectedFiles.slice(0, 3).map((f) => f.path)
   const hasMoreFiles = selectedFiles.length > 3
@@ -95,10 +97,10 @@ export default function WizardStepRestorePath({
       {/* Header */}
       <Box>
         <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-          Choose restore location
+          {t('wizard.restorePath.title')}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Restore files to their original paths or select a custom destination
+          {t('wizard.restorePath.subtitle')}
         </Typography>
       </Box>
 
@@ -135,10 +137,10 @@ export default function WizardStepRestorePath({
                   <FileCheck size={18} />
                   <Box>
                     <Typography variant="body1" fontWeight={600}>
-                      Restore to Original Location
+                      {t('wizard.restorePath.restoreToOriginal')}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Recreate full directory structure from root (/)
+                      {t('wizard.restorePath.restoreToOriginalDesc')}
                     </Typography>
                   </Box>
                 </Box>
@@ -173,10 +175,10 @@ export default function WizardStepRestorePath({
                   <FolderOpen size={18} />
                   <Box>
                     <Typography variant="body1" fontWeight={600}>
-                      Restore to Custom Location
+                      {t('wizard.restorePath.restoreToCustom')}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Choose where to restore files
+                      {t('wizard.restorePath.restoreToCustomDesc')}
                     </Typography>
                   </Box>
                 </Box>
@@ -191,13 +193,13 @@ export default function WizardStepRestorePath({
       {data.restoreStrategy === 'custom' && (
         <>
           <TextField
-            label="Custom Destination Path"
+            label={t('wizard.restorePath.customPathLabel')}
             value={data.customPath}
             onChange={(e) => onChange({ customPath: e.target.value })}
             placeholder="/Users/yourusername/restored"
             required
             fullWidth
-            helperText="Choose a writable directory where files will be restored"
+            helperText={t('wizard.restorePath.customPathHelper')}
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
@@ -205,7 +207,7 @@ export default function WizardStepRestorePath({
                     onClick={onBrowsePath}
                     edge="end"
                     size="small"
-                    title="Browse filesystem"
+                    title={t('wizard.restorePath.browseFilesystem')}
                     disabled={destinationType === 'ssh' && !destinationConnectionId}
                   >
                     <FolderOpenIcon fontSize="small" />
@@ -221,7 +223,7 @@ export default function WizardStepRestorePath({
       {selectedFiles.length > 0 && (
         <Box>
           <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600, mb: 1 }}>
-            Preview
+            {t('wizard.restorePath.preview')}
           </Typography>
           <Paper
             variant="outlined"
@@ -240,7 +242,7 @@ export default function WizardStepRestorePath({
                     color="text.secondary"
                     sx={{ fontSize: '0.75rem', fontFamily: 'monospace' }}
                   >
-                    Original: {path}
+                    {t('wizard.restorePath.original')} {path}
                   </Typography>
                   <Typography
                     variant="body2"
@@ -257,8 +259,7 @@ export default function WizardStepRestorePath({
               ))}
               {hasMoreFiles && (
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-                  ... and {selectedFiles.length - 3} more file
-                  {selectedFiles.length - 3 !== 1 ? 's' : ''}
+                  {t('wizard.restorePath.andMoreFiles', { count: selectedFiles.length - 3 })}
                 </Typography>
               )}
             </Box>
@@ -269,7 +270,7 @@ export default function WizardStepRestorePath({
       {destinationType === 'ssh' && !destinationConnectionId && (
         <Alert severity="error">
           <Typography variant="body2">
-            Please select an SSH connection in the previous step.
+            {t('wizard.restorePath.noSshConnection')}
           </Typography>
         </Alert>
       )}

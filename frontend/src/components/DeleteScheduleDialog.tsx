@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Dialog,
   DialogTitle,
@@ -56,6 +57,7 @@ const DeleteScheduleDialog: React.FC<DeleteScheduleDialogProps> = ({
   onConfirm,
   isDeleting,
 }) => {
+  const { t } = useTranslation()
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
       <DialogTitle>
@@ -74,20 +76,20 @@ const DeleteScheduleDialog: React.FC<DeleteScheduleDialogProps> = ({
             <AlertCircle size={24} color="#d32f2f" />
           </Box>
           <Typography variant="h6" fontWeight={600}>
-            Delete Scheduled Job
+            {t('dialogs.deleteSchedule.title')}
           </Typography>
         </Stack>
       </DialogTitle>
       <DialogContent>
         <Typography variant="body2">
-          Are you sure you want to delete the scheduled job <strong>"{job?.name}"</strong>?
+          {t('dialogs.deleteSchedule.message')} <strong>"{job?.name}"</strong>
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          This action cannot be undone. The job will no longer run automatically.
+          {t('dialogs.deleteSchedule.warning')}
         </Typography>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
         <Button
           onClick={onConfirm}
           variant="contained"
@@ -95,7 +97,7 @@ const DeleteScheduleDialog: React.FC<DeleteScheduleDialogProps> = ({
           disabled={isDeleting}
           startIcon={isDeleting ? <CircularProgress size={16} /> : <Trash2 size={16} />}
         >
-          {isDeleting ? 'Deleting...' : 'Delete Job'}
+          {isDeleting ? t('dialogs.deleteSchedule.deleting') : t('dialogs.deleteSchedule.confirm')}
         </Button>
       </DialogActions>
     </Dialog>

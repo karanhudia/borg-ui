@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
@@ -41,6 +42,7 @@ interface CacheStats {
 }
 
 const CacheManagementTab: React.FC = () => {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
 
   // Local state for form values
@@ -97,7 +99,7 @@ const CacheManagementTab: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to save cache settings')
+      toast.error(error.response?.data?.detail || t('cache.failedToSaveCacheSettings'))
     },
   })
 
@@ -109,12 +111,12 @@ const CacheManagementTab: React.FC = () => {
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['cache-stats'] })
       const clearedCount = response.data?.cleared_count || 0
-      toast.success(`Cache cleared successfully (${clearedCount} entries removed)`)
+      toast.success(t('cache.clearSuccess', { count: clearedCount }))
       setClearDialogOpen(false)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to clear cache')
+      toast.error(error.response?.data?.detail || t('cache.failedToClearCache'))
       setClearDialogOpen(false)
     },
   })
@@ -130,7 +132,7 @@ const CacheManagementTab: React.FC = () => {
   // Test Redis connection
   const handleTestConnection = async () => {
     if (!redisUrl.trim()) {
-      toast.error('Please enter a Redis URL first')
+      toast.error(t('cache.pleaseEnterRedisUrl'))
       return
     }
 
@@ -144,17 +146,17 @@ const CacheManagementTab: React.FC = () => {
 
       const data = response.data
       if (data.backend === 'redis') {
-        toast.success(`✓ Connected to Redis: ${data.connection_info}`, { duration: 5000 })
+        toast.success(t('cache.redisConnected', { info: data.connection_info }), { duration: 5000 })
         queryClient.invalidateQueries({ queryKey: ['cache-stats'] })
         setHasChanges(false)
       } else {
-        toast.error(`Failed to connect: ${data.message || 'Using in-memory fallback'}`, {
+        toast.error(t('cache.redisConnectFailed', { message: data.message || t('cache.usingInMemoryFallback') }), {
           duration: 5000,
         })
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      const errorMsg = error.response?.data?.detail || 'Connection test failed'
+      const errorMsg = error.response?.data?.detail || t('cache.connectionTestFailed')
       toast.error(errorMsg, { duration: 5000 })
     } finally {
       setTestingConnection(false)
@@ -196,10 +198,10 @@ const CacheManagementTab: React.FC = () => {
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Box>
             <Typography variant="h6" fontWeight={600}>
-              Archive Cache Management
+              {t('cacheManagement.title')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Monitor and configure the Redis-based archive caching system for faster browsing
+              {t('cache.subtitle')}
             </Typography>
           </Box>
           <Button
@@ -210,7 +212,7 @@ const CacheManagementTab: React.FC = () => {
             onClick={handleSaveSettings}
             disabled={!hasChanges || saveSettingsMutation.isPending}
           >
-            {saveSettingsMutation.isPending ? 'Saving...' : 'Save Settings'}
+            {saveSettingsMutation.isPending ? t('cacheManagement.saving') : t('cacheManagement.save')}
           </Button>
         </Box>
 
@@ -221,7 +223,7 @@ const CacheManagementTab: React.FC = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Server size={24} />
-                  <Typography variant="h6">Cache Status</Typography>
+                  <Typography variant="h6">{t('cache.cacheStatus')}</Typography>
                 </Box>
                 {stats && (
                   <Chip
@@ -259,7 +261,7 @@ const CacheManagementTab: React.FC = () => {
                     {stats?.entry_count || 0}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Cached Archives
+                    {t('cache.cachedArchives')}
                   </Typography>
                 </Box>
 
@@ -268,7 +270,7 @@ const CacheManagementTab: React.FC = () => {
                     {sizeMb.toFixed(1)} MB
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Memory Used
+                    {t('cache.memoryUsed')}
                   </Typography>
                 </Box>
 
@@ -277,10 +279,10 @@ const CacheManagementTab: React.FC = () => {
                     {hitRate.toFixed(1)}%
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Hit Rate
+                    {t('cache.hitRate')}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {totalRequests} total requests
+                    {t('cache.totalRequests', { count: totalRequests })}
                   </Typography>
                 </Box>
 
@@ -289,7 +291,7 @@ const CacheManagementTab: React.FC = () => {
                     {stats ? formatTtl(stats.cache_ttl_minutes) : '2 hours'}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Cache TTL
+                    {t('cache.cacheTtl')}
                   </Typography>
                 </Box>
               </Box>
@@ -298,10 +300,10 @@ const CacheManagementTab: React.FC = () => {
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                   <Typography variant="body2" color="text.secondary">
-                    Cache Usage
+                    {t('cache.cacheUsage')}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    {sizeMb.toFixed(1)} MB / {maxSizeFromStats} MB ({usagePercent.toFixed(1)}%)
+                    {t('cache.cacheUsageDetail', { used: sizeMb.toFixed(1), max: maxSizeFromStats, percent: usagePercent.toFixed(1) })}
                   </Typography>
                 </Box>
                 <LinearProgress
@@ -321,16 +323,14 @@ const CacheManagementTab: React.FC = () => {
               {/* Warning if usage is high */}
               {usagePercent >= 80 && (
                 <Alert severity="warning" icon={<AlertTriangle size={20} />}>
-                  Cache usage is at {usagePercent.toFixed(1)}%. Consider increasing the max size
-                  limit or clearing old entries.
+                  {t('cache.highUsageWarning', { percent: usagePercent.toFixed(1) })}
                 </Alert>
               )}
 
               {/* Backend Info */}
               {stats?.backend === 'in-memory' && (
                 <Alert severity="info">
-                  Currently using in-memory cache. Redis is unavailable or not configured. In-memory
-                  cache is limited and will be lost on restart.
+                  {t('cache.inMemoryWarning')}
                 </Alert>
               )}
 
@@ -343,7 +343,7 @@ const CacheManagementTab: React.FC = () => {
                   onClick={() => setClearDialogOpen(true)}
                   disabled={!stats || stats.entry_count === 0 || clearCacheMutation.isPending}
                 >
-                  Clear All Cache
+                  {t('cache.clearAllCache')}
                 </Button>
               </Box>
             </Stack>
@@ -354,41 +354,41 @@ const CacheManagementTab: React.FC = () => {
         <Card>
           <CardContent>
             <Stack spacing={3}>
-              <Typography variant="h6">Cache Configuration</Typography>
+              <Typography variant="h6">{t('cache.cacheConfiguration')}</Typography>
               <Divider />
 
               <Box
                 sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}
               >
                 <TextField
-                  label="Cache TTL (minutes)"
+                  label={t('cache.ttlLabel')}
                   type="number"
                   fullWidth
                   value={ttlMinutes}
                   onChange={(e) => setTtlMinutes(Number(e.target.value))}
                   inputProps={{ min: 1, max: 10080 }}
-                  helperText={`Time before cached entries expire. Range: 1 minute to 7 days. Current: ${formatTtl(ttlMinutes)}`}
+                  helperText={t('cache.ttlHelperText', { current: formatTtl(ttlMinutes) })}
                 />
 
                 <TextField
-                  label="Max Cache Size (MB)"
+                  label={t('cache.maxSizeLabel')}
                   type="number"
                   fullWidth
                   value={maxSizeMb}
                   onChange={(e) => setMaxSizeMb(Number(e.target.value))}
                   inputProps={{ min: 100, max: 10240 }}
-                  helperText={`Maximum cache size. Range: 100 MB to 10 GB. Current: ${(maxSizeMb / 1024).toFixed(2)} GB`}
+                  helperText={t('cache.maxSizeHelperText', { current: (maxSizeMb / 1024).toFixed(2) })}
                 />
               </Box>
 
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="flex-start">
                 <TextField
-                  label="External Redis URL (Optional)"
+                  label={t('cache.redisUrlLabel')}
                   fullWidth
                   value={redisUrl}
                   onChange={(e) => setRedisUrl(e.target.value)}
                   placeholder="redis://192.168.1.100:6379/0"
-                  helperText="Format: redis://[password@]host:port/db, rediss:// for TLS, or unix:// for Unix sockets"
+                  helperText={t('cache.redisUrlHelperText')}
                   error={
                     redisUrl.trim() !== '' &&
                     !redisUrl.startsWith('redis://') &&
@@ -403,13 +403,12 @@ const CacheManagementTab: React.FC = () => {
                   disabled={!redisUrl.trim() || testingConnection}
                   sx={{ minWidth: 120, mt: 2.5, flexShrink: 0 }}
                 >
-                  {testingConnection ? 'Testing...' : 'Test Connection'}
+                  {testingConnection ? t('cache.testing') : t('cache.testConnection')}
                 </Button>
               </Stack>
 
               <Alert severity="info">
-                <strong>Note:</strong> TTL changes only affect new cache entries. Existing entries
-                keep their original TTL until they expire.
+                <strong>{t('cache.noteLabel')}</strong> {t('cache.ttlNoteText')}
               </Alert>
             </Stack>
           </CardContent>
@@ -418,19 +417,18 @@ const CacheManagementTab: React.FC = () => {
 
       {/* Clear Cache Confirmation Dialog */}
       <Dialog open={clearDialogOpen} onClose={() => setClearDialogOpen(false)}>
-        <DialogTitle>Clear All Cache?</DialogTitle>
+        <DialogTitle>{t('cache.clearDialogTitle')}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            This will remove all {stats?.entry_count || 0} cached archive entries. The next time you
-            browse an archive, it will need to rebuild the cache (60-90 seconds for large archives).
+            {t('cache.clearConfirmCount', { count: stats?.entry_count || 0 })}
             <br />
             <br />
-            Are you sure you want to continue?
+            {t('cache.clearConfirmQuestion')}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setClearDialogOpen(false)} color="inherit">
-            Cancel
+            {t('cache.cancel')}
           </Button>
           <Button
             onClick={handleClearCache}
@@ -438,7 +436,7 @@ const CacheManagementTab: React.FC = () => {
             variant="contained"
             disabled={clearCacheMutation.isPending}
           >
-            {clearCacheMutation.isPending ? 'Clearing...' : 'Clear Cache'}
+            {clearCacheMutation.isPending ? t('cacheManagement.clearing') : t('cacheManagement.clearCache')}
           </Button>
         </DialogActions>
       </Dialog>

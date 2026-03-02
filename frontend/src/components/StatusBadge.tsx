@@ -1,5 +1,6 @@
 import React from 'react'
 import { Chip } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 
 interface StatusBadgeProps {
   status: string
@@ -16,6 +17,8 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   size = 'small',
   variant = 'filled',
 }) => {
+  const { t } = useTranslation()
+
   const getStatusColor = (status: string): 'success' | 'error' | 'warning' | 'info' | 'default' => {
     switch (status.toLowerCase()) {
       case 'completed':
@@ -39,18 +42,18 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   const getStatusLabel = (status: string): string => {
     switch (status.toLowerCase()) {
       case 'completed':
-        return 'Completed'
+        return t('status.completed')
       case 'completed_with_warnings':
-        return 'Completed with Warnings'
+        return t('status.completedWithWarnings')
       case 'failed':
-        return 'Failed'
+        return t('status.failed')
       case 'running':
       case 'in_progress':
-        return 'Running'
+        return t('status.running')
       case 'pending':
-        return 'Pending'
+        return t('status.pending')
       case 'cancelled':
-        return 'Cancelled'
+        return t('status.cancelled')
       default:
         return status.charAt(0).toUpperCase() + status.slice(1)
     }

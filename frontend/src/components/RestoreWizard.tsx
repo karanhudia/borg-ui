@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Dialog,
   DialogTitle,
@@ -87,6 +88,7 @@ const RestoreWizard = ({
   onRestore,
 }: RestoreWizardProps) => {
   const { track, EventCategory, EventAction } = useMatomo()
+  const { t } = useTranslation()
   const [activeStep, setActiveStep] = useState(0)
   const [wizardState, setWizardState] = useState<WizardState>(initialState)
   const [sshConnections, setSshConnections] = useState<SSHConnection[]>([])
@@ -98,11 +100,11 @@ const RestoreWizard = ({
   // Step definitions
   const steps = useMemo(
     () => [
-      { key: 'files', label: 'Files', icon: <Files size={14} /> },
-      { key: 'destination', label: 'Destination', icon: <HardDrive size={14} /> },
-      { key: 'review', label: 'Review', icon: <CheckCircle size={14} /> },
+      { key: 'files', label: t('restoreWizard.steps.files'), icon: <Files size={14} /> },
+      { key: 'destination', label: t('restoreWizard.steps.destination'), icon: <HardDrive size={14} /> },
+      { key: 'review', label: t('restoreWizard.steps.review'), icon: <CheckCircle size={14} /> },
     ],
-    []
+    [t]
   )
 
   // Load SSH connections
@@ -312,10 +314,10 @@ const RestoreWizard = ({
       >
         <DialogTitle sx={{ pt: 3, pb: 1 }}>
           <Typography variant="h5" component="div" fontWeight={700}>
-            Restore Files
+{t('restoreWizard.title')}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            From archive: {archiveName}
+            {t('restoreWizard.fromArchive', { archiveName })}
           </Typography>
         </DialogTitle>
         <DialogContent>
@@ -340,18 +342,18 @@ const RestoreWizard = ({
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
           <Box sx={{ flex: 1 }} />
           <Button disabled={activeStep === 0} onClick={handleBack}>
-            Back
+            {t('common.buttons.back')}
           </Button>
           {activeStep < steps.length - 1 ? (
             <Button variant="contained" onClick={handleNext} disabled={!canProceed()}>
-              Next
+              {t('common.buttons.next')}
             </Button>
           ) : (
             <Button variant="contained" onClick={handleSubmit} disabled={!canProceed()}>
-              Restore Files
+              {t('restoreWizard.buttons.restore')}
             </Button>
           )}
         </DialogActions>
@@ -369,7 +371,7 @@ const RestoreWizard = ({
             }
             setShowPathExplorer(false)
           }}
-          title="Select Restore Destination"
+          title={t('restoreWizard.fileExplorer.selectRestoreDestination')}
           initialPath={
             wizardState.destinationType === 'ssh' && wizardState.destinationConnectionId
               ? sshConnections.find((c) => c.id === wizardState.destinationConnectionId)

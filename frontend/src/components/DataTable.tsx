@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Table,
   TableBody,
@@ -114,6 +115,7 @@ export default function DataTable<T>({
 
   // Pagination state
   const [page, setPage] = useState(0)
+  const { t } = useTranslation()
   const [rowsPerPage, setRowsPerPage] = useState(getInitialRowsPerPage)
 
   const handleChangePage = (_event: unknown, newPage: number) => {
@@ -214,7 +216,7 @@ export default function DataTable<T>({
                   maxWidth: '130px',
                 }}
               >
-                Actions
+                {t('dataTable.actions')}
               </TableCell>
             )}
           </TableRow>
@@ -308,7 +310,7 @@ export default function DataTable<T>({
           rowsPerPage={rowsPerPage}
           onRowsPerPageChange={handleChangeRowsPerPage}
           rowsPerPageOptions={rowsPerPageOptions}
-          labelRowsPerPage="Rows per page:"
+          labelRowsPerPage={t('dataTable.rowsPerPage')}
           labelDisplayedRows={({ from, to, count }) =>
             `${from}–${to} of ${count !== -1 ? count : `more than ${to}`}`
           }

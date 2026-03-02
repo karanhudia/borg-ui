@@ -1,4 +1,5 @@
 import { Box, Alert, Typography } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import CompressionSettings from '../CompressionSettings'
 import ExcludePatternInput from '../ExcludePatternInput'
 import AdvancedRepositoryOptions from '../AdvancedRepositoryOptions'
@@ -32,6 +33,8 @@ export default function WizardStepBackupConfig({
   onChange,
   onBrowseExclude,
 }: WizardStepBackupConfigProps) {
+  const { t } = useTranslation()
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* Compression Settings */}
@@ -51,8 +54,7 @@ export default function WizardStepBackupConfig({
       {dataSource === 'remote' && (
         <Alert severity="info">
           <Typography variant="body2">
-            Remote directories are mounted via SSHFS preserving their original paths. Exclude
-            patterns work the same as local sources (e.g., <code>*/var/cache/*</code>).
+            {t('wizard.backupConfig.remoteSshfsNote')}
           </Typography>
         </Alert>
       )}

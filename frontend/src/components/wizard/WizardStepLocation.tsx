@@ -18,6 +18,7 @@ import {
 } from '@mui/material'
 import { Server, Cloud } from 'lucide-react'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
+import { useTranslation } from 'react-i18next'
 
 interface SSHConnection {
   id: number
@@ -58,6 +59,8 @@ export default function WizardStepLocation({
   onChange,
   onBrowsePath,
 }: WizardStepLocationProps) {
+  const { t } = useTranslation()
+
   // Disable SSH repository location if data source is remote (prevent remote-to-remote)
   // Only enforce this in edit mode when we know the data source
   const isRemoteLocationDisabled =
@@ -77,40 +80,40 @@ export default function WizardStepLocation({
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* Name Input */}
       <TextField
-        label="Repository Name"
+        label={t('wizard.location.repositoryNameLabel')}
         value={data.name}
         onChange={(e) => onChange({ name: e.target.value })}
         required
         fullWidth
-        helperText="A friendly name to identify this repository"
+        helperText={t('wizard.location.repositoryNameHelper')}
       />
 
       {/* Repository Mode for Import */}
       {mode === 'import' && (
         <FormControl fullWidth>
-          <InputLabel>Repository Mode</InputLabel>
+          <InputLabel>{t('wizard.location.repositoryModeLabel')}</InputLabel>
           <Select
             value={data.repositoryMode}
-            label="Repository Mode"
+            label={t('wizard.location.repositoryModeLabel')}
             onChange={(e) => onChange({ repositoryMode: e.target.value as 'full' | 'observe' })}
           >
             <MenuItem value="full">
               <Box>
                 <Typography variant="body2" fontWeight={600}>
-                  Full Repository
+                  {t('wizard.location.fullRepository')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Create backups and browse archives
+                  {t('wizard.location.fullRepositoryDesc')}
                 </Typography>
               </Box>
             </MenuItem>
             <MenuItem value="observe">
               <Box>
                 <Typography variant="body2" fontWeight={600}>
-                  Observability Only
+                  {t('wizard.location.observabilityOnly')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Browse and restore only (no backups)
+                  {t('wizard.location.observabilityOnlyDesc')}
                 </Typography>
               </Box>
             </MenuItem>
@@ -120,8 +123,7 @@ export default function WizardStepLocation({
 
       {mode === 'import' && data.repositoryMode === 'observe' && (
         <Alert severity="info">
-          Observability-only repositories can browse and restore existing archives but cannot create
-          new backups.
+          {t('wizard.location.observabilityInfo')}
         </Alert>
       )}
 
@@ -136,9 +138,9 @@ export default function WizardStepLocation({
           }
           label={
             <Box>
-              <Typography variant="body2">Read-only storage access</Typography>
+              <Typography variant="body2">{t('wizard.location.readOnlyStorageLabel')}</Typography>
               <Typography variant="caption" color="text.secondary">
-                Enable if the storage is read-only or locked by another process (adds --bypass-lock)
+                {t('wizard.location.readOnlyStorageDesc')}
               </Typography>
             </Box>
           }
@@ -148,7 +150,7 @@ export default function WizardStepLocation({
       {/* Location Selection Cards */}
       <Box>
         <Typography variant="subtitle2" gutterBottom sx={{ mb: 2, fontWeight: 600 }}>
-          Where should backups be stored?
+          {t('wizard.location.whereToStore')}
         </Typography>
         <Box sx={{ display: 'flex', gap: 2 }}>
           <Card
@@ -199,14 +201,14 @@ export default function WizardStepLocation({
                   </Box>
                   <Box>
                     <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
-                      Borg UI Server
+                      {t('wizard.borgUiServer')}
                     </Typography>
                     <Typography
                       variant="body2"
                       color="text.secondary"
                       sx={{ fontSize: '0.8125rem' }}
                     >
-                      Store backups on this server's local storage
+                      {t('wizard.location.borgUiServerDesc')}
                     </Typography>
                   </Box>
                 </Box>
@@ -269,14 +271,14 @@ export default function WizardStepLocation({
                   </Box>
                   <Box>
                     <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
-                      Remote Client
+                      {t('wizard.remoteClient')}
                     </Typography>
                     <Typography
                       variant="body2"
                       color="text.secondary"
                       sx={{ fontSize: '0.8125rem' }}
                     >
-                      Store backups on a remote machine via SSH
+                      {t('wizard.location.remoteClientDesc')}
                     </Typography>
                   </Box>
                 </Box>
@@ -289,10 +291,7 @@ export default function WizardStepLocation({
         {isRemoteLocationDisabled && (
           <Alert severity="info" sx={{ mt: 2 }}>
             <Typography variant="body2">
-              <strong>Why is "Remote Client" disabled?</strong> This repository is configured to
-              back up data from a remote machine. Remote-to-remote backups (backing up from one
-              remote machine to another) are not supported. Please keep the repository on the Borg
-              UI Server.
+              <strong>{t('wizard.dataSource.remoteToRemoteTitle')}</strong> {t('wizard.location.remoteDisabledInfo')}
             </Typography>
           </Alert>
         )}
@@ -303,15 +302,14 @@ export default function WizardStepLocation({
         <>
           {!Array.isArray(sshConnections) || sshConnections.length === 0 ? (
             <Alert severity="warning">
-              No SSH connections configured. Please configure SSH connections in the SSH Keys page
-              first.
+              {t('wizard.noSshConnections')}
             </Alert>
           ) : (
             <FormControl fullWidth>
-              <InputLabel>Select SSH Connection</InputLabel>
+              <InputLabel>{t('wizard.location.selectSshConnection')}</InputLabel>
               <Select
                 value={data.repoSshConnectionId === '' ? '' : String(data.repoSshConnectionId)}
-                label="Select SSH Connection"
+                label={t('wizard.location.selectSshConnection')}
                 onChange={(e) => {
                   const value = e.target.value
                   if (value) {
@@ -361,7 +359,7 @@ export default function WizardStepLocation({
 
       {/* Path Input */}
       <TextField
-        label="Repository Path"
+        label={t('wizard.location.repositoryPathLabel')}
         value={data.path}
         onChange={(e) => onChange({ path: e.target.value })}
         placeholder={
@@ -369,7 +367,7 @@ export default function WizardStepLocation({
         }
         required
         fullWidth
-        helperText="Path where the repository will be stored"
+        helperText={t('wizard.location.repositoryPathHelper')}
         InputProps={{
           endAdornment: (
             <InputAdornment position="end">

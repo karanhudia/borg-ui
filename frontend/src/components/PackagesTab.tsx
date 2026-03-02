@@ -34,6 +34,7 @@ import React from 'react'
 import { toast } from 'react-hot-toast'
 import DataTable, { Column, ActionButton } from './DataTable'
 import { formatDateShort } from '../utils/dateUtils'
+import { useTranslation } from 'react-i18next'
 
 interface PackageType {
   id: number
@@ -67,6 +68,7 @@ interface JobStatusType {
 }
 
 export default function PackagesTab() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [editingPackage, setEditingPackage] = useState<PackageType | null>(null)
@@ -130,7 +132,7 @@ export default function PackagesTab() {
       return response.data
     },
     onSuccess: () => {
-      toast.success('Package added successfully')
+      toast.success(t('packages.toasts.addedSuccessfully'))
       queryClient.invalidateQueries({ queryKey: ['packages'] })
       setShowCreateDialog(false)
       setPackageForm({ name: '', install_command: '', description: '' })
@@ -148,7 +150,7 @@ export default function PackagesTab() {
       return response.data
     },
     onSuccess: () => {
-      toast.success('Package updated successfully')
+      toast.success(t('packages.toasts.updatedSuccessfully'))
       queryClient.invalidateQueries({ queryKey: ['packages'] })
       setEditingPackage(null)
       setPackageForm({ name: '', install_command: '', description: '' })
@@ -185,7 +187,7 @@ export default function PackagesTab() {
       return response.data
     },
     onSuccess: () => {
-      toast.success('Package removed successfully')
+      toast.success(t('packages.toasts.removedSuccessfully'))
       queryClient.invalidateQueries({ queryKey: ['packages'] })
       setDeleteConfirmPackage(null)
     },
@@ -255,7 +257,7 @@ export default function PackagesTab() {
   const columns: Column<PackageType>[] = [
     {
       id: 'name',
-      label: 'Package',
+      label: t('packages.columns.package'),
       render: (pkg) => (
         <Box>
           <Typography variant="body2" fontWeight={500}>
@@ -271,21 +273,21 @@ export default function PackagesTab() {
     },
     {
       id: 'status',
-      label: 'Status',
+      label: t('packages.columns.status'),
       render: (pkg) => {
         const statusConfig = {
           installed: {
             color: 'success' as const,
             icon: <CheckCircle size={16} />,
-            label: 'Installed',
+            label: t('packages.status.installed'),
           },
-          pending: { color: 'warning' as const, icon: <Clock size={16} />, label: 'Pending' },
+          pending: { color: 'warning' as const, icon: <Clock size={16} />, label: t('packages.status.pending') },
           installing: {
             color: 'info' as const,
             icon: <Loader2 size={16} className="animate-spin" />,
-            label: 'Installing',
+            label: t('packages.status.installing'),
           },
-          failed: { color: 'error' as const, icon: <XCircle size={16} />, label: 'Failed' },
+          failed: { color: 'error' as const, icon: <XCircle size={16} />, label: t('packages.status.failed') },
         }
         const config = statusConfig[pkg.status]
         return <Chip icon={config.icon} label={config.label} color={config.color} size="small" />
@@ -293,7 +295,7 @@ export default function PackagesTab() {
     },
     {
       id: 'installed_at',
-      label: 'Installed',
+      label: t('packages.columns.installed'),
       render: (pkg) => (
         <Typography variant="body2" color="text.secondary">
           {pkg.installed_at ? formatDateShort(pkg.installed_at) : '-'}
@@ -306,34 +308,34 @@ export default function PackagesTab() {
   const actions: ActionButton<PackageType>[] = [
     {
       icon: <Play size={16} />,
-      label: 'Install',
+      label: t('packages.actions.install'),
       onClick: (pkg) => installPackageMutation.mutate(pkg.id),
       color: 'primary',
-      tooltip: 'Install Package',
+      tooltip: t('packages.actions.installTooltip'),
       show: (pkg) => pkg.status === 'pending' || pkg.status === 'failed',
     },
     {
       icon: <RefreshCw size={16} />,
-      label: 'Reinstall',
+      label: t('packages.actions.reinstall'),
       onClick: (pkg) => reinstallPackageMutation.mutate(pkg.id),
       color: 'warning',
-      tooltip: 'Reinstall Package',
+      tooltip: t('packages.actions.reinstallTooltip'),
       show: (pkg) => pkg.status === 'installed',
     },
     {
       icon: <Edit size={16} />,
-      label: 'Edit',
+      label: t('packages.actions.edit'),
       onClick: handleOpenEdit,
       color: 'default',
-      tooltip: 'Edit Package',
+      tooltip: t('packages.actions.editTooltip'),
       show: (pkg) => pkg.status !== 'installing', // Can't edit while installing
     },
     {
       icon: <Trash2 size={16} />,
-      label: 'Delete',
+      label: t('packages.actions.delete'),
       onClick: setDeleteConfirmPackage,
       color: 'error',
-      tooltip: 'Delete Package',
+      tooltip: t('packages.actions.deleteTooltip'),
       show: (pkg) => pkg.status !== 'installing', // Can't delete while installing
     },
   ]
@@ -342,30 +344,27 @@ export default function PackagesTab() {
     <Box>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h6" fontWeight={600} gutterBottom>
-          System Packages
+          {t('packages.title')}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Install system packages that can be used in your backup scripts. Packages are
-          automatically reinstalled when the container is recreated.
+          {t('packages.subtitle')}
         </Typography>
       </Box>
 
       <Alert severity="info" sx={{ mb: 3 }}>
-        Simply enter a package name (e.g., <code>wakeonlan</code>, <code>curl</code>) and it will be
-        installed using <code>sudo apt-get install -y</code>. For advanced cases, you can enable
-        custom install commands.
+        {t('packages.hint')}
       </Alert>
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h6" fontWeight={600}>
-          Installed Packages
+          {t('packages.installedPackages')}
         </Typography>
         <Button
           variant="contained"
           startIcon={<Plus size={18} />}
           onClick={() => setShowCreateDialog(true)}
         >
-          Add Package
+          {t('packages.addPackage')}
         </Button>
       </Box>
 
@@ -377,8 +376,8 @@ export default function PackagesTab() {
         loading={isLoading}
         emptyState={{
           icon: <Package size={48} />,
-          title: 'No packages installed',
-          description: 'Add system packages to use in your backup scripts',
+          title: t('packages.empty'),
+          description: t('packages.emptyDesc'),
         }}
         variant="outlined"
       />
@@ -390,20 +389,20 @@ export default function PackagesTab() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>{editingPackage ? 'Edit Package' : 'Add System Package'}</DialogTitle>
+        <DialogTitle>{editingPackage ? t('packages.createDialog.titleEdit') : t('packages.createDialog.titleAdd')}</DialogTitle>
         <form onSubmit={handleSubmitPackage}>
           <DialogContent>
             <Stack spacing={3}>
               <TextField
-                label="Package Name"
+label={t('packages.fields.packageName')}
                 value={packageForm.name}
                 onChange={(e) => setPackageForm({ ...packageForm, name: e.target.value })}
                 required
                 fullWidth
                 helperText={
                   advancedMode
-                    ? 'Package name for reference'
-                    : 'e.g., wakeonlan, curl, jq (will run: sudo apt-get update && sudo apt-get install -y <name>)'
+                    ? t('packages.fields.packageNameHintAdvanced')
+                    : t('packages.fields.packageNameHintSimple')
                 }
               />
 
@@ -414,12 +413,12 @@ export default function PackagesTab() {
                     onChange={(e) => setAdvancedMode(e.target.checked)}
                   />
                 }
-                label="Advanced: Custom install command"
+                label={t('packages.fields.advancedMode')}
               />
 
               {advancedMode && (
                 <TextField
-                  label="Install Command"
+                  label={t('packages.fields.installCommand')}
                   value={packageForm.install_command}
                   onChange={(e) =>
                     setPackageForm({ ...packageForm, install_command: e.target.value })
@@ -428,21 +427,21 @@ export default function PackagesTab() {
                   fullWidth
                   multiline
                   rows={3}
-                  helperText="e.g., apt-get install -y wakeonlan or pip install some-package"
+                  helperText={t('packages.fields.installCommandHint')}
                 />
               )}
 
               <TextField
-                label="Description (Optional)"
+                label={t('packages.fields.description')}
                 value={packageForm.description}
                 onChange={(e) => setPackageForm({ ...packageForm, description: e.target.value })}
                 fullWidth
-                helperText="Brief description of what this package does"
+helperText={t('packages.fields.descriptionHint')}
               />
             </Stack>
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleCloseDialog}>Cancel</Button>
+            <Button onClick={handleCloseDialog}>{t('common.buttons.cancel')}</Button>
             <Button
               type="submit"
               variant="contained"
@@ -453,13 +452,13 @@ export default function PackagesTab() {
                 ) : null
               }
             >
-              {editingPackage
+{editingPackage
                 ? updatePackageMutation.isPending
-                  ? 'Updating...'
-                  : 'Update Package'
+                  ? t('packages.buttons.updating')
+                  : t('packages.buttons.updatePackage')
                 : createPackageMutation.isPending
-                  ? 'Adding...'
-                  : 'Add Package'}
+                  ? t('packages.buttons.adding')
+                  : t('packages.buttons.addPackage')}
             </Button>
           </DialogActions>
         </form>
@@ -472,18 +471,17 @@ export default function PackagesTab() {
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>Delete Package</DialogTitle>
+        <DialogTitle>{t('packages.deleteDialog.title')}</DialogTitle>
         <DialogContent>
           <Typography variant="body2">
-            Are you sure you want to remove <strong>"{deleteConfirmPackage?.name}"</strong> from the
-            list?
+            {t('packages.deleteDialog.message', { name: deleteConfirmPackage?.name })}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            This will not uninstall the package from the system, only remove it from the list.
+            {t('packages.deleteDialog.note')}
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteConfirmPackage(null)}>Cancel</Button>
+          <Button onClick={() => setDeleteConfirmPackage(null)}>{t('common.buttons.cancel')}</Button>
           <Button
             onClick={() =>
               deleteConfirmPackage && deletePackageMutation.mutate(deleteConfirmPackage.id)
@@ -493,7 +491,7 @@ export default function PackagesTab() {
             disabled={deletePackageMutation.isPending}
             startIcon={deletePackageMutation.isPending ? <CircularProgress size={16} /> : null}
           >
-            {deletePackageMutation.isPending ? 'Deleting...' : 'Delete'}
+            {deletePackageMutation.isPending ? t('packages.deleteDialog.deleting') : t('packages.deleteDialog.confirm')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -510,17 +508,17 @@ export default function PackagesTab() {
             {jobStatus?.status === 'completed' ? (
               <>
                 <CheckCircle size={24} color="#4caf50" />
-                <Typography variant="h6">Installation Successful</Typography>
+                <Typography variant="h6">{t('packages.resultDialog.successful')}</Typography>
               </>
             ) : jobStatus?.status === 'failed' ? (
               <>
                 <XCircle size={24} color="#f44336" />
-                <Typography variant="h6">Installation Failed</Typography>
+                <Typography variant="h6">{t('packages.resultDialog.failed')}</Typography>
               </>
             ) : (
               <>
                 <Loader2 size={24} className="animate-spin" color="#2196f3" />
-                <Typography variant="h6">Installing...</Typography>
+                <Typography variant="h6">{t('packages.resultDialog.installing')}</Typography>
               </>
             )}
           </Box>
@@ -533,7 +531,7 @@ export default function PackagesTab() {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <CircularProgress size={20} />
                 <Typography variant="body2" color="text.secondary">
-                  Installing package... This may take a few minutes.
+                  {t('packages.resultDialog.installingDesc')}
                 </Typography>
               </Box>
             )}
@@ -545,7 +543,7 @@ export default function PackagesTab() {
                   color="text.secondary"
                   sx={{ mb: 0.5, display: 'block' }}
                 >
-                  Standard Output:
+                  {t('packages.resultDialog.stdout')}
                 </Typography>
                 <Paper
                   sx={{
@@ -576,7 +574,7 @@ export default function PackagesTab() {
                   color="text.secondary"
                   sx={{ mb: 0.5, display: 'block' }}
                 >
-                  Standard Error:
+                  {t('packages.resultDialog.stderr')}
                 </Typography>
                 <Paper
                   sx={{
@@ -603,7 +601,7 @@ export default function PackagesTab() {
             {jobStatus?.exit_code !== null && jobStatus?.exit_code !== undefined && (
               <Box>
                 <Chip
-                  label={`Exit Code: ${jobStatus.exit_code}`}
+                  label={t('packages.resultDialog.exitCode', { code: jobStatus.exit_code })}
                   size="small"
                   color={jobStatus.exit_code === 0 ? 'success' : 'error'}
                 />
@@ -620,7 +618,7 @@ export default function PackagesTab() {
             variant="contained"
             disabled={jobStatus?.status === 'installing'}
           >
-            {jobStatus?.status === 'installing' ? 'Installing...' : 'Close'}
+            {jobStatus?.status === 'installing' ? t('packages.resultDialog.installing') : t('packages.resultDialog.close')}
           </Button>
         </DialogActions>
       </Dialog>

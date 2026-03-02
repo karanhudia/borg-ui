@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import {
   Card,
   CardContent,
@@ -31,29 +32,30 @@ export default function RepositorySelectorCard({
   onRepositoryChange,
   loading = false,
 }: RepositorySelectorCardProps) {
+  const { t } = useTranslation()
   return (
     <Card sx={{ mb: 3 }}>
       <CardContent>
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
           <Database size={20} color="#2e7d32" />
           <Typography variant="h6" fontWeight={600}>
-            Select Repository
+            {t('repositorySelectorCard.title')}
           </Typography>
         </Stack>
         <FormControl fullWidth sx={{ minWidth: { xs: '100%', sm: 300 } }}>
           <InputLabel id="repository-select-label" sx={{ color: 'text.primary' }}>
-            Repository
+            {t('common.repository')}
           </InputLabel>
           <Select
             labelId="repository-select-label"
             value={selectedRepositoryId || ''}
             onChange={(e) => onRepositoryChange(e.target.value as number)}
-            label="Repository"
+            label={t('common.repository')}
             disabled={loading}
             sx={{ height: { xs: 48, sm: 56 } }}
           >
             <MenuItem value="" disabled>
-              {loading ? 'Loading repositories...' : 'Select a repository...'}
+              {loading ? t('repositorySelectorCard.loading') : t('repositorySelectorCard.placeholder')}
             </MenuItem>
             {repositories.map((repo) => (
               <MenuItem key={repo.id} value={repo.id} disabled={repo.has_running_maintenance}>
@@ -69,7 +71,7 @@ export default function RepositorySelectorCard({
                           color="warning.main"
                           sx={{ ml: 1 }}
                         >
-                          (Maintenance Running)
+                          {t('repositorySelectorCard.maintenanceRunning')}
                         </Typography>
                       )}
                     </Typography>

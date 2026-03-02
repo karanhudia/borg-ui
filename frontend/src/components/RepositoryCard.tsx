@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Card, CardContent, Box, Typography, Button, Tooltip, Chip } from '@mui/material'
 import {
   Info,
@@ -69,6 +70,7 @@ export default function RepositoryCard({
   onJobCompleted,
 }: RepositoryCardProps) {
   const queryClient = useQueryClient()
+  const { t } = useTranslation()
   const { trackRepository, trackBackup, trackMaintenance, trackArchive, EventAction } = useMatomo()
 
   // Use maintenance jobs hook - always poll to handle page refreshes
@@ -139,7 +141,7 @@ export default function RepositoryCard({
               </Typography>
               {repository.mode === 'observe' && (
                 <Chip
-                  label="Observe Only"
+                  label={t('repositoryCard.observeOnly')}
                   size="small"
                   color="info"
                   sx={{ height: '20px', fontSize: '0.7rem' }}
@@ -157,7 +159,7 @@ export default function RepositoryCard({
           {isAdmin && (
             <Box sx={{ display: 'flex', gap: 1 }}>
               <Button variant="outlined" size="small" onClick={onEdit}>
-                Edit
+                {t('repositoryCard.edit')}
               </Button>
             </Box>
           )}
@@ -166,7 +168,7 @@ export default function RepositoryCard({
         <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', mb: 2 }}>
           <Box>
             <Typography variant="caption" color="text.secondary" display="block">
-              Archives
+              {t('repositoryCard.archives')}
             </Typography>
             <Typography variant="body2" fontWeight={500}>
               {repository.archive_count}
@@ -174,7 +176,7 @@ export default function RepositoryCard({
           </Box>
           <Box>
             <Typography variant="caption" color="text.secondary" display="block">
-              Total Size
+              {t('repositoryCard.totalSize')}
             </Typography>
             <Typography variant="body2" fontWeight={500}>
               {repository.total_size || 'N/A'}
@@ -182,10 +184,10 @@ export default function RepositoryCard({
           </Box>
           <Box>
             <Typography variant="caption" color="text.secondary" display="block">
-              Last Backup
+              {t('repositoryCard.lastBackup')}
             </Typography>
             <Tooltip
-              title={repository.last_backup ? formatDateTimeFull(repository.last_backup) : 'Never'}
+              title={repository.last_backup ? formatDateTimeFull(repository.last_backup) : t('common.never')}
               arrow
             >
               <Typography
@@ -193,16 +195,16 @@ export default function RepositoryCard({
                 fontWeight={500}
                 sx={{ cursor: repository.last_backup ? 'help' : 'default' }}
               >
-                {repository.last_backup ? formatDateShort(repository.last_backup) : 'Never'}
+                {repository.last_backup ? formatDateShort(repository.last_backup) : t('common.never')}
               </Typography>
             </Tooltip>
           </Box>
           <Box>
             <Typography variant="caption" color="text.secondary" display="block">
-              Last Check
+              {t('repositoryCard.lastCheck')}
             </Typography>
             <Tooltip
-              title={repository.last_check ? formatDateTimeFull(repository.last_check) : 'Never'}
+              title={repository.last_check ? formatDateTimeFull(repository.last_check) : t('common.never')}
               arrow
             >
               <Typography
@@ -210,17 +212,17 @@ export default function RepositoryCard({
                 fontWeight={500}
                 sx={{ cursor: repository.last_check ? 'help' : 'default' }}
               >
-                {repository.last_check ? formatDateShort(repository.last_check) : 'Never'}
+                {repository.last_check ? formatDateShort(repository.last_check) : t('common.never')}
               </Typography>
             </Tooltip>
           </Box>
           <Box>
             <Typography variant="caption" color="text.secondary" display="block">
-              Last Compact
+              {t('repositoryCard.lastCompact')}
             </Typography>
             <Tooltip
               title={
-                repository.last_compact ? formatDateTimeFull(repository.last_compact) : 'Never'
+                repository.last_compact ? formatDateTimeFull(repository.last_compact) : t('common.never')
               }
               arrow
             >
@@ -229,13 +231,13 @@ export default function RepositoryCard({
                 fontWeight={500}
                 sx={{ cursor: repository.last_compact ? 'help' : 'default' }}
               >
-                {repository.last_compact ? formatDateShort(repository.last_compact) : 'Never'}
+                {repository.last_compact ? formatDateShort(repository.last_compact) : t('common.never')}
               </Typography>
             </Tooltip>
           </Box>
           <Box>
             <Typography variant="caption" color="text.secondary" display="block">
-              Encryption
+              {t('repositoryCard.encryption')}
             </Typography>
             <Typography variant="body2" fontWeight={500}>
               {repository.encryption}
@@ -243,7 +245,7 @@ export default function RepositoryCard({
           </Box>
           <Box>
             <Typography variant="caption" color="text.secondary" display="block">
-              Compression
+              {t('repositoryCard.compression')}
             </Typography>
             <Typography variant="body2" fontWeight={500}>
               {getCompressionLabel(repository.compression)}
@@ -253,11 +255,13 @@ export default function RepositoryCard({
           {repository.source_directories && repository.source_directories.length > 0 && (
             <Box>
               <Typography variant="caption" color="text.secondary" display="block">
-                Source Paths
+                {t('repositoryCard.sourcePaths')}
               </Typography>
               <Typography variant="body2" fontWeight={500}>
                 {repository.source_directories.length}{' '}
-                {repository.source_directories.length === 1 ? 'path' : 'paths'}
+                {repository.source_directories.length === 1
+                  ? t('repositoryCard.path')
+                  : t('repositoryCard.paths')}
               </Typography>
             </Box>
           )}
@@ -282,7 +286,7 @@ export default function RepositoryCard({
                 disabled={isMaintenanceRunning}
                 sx={{ textTransform: 'none' }}
               >
-                Info
+                {t('repositoryCard.buttons.info')}
               </Button>
               <Button
                 variant="outlined"
@@ -296,7 +300,7 @@ export default function RepositoryCard({
                 sx={{ textTransform: 'none' }}
                 color={checkJob ? 'primary' : 'inherit'}
               >
-                Check
+                {t('repositoryCard.buttons.check')}
               </Button>
               <Button
                 variant="outlined"
@@ -310,7 +314,7 @@ export default function RepositoryCard({
                 color={compactJob ? 'primary' : 'warning'}
                 sx={{ textTransform: 'none' }}
               >
-                Compact
+                {t('repositoryCard.buttons.compact')}
               </Button>
               <Button
                 variant="outlined"
@@ -324,7 +328,7 @@ export default function RepositoryCard({
                 color={pruneJob ? 'primary' : 'secondary'}
                 sx={{ textTransform: 'none' }}
               >
-                Prune
+                {t('repositoryCard.buttons.prune')}
               </Button>
               {repository.mode === 'full' && (
                 <Button
@@ -344,7 +348,7 @@ export default function RepositoryCard({
                   color="success"
                   sx={{ textTransform: 'none' }}
                 >
-                  Backup Now
+                  {t('repositoryCard.buttons.backupNow')}
                 </Button>
               )}
               <Button
@@ -358,7 +362,7 @@ export default function RepositoryCard({
                 disabled={isMaintenanceRunning}
                 sx={{ textTransform: 'none' }}
               >
-                View Archives
+                {t('repositoryCard.buttons.viewArchives')}
               </Button>
               <Button
                 variant="outlined"
@@ -375,7 +379,7 @@ export default function RepositoryCard({
                 color="error"
                 sx={{ textTransform: 'none' }}
               >
-                Delete
+                {t('repositoryCard.buttons.delete')}
               </Button>
             </Box>
             {/* Progress message and elapsed time */}

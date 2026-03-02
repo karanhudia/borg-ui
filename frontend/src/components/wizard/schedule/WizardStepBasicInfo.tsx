@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { TextField, Stack, Alert } from '@mui/material'
 import MultiRepositorySelector from '../../MultiRepositorySelector'
 import { Repository } from '../../../types'
@@ -20,15 +21,17 @@ const WizardStepBasicInfo: React.FC<WizardStepBasicInfoProps> = ({
   repositories,
   onChange,
 }) => {
+  const { t } = useTranslation()
+
   return (
     <Stack spacing={2}>
       <TextField
-        label="Job Name"
+        label={t('wizard.scheduleWizard.basicInfo.jobNameLabel')}
         value={data.name}
         onChange={(e) => onChange({ name: e.target.value })}
         required
         fullWidth
-        placeholder="Daily backup"
+        placeholder={t('wizard.scheduleWizard.basicInfo.jobNamePlaceholder')}
         size="medium"
         InputProps={{
           sx: { fontSize: '1.1rem' },
@@ -39,12 +42,12 @@ const WizardStepBasicInfo: React.FC<WizardStepBasicInfoProps> = ({
       />
 
       <TextField
-        label="Description"
+        label={t('wizard.scheduleWizard.basicInfo.descriptionLabel')}
         value={data.description}
         onChange={(e) => onChange({ description: e.target.value })}
         multiline
         rows={2}
-        placeholder="Optional description"
+        placeholder={t('wizard.scheduleWizard.basicInfo.descriptionPlaceholder')}
         fullWidth
         size="medium"
         InputProps={{
@@ -59,9 +62,9 @@ const WizardStepBasicInfo: React.FC<WizardStepBasicInfoProps> = ({
         repositories={repositories}
         selectedIds={data.repositoryIds}
         onChange={(ids) => onChange({ repositoryIds: ids })}
-        label="Repositories"
-        placeholder="Select repositories..."
-        helperText="Use arrows to change backup order."
+        label={t('wizard.scheduleWizard.basicInfo.repositoriesLabel')}
+        placeholder={t('wizard.scheduleWizard.basicInfo.repositoriesPlaceholder')}
+        helperText={t('wizard.scheduleWizard.basicInfo.repositoriesHelper')}
         required
         size="medium"
         allowReorder={true}
@@ -70,7 +73,7 @@ const WizardStepBasicInfo: React.FC<WizardStepBasicInfoProps> = ({
 
       {data.repositoryIds.length === 0 && (
         <Alert severity="warning" sx={{ py: 0.5 }}>
-          Select at least one repository to continue.
+          {t('wizard.scheduleWizard.basicInfo.selectAtLeastOne')}
         </Alert>
       )}
     </Stack>

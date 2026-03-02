@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
@@ -21,6 +22,7 @@ import { toast } from 'react-hot-toast'
 import { settingsAPI } from '../services/api'
 
 const MqttSettingsTab: React.FC = () => {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
 
   // MQTT form state
@@ -130,14 +132,14 @@ const MqttSettingsTab: React.FC = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['systemSettings'] })
-      toast.success('MQTT settings saved successfully')
+      toast.success(t('mqttSettings.savedSuccessfully'))
       setHasChanges(false)
       setPasswordChanged(false)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       const data = error.response?.data
-      let errorMsg = 'Failed to save MQTT settings'
+      let errorMsg = t('mqtt.failedToSaveMqttSettings')
       if (Array.isArray(data)) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         errorMsg = data.map((e: any) => e.msg).join(', ')
@@ -153,7 +155,7 @@ const MqttSettingsTab: React.FC = () => {
       await saveMqttSettingsMutation.mutateAsync()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      toast.error(error.message || 'Failed to save MQTT settings')
+      toast.error(error.message || t('mqtt.failedToSaveMqttSettings'))
     }
   }
 
@@ -183,10 +185,10 @@ const MqttSettingsTab: React.FC = () => {
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
           <Box>
             <Typography variant="h5" fontWeight={700} gutterBottom>
-              MQTT Settings
+              {t('mqttSettings.title')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Configure MQTT broker connection for Home Assistant state publishing
+              {t('mqtt.subtitle')}
             </Typography>
           </Box>
           <Button
@@ -195,7 +197,7 @@ const MqttSettingsTab: React.FC = () => {
             onClick={handleSaveSettings}
             disabled={!hasChanges || isSaving}
           >
-            {isSaving ? 'Saving...' : 'Save Settings'}
+            {isSaving ? t('mqttSettings.saving') : t('mqttSettings.save')}
           </Button>
         </Box>
 
@@ -205,10 +207,10 @@ const MqttSettingsTab: React.FC = () => {
             <Stack spacing={3}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Wifi size={24} />
-                <Typography variant="h6">MQTT Connection</Typography>
+                <Typography variant="h6">{t('mqtt.connectionTitle')}</Typography>
               </Box>
               <Typography variant="body2" color="text.secondary">
-                Configure connection to your MQTT broker.
+                {t('mqtt.connectionDescription')}
               </Typography>
               <Divider />
 
@@ -221,7 +223,7 @@ const MqttSettingsTab: React.FC = () => {
                     color="primary"
                   />
                 }
-                label="Enable MQTT Publishing"
+                label={t('mqtt.enableMqttPublishing')}
               />
 
               {mqttEnabled && (
@@ -234,32 +236,32 @@ const MqttSettingsTab: React.FC = () => {
                     }}
                   >
                     <TextField
-                      label="Broker URL"
-                      placeholder="broker.example.com or localhost"
+                      label={t('mqtt.brokerUrlLabel')}
+                      placeholder={t('mqtt.brokerUrlPlaceholder')}
                       value={mqttBrokerUrl}
                       onChange={(e) => setMqttBrokerUrl(e.target.value)}
                       fullWidth
                       required
-                      helperText="MQTT broker hostname or IP address"
+                      helperText={t('mqtt.brokerUrlHelper')}
                     />
 
                     <TextField
-                      label="Broker Port"
+                      label={t('mqtt.brokerPortLabel')}
                       type="number"
                       value={mqttBrokerPort}
                       onChange={(e) => setMqttBrokerPort(Number(e.target.value))}
                       fullWidth
                       inputProps={{ min: 1, max: 65535, step: 1 }}
-                      helperText="MQTT broker port (1883 for standard, 8883 for TLS)"
+                      helperText={t('mqtt.brokerPortHelper')}
                     />
 
                     <TextField
-                      label="Username"
-                      placeholder="Optional username"
+                      label={t('mqtt.usernameLabel')}
+                      placeholder={t('mqtt.usernamePlaceholder')}
                       value={mqttUsername}
                       onChange={(e) => setMqttUsername(e.target.value)}
                       fullWidth
-                      helperText="Optional MQTT username"
+                      helperText={t('mqtt.usernameHelper')}
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
@@ -270,15 +272,15 @@ const MqttSettingsTab: React.FC = () => {
                     />
 
                     <TextField
-                      label="Password"
+                      label={t('mqtt.passwordLabel')}
                       type={showPassword ? 'text' : 'password'}
                       value={mqttPassword}
                       onChange={handlePasswordChange}
                       fullWidth
                       helperText={
                         systemSettings?.mqtt_password_set
-                          ? 'Password is set'
-                          : 'Optional MQTT password'
+                          ? t('mqtt.passwordIsSet')
+                          : t('mqtt.passwordHelper')
                       }
                       InputProps={{
                         startAdornment: (
@@ -297,29 +299,29 @@ const MqttSettingsTab: React.FC = () => {
                     />
 
                     <TextField
-                      label="Client ID"
+                      label={t('mqtt.clientIdLabel')}
                       value={mqttClientId}
                       onChange={(e) => setMqttClientId(e.target.value)}
                       fullWidth
-                      helperText="MQTT client identifier"
+                      helperText={t('mqtt.clientIdHelper')}
                     />
 
                     <TextField
-                      label="Base Topic"
+                      label={t('mqtt.baseTopicLabel')}
                       value={mqttBaseTopic}
                       onChange={(e) => setMqttBaseTopic(e.target.value)}
                       fullWidth
-                      helperText="Root topic prefix for all MQTT messages"
+                      helperText={t('mqtt.baseTopicHelper')}
                     />
 
                     <TextField
-                      label="QoS Level"
+                      label={t('mqtt.qosLevelLabel')}
                       type="number"
                       value={mqttQos}
                       onChange={(e) => setMqttQos(Math.min(Math.max(0, Number(e.target.value)), 2))}
                       fullWidth
                       inputProps={{ min: 0, max: 2, step: 1 }}
-                      helperText="0 = at most once, 1 = at least once, 2 = exactly once"
+                      helperText={t('mqtt.qosLevelHelper')}
                     />
                   </Box>
 
@@ -332,7 +334,7 @@ const MqttSettingsTab: React.FC = () => {
                         color="primary"
                       />
                     }
-                    label="Retain messages"
+                    label={t('mqtt.retainMessages')}
                   />
                 </>
               )}
@@ -347,11 +349,10 @@ const MqttSettingsTab: React.FC = () => {
               <Stack spacing={3}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Shield size={24} />
-                  <Typography variant="h6">TLS/SSL Configuration</Typography>
+                  <Typography variant="h6">{t('mqtt.tlsConfigTitle')}</Typography>
                 </Box>
                 <Typography variant="body2" color="text.secondary">
-                  Configure TLS/SSL for secure MQTT connections. Required for encrypted MQTT
-                  brokers.
+                  {t('mqtt.tlsConfigDescription')}
                 </Typography>
                 <Divider />
 
@@ -364,42 +365,40 @@ const MqttSettingsTab: React.FC = () => {
                       color="primary"
                     />
                   }
-                  label="Enable TLS/SSL"
+                  label={t('mqtt.enableTls')}
                 />
 
                 {mqttTlsEnabled && (
                   <Box sx={{ display: 'grid', gridTemplateColumns: '1fr', gap: 3 }}>
                     <TextField
-                      label="CA Certificate Path"
+                      label={t('mqtt.caCertPathLabel')}
                       placeholder="/path/to/ca.crt"
                       value={mqttTlsCaCert}
                       onChange={(e) => setMqttTlsCaCert(e.target.value)}
                       fullWidth
-                      helperText="Path to CA certificate file (optional)"
+                      helperText={t('mqtt.caCertPathHelper')}
                     />
 
                     <TextField
-                      label="Client Certificate Path"
+                      label={t('mqtt.clientCertPathLabel')}
                       placeholder="/path/to/client.crt"
                       value={mqttTlsClientCert}
                       onChange={(e) => setMqttTlsClientCert(e.target.value)}
                       fullWidth
-                      helperText="Path to client certificate file (optional)"
+                      helperText={t('mqtt.clientCertPathHelper')}
                     />
 
                     <TextField
-                      label="Client Key Path"
+                      label={t('mqtt.clientKeyPathLabel')}
                       placeholder="/path/to/client.key"
                       value={mqttTlsClientKey}
                       onChange={(e) => setMqttTlsClientKey(e.target.value)}
                       fullWidth
-                      helperText="Path to client key file (optional)"
+                      helperText={t('mqtt.clientKeyPathHelper')}
                     />
 
                     <Alert severity="info" icon={<AlertTriangle size={20} />}>
-                      <strong>Note:</strong> Certificate paths are relative to the container's
-                      filesystem. For Docker deployments, mount your certificates to a volume and
-                      reference the container path (e.g., /certs/ca.crt).
+                      <strong>{t('mqtt.noteLabel')}</strong> {t('mqtt.dockerVolumesWarning')}
                     </Alert>
                   </Box>
                 )}

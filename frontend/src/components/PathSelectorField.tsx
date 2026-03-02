@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { TextField, IconButton, InputAdornment } from '@mui/material'
 import { FolderOpen } from '@mui/icons-material'
 import FileExplorerDialog from './FileExplorerDialog'
@@ -41,6 +42,7 @@ export default function PathSelectorField({
   fullWidth = true,
   size = 'small',
 }: PathSelectorFieldProps) {
+  const { t } = useTranslation()
   const [showFileExplorer, setShowFileExplorer] = useState(false)
 
   return (
@@ -63,7 +65,7 @@ export default function PathSelectorField({
                 onClick={() => setShowFileExplorer(true)}
                 edge="end"
                 size="small"
-                title="Browse filesystem"
+                title={t("pathSelectorField.browseFilesystem")}
                 disabled={disabled}
               >
                 <FolderOpen fontSize="small" />
@@ -81,7 +83,7 @@ export default function PathSelectorField({
             onChange(multiSelect ? paths.join(',') : paths[0])
           }
         }}
-        title={`Select ${selectMode === 'directories' ? 'Directory' : selectMode === 'files' ? 'File' : 'Path'}`}
+        title={selectMode === "directories" ? t("pathSelectorField.selectDirectory") : selectMode === "files" ? t("pathSelectorField.selectFile") : t("pathSelectorField.selectPath")}
         initialPath={value || '/'}
         multiSelect={multiSelect}
         connectionType={connectionType}

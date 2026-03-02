@@ -11,6 +11,7 @@ import {
 } from '@mui/material'
 import { AlertCircle, Unlock } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 
@@ -31,14 +32,12 @@ export default function LockErrorDialog({
   onLockBroken,
   isAdmin = false,
 }: LockErrorDialogProps) {
+  const { t } = useTranslation()
   const [breaking, setBreaking] = useState(false)
 
   const handleBreakLock = async () => {
     if (
-      !window.confirm(
-        'Are you CERTAIN no backup or operation is currently running on this repository? ' +
-          'Breaking the lock while an operation is running can corrupt your repository!'
-      )
+      !window.confirm(t('dialogs.lockError.breakLockWarning'))
     ) {
       return
     }
@@ -46,7 +45,7 @@ export default function LockErrorDialog({
     setBreaking(true)
     try {
       await repositoriesAPI.breakLock(repositoryId)
-      toast.success('Lock removed successfully! You can now retry your operation.')
+      toast.success(t('dialogs.lockError.lockRemovedSuccess'))
       onLockBroken?.()
       onClose()
     } catch (
@@ -65,9 +64,9 @@ export default function LockErrorDialog({
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <AlertCircle size={24} color="#f57c00" />
           <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-            <Typography variant="h6">Repository Locked</Typography>
+            <Typography variant="h6">{t('dialogs.lockError.title')}</Typography>
             <Typography variant="body2" color="text.secondary">
-              <strong>{repositoryName}</strong> is locked by another process or has a stale lock.
+              {t('dialogs.lockError.lockedDescription', { repositoryName })}
             </Typography>
           </Box>
         </Box>
@@ -76,12 +75,12 @@ export default function LockErrorDialog({
       <DialogContent>
         <Alert severity="warning" sx={{ mb: 1.5 }}>
           <Typography variant="body2">
-            If no backup is currently running, this is likely a stale lock from a crashed backup.
+            {t('dialogs.lockError.staleLockInfo')}
           </Typography>
         </Alert>
 
         <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-          <strong>What causes this?</strong>
+          <strong>{t('dialogs.lockError.whatCausesThis')}</strong>
         </Typography>
         <Typography
           variant="body2"
@@ -89,14 +88,14 @@ export default function LockErrorDialog({
           component="ul"
           sx={{ pl: 2, mb: 1.5, mt: 0 }}
         >
-          <li>Previous backup was interrupted or crashed</li>
-          <li>Network connection dropped during SSH backup</li>
-          <li>Container was restarted during an operation</li>
-          <li>Repository cache locks from stale operations</li>
+          <li>{t('dialogs.lockError.causeInterrupted')}</li>
+          <li>{t('dialogs.lockError.causeNetworkDrop')}</li>
+          <li>{t('dialogs.lockError.causeContainerRestart')}</li>
+          <li>{t('dialogs.lockError.causeCacheLocks')}</li>
         </Typography>
 
         <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-          <strong>Before breaking the lock:</strong>
+          <strong>{t('dialogs.lockError.beforeBreaking')}</strong>
         </Typography>
         <Typography
           variant="body2"
@@ -104,16 +103,15 @@ export default function LockErrorDialog({
           component="ul"
           sx={{ pl: 2, mt: 0, mb: 0 }}
         >
-          <li>Make sure no backup process is currently running</li>
-          <li>Check that no other client is accessing this repository</li>
-          <li>This will break both repository and cache locks</li>
+          <li>{t('dialogs.lockError.beforeBreakingCheck1')}</li>
+          <li>{t('dialogs.lockError.beforeBreakingCheck2')}</li>
+          <li>{t('dialogs.lockError.beforeBreakingCheck3')}</li>
         </Typography>
 
         {!isAdmin && (
           <Alert severity="info" sx={{ mt: 2 }}>
             <Typography variant="body2">
-              <strong>Admin privileges required:</strong> Only administrators can break repository
-              locks. Please contact your admin for assistance.
+              <strong>{t('dialogs.lockError.adminRequired')}</strong> {t('dialogs.lockError.adminRequiredDetail')}
             </Typography>
           </Alert>
         )}
@@ -121,7 +119,7 @@ export default function LockErrorDialog({
 
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={onClose} disabled={breaking}>
-          Cancel
+          {t('dialogs.lockError.cancel')}
         </Button>
         <Button
           variant="contained"
@@ -131,7 +129,7 @@ export default function LockErrorDialog({
           startIcon={breaking ? <CircularProgress size={16} /> : <Unlock size={16} />}
           title={!isAdmin ? 'Admin privileges required to break locks' : ''}
         >
-          {breaking ? 'Breaking Lock...' : 'Break Lock'}
+          {breaking ? t('common.status.running') : t('dialogs.lockError.breakLock')}
         </Button>
       </DialogActions>
     </Dialog>

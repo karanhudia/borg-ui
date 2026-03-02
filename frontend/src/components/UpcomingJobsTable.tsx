@@ -1,6 +1,7 @@
 import React from 'react'
 import { Card, CardContent, Typography, Stack, Box } from '@mui/material'
 import { Calendar } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { formatDate, formatRelativeTime } from '../utils/dateUtils'
 
 interface Repository {
@@ -32,6 +33,7 @@ const UpcomingJobsTable: React.FC<UpcomingJobsTableProps> = ({
   repositories,
   getRepositoryName,
 }) => {
+  const { t } = useTranslation()
   if (upcomingJobs.length === 0) {
     return null
   }
@@ -42,7 +44,7 @@ const UpcomingJobsTable: React.FC<UpcomingJobsTableProps> = ({
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
           <Calendar size={20} color="#1976d2" />
           <Typography variant="h6" fontWeight={600}>
-            Upcoming Jobs (Next 24 Hours)
+            {t('upcomingJobs.title')}
           </Typography>
         </Stack>
         <Stack spacing={1.5}>
@@ -64,7 +66,7 @@ const UpcomingJobsTable: React.FC<UpcomingJobsTableProps> = ({
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   {job.repository_ids && job.repository_ids.length > 0
-                    ? `${job.repository_ids.length} repositories`
+                    ? t('upcomingJobs.repositories', { count: job.repository_ids.length })
                     : job.repository_id
                       ? repositories.find((r) => r.id === job.repository_id)?.name || 'Unknown'
                       : getRepositoryName(job.repository || '')}

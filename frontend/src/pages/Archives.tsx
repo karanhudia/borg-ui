@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Box, Typography, CircularProgress } from '@mui/material'
 import { Folder } from 'lucide-react'
 import { archivesAPI, repositoriesAPI, mountsAPI, restoreAPI } from '../services/api'
@@ -18,6 +19,7 @@ import { useMatomo } from '../hooks/useMatomo'
 import RestoreWizard, { RestoreData } from '../components/RestoreWizard'
 
 const Archives: React.FC = () => {
+  const { t } = useTranslation()
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(null)
   const [selectedRepository, setSelectedRepository] = useState<Repository | null>(null)
   const [viewArchive, setViewArchive] = useState<Archive | null>(null)
@@ -102,7 +104,7 @@ const Archives: React.FC = () => {
       archivesAPI.deleteArchive(repository, archive),
     onSuccess: (data) => {
       // Backend now returns job_id for background deletion
-      toast.success(`Archive deletion started in background (Job ID: ${data.data.job_id})`)
+      toast.success(t('archives.deletionStarted', { id: data.data.job_id }))
       // Refresh archives list after a delay to allow deletion to complete
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ['repository-archives', selectedRepositoryId] })
@@ -153,8 +155,7 @@ const Archives: React.FC = () => {
 
       if (isMountTimeout) {
         toast.error(
-          `Mount timeout: Large repositories may need more time to mount. ` +
-            `Go to Settings > System to increase the Mount Timeout value.`,
+          t('archives.mountTimeout'),
           {
             duration: 10000,
             style: {
@@ -163,7 +164,7 @@ const Archives: React.FC = () => {
           }
         )
       } else {
-        toast.error(`Failed to mount archive: ${errorDetail}`)
+        toast.error(t('archives.mountFailed', { error: errorDetail }))
       }
     },
   })
@@ -197,7 +198,7 @@ const Archives: React.FC = () => {
         destination_connection_id
       ),
     onSuccess: () => {
-      toast.success('Restore job started! Check the Activity tab to monitor progress.', {
+      toast.success(t('archives.restoreStarted'), {
         duration: 6000, // Show longer so user can read it
       })
       trackArchive(EventAction.START, selectedRepository?.name)
@@ -349,10 +350,10 @@ const Archives: React.FC = () => {
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" fontWeight={600} gutterBottom>
-          Archive Browser
+          {t('archives.title')}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Browse and manage your backup archives
+          {t('archives.subtitle')}
         </Typography>
       </Box>
 
@@ -378,7 +379,7 @@ const Archives: React.FC = () => {
         >
           <CircularProgress size={48} />
           <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-            Loading repository statistics...
+            {t('archives.loadingStats')}
           </Typography>
         </Box>
       )}
@@ -408,8 +409,8 @@ const Archives: React.FC = () => {
           <Folder size={48} style={{ marginBottom: 16 }} />
           <Typography variant="body1" color="text.secondary">
             {repositories.length === 0
-              ? 'No repositories found. Create a repository first.'
-              : 'Select a repository to view its archives'}
+              ? t('archives.noRepositories')
+              : t('archives.selectRepository')}
           </Typography>
         </Box>
       )}

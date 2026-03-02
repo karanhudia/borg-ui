@@ -20,6 +20,7 @@ import {
 } from '@mui/material'
 import { Server, Cloud, FileCheck, FolderOpen } from 'lucide-react'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
+import { useTranslation } from 'react-i18next'
 
 interface SSHConnection {
   id: number
@@ -54,6 +55,7 @@ export default function WizardStepRestoreDestination({
   onChange,
   onBrowsePath,
 }: WizardStepRestoreDestinationProps) {
+  const { t } = useTranslation()
   const isSSHRepository = repositoryType === 'ssh'
 
   const handleLocationChange = (location: 'local' | 'ssh') => {
@@ -86,10 +88,10 @@ export default function WizardStepRestoreDestination({
       {/* Header */}
       <Box>
         <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-          Where should files be restored?
+          {t('wizard.restoreDestination.title')}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Select the destination and location for your restored files
+          {t('wizard.restoreDestination.subtitle')}
         </Typography>
       </Box>
 
@@ -140,10 +142,10 @@ export default function WizardStepRestoreDestination({
                 </Box>
                 <Box>
                   <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
-                    Borg UI Server
+                    {t('wizard.borgUiServer')}
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
-                    Restore to this server's local storage
+                    {t('wizard.restoreDestination.borgUiServerDesc')}
                   </Typography>
                 </Box>
               </Box>
@@ -197,14 +199,14 @@ export default function WizardStepRestoreDestination({
                   </Box>
                   <Box>
                     <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
-                      Remote Machine
+                      {t('wizard.restoreDestination.remoteMachine')}
                     </Typography>
                     <Typography
                       variant="body2"
                       color="text.secondary"
                       sx={{ fontSize: '0.8125rem' }}
                     >
-                      Restore to a remote machine via SSH
+                      {t('wizard.restoreDestination.remoteMachineDesc')}
                     </Typography>
                   </Box>
                 </Box>
@@ -217,8 +219,7 @@ export default function WizardStepRestoreDestination({
       {/* SSH Repository Info Alert */}
       {isSSHRepository && (
         <Alert severity="info">
-          SSH-to-SSH restore is not supported. Only local destinations are available for SSH
-          repositories.
+          {t('wizard.restoreDestination.sshToSshNotSupported')}
         </Alert>
       )}
 
@@ -227,17 +228,16 @@ export default function WizardStepRestoreDestination({
         <>
           {!Array.isArray(sshConnections) || sshConnections.length === 0 ? (
             <Alert severity="warning">
-              No SSH connections configured. Please configure SSH connections in the SSH Keys page
-              first.
+              {t('wizard.noSshConnections')}
             </Alert>
           ) : (
             <FormControl fullWidth>
-              <InputLabel>Select SSH Connection</InputLabel>
+              <InputLabel>{t('wizard.restoreDestination.selectSshConnection')}</InputLabel>
               <Select
                 value={
                   data.destinationConnectionId === '' ? '' : String(data.destinationConnectionId)
                 }
-                label="Select SSH Connection"
+                label={t('wizard.restoreDestination.selectSshConnection')}
                 onChange={(e) => {
                   const value = e.target.value
                   if (value) {
@@ -320,12 +320,12 @@ export default function WizardStepRestoreDestination({
                     <FileCheck size={18} />
                     <Box>
                       <Typography variant="body1" fontWeight={600}>
-                        Restore to Original Location
+                        {t('wizard.restoreDestination.restoreToOriginal')}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
                         {data.destinationType === 'ssh'
-                          ? 'Recreate full directory structure from root (/) on the remote machine'
-                          : 'Recreate full directory structure from root (/)'}
+                          ? t('wizard.restoreDestination.restoreToOriginalDescRemote')
+                          : t('wizard.restoreDestination.restoreToOriginalDescLocal')}
                       </Typography>
                     </Box>
                   </Box>
@@ -360,10 +360,10 @@ export default function WizardStepRestoreDestination({
                     <FolderOpen size={18} />
                     <Box>
                       <Typography variant="body1" fontWeight={600}>
-                        Restore to Custom Location
+                        {t('wizard.restoreDestination.restoreToCustom')}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Choose where to restore files
+                        {t('wizard.restoreDestination.restoreToCustomDesc')}
                       </Typography>
                     </Box>
                   </Box>
@@ -379,7 +379,7 @@ export default function WizardStepRestoreDestination({
       {data.restoreStrategy === 'custom' && (
         <>
           <TextField
-            label="Custom Destination Path"
+            label={t('wizard.restoreDestination.customPathLabel')}
             value={data.customPath}
             onChange={(e) => onChange({ customPath: e.target.value })}
             placeholder={
@@ -391,8 +391,8 @@ export default function WizardStepRestoreDestination({
             fullWidth
             helperText={
               data.destinationType === 'ssh'
-                ? 'Choose a writable directory on the remote machine'
-                : 'Choose a writable directory where files will be restored'
+                ? t('wizard.restoreDestination.customPathHelperRemote')
+                : t('wizard.restoreDestination.customPathHelperLocal')
             }
             InputProps={{
               endAdornment: (
@@ -403,8 +403,8 @@ export default function WizardStepRestoreDestination({
                     size="small"
                     title={
                       data.destinationType === 'ssh'
-                        ? 'Browse remote filesystem'
-                        : 'Browse filesystem'
+                        ? t('wizard.restoreDestination.browseRemoteFilesystem')
+                        : t('wizard.restoreDestination.browseFilesystem')
                     }
                   >
                     <FolderOpenIcon fontSize="small" />
@@ -420,7 +420,7 @@ export default function WizardStepRestoreDestination({
               sx={{ mt: 1 }}
             >
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                Files will be restored to:
+                {t('wizard.restoreDestination.filesWillBeRestoredTo')}
               </Typography>
               <Typography
                 variant="body2"

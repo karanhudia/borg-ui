@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Box,
   TextField,
@@ -31,6 +32,7 @@ export default function ScriptParameterInputs({
   onChange,
   showDescriptions = true,
 }: ScriptParameterInputsProps) {
+  const { t } = useTranslation()
   const [showPassword, setShowPassword] = useState<Record<string, boolean>>({})
 
   if (!parameters || parameters.length === 0) {
@@ -55,10 +57,10 @@ export default function ScriptParameterInputs({
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <Typography variant="subtitle2" fontWeight={600}>
-          Script Parameters
+          {t('scriptParameters.title')}
         </Typography>
         <Chip
-          label={`${parameters.length} parameter${parameters.length !== 1 ? 's' : ''}`}
+          label={t('scriptParameters.paramCount', { count: parameters.length })}
           size="small"
           color="primary"
           variant="outlined"
@@ -105,7 +107,7 @@ export default function ScriptParameterInputs({
                 ) : undefined,
                 endAdornment: isPassword ? (
                   <InputAdornment position="end">
-                    <Tooltip title={shouldShow ? 'Hide password' : 'Show password'}>
+                    <Tooltip title={shouldShow ? t('scriptParameters.hidePassword') : t('scriptParameters.showPassword')}>
                       <IconButton
                         size="small"
                         onClick={() => toggleShowPassword(param.name)}

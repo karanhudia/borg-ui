@@ -14,6 +14,7 @@ import {
 } from '@mui/material'
 import { Warning, CheckCircle, Lock } from '@mui/icons-material'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface CheckWarningDialogProps {
   open: boolean
@@ -30,21 +31,22 @@ export default function CheckWarningDialog({
   onCancel,
   isLoading = false,
 }: CheckWarningDialogProps) {
+  const { t } = useTranslation()
   const [maxDuration, setMaxDuration] = useState<number>(3600)
   return (
     <Dialog open={open} onClose={onCancel} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <Warning color="warning" />
-        Confirm Repository Check
+        {t('dialogs.checkWarning.title')}
       </DialogTitle>
       <DialogContent>
         <Typography variant="body1" gutterBottom>
-          Check the integrity of repository: <strong>{repositoryName}</strong>
+          {t('dialogs.checkWarning.description', { repositoryName })}
         </Typography>
 
         <Box sx={{ mt: 1.5 }}>
           <Typography variant="subtitle2" gutterBottom>
-            Important:
+            {t('dialogs.checkWarning.important')}
           </Typography>
           <List dense sx={{ py: 0 }}>
             <ListItem sx={{ py: 0.5 }}>
@@ -52,8 +54,8 @@ export default function CheckWarningDialog({
                 <Lock fontSize="small" color="action" />
               </ListItemIcon>
               <ListItemText
-                primary="Repository will be locked"
-                secondary="Other operations (info, archives, backup) will not be available until check completes"
+                primary={t('dialogs.checkWarning.repoWillBeLocked')}
+                secondary={t('dialogs.checkWarning.otherOperationsUnavailable')}
               />
             </ListItem>
             <ListItem sx={{ py: 0.5 }}>
@@ -61,20 +63,20 @@ export default function CheckWarningDialog({
                 <CheckCircle fontSize="small" color="action" />
               </ListItemIcon>
               <ListItemText
-                primary="Progress tracking"
-                secondary="You can monitor progress in real-time. Note: Check operations cannot be cancelled once started."
+                primary={t('dialogs.checkWarning.progressTracking')}
+                secondary={t('dialogs.checkWarning.progressTrackingDetail')}
               />
             </ListItem>
           </List>
         </Box>
 
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          Other repositories will remain accessible during this operation.
+          {t('dialogs.checkWarning.otherReposAccessible')}
         </Typography>
 
         <Box sx={{ mt: 2 }}>
           <TextField
-            label="Max Duration (seconds)"
+            label={t('dialogs.checkWarning.maxDurationLabel')}
             type="number"
             value={maxDuration}
             onChange={(e) => {
@@ -82,7 +84,7 @@ export default function CheckWarningDialog({
               setMaxDuration(isNaN(value) ? 3600 : value)
             }}
             fullWidth
-            helperText="Maximum time for the check operation. Default: 3600 seconds (1 hour). Set to 0 for unlimited."
+            helperText={t('dialogs.checkWarning.maxDurationHelper')}
             InputProps={{
               inputProps: { min: 0 },
             }}
@@ -91,7 +93,7 @@ export default function CheckWarningDialog({
       </DialogContent>
       <DialogActions>
         <Button onClick={onCancel} disabled={isLoading}>
-          Cancel
+          {t('dialogs.checkWarning.cancel')}
         </Button>
         <Button
           onClick={() => onConfirm(maxDuration)}
@@ -100,7 +102,7 @@ export default function CheckWarningDialog({
           disabled={isLoading}
           startIcon={isLoading ? <CheckCircle className="animate-spin" /> : <CheckCircle />}
         >
-          {isLoading ? 'Starting...' : 'Start Check'}
+          {isLoading ? t('common.status.starting') : t('dialogs.checkWarning.confirm')}
         </Button>
       </DialogActions>
     </Dialog>

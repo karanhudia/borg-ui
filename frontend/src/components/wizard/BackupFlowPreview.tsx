@@ -1,5 +1,6 @@
 import { Box, Typography, alpha, Paper } from '@mui/material'
 import { Server, Cloud, HardDrive, Laptop, ArrowRight, ArrowRightLeft } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface SSHConnection {
   id: number
@@ -25,38 +26,40 @@ export default function BackupFlowPreview({
   repoSshConnection,
   sourceSshConnection,
 }: BackupFlowPreviewProps) {
+  const { t } = useTranslation()
+
   // Generate summary text
   const getSummaryText = () => {
     if (dataSource === 'local' && repositoryLocation === 'local') {
-      return 'Back up local data to local repository'
+      return t('wizard.backupFlowPreview.localToLocal')
     }
     if (dataSource === 'local' && repositoryLocation === 'ssh') {
-      return 'Back up local data to remote repository'
+      return t('wizard.backupFlowPreview.localToRemote')
     }
     if (dataSource === 'remote' && repositoryLocation === 'local') {
-      return 'Back up remote data to local repository via SSHFS'
+      return t('wizard.backupFlowPreview.remoteToLocal')
     }
-    return 'Back up data to repository'
+    return t('wizard.backupFlowPreview.default')
   }
 
   const getSourceLabel = () => {
     if (dataSource === 'local') {
-      return 'Borg UI Server'
+      return t('wizard.borgUiServer')
     }
     if (sourceSshConnection) {
       return `${sourceSshConnection.username}@${sourceSshConnection.host}`
     }
-    return 'Remote Client'
+    return t('wizard.remoteClient')
   }
 
   const getRepoLabel = () => {
     if (repositoryLocation === 'local') {
-      return 'Borg UI Server'
+      return t('wizard.borgUiServer')
     }
     if (repoSshConnection) {
       return `${repoSshConnection.username}@${repoSshConnection.host}`
     }
-    return 'Remote Storage'
+    return t('wizard.backupFlowPreview.remoteStorage')
   }
 
   const getSourceIcon = () => {
@@ -176,7 +179,7 @@ export default function BackupFlowPreview({
                 color="text.secondary"
                 sx={{ fontSize: '0.7rem', mt: 0.5, display: 'block' }}
               >
-                {sourceDirs.length} dir{sourceDirs.length !== 1 ? 's' : ''}
+                {t('wizard.backupFlowPreview.dirs', { count: sourceDirs.length })}
               </Typography>
             )}
           </Box>
@@ -220,7 +223,7 @@ export default function BackupFlowPreview({
                 color="text.secondary"
                 sx={{ fontSize: '0.7rem', fontWeight: 500 }}
               >
-                via SSHFS
+                {t('wizard.backupFlowPreview.viaSSHFS')}
               </Typography>
             </Box>
 

@@ -12,6 +12,7 @@ import {
   Alert,
   Stack,
 } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import { buildCompressionString, parseCompressionString } from '../utils/compressionUtils'
 
 interface CompressionSettingsProps {
@@ -25,6 +26,7 @@ export default function CompressionSettings({
   onChange,
   disabled = false,
 }: CompressionSettingsProps) {
+  const { t } = useTranslation()
   const parsed = parseCompressionString(value || 'lz4')
   const [algorithm, setAlgorithm] = useState(parsed.algorithm)
   const [level, setLevel] = useState(parsed.level)
@@ -49,55 +51,53 @@ export default function CompressionSettings({
   return (
     <Box>
       <Typography variant="subtitle2" gutterBottom sx={{ mb: 1.5 }}>
-        Compression Settings
+        {t('compressionSettings.title')}
       </Typography>
 
       <Stack spacing={2}>
         <FormControl fullWidth disabled={disabled}>
-          <InputLabel>Compression Algorithm</InputLabel>
+          <InputLabel>{t('compressionSettings.algorithmLabel')}</InputLabel>
           <Select
             value={algorithm}
-            label="Compression Algorithm"
+            label={t('compressionSettings.algorithmLabel')}
             onChange={(e) => setAlgorithm(e.target.value)}
           >
-            <MenuItem value="none">none - Do not compress</MenuItem>
-            <MenuItem value="lz4">lz4 - Very high speed, very low compression (default)</MenuItem>
-            <MenuItem value="zstd">zstd - Modern wide-range algorithm (default level 3)</MenuItem>
-            <MenuItem value="zlib">
-              zlib - Medium speed, medium compression (default level 6)
-            </MenuItem>
-            <MenuItem value="lzma">lzma - Low speed, high compression (default level 6)</MenuItem>
-            <MenuItem value="auto">auto - Automatic compression selection</MenuItem>
-            <MenuItem value="obfuscate">obfuscate - Obfuscate compressed data</MenuItem>
+            <MenuItem value="none">{t('compressionSettings.algorithmNone')}</MenuItem>
+            <MenuItem value="lz4">{t('compressionSettings.algorithmLz4')}</MenuItem>
+            <MenuItem value="zstd">{t('compressionSettings.algorithmZstd')}</MenuItem>
+            <MenuItem value="zlib">{t('compressionSettings.algorithmZlib')}</MenuItem>
+            <MenuItem value="lzma">{t('compressionSettings.algorithmLzma')}</MenuItem>
+            <MenuItem value="auto">{t('compressionSettings.algorithmAuto')}</MenuItem>
+            <MenuItem value="obfuscate">{t('compressionSettings.algorithmObfuscate')}</MenuItem>
           </Select>
         </FormControl>
 
         {algorithm !== 'none' && (
           <>
             <TextField
-              label="Compression Level (Optional)"
+              label={t('compressionSettings.levelLabel')}
               type="number"
               value={level}
               onChange={(e) => setLevel(e.target.value)}
               placeholder={
                 algorithm === 'zstd'
-                  ? '1-22 (default: 3)'
+                  ? t('compressionSettings.levelPlaceholderZstd')
                   : algorithm === 'zlib'
-                    ? '0-9 (default: 6)'
+                    ? t('compressionSettings.levelPlaceholderZlib')
                     : algorithm === 'lzma'
-                      ? '0-9 (default: 6, max useful: 6)'
-                      : 'Leave empty for default'
+                      ? t('compressionSettings.levelPlaceholderLzma')
+                      : t('compressionSettings.levelPlaceholderDefault')
               }
               helperText={
                 algorithm === 'auto'
-                  ? 'Auto algorithm uses lz4 as fallback. Level setting not applicable.'
+                  ? t('compressionSettings.levelHelperAuto')
                   : algorithm === 'zstd'
-                    ? 'zstd: Level 1-22. Higher = better compression but slower.'
+                    ? t('compressionSettings.levelHelperZstd')
                     : algorithm === 'zlib'
-                      ? 'zlib: Level 0-9. Level 0 means no compression (use "none" instead).'
+                      ? t('compressionSettings.levelHelperZlib')
                       : algorithm === 'lzma'
-                        ? 'lzma: Level 0-9. Levels above 6 are pointless and waste CPU/RAM.'
-                        : 'Leave empty to use default level.'
+                        ? t('compressionSettings.levelHelperLzma')
+                        : t('compressionSettings.levelHelperDefault')
               }
               fullWidth
               disabled={disabled || algorithm === 'auto'}
@@ -113,32 +113,31 @@ export default function CompressionSettings({
                       disabled={disabled}
                     />
                   }
-                  label="Auto-detect compressibility (auto,C[,L])"
+                  label={t('compressionSettings.autoDetect')}
                 />
                 <Typography
                   variant="caption"
                   color="text.secondary"
                   sx={{ mt: -1, mb: 1, display: 'block' }}
                 >
-                  Uses lz4 to test if data is compressible. For incompressible data (e.g., media
-                  files), uses "none". For compressible data, uses your selected algorithm.
+                  {t('compressionSettings.autoDetectDesc')}
                 </Typography>
               </>
             )}
 
             <TextField
-              label="Obfuscate Spec (Optional)"
+              label={t('compressionSettings.obfuscateLabel')}
               type="number"
               value={obfuscate}
               onChange={(e) => setObfuscate(e.target.value)}
-              placeholder="e.g., 110, 250"
-              helperText="Obfuscate compressed chunk sizes to make fingerprinting attacks harder. Must be used with encryption. Repo will be bigger."
+              placeholder={t('compressionSettings.obfuscatePlaceholder')}
+              helperText={t('compressionSettings.obfuscateHelper')}
               fullWidth
               disabled={disabled}
             />
 
             <Alert severity="info" sx={{ mt: 1 }}>
-              Final compression spec:{' '}
+              {t('compressionSettings.finalSpec')}{' '}
               <strong>{buildCompressionString(algorithm, level, autoDetect, obfuscate)}</strong>
             </Alert>
           </>

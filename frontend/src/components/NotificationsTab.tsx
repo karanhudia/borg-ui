@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
@@ -74,6 +75,7 @@ interface NotificationSetting {
 }
 
 const NotificationsTab: React.FC = () => {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [showDialog, setShowDialog] = useState(false)
   const [editingNotification, setEditingNotification] = useState<NotificationSetting | null>(null)
@@ -120,14 +122,14 @@ const NotificationsTab: React.FC = () => {
   const createMutation = useMutation({
     mutationFn: notificationsAPI.create,
     onSuccess: () => {
-      toast.success('Notification service added successfully')
+      toast.success(t('notifications.serviceAddedSuccessfully'))
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       setShowDialog(false)
       resetForm()
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to add notification service')
+      toast.error(error.response?.data?.detail || t('notifications.failedToAdd'))
     },
   })
 
@@ -136,7 +138,7 @@ const NotificationsTab: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: ({ id, data }: { id: number; data: any }) => notificationsAPI.update(id, data),
     onSuccess: () => {
-      toast.success('Notification service updated successfully')
+      toast.success(t('notifications.serviceUpdatedSuccessfully'))
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       setShowDialog(false)
       setEditingNotification(null)
@@ -144,7 +146,7 @@ const NotificationsTab: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to update notification service')
+      toast.error(error.response?.data?.detail || t('notifications.failedToUpdate'))
     },
   })
 
@@ -152,13 +154,13 @@ const NotificationsTab: React.FC = () => {
   const deleteMutation = useMutation({
     mutationFn: notificationsAPI.delete,
     onSuccess: () => {
-      toast.success('Notification service deleted successfully')
+      toast.success(t('notifications.serviceDeletedSuccessfully'))
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       setDeleteConfirm(null)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to delete notification service')
+      toast.error(error.response?.data?.detail || t('notifications.failedToDelete'))
     },
   })
 
@@ -167,15 +169,15 @@ const NotificationsTab: React.FC = () => {
     mutationFn: (serviceUrl: string) => notificationsAPI.test(serviceUrl),
     onSuccess: (response) => {
       if (response.data.success) {
-        toast.success('Test notification sent successfully! Check your service.')
+        toast.success(t('notifications.testSentSuccessfully'))
       } else {
-        toast.error(response.data.message || 'Failed to send test notification')
+        toast.error(response.data.message || t('notifications.failedToSendTest'))
       }
       setTesting(null)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to test notification')
+      toast.error(error.response?.data?.detail || t('notifications.failedToTest'))
       setTesting(null)
     },
   })
@@ -252,7 +254,7 @@ const NotificationsTab: React.FC = () => {
 
   const handleSubmit = () => {
     if (!formData.name.trim() || !formData.service_url.trim()) {
-      toast.error('Name and Service URL are required')
+      toast.error(t('notifications.nameAndUrlRequired'))
       return
     }
 
@@ -275,10 +277,10 @@ const NotificationsTab: React.FC = () => {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h6" fontWeight={600}>
-            Notification Services
+            {t('notifications.title')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Configure notification services for backup and restore alerts
+            {t('notifications.subtitle')}
           </Typography>
         </Box>
         <Button
@@ -290,14 +292,13 @@ const NotificationsTab: React.FC = () => {
             setShowDialog(true)
           }}
         >
-          Add Service
+          {t('notifications.addService')}
         </Button>
       </Box>
 
       <Alert severity="info" sx={{ mb: 3 }}>
         <Typography variant="body2" gutterBottom>
-          Get notified about backup failures, restore completions, and scheduled job issues via 100+
-          services including Email, Slack, Discord, Telegram, Pushover, and more.
+          {t('notifications.alertDescription')}
         </Typography>
         <Link
           href="#"
@@ -308,7 +309,7 @@ const NotificationsTab: React.FC = () => {
           sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1 }}
         >
           {showExamples ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-          {showExamples ? 'Hide' : 'Show'} Service URL Examples
+          {showExamples ? t('notifications.hide') : t('notifications.show')} {t('notifications.serviceUrlExamples')}
         </Link>
       </Alert>
 
@@ -317,7 +318,7 @@ const NotificationsTab: React.FC = () => {
           sx={{ mb: 3, p: 2, bgcolor: 'background.default', border: 1, borderColor: 'divider' }}
         >
           <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-            Apprise URL Examples:
+            {t('notifications.appriseUrlExamplesTitle')}
           </Typography>
           <Box
             sx={{
@@ -334,44 +335,44 @@ const NotificationsTab: React.FC = () => {
             }}
           >
             <Box component="span" sx={{ color: 'grey.400' }}>
-              Email (Gmail):{' '}
+              {t('notifications.exampleEmailGmail')}{' '}
             </Box>
             <Box component="span">
               mailto://user:app_password@gmail.com?smtp=smtp.gmail.com&mode=starttls
             </Box>
             <br />
             <Box component="span" sx={{ color: 'grey.400' }}>
-              Slack:{' '}
+              {t('notifications.exampleSlack')}{' '}
             </Box>
             <Box component="span">slack://TokenA/TokenB/TokenC/</Box>
             <br />
             <Box component="span" sx={{ color: 'grey.400' }}>
-              Discord:{' '}
+              {t('notifications.exampleDiscord')}{' '}
             </Box>
             <Box component="span">discord://webhook_id/webhook_token</Box>
             <br />
             <Box component="span" sx={{ color: 'grey.400' }}>
-              Telegram:{' '}
+              {t('notifications.exampleTelegram')}{' '}
             </Box>
             <Box component="span">tgram://bot_token/chat_id</Box>
             <br />
             <Box component="span" sx={{ color: 'grey.400' }}>
-              Microsoft Teams:{' '}
+              {t('notifications.exampleMicrosoftTeams')}{' '}
             </Box>
             <Box component="span">msteams://TokenA/TokenB/TokenC/</Box>
             <br />
             <Box component="span" sx={{ color: 'grey.400' }}>
-              Pushover:{' '}
+              {t('notifications.examplePushover')}{' '}
             </Box>
             <Box component="span">pover://user@token</Box>
             <br />
             <Box component="span" sx={{ color: 'grey.400' }}>
-              ntfy:{' '}
+              {t('notifications.exampleNtfy')}{' '}
             </Box>
             <Box component="span">ntfy://topic/</Box>
             <br />
             <Box component="span" sx={{ color: 'grey.400' }}>
-              Custom Webhook:{' '}
+              {t('notifications.exampleCustomWebhook')}{' '}
             </Box>
             <Box component="span">json://hostname/path/to/endpoint</Box>
           </Box>
@@ -382,7 +383,7 @@ const NotificationsTab: React.FC = () => {
             sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1.5 }}
           >
             <ExternalLink size={14} />
-            Full Apprise Documentation
+            {t('notifications.fullAppriseDocumentation')}
           </Link>
         </Card>
       </Collapse>
@@ -395,11 +396,10 @@ const NotificationsTab: React.FC = () => {
         <Card sx={{ p: 4, textAlign: 'center' }}>
           <Bell size={48} style={{ opacity: 0.3, margin: '0 auto 16px' }} />
           <Typography variant="h6" gutterBottom>
-            No Notification Services Configured
+            {t('notifications.noServicesTitle')}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Add your first notification service to get alerts about backup failures and other
-            important events.
+            {t('notifications.noServicesSubtitle')}
           </Typography>
           <Button
             variant="contained"
@@ -409,7 +409,7 @@ const NotificationsTab: React.FC = () => {
               setShowDialog(true)
             }}
           >
-            Add Service
+            {t('notifications.addService')}
           </Button>
         </Card>
       ) : (
@@ -418,12 +418,12 @@ const NotificationsTab: React.FC = () => {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Service</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Events</TableCell>
-                  <TableCell>Repositories</TableCell>
-                  <TableCell>Last Used</TableCell>
-                  <TableCell align="right">Actions</TableCell>
+                  <TableCell>{t('notifications.table.service')}</TableCell>
+                  <TableCell>{t('notifications.table.status')}</TableCell>
+                  <TableCell>{t('notifications.table.events')}</TableCell>
+                  <TableCell>{t('notifications.table.repositories')}</TableCell>
+                  <TableCell>{t('notifications.table.lastUsed')}</TableCell>
+                  <TableCell align="right">{t('common.actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -447,7 +447,7 @@ const NotificationsTab: React.FC = () => {
                     <TableCell>
                       <Chip
                         icon={notification.enabled ? <Bell size={14} /> : <BellOff size={14} />}
-                        label={notification.enabled ? 'Enabled' : 'Disabled'}
+                        label={notification.enabled ? t('notifications.enabled') : t('notifications.disabled')}
                         color={notification.enabled ? 'success' : 'default'}
                         size="small"
                       />
@@ -455,17 +455,17 @@ const NotificationsTab: React.FC = () => {
                     <TableCell>
                       <Stack direction="row" spacing={0.5} flexWrap="wrap" gap={0.5}>
                         {notification.notify_on_backup_start && (
-                          <Chip label="Backup Start" size="small" color="info" variant="outlined" />
+                          <Chip label={t('notifications.chip.backupStart')} size="small" color="info" variant="outlined" />
                         )}
                         {notification.notify_on_backup_failure && (
-                          <Chip label="Backup Fail" size="small" color="error" variant="outlined" />
+                          <Chip label={t('notifications.chip.backupFail')} size="small" color="error" variant="outlined" />
                         )}
                         {notification.notify_on_backup_success && (
-                          <Chip label="Backup OK" size="small" color="success" variant="outlined" />
+                          <Chip label={t('notifications.chip.backupOk')} size="small" color="success" variant="outlined" />
                         )}
                         {notification.notify_on_restore_failure && (
                           <Chip
-                            label="Restore Fail"
+                            label={t('notifications.chip.restoreFail')}
                             size="small"
                             color="error"
                             variant="outlined"
@@ -473,21 +473,21 @@ const NotificationsTab: React.FC = () => {
                         )}
                         {notification.notify_on_restore_success && (
                           <Chip
-                            label="Restore OK"
+                            label={t('notifications.chip.restoreOk')}
                             size="small"
                             color="success"
                             variant="outlined"
                           />
                         )}
                         {notification.notify_on_check_failure && (
-                          <Chip label="Check Fail" size="small" color="error" variant="outlined" />
+                          <Chip label={t('notifications.chip.checkFail')} size="small" color="error" variant="outlined" />
                         )}
                         {notification.notify_on_check_success && (
-                          <Chip label="Check OK" size="small" color="success" variant="outlined" />
+                          <Chip label={t('notifications.chip.checkOk')} size="small" color="success" variant="outlined" />
                         )}
                         {notification.notify_on_schedule_failure && (
                           <Chip
-                            label="Scheduler Error"
+                            label={t('notifications.chip.schedulerError')}
                             size="small"
                             color="warning"
                             variant="outlined"
@@ -497,19 +497,17 @@ const NotificationsTab: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       {notification.monitor_all_repositories ? (
-                        <Chip label="All Repositories" size="small" variant="outlined" />
+                        <Chip label={t('notifications.chip.allRepositories')} size="small" variant="outlined" />
                       ) : notification.repositories.length > 0 ? (
                         <Chip
-                          label={`${notification.repositories.length} ${
-                            notification.repositories.length === 1 ? 'Repository' : 'Repositories'
-                          }`}
+                          label={t('notifications.chip.repositoryCount', { count: notification.repositories.length })}
                           size="small"
                           color="primary"
                           variant="outlined"
                         />
                       ) : (
                         <Chip
-                          label="None Selected"
+                          label={t('notifications.chip.noneSelected')}
                           size="small"
                           color="warning"
                           variant="outlined"
@@ -527,7 +525,7 @@ const NotificationsTab: React.FC = () => {
                           size="small"
                           onClick={() => handleTest(notification)}
                           disabled={testing === notification.id}
-                          title="Send test notification"
+                          title={t('notifications.tooltip.sendTest')}
                         >
                           {testing === notification.id ? (
                             <CircularProgress size={16} />
@@ -539,7 +537,7 @@ const NotificationsTab: React.FC = () => {
                           size="small"
                           onClick={() => handleDuplicate(notification)}
                           color="default"
-                          title="Duplicate notification"
+                          title={t('notifications.tooltip.duplicate')}
                         >
                           <Copy size={16} />
                         </IconButton>
@@ -547,7 +545,7 @@ const NotificationsTab: React.FC = () => {
                           size="small"
                           onClick={() => openEditDialog(notification)}
                           color="primary"
-                          title="Edit notification"
+                          title={t('notifications.tooltip.edit')}
                         >
                           <Edit size={16} />
                         </IconButton>
@@ -555,7 +553,7 @@ const NotificationsTab: React.FC = () => {
                           size="small"
                           onClick={() => setDeleteConfirm(notification)}
                           color="error"
-                          title="Delete notification"
+                          title={t('notifications.tooltip.delete')}
                         >
                           <Trash2 size={16} />
                         </IconButton>
@@ -572,41 +570,40 @@ const NotificationsTab: React.FC = () => {
       {/* Add/Edit Dialog */}
       <Dialog open={showDialog} onClose={() => setShowDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
-          {editingNotification ? 'Edit Notification Service' : 'Add Notification Service'}
+          {editingNotification ? t('notifications.editService') : t('notifications.addService')}
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
-              label="Service Name"
+              label={t('notifications.form.serviceName')}
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="e.g., Slack - DevOps Channel"
+              placeholder={t('notifications.form.serviceNamePlaceholder')}
               fullWidth
               required
             />
 
             <TextField
-              label="Service URL"
+              label={t('notifications.form.serviceUrl')}
               value={formData.service_url}
               onChange={(e) => setFormData({ ...formData, service_url: e.target.value })}
-              placeholder="e.g., slack://TokenA/TokenB/TokenC/"
+              placeholder={t('notifications.form.serviceUrlPlaceholder')}
               fullWidth
               required
-              helperText="Use Apprise URL format. See examples above."
+              helperText={t('notifications.form.serviceUrlHelper')}
             />
 
             <Alert severity="info" sx={{ mt: 1 }}>
-              <strong>Tip:</strong> For automation and monitoring, use <code>jsons://</code> or{' '}
-              <code>json://</code> URLs to automatically receive pure JSON data.
+              <strong>{t('notifications.form.tipLabel')}</strong> {t('notifications.form.tipText')}
             </Alert>
 
             <TextField
-              label="Title Prefix (Optional)"
+              label={t('notifications.form.titlePrefix')}
               value={formData.title_prefix}
               onChange={(e) => setFormData({ ...formData, title_prefix: e.target.value })}
-              placeholder="e.g., [Production] or [Dev]"
+              placeholder={t('notifications.form.titlePrefixPlaceholder')}
               fullWidth
-              helperText="Add a custom prefix to all notification titles (e.g., '[Production] ✅ Backup Successful')"
+              helperText={t('notifications.form.titlePrefixHelper')}
             />
 
             <Box sx={{ mt: 2, mb: 2 }}>
@@ -617,13 +614,13 @@ const NotificationsTab: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
                   />
                 }
-                label="Enable notifications"
+                label={t('notifications.form.enableNotifications')}
               />
             </Box>
 
             <Box sx={{ mt: 2, mb: 1 }}>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                Notification Enhancements
+                {t('notifications.form.notificationEnhancements')}
               </Typography>
 
               <FormControlLabel
@@ -635,19 +632,18 @@ const NotificationsTab: React.FC = () => {
                     }
                   />
                 }
-                label="Include job/schedule name in title"
+                label={t('notifications.form.includeJobName')}
               />
               <Typography
                 variant="caption"
                 sx={{ display: 'block', pl: 4.5, mt: -0.5, mb: 1, color: 'text.secondary' }}
               >
-                Adds job or schedule name to notification titles for easier identification (e.g.,
-                "✅ Backup Successful - Daily Backup")
+                {t('notifications.form.includeJobNameHelper')}
               </Typography>
             </Box>
 
             <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
-              Notify on:
+              {t('notifications.form.notifyOn')}
             </Typography>
 
             {/* Backup Events Category */}
@@ -655,7 +651,7 @@ const NotificationsTab: React.FC = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                 <Archive size={16} />
                 <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-                  Backup Events
+                  {t('notifications.category.backupEvents')}
                 </Typography>
               </Box>
               <Box sx={{ pl: 2 }}>
@@ -668,7 +664,7 @@ const NotificationsTab: React.FC = () => {
                       }
                     />
                   }
-                  label="Started"
+                  label={t('notifications.form.started')}
                 />
                 <FormControlLabel
                   control={
@@ -679,7 +675,7 @@ const NotificationsTab: React.FC = () => {
                       }
                     />
                   }
-                  label="Success"
+                  label={t('notifications.form.success')}
                 />
                 <FormControlLabel
                   control={
@@ -690,7 +686,7 @@ const NotificationsTab: React.FC = () => {
                       }
                     />
                   }
-                  label="Failure"
+                  label={t('notifications.form.failure')}
                 />
               </Box>
             </Box>
@@ -700,7 +696,7 @@ const NotificationsTab: React.FC = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                 <RotateCcw size={16} />
                 <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-                  Restore Events
+                  {t('notifications.category.restoreEvents')}
                 </Typography>
               </Box>
               <Box sx={{ pl: 2 }}>
@@ -713,7 +709,7 @@ const NotificationsTab: React.FC = () => {
                       }
                     />
                   }
-                  label="Success"
+                  label={t('notifications.form.success')}
                 />
                 <FormControlLabel
                   control={
@@ -724,7 +720,7 @@ const NotificationsTab: React.FC = () => {
                       }
                     />
                   }
-                  label="Failure"
+                  label={t('notifications.form.failure')}
                 />
               </Box>
             </Box>
@@ -734,7 +730,7 @@ const NotificationsTab: React.FC = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                 <Settings size={16} />
                 <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-                  Check Jobs
+                  {t('notifications.category.checkJobs')}
                 </Typography>
               </Box>
               <Box sx={{ pl: 2 }}>
@@ -747,7 +743,7 @@ const NotificationsTab: React.FC = () => {
                       }
                     />
                   }
-                  label="Success"
+                  label={t('notifications.form.success')}
                 />
                 <FormControlLabel
                   control={
@@ -758,7 +754,7 @@ const NotificationsTab: React.FC = () => {
                       }
                     />
                   }
-                  label="Failure"
+                  label={t('notifications.form.failure')}
                 />
               </Box>
             </Box>
@@ -768,7 +764,7 @@ const NotificationsTab: React.FC = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                 <Settings size={16} />
                 <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-                  System Events
+                  {t('notifications.category.systemEvents')}
                 </Typography>
               </Box>
               <Box sx={{ pl: 2 }}>
@@ -781,14 +777,13 @@ const NotificationsTab: React.FC = () => {
                       }
                     />
                   }
-                  label="Scheduler Errors"
+                  label={t('notifications.form.schedulerErrors')}
                 />
                 <Typography
                   variant="caption"
                   sx={{ display: 'block', pl: 4.5, mt: -0.5, mb: 1, color: 'text.secondary' }}
                 >
-                  Notifies when the scheduler fails to start a backup (e.g., system errors). Regular
-                  backup failures are handled above.
+                  {t('notifications.form.schedulerErrorsHelper')}
                 </Typography>
               </Box>
             </Box>
@@ -797,7 +792,7 @@ const NotificationsTab: React.FC = () => {
             <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
               <FormControl component="fieldset">
                 <FormLabel component="legend" sx={{ mb: 1 }}>
-                  Apply To Repositories
+                  {t('notifications.form.applyToRepositories')}
                 </FormLabel>
                 <RadioGroup
                   value={formData.monitor_all_repositories ? 'all' : 'selected'}
@@ -805,11 +800,11 @@ const NotificationsTab: React.FC = () => {
                     setFormData({ ...formData, monitor_all_repositories: e.target.value === 'all' })
                   }
                 >
-                  <FormControlLabel value="all" control={<Radio />} label="All Repositories" />
+                  <FormControlLabel value="all" control={<Radio />} label={t('notifications.form.allRepositories')} />
                   <FormControlLabel
                     value="selected"
                     control={<Radio />}
-                    label="Selected Repositories Only"
+                    label={t('notifications.form.selectedRepositoriesOnly')}
                   />
                 </RadioGroup>
               </FormControl>
@@ -820,9 +815,9 @@ const NotificationsTab: React.FC = () => {
                     repositories={repositories || []}
                     selectedIds={formData.repository_ids}
                     onChange={(ids) => setFormData({ ...formData, repository_ids: ids })}
-                    label="Select Repositories"
-                    placeholder="Choose repositories to monitor"
-                    helperText="Only send notifications for backups from these repositories"
+                    label={t('notifications.form.selectRepositories')}
+                    placeholder={t('notifications.form.selectRepositoriesPlaceholder')}
+                    helperText={t('notifications.form.selectRepositoriesHelper')}
                     allowReorder={false}
                   />
                 </Box>
@@ -831,7 +826,7 @@ const NotificationsTab: React.FC = () => {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShowDialog(false)}>Cancel</Button>
+          <Button onClick={() => setShowDialog(false)}>{t('notifications.cancel')}</Button>
           <Button
             variant="contained"
             onClick={handleSubmit}
@@ -840,9 +835,9 @@ const NotificationsTab: React.FC = () => {
             {createMutation.isPending || updateMutation.isPending ? (
               <CircularProgress size={20} />
             ) : editingNotification ? (
-              'Update'
+              t('notifications.update')
             ) : (
-              'Add'
+              t('notifications.add')
             )}
           </Button>
         </DialogActions>
@@ -850,7 +845,7 @@ const NotificationsTab: React.FC = () => {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={!!deleteConfirm} onClose={() => setDeleteConfirm(null)}>
-        <DialogTitle>Delete Notification Service?</DialogTitle>
+        <DialogTitle>{t('notifications.deleteServiceTitle')}</DialogTitle>
         <DialogContent>
           <Typography>
             Are you sure you want to delete <strong>{deleteConfirm?.name}</strong>? You will no
@@ -858,14 +853,14 @@ const NotificationsTab: React.FC = () => {
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteConfirm(null)}>Cancel</Button>
+          <Button onClick={() => setDeleteConfirm(null)}>{t('notifications.cancel')}</Button>
           <Button
             color="error"
             variant="contained"
             onClick={() => deleteConfirm && deleteMutation.mutate(deleteConfirm.id)}
             disabled={deleteMutation.isPending}
           >
-            {deleteMutation.isPending ? <CircularProgress size={20} /> : 'Delete'}
+            {deleteMutation.isPending ? <CircularProgress size={20} /> : t('notifications.delete')}
           </Button>
         </DialogActions>
       </Dialog>

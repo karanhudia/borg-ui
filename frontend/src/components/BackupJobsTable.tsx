@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Box, Typography, Chip, Tooltip } from '@mui/material'
 import { Eye, Download, Trash2, Lock, Play, AlertCircle, Clock, Calendar, User } from 'lucide-react'
 import { toast } from 'react-hot-toast'
@@ -66,20 +67,20 @@ interface BackupJobsTableProps<T extends Job = Job> {
   tableId?: string // Unique identifier for localStorage persistence
 }
 
-const getTypeLabel = (type: string): string => {
+const getTypeLabel = (type: string, t: (key: string) => string): string => {
   switch (type) {
     case 'backup':
-      return 'Backup'
+      return t('backupJobsTable.types.backup')
     case 'restore':
-      return 'Restore'
+      return t('backupJobsTable.types.restore')
     case 'check':
-      return 'Repository Check'
+      return t('backupJobsTable.types.check')
     case 'compact':
-      return 'Compact'
+      return t('backupJobsTable.types.compact')
     case 'prune':
-      return 'Prune'
+      return t('backupJobsTable.types.prune')
     case 'package':
-      return 'Package Install'
+      return t('backupJobsTable.types.package')
     default:
       return type
   }
@@ -128,6 +129,7 @@ export const BackupJobsTable = <T extends Job = Job>({
   tableId,
 }: BackupJobsTableProps<T>) => {
   const queryClient = useQueryClient()
+  const { t } = useTranslation()
 
   // Fetch repositories (needed for break lock)
   const { data: repositoriesData } = useQuery({
@@ -181,7 +183,7 @@ export const BackupJobsTable = <T extends Job = Job>({
       const jobType = job.type || 'backup'
       const token = localStorage.getItem('access_token')
       if (!token) {
-        toast.error('Authentication required')
+        toast.error(t('backupJobsTable.toasts.authRequired'))
         return
       }
 
@@ -192,7 +194,7 @@ export const BackupJobsTable = <T extends Job = Job>({
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
-      toast.success('Downloading logs...')
+      toast.success(t('backupJobsTable.toasts.downloadingLogs'))
     }
   }
 
@@ -219,13 +221,13 @@ export const BackupJobsTable = <T extends Job = Job>({
       })
 
       if (!response.ok) {
-        throw new Error('Failed to cancel job')
+        throw new Error(t('backupJobsTable.toasts.failedToCancel'))
       }
 
-      toast.success('Job cancelled successfully')
+      toast.success(t('backupJobsTable.toasts.cancelSuccess'))
       setCancelJob(null)
     } catch (error) {
-      toast.error('Failed to cancel job')
+      toast.error(t('backupJobsTable.toasts.failedToCancel'))
       console.error(error)
     }
   }
@@ -293,12 +295,12 @@ export const BackupJobsTable = <T extends Job = Job>({
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: 'Failed to delete job' }))
-        throw new Error(errorData.detail || 'Failed to delete job')
+        const errorData = await response.json().catch(() => ({ detail: t('backupJobsTable.toasts.failedToDelete') }))
+        throw new Error(errorData.detail || t('backupJobsTable.toasts.failedToDelete'))
       }
 
       // Success - show toast after item is already removed from UI
-      toast.success('Job deleted successfully')
+      toast.success(t('backupJobsTable.toasts.deleteSuccess'))
     } catch (error) {
       // Rollback optimistic updates on error
       previousData.forEach(({ queryKey, data }) => {
@@ -307,7 +309,7 @@ export const BackupJobsTable = <T extends Job = Job>({
         }
       })
 
-      toast.error(error instanceof Error ? error.message : 'Failed to delete job')
+      toast.error(error instanceof Error ? error.message : t('backupJobsTable.toasts.failedToDelete'))
       console.error(error)
     }
   }
@@ -326,7 +328,7 @@ export const BackupJobsTable = <T extends Job = Job>({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const repo = repositoriesData?.data?.repositories?.find((r: any) => r.path === repoPath)
       if (!repo) {
-        toast.error('Repository not found')
+        toast.error(t('backupJobsTable.toasts.repositoryNotFound'))
         return
       }
 
@@ -342,7 +344,7 @@ export const BackupJobsTable = <T extends Job = Job>({
   const columns: Column<T>[] = [
     {
       id: 'id',
-      label: 'Job ID',
+      label: t('backupJobsTable.columns.jobId'),
       align: 'left',
       width: '60px',
       render: (job: T) => (
@@ -353,7 +355,7 @@ export const BackupJobsTable = <T extends Job = Job>({
     },
     {
       id: 'repository',
-      label: 'Repository',
+      label: t('backupJobsTable.columns.repository'),
       align: 'left',
       width: '250px',
       render: (job: T) => {
@@ -390,12 +392,12 @@ export const BackupJobsTable = <T extends Job = Job>({
       ? [
           {
             id: 'type',
-            label: 'Type',
+            label: t('backupJobsTable.columns.type'),
             align: 'left' as const,
             width: '120px',
             render: (job: T) => (
               <Chip
-                label={getTypeLabel(job.type || '')}
+                label={getTypeLabel(job.type || '', t)}
                 color={getTypeColor(job.type || '')}
                 size="small"
               />
@@ -408,14 +410,14 @@ export const BackupJobsTable = <T extends Job = Job>({
       ? [
           {
             id: 'trigger',
-            label: 'Trigger',
+            label: t('backupJobsTable.columns.trigger'),
             align: 'center' as const,
             width: '70px',
             render: (job: T) => {
               const isScheduled = job.triggered_by === 'schedule'
               return (
                 <Tooltip
-                  title={isScheduled ? `Scheduled (ID: ${job.schedule_id || 'N/A'})` : 'Manual'}
+                  title={isScheduled ? t('backupJobsTable.scheduledById', { id: job.schedule_id || 'N/A' }) : t('backupJobsTable.manual')}
                   placement="top"
                   arrow
                 >
@@ -434,14 +436,14 @@ export const BackupJobsTable = <T extends Job = Job>({
       : []),
     {
       id: 'status',
-      label: 'Status',
+      label: t('backupJobsTable.columns.status'),
       align: 'left',
       width: '180px',
       render: (job: T) => <StatusBadge status={job.status} />,
     },
     {
       id: 'started_at',
-      label: 'Started',
+      label: t('backupJobsTable.columns.started'),
       align: 'left',
       width: '160px',
       render: (job: T) => (
@@ -452,7 +454,7 @@ export const BackupJobsTable = <T extends Job = Job>({
     },
     {
       id: 'duration',
-      label: 'Duration',
+      label: t('backupJobsTable.columns.duration'),
       align: 'left',
       width: '80px',
       render: (job: T) => (
@@ -469,10 +471,10 @@ export const BackupJobsTable = <T extends Job = Job>({
   if (actions.viewLogs !== false) {
     actionButtons.push({
       icon: <Eye size={18} />,
-      label: 'View Logs',
+      label: t('backupJobsTable.actions.viewLogs'),
       onClick: handleViewLogsClick,
       color: 'primary',
-      tooltip: 'View Logs',
+      tooltip: t('backupJobsTable.actions.viewLogs'),
       show: (job) => {
         // Show logs button for running and completed jobs (when logs exist)
         // Check has_logs flag or log_file_path, exclude only pending status
@@ -487,10 +489,10 @@ export const BackupJobsTable = <T extends Job = Job>({
   if (actions.downloadLogs !== false) {
     actionButtons.push({
       icon: <Download size={18} />,
-      label: 'Download Logs',
+      label: t('backupJobsTable.actions.downloadLogs'),
       onClick: handleDownloadLogsClick,
       color: 'info',
-      tooltip: 'Download Logs',
+      tooltip: t('backupJobsTable.actions.downloadLogs'),
       show: (job) => {
         // Show download button for running and completed jobs (when logs exist)
         // Check has_logs flag or log_file_path, exclude only pending status
@@ -505,10 +507,10 @@ export const BackupJobsTable = <T extends Job = Job>({
   if (actions.errorInfo !== false) {
     actionButtons.push({
       icon: <AlertCircle size={18} />,
-      label: 'Error Details',
+      label: t('backupJobsTable.actions.errorDetails'),
       onClick: handleErrorClick,
       color: 'error',
-      tooltip: 'View Error',
+      tooltip: t('backupJobsTable.actions.errorDetails'),
       show: (job) => job.status === 'failed' && !!job.error_message,
     })
   }
@@ -516,10 +518,10 @@ export const BackupJobsTable = <T extends Job = Job>({
   if (actions.cancel !== false) {
     actionButtons.push({
       icon: <Trash2 size={18} />,
-      label: 'Cancel',
+      label: t('backupJobsTable.actions.cancel'),
       onClick: handleCancelClick,
       color: 'warning',
-      tooltip: 'Cancel Job',
+      tooltip: t('backupJobsTable.actions.cancelJob'),
       show: (job) => job.status === 'running',
     })
   }
@@ -527,10 +529,10 @@ export const BackupJobsTable = <T extends Job = Job>({
   if (actions.breakLock !== false && isAdmin) {
     actionButtons.push({
       icon: <Lock size={18} />,
-      label: 'Break Lock',
+      label: t('backupJobsTable.actions.breakLock'),
       onClick: handleBreakLockClick,
       color: 'warning',
-      tooltip: 'Break Lock',
+      tooltip: t('backupJobsTable.actions.breakLock'),
       show: (job) => job.status === 'failed' && !!job.error_message?.includes('LOCK_ERROR::'),
     })
   }
@@ -538,10 +540,10 @@ export const BackupJobsTable = <T extends Job = Job>({
   if (actions.runNow !== false && onRunNow) {
     actionButtons.push({
       icon: <Play size={18} />,
-      label: 'Run Now',
+      label: t('backupJobsTable.actions.runNow'),
       onClick: onRunNow,
       color: 'success',
-      tooltip: 'Run Now',
+      tooltip: t('backupJobsTable.actions.runNow'),
       show: (job) => job.status !== 'running',
     })
   }
@@ -549,10 +551,10 @@ export const BackupJobsTable = <T extends Job = Job>({
   if (actions.delete !== false && isAdmin) {
     actionButtons.push({
       icon: <Trash2 size={18} />,
-      label: 'Delete',
+      label: t('backupJobsTable.actions.delete'),
       onClick: handleDeleteClick,
       color: 'error',
-      tooltip: 'Delete Job (Admin Only)',
+      tooltip: t('backupJobsTable.actions.delete'),
       show: (job) => job.status !== 'running', // Allow deleting pending jobs (useful for stuck jobs)
     })
   }
@@ -564,8 +566,8 @@ export const BackupJobsTable = <T extends Job = Job>({
         <Clock size={48} />
       </Box>
     ),
-    title: 'No jobs found',
-    description: 'No backup jobs to display',
+    title: t('backupJobsTable.empty'),
+    description: t('backupJobsTable.empty'),
   }
 
   const finalEmptyState: { icon: React.ReactNode; title: string; description?: string } = emptyState

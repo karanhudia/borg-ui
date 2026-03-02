@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Box,
   Button,
@@ -73,6 +74,7 @@ interface TestResult {
 }
 
 export default function Scripts() {
+  const { t } = useTranslation()
   const [scripts, setScripts] = useState<Script[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -104,7 +106,7 @@ export default function Scripts() {
       const response = await api.get('/scripts')
       setScripts(Array.isArray(response.data) ? response.data : [])
     } catch {
-      toast.error('Failed to load scripts')
+      toast.error(t('scripts.errors.failedToLoad'))
       setScripts([])
     } finally {
       setLoading(false)
@@ -144,7 +146,7 @@ export default function Scripts() {
       setDialogOpen(true)
     } catch (error) {
       console.error('Failed to fetch script details:', error)
-      toast.error('Failed to load script details')
+      toast.error(t('scripts.errors.failedToLoadDetails'))
     }
   }
 
@@ -207,11 +209,11 @@ export default function Scripts() {
       if (editingScript) {
         // Update existing script
         await api.put(`/scripts/${editingScript.id}`, dataToSave)
-        toast.success('Script updated successfully')
+        toast.success(t('scripts.toasts.scriptUpdated'))
       } else {
         // Create new script
         await api.post('/scripts', dataToSave)
-        toast.success('Script created successfully')
+        toast.success(t('scripts.toasts.scriptCreated'))
       }
       setDialogOpen(false)
       fetchScripts()
@@ -227,13 +229,13 @@ export default function Scripts() {
   }
 
   const handleDelete = async (script: Script) => {
-    if (!confirm(`Are you sure you want to delete "${script.name}"?`)) {
+    if (!confirm(t('scripts.confirmDelete', { name: script.name }))) {
       return
     }
 
     try {
       await api.delete(`/scripts/${script.id}`)
-      toast.success('Script deleted successfully')
+      toast.success(t('scripts.toasts.scriptDeleted'))
       fetchScripts()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
@@ -317,10 +319,10 @@ export default function Scripts() {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 600 }}>
-            Script Library
+            {t('scripts.title')}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Reusable scripts for backup hooks and maintenance
+            {t('scripts.subtitle')}
           </Typography>
         </Box>
         <Button
@@ -329,7 +331,7 @@ export default function Scripts() {
           onClick={handleCreate}
           sx={{ minWidth: 140 }}
         >
-          New Script
+          {t('scripts.newScript')}
         </Button>
       </Box>
 
@@ -337,8 +339,7 @@ export default function Scripts() {
       {scripts.length === 0 && (
         <Alert severity="info" sx={{ mb: 3 }}>
           <Typography variant="body2">
-            No scripts created yet. Scripts can be assigned to repositories for pre-backup and
-            post-backup hooks with conditions like "run on failure" or "run always".
+            {t('scripts.empty')}
           </Typography>
         </Alert>
       )}
@@ -348,14 +349,14 @@ export default function Scripts() {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Description</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Category</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Run On</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Timeout</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Usage</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('scripts.table.name')}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('scripts.table.description')}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('scripts.table.category')}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('scripts.table.runOn')}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('scripts.table.timeout')}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('scripts.table.usage')}</TableCell>
               <TableCell sx={{ fontWeight: 600 }} align="right">
-                Actions
+                {t('scripts.table.actions')}
               </TableCell>
             </TableRow>
           </TableHead>
@@ -408,16 +409,16 @@ export default function Scripts() {
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2">
-                    {script.usage_count} {script.usage_count === 1 ? 'place used' : 'places used'}
+                    {t('scripts.usedInCount', { count: script.usage_count })}
                   </Typography>
                 </TableCell>
                 <TableCell align="right">
-                  <Tooltip title="Test Script">
+                  <Tooltip title={t('scripts.actions.test')}>
                     <IconButton size="small" onClick={() => handleTest(script)} sx={{ mr: 0.5 }}>
                       <Play size={18} />
                     </IconButton>
                   </Tooltip>
-                  <Tooltip title="Edit Script">
+                  <Tooltip title={t('scripts.actions.edit')}>
                     <IconButton
                       size="small"
                       onClick={() => handleEdit(script)}
@@ -430,10 +431,10 @@ export default function Scripts() {
                   <Tooltip
                     title={
                       script.is_template
-                        ? 'Cannot delete templates'
+                        ? t('scripts.actions.cannotDeleteTemplates')
                         : script.usage_count > 0
-                          ? `Script is used in ${script.usage_count} ${script.usage_count === 1 ? 'place' : 'places'}`
-                          : 'Delete Script'
+                          ? t('scripts.usedInCount', { count: script.usage_count })
+                          : t('scripts.actions.delete')
                     }
                   >
                     <span>
@@ -456,75 +457,73 @@ export default function Scripts() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{editingScript ? 'Edit Script' : 'Create Script'}</DialogTitle>
+        <DialogTitle>{editingScript ? t('scripts.editDialog.title') : t('scripts.createDialog.title')}</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
             <TextField
-              label="Name"
+              label={t('scripts.fields.name')}
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               fullWidth
               required
-              helperText="A unique name for this script"
+              helperText={t('scripts.fields.nameHelperText')}
             />
 
             <TextField
-              label="Description"
+              label={t('scripts.fields.description')}
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               fullWidth
               multiline
               rows={2}
-              helperText="Optional description of what this script does"
+              helperText={t('scripts.fields.descriptionHelperText')}
             />
 
             <FormControl fullWidth>
-              <InputLabel>Run On</InputLabel>
+              <InputLabel>{t('scripts.fields.runOn')}</InputLabel>
               <Select
                 value={formData.run_on}
-                label="Run On"
+                label={t('scripts.fields.runOn')}
                 onChange={(e) => setFormData({ ...formData, run_on: e.target.value })}
               >
-                <MenuItem value="success">Success - Only after successful backups</MenuItem>
-                <MenuItem value="failure">Failure - Only after failed backups</MenuItem>
-                <MenuItem value="warning">Warning - Only after backups with warnings</MenuItem>
-                <MenuItem value="always">Always - Run regardless of result</MenuItem>
+                <MenuItem value="success">{t('scripts.runOn.success')}</MenuItem>
+                <MenuItem value="failure">{t('scripts.runOn.failure')}</MenuItem>
+                <MenuItem value="warning">{t('scripts.runOn.warning')}</MenuItem>
+                <MenuItem value="always">{t('scripts.runOn.always')}</MenuItem>
               </Select>
             </FormControl>
 
             <Alert severity="info">
-              <strong>Note:</strong> The "Run On" condition only applies to Post-Backup hooks.
-              Pre-backup scripts always run before the backup starts.
+              {t('scripts.runOn.note')}
             </Alert>
 
             <TextField
-              label="Timeout (seconds)"
+              label={t('scripts.fields.timeout')}
               type="number"
               value={formData.timeout}
               onChange={(e) => setFormData({ ...formData, timeout: parseInt(e.target.value) })}
               fullWidth
               inputProps={{ min: 30, max: 3600 }}
-              helperText="Maximum execution time (30-3600 seconds)"
+              helperText={t('scripts.fields.timeoutHint')}
             />
 
             <CodeEditor
-              label="Script Content"
+              label={t('scripts.fields.content')}
               value={formData.content}
               onChange={handleContentChange}
               height="300px"
               language="shell"
-              helperText="Use \${PARAM_NAME} or \${PARAM_NAME:-default} for parameters"
+              helperText={t('scripts.fields.contentHint')}
             />
 
             {/* Parameter Configuration */}
             {detectedParameters.length > 0 && (
               <Box>
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                  Script Parameters
+                  {t('scripts.fields.parameters')}
                 </Typography>
                 <Alert severity="info" sx={{ mb: 2 }}>
-                  Check the box for parameters that contain sensitive data (passwords, tokens, API
-                  keys) to encrypt them.
+                  {t('scripts.fields.parametersHint')}
                 </Alert>
                 <Paper variant="outlined" sx={{ p: 2 }}>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -569,7 +568,7 @@ export default function Scripts() {
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Typography variant="body2" color="text.secondary" sx={{ mr: 1 }}>
-                            Treat as secret
+                            {t('scripts.fields.treatAsSecret')}
                           </Typography>
                           <input
                             type="checkbox"
@@ -587,17 +586,15 @@ export default function Scripts() {
 
             {editingScript && editingScript.usage_count > 0 && (
               <Alert severity="info">
-                This script is used in {editingScript.usage_count}{' '}
-                {editingScript.usage_count === 1 ? 'place' : 'places'}. Changes will affect all
-                assignments.
+                {t('scripts.usedInPlaces', { count: editingScript.usage_count })}
               </Alert>
             )}
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setDialogOpen(false)}>{t('scripts.buttons.cancel')}</Button>
           <Button onClick={handleSave} variant="contained" disabled={!formData.name.trim()}>
-            {editingScript ? 'Update' : 'Create'}
+            {editingScript ? t('scripts.buttons.update') : t('scripts.buttons.create')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -612,7 +609,7 @@ export default function Scripts() {
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Play size={20} />
-            Test Script: {testingScriptData?.name}
+            {t('scripts.testDialog.title')}: {testingScriptData?.name}
           </Box>
         </DialogTitle>
         <DialogContent>
@@ -622,8 +619,7 @@ export default function Scripts() {
               {testingScriptData?.parameters && testingScriptData.parameters.length > 0 ? (
                 <>
                   <Alert severity="info">
-                    This script has parameters. Provide values below to test with specific
-                    configuration.
+                    {t('scripts.testDialog.hasParams')}
                   </Alert>
                   <ScriptParameterInputs
                     parameters={testingScriptData.parameters}
@@ -633,27 +629,27 @@ export default function Scripts() {
                 </>
               ) : (
                 <Alert severity="info">
-                  This script has no parameters. Click "Run Test" to execute it.
+                  {t('scripts.testDialog.noParams')}
                 </Alert>
               )}
 
               {/* Test button */}
               <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, pt: 2 }}>
-                <Button onClick={() => setTestDialogOpen(false)}>Cancel</Button>
+                <Button onClick={() => setTestDialogOpen(false)}>{t('scripts.buttons.cancel')}</Button>
                 <Button
                   onClick={executeTest}
                   variant="contained"
                   startIcon={testingScript ? <CircularProgress size={16} /> : <Play size={16} />}
                   disabled={testingScript}
                 >
-                  {testingScript ? 'Running...' : 'Run Test'}
+                  {testingScript ? t('scripts.testDialog.running') : t('scripts.testDialog.runTest')}
                 </Button>
               </Box>
             </Box>
           ) : testingScript ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 4 }}>
               <CircularProgress />
-              <Typography sx={{ ml: 2 }}>Running script...</Typography>
+              <Typography sx={{ ml: 2 }}>{t('scripts.testDialog.runningScript')}</Typography>
             </Box>
           ) : testResult ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -663,11 +659,10 @@ export default function Scripts() {
                 icon={testResult.success ? <CheckCircle /> : <XCircle />}
               >
                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  {testResult.success ? 'Script executed successfully' : 'Script execution failed'}
+                  {testResult.success ? t('scripts.testDialog.success') : t('scripts.testDialog.failed')}
                 </Typography>
                 <Typography variant="caption">
-                  Exit code: {testResult.exit_code} | Execution time:{' '}
-                  {testResult.execution_time.toFixed(2)}s
+                  {t('scripts.testDialog.exitCode', { code: testResult.exit_code, time: testResult.execution_time.toFixed(2) })}
                 </Typography>
               </Alert>
 
@@ -675,7 +670,7 @@ export default function Scripts() {
               {testResult.stdout && (
                 <Box>
                   <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                    Standard Output:
+                    {t('scripts.testDialog.stdout')}
                   </Typography>
                   <Paper
                     sx={{
@@ -700,7 +695,7 @@ export default function Scripts() {
                     variant="subtitle2"
                     sx={{ mb: 1, fontWeight: 600, color: 'error.main' }}
                   >
-                    Standard Error:
+                    {t('scripts.testDialog.stderr')}
                   </Typography>
                   <Paper
                     sx={{
@@ -724,9 +719,9 @@ export default function Scripts() {
           {testResult ? (
             <>
               <Button onClick={() => setTestResult(null)} variant="outlined">
-                Test Again
+                {t('scripts.testDialog.testAgain')}
               </Button>
-              <Button onClick={() => setTestDialogOpen(false)}>Close</Button>
+              <Button onClick={() => setTestDialogOpen(false)}>{t('scripts.testDialog.close')}</Button>
             </>
           ) : null}
         </DialogActions>

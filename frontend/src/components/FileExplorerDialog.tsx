@@ -27,6 +27,7 @@ import { File, ChevronRight, Home, Search, Archive, HardDrive, FolderPlus } from
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import api from '../services/api'
 import { sshKeysAPI } from '../services/api'
+import { useTranslation } from 'react-i18next'
 
 interface FileSystemItem {
   name: string
@@ -77,7 +78,7 @@ export default function FileExplorerDialog({
   open,
   onClose,
   onSelect,
-  title = 'Select Directory',
+  title,
   initialPath = '/',
   multiSelect = false,
   connectionType = 'local',
@@ -86,6 +87,7 @@ export default function FileExplorerDialog({
   showSshMountPoints = true,
   allowedSshConnectionId = null,
 }: FileExplorerDialogProps) {
+  const { t } = useTranslation()
   const [currentPath, setCurrentPath] = useState(initialPath)
   const [items, setItems] = useState<FileSystemItem[]>([])
   const [loading, setLoading] = useState(false)
@@ -316,7 +318,7 @@ export default function FileExplorerDialog({
 
   const getBreadcrumbs = () => {
     const parts = currentPath.split('/').filter(Boolean)
-    const breadcrumbs: { label: string; path: string }[] = [{ label: 'Root', path: '/' }]
+    const breadcrumbs: { label: string; path: string }[] = [{ label: t('dialogs.fileExplorer.root'), path: '/' }]
 
     let accumulatedPath = ''
     parts.forEach((part) => {
@@ -389,7 +391,7 @@ export default function FileExplorerDialog({
         <DialogTitle sx={{ pb: 1, pt: 2 }}>
           <Box display="flex" alignItems="center" justifyContent="space-between">
             <Typography variant="h6" fontWeight={600}>
-              {title}
+              {title ?? t('dialogs.fileExplorer.selectDirectory')}
             </Typography>
             {activeConnectionType === 'ssh' && activeSshConfig ? (
               <Chip
@@ -401,7 +403,7 @@ export default function FileExplorerDialog({
             ) : isInsideLocalMount && activeConnectionType === 'local' ? (
               <Chip
                 icon={<HardDrive size={14} />}
-                label="Host"
+                label={t('fileExplorer.chips.host')}
                 size="small"
                 color="primary"
                 variant="outlined"
@@ -457,7 +459,7 @@ export default function FileExplorerDialog({
             <TextField
               fullWidth
               size="small"
-              placeholder="Search..."
+              placeholder={t('fileExplorer.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               inputRef={searchInputRef}
@@ -489,7 +491,7 @@ export default function FileExplorerDialog({
                 minHeight: '35px',
               }}
             >
-              New Folder
+              {t('fileExplorer.newFolder')}
             </Button>
           </Box>
 
@@ -507,8 +509,7 @@ export default function FileExplorerDialog({
             <Box sx={{ px: 2, pb: 1 }}>
               <Alert severity="info" sx={{ borderRadius: 1, py: 0.5 }}>
                 <Typography variant="caption">
-                  💡 SSH connections are shown below. Configure mount points in SSH Keys page for
-                  cleaner display names.
+                  {t("fileExplorer.sshInfoAlert")}
                 </Typography>
               </Alert>
             </Box>
@@ -525,7 +526,7 @@ export default function FileExplorerDialog({
             >
               <CircularProgress size={32} />
               <Typography variant="caption" color="text.secondary" mt={1.5}>
-                Loading...
+                {t('fileExplorer.loading')}
               </Typography>
             </Box>
           ) : (
@@ -550,10 +551,10 @@ export default function FileExplorerDialog({
                   >
                     <FolderOpenIcon sx={{ fontSize: 36 }} />
                     <Typography variant="body2" color="text.secondary" mt={1.5}>
-                      No items found
+                      {t('fileExplorer.noItemsFound')}
                     </Typography>
                     <Typography variant="caption" color="text.disabled">
-                      {searchTerm ? 'Try a different search' : 'Empty directory'}
+                      {searchTerm ? t('fileExplorer.tryDifferentSearch') : t('fileExplorer.emptyDirectory')}
                     </Typography>
                   </Box>
                 ) : (
@@ -620,7 +621,7 @@ export default function FileExplorerDialog({
                                 <Typography variant="body2">{item.name}</Typography>
                                 {item.is_mount_point && (
                                   <Chip
-                                    label="Remote"
+                                    label={t('fileExplorer.chips.remote')}
                                     size="small"
                                     color="success"
                                     sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600 }}
@@ -628,7 +629,7 @@ export default function FileExplorerDialog({
                                 )}
                                 {item.is_local_mount && (
                                   <Chip
-                                    label="Host"
+                                    label={t('fileExplorer.chips.host')}
                                     size="small"
                                     color="primary"
                                     sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600 }}
@@ -636,7 +637,7 @@ export default function FileExplorerDialog({
                                 )}
                                 {item.is_borg_repo && (
                                   <Chip
-                                    label="Borg"
+                                    label={t('fileExplorer.chips.borg')}
                                     size="small"
                                     color="warning"
                                     sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600 }}
@@ -667,7 +668,7 @@ export default function FileExplorerDialog({
                   sx={{ px: 2, py: 1, bgcolor: 'primary.50', borderTop: 1, borderColor: 'divider' }}
                 >
                   <Typography variant="caption" color="primary.main" fontWeight={600}>
-                    {selectedPaths.length} selected
+                    {t('fileExplorer.selectedCount', { count: selectedPaths.length })}
                   </Typography>
                 </Box>
               )}
@@ -677,12 +678,12 @@ export default function FileExplorerDialog({
 
         <DialogActions sx={{ px: 2, py: 1.5, borderTop: 1, borderColor: 'divider' }}>
           <Button onClick={onClose} size="small" sx={{ color: 'text.secondary' }}>
-            Cancel
+            {t('fileExplorer.cancel')}
           </Button>
           <Box sx={{ flex: 1 }} />
           {selectMode === 'directories' && (
             <Button onClick={handleSelectCurrent} variant="outlined" size="small" sx={{ mr: 1 }}>
-              Use Current
+              {t('fileExplorer.useCurrent')}
             </Button>
           )}
           <Button
@@ -691,7 +692,7 @@ export default function FileExplorerDialog({
             size="small"
             disabled={selectedPaths.length === 0}
           >
-            Select {multiSelect && selectedPaths.length > 0 ? `(${selectedPaths.length})` : ''}
+            {multiSelect && selectedPaths.length > 0 ? t('fileExplorer.selectWithCount', { count: selectedPaths.length }) : t('fileExplorer.select')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -703,12 +704,12 @@ export default function FileExplorerDialog({
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>Create New Folder</DialogTitle>
+        <DialogTitle>{t('fileExplorer.createFolderTitle')}</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
             fullWidth
-            label="Folder Name"
+            label={t('fileExplorer.folderNameLabel')}
             value={newFolderName}
             onChange={(e) => setNewFolderName(e.target.value)}
             onKeyDown={(e) => {
@@ -716,7 +717,7 @@ export default function FileExplorerDialog({
                 handleCreateFolder()
               }
             }}
-            placeholder="Enter folder name"
+            placeholder={t('fileExplorer.folderNamePlaceholder')}
             margin="dense"
             disabled={creatingFolder}
           />
@@ -736,14 +737,14 @@ export default function FileExplorerDialog({
             }}
             disabled={creatingFolder}
           >
-            Cancel
+            {t('fileExplorer.cancel')}
           </Button>
           <Button
             onClick={handleCreateFolder}
             variant="contained"
             disabled={!newFolderName.trim() || creatingFolder}
           >
-            {creatingFolder ? 'Creating...' : 'Create'}
+            {creatingFolder ? t('fileExplorer.creating') : t('fileExplorer.create')}
           </Button>
         </DialogActions>
       </Dialog>

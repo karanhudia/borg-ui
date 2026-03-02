@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Dialog,
   DialogTitle,
@@ -45,6 +46,7 @@ export default function ScriptEditorDialog({
   onContinueOnFailureChange,
   showContinueOnFailure = false,
 }: ScriptEditorDialogProps) {
+  const { t } = useTranslation()
   const [testRunning, setTestRunning] = useState(false)
   const [testResult, setTestResult] = useState<{
     success: boolean
@@ -96,7 +98,7 @@ export default function ScriptEditorDialog({
             onClick={handleTestRun}
             disabled={testRunning || !value || value.trim() === ''}
           >
-            {testRunning ? 'Testing...' : 'Test Run'}
+            {testRunning ? t('scriptEditor.testing') : t('scriptEditor.testRun')}
           </Button>
         </Box>
       </DialogTitle>
@@ -113,12 +115,12 @@ export default function ScriptEditorDialog({
 
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
             <TextField
-              label="Timeout (seconds)"
+              label={t('scriptEditor.timeoutLabel')}
               type="number"
               value={timeout}
               onChange={(e) => onTimeoutChange?.(parseInt(e.target.value) || 300)}
               inputProps={{ min: 30, max: 3600 }}
-              helperText="Maximum time to wait for script execution"
+              helperText={t('scriptEditor.timeoutHint')}
               sx={{ flex: 1 }}
             />
             {showContinueOnFailure && (
@@ -129,7 +131,7 @@ export default function ScriptEditorDialog({
                     onChange={(e) => onContinueOnFailureChange?.(e.target.checked)}
                   />
                 }
-                label="Continue backup if script fails"
+                label={t('scriptEditor.continueOnFailure')}
                 sx={{ mt: 1 }}
               />
             )}
@@ -142,26 +144,26 @@ export default function ScriptEditorDialog({
                   <>
                     <CheckCircle size={20} color="#4caf50" />
                     <Typography variant="subtitle2" color="success.main">
-                      Test Passed
+                      {t('scriptEditor.testPassed')}
                     </Typography>
                   </>
                 ) : testResult.exit_code === 0 ? (
                   <>
                     <AlertTriangle size={20} color="#ff9800" />
                     <Typography variant="subtitle2" color="warning.main">
-                      Test Completed with Warnings
+                      {t('scriptEditor.testWarnings')}
                     </Typography>
                   </>
                 ) : (
                   <>
                     <XCircle size={20} color="#f44336" />
                     <Typography variant="subtitle2" color="error.main">
-                      Test Failed
+                      {t('scriptEditor.testFailed')}
                     </Typography>
                   </>
                 )}
                 <Chip
-                  label={`Exit Code: ${testResult.exit_code}`}
+                  label={t('scriptEditor.exitCode', { code: testResult.exit_code })}
                   size="small"
                   color={testResult.exit_code === 0 ? 'success' : 'error'}
                   sx={{ ml: 'auto' }}
@@ -180,7 +182,7 @@ export default function ScriptEditorDialog({
                     color="text.secondary"
                     sx={{ mb: 0.5, display: 'block' }}
                   >
-                    Standard Output:
+                    {t('scriptEditor.stdout')}
                   </Typography>
                   <Paper
                     sx={{
@@ -211,7 +213,7 @@ export default function ScriptEditorDialog({
                     color="text.secondary"
                     sx={{ mb: 0.5, display: 'block' }}
                   >
-                    Standard Error:
+                    {t('scriptEditor.stderr')}
                   </Typography>
                   <Paper
                     sx={{
@@ -241,10 +243,10 @@ export default function ScriptEditorDialog({
 
       <DialogActions>
         <Button onClick={onClose} color="inherit">
-          Cancel
+          {t('common.buttons.cancel')}
         </Button>
         <Button onClick={handleSave} variant="contained" color="primary">
-          Save
+          {t('scriptEditor.save')}
         </Button>
       </DialogActions>
     </Dialog>

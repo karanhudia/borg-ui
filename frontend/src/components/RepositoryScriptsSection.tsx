@@ -1,4 +1,5 @@
 import { Box, Button, Typography, Chip, Tooltip } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import { FileCode } from 'lucide-react'
 import RepositoryScriptsTab from './RepositoryScriptsTab'
 
@@ -32,6 +33,8 @@ export default function RepositoryScriptsSection({
   onPreLibraryScriptsChange,
   onPostLibraryScriptsChange,
 }: RepositoryScriptsSectionProps) {
+  const { t } = useTranslation()
+
   return (
     <>
       {/* Pre-Backup Scripts */}
@@ -40,13 +43,13 @@ export default function RepositoryScriptsSection({
           sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}
         >
           <Typography variant="body2" fontWeight={600}>
-            Pre-Backup Scripts
+            {t('repositoryScriptsSection.preBackup')}
           </Typography>
           <Tooltip
             title={
               !repositoryId
-                ? 'Create the repository first to add library scripts'
-                : 'Add script from library'
+                ? t('repositoryScriptsSection.createFirst')
+                : t('repositoryScriptsSection.addFromLibrary')
             }
             arrow
           >
@@ -65,7 +68,7 @@ export default function RepositoryScriptsSection({
                 disabled={!repositoryId}
                 sx={{ py: 0.25, px: 1, minHeight: 'auto', fontSize: '0.8rem' }}
               >
-                Add
+                {t('repositoryScriptsSection.add')}
               </Button>
             </span>
           </Tooltip>
@@ -82,9 +85,9 @@ export default function RepositoryScriptsSection({
               sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                <Typography>Inline Script</Typography>
+                <Typography>{t('repositoryScriptsSection.inlineScript')}</Typography>
                 {preBackupScript && (
-                  <Chip label="Configured" size="small" color="success" sx={{ ml: 'auto' }} />
+                  <Chip label={t('repositoryScriptsSection.configured')} size="small" color="success" sx={{ ml: 'auto' }} />
                 )}
               </Box>
             </Button>
@@ -109,13 +112,13 @@ export default function RepositoryScriptsSection({
           sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}
         >
           <Typography variant="body2" fontWeight={600}>
-            Post-Backup Scripts
+            {t('repositoryScriptsSection.postBackup')}
           </Typography>
           <Tooltip
             title={
               !repositoryId
-                ? 'Create the repository first to add library scripts'
-                : 'Add script from library'
+                ? t('repositoryScriptsSection.createFirst')
+                : t('repositoryScriptsSection.addFromLibrary')
             }
             arrow
           >
@@ -134,7 +137,7 @@ export default function RepositoryScriptsSection({
                 disabled={!repositoryId}
                 sx={{ py: 0.25, px: 1, minHeight: 'auto', fontSize: '0.8rem' }}
               >
-                Add
+                {t('repositoryScriptsSection.add')}
               </Button>
             </span>
           </Tooltip>
@@ -151,9 +154,9 @@ export default function RepositoryScriptsSection({
               sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                <Typography>Inline Script</Typography>
+                <Typography>{t('repositoryScriptsSection.inlineScript')}</Typography>
                 {postBackupScript && (
-                  <Chip label="Configured" size="small" color="success" sx={{ ml: 'auto' }} />
+                  <Chip label={t('repositoryScriptsSection.configured')} size="small" color="success" sx={{ ml: 'auto' }} />
                 )}
               </Box>
             </Button>
