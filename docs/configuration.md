@@ -131,30 +131,6 @@ See [Security Guide - Proxy/OIDC Authentication](security.md#proxyoidc-authentic
 - Troubleshooting guide
 - User management
 
-### Reverse Proxy / BASE_PATH
-
-{: .new }
-> **New in vX.Y.Z**: BASE_PATH support for subfolder deployments
-
-Run Borg Web UI in a subfolder behind a reverse proxy:
-
-```yaml
-environment:
-  - BASE_PATH=/borg  # Access at example.com/borg/
-```
-
-**Important Notes:**
-- Requires container rebuild: `docker-compose up -d --build`
-- Must start with `/` and have no trailing slash
-- Defaults to `/` (root path) if not set
-
-**Examples:**
-- `/borg` → Access at `example.com/borg/`
-- `/backup-ui` → Access at `example.com/backup-ui/`
-- `/` → Access at `example.com/` (default)
-
-See [Reverse Proxy Setup](reverse-proxy.md) for complete configuration examples with Nginx, Traefik, Caddy, and Apache.
-
 ### File Browser Mount Points
 
 {: .new }
@@ -319,9 +295,9 @@ No need for a separate `borg_backups` volume!
 
 ### Using a Reverse Proxy
 
-Borg Web UI supports both root domain and subfolder deployments behind reverse proxies.
+Borg Web UI supports running behind a reverse proxy on a dedicated (sub)domain (e.g., `backups.example.com`).
 
-**Quick Example (Nginx root domain):**
+**Quick Example (Nginx):**
 
 ```nginx
 server {
@@ -345,7 +321,6 @@ server {
 ```
 
 **For complete reverse proxy setup including:**
-- Subfolder deployments (e.g., `example.com/borg/`)
 - Nginx, Traefik, Caddy, Apache configurations
 - SSL/HTTPS setup
 - Docker network integration
