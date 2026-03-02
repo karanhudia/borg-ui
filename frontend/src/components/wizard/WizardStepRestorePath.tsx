@@ -269,9 +269,7 @@ export default function WizardStepRestorePath({
 
       {destinationType === 'ssh' && !destinationConnectionId && (
         <Alert severity="error">
-          <Typography variant="body2">
-            {t('wizard.restorePath.noSshConnection')}
-          </Typography>
+          <Typography variant="body2">{t('wizard.restorePath.noSshConnection')}</Typography>
         </Alert>
       )}
     </Box>

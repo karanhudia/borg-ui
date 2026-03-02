@@ -181,9 +181,7 @@ export default function WizardStepDataSource({
         {/* Remote Data Source Card */}
         <Tooltip
           title={
-            isRemoteToRemoteDisabled
-              ? t('wizard.dataSource.remoteToRemoteDisabledTooltip')
-              : ''
+            isRemoteToRemoteDisabled ? t('wizard.dataSource.remoteToRemoteDisabledTooltip') : ''
           }
           arrow
           placement="top"
@@ -285,7 +283,8 @@ export default function WizardStepDataSource({
       {isRemoteToRemoteDisabled && (
         <Alert severity="info">
           <Typography variant="body2">
-            <strong>{t('wizard.dataSource.remoteToRemoteTitle')}</strong> {t('wizard.dataSource.remoteToRemoteBody')}
+            <strong>{t('wizard.dataSource.remoteToRemoteTitle')}</strong>{' '}
+            {t('wizard.dataSource.remoteToRemoteBody')}
           </Typography>
         </Alert>
       )}
@@ -309,9 +308,7 @@ export default function WizardStepDataSource({
       {data.dataSource === 'remote' && !isRemoteToRemoteDisabled && (
         <>
           {!Array.isArray(sshConnections) || sshConnections.length === 0 ? (
-            <Alert severity="warning">
-              {t('wizard.noSshConnections')}
-            </Alert>
+            <Alert severity="warning">{t('wizard.noSshConnections')}</Alert>
           ) : (
             <>
               <FormControl fullWidth>

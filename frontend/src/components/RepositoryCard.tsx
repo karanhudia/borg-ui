@@ -187,7 +187,11 @@ export default function RepositoryCard({
               {t('repositoryCard.lastBackup')}
             </Typography>
             <Tooltip
-              title={repository.last_backup ? formatDateTimeFull(repository.last_backup) : t('common.never')}
+              title={
+                repository.last_backup
+                  ? formatDateTimeFull(repository.last_backup)
+                  : t('common.never')
+              }
               arrow
             >
               <Typography
@@ -195,7 +199,9 @@ export default function RepositoryCard({
                 fontWeight={500}
                 sx={{ cursor: repository.last_backup ? 'help' : 'default' }}
               >
-                {repository.last_backup ? formatDateShort(repository.last_backup) : t('common.never')}
+                {repository.last_backup
+                  ? formatDateShort(repository.last_backup)
+                  : t('common.never')}
               </Typography>
             </Tooltip>
           </Box>
@@ -204,7 +210,11 @@ export default function RepositoryCard({
               {t('repositoryCard.lastCheck')}
             </Typography>
             <Tooltip
-              title={repository.last_check ? formatDateTimeFull(repository.last_check) : t('common.never')}
+              title={
+                repository.last_check
+                  ? formatDateTimeFull(repository.last_check)
+                  : t('common.never')
+              }
               arrow
             >
               <Typography
@@ -222,7 +232,9 @@ export default function RepositoryCard({
             </Typography>
             <Tooltip
               title={
-                repository.last_compact ? formatDateTimeFull(repository.last_compact) : t('common.never')
+                repository.last_compact
+                  ? formatDateTimeFull(repository.last_compact)
+                  : t('common.never')
               }
               arrow
             >
@@ -231,7 +243,9 @@ export default function RepositoryCard({
                 fontWeight={500}
                 sx={{ cursor: repository.last_compact ? 'help' : 'default' }}
               >
-                {repository.last_compact ? formatDateShort(repository.last_compact) : t('common.never')}
+                {repository.last_compact
+                  ? formatDateShort(repository.last_compact)
+                  : t('common.never')}
               </Typography>
             </Tooltip>
           </Box>

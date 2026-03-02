@@ -272,7 +272,11 @@ export default function RepositoryScriptsTab({
                 sx={{ height: 20, fontSize: '0.7rem' }}
               />
               {script.parameters && script.parameters.length > 0 && (
-                <Tooltip title={t('repositoryScripts.parametersConfigured', { count: script.parameters.length })}>
+                <Tooltip
+                  title={t('repositoryScripts.parametersConfigured', {
+                    count: script.parameters.length,
+                  })}
+                >
                   <Chip
                     label={`${script.parameters.length} param${script.parameters.length > 1 ? 's' : ''}`}
                     size="small"
@@ -568,7 +572,9 @@ function EditParametersDialog({ open, onClose, script, onSubmit }: EditParameter
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{t('repositoryScripts.parametersDialog.title', { scriptName: script.script_name })}</DialogTitle>
+      <DialogTitle>
+        {t('repositoryScripts.parametersDialog.title', { scriptName: script.script_name })}
+      </DialogTitle>
       <DialogContent>
         <Box sx={{ pt: 2 }}>
           {script.parameters && script.parameters.length > 0 ? (

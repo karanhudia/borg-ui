@@ -309,7 +309,8 @@ const NotificationsTab: React.FC = () => {
           sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1 }}
         >
           {showExamples ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-          {showExamples ? t('notifications.hide') : t('notifications.show')} {t('notifications.serviceUrlExamples')}
+          {showExamples ? t('notifications.hide') : t('notifications.show')}{' '}
+          {t('notifications.serviceUrlExamples')}
         </Link>
       </Alert>
 
@@ -447,7 +448,11 @@ const NotificationsTab: React.FC = () => {
                     <TableCell>
                       <Chip
                         icon={notification.enabled ? <Bell size={14} /> : <BellOff size={14} />}
-                        label={notification.enabled ? t('notifications.enabled') : t('notifications.disabled')}
+                        label={
+                          notification.enabled
+                            ? t('notifications.enabled')
+                            : t('notifications.disabled')
+                        }
                         color={notification.enabled ? 'success' : 'default'}
                         size="small"
                       />
@@ -455,13 +460,28 @@ const NotificationsTab: React.FC = () => {
                     <TableCell>
                       <Stack direction="row" spacing={0.5} flexWrap="wrap" gap={0.5}>
                         {notification.notify_on_backup_start && (
-                          <Chip label={t('notifications.chip.backupStart')} size="small" color="info" variant="outlined" />
+                          <Chip
+                            label={t('notifications.chip.backupStart')}
+                            size="small"
+                            color="info"
+                            variant="outlined"
+                          />
                         )}
                         {notification.notify_on_backup_failure && (
-                          <Chip label={t('notifications.chip.backupFail')} size="small" color="error" variant="outlined" />
+                          <Chip
+                            label={t('notifications.chip.backupFail')}
+                            size="small"
+                            color="error"
+                            variant="outlined"
+                          />
                         )}
                         {notification.notify_on_backup_success && (
-                          <Chip label={t('notifications.chip.backupOk')} size="small" color="success" variant="outlined" />
+                          <Chip
+                            label={t('notifications.chip.backupOk')}
+                            size="small"
+                            color="success"
+                            variant="outlined"
+                          />
                         )}
                         {notification.notify_on_restore_failure && (
                           <Chip
@@ -480,10 +500,20 @@ const NotificationsTab: React.FC = () => {
                           />
                         )}
                         {notification.notify_on_check_failure && (
-                          <Chip label={t('notifications.chip.checkFail')} size="small" color="error" variant="outlined" />
+                          <Chip
+                            label={t('notifications.chip.checkFail')}
+                            size="small"
+                            color="error"
+                            variant="outlined"
+                          />
                         )}
                         {notification.notify_on_check_success && (
-                          <Chip label={t('notifications.chip.checkOk')} size="small" color="success" variant="outlined" />
+                          <Chip
+                            label={t('notifications.chip.checkOk')}
+                            size="small"
+                            color="success"
+                            variant="outlined"
+                          />
                         )}
                         {notification.notify_on_schedule_failure && (
                           <Chip
@@ -497,10 +527,16 @@ const NotificationsTab: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       {notification.monitor_all_repositories ? (
-                        <Chip label={t('notifications.chip.allRepositories')} size="small" variant="outlined" />
+                        <Chip
+                          label={t('notifications.chip.allRepositories')}
+                          size="small"
+                          variant="outlined"
+                        />
                       ) : notification.repositories.length > 0 ? (
                         <Chip
-                          label={t('notifications.chip.repositoryCount', { count: notification.repositories.length })}
+                          label={t('notifications.chip.repositoryCount', {
+                            count: notification.repositories.length,
+                          })}
                           size="small"
                           color="primary"
                           variant="outlined"
@@ -800,7 +836,11 @@ const NotificationsTab: React.FC = () => {
                     setFormData({ ...formData, monitor_all_repositories: e.target.value === 'all' })
                   }
                 >
-                  <FormControlLabel value="all" control={<Radio />} label={t('notifications.form.allRepositories')} />
+                  <FormControlLabel
+                    value="all"
+                    control={<Radio />}
+                    label={t('notifications.form.allRepositories')}
+                  />
                   <FormControlLabel
                     value="selected"
                     control={<Radio />}

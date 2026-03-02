@@ -44,7 +44,9 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
         <Typography variant="body2" fontWeight={600}>
           {t('wizard.scheduleWizard.review.readyToCreate')}
         </Typography>
-        <Typography variant="caption">{t('wizard.scheduleWizard.review.reviewAndConfirm')}</Typography>
+        <Typography variant="caption">
+          {t('wizard.scheduleWizard.review.reviewAndConfirm')}
+        </Typography>
       </Alert>
 
       {/* Job Summary Card */}
@@ -154,7 +156,11 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
                 {t('wizard.scheduleWizard.review.repositoryLevelScripts')}
               </Typography>
               <Chip
-                label={data.runRepositoryScripts ? t('wizard.scheduleWizard.review.enabled') : t('wizard.scheduleWizard.review.disabled')}
+                label={
+                  data.runRepositoryScripts
+                    ? t('wizard.scheduleWizard.review.enabled')
+                    : t('wizard.scheduleWizard.review.disabled')
+                }
                 color={data.runRepositoryScripts ? 'primary' : 'default'}
                 size="small"
               />
@@ -180,7 +186,11 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
               </Typography>
               <Box sx={{ mt: 0.5 }}>
                 <Chip
-                  label={data.runPruneAfter ? t('wizard.scheduleWizard.review.enabled') : t('wizard.scheduleWizard.review.disabled')}
+                  label={
+                    data.runPruneAfter
+                      ? t('wizard.scheduleWizard.review.enabled')
+                      : t('wizard.scheduleWizard.review.disabled')
+                  }
                   color={data.runPruneAfter ? 'primary' : 'default'}
                   size="small"
                 />
@@ -204,7 +214,11 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
               </Typography>
               <Box sx={{ mt: 0.5 }}>
                 <Chip
-                  label={data.runCompactAfter ? t('wizard.scheduleWizard.review.enabled') : t('wizard.scheduleWizard.review.disabled')}
+                  label={
+                    data.runCompactAfter
+                      ? t('wizard.scheduleWizard.review.enabled')
+                      : t('wizard.scheduleWizard.review.disabled')
+                  }
                   color={data.runCompactAfter ? 'secondary' : 'default'}
                   size="small"
                 />

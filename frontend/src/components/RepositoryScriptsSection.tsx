@@ -87,7 +87,12 @@ export default function RepositoryScriptsSection({
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
                 <Typography>{t('repositoryScriptsSection.inlineScript')}</Typography>
                 {preBackupScript && (
-                  <Chip label={t('repositoryScriptsSection.configured')} size="small" color="success" sx={{ ml: 'auto' }} />
+                  <Chip
+                    label={t('repositoryScriptsSection.configured')}
+                    size="small"
+                    color="success"
+                    sx={{ ml: 'auto' }}
+                  />
                 )}
               </Box>
             </Button>
@@ -156,7 +161,12 @@ export default function RepositoryScriptsSection({
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
                 <Typography>{t('repositoryScriptsSection.inlineScript')}</Typography>
                 {postBackupScript && (
-                  <Chip label={t('repositoryScriptsSection.configured')} size="small" color="success" sx={{ ml: 'auto' }} />
+                  <Chip
+                    label={t('repositoryScriptsSection.configured')}
+                    size="small"
+                    color="success"
+                    sx={{ ml: 'auto' }}
+                  />
                 )}
               </Box>
             </Button>

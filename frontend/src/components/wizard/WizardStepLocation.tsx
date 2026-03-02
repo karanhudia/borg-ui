@@ -122,9 +122,7 @@ export default function WizardStepLocation({
       )}
 
       {mode === 'import' && data.repositoryMode === 'observe' && (
-        <Alert severity="info">
-          {t('wizard.location.observabilityInfo')}
-        </Alert>
+        <Alert severity="info">{t('wizard.location.observabilityInfo')}</Alert>
       )}
 
       {/* Read-only storage access option for observe mode */}
@@ -291,7 +289,8 @@ export default function WizardStepLocation({
         {isRemoteLocationDisabled && (
           <Alert severity="info" sx={{ mt: 2 }}>
             <Typography variant="body2">
-              <strong>{t('wizard.dataSource.remoteToRemoteTitle')}</strong> {t('wizard.location.remoteDisabledInfo')}
+              <strong>{t('wizard.dataSource.remoteToRemoteTitle')}</strong>{' '}
+              {t('wizard.location.remoteDisabledInfo')}
             </Typography>
           </Alert>
         )}
@@ -301,9 +300,7 @@ export default function WizardStepLocation({
       {data.repositoryLocation === 'ssh' && (
         <>
           {!Array.isArray(sshConnections) || sshConnections.length === 0 ? (
-            <Alert severity="warning">
-              {t('wizard.noSshConnections')}
-            </Alert>
+            <Alert severity="warning">{t('wizard.noSshConnections')}</Alert>
           ) : (
             <FormControl fullWidth>
               <InputLabel>{t('wizard.location.selectSshConnection')}</InputLabel>

@@ -281,13 +281,21 @@ export default function PackagesTab() {
             icon: <CheckCircle size={16} />,
             label: t('packages.status.installed'),
           },
-          pending: { color: 'warning' as const, icon: <Clock size={16} />, label: t('packages.status.pending') },
+          pending: {
+            color: 'warning' as const,
+            icon: <Clock size={16} />,
+            label: t('packages.status.pending'),
+          },
           installing: {
             color: 'info' as const,
             icon: <Loader2 size={16} className="animate-spin" />,
             label: t('packages.status.installing'),
           },
-          failed: { color: 'error' as const, icon: <XCircle size={16} />, label: t('packages.status.failed') },
+          failed: {
+            color: 'error' as const,
+            icon: <XCircle size={16} />,
+            label: t('packages.status.failed'),
+          },
         }
         const config = statusConfig[pkg.status]
         return <Chip icon={config.icon} label={config.label} color={config.color} size="small" />
@@ -389,12 +397,16 @@ export default function PackagesTab() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>{editingPackage ? t('packages.createDialog.titleEdit') : t('packages.createDialog.titleAdd')}</DialogTitle>
+        <DialogTitle>
+          {editingPackage
+            ? t('packages.createDialog.titleEdit')
+            : t('packages.createDialog.titleAdd')}
+        </DialogTitle>
         <form onSubmit={handleSubmitPackage}>
           <DialogContent>
             <Stack spacing={3}>
               <TextField
-label={t('packages.fields.packageName')}
+                label={t('packages.fields.packageName')}
                 value={packageForm.name}
                 onChange={(e) => setPackageForm({ ...packageForm, name: e.target.value })}
                 required
@@ -436,7 +448,7 @@ label={t('packages.fields.packageName')}
                 value={packageForm.description}
                 onChange={(e) => setPackageForm({ ...packageForm, description: e.target.value })}
                 fullWidth
-helperText={t('packages.fields.descriptionHint')}
+                helperText={t('packages.fields.descriptionHint')}
               />
             </Stack>
           </DialogContent>
@@ -452,7 +464,7 @@ helperText={t('packages.fields.descriptionHint')}
                 ) : null
               }
             >
-{editingPackage
+              {editingPackage
                 ? updatePackageMutation.isPending
                   ? t('packages.buttons.updating')
                   : t('packages.buttons.updatePackage')
@@ -481,7 +493,9 @@ helperText={t('packages.fields.descriptionHint')}
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteConfirmPackage(null)}>{t('common.buttons.cancel')}</Button>
+          <Button onClick={() => setDeleteConfirmPackage(null)}>
+            {t('common.buttons.cancel')}
+          </Button>
           <Button
             onClick={() =>
               deleteConfirmPackage && deletePackageMutation.mutate(deleteConfirmPackage.id)
@@ -491,7 +505,9 @@ helperText={t('packages.fields.descriptionHint')}
             disabled={deletePackageMutation.isPending}
             startIcon={deletePackageMutation.isPending ? <CircularProgress size={16} /> : null}
           >
-            {deletePackageMutation.isPending ? t('packages.deleteDialog.deleting') : t('packages.deleteDialog.confirm')}
+            {deletePackageMutation.isPending
+              ? t('packages.deleteDialog.deleting')
+              : t('packages.deleteDialog.confirm')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -618,7 +634,9 @@ helperText={t('packages.fields.descriptionHint')}
             variant="contained"
             disabled={jobStatus?.status === 'installing'}
           >
-            {jobStatus?.status === 'installing' ? t('packages.resultDialog.installing') : t('packages.resultDialog.close')}
+            {jobStatus?.status === 'installing'
+              ? t('packages.resultDialog.installing')
+              : t('packages.resultDialog.close')}
           </Button>
         </DialogActions>
       </Dialog>

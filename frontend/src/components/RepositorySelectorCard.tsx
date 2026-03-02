@@ -55,7 +55,9 @@ export default function RepositorySelectorCard({
             sx={{ height: { xs: 48, sm: 56 } }}
           >
             <MenuItem value="" disabled>
-              {loading ? t('repositorySelectorCard.loading') : t('repositorySelectorCard.placeholder')}
+              {loading
+                ? t('repositorySelectorCard.loading')
+                : t('repositorySelectorCard.placeholder')}
             </MenuItem>
             {repositories.map((repo) => (
               <MenuItem key={repo.id} value={repo.id} disabled={repo.has_running_maintenance}>

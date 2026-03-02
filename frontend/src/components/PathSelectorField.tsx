@@ -65,7 +65,7 @@ export default function PathSelectorField({
                 onClick={() => setShowFileExplorer(true)}
                 edge="end"
                 size="small"
-                title={t("pathSelectorField.browseFilesystem")}
+                title={t('pathSelectorField.browseFilesystem')}
                 disabled={disabled}
               >
                 <FolderOpen fontSize="small" />
@@ -83,7 +83,13 @@ export default function PathSelectorField({
             onChange(multiSelect ? paths.join(',') : paths[0])
           }
         }}
-        title={selectMode === "directories" ? t("pathSelectorField.selectDirectory") : selectMode === "files" ? t("pathSelectorField.selectFile") : t("pathSelectorField.selectPath")}
+        title={
+          selectMode === 'directories'
+            ? t('pathSelectorField.selectDirectory')
+            : selectMode === 'files'
+              ? t('pathSelectorField.selectFile')
+              : t('pathSelectorField.selectPath')
+        }
         initialPath={value || '/'}
         multiSelect={multiSelect}
         connectionType={connectionType}

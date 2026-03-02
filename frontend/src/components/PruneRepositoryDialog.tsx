@@ -187,7 +187,9 @@ export default function PruneRepositoryDialog({
         {results && (
           <Box sx={{ mt: 2 }}>
             <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-              {results.dry_run ? t('dialogs.prune.dryRunResultsTitle') : t('dialogs.prune.pruneResultsTitle')}
+              {results.dry_run
+                ? t('dialogs.prune.dryRunResultsTitle')
+                : t('dialogs.prune.pruneResultsTitle')}
             </Typography>
 
             {results.prune_result?.success === false ? (
@@ -279,9 +281,7 @@ export default function PruneRepositoryDialog({
 
             {results.dry_run && results.prune_result?.success !== false && (
               <Alert severity="success" sx={{ mb: 2 }}>
-                <Typography variant="body2">
-                  {t('dialogs.prune.dryRunSuccess')}
-                </Typography>
+                <Typography variant="body2">{t('dialogs.prune.dryRunSuccess')}</Typography>
               </Alert>
             )}
           </Box>
@@ -291,9 +291,7 @@ export default function PruneRepositoryDialog({
           <Typography variant="body2" fontWeight={600} gutterBottom>
             {t('dialogs.prune.warningTitle')}
           </Typography>
-          <Typography variant="body2">
-            {t('dialogs.prune.warningCompact')}
-          </Typography>
+          <Typography variant="body2">{t('dialogs.prune.warningCompact')}</Typography>
         </Alert>
       </DialogContent>
       <DialogActions>

@@ -36,9 +36,7 @@ export default function LockErrorDialog({
   const [breaking, setBreaking] = useState(false)
 
   const handleBreakLock = async () => {
-    if (
-      !window.confirm(t('dialogs.lockError.breakLockWarning'))
-    ) {
+    if (!window.confirm(t('dialogs.lockError.breakLockWarning'))) {
       return
     }
 
@@ -74,9 +72,7 @@ export default function LockErrorDialog({
 
       <DialogContent>
         <Alert severity="warning" sx={{ mb: 1.5 }}>
-          <Typography variant="body2">
-            {t('dialogs.lockError.staleLockInfo')}
-          </Typography>
+          <Typography variant="body2">{t('dialogs.lockError.staleLockInfo')}</Typography>
         </Alert>
 
         <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
@@ -111,7 +107,8 @@ export default function LockErrorDialog({
         {!isAdmin && (
           <Alert severity="info" sx={{ mt: 2 }}>
             <Typography variant="body2">
-              <strong>{t('dialogs.lockError.adminRequired')}</strong> {t('dialogs.lockError.adminRequiredDetail')}
+              <strong>{t('dialogs.lockError.adminRequired')}</strong>{' '}
+              {t('dialogs.lockError.adminRequiredDetail')}
             </Typography>
           </Alert>
         )}

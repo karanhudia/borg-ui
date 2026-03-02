@@ -338,9 +338,7 @@ export default function Scripts() {
       {/* Info Alert */}
       {scripts.length === 0 && (
         <Alert severity="info" sx={{ mb: 3 }}>
-          <Typography variant="body2">
-            {t('scripts.empty')}
-          </Typography>
+          <Typography variant="body2">{t('scripts.empty')}</Typography>
         </Alert>
       )}
 
@@ -457,7 +455,9 @@ export default function Scripts() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{editingScript ? t('scripts.editDialog.title') : t('scripts.createDialog.title')}</DialogTitle>
+        <DialogTitle>
+          {editingScript ? t('scripts.editDialog.title') : t('scripts.createDialog.title')}
+        </DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
             <TextField
@@ -493,9 +493,7 @@ export default function Scripts() {
               </Select>
             </FormControl>
 
-            <Alert severity="info">
-              {t('scripts.runOn.note')}
-            </Alert>
+            <Alert severity="info">{t('scripts.runOn.note')}</Alert>
 
             <TextField
               label={t('scripts.fields.timeout')}
@@ -618,9 +616,7 @@ export default function Scripts() {
               {/* Show parameters if script has them */}
               {testingScriptData?.parameters && testingScriptData.parameters.length > 0 ? (
                 <>
-                  <Alert severity="info">
-                    {t('scripts.testDialog.hasParams')}
-                  </Alert>
+                  <Alert severity="info">{t('scripts.testDialog.hasParams')}</Alert>
                   <ScriptParameterInputs
                     parameters={testingScriptData.parameters}
                     values={testParameterValues}
@@ -628,21 +624,23 @@ export default function Scripts() {
                   />
                 </>
               ) : (
-                <Alert severity="info">
-                  {t('scripts.testDialog.noParams')}
-                </Alert>
+                <Alert severity="info">{t('scripts.testDialog.noParams')}</Alert>
               )}
 
               {/* Test button */}
               <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, pt: 2 }}>
-                <Button onClick={() => setTestDialogOpen(false)}>{t('scripts.buttons.cancel')}</Button>
+                <Button onClick={() => setTestDialogOpen(false)}>
+                  {t('scripts.buttons.cancel')}
+                </Button>
                 <Button
                   onClick={executeTest}
                   variant="contained"
                   startIcon={testingScript ? <CircularProgress size={16} /> : <Play size={16} />}
                   disabled={testingScript}
                 >
-                  {testingScript ? t('scripts.testDialog.running') : t('scripts.testDialog.runTest')}
+                  {testingScript
+                    ? t('scripts.testDialog.running')
+                    : t('scripts.testDialog.runTest')}
                 </Button>
               </Box>
             </Box>
@@ -659,10 +657,15 @@ export default function Scripts() {
                 icon={testResult.success ? <CheckCircle /> : <XCircle />}
               >
                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  {testResult.success ? t('scripts.testDialog.success') : t('scripts.testDialog.failed')}
+                  {testResult.success
+                    ? t('scripts.testDialog.success')
+                    : t('scripts.testDialog.failed')}
                 </Typography>
                 <Typography variant="caption">
-                  {t('scripts.testDialog.exitCode', { code: testResult.exit_code, time: testResult.execution_time.toFixed(2) })}
+                  {t('scripts.testDialog.exitCode', {
+                    code: testResult.exit_code,
+                    time: testResult.execution_time.toFixed(2),
+                  })}
                 </Typography>
               </Alert>
 
@@ -721,7 +724,9 @@ export default function Scripts() {
               <Button onClick={() => setTestResult(null)} variant="outlined">
                 {t('scripts.testDialog.testAgain')}
               </Button>
-              <Button onClick={() => setTestDialogOpen(false)}>{t('scripts.testDialog.close')}</Button>
+              <Button onClick={() => setTestDialogOpen(false)}>
+                {t('scripts.testDialog.close')}
+              </Button>
             </>
           ) : null}
         </DialogActions>

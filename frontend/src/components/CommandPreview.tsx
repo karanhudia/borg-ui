@@ -138,7 +138,9 @@ export default function CommandPreview({
     return (
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
         <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
-          {mode === 'create' ? t('commandPreview.howBackupWillWork') : t('commandPreview.howBackupWorks')}
+          {mode === 'create'
+            ? t('commandPreview.howBackupWillWork')
+            : t('commandPreview.howBackupWorks')}
         </Typography>
 
         {mode === 'create' && (
@@ -163,8 +165,18 @@ export default function CommandPreview({
             sx={{ mb: 0.5, display: 'block' }}
           >
             {mode === 'create'
-              ? t('commandPreview.step2MountRemote', { type: mountPaths.length > 1 ? t('commandPreview.mountDirectories') : t('commandPreview.mountDirectory') })
-              : t('commandPreview.step1MountRemote', { type: mountPaths.length > 1 ? t('commandPreview.mountDirectories') : t('commandPreview.mountDirectory') })}
+              ? t('commandPreview.step2MountRemote', {
+                  type:
+                    mountPaths.length > 1
+                      ? t('commandPreview.mountDirectories')
+                      : t('commandPreview.mountDirectory'),
+                })
+              : t('commandPreview.step1MountRemote', {
+                  type:
+                    mountPaths.length > 1
+                      ? t('commandPreview.mountDirectories')
+                      : t('commandPreview.mountDirectory'),
+                })}
           </Typography>
           <CommandBox>{sshfsMountCommands.join('\n')}</CommandBox>
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
@@ -179,7 +191,9 @@ export default function CommandPreview({
             fontWeight={600}
             sx={{ mb: 0.5, display: 'block' }}
           >
-            {mode === 'create' ? t('commandPreview.step3RunBackup') : t('commandPreview.step2RunBackup')}
+            {mode === 'create'
+              ? t('commandPreview.step3RunBackup')
+              : t('commandPreview.step2RunBackup')}
           </Typography>
           <CommandBox>{createCommand}</CommandBox>
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
@@ -194,7 +208,9 @@ export default function CommandPreview({
             fontWeight={600}
             sx={{ mb: 0.5, display: 'block' }}
           >
-            {mode === 'create' ? t('commandPreview.step4Cleanup') : t('commandPreview.step3Cleanup')}
+            {mode === 'create'
+              ? t('commandPreview.step4Cleanup')
+              : t('commandPreview.step3Cleanup')}
           </Typography>
           <CommandBox>fusermount -u /tmp/sshfs_mount/</CommandBox>
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
@@ -209,7 +225,9 @@ export default function CommandPreview({
   return (
     <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
       <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
-        {mode === 'create' ? t('commandPreview.howBackupWillWork') : t('commandPreview.howBackupWorks')}
+        {mode === 'create'
+          ? t('commandPreview.howBackupWillWork')
+          : t('commandPreview.howBackupWorks')}
       </Typography>
 
       {mode === 'create' && (
@@ -237,7 +255,9 @@ export default function CommandPreview({
             fontWeight={600}
             sx={{ mb: 0.5, display: 'block' }}
           >
-            {mode === 'create' ? t('commandPreview.step2RunBackup') : t('commandPreview.stepRunBackup')}
+            {mode === 'create'
+              ? t('commandPreview.step2RunBackup')
+              : t('commandPreview.stepRunBackup')}
           </Typography>
           <CommandBox>{createCommand}</CommandBox>
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>

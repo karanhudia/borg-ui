@@ -433,7 +433,9 @@ export default function DashboardNew() {
               })}
               {overview.storage.breakdown.length > 3 && (
                 <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center' }}>
-                  {t('dashboard.moreRepositories', { count: overview.storage.breakdown.length - 3 })}
+                  {t('dashboard.moreRepositories', {
+                    count: overview.storage.breakdown.length - 3,
+                  })}
                 </Typography>
               )}
             </Stack>
@@ -652,7 +654,8 @@ export default function DashboardNew() {
                           />
                         </Stack>
                         <Typography variant="caption" color="text.secondary">
-                          {repo.warnings[0] || t('dashboard.repositoryHealth.needsAttention')} • {repo.archive_count} {t('dashboard.repositoryHealth.archives')} •{' '}
+                          {repo.warnings[0] || t('dashboard.repositoryHealth.needsAttention')} •{' '}
+                          {repo.archive_count} {t('dashboard.repositoryHealth.archives')} •{' '}
                           {repo.total_size}
                         </Typography>
                       </Box>
@@ -707,7 +710,8 @@ export default function DashboardNew() {
                           />
                         </Stack>
                         <Typography variant="caption" color="text.secondary">
-                          {t('dashboard.repositoryHealth.upToDate')} • {repo.archive_count} {t('dashboard.repositoryHealth.archives')} • {repo.total_size}
+                          {t('dashboard.repositoryHealth.upToDate')} • {repo.archive_count}{' '}
+                          {t('dashboard.repositoryHealth.archives')} • {repo.total_size}
                         </Typography>
                       </Box>
                     </Stack>
@@ -732,7 +736,9 @@ export default function DashboardNew() {
                   onClick={() => navigate('/repositories')}
                   sx={{ alignSelf: 'center', mt: 0.5, color: 'text.secondary' }}
                 >
-                  {t('dashboard.moreRepositories', { count: overview.repository_health.length - repoLimit })}
+                  {t('dashboard.moreRepositories', {
+                    count: overview.repository_health.length - repoLimit,
+                  })}
                 </Button>
               )}
 
@@ -781,7 +787,9 @@ export default function DashboardNew() {
                       onClick={() => navigate('/schedule')}
                       sx={{ alignSelf: 'flex-start', p: 0, minWidth: 0, color: 'text.secondary' }}
                     >
-                      {t('dashboard.moreScheduled', { count: overview.upcoming_tasks.length - taskLimit })}
+                      {t('dashboard.moreScheduled', {
+                        count: overview.upcoming_tasks.length - taskLimit,
+                      })}
                     </Button>
                   )}
                 </Stack>
@@ -837,7 +845,9 @@ export default function DashboardNew() {
                         onClick={() => navigate('/repositories')}
                         sx={{ alignSelf: 'center', color: 'text.secondary' }}
                       >
-                        {t('dashboard.moreAlerts', { count: overview.maintenance_alerts.length - alertLimit })}
+                        {t('dashboard.moreAlerts', {
+                          count: overview.maintenance_alerts.length - alertLimit,
+                        })}
                       </Button>
                     )}
                   </Stack>
@@ -865,7 +875,9 @@ export default function DashboardNew() {
                   <Box sx={{ mt: 0.5 }}>{getActivityIcon(activity.type, activity.status)}</Box>
                   <Box sx={{ flex: 1 }}>
                     <Typography variant="body2" fontWeight={600}>
-                      {t(`dashboard.activityMessages.${activity.type}_${activity.status}`, { defaultValue: activity.message })}
+                      {t(`dashboard.activityMessages.${activity.type}_${activity.status}`, {
+                        defaultValue: activity.message,
+                      })}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       {activity.repository} •{' '}

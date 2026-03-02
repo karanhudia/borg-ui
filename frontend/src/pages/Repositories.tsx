@@ -445,7 +445,8 @@ export default function Repositories() {
       const local = sorted.filter((r: Repository) => !r.path?.startsWith('ssh://'))
       const ssh = sorted.filter((r: Repository) => r.path?.startsWith('ssh://'))
 
-      if (local.length > 0) groups.push({ name: t('repositories.groups.local'), repositories: local })
+      if (local.length > 0)
+        groups.push({ name: t('repositories.groups.local'), repositories: local })
       if (ssh.length > 0) groups.push({ name: t('repositories.groups.remote'), repositories: ssh })
     } else if (groupBy === 'mode') {
       const full = sorted.filter((r: Repository) => r.mode === 'full' || !r.mode)
@@ -531,8 +532,12 @@ export default function Repositories() {
                 >
                   <MenuItem value="name-asc">{t('repositories.sort.nameAZ')}</MenuItem>
                   <MenuItem value="name-desc">{t('repositories.sort.nameZA')}</MenuItem>
-                  <MenuItem value="last-backup-recent">{t('repositories.sort.lastBackupRecent')}</MenuItem>
-                  <MenuItem value="last-backup-oldest">{t('repositories.sort.lastBackupOldest')}</MenuItem>
+                  <MenuItem value="last-backup-recent">
+                    {t('repositories.sort.lastBackupRecent')}
+                  </MenuItem>
+                  <MenuItem value="last-backup-oldest">
+                    {t('repositories.sort.lastBackupOldest')}
+                  </MenuItem>
                   <MenuItem value="created-newest">{t('repositories.sort.createdNewest')}</MenuItem>
                   <MenuItem value="created-oldest">{t('repositories.sort.createdOldest')}</MenuItem>
                 </Select>

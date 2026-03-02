@@ -489,9 +489,7 @@ export default function SSHConnectionsSingleKey() {
         <Typography variant="body2" fontWeight={500}>
           {t('sshConnections.singleKeySystem.title')}
         </Typography>
-        <Typography variant="caption">
-          {t('sshConnections.singleKeySystem.description')}
-        </Typography>
+        <Typography variant="caption">{t('sshConnections.singleKeySystem.description')}</Typography>
       </Alert>
 
       {/* Statistics Cards */}
@@ -805,7 +803,11 @@ export default function SSHConnectionsSingleKey() {
 
             <FormControl fullWidth>
               <InputLabel>{t('sshConnections.generateDialog.keyType')}</InputLabel>
-              <Select value={keyType} label={t('sshConnections.generateDialog.keyType')} onChange={(e) => setKeyType(e.target.value)}>
+              <Select
+                value={keyType}
+                label={t('sshConnections.generateDialog.keyType')}
+                onChange={(e) => setKeyType(e.target.value)}
+              >
                 <MenuItem value="ed25519">{t('sshConnections.generateDialog.ed25519')}</MenuItem>
                 <MenuItem value="rsa">{t('sshConnections.generateDialog.rsa')}</MenuItem>
                 <MenuItem value="ecdsa">{t('sshConnections.generateDialog.ecdsa')}</MenuItem>
@@ -820,7 +822,9 @@ export default function SSHConnectionsSingleKey() {
             onClick={handleGenerateKey}
             disabled={generateKeyMutation.isPending}
           >
-            {generateKeyMutation.isPending ? t('sshConnections.generateDialog.generating') : t('sshConnections.generateDialog.generate')}
+            {generateKeyMutation.isPending
+              ? t('sshConnections.generateDialog.generating')
+              : t('sshConnections.generateDialog.generate')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -889,7 +893,9 @@ export default function SSHConnectionsSingleKey() {
             onClick={handleImportKey}
             disabled={importKeyMutation.isPending || !importForm.private_key_path}
           >
-            {importKeyMutation.isPending ? t('sshConnections.importDialog.importing') : t('sshConnections.importDialog.import')}
+            {importKeyMutation.isPending
+              ? t('sshConnections.importDialog.importing')
+              : t('sshConnections.importDialog.import')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -962,7 +968,9 @@ export default function SSHConnectionsSingleKey() {
               }
               label={
                 <Box>
-                  <Typography variant="body2">{t('sshConnections.deployDialog.sftpMode')}</Typography>
+                  <Typography variant="body2">
+                    {t('sshConnections.deployDialog.sftpMode')}
+                  </Typography>
                   <Typography variant="caption" color="text.secondary">
                     Required by Hetzner Storage Box. Disable for Synology NAS or older SSH servers.
                   </Typography>
@@ -1022,7 +1030,9 @@ export default function SSHConnectionsSingleKey() {
               !connectionForm.password
             }
           >
-            {deployKeyMutation.isPending ? t('sshConnections.deployDialog.deploying') : t('sshConnections.deployDialog.deploy')}
+            {deployKeyMutation.isPending
+              ? t('sshConnections.deployDialog.deploying')
+              : t('sshConnections.deployDialog.deploy')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1105,7 +1115,9 @@ export default function SSHConnectionsSingleKey() {
               !testConnectionForm.username
             }
           >
-            {testConnectionMutation.isPending ? 'Testing...' : t('sshConnections.manualConnectionDialog.submit')}
+            {testConnectionMutation.isPending
+              ? 'Testing...'
+              : t('sshConnections.manualConnectionDialog.submit')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1176,7 +1188,9 @@ export default function SSHConnectionsSingleKey() {
               }
               label={
                 <Box>
-                  <Typography variant="body2">{t('sshConnections.deployDialog.sftpMode')}</Typography>
+                  <Typography variant="body2">
+                    {t('sshConnections.deployDialog.sftpMode')}
+                  </Typography>
                   <Typography variant="caption" color="text.secondary">
                     Required by Hetzner Storage Box. Disable for Synology NAS or older SSH servers.
                   </Typography>
@@ -1250,7 +1264,9 @@ export default function SSHConnectionsSingleKey() {
               !editConnectionForm.username
             }
           >
-            {updateConnectionMutation.isPending ? 'Updating...' : t('sshConnections.editConnectionDialog.submit')}
+            {updateConnectionMutation.isPending
+              ? 'Updating...'
+              : t('sshConnections.editConnectionDialog.submit')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1299,7 +1315,9 @@ export default function SSHConnectionsSingleKey() {
             onClick={confirmDeleteConnection}
             disabled={deleteConnectionMutation.isPending}
           >
-            {deleteConnectionMutation.isPending ? t('sshConnections.deleteConnectionDialog.deleting') : t('sshConnections.deleteConnectionDialog.delete')}
+            {deleteConnectionMutation.isPending
+              ? t('sshConnections.deleteConnectionDialog.deleting')
+              : t('sshConnections.deleteConnectionDialog.delete')}
           </Button>
         </DialogActions>
       </Dialog>

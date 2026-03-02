@@ -470,7 +470,9 @@ const Restore: React.FC = () => {
               sx={{ height: { xs: 48, sm: 56 } }}
             >
               <MenuItem value="" disabled>
-                {loadingRepositories ? t('restore.loadingRepositories') : t('restore.selectRepositoryPlaceholder')}
+                {loadingRepositories
+                  ? t('restore.loadingRepositories')
+                  : t('restore.selectRepositoryPlaceholder')}
               </MenuItem>
               {repositories.map((repo: Repository) => (
                 <MenuItem key={repo.id} value={repo.path} disabled={repo.has_running_maintenance}>
@@ -685,9 +687,7 @@ const Restore: React.FC = () => {
                   <Typography variant="body2" fontWeight={500} gutterBottom>
                     {t('restore.dialog.important')}
                   </Typography>
-                  <Typography variant="body2">
-                    {t('restore.dialog.fullRestoreWarning')}
-                  </Typography>
+                  <Typography variant="body2">{t('restore.dialog.fullRestoreWarning')}</Typography>
                   <Button
                     size="small"
                     variant="text"

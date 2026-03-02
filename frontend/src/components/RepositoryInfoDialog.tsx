@@ -140,7 +140,11 @@ export default function RepositoryInfoDialog({
                       </Typography>
                     </Box>
                     {repository?.has_keyfile && (
-                      <Tooltip title={t('dialogs.repositoryInfo.exportKeyfileTooltip')} arrow placement="top">
+                      <Tooltip
+                        title={t('dialogs.repositoryInfo.exportKeyfileTooltip')}
+                        arrow
+                        placement="top"
+                      >
                         <IconButton
                           onClick={handleDownloadKeyfile}
                           size="small"
@@ -297,9 +301,7 @@ export default function RepositoryInfoDialog({
             )}
           </Box>
         ) : (
-          <Alert severity="error">
-            {t('repositoryInfoDialog.failedToLoad')}
-          </Alert>
+          <Alert severity="error">{t('repositoryInfoDialog.failedToLoad')}</Alert>
         )}
       </DialogContent>
       <DialogActions>

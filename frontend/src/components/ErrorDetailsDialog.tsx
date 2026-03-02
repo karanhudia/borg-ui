@@ -36,7 +36,9 @@ export default function ErrorDetailsDialog<T extends JobWithError>({
       <DialogTitle>
         {job && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Typography variant="h6">{t('dialogs.errorDetails.title')} - Job #{job.id}</Typography>
+            <Typography variant="h6">
+              {t('dialogs.errorDetails.title')} - Job #{job.id}
+            </Typography>
             <StatusBadge status={job.status} />
           </Box>
         )}

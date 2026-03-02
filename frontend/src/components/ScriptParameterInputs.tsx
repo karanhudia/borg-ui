@@ -107,7 +107,13 @@ export default function ScriptParameterInputs({
                 ) : undefined,
                 endAdornment: isPassword ? (
                   <InputAdornment position="end">
-                    <Tooltip title={shouldShow ? t('scriptParameters.hidePassword') : t('scriptParameters.showPassword')}>
+                    <Tooltip
+                      title={
+                        shouldShow
+                          ? t('scriptParameters.hidePassword')
+                          : t('scriptParameters.showPassword')
+                      }
+                    >
                       <IconButton
                         size="small"
                         onClick={() => toggleShowPassword(param.name)}

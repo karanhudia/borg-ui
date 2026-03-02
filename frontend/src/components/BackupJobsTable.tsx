@@ -295,7 +295,9 @@ export const BackupJobsTable = <T extends Job = Job>({
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: t('backupJobsTable.toasts.failedToDelete') }))
+        const errorData = await response
+          .json()
+          .catch(() => ({ detail: t('backupJobsTable.toasts.failedToDelete') }))
         throw new Error(errorData.detail || t('backupJobsTable.toasts.failedToDelete'))
       }
 
@@ -309,7 +311,9 @@ export const BackupJobsTable = <T extends Job = Job>({
         }
       })
 
-      toast.error(error instanceof Error ? error.message : t('backupJobsTable.toasts.failedToDelete'))
+      toast.error(
+        error instanceof Error ? error.message : t('backupJobsTable.toasts.failedToDelete')
+      )
       console.error(error)
     }
   }
@@ -417,7 +421,11 @@ export const BackupJobsTable = <T extends Job = Job>({
               const isScheduled = job.triggered_by === 'schedule'
               return (
                 <Tooltip
-                  title={isScheduled ? t('backupJobsTable.scheduledById', { id: job.schedule_id || 'N/A' }) : t('backupJobsTable.manual')}
+                  title={
+                    isScheduled
+                      ? t('backupJobsTable.scheduledById', { id: job.schedule_id || 'N/A' })
+                      : t('backupJobsTable.manual')
+                  }
                   placement="top"
                   arrow
                 >

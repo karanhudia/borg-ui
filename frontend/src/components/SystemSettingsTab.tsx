@@ -464,7 +464,8 @@ const SystemSettingsTab: React.FC = () => {
                   error={sourceSizeTimeout < MIN_TIMEOUT || sourceSizeTimeout > MAX_TIMEOUT}
                   helperText={
                     <>
-                      {t('systemSettings.sourceSizeTimeoutHelper')} {formatTimeout(sourceSizeTimeout)}
+                      {t('systemSettings.sourceSizeTimeoutHelper')}{' '}
+                      {formatTimeout(sourceSizeTimeout)}
                       {renderSourceLabel(timeoutSources?.source_size_timeout)}
                     </>
                   }
@@ -480,7 +481,9 @@ const SystemSettingsTab: React.FC = () => {
             <Stack spacing={3}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <RefreshCw size={24} />
-                <Typography variant="h6">{t('systemSettings.repositoryMonitoringTitle')}</Typography>
+                <Typography variant="h6">
+                  {t('systemSettings.repositoryMonitoringTitle')}
+                </Typography>
               </Box>
               <Typography variant="body2" color="text.secondary">
                 {t('systemSettings.repositoryMonitoringDescription')}
@@ -500,7 +503,9 @@ const SystemSettingsTab: React.FC = () => {
                       ? t('systemSettings.statsRefreshDisabled')
                       : statsRefreshInterval < 0 || statsRefreshInterval > MAX_STATS_REFRESH
                         ? t('systemSettings.statsRefreshRangeError', { max: MAX_STATS_REFRESH })
-                        : t('systemSettings.statsRefreshIntervalHelper', { interval: statsRefreshInterval })
+                        : t('systemSettings.statsRefreshIntervalHelper', {
+                            interval: statsRefreshInterval,
+                          })
                   }
                   sx={{ width: 300 }}
                 />
@@ -513,19 +518,20 @@ const SystemSettingsTab: React.FC = () => {
                   }
                   sx={{ height: 40 }}
                 >
-                  {isRefreshingStats ? t('systemSettings.refreshing') : t('systemSettings.refreshNow')}
+                  {isRefreshingStats
+                    ? t('systemSettings.refreshing')
+                    : t('systemSettings.refreshNow')}
                 </Button>
               </Box>
 
               {systemSettings?.last_stats_refresh && (
                 <Typography variant="body2" color="text.secondary">
-                  {t('systemSettings.lastRefreshed')} {new Date(systemSettings.last_stats_refresh).toLocaleString()}
+                  {t('systemSettings.lastRefreshed')}{' '}
+                  {new Date(systemSettings.last_stats_refresh).toLocaleString()}
                 </Typography>
               )}
 
-              <Alert severity="info">
-                {t('systemSettings.manualRefreshAlert')}
-              </Alert>
+              <Alert severity="info">{t('systemSettings.manualRefreshAlert')}</Alert>
             </Stack>
           </CardContent>
         </Card>
@@ -536,7 +542,9 @@ const SystemSettingsTab: React.FC = () => {
             <Stack spacing={3}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Settings size={24} />
-                <Typography variant="h6">{t('systemSettings.archiveBrowsingLimitsTitle')}</Typography>
+                <Typography variant="h6">
+                  {t('systemSettings.archiveBrowsingLimitsTitle')}
+                </Typography>
               </Box>
               <Typography variant="body2" color="text.secondary">
                 {t('systemSettings.archiveBrowsingLimitsDescription')}
@@ -556,8 +564,13 @@ const SystemSettingsTab: React.FC = () => {
                   error={browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES}
                   helperText={
                     browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES
-                      ? t('systemSettings.maxFilesRangeError', { min: MIN_FILES.toLocaleString(), max: MAX_FILES.toLocaleString() })
-                      : t('systemSettings.maxFilesHelperText', { current: (browseMaxItems / 1_000_000).toFixed(1) })
+                      ? t('systemSettings.maxFilesRangeError', {
+                          min: MIN_FILES.toLocaleString(),
+                          max: MAX_FILES.toLocaleString(),
+                        })
+                      : t('systemSettings.maxFilesHelperText', {
+                          current: (browseMaxItems / 1_000_000).toFixed(1),
+                        })
                   }
                 />
 
@@ -571,14 +584,20 @@ const SystemSettingsTab: React.FC = () => {
                   error={browseMaxMemoryMb < MIN_MEMORY || browseMaxMemoryMb > MAX_MEMORY}
                   helperText={
                     browseMaxMemoryMb < MIN_MEMORY || browseMaxMemoryMb > MAX_MEMORY
-                      ? t('systemSettings.maxMemoryRangeError', { min: MIN_MEMORY, max: MAX_MEMORY })
-                      : t('systemSettings.maxMemoryHelperText', { current: (browseMaxMemoryMb / 1024).toFixed(2) })
+                      ? t('systemSettings.maxMemoryRangeError', {
+                          min: MIN_MEMORY,
+                          max: MAX_MEMORY,
+                        })
+                      : t('systemSettings.maxMemoryHelperText', {
+                          current: (browseMaxMemoryMb / 1024).toFixed(2),
+                        })
                   }
                 />
               </Box>
 
               <Alert severity="warning" icon={<AlertTriangle size={20} />}>
-                <strong>{t('systemSettings.warningLabel')}</strong> {t('systemSettings.largeLimitsWarning')}
+                <strong>{t('systemSettings.warningLabel')}</strong>{' '}
+                {t('systemSettings.largeLimitsWarning')}
               </Alert>
             </Stack>
           </CardContent>

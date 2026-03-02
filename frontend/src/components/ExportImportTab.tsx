@@ -212,7 +212,9 @@ const ExportImportTab: React.FC = () => {
                     mb: 1,
                   }}
                 >
-                  <Typography variant="subtitle2">{t('exportImport.selectRepositories')}</Typography>
+                  <Typography variant="subtitle2">
+                    {t('exportImport.selectRepositories')}
+                  </Typography>
                   <Box>
                     <Button size="small" onClick={selectAllRepos} disabled={loadingRepos}>
                       {t('exportImport.selectAll')}
@@ -284,7 +286,9 @@ const ExportImportTab: React.FC = () => {
               onClick={handleExport}
               disabled={exportMutation.isPending || (!exportingAll && selectedRepos.length === 0)}
             >
-              {exportMutation.isPending ? t('exportImport.export.exporting') : t('exportImport.export.button')}
+              {exportMutation.isPending
+                ? t('exportImport.export.exporting')
+                : t('exportImport.export.button')}
             </Button>
           </Stack>
         </CardContent>
@@ -345,7 +349,8 @@ const ExportImportTab: React.FC = () => {
             </FormControl>
 
             <Alert severity="warning" icon={<AlertCircle size={20} />}>
-              <strong>{t('exportImport.importantLabel')}</strong> {t('exportImport.importSecurityWarning')}
+              <strong>{t('exportImport.importantLabel')}</strong>{' '}
+              {t('exportImport.importSecurityWarning')}
             </Alert>
 
             <Box sx={{ display: 'flex', gap: 2 }}>
@@ -355,7 +360,9 @@ const ExportImportTab: React.FC = () => {
                 onClick={handleImport}
                 disabled={!importFile || importMutation.isPending}
               >
-                {importMutation.isPending ? t('exportImport.import.importing') : t('exportImport.import.button')}
+                {importMutation.isPending
+                  ? t('exportImport.import.importing')
+                  : t('exportImport.import.button')}
               </Button>
             </Box>
 
@@ -372,7 +379,9 @@ const ExportImportTab: React.FC = () => {
                       <AlertCircle size={24} color="red" style={{ marginRight: 8 }} />
                     )}
                     <Typography variant="h6">
-                      {importResult.success ? t('exportImport.importSummary') : t('exportImport.importFailed')}
+                      {importResult.success
+                        ? t('exportImport.importSummary')
+                        : t('exportImport.importFailed')}
                     </Typography>
                   </Box>
 
@@ -387,10 +396,12 @@ const ExportImportTab: React.FC = () => {
                         {importResult.repositories_updated || 0}
                       </Typography>
                       <Typography variant="body2">
-                        <strong>{t('exportImport.schedulesCreated')}:</strong> {importResult.schedules_created || 0}
+                        <strong>{t('exportImport.schedulesCreated')}:</strong>{' '}
+                        {importResult.schedules_created || 0}
                       </Typography>
                       <Typography variant="body2">
-                        <strong>{t('exportImport.schedulesUpdated')}:</strong> {importResult.schedules_updated || 0}
+                        <strong>{t('exportImport.schedulesUpdated')}:</strong>{' '}
+                        {importResult.schedules_updated || 0}
                       </Typography>
 
                       {importResult.warnings && importResult.warnings.length > 0 && (
