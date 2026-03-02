@@ -288,7 +288,9 @@ const Settings: React.FC = () => {
       label: t('settings.users.table.status'),
       render: (user) => (
         <Chip
-          label={user.is_active ? t('settings.users.status.active') : t('settings.users.status.inactive')}
+          label={
+            user.is_active ? t('settings.users.status.active') : t('settings.users.status.inactive')
+          }
           color={user.is_active ? 'success' : 'error'}
           size="small"
         />
@@ -576,7 +578,11 @@ const Settings: React.FC = () => {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>{editingUser ? t('settings.users.editDialog.title') : t('settings.users.createDialog.title')}</DialogTitle>
+        <DialogTitle>
+          {editingUser
+            ? t('settings.users.editDialog.title')
+            : t('settings.users.createDialog.title')}
+        </DialogTitle>
         <form onSubmit={editingUser ? handleUpdateUser : handleCreateUser}>
           <DialogContent>
             <Stack spacing={3}>
@@ -629,7 +635,9 @@ const Settings: React.FC = () => {
               {t('settings.users.buttons.cancel')}
             </Button>
             <Button type="submit" variant="contained">
-              {editingUser ? t('settings.users.buttons.update') : t('settings.users.buttons.create')}
+              {editingUser
+                ? t('settings.users.buttons.update')
+                : t('settings.users.buttons.create')}
             </Button>
           </DialogActions>
         </form>
@@ -709,7 +717,9 @@ const Settings: React.FC = () => {
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteConfirmUser(null)}>{t('settings.users.buttons.cancel')}</Button>
+          <Button onClick={() => setDeleteConfirmUser(null)}>
+            {t('settings.users.buttons.cancel')}
+          </Button>
           <Button
             onClick={handleDeleteUser}
             variant="contained"
@@ -717,7 +727,9 @@ const Settings: React.FC = () => {
             disabled={deleteUserMutation.isPending}
             startIcon={deleteUserMutation.isPending ? <CircularProgress size={16} /> : null}
           >
-            {deleteUserMutation.isPending ? t('settings.users.deleteDialog.deleting') : t('settings.users.deleteDialog.confirm')}
+            {deleteUserMutation.isPending
+              ? t('settings.users.deleteDialog.deleting')
+              : t('settings.users.deleteDialog.confirm')}
           </Button>
         </DialogActions>
       </Dialog>

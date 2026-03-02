@@ -26,7 +26,9 @@ export default function DeleteJobDialog({
             <AlertTriangle size={24} />
           </Box>
           <Typography variant="h6" fontWeight={600}>
-            {jobType === 'backup' ? t('dialogs.deleteJob.titleBackup') : t('dialogs.deleteJob.titleJob')}
+            {jobType === 'backup'
+              ? t('dialogs.deleteJob.titleBackup')
+              : t('dialogs.deleteJob.titleJob')}
           </Typography>
         </Box>
 
@@ -41,8 +43,7 @@ export default function DeleteJobDialog({
           </Typography>
           <Typography variant="body2">
             • {t('dialogs.deleteJob.warnings.historyRemoved')}
-            <br />
-            • {t('dialogs.deleteJob.warnings.logsDeleted')}
+            <br />• {t('dialogs.deleteJob.warnings.logsDeleted')}
             <br />• {t('dialogs.deleteJob.warnings.cannotRecover')}
           </Typography>
         </Alert>

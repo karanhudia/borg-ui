@@ -204,7 +204,8 @@ export default function RemoteMachineCard({
               </Box>
               <Stack direction="row" justifyContent="space-between" sx={{ mt: 0.5 }}>
                 <Typography variant="caption" fontWeight={500}>
-                  {machine.storage.percent_used.toFixed(1)}{t('remoteMachine.percentUsed')}
+                  {machine.storage.percent_used.toFixed(1)}
+                  {t('remoteMachine.percentUsed')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   {machine.storage.total_formatted} total

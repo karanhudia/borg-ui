@@ -101,7 +101,11 @@ const RestoreWizard = ({
   const steps = useMemo(
     () => [
       { key: 'files', label: t('restoreWizard.steps.files'), icon: <Files size={14} /> },
-      { key: 'destination', label: t('restoreWizard.steps.destination'), icon: <HardDrive size={14} /> },
+      {
+        key: 'destination',
+        label: t('restoreWizard.steps.destination'),
+        icon: <HardDrive size={14} />,
+      },
       { key: 'review', label: t('restoreWizard.steps.review'), icon: <CheckCircle size={14} /> },
     ],
     [t]
@@ -314,7 +318,7 @@ const RestoreWizard = ({
       >
         <DialogTitle sx={{ pt: 3, pb: 1 }}>
           <Typography variant="h5" component="div" fontWeight={700}>
-{t('restoreWizard.title')}
+            {t('restoreWizard.title')}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             {t('restoreWizard.fromArchive', { archiveName })}

@@ -154,15 +154,12 @@ const Archives: React.FC = () => {
       const isMountTimeout = errorDetail.toLowerCase().includes('mount timeout')
 
       if (isMountTimeout) {
-        toast.error(
-          t('archives.mountTimeout'),
-          {
-            duration: 10000,
-            style: {
-              maxWidth: '500px',
-            },
-          }
-        )
+        toast.error(t('archives.mountTimeout'), {
+          duration: 10000,
+          style: {
+            maxWidth: '500px',
+          },
+        })
       } else {
         toast.error(t('archives.mountFailed', { error: errorDetail }))
       }

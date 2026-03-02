@@ -218,18 +218,14 @@ export default function WizardStepRestoreDestination({
 
       {/* SSH Repository Info Alert */}
       {isSSHRepository && (
-        <Alert severity="info">
-          {t('wizard.restoreDestination.sshToSshNotSupported')}
-        </Alert>
+        <Alert severity="info">{t('wizard.restoreDestination.sshToSshNotSupported')}</Alert>
       )}
 
       {/* SSH Connection Selection (shown first so strategy options appear below) */}
       {data.destinationType === 'ssh' && (
         <>
           {!Array.isArray(sshConnections) || sshConnections.length === 0 ? (
-            <Alert severity="warning">
-              {t('wizard.noSshConnections')}
-            </Alert>
+            <Alert severity="warning">{t('wizard.noSshConnections')}</Alert>
           ) : (
             <FormControl fullWidth>
               <InputLabel>{t('wizard.restoreDestination.selectSshConnection')}</InputLabel>

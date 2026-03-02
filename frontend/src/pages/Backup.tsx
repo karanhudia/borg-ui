@@ -198,7 +198,9 @@ const Backup: React.FC = () => {
 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="stretch">
             <FormControl fullWidth sx={{ minWidth: { xs: '100%', sm: 300 } }}>
-              <InputLabel id="repository-select-label">{t('backup.manualBackup.repository')}</InputLabel>
+              <InputLabel id="repository-select-label">
+                {t('backup.manualBackup.repository')}
+              </InputLabel>
               <Select
                 labelId="repository-select-label"
                 id="repository-select"
@@ -209,7 +211,9 @@ const Backup: React.FC = () => {
                 sx={{ height: { xs: 48, sm: 56 } }}
               >
                 <MenuItem value="" disabled>
-                  {loadingRepositories ? t('backup.manualBackup.loadingRepositories') : t('backup.manualBackup.selectRepository')}
+                  {loadingRepositories
+                    ? t('backup.manualBackup.loadingRepositories')
+                    : t('backup.manualBackup.selectRepository')}
                 </MenuItem>
                 {repositoriesData?.data?.repositories
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -270,7 +274,9 @@ const Backup: React.FC = () => {
                 fontWeight: 600,
               }}
             >
-              {startBackupMutation.isPending ? t('backup.manualBackup.starting') : t('backup.manualBackup.startBackup')}
+              {startBackupMutation.isPending
+                ? t('backup.manualBackup.starting')
+                : t('backup.manualBackup.startBackup')}
             </Button>
           </Stack>
 

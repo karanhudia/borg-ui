@@ -125,7 +125,9 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
           <TextField
             {...params}
             label={label}
-            placeholder={selectedIds.length === 0 ? placeholder : t('multiRepositorySelector.searchOrAddMore')}
+            placeholder={
+              selectedIds.length === 0 ? placeholder : t('multiRepositorySelector.searchOrAddMore')
+            }
             helperText={helperText}
             required={required}
             size={size}

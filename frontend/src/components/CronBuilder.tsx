@@ -170,7 +170,10 @@ const buildCron = (state: CronState): string => {
   }
 }
 
-const generatePreview = (state: CronState, t: (key: string, opts?: Record<string, unknown>) => string): string => {
+const generatePreview = (
+  state: CronState,
+  t: (key: string, opts?: Record<string, unknown>) => string
+): string => {
   switch (state.frequency) {
     case 'minute':
       return t('cronBuilder.everyMinutes', { count: state.minuteInterval })
@@ -190,7 +193,8 @@ const generatePreview = (state: CronState, t: (key: string, opts?: Record<string
       const hour12 = state.hour === 0 ? 12 : state.hour > 12 ? state.hour - 12 : state.hour
       const ampm = state.hour >= 12 ? t('cronBuilder.pm') : t('cronBuilder.am')
       const minuteStr = state.minute.toString().padStart(2, '0')
-      const daysStr = selectedDayNames.length === 7 ? t('cronBuilder.daily') : selectedDayNames.join(', ')
+      const daysStr =
+        selectedDayNames.length === 7 ? t('cronBuilder.daily') : selectedDayNames.join(', ')
       return t('cronBuilder.weeklyAt', { days: daysStr, time: `${hour12}:${minuteStr} ${ampm}` })
     }
     case 'monthly': {
@@ -205,7 +209,10 @@ const generatePreview = (state: CronState, t: (key: string, opts?: Record<string
             : state.dayOfMonth === 3
               ? 'rd'
               : 'th'
-      return t('cronBuilder.monthlyOn', { day: `${state.dayOfMonth}${suffix}`, time: `${hour12}:${minuteStr} ${ampm}` })
+      return t('cronBuilder.monthlyOn', {
+        day: `${state.dayOfMonth}${suffix}`,
+        time: `${hour12}:${minuteStr} ${ampm}`,
+      })
     }
     case 'custom':
       return t('cronBuilder.customSchedule', { cron: state.customCron })

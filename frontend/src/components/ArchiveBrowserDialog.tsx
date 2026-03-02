@@ -283,9 +283,7 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
 
         {/* Info alert */}
         <Alert severity="info" sx={{ mb: 2, flexShrink: 0 }}>
-          <Typography variant="body2">
-            {t('archiveBrowser.selectionDescription')}
-          </Typography>
+          <Typography variant="body2">{t('archiveBrowser.selectionDescription')}</Typography>
         </Alert>
 
         {/* Items list - takes remaining space */}
@@ -329,7 +327,13 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
                     }}
                   >
                     <ListItemIcon sx={{ minWidth: 40 }}>
-                      <Tooltip title={isSelected(item.path) ? t('archiveBrowser.selected') : t('archiveBrowser.notSelected')}>
+                      <Tooltip
+                        title={
+                          isSelected(item.path)
+                            ? t('archiveBrowser.selected')
+                            : t('archiveBrowser.notSelected')
+                        }
+                      >
                         <IconButton
                           size="small"
                           onClick={(e) => {

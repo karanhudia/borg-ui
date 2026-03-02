@@ -150,9 +150,14 @@ const CacheManagementTab: React.FC = () => {
         queryClient.invalidateQueries({ queryKey: ['cache-stats'] })
         setHasChanges(false)
       } else {
-        toast.error(t('cache.redisConnectFailed', { message: data.message || t('cache.usingInMemoryFallback') }), {
-          duration: 5000,
-        })
+        toast.error(
+          t('cache.redisConnectFailed', {
+            message: data.message || t('cache.usingInMemoryFallback'),
+          }),
+          {
+            duration: 5000,
+          }
+        )
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
@@ -212,7 +217,9 @@ const CacheManagementTab: React.FC = () => {
             onClick={handleSaveSettings}
             disabled={!hasChanges || saveSettingsMutation.isPending}
           >
-            {saveSettingsMutation.isPending ? t('cacheManagement.saving') : t('cacheManagement.save')}
+            {saveSettingsMutation.isPending
+              ? t('cacheManagement.saving')
+              : t('cacheManagement.save')}
           </Button>
         </Box>
 
@@ -303,7 +310,11 @@ const CacheManagementTab: React.FC = () => {
                     {t('cache.cacheUsage')}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    {t('cache.cacheUsageDetail', { used: sizeMb.toFixed(1), max: maxSizeFromStats, percent: usagePercent.toFixed(1) })}
+                    {t('cache.cacheUsageDetail', {
+                      used: sizeMb.toFixed(1),
+                      max: maxSizeFromStats,
+                      percent: usagePercent.toFixed(1),
+                    })}
                   </Typography>
                 </Box>
                 <LinearProgress
@@ -329,9 +340,7 @@ const CacheManagementTab: React.FC = () => {
 
               {/* Backend Info */}
               {stats?.backend === 'in-memory' && (
-                <Alert severity="info">
-                  {t('cache.inMemoryWarning')}
-                </Alert>
+                <Alert severity="info">{t('cache.inMemoryWarning')}</Alert>
               )}
 
               {/* Clear Cache Button */}
@@ -377,7 +386,9 @@ const CacheManagementTab: React.FC = () => {
                   value={maxSizeMb}
                   onChange={(e) => setMaxSizeMb(Number(e.target.value))}
                   inputProps={{ min: 100, max: 10240 }}
-                  helperText={t('cache.maxSizeHelperText', { current: (maxSizeMb / 1024).toFixed(2) })}
+                  helperText={t('cache.maxSizeHelperText', {
+                    current: (maxSizeMb / 1024).toFixed(2),
+                  })}
                 />
               </Box>
 
@@ -436,7 +447,9 @@ const CacheManagementTab: React.FC = () => {
             variant="contained"
             disabled={clearCacheMutation.isPending}
           >
-            {clearCacheMutation.isPending ? t('cacheManagement.clearing') : t('cacheManagement.clearCache')}
+            {clearCacheMutation.isPending
+              ? t('cacheManagement.clearing')
+              : t('cacheManagement.clearCache')}
           </Button>
         </DialogActions>
       </Dialog>

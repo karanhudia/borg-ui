@@ -124,21 +124,43 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
 
   // Step definitions
   const steps = useMemo(() => {
-    const baseSteps = [{ key: 'location', label: t('repositoryWizard.steps.location'), icon: <FolderOpen size={14} /> }]
+    const baseSteps = [
+      {
+        key: 'location',
+        label: t('repositoryWizard.steps.location'),
+        icon: <FolderOpen size={14} />,
+      },
+    ]
 
     // Add data source step only for full mode (not observe) and not import
     if (wizardState.repositoryMode === 'full' || mode === 'import') {
-      baseSteps.push({ key: 'source', label: t('repositoryWizard.steps.source'), icon: <Database size={14} /> })
+      baseSteps.push({
+        key: 'source',
+        label: t('repositoryWizard.steps.source'),
+        icon: <Database size={14} />,
+      })
     }
 
-    baseSteps.push({ key: 'security', label: t('repositoryWizard.steps.security'), icon: <Shield size={14} /> })
+    baseSteps.push({
+      key: 'security',
+      label: t('repositoryWizard.steps.security'),
+      icon: <Shield size={14} />,
+    })
 
     // Add backup config step only for full mode
     if (wizardState.repositoryMode === 'full') {
-      baseSteps.push({ key: 'config', label: t('repositoryWizard.steps.config'), icon: <Settings size={14} /> })
+      baseSteps.push({
+        key: 'config',
+        label: t('repositoryWizard.steps.config'),
+        icon: <Settings size={14} />,
+      })
     }
 
-    baseSteps.push({ key: 'review', label: t('repositoryWizard.steps.review'), icon: <CheckCircle size={14} /> })
+    baseSteps.push({
+      key: 'review',
+      label: t('repositoryWizard.steps.review'),
+      icon: <CheckCircle size={14} />,
+    })
 
     return baseSteps
   }, [wizardState.repositoryMode, mode, t])
@@ -588,7 +610,11 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       >
         <DialogTitle sx={{ pt: 3, pb: 1 }}>
           <Typography variant="h5" component="div" fontWeight={700}>
-            {mode === 'create' ? t('repositoryWizard.titleCreate') : mode === 'edit' ? t('repositoryWizard.titleEdit') : t('repositoryWizard.titleImport')}
+            {mode === 'create'
+              ? t('repositoryWizard.titleCreate')
+              : mode === 'edit'
+                ? t('repositoryWizard.titleEdit')
+                : t('repositoryWizard.titleImport')}
           </Typography>
         </DialogTitle>
         <DialogContent>

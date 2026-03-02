@@ -51,15 +51,15 @@ export default function MountArchiveDialog({
       </DialogTitle>
       <DialogContent>
         <Stack spacing={3} sx={{ mt: 1 }}>
-          <Alert severity="info">
-            {t('dialogs.mount.readOnlyInfo')}
-          </Alert>
+          <Alert severity="info">{t('dialogs.mount.readOnlyInfo')}</Alert>
           <TextField
             label={t('dialogs.mountArchive.mountPoint')}
             value={mountPoint}
             onChange={(e) => onMountPointChange(e.target.value)}
             placeholder={t('dialogs.mount.mountPointPlaceholder')}
-            helperText={t('dialogs.mount.mountPointHint', { path: `/data/mounts/${mountPoint || '<name>'}` })}
+            helperText={t('dialogs.mount.mountPointHint', {
+              path: `/data/mounts/${mountPoint || '<name>'}`,
+            })}
             fullWidth
           />
         </Stack>

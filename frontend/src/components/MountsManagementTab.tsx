@@ -181,9 +181,7 @@ export default function MountsManagementTab() {
 
       {/* Info Alert */}
       <Alert severity="info" sx={{ mb: 3 }} icon={<AlertCircle size={20} />}>
-        <Typography variant="body2">
-          {t('mounts.infoAlert')}
-        </Typography>
+        <Typography variant="body2">{t('mounts.infoAlert')}</Typography>
       </Alert>
 
       {/* No mounts message */}

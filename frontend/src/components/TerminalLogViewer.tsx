@@ -249,7 +249,9 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
       >
         {logs.length === 0 ? (
           <Typography variant="body2" color="text.secondary">
-            {status === 'running' ? t('terminalLogViewer.waitingForLogs') : t('terminalLogViewer.noLogsAvailable')}
+            {status === 'running'
+              ? t('terminalLogViewer.waitingForLogs')
+              : t('terminalLogViewer.noLogsAvailable')}
           </Typography>
         ) : (
           logs.map((log) => (
@@ -290,7 +292,9 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
               }}
             />
             <Typography sx={{ color: '#4ade80', fontSize: '0.875rem' }}>
-              {t('terminalLog.inProgress', { type: jobType.charAt(0).toUpperCase() + jobType.slice(1) })}
+              {t('terminalLog.inProgress', {
+                type: jobType.charAt(0).toUpperCase() + jobType.slice(1),
+              })}
             </Typography>
           </Box>
         )}

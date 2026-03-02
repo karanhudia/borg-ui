@@ -100,9 +100,7 @@ export default function WizardStepSecurity({ mode, data, onChange }: WizardStepS
               <Typography variant="body2" fontWeight={600} gutterBottom>
                 {t('wizard.security.securityWarningTitle')}
               </Typography>
-              <Typography variant="body2">
-                {t('wizard.security.securityWarningBody')}
-              </Typography>
+              <Typography variant="body2">{t('wizard.security.securityWarningBody')}</Typography>
             </Alert>
           )}
         </>
@@ -111,21 +109,25 @@ export default function WizardStepSecurity({ mode, data, onChange }: WizardStepS
       {/* Encryption info for edit mode only */}
       {mode === 'edit' && (
         <Alert severity="info" icon={<Shield size={20} />}>
-          <Typography variant="body2">
-            {t('wizard.security.encryptionReadonly')}
-          </Typography>
+          <Typography variant="body2">{t('wizard.security.encryptionReadonly')}</Typography>
         </Alert>
       )}
 
       {/* Passphrase Input */}
       {data.encryption !== 'none' && (
         <TextField
-          label={mode === 'edit' ? t('wizard.security.passphraseOptional') : t('wizard.security.passphraseRequired')}
+          label={
+            mode === 'edit'
+              ? t('wizard.security.passphraseOptional')
+              : t('wizard.security.passphraseRequired')
+          }
           type="password"
           value={data.passphrase}
           onChange={(e) => onChange({ passphrase: e.target.value })}
           placeholder={
-            mode === 'edit' ? t('wizard.security.passphrasePlaceholderEdit') : t('wizard.security.passphrasePlaceholderCreate')
+            mode === 'edit'
+              ? t('wizard.security.passphrasePlaceholderEdit')
+              : t('wizard.security.passphrasePlaceholderCreate')
           }
           required={mode !== 'edit'}
           fullWidth
@@ -191,7 +193,9 @@ export default function WizardStepSecurity({ mode, data, onChange }: WizardStepS
                 },
               }}
             >
-              {data.selectedKeyfile ? t('wizard.security.selectedKeyfile', { name: data.selectedKeyfile.name }) : t('wizard.security.chooseKeyfile')}
+              {data.selectedKeyfile
+                ? t('wizard.security.selectedKeyfile', { name: data.selectedKeyfile.name })
+                : t('wizard.security.chooseKeyfile')}
               <input
                 type="file"
                 hidden

@@ -168,7 +168,11 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
 
           <SummaryRow label={t('wizard.review.mode')}>
             <Chip
-              label={data.repositoryMode === 'full' ? t('wizard.review.full') : t('wizard.review.observeOnly')}
+              label={
+                data.repositoryMode === 'full'
+                  ? t('wizard.review.full')
+                  : t('wizard.review.observeOnly')
+              }
               size="small"
               color={data.repositoryMode === 'full' ? 'primary' : 'default'}
             />
@@ -178,7 +182,9 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               {data.repositoryLocation === 'local' ? <Server size={14} /> : <Cloud size={14} />}
               <Typography variant="body2" fontWeight={500}>
-                {data.repositoryLocation === 'local' ? t('wizard.review.borgUiServer') : t('wizard.review.sshRemote')}
+                {data.repositoryLocation === 'local'
+                  ? t('wizard.review.borgUiServer')
+                  : t('wizard.review.sshRemote')}
               </Typography>
             </Box>
           </SummaryRow>
@@ -205,14 +211,18 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
 
               <SummaryRow label={t('wizard.review.source')}>
                 <Typography variant="body2" fontWeight={500}>
-                  {data.dataSource === 'local' ? t('wizard.review.borgUiServer') : t('wizard.review.remoteClient')}
+                  {data.dataSource === 'local'
+                    ? t('wizard.review.borgUiServer')
+                    : t('wizard.review.remoteClient')}
                 </Typography>
               </SummaryRow>
 
               {data.dataSource === 'local' && (
                 <>
                   <SummaryRow label={t('wizard.review.directories')}>
-                    <Typography variant="body2">{t('wizard.review.directoriesCount', { count: data.sourceDirs.length })}</Typography>
+                    <Typography variant="body2">
+                      {t('wizard.review.directoriesCount', { count: data.sourceDirs.length })}
+                    </Typography>
                   </SummaryRow>
 
                   <SummaryRow label={t('wizard.review.excludePatterns')}>
@@ -254,7 +264,11 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
           )}
 
           <SummaryRow label={t('wizard.review.passphrase')}>
-            <Typography variant="body2">{data.passphrase ? t('wizard.review.passphraseSet') : t('wizard.review.passphraseNotSet')}</Typography>
+            <Typography variant="body2">
+              {data.passphrase
+                ? t('wizard.review.passphraseSet')
+                : t('wizard.review.passphraseNotSet')}
+            </Typography>
           </SummaryRow>
         </Box>
 
@@ -297,17 +311,13 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
 
       {mode === 'import' && (
         <Alert severity="info">
-          <Typography variant="body2">
-            {t('wizard.review.repositoryImportNote')}
-          </Typography>
+          <Typography variant="body2">{t('wizard.review.repositoryImportNote')}</Typography>
         </Alert>
       )}
 
       {mode === 'edit' && (
         <Alert severity="info">
-          <Typography variant="body2">
-            {t('wizard.review.repositoryEditNote')}
-          </Typography>
+          <Typography variant="body2">{t('wizard.review.repositoryEditNote')}</Typography>
         </Alert>
       )}
     </Box>

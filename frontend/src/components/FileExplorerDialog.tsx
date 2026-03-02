@@ -318,7 +318,9 @@ export default function FileExplorerDialog({
 
   const getBreadcrumbs = () => {
     const parts = currentPath.split('/').filter(Boolean)
-    const breadcrumbs: { label: string; path: string }[] = [{ label: t('dialogs.fileExplorer.root'), path: '/' }]
+    const breadcrumbs: { label: string; path: string }[] = [
+      { label: t('dialogs.fileExplorer.root'), path: '/' },
+    ]
 
     let accumulatedPath = ''
     parts.forEach((part) => {
@@ -508,9 +510,7 @@ export default function FileExplorerDialog({
           {currentPath === '/' && activeConnectionType === 'local' && sshConnections.length > 0 && (
             <Box sx={{ px: 2, pb: 1 }}>
               <Alert severity="info" sx={{ borderRadius: 1, py: 0.5 }}>
-                <Typography variant="caption">
-                  {t("fileExplorer.sshInfoAlert")}
-                </Typography>
+                <Typography variant="caption">{t('fileExplorer.sshInfoAlert')}</Typography>
               </Alert>
             </Box>
           )}
@@ -554,7 +554,9 @@ export default function FileExplorerDialog({
                       {t('fileExplorer.noItemsFound')}
                     </Typography>
                     <Typography variant="caption" color="text.disabled">
-                      {searchTerm ? t('fileExplorer.tryDifferentSearch') : t('fileExplorer.emptyDirectory')}
+                      {searchTerm
+                        ? t('fileExplorer.tryDifferentSearch')
+                        : t('fileExplorer.emptyDirectory')}
                     </Typography>
                   </Box>
                 ) : (
@@ -692,7 +694,9 @@ export default function FileExplorerDialog({
             size="small"
             disabled={selectedPaths.length === 0}
           >
-            {multiSelect && selectedPaths.length > 0 ? t('fileExplorer.selectWithCount', { count: selectedPaths.length }) : t('fileExplorer.select')}
+            {multiSelect && selectedPaths.length > 0
+              ? t('fileExplorer.selectWithCount', { count: selectedPaths.length })
+              : t('fileExplorer.select')}
           </Button>
         </DialogActions>
       </Dialog>

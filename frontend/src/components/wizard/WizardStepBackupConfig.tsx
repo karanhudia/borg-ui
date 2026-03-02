@@ -53,9 +53,7 @@ export default function WizardStepBackupConfig({
       {/* Info for remote data source */}
       {dataSource === 'remote' && (
         <Alert severity="info">
-          <Typography variant="body2">
-            {t('wizard.backupConfig.remoteSshfsNote')}
-          </Typography>
+          <Typography variant="body2">{t('wizard.backupConfig.remoteSshfsNote')}</Typography>
         </Alert>
       )}
 

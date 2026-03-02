@@ -37,7 +37,8 @@ export default function LogViewerDialog<T extends JobWithLogs>({
   const jobId = job?.id
 
   // Determine display label
-  const displayLabel = jobTypeLabel || (job?.type ? getTypeLabel(job.type, t) : t('logViewer.typeBackup'))
+  const displayLabel =
+    jobTypeLabel || (job?.type ? getTypeLabel(job.type, t) : t('logViewer.typeBackup'))
 
   // Memoize the fetch function to prevent re-renders from causing duplicate log fetches
   const handleFetchLogs = useCallback(

@@ -123,8 +123,14 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           {hasFilters
-            ? t('backupHistory.showingFiltered', { filtered: filteredBackupJobs.length, total: backupJobs.length })
-            : t('backupHistory.showing', { filtered: filteredBackupJobs.length, total: backupJobs.length })}
+            ? t('backupHistory.showingFiltered', {
+                filtered: filteredBackupJobs.length,
+                total: backupJobs.length,
+              })
+            : t('backupHistory.showing', {
+                filtered: filteredBackupJobs.length,
+                total: backupJobs.length,
+              })}
         </Typography>
 
         {/* Filters */}

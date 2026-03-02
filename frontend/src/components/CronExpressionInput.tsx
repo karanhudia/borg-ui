@@ -43,7 +43,11 @@ const CronExpressionInput: React.FC<CronExpressionInputProps> = ({
         },
         endAdornment: (
           <InputAdornment position="end">
-            <CronBuilderDialog value={value} onChange={onChange} dialogTitle={t('cronBuilderDialog.configureSchedule')} />
+            <CronBuilderDialog
+              value={value}
+              onChange={onChange}
+              dialogTitle={t('cronBuilderDialog.configureSchedule')}
+            />
           </InputAdornment>
         ),
       }}

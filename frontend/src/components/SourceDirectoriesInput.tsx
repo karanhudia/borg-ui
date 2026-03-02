@@ -63,7 +63,9 @@ export default function SourceDirectoriesInput({
       </Typography>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
         {t('sourceDirectories.subtitle')}
-        {required ? t('sourceDirectories.atLeastOneRequired') : t('sourceDirectories.optionalSuffix')}
+        {required
+          ? t('sourceDirectories.atLeastOneRequired')
+          : t('sourceDirectories.optionalSuffix')}
       </Typography>
 
       {required && directories.length === 0 && (

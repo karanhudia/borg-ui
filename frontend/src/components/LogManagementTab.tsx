@@ -325,7 +325,9 @@ const LogManagementTab: React.FC = () => {
                       onClick={handleCleanup}
                       disabled={cleanupMutation.isPending}
                     >
-                      {cleanupMutation.isPending ? t('logManagement.clearing') : t('logManagement.clearLogs')}
+                      {cleanupMutation.isPending
+                        ? t('logManagement.clearing')
+                        : t('logManagement.clearLogs')}
                     </Button>
                   </Box>
                 </>

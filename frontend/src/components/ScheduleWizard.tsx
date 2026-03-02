@@ -163,7 +163,11 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
       { key: 'basic', label: t('scheduleWizard.steps.basic'), icon: <FileText size={14} /> },
       { key: 'schedule', label: t('scheduleWizard.steps.schedule'), icon: <Clock size={14} /> },
       { key: 'scripts', label: t('scheduleWizard.steps.scripts'), icon: <Code size={14} /> },
-      { key: 'maintenance', label: t('scheduleWizard.steps.maintenance'), icon: <Wrench size={14} /> },
+      {
+        key: 'maintenance',
+        label: t('scheduleWizard.steps.maintenance'),
+        icon: <Wrench size={14} />,
+      },
       { key: 'review', label: t('scheduleWizard.steps.review'), icon: <CheckCircle size={14} /> },
     ],
     [t]
@@ -433,7 +437,9 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
           </Button>
         ) : (
           <Button variant="contained" onClick={handleSubmit} disabled={!canProceed()}>
-            {mode === 'create' ? t('scheduleWizard.finalButtonCreate') : t('scheduleWizard.finalButtonEdit')}
+            {mode === 'create'
+              ? t('scheduleWizard.finalButtonCreate')
+              : t('scheduleWizard.finalButtonEdit')}
           </Button>
         )}
       </DialogActions>

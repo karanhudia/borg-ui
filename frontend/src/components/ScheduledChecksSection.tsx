@@ -215,7 +215,9 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
       id: 'last_check',
       label: t('scheduledChecks.lastCheck'),
       render: (check) =>
-        check.last_scheduled_check ? formatDate(check.last_scheduled_check) : t('scheduledChecks.never'),
+        check.last_scheduled_check
+          ? formatDate(check.last_scheduled_check)
+          : t('scheduledChecks.never'),
     },
     {
       id: 'next_check',
@@ -289,7 +291,9 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
       {/* Add/Edit Dialog */}
       <Dialog open={showDialog} onClose={() => setShowDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
-          {selectedRepositoryId ? t('scheduledChecks.editCheckSchedule') : t('scheduledChecks.addCheckSchedule')}
+          {selectedRepositoryId
+            ? t('scheduledChecks.editCheckSchedule')
+            : t('scheduledChecks.addCheckSchedule')}
         </DialogTitle>
         <DialogContent>
           <Stack spacing={3} sx={{ mt: 1 }}>
