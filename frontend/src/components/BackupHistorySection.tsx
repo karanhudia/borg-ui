@@ -10,6 +10,7 @@ import {
   MenuItem,
 } from '@mui/material'
 import { Clock } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import BackupJobsTable from './BackupJobsTable'
 
 interface ScheduledJob {
@@ -112,15 +113,18 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
   const hasFilters =
     filterSchedule !== 'all' || filterRepository !== 'all' || filterStatus !== 'all'
 
+  const { t } = useTranslation()
+
   return (
     <Card sx={{ mt: 3 }}>
       <CardContent>
         <Typography variant="h6" fontWeight={600} gutterBottom>
-          Backup History
+          {t('backupHistory.title')}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Showing {filteredBackupJobs.length} of {backupJobs.length} backup jobs
-          {hasFilters && ' (filtered)'}
+          {hasFilters
+            ? t('backupHistory.showingFiltered', { filtered: filteredBackupJobs.length, total: backupJobs.length })
+            : t('backupHistory.showing', { filtered: filteredBackupJobs.length, total: backupJobs.length })}
         </Typography>
 
         {/* Filters */}
@@ -132,7 +136,7 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
               label="Schedule"
               onChange={(e) => onFilterScheduleChange(e.target.value as number | 'all')}
             >
-              <MenuItem value="all">All Schedules</MenuItem>
+              <MenuItem value="all">{t('backupHistory.allSchedules')}</MenuItem>
               {scheduledJobs.map((job: ScheduledJob) => (
                 <MenuItem key={job.id} value={job.id}>
                   {job.name}
@@ -148,7 +152,7 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
               label="Repository"
               onChange={(e) => onFilterRepositoryChange(e.target.value)}
             >
-              <MenuItem value="all">All Repositories</MenuItem>
+              <MenuItem value="all">{t('backupHistory.allRepositories')}</MenuItem>
               {repositories.map((repo: Repository) => (
                 <MenuItem key={repo.id} value={repo.path}>
                   {repo.name}
@@ -164,10 +168,10 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
               label="Status"
               onChange={(e) => onFilterStatusChange(e.target.value)}
             >
-              <MenuItem value="all">All Status</MenuItem>
-              <MenuItem value="completed">Completed</MenuItem>
-              <MenuItem value="failed">Failed</MenuItem>
-              <MenuItem value="warning">Warning</MenuItem>
+              <MenuItem value="all">{t('backupHistory.allStatus')}</MenuItem>
+              <MenuItem value="completed">{t('backupHistory.completed')}</MenuItem>
+              <MenuItem value="failed">{t('backupHistory.failed')}</MenuItem>
+              <MenuItem value="warning">{t('backupHistory.warning')}</MenuItem>
             </Select>
           </FormControl>
         </Stack>
@@ -190,7 +194,7 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
           tableId="schedule"
           emptyState={{
             icon: <Clock size={48} />,
-            title: 'No backup jobs found',
+            title: t('backupHistory.noJobsFound'),
           }}
         />
       </CardContent>

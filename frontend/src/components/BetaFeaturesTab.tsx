@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
@@ -14,6 +15,7 @@ import { toast } from 'react-hot-toast'
 import { settingsAPI } from '../services/api'
 
 const BetaFeaturesTab: React.FC = () => {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [bypassLockOnInfo, setBypassLockOnInfo] = useState(false)
   const [bypassLockOnList, setBypassLockOnList] = useState(false)
@@ -52,11 +54,11 @@ const BetaFeaturesTab: React.FC = () => {
       await settingsAPI.updateSystemSettings(settings)
     },
     onSuccess: () => {
-      toast.success('Setting updated successfully')
+      toast.success(t('betaFeatures.settingUpdatedSuccessfully'))
       queryClient.invalidateQueries({ queryKey: ['systemSettings'] })
     },
     onError: (error: Error) => {
-      toast.error(`Failed to update setting: ${error.message}`)
+      toast.error(t('betaFeatures.failedToUpdateSetting', { message: error.message }))
       // Revert on error
       if (systemSettings) {
         setBypassLockOnInfo(systemSettings.bypass_lock_on_info ?? false)
@@ -99,11 +101,10 @@ const BetaFeaturesTab: React.FC = () => {
     <Box>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h6" fontWeight={600} gutterBottom>
-          Beta Features
+          {t('betaFeatures.title')}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Try experimental features before they're released to everyone. These features are still in
-          development and may change.
+          {t('betaFeatures.description')}
         </Typography>
       </Box>
 
@@ -113,7 +114,7 @@ const BetaFeaturesTab: React.FC = () => {
             {/* Bypass Lock on Info Commands */}
             <Box>
               <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
-                Bypass Locks for Info Commands
+                {t('betaFeatures.bypassLocksInfoTitle')}
               </Typography>
 
               <FormControlLabel
@@ -128,12 +129,10 @@ const BetaFeaturesTab: React.FC = () => {
                 label={
                   <Box>
                     <Typography variant="body1">
-                      Enable bypass-lock for all borg info commands
+                      {t('betaFeatures.enableBypassLocksInfo')}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Adds <code>--bypass-lock</code> to all <code>borg info</code> commands. This
-                      prevents lock contention when multiple operations try to access SSH
-                      repositories simultaneously. Enable if you see "Repository is locked" errors.
+                      {t('betaFeatures.bypassLocksInfoDescription')}
                     </Typography>
                   </Box>
                 }
@@ -143,7 +142,7 @@ const BetaFeaturesTab: React.FC = () => {
             {/* Bypass Lock on List Commands */}
             <Box>
               <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
-                Bypass Locks for List Commands
+                {t('betaFeatures.bypassLocksListTitle')}
               </Typography>
 
               <FormControlLabel
@@ -158,13 +157,10 @@ const BetaFeaturesTab: React.FC = () => {
                 label={
                   <Box>
                     <Typography variant="body1">
-                      Enable bypass-lock for all borg list commands
+                      {t('betaFeatures.enableBypassLocksList')}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Adds <code>--bypass-lock</code> to all <code>borg list</code> commands. This
-                      prevents lock contention when multiple read operations (like info + list) run
-                      simultaneously. Enable if you see "Failed to acquire lock" errors. Note: May
-                      show stale data if a backup is actively running.
+                      {t('betaFeatures.bypassLocksListDescription')}
                     </Typography>
                   </Box>
                 }
@@ -174,7 +170,7 @@ const BetaFeaturesTab: React.FC = () => {
             {/* Show Restore Tab */}
             <Box>
               <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
-                Show Legacy Restore Tab
+                {t('betaFeatures.showLegacyRestoreTabTitle')}
               </Typography>
 
               <FormControlLabel
@@ -189,12 +185,10 @@ const BetaFeaturesTab: React.FC = () => {
                 label={
                   <Box>
                     <Typography variant="body1">
-                      Show the dedicated Restore tab in navigation
+                      {t('betaFeatures.showLegacyRestoreTabLabel')}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Enable this to access the legacy Restore tab. Restore functionality is now
-                      integrated into the Archives page, but this option allows you to use the old
-                      interface if preferred.
+                      {t('betaFeatures.showLegacyRestoreTabDescription')}
                     </Typography>
                   </Box>
                 }
@@ -203,7 +197,7 @@ const BetaFeaturesTab: React.FC = () => {
 
             <Box>
               <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
-                MQTT Integration
+                {t('betaFeatures.mqttIntegrationTitle')}
               </Typography>
 
               <FormControlLabel
@@ -217,9 +211,9 @@ const BetaFeaturesTab: React.FC = () => {
                 }
                 label={
                   <Box>
-                    <Typography variant="body1">Enable MQTT</Typography>
+                    <Typography variant="body1">{t('betaFeatures.enableMqtt')}</Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Activates MQTT integration in the UI.
+                      {t('betaFeatures.mqttIntegrationDescription')}
                     </Typography>
                   </Box>
                 }

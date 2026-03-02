@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import {
   Dialog,
   DialogTitle,
@@ -27,6 +28,7 @@ export default function DeleteArchiveDialog({
   onConfirm,
   deleting = false,
 }: DeleteArchiveDialogProps) {
+  const { t } = useTranslation()
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
       <DialogTitle>
@@ -45,23 +47,23 @@ export default function DeleteArchiveDialog({
             <AlertCircle size={24} color="#d32f2f" />
           </Box>
           <Typography variant="h6" fontWeight={600}>
-            Delete Archive
+            {t('dialogs.deleteArchive.title')}
           </Typography>
         </Stack>
       </DialogTitle>
       <DialogContent>
         <Alert severity="warning" sx={{ mb: 2 }}>
-          This action cannot be undone!
+          {t('dialogs.deleteArchive.warning')}
         </Alert>
         <Typography variant="body2" gutterBottom>
-          Are you sure you want to delete the archive <strong>"{archiveName}"</strong>?
+          {t('dialogs.deleteArchive.subtitle')} <strong>"{archiveName}"</strong>
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          The deletion will run in the background. You can close this dialog and continue working.
+          {t('dialogs.deleteArchive.archiveName', { name: archiveName })}
         </Typography>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
         <Button
           variant="contained"
           color="error"
@@ -71,7 +73,7 @@ export default function DeleteArchiveDialog({
             deleting ? <CircularProgress size={16} color="inherit" /> : <Trash2 size={16} />
           }
         >
-          {deleting ? 'Starting...' : 'Delete'}
+          {deleting ? t('dialogs.deleteArchive.deleting') : t('dialogs.deleteArchive.confirm')}
         </Button>
       </DialogActions>
     </Dialog>

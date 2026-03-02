@@ -1,5 +1,6 @@
 import { Box, Card, CardContent, Stack, Typography } from '@mui/material'
 import { Archive as ArchiveIcon, Database, Gauge, Layers } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { formatBytes as formatBytesUtil } from '../utils/dateUtils'
 
 interface RepositoryStats {
@@ -14,6 +15,7 @@ interface RepositoryStatsGridProps {
 }
 
 export default function RepositoryStatsGrid({ stats, archivesCount }: RepositoryStatsGridProps) {
+  const { t } = useTranslation()
   const spaceSaved = (stats.total_size || 0) - (stats.unique_csize || 0)
   const compressionRatio =
     stats.unique_size > 0 ? ((1 - stats.unique_csize / stats.unique_size) * 100).toFixed(1) : '0'
@@ -36,7 +38,7 @@ export default function RepositoryStatsGrid({ stats, archivesCount }: Repository
             <ArchiveIcon size={32} color="#1565c0" />
             <Box>
               <Typography variant="body2" color="primary.dark" fontWeight={500}>
-                Total Archives
+                {t('repositoryStatsGrid.totalArchives')}
               </Typography>
               <Typography variant="h4" fontWeight={700} color="primary.dark">
                 {archivesCount}
@@ -53,7 +55,7 @@ export default function RepositoryStatsGrid({ stats, archivesCount }: Repository
             <Database size={32} color="#2e7d32" />
             <Box>
               <Typography variant="body2" color="success.dark" fontWeight={500}>
-                Space Used
+                {t('repositoryStatsGrid.spaceUsed')}
               </Typography>
               <Typography
                 variant="h4"
@@ -75,7 +77,7 @@ export default function RepositoryStatsGrid({ stats, archivesCount }: Repository
             <Database size={32} color="#0277bd" />
             <Box>
               <Typography variant="body2" sx={{ color: '#0277bd' }} fontWeight={500}>
-                Space Saved
+                {t('repositoryStatsGrid.spaceSaved')}
               </Typography>
               <Typography
                 variant="h4"
@@ -96,7 +98,7 @@ export default function RepositoryStatsGrid({ stats, archivesCount }: Repository
             <Gauge size={32} color="#7b1fa2" />
             <Box>
               <Typography variant="body2" color="purple" fontWeight={500}>
-                Compression
+                {t('repositoryStatsGrid.compression')}
               </Typography>
               <Typography variant="h4" fontWeight={700} color="purple">
                 {compressionRatio}%
@@ -113,7 +115,7 @@ export default function RepositoryStatsGrid({ stats, archivesCount }: Repository
             <Layers size={32} color="#e65100" />
             <Box>
               <Typography variant="body2" sx={{ color: '#e65100' }} fontWeight={500}>
-                Deduplication
+                {t('repositoryStatsGrid.deduplication')}
               </Typography>
               <Typography variant="h4" fontWeight={700} sx={{ color: '#e65100' }}>
                 {deduplicationRatio}%

@@ -2,6 +2,7 @@ import { ReactElement, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTabEnablement, useAppState } from '../context/AppContext'
 import { toast } from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 
 interface ProtectedRouteProps {
   children: ReactElement
@@ -18,6 +19,7 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children, requiredTab }: ProtectedRouteProps) {
+  const { t } = useTranslation()
   const { tabEnablement, getTabDisabledReason } = useTabEnablement()
   const appState = useAppState()
   const navigate = useNavigate()
@@ -30,7 +32,7 @@ export default function ProtectedRoute({ children, requiredTab }: ProtectedRoute
       const reason = getTabDisabledReason(requiredTab)
 
       // Show toast notification only once
-      toast.error(reason || 'This feature is currently unavailable', {
+      toast.error(reason || t('protectedRoute.unavailable'), {
         duration: 4000,
       })
       hasShownToast.current = true
@@ -43,7 +45,7 @@ export default function ProtectedRoute({ children, requiredTab }: ProtectedRoute
     if (isEnabled) {
       hasShownToast.current = false
     }
-  }, [isEnabled, requiredTab, navigate, appState.isLoading, getTabDisabledReason])
+  }, [isEnabled, requiredTab, navigate, appState.isLoading, getTabDisabledReason, t])
 
   // If tab is disabled, return null while redirect happens
   if (!isEnabled) {

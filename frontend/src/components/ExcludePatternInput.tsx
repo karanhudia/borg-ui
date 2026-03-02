@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Box,
   Typography,
@@ -24,6 +25,7 @@ export default function ExcludePatternInput({
   onBrowseClick,
   disabled = false,
 }: ExcludePatternInputProps) {
+  const { t } = useTranslation()
   const [newPattern, setNewPattern] = useState('')
 
   const handleAdd = () => {
@@ -47,10 +49,10 @@ export default function ExcludePatternInput({
   return (
     <Box>
       <Typography variant="subtitle2" gutterBottom>
-        Exclude Patterns (Optional)
+        {t('excludePatterns.title')}
       </Typography>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-        Specify patterns to exclude from backup (e.g., *.log, *.tmp, __pycache__, node_modules)
+        {t('excludePatterns.hint')}
       </Typography>
 
       {patterns.length > 0 && (
@@ -73,7 +75,7 @@ export default function ExcludePatternInput({
           value={newPattern}
           onChange={(e) => setNewPattern(e.target.value)}
           onKeyPress={handleKeyPress}
-          placeholder="*.log or /path/to/exclude"
+          placeholder={t('excludePatterns.placeholder')}
           size="small"
           fullWidth
           disabled={disabled}
@@ -84,7 +86,7 @@ export default function ExcludePatternInput({
                   onClick={onBrowseClick}
                   edge="end"
                   size="small"
-                  title="Browse to exclude"
+                  title={t('excludePatterns.browseToExclude')}
                   disabled={disabled}
                 >
                   <FolderOpenIcon fontSize="small" />
@@ -94,7 +96,7 @@ export default function ExcludePatternInput({
           }}
         />
         <Button variant="outlined" size="small" onClick={handleAdd} disabled={disabled}>
-          Add
+          {t('excludePatterns.add')}
         </Button>
       </Box>
     </Box>

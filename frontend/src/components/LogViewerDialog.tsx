@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Dialog,
   DialogTitle,
@@ -30,12 +31,13 @@ export default function LogViewerDialog<T extends JobWithLogs>({
   onClose,
   jobTypeLabel,
 }: LogViewerDialogProps<T>) {
+  const { t } = useTranslation()
   // Determine job type for API endpoint (default to 'backup' for backward compatibility)
   const jobType = job?.type || 'backup'
   const jobId = job?.id
 
   // Determine display label
-  const displayLabel = jobTypeLabel || (job?.type ? getTypeLabel(job.type) : 'Backup')
+  const displayLabel = jobTypeLabel || (job?.type ? getTypeLabel(job.type, t) : t('logViewer.typeBackup'))
 
   // Memoize the fetch function to prevent re-renders from causing duplicate log fetches
   const handleFetchLogs = useCallback(
@@ -65,7 +67,7 @@ export default function LogViewerDialog<T extends JobWithLogs>({
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Typography variant="h6">
-            {displayLabel} Logs - Job #{job.id}
+            {t('logViewer.title', { label: displayLabel, jobId: job.id })}
           </Typography>
           <StatusBadge status={job.status} />
         </Box>
@@ -80,27 +82,27 @@ export default function LogViewerDialog<T extends JobWithLogs>({
         />
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Close</Button>
+        <Button onClick={onClose}>{t('dialogs.logViewer.close')}</Button>
       </DialogActions>
     </Dialog>
   )
 }
 
 // Helper to get human-readable type labels
-function getTypeLabel(type: string): string {
+function getTypeLabel(type: string, t: (key: string) => string): string {
   switch (type) {
     case 'backup':
-      return 'Backup'
+      return t('logViewer.typeBackup')
     case 'restore':
-      return 'Restore'
+      return t('logViewer.typeRestore')
     case 'check':
-      return 'Check'
+      return t('logViewer.typeCheck')
     case 'compact':
-      return 'Compact'
+      return t('logViewer.typeCompact')
     case 'prune':
-      return 'Prune'
+      return t('logViewer.typePrune')
     case 'package':
-      return 'Package'
+      return t('logViewer.typePackage')
     default:
       return type.charAt(0).toUpperCase() + type.slice(1)
   }

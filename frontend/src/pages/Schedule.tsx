@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   Box,
   Typography,
@@ -95,6 +96,7 @@ interface BackupJob {
 }
 
 const Schedule: React.FC = () => {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const location = useLocation()
@@ -201,14 +203,14 @@ const Schedule: React.FC = () => {
   const createJobMutation = useMutation({
     mutationFn: scheduleAPI.createScheduledJob,
     onSuccess: () => {
-      toast.success('Scheduled job created successfully')
+      toast.success(t('schedule.toasts.jobCreated'))
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
       track(EventCategory.BACKUP, EventAction.CREATE, 'schedule')
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to create scheduled job')
+      toast.error(error.response?.data?.detail || t('schedule.toasts.jobCreateFailed'))
     },
   })
 
@@ -218,14 +220,14 @@ const Schedule: React.FC = () => {
     mutationFn: ({ id, data }: { id: number; data: any }) =>
       scheduleAPI.updateScheduledJob(id, data),
     onSuccess: () => {
-      toast.success('Scheduled job updated successfully')
+      toast.success(t('schedule.toasts.jobUpdated'))
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
       track(EventCategory.BACKUP, EventAction.EDIT, 'schedule')
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to update scheduled job')
+      toast.error(error.response?.data?.detail || t('schedule.toasts.jobUpdateFailed'))
     },
   })
 
@@ -233,7 +235,7 @@ const Schedule: React.FC = () => {
   const deleteJobMutation = useMutation({
     mutationFn: scheduleAPI.deleteScheduledJob,
     onSuccess: () => {
-      toast.success('Scheduled job deleted successfully')
+      toast.success(t('schedule.toasts.jobDeleted'))
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
       setDeleteConfirmJob(null)
@@ -241,7 +243,7 @@ const Schedule: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to delete scheduled job')
+      toast.error(error.response?.data?.detail || t('schedule.toasts.jobDeleteFailed'))
     },
   })
 
@@ -249,14 +251,14 @@ const Schedule: React.FC = () => {
   const toggleJobMutation = useMutation({
     mutationFn: scheduleAPI.toggleScheduledJob,
     onSuccess: () => {
-      toast.success('Job status updated')
+      toast.success(t('schedule.toasts.jobStatusUpdated'))
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
       track(EventCategory.BACKUP, EventAction.EDIT, 'schedule-toggle')
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to toggle job')
+      toast.error(error.response?.data?.detail || t('schedule.toasts.jobToggleFailed'))
     },
   })
 
@@ -264,7 +266,7 @@ const Schedule: React.FC = () => {
   const runJobNowMutation = useMutation({
     mutationFn: scheduleAPI.runScheduledJobNow,
     onSuccess: () => {
-      toast.success('Job started successfully')
+      toast.success(t('schedule.toasts.jobStarted'))
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['backup-status'] })
       queryClient.invalidateQueries({ queryKey: ['backup-jobs-scheduled'] })
@@ -272,7 +274,7 @@ const Schedule: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to run job')
+      toast.error(error.response?.data?.detail || t('schedule.toasts.jobRunFailed'))
     },
   })
 
@@ -280,14 +282,14 @@ const Schedule: React.FC = () => {
   const duplicateJobMutation = useMutation({
     mutationFn: scheduleAPI.duplicateScheduledJob,
     onSuccess: () => {
-      toast.success('Scheduled job duplicated successfully')
+      toast.success(t('schedule.toasts.jobDuplicated'))
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
       track(EventCategory.BACKUP, EventAction.CREATE, 'schedule-duplicate')
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to duplicate job')
+      toast.error(error.response?.data?.detail || t('schedule.toasts.jobDuplicateFailed'))
     },
   })
 
@@ -295,12 +297,12 @@ const Schedule: React.FC = () => {
   const cancelBackupMutation = useMutation({
     mutationFn: (jobId: string) => backupAPI.cancelJob(jobId),
     onSuccess: () => {
-      toast.success('Backup cancelled successfully')
+      toast.success(t('schedule.toasts.backupCancelled'))
       queryClient.invalidateQueries({ queryKey: ['backup-jobs-scheduled'] })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to cancel backup')
+      toast.error(error.response?.data?.detail || t('schedule.toasts.backupCancelFailed'))
     },
   })
 
@@ -363,19 +365,19 @@ const Schedule: React.FC = () => {
 
     switch (maintenanceStatus) {
       case 'running_prune':
-        return 'Pruning archives...'
+        return t('schedule.maintenance.pruning')
       case 'prune_completed':
-        return 'Prune completed ✓'
+        return t('schedule.maintenance.pruneCompleted')
       case 'prune_failed':
-        return 'Prune failed ✗'
+        return t('schedule.maintenance.pruneFailed')
       case 'running_compact':
-        return 'Compacting repository...'
+        return t('schedule.maintenance.compacting')
       case 'compact_completed':
-        return 'Compact completed ✓'
+        return t('schedule.maintenance.compactCompleted')
       case 'compact_failed':
-        return 'Compact failed ✗'
+        return t('schedule.maintenance.compactFailed')
       case 'maintenance_completed':
-        return 'Maintenance completed ✓'
+        return t('schedule.maintenance.completed')
       default:
         return null
     }
@@ -471,7 +473,7 @@ const Schedule: React.FC = () => {
           if (repos.length === 0) {
             return (
               <Typography variant="caption" color="text.secondary">
-                Unknown
+                {t('common.unknown')}
               </Typography>
             )
           }
@@ -487,7 +489,7 @@ const Schedule: React.FC = () => {
               ))}
               {repos.length > 2 && (
                 <Typography variant="caption" color="text.secondary">
-                  +{repos.length - 2} more
+                  {t('repositories.moreCount', { count: repos.length - 2 })}
                 </Typography>
               )}
             </Box>
@@ -511,7 +513,7 @@ const Schedule: React.FC = () => {
         }
         return (
           <Typography variant="caption" color="text.secondary">
-            Unknown
+            {t('common.unknown')}
           </Typography>
         )
       },
@@ -664,10 +666,10 @@ const Schedule: React.FC = () => {
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
           <Typography variant="h4" fontWeight={600} gutterBottom>
-            Schedule
+            {t('schedule.title')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Manage automated backups and repository checks
+            {t('schedule.subtitle')}
           </Typography>
         </Box>
 
@@ -679,7 +681,7 @@ const Schedule: React.FC = () => {
             onClick={openCreateWizard}
             disabled={!repositories || repositories.length === 0}
           >
-            Create Backup Schedule
+            {t('schedule.createBackup')}
           </Button>
         ) : (
           <Button
@@ -688,7 +690,7 @@ const Schedule: React.FC = () => {
             onClick={() => scheduledChecksSectionRef.current?.openAddDialog()}
             disabled={!repositories || repositories.length === 0}
           >
-            Add Check Schedule
+            {t('schedule.addCheck')}
           </Button>
         )}
       </Box>
@@ -696,8 +698,8 @@ const Schedule: React.FC = () => {
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={currentTab} onChange={(_, newValue) => setCurrentTab(newValue)}>
-          <Tab label="Backup Jobs" />
-          <Tab label="Repository Checks" />
+          <Tab label={t('schedule.tabs.backupJobs')} />
+          <Tab label={t('schedule.tabs.repositoryChecks')} />
         </Tabs>
       </Box>
 
@@ -707,7 +709,7 @@ const Schedule: React.FC = () => {
           {/* No repositories warning */}
           {(!repositories || repositories.length === 0) && (
             <Alert severity="info" sx={{ mb: 3 }}>
-              You need to create at least one repository before scheduling backups.
+              {t('schedule.noRepositories')}
             </Alert>
           )}
 

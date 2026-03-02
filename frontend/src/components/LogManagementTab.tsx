@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
@@ -42,6 +43,7 @@ interface SystemSettings {
 }
 
 const LogManagementTab: React.FC = () => {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
 
   // Local state for form values
@@ -108,7 +110,7 @@ const LogManagementTab: React.FC = () => {
       return response.data
     },
     onSuccess: (data) => {
-      toast.success('Log management settings saved successfully')
+      toast.success(t('logManagement.savedSuccessfully'))
       if (data.warnings && data.warnings.length > 0) {
         data.warnings.forEach((warning: string) => {
           toast.error(warning, { duration: 6000 })
@@ -131,13 +133,13 @@ const LogManagementTab: React.FC = () => {
       return response.data
     },
     onSuccess: (data) => {
-      toast.success(data.message || 'Log cleanup completed successfully')
+      toast.success(data.message || t('logManagement.cleanupCompleted'))
       queryClient.invalidateQueries({ queryKey: ['log-storage-stats'] })
       queryClient.invalidateQueries({ queryKey: ['system-settings'] })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to run log cleanup')
+      toast.error(error.response?.data?.detail || t('logManagement.failedToRunCleanup'))
     },
   })
 
@@ -181,7 +183,7 @@ const LogManagementTab: React.FC = () => {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h6" fontWeight={600}>
-            Log Management
+            {t('logManagement.title')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Configure log storage, retention, and cleanup policies for job logs
@@ -195,7 +197,7 @@ const LogManagementTab: React.FC = () => {
           onClick={handleSaveSettings}
           disabled={!hasChanges || saveSettingsMutation.isPending}
         >
-          {saveSettingsMutation.isPending ? 'Saving...' : 'Save Settings'}
+          {saveSettingsMutation.isPending ? t('logManagement.saving') : t('logManagement.save')}
         </Button>
       </Box>
 
@@ -323,7 +325,7 @@ const LogManagementTab: React.FC = () => {
                       onClick={handleCleanup}
                       disabled={cleanupMutation.isPending}
                     >
-                      {cleanupMutation.isPending ? 'Running Cleanup...' : 'Run Cleanup Now'}
+                      {cleanupMutation.isPending ? t('logManagement.clearing') : t('logManagement.clearLogs')}
                     </Button>
                   </Box>
                 </>

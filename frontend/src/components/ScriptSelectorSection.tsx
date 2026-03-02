@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Box,
   Typography,
@@ -51,27 +52,28 @@ const ScriptSelectorSection: React.FC<ScriptSelectorSectionProps> = ({
   size = 'medium',
 }) => {
   // Find selected scripts to get their parameters
+  const { t } = useTranslation()
   const selectedPreScript = scripts.find((s) => s.id === preBackupScriptId)
   const selectedPostScript = scripts.find((s) => s.id === postBackupScriptId)
 
   return (
     <Box sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
       <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-        Schedule-Level Scripts
+        {t('scriptSelector.title')}
       </Typography>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
-        These scripts run once per schedule (e.g., wake server before all backups, shutdown after)
+        {t('scriptSelector.subtitle')}
       </Typography>
 
       <Stack spacing={2}>
         <FormControl fullWidth size={size}>
           <InputLabel sx={{ fontSize: size === 'medium' ? '1.1rem' : '0.875rem' }}>
-            Pre-Backup Script (runs once before all backups)
+            {t('scriptSelector.preBackup')}
           </InputLabel>
           <Select
             value={preBackupScriptId || ''}
             onChange={(e) => onPreChange(e.target.value ? Number(e.target.value) : null)}
-            label="Pre-Backup Script (runs once before all backups)"
+            label={t('scriptSelector.preBackup')}
             disabled={disabled}
             sx={{
               fontSize: size === 'medium' ? '1.1rem' : '0.875rem',
@@ -79,7 +81,7 @@ const ScriptSelectorSection: React.FC<ScriptSelectorSectionProps> = ({
             }}
           >
             <MenuItem value="">
-              <em>None</em>
+              <em>{t('scriptSelector.none')}</em>
             </MenuItem>
             {scripts.map((script) => (
               <MenuItem key={script.id} value={script.id}>
@@ -106,12 +108,12 @@ const ScriptSelectorSection: React.FC<ScriptSelectorSectionProps> = ({
 
         <FormControl fullWidth size={size}>
           <InputLabel sx={{ fontSize: size === 'medium' ? '1.1rem' : '0.875rem' }}>
-            Post-Backup Script (runs once after all backups)
+            {t('scriptSelector.postBackup')}
           </InputLabel>
           <Select
             value={postBackupScriptId || ''}
             onChange={(e) => onPostChange(e.target.value ? Number(e.target.value) : null)}
-            label="Post-Backup Script (runs once after all backups)"
+            label={t('scriptSelector.postBackup')}
             disabled={disabled}
             sx={{
               fontSize: size === 'medium' ? '1.1rem' : '0.875rem',
@@ -119,7 +121,7 @@ const ScriptSelectorSection: React.FC<ScriptSelectorSectionProps> = ({
             }}
           >
             <MenuItem value="">
-              <em>None</em>
+              <em>{t('scriptSelector.none')}</em>
             </MenuItem>
             {scripts.map((script) => (
               <MenuItem key={script.id} value={script.id}>
@@ -154,9 +156,9 @@ const ScriptSelectorSection: React.FC<ScriptSelectorSectionProps> = ({
           }
           label={
             <Box>
-              <Typography variant="body2">Run repository-level scripts</Typography>
+              <Typography variant="body2">{t('scriptSelector.runRepoScripts')}</Typography>
               <Typography variant="caption" color="text.secondary">
-                If enabled, each repository's pre/post scripts will run during its backup
+                {t('scriptSelector.runRepoScriptsDesc')}
               </Typography>
             </Box>
           }

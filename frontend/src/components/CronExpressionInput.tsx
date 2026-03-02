@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { TextField, InputAdornment } from '@mui/material'
 import CronBuilderDialog from './CronBuilderDialog'
 
@@ -15,15 +16,17 @@ interface CronExpressionInputProps {
 const CronExpressionInput: React.FC<CronExpressionInputProps> = ({
   value,
   onChange,
-  label = 'Schedule',
+  label,
   helperText,
   required = false,
   disabled = false,
   size = 'medium',
 }) => {
+  const { t } = useTranslation()
+  const effectiveLabel = label ?? t('cronExpressionInput.label')
   return (
     <TextField
-      label={label}
+      label={effectiveLabel}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       required={required}
@@ -40,7 +43,7 @@ const CronExpressionInput: React.FC<CronExpressionInputProps> = ({
         },
         endAdornment: (
           <InputAdornment position="end">
-            <CronBuilderDialog value={value} onChange={onChange} dialogTitle="Configure Schedule" />
+            <CronBuilderDialog value={value} onChange={onChange} dialogTitle={t('cronBuilderDialog.configureSchedule')} />
           </InputAdornment>
         ),
       }}

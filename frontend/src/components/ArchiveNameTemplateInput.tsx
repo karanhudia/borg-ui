@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { TextField, Alert, Box } from '@mui/material'
 
 interface ArchiveNameTemplateInputProps {
@@ -16,6 +17,7 @@ const ArchiveNameTemplateInput: React.FC<ArchiveNameTemplateInputProps> = ({
   size = 'medium',
   jobName = 'example-job',
 }) => {
+  const { t } = useTranslation()
   // Generate preview of archive name with current timestamp
   const previewName = useMemo(() => {
     const now = new Date()
@@ -35,13 +37,13 @@ const ArchiveNameTemplateInput: React.FC<ArchiveNameTemplateInputProps> = ({
   return (
     <Box>
       <TextField
-        label="Archive Name Template"
+        label={t('archiveNameTemplate.label')}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         fullWidth
         size={size}
         disabled={disabled}
-        helperText="Customize archive naming. Available placeholders: {job_name}, {now}, {date}, {time}, {timestamp}"
+        helperText={t('archiveNameTemplate.hint')}
         InputProps={{
           sx: {
             fontSize: size === 'medium' ? '1.1rem' : '0.875rem',
@@ -54,7 +56,7 @@ const ArchiveNameTemplateInput: React.FC<ArchiveNameTemplateInputProps> = ({
       />
       {value && (
         <Alert severity="info" sx={{ mt: 2, fontFamily: 'monospace', fontSize: '0.875rem' }}>
-          <strong>Preview:</strong> {previewName}
+          <strong>{t('archiveNameTemplate.preview')}</strong> {previewName}
         </Alert>
       )}
     </Box>

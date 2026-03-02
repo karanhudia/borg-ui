@@ -1,6 +1,7 @@
 import React from 'react'
 import { Box, Typography, Paper } from '@mui/material'
 import { generateBorgCreateCommand } from '../utils/borgUtils'
+import { useTranslation } from 'react-i18next'
 
 interface SourceSshConnection {
   username: string
@@ -62,6 +63,7 @@ export default function CommandPreview({
   dataSource = 'local',
   sourceSshConnection = null,
 }: CommandPreviewProps) {
+  const { t } = useTranslation()
   const isRemoteSource = dataSource === 'remote' && sourceSshConnection
 
   // Build full repository path
@@ -130,13 +132,13 @@ export default function CommandPreview({
 
     const mountDisplayText =
       mountPaths.length === 1
-        ? 'Mounts remote directory under shared temp root'
-        : `Mounts ${mountPaths.length} unique directories under shared temp root (files share parent mount)`
+        ? t('commandPreview.mountDisplayText')
+        : t('commandPreview.mountDisplayTextMultiple', { count: mountPaths.length })
 
     return (
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
         <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
-          {mode === 'create' ? 'How backup will work:' : 'How backup works:'}
+          {mode === 'create' ? t('commandPreview.howBackupWillWork') : t('commandPreview.howBackupWorks')}
         </Typography>
 
         {mode === 'create' && (
@@ -147,7 +149,7 @@ export default function CommandPreview({
               fontWeight={600}
               sx={{ mb: 0.5, display: 'block' }}
             >
-              Step 1: Initialize Repository
+              {t('commandPreview.step1InitRepo')}
             </Typography>
             <CommandBox>{initCommand}</CommandBox>
           </Box>
@@ -161,8 +163,8 @@ export default function CommandPreview({
             sx={{ mb: 0.5, display: 'block' }}
           >
             {mode === 'create'
-              ? `Step 2: Mount Remote ${mountPaths.length > 1 ? 'Directories' : 'Directory'}`
-              : `Step 1: Mount Remote ${mountPaths.length > 1 ? 'Directories' : 'Directory'}`}
+              ? t('commandPreview.step2MountRemote', { type: mountPaths.length > 1 ? t('commandPreview.mountDirectories') : t('commandPreview.mountDirectory') })
+              : t('commandPreview.step1MountRemote', { type: mountPaths.length > 1 ? t('commandPreview.mountDirectories') : t('commandPreview.mountDirectory') })}
           </Typography>
           <CommandBox>{sshfsMountCommands.join('\n')}</CommandBox>
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
@@ -177,11 +179,11 @@ export default function CommandPreview({
             fontWeight={600}
             sx={{ mb: 0.5, display: 'block' }}
           >
-            {mode === 'create' ? 'Step 3: Run Backup' : 'Step 2: Run Backup'}
+            {mode === 'create' ? t('commandPreview.step3RunBackup') : t('commandPreview.step2RunBackup')}
           </Typography>
           <CommandBox>{createCommand}</CommandBox>
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-            Archives preserve original paths (excludes work intuitively)
+            {t('commandPreview.archivesPreserve')}
           </Typography>
         </Box>
 
@@ -192,11 +194,11 @@ export default function CommandPreview({
             fontWeight={600}
             sx={{ mb: 0.5, display: 'block' }}
           >
-            {mode === 'create' ? 'Step 4: Cleanup' : 'Step 3: Cleanup'}
+            {mode === 'create' ? t('commandPreview.step4Cleanup') : t('commandPreview.step3Cleanup')}
           </Typography>
           <CommandBox>fusermount -u /tmp/sshfs_mount/</CommandBox>
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-            Unmounts remote directory after backup completes
+            {t('commandPreview.cleanupDesc')}
           </Typography>
         </Box>
       </Paper>
@@ -207,7 +209,7 @@ export default function CommandPreview({
   return (
     <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
       <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
-        {mode === 'create' ? 'How backup will work:' : 'How backup works:'}
+        {mode === 'create' ? t('commandPreview.howBackupWillWork') : t('commandPreview.howBackupWorks')}
       </Typography>
 
       {mode === 'create' && (
@@ -218,11 +220,11 @@ export default function CommandPreview({
             fontWeight={600}
             sx={{ mb: 0.5, display: 'block' }}
           >
-            Step 1: Initialize Repository
+            {t('commandPreview.step1InitRepo')}
           </Typography>
           <CommandBox>{initCommand}</CommandBox>
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-            Creates encrypted repository at the specified location
+            {t('commandPreview.initRepositoryDesc')}
           </Typography>
         </Box>
       )}
@@ -235,13 +237,13 @@ export default function CommandPreview({
             fontWeight={600}
             sx={{ mb: 0.5, display: 'block' }}
           >
-            {mode === 'create' ? 'Step 2: Run Backup' : 'Run Backup'}
+            {mode === 'create' ? t('commandPreview.step2RunBackup') : t('commandPreview.stepRunBackup')}
           </Typography>
           <CommandBox>{createCommand}</CommandBox>
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
             {mode === 'create'
-              ? 'Backs up source directories to the repository'
-              : 'This command will be used for future backups'}
+              ? t('commandPreview.backupSourceDirs')
+              : t('commandPreview.futureBackups')}
           </Typography>
         </Box>
       )}

@@ -1,6 +1,7 @@
 import React from 'react'
 import { Card, CardContent, Typography, Box } from '@mui/material'
 import { Clock } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import DataTable, { Column, ActionButton } from './DataTable'
 
 interface ScheduledJobsTableProps<T = unknown> {
@@ -16,11 +17,12 @@ const ScheduledJobsTable = <T extends { id: number | string }>({
   actions,
   isLoading,
 }: ScheduledJobsTableProps<T>) => {
+  const { t } = useTranslation()
   return (
     <Card>
       <CardContent>
         <Typography variant="h6" fontWeight={600} gutterBottom>
-          All Scheduled Jobs
+          {t('scheduledJobsTableSection.title')}
         </Typography>
 
         <Box sx={{ mt: 2 }}>
@@ -34,8 +36,8 @@ const ScheduledJobsTable = <T extends { id: number | string }>({
             headerBgColor="background.default"
             emptyState={{
               icon: <Clock size={48} />,
-              title: 'No scheduled jobs found',
-              description: 'Create your first scheduled backup job',
+              title: t('scheduledJobsTableSection.noJobsFound'),
+              description: t('scheduledJobsTableSection.noJobsDesc'),
             }}
           />
         </Box>

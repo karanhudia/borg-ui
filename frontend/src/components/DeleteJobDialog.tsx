@@ -1,5 +1,6 @@
 import { Dialog, DialogContent, DialogActions, Button, Typography, Alert, Box } from '@mui/material'
 import { AlertTriangle } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface DeleteJobDialogProps {
   open: boolean
@@ -16,6 +17,7 @@ export default function DeleteJobDialog({
   jobId,
   jobType = 'job',
 }: DeleteJobDialogProps) {
+  const { t } = useTranslation()
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogContent sx={{ pt: 3 }}>
@@ -24,30 +26,30 @@ export default function DeleteJobDialog({
             <AlertTriangle size={24} />
           </Box>
           <Typography variant="h6" fontWeight={600}>
-            Delete {jobType === 'backup' ? 'Backup' : 'Job'} Entry?
+            {jobType === 'backup' ? t('dialogs.deleteJob.titleBackup') : t('dialogs.deleteJob.titleJob')}
           </Typography>
         </Box>
 
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Are you sure you want to permanently delete this {jobType} job entry
-          {jobId && ` (ID: ${jobId})`}?
+          {jobId && ` ${t('dialogs.deleteJob.jobId', { id: jobId })}`}?
         </Typography>
 
         <Alert severity="warning" sx={{ mb: 0 }}>
           <Typography variant="body2" fontWeight={500} gutterBottom>
-            This action cannot be undone
+            {t('dialogs.deleteJob.warnings.undone')}
           </Typography>
           <Typography variant="body2">
-            • Job history will be permanently removed
+            • {t('dialogs.deleteJob.warnings.historyRemoved')}
             <br />
-            • Associated log files will be deleted
-            <br />• This information cannot be recovered
+            • {t('dialogs.deleteJob.warnings.logsDeleted')}
+            <br />• {t('dialogs.deleteJob.warnings.cannotRecover')}
           </Typography>
         </Alert>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={onClose} variant="outlined">
-          Cancel
+          {t('common.buttons.cancel')}
         </Button>
         <Button
           onClick={onConfirm}
@@ -55,7 +57,7 @@ export default function DeleteJobDialog({
           variant="contained"
           startIcon={<AlertTriangle size={18} />}
         >
-          Delete Permanently
+          {t('dialogs.deleteJob.confirm')}
         </Button>
       </DialogActions>
     </Dialog>

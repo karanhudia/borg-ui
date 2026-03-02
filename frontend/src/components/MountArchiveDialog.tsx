@@ -10,6 +10,7 @@ import {
   Alert,
   TextField,
 } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import { HardDrive } from 'lucide-react'
 import { Archive } from '../types'
 
@@ -32,6 +33,7 @@ export default function MountArchiveDialog({
   onConfirm,
   mounting = false,
 }: MountArchiveDialogProps) {
+  const { t } = useTranslation()
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>
@@ -39,7 +41,7 @@ export default function MountArchiveDialog({
           <HardDrive size={24} />
           <Box>
             <Typography variant="h6" fontWeight={600}>
-              Mount Archive
+              {t('dialogs.mountArchive.title')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
               {archive?.name}
@@ -50,21 +52,20 @@ export default function MountArchiveDialog({
       <DialogContent>
         <Stack spacing={3} sx={{ mt: 1 }}>
           <Alert severity="info">
-            The archive will be mounted as a read-only filesystem inside the container. You'll
-            receive a command to access it via terminal.
+            {t('dialogs.mount.readOnlyInfo')}
           </Alert>
           <TextField
-            label="Mount Name"
+            label={t('dialogs.mountArchive.mountPoint')}
             value={mountPoint}
             onChange={(e) => onMountPointChange(e.target.value)}
-            placeholder="my-backup-2024"
-            helperText={`Will be mounted at: /data/mounts/${mountPoint || '<name>'}`}
+            placeholder={t('dialogs.mount.mountPointPlaceholder')}
+            helperText={t('dialogs.mount.mountPointHint', { path: `/data/mounts/${mountPoint || '<name>'}` })}
             fullWidth
           />
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose}>{t('dialogs.mountArchive.cancel')}</Button>
         <Button
           variant="contained"
           color="primary"
@@ -72,7 +73,7 @@ export default function MountArchiveDialog({
           disabled={mounting}
           startIcon={<HardDrive size={18} />}
         >
-          {mounting ? 'Mounting...' : 'Mount'}
+          {mounting ? t('dialogs.mountArchive.mounting') : t('dialogs.mountArchive.mount')}
         </Button>
       </DialogActions>
     </Dialog>

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   Alert,
   alpha,
@@ -40,6 +41,7 @@ const Backup: React.FC = () => {
   const location = useLocation()
   const { trackBackup, EventAction } = useMatomo()
   const { user } = useAuth()
+  const { t } = useTranslation()
 
   // Handle incoming navigation state (from "Backup Now" button)
   useEffect(() => {
@@ -172,10 +174,10 @@ const Backup: React.FC = () => {
       >
         <Box>
           <Typography variant="h4" fontWeight={600} gutterBottom>
-            Backup Operations
+            {t('backup.title')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Manage and monitor your backup jobs
+            {t('backup.subtitle')}
           </Typography>
         </Box>
         <Stack direction="row" spacing={2} alignItems="center"></Stack>
@@ -187,27 +189,27 @@ const Backup: React.FC = () => {
           <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
             <Play size={20} color="#2e7d32" />
             <Typography variant="h6" fontWeight={600}>
-              Manual Backup
+              {t('backup.manualBackup.title')}
             </Typography>
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Select a repository and start a backup job
+            {t('backup.manualBackup.subtitle')}
           </Typography>
 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="stretch">
             <FormControl fullWidth sx={{ minWidth: { xs: '100%', sm: 300 } }}>
-              <InputLabel id="repository-select-label">Repository</InputLabel>
+              <InputLabel id="repository-select-label">{t('backup.manualBackup.repository')}</InputLabel>
               <Select
                 labelId="repository-select-label"
                 id="repository-select"
                 value={selectedRepository}
                 onChange={(e) => handleRepositoryChange(e.target.value)}
-                label="Repository"
+                label={t('backup.manualBackup.repository')}
                 disabled={loadingRepositories}
                 sx={{ height: { xs: 48, sm: 56 } }}
               >
                 <MenuItem value="" disabled>
-                  {loadingRepositories ? 'Loading repositories...' : 'Select a repository...'}
+                  {loadingRepositories ? t('backup.manualBackup.loadingRepositories') : t('backup.manualBackup.selectRepository')}
                 </MenuItem>
                 {repositoriesData?.data?.repositories
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -231,7 +233,7 @@ const Backup: React.FC = () => {
                                 color="warning.main"
                                 sx={{ ml: 1 }}
                               >
-                                (Maintenance Running)
+                                {t('backup.manualBackup.maintenanceRunning')}
                               </Typography>
                             )}
                           </Typography>
@@ -268,7 +270,7 @@ const Backup: React.FC = () => {
                 fontWeight: 600,
               }}
             >
-              {startBackupMutation.isPending ? 'Starting...' : 'Start Backup'}
+              {startBackupMutation.isPending ? t('backup.manualBackup.starting') : t('backup.manualBackup.startBackup')}
             </Button>
           </Stack>
 
@@ -278,7 +280,7 @@ const Backup: React.FC = () => {
               !loadingRepositories && (
                 <Alert severity="info" sx={{ mt: 2 }}>
                   <Typography variant="body2">
-                    Some repositories are hidden because they are configured for observability only.
+                    {t('backup.manualBackup.observeOnlyHidden')}
                     To create backups, switch them to full mode in Repository settings.
                   </Typography>
                 </Alert>
@@ -288,10 +290,10 @@ const Backup: React.FC = () => {
           {repositoriesData?.data?.repositories?.length === 0 && !loadingRepositories && (
             <Alert severity="warning" sx={{ mt: 2 }}>
               <Typography variant="body2" fontWeight={500} gutterBottom>
-                No Repositories Found
+                {t('backup.manualBackup.noRepositories.title')}
               </Typography>
               <Typography variant="body2">
-                Create a repository in the Repositories page before starting a backup
+                {t('backup.manualBackup.noRepositories.subtitle')}
               </Typography>
             </Alert>
           )}
@@ -305,7 +307,7 @@ const Backup: React.FC = () => {
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
               <Info size={20} color="#1976d2" />
               <Typography variant="h6" fontWeight={600}>
-                Command Preview
+                {t('backup.commandPreview')}
               </Typography>
             </Stack>
             <Box
@@ -332,10 +334,10 @@ const Backup: React.FC = () => {
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography variant="h6" fontWeight={600} gutterBottom>
-              Running Jobs
+              {t('backup.runningJobs.title')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Currently active backup operations
+              {t('backup.runningJobs.subtitle')}
             </Typography>
 
             <Stack spacing={3}>
@@ -353,10 +355,10 @@ const Backup: React.FC = () => {
                       </Box>
                       <Box>
                         <Typography variant="body1" fontWeight={500}>
-                          Backup Job {job.id}
+                          {t('backup.runningJobs.jobTitle', { id: job.id })}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          Repository: {job.repository}
+                          {t('backup.runningJobs.repositoryPath', { path: job.repository })}
                         </Typography>
                       </Box>
                     </Stack>
@@ -368,7 +370,7 @@ const Backup: React.FC = () => {
                         startIcon={<Eye size={16} />}
                         onClick={() => handleViewLogs(job)}
                       >
-                        View Logs
+                        {t('backup.runningJobs.viewLogs')}
                       </Button>
                       <Button
                         variant="outlined"
@@ -378,7 +380,7 @@ const Backup: React.FC = () => {
                         onClick={() => handleCancelBackup(String(job.id))}
                         disabled={cancelBackupMutation.isPending}
                       >
-                        Cancel
+                        {t('backup.runningJobs.cancel')}
                       </Button>
                     </Stack>
                   </Stack>
@@ -407,10 +409,10 @@ const Backup: React.FC = () => {
                         />
                         <Typography variant="body2" fontWeight={500} color="info.main">
                           {(job.progress || 0) === 0
-                            ? 'Initializing backup...'
+                            ? t('backup.runningJobs.progress.initializing')
                             : (job.progress || 0) >= 100
-                              ? 'Finalizing...'
-                              : 'Processing files...'}
+                              ? t('backup.runningJobs.progress.finalizing')
+                              : t('backup.runningJobs.progress.processing')}
                         </Typography>
                       </Stack>
                       <Typography variant="body2" color="text.secondary">
@@ -423,7 +425,7 @@ const Backup: React.FC = () => {
                   {job.progress_details?.current_file && (
                     <Alert severity="info" sx={{ mb: 2, py: 0.5 }}>
                       <Typography variant="caption" fontWeight={500}>
-                        Current File:
+                        {t('backup.runningJobs.progress.currentFile')}
                       </Typography>
                       <Typography
                         variant="caption"
@@ -455,7 +457,7 @@ const Backup: React.FC = () => {
                   >
                     <Box>
                       <Typography variant="body2" color="text.secondary">
-                        Files Processed:
+                        {t('backup.runningJobs.progress.filesProcessed')}
                       </Typography>
                       <Typography variant="body2" fontWeight={500}>
                         {job.progress_details?.nfiles?.toLocaleString() ||
@@ -466,7 +468,7 @@ const Backup: React.FC = () => {
                     </Box>
                     <Box>
                       <Typography variant="body2" color="text.secondary">
-                        Original Size:
+                        {t('backup.runningJobs.progress.originalSize')}
                       </Typography>
                       <Typography variant="body2" fontWeight={500}>
                         {job.progress_details?.original_size
@@ -476,7 +478,7 @@ const Backup: React.FC = () => {
                     </Box>
                     <Box>
                       <Typography variant="body2" color="text.secondary">
-                        Compressed:
+                        {t('backup.runningJobs.progress.compressed')}
                       </Typography>
                       <Typography variant="body2" fontWeight={500}>
                         {job.progress_details?.compressed_size !== undefined &&
@@ -487,7 +489,7 @@ const Backup: React.FC = () => {
                     </Box>
                     <Box>
                       <Typography variant="body2" color="text.secondary">
-                        Deduplicated:
+                        {t('backup.runningJobs.progress.deduplicated')}
                       </Typography>
                       <Typography variant="body2" fontWeight={500} color="success.main">
                         {job.progress_details?.deduplicated_size !== undefined &&
@@ -500,7 +502,7 @@ const Backup: React.FC = () => {
                       job.progress_details.total_expected_size > 0 && (
                         <Box>
                           <Typography variant="body2" color="text.secondary">
-                            Total Source Size:
+                            {t('backup.runningJobs.progress.totalSourceSize')}
                           </Typography>
                           <Typography variant="body2" fontWeight={500} color="info.main">
                             {formatBytesUtil(job.progress_details.total_expected_size)}
@@ -509,7 +511,7 @@ const Backup: React.FC = () => {
                       )}
                     <Box>
                       <Typography variant="body2" color="text.secondary">
-                        Speed:
+                        {t('backup.runningJobs.progress.speed')}
                       </Typography>
                       <Typography variant="body2" fontWeight={500} color="primary.main">
                         {job.status === 'running' && job.progress_details?.backup_speed
@@ -520,7 +522,7 @@ const Backup: React.FC = () => {
                     {(job.progress_details?.estimated_time_remaining || 0) > 0 && (
                       <Box>
                         <Typography variant="body2" color="text.secondary">
-                          ETA:
+                          {t('backup.runningJobs.progress.eta')}
                         </Typography>
                         <Typography variant="body2" fontWeight={500} color="success.main">
                           {formatDurationSeconds(
@@ -548,11 +550,11 @@ const Backup: React.FC = () => {
           >
             <Clock size={20} />
             <Typography variant="h6" fontWeight={600}>
-              Recent Jobs
+              {t('backup.recentJobs.title')}
             </Typography>
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            History of backup operations
+            {t('backup.recentJobs.subtitle')}
           </Typography>
 
           <BackupJobsTable
@@ -578,7 +580,7 @@ const Backup: React.FC = () => {
                   <Clock size={48} />
                 </Box>
               ),
-              title: 'No backup jobs found',
+              title: t('backup.recentJobs.empty'),
             }}
           />
         </CardContent>

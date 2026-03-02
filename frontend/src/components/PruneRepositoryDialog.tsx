@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Dialog,
   DialogTitle,
@@ -62,6 +63,7 @@ export default function PruneRepositoryDialog({
   isLoading,
   results,
 }: PruneRepositoryDialogProps) {
+  const { t } = useTranslation()
   const [pruneForm, setPruneForm] = useState<PruneForm>(defaultPruneForm)
 
   // Reset form when dialog opens
@@ -85,101 +87,99 @@ export default function PruneRepositoryDialog({
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Delete color="secondary" />
           <Typography variant="h6" fontWeight={600}>
-            Prune Archives
+            {t('dialogs.pruneRepository.title')}
           </Typography>
         </Box>
       </DialogTitle>
       <DialogContent>
         <Alert severity="info" sx={{ mb: 3 }}>
           <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-            What does pruning do?
+            {t('dialogs.prune.whatDoesPruningDo')}
           </Typography>
           <Typography variant="body2" gutterBottom>
-            Pruning automatically deletes old archives based on retention rules. This helps manage
-            repository size by keeping only the backups you need.
+            {t('dialogs.prune.explanation')}
           </Typography>
           <Typography variant="body2" fontWeight={600} color="primary.main">
-            Tip: Always run "Dry Run" first to preview what will be deleted!
+            {t('dialogs.prune.dryRunTip')}
           </Typography>
         </Alert>
 
         <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-          Retention Policy
+          {t('dialogs.prune.retentionPolicy')}
         </Typography>
         <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mb: 2 }}>
-          Specify how many backups to keep for each time period
+          {t('dialogs.prune.retentionDescription')}
         </Typography>
 
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2, mb: 3 }}>
           <TextField
-            label="Keep Hourly"
+            label={t('dialogs.prune.keepHourly')}
             type="number"
             value={pruneForm.keep_hourly}
             onChange={(e) =>
               setPruneForm({ ...pruneForm, keep_hourly: parseInt(e.target.value) || 0 })
             }
-            helperText="Last N hourly backups (0 = disabled)"
+            helperText={t('dialogs.prune.keepHourlyHelper')}
             fullWidth
           />
           <TextField
-            label="Keep Daily"
+            label={t('dialogs.prune.keepDaily')}
             type="number"
             value={pruneForm.keep_daily}
             onChange={(e) =>
               setPruneForm({ ...pruneForm, keep_daily: parseInt(e.target.value) || 0 })
             }
-            helperText="Last N daily backups"
+            helperText={t('dialogs.prune.keepDailyHelper')}
             fullWidth
           />
           <TextField
-            label="Keep Weekly"
+            label={t('dialogs.prune.keepWeekly')}
             type="number"
             value={pruneForm.keep_weekly}
             onChange={(e) =>
               setPruneForm({ ...pruneForm, keep_weekly: parseInt(e.target.value) || 0 })
             }
-            helperText="Last N weekly backups"
+            helperText={t('dialogs.prune.keepWeeklyHelper')}
             fullWidth
           />
           <TextField
-            label="Keep Monthly"
+            label={t('dialogs.prune.keepMonthly')}
             type="number"
             value={pruneForm.keep_monthly}
             onChange={(e) =>
               setPruneForm({ ...pruneForm, keep_monthly: parseInt(e.target.value) || 0 })
             }
-            helperText="Last N monthly backups"
+            helperText={t('dialogs.prune.keepMonthlyHelper')}
             fullWidth
           />
           <TextField
-            label="Keep Quarterly"
+            label={t('dialogs.prune.keepQuarterly')}
             type="number"
             value={pruneForm.keep_quarterly}
             onChange={(e) =>
               setPruneForm({ ...pruneForm, keep_quarterly: parseInt(e.target.value) || 0 })
             }
-            helperText="Last N quarterly backups (0 = disabled)"
+            helperText={t('dialogs.prune.keepQuarterlyHelper')}
             fullWidth
           />
           <TextField
-            label="Keep Yearly"
+            label={t('dialogs.prune.keepYearly')}
             type="number"
             value={pruneForm.keep_yearly}
             onChange={(e) =>
               setPruneForm({ ...pruneForm, keep_yearly: parseInt(e.target.value) || 0 })
             }
-            helperText="Last N yearly backups"
+            helperText={t('dialogs.prune.keepYearlyHelper')}
             fullWidth
           />
         </Box>
 
         <Box sx={{ bgcolor: 'background.default', p: 2, borderRadius: 1, mb: 2 }}>
           <Typography variant="body2" gutterBottom>
-            <strong>Repository:</strong> {repository?.name}
+            <strong>{t('dialogs.prune.repositoryLabel')}</strong> {repository?.name}
           </Typography>
           <Typography variant="caption" color="text.secondary" display="block">
-            Example: With these settings, you'll keep the last 7 daily, 4 weekly, 6 monthly, and 1
-            yearly backup. Older archives will be deleted.
+            {t('dialogs.prune.exampleExplanation')}
           </Typography>
         </Box>
 
@@ -187,13 +187,13 @@ export default function PruneRepositoryDialog({
         {results && (
           <Box sx={{ mt: 2 }}>
             <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-              {results.dry_run ? 'Dry Run Results (Preview)' : 'Prune Results'}
+              {results.dry_run ? t('dialogs.prune.dryRunResultsTitle') : t('dialogs.prune.pruneResultsTitle')}
             </Typography>
 
             {results.prune_result?.success === false ? (
               <Alert severity="error" sx={{ mb: 2 }}>
                 <Typography variant="body2" fontWeight={600} gutterBottom>
-                  Operation Failed
+                  {t('dialogs.prune.operationFailed')}
                 </Typography>
                 {results.prune_result?.stderr && (
                   <Box
@@ -225,7 +225,7 @@ export default function PruneRepositoryDialog({
                         display="block"
                         gutterBottom
                       >
-                        Output:
+                        {t('dialogs.prune.outputLabel')}
                       </Typography>
                       <Box
                         component="pre"
@@ -241,7 +241,7 @@ export default function PruneRepositoryDialog({
                           fontFamily: 'monospace',
                         }}
                       >
-                        {results.prune_result.stdout || 'No output'}
+                        {results.prune_result.stdout || t('dialogs.prune.noOutput')}
                       </Box>
                     </Box>
                   )}
@@ -253,7 +253,7 @@ export default function PruneRepositoryDialog({
                         display="block"
                         gutterBottom
                       >
-                        Messages:
+                        {t('dialogs.prune.messagesLabel')}
                       </Typography>
                       <Box
                         component="pre"
@@ -280,8 +280,7 @@ export default function PruneRepositoryDialog({
             {results.dry_run && results.prune_result?.success !== false && (
               <Alert severity="success" sx={{ mb: 2 }}>
                 <Typography variant="body2">
-                  Dry run completed successfully. Review the output above to see which archives
-                  would be deleted. If everything looks correct, click "Prune Archives" to execute.
+                  {t('dialogs.prune.dryRunSuccess')}
                 </Typography>
               </Alert>
             )}
@@ -290,17 +289,17 @@ export default function PruneRepositoryDialog({
 
         <Alert severity="warning">
           <Typography variant="body2" fontWeight={600} gutterBottom>
-            Warning: Deleted archives cannot be recovered!
+            {t('dialogs.prune.warningTitle')}
           </Typography>
           <Typography variant="body2">
-            After pruning, run "Compact" to actually free up disk space.
+            {t('dialogs.prune.warningCompact')}
           </Typography>
         </Alert>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose}>{t('dialogs.pruneRepository.cancel')}</Button>
         <Button onClick={handleDryRun} variant="outlined" disabled={isLoading} startIcon={<Info />}>
-          Dry Run (Preview)
+          {t('dialogs.prune.dryRunButton')}
         </Button>
         <Button
           onClick={handleConfirmPrune}
@@ -309,7 +308,7 @@ export default function PruneRepositoryDialog({
           disabled={isLoading}
           startIcon={isLoading ? <Delete className="animate-spin" /> : <Delete />}
         >
-          {isLoading ? 'Pruning...' : 'Prune Archives'}
+          {isLoading ? t('common.status.running') : t('dialogs.pruneRepository.confirm')}
         </Button>
       </DialogActions>
     </Dialog>

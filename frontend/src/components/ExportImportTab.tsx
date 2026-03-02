@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import {
   Box,
@@ -46,6 +47,7 @@ interface ImportResult {
 }
 
 const ExportImportTab: React.FC = () => {
+  const { t } = useTranslation()
   // Export state
   const [selectedRepos, setSelectedRepos] = useState<number[]>([])
   const [includeSchedules, setIncludeSchedules] = useState(true)
@@ -97,11 +99,11 @@ const ExportImportTab: React.FC = () => {
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
 
-      toast.success('Configuration exported successfully')
+      toast.success(t('exportImport.export.success'))
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to export configuration')
+      toast.error(error.response?.data?.detail || t('exportImport.failedToExport'))
     },
   })
 
@@ -114,22 +116,22 @@ const ExportImportTab: React.FC = () => {
     onSuccess: (result) => {
       setImportResult(result)
       if (!result.success) {
-        toast.error(result.error || 'Import failed')
+        toast.error(result.error || t('exportImport.importFailed'))
       } else if (result.errors?.length > 0) {
-        toast.error('Import completed with errors')
+        toast.error(t('exportImport.importCompletedWithErrors'))
       } else {
-        toast.success('Configuration imported successfully')
+        toast.success(t('exportImport.importSuccess'))
       }
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to import configuration')
+      toast.error(error.response?.data?.detail || t('exportImport.failedToImport'))
     },
   })
 
   const handleExport = () => {
     if (!exportingAll && selectedRepos.length === 0) {
-      toast.error('Please select at least one repository to export')
+      toast.error(t('exportImport.selectAtLeastOneRepo'))
       return
     }
     exportMutation.mutate()
@@ -137,7 +139,7 @@ const ExportImportTab: React.FC = () => {
 
   const handleImport = () => {
     if (!importFile) {
-      toast.error('Please select a file to import')
+      toast.error(t('exportImport.selectFileToImport'))
       return
     }
     importMutation.mutate({ file: importFile, dryRun: false })
@@ -147,7 +149,7 @@ const ExportImportTab: React.FC = () => {
     const file = event.target.files?.[0]
     if (file) {
       if (!file.name.endsWith('.yaml') && !file.name.endsWith('.yml')) {
-        toast.error('Please select a YAML file (.yaml or .yml)')
+        toast.error(t('exportImport.selectYamlFileError'))
         return
       }
       setImportFile(file)
@@ -178,13 +180,12 @@ const ExportImportTab: React.FC = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
           <Download size={24} style={{ marginRight: 8 }} />
           <Typography variant="h6" fontWeight={600}>
-            Export Configuration
+            {t('exportImport.export.title')}
           </Typography>
         </Box>
 
         <Typography variant="body2" color="text.secondary">
-          Export your repositories, backup schedules, and settings to a borgmatic-compatible YAML
-          file.
+          {t('exportImport.export.description')}
         </Typography>
       </Box>
 
@@ -198,7 +199,7 @@ const ExportImportTab: React.FC = () => {
                   onChange={(e) => setExportingAll(e.target.checked)}
                 />
               }
-              label="Export all repositories"
+              label={t('exportImport.exportAllRepositories')}
             />
 
             {!exportingAll && (
@@ -211,13 +212,13 @@ const ExportImportTab: React.FC = () => {
                     mb: 1,
                   }}
                 >
-                  <Typography variant="subtitle2">Select Repositories</Typography>
+                  <Typography variant="subtitle2">{t('exportImport.selectRepositories')}</Typography>
                   <Box>
                     <Button size="small" onClick={selectAllRepos} disabled={loadingRepos}>
-                      Select All
+                      {t('exportImport.selectAll')}
                     </Button>
                     <Button size="small" onClick={clearSelection} disabled={loadingRepos}>
-                      Clear
+                      {t('exportImport.clear')}
                     </Button>
                   </Box>
                 </Box>
@@ -232,11 +233,11 @@ const ExportImportTab: React.FC = () => {
                 >
                   {loadingRepos ? (
                     <Typography variant="body2" sx={{ p: 2 }}>
-                      Loading repositories...
+                      {t('exportImport.loadingRepositories')}
                     </Typography>
                   ) : repositories.length === 0 ? (
                     <Typography variant="body2" sx={{ p: 2 }}>
-                      No repositories available
+                      {t('exportImport.noRepositoriesAvailable')}
                     </Typography>
                   ) : (
                     <List dense>
@@ -274,7 +275,7 @@ const ExportImportTab: React.FC = () => {
                   onChange={(e) => setIncludeSchedules(e.target.checked)}
                 />
               }
-              label="Include backup schedules and retention policies"
+              label={t('exportImport.includeSchedules')}
             />
 
             <Button
@@ -283,7 +284,7 @@ const ExportImportTab: React.FC = () => {
               onClick={handleExport}
               disabled={exportMutation.isPending || (!exportingAll && selectedRepos.length === 0)}
             >
-              {exportMutation.isPending ? 'Exporting...' : 'Export Configuration'}
+              {exportMutation.isPending ? t('exportImport.export.exporting') : t('exportImport.export.button')}
             </Button>
           </Stack>
         </CardContent>
@@ -296,13 +297,12 @@ const ExportImportTab: React.FC = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
           <Upload size={24} style={{ marginRight: 8 }} />
           <Typography variant="h6" fontWeight={600}>
-            Import Configuration
+            {t('exportImport.import.title')}
           </Typography>
         </Box>
 
         <Typography variant="body2" color="text.secondary">
-          Import borgmatic YAML configurations or Borg UI exports. Supports both standard borgmatic
-          format and Borg UI exports.
+          {t('exportImport.import.description')}
         </Typography>
       </Box>
 
@@ -319,34 +319,33 @@ const ExportImportTab: React.FC = () => {
               />
               <label htmlFor="import-file-input">
                 <Button variant="outlined" component="span" startIcon={<FileText size={18} />}>
-                  Select YAML File
+                  {t('exportImport.selectYamlFile')}
                 </Button>
               </label>
               {importFile && (
                 <Typography variant="body2" sx={{ mt: 1 }}>
-                  Selected: {importFile.name}
+                  {t('exportImport.selectedFile', { name: importFile.name })}
                 </Typography>
               )}
             </Box>
 
             <FormControl fullWidth>
-              <InputLabel>Conflict Resolution Strategy</InputLabel>
+              <InputLabel>{t('exportImport.conflictResolutionStrategy')}</InputLabel>
               <Select
                 value={mergeStrategy}
                 onChange={(e) => setMergeStrategy(e.target.value)}
-                label="Conflict Resolution Strategy"
+                label={t('exportImport.conflictResolutionStrategy')}
               >
                 <MenuItem value="skip_duplicates">
-                  Skip Duplicates - Keep existing configurations
+                  {t('exportImport.strategySkipDuplicates')}
                 </MenuItem>
-                <MenuItem value="replace">Replace - Overwrite existing configurations</MenuItem>
-                <MenuItem value="rename">Rename - Auto-rename imported configurations</MenuItem>
+                <MenuItem value="replace">{t('exportImport.strategyReplace')}</MenuItem>
+                <MenuItem value="rename">{t('exportImport.strategyRename')}</MenuItem>
               </Select>
             </FormControl>
 
             <Alert severity="warning" icon={<AlertCircle size={20} />}>
-              <strong>Important:</strong> SSH keys and repository passphrases cannot be imported for
-              security reasons. You will need to configure them manually after import.
+              <strong>{t('exportImport.importantLabel')}</strong> {t('exportImport.importSecurityWarning')}
             </Alert>
 
             <Box sx={{ display: 'flex', gap: 2 }}>
@@ -356,7 +355,7 @@ const ExportImportTab: React.FC = () => {
                 onClick={handleImport}
                 disabled={!importFile || importMutation.isPending}
               >
-                {importMutation.isPending ? 'Importing...' : 'Import Configuration'}
+                {importMutation.isPending ? t('exportImport.import.importing') : t('exportImport.import.button')}
               </Button>
             </Box>
 
@@ -373,31 +372,31 @@ const ExportImportTab: React.FC = () => {
                       <AlertCircle size={24} color="red" style={{ marginRight: 8 }} />
                     )}
                     <Typography variant="h6">
-                      {importResult.success ? 'Import Summary' : 'Import Failed'}
+                      {importResult.success ? t('exportImport.importSummary') : t('exportImport.importFailed')}
                     </Typography>
                   </Box>
 
                   {importResult.success && (
                     <Stack spacing={1}>
                       <Typography variant="body2">
-                        <strong>Repositories Created:</strong>{' '}
+                        <strong>{t('exportImport.repositoriesCreated')}:</strong>{' '}
                         {importResult.repositories_created || 0}
                       </Typography>
                       <Typography variant="body2">
-                        <strong>Repositories Updated:</strong>{' '}
+                        <strong>{t('exportImport.repositoriesUpdated')}:</strong>{' '}
                         {importResult.repositories_updated || 0}
                       </Typography>
                       <Typography variant="body2">
-                        <strong>Schedules Created:</strong> {importResult.schedules_created || 0}
+                        <strong>{t('exportImport.schedulesCreated')}:</strong> {importResult.schedules_created || 0}
                       </Typography>
                       <Typography variant="body2">
-                        <strong>Schedules Updated:</strong> {importResult.schedules_updated || 0}
+                        <strong>{t('exportImport.schedulesUpdated')}:</strong> {importResult.schedules_updated || 0}
                       </Typography>
 
                       {importResult.warnings && importResult.warnings.length > 0 && (
                         <Box sx={{ mt: 2 }}>
                           <Typography variant="subtitle2" gutterBottom>
-                            Warnings:
+                            {t('exportImport.warnings')}:
                           </Typography>
                           {importResult.warnings.map((warning: string, index: number) => (
                             <Alert severity="warning" key={index} sx={{ mt: 1 }}>
@@ -414,7 +413,7 @@ const ExportImportTab: React.FC = () => {
                   {importResult.errors && importResult.errors.length > 0 && (
                     <Box sx={{ mt: 2 }}>
                       <Typography variant="subtitle2" gutterBottom>
-                        Errors:
+                        {t('exportImport.errors')}:
                       </Typography>
                       {importResult.errors.map((error: string, index: number) => (
                         <Alert severity="error" key={index} sx={{ mt: 1 }}>

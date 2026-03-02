@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Stack, Card, CardContent, Typography, Box, Chip, Alert, Divider } from '@mui/material'
 import { CheckCircle, Calendar, Code, Wrench } from 'lucide-react'
 import { Repository, Script } from '../../ScheduleWizard'
@@ -31,6 +32,8 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
   repositories,
   scripts,
 }) => {
+  const { t } = useTranslation()
+
   const selectedRepos = repositories.filter((r) => data.repositoryIds.includes(r.id))
   const preScript = scripts.find((s) => s.id === data.preBackupScriptId)
   const postScript = scripts.find((s) => s.id === data.postBackupScriptId)
@@ -39,9 +42,9 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
     <Stack spacing={2}>
       <Alert severity="success" icon={<CheckCircle size={20} />} sx={{ py: 0.5 }}>
         <Typography variant="body2" fontWeight={600}>
-          Ready to create schedule!
+          {t('wizard.scheduleWizard.review.readyToCreate')}
         </Typography>
-        <Typography variant="caption">Review and confirm below.</Typography>
+        <Typography variant="caption">{t('wizard.scheduleWizard.review.reviewAndConfirm')}</Typography>
       </Alert>
 
       {/* Job Summary Card */}
@@ -50,14 +53,14 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
             <Calendar size={20} color="#1976d2" />
             <Typography variant="h6" fontWeight={600}>
-              Job Summary
+              {t('wizard.scheduleWizard.review.jobSummary')}
             </Typography>
           </Box>
 
           <Stack spacing={1.5}>
             <Box>
               <Typography variant="caption" color="text.secondary">
-                Name
+                {t('wizard.scheduleWizard.review.name')}
               </Typography>
               <Typography variant="body1" fontWeight={600}>
                 {data.name}
@@ -73,7 +76,7 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
 
             <Box>
               <Typography variant="caption" color="text.secondary">
-                Repositories ({selectedRepos.length})
+                {t('wizard.scheduleWizard.review.repositories', { count: selectedRepos.length })}
               </Typography>
               <Stack spacing={0.5} sx={{ mt: 0.5 }}>
                 {selectedRepos.map((repo, index) => (
@@ -100,7 +103,7 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
 
             <Box>
               <Typography variant="caption" color="text.secondary">
-                Schedule
+                {t('wizard.scheduleWizard.review.schedule')}
               </Typography>
               <Typography variant="body1" fontWeight={600} sx={{ fontFamily: 'monospace' }}>
                 {data.cronExpression}
@@ -109,7 +112,7 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
 
             <Box>
               <Typography variant="caption" color="text.secondary">
-                Archive Name Template
+                {t('wizard.scheduleWizard.review.archiveNameTemplate')}
               </Typography>
               <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
                 {data.archiveNameTemplate}
@@ -125,21 +128,21 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
             <Code size={20} color="#7b1fa2" />
             <Typography variant="h6" fontWeight={600}>
-              Scripts Configuration
+              {t('wizard.scheduleWizard.review.scriptsConfiguration')}
             </Typography>
           </Box>
 
           <Stack spacing={1.5}>
             <Box>
               <Typography variant="caption" color="text.secondary">
-                Pre-Backup Script
+                {t('wizard.scheduleWizard.review.preBackupScript')}
               </Typography>
               <Typography variant="body2">{preScript ? preScript.name : <em>None</em>}</Typography>
             </Box>
 
             <Box>
               <Typography variant="caption" color="text.secondary">
-                Post-Backup Script
+                {t('wizard.scheduleWizard.review.postBackupScript')}
               </Typography>
               <Typography variant="body2">
                 {postScript ? postScript.name : <em>None</em>}
@@ -148,10 +151,10 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
 
             <Box>
               <Typography variant="caption" color="text.secondary">
-                Repository-Level Scripts
+                {t('wizard.scheduleWizard.review.repositoryLevelScripts')}
               </Typography>
               <Chip
-                label={data.runRepositoryScripts ? 'Enabled' : 'Disabled'}
+                label={data.runRepositoryScripts ? t('wizard.scheduleWizard.review.enabled') : t('wizard.scheduleWizard.review.disabled')}
                 color={data.runRepositoryScripts ? 'primary' : 'default'}
                 size="small"
               />
@@ -166,18 +169,18 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
             <Wrench size={20} color="#2e7d32" />
             <Typography variant="h6" fontWeight={600}>
-              Maintenance Settings
+              {t('wizard.scheduleWizard.review.maintenanceSettings')}
             </Typography>
           </Box>
 
           <Stack spacing={1.5}>
             <Box>
               <Typography variant="caption" color="text.secondary">
-                Prune After Backup
+                {t('wizard.scheduleWizard.review.pruneAfterBackup')}
               </Typography>
               <Box sx={{ mt: 0.5 }}>
                 <Chip
-                  label={data.runPruneAfter ? 'Enabled' : 'Disabled'}
+                  label={data.runPruneAfter ? t('wizard.scheduleWizard.review.enabled') : t('wizard.scheduleWizard.review.disabled')}
                   color={data.runPruneAfter ? 'primary' : 'default'}
                   size="small"
                 />
@@ -197,11 +200,11 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
 
             <Box>
               <Typography variant="caption" color="text.secondary">
-                Compact After Prune
+                {t('wizard.scheduleWizard.review.compactAfterPrune')}
               </Typography>
               <Box sx={{ mt: 0.5 }}>
                 <Chip
-                  label={data.runCompactAfter ? 'Enabled' : 'Disabled'}
+                  label={data.runCompactAfter ? t('wizard.scheduleWizard.review.enabled') : t('wizard.scheduleWizard.review.disabled')}
                   color={data.runCompactAfter ? 'secondary' : 'default'}
                   size="small"
                 />

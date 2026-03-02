@@ -3,6 +3,7 @@ import { Box, Button, Typography, Paper, Chip } from '@mui/material'
 import { ContentCopy, Download } from '@mui/icons-material'
 import { PlayCircle } from 'lucide-react'
 import { toast } from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 
 interface LogLine {
   line_number: number
@@ -28,6 +29,7 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
   showHeader = true,
   onFetchLogs,
 }) => {
+  const { t } = useTranslation()
   const [logs, setLogs] = useState<LogLine[]>([])
   const logsRef = useRef<LogLine[]>([])
   const isLoadingRef = useRef(false)
@@ -112,7 +114,7 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
   const handleCopyLogs = () => {
     const logText = logs.map((log) => log.content).join('\n')
     navigator.clipboard.writeText(logText)
-    toast.success('Logs copied to clipboard')
+    toast.success(t('terminalLogViewer.toasts.logsCopied'))
   }
 
   // Download logs as file
@@ -125,7 +127,7 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
     a.download = `backup_${jobId}_logs.txt`
     a.click()
     URL.revokeObjectURL(url)
-    toast.success('Logs downloaded')
+    toast.success(t('terminalLogViewer.toasts.logsDownloaded'))
   }
 
   // Jump to beginning of logs
@@ -140,7 +142,7 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
       }
     } catch (error) {
       console.error('Failed to fetch logs from start:', error)
-      toast.error('Failed to load logs')
+      toast.error(t('terminalLogViewer.toasts.failedToLoad'))
     }
   }
 
@@ -151,16 +153,16 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Box>
             <Typography variant="h6" fontWeight={600}>
-              Backup Logs
+              {t('terminalLogViewer.title')}
             </Typography>
             {status === 'running' && totalLines > 500 && (
               <Typography variant="caption" color="text.secondary">
-                Showing last 500 of {totalLines} lines (live tail)
+                {t('terminalLogViewer.tailLabel', { total: totalLines.toLocaleString() })}
               </Typography>
             )}
             {status !== 'running' && totalLines > 0 && (
               <Typography variant="caption" color="text.secondary">
-                {logs.length} of {totalLines} lines
+                {t('terminalLogViewer.linesLabel', { count: logs.length, total: totalLines })}
               </Typography>
             )}
           </Box>
@@ -171,7 +173,7 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
               onClick={handleCopyLogs}
               disabled={logs.length === 0}
             >
-              Copy Logs
+              {t('terminalLogViewer.copyLogs')}
             </Button>
             <Button
               size="small"
@@ -179,7 +181,7 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
               onClick={handleDownloadLogs}
               disabled={logs.length === 0}
             >
-              Download
+              {t('terminalLogViewer.download')}
             </Button>
           </Box>
         </Box>
@@ -190,27 +192,27 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
         <Box sx={{ mb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Chip
             icon={<PlayCircle size={16} />}
-            label="Live Streaming (Last 500 lines)"
+            label={t('terminalLogViewer.liveStreaming')}
             color="info"
             size="small"
             sx={{ fontWeight: 500 }}
           />
           {totalLines > 0 && (
             <Typography variant="caption" color="text.secondary">
-              {logs.length} lines displayed
+              {t('terminalLogViewer.linesDisplayed', { count: logs.length })}
             </Typography>
           )}
         </Box>
       ) : showingTail && totalLines > 500 ? (
         <Box sx={{ mb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Chip
-            label={`Showing last 500 of ${totalLines.toLocaleString()} lines (errors typically appear at end)`}
+            label={t('terminalLogViewer.showingLast', { total: totalLines.toLocaleString() })}
             color="warning"
             size="small"
             sx={{ fontWeight: 500 }}
           />
           <Button size="small" onClick={handleJumpToStart} sx={{ minWidth: 'auto' }}>
-            Jump to Start
+            {t('terminalLogViewer.jumpToStart')}
           </Button>
         </Box>
       ) : null}
@@ -247,7 +249,7 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
       >
         {logs.length === 0 ? (
           <Typography variant="body2" color="text.secondary">
-            {status === 'running' ? 'Waiting for logs...' : 'No logs available'}
+            {status === 'running' ? t('terminalLogViewer.waitingForLogs') : t('terminalLogViewer.noLogsAvailable')}
           </Typography>
         ) : (
           logs.map((log) => (
@@ -288,7 +290,7 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
               }}
             />
             <Typography sx={{ color: '#4ade80', fontSize: '0.875rem' }}>
-              {jobType.charAt(0).toUpperCase() + jobType.slice(1)} in progress...
+              {t('terminalLog.inProgress', { type: jobType.charAt(0).toUpperCase() + jobType.slice(1) })}
             </Typography>
           </Box>
         )}
@@ -306,7 +308,7 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
               }
             }}
           >
-            New logs available - Click to scroll to bottom
+            {t('terminalLogViewer.newLogsAvailable')}
           </Button>
         </Box>
       )}

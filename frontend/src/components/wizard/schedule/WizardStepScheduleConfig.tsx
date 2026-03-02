@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Stack, Alert, Typography, Box } from '@mui/material'
 import CronExpressionInput from '../../CronExpressionInput'
 import ArchiveNameTemplateInput from '../../ArchiveNameTemplateInput'
@@ -20,6 +21,8 @@ const WizardStepScheduleConfig: React.FC<WizardStepScheduleConfigProps> = ({
   jobName,
   onChange,
 }) => {
+  const { t } = useTranslation()
+
   // Calculate next 3 run times
   const nextRunTimes = useMemo(() => {
     try {
@@ -39,8 +42,8 @@ const WizardStepScheduleConfig: React.FC<WizardStepScheduleConfigProps> = ({
       <CronExpressionInput
         value={data.cronExpression}
         onChange={(cron) => onChange({ cronExpression: cron })}
-        label="Schedule (Cron Expression)"
-        helperText="Click the clock icon to use the visual builder."
+        label={t('wizard.scheduleWizard.config.scheduleLabel')}
+        helperText={t('wizard.scheduleWizard.config.scheduleHelper')}
         required
         size="medium"
       />
@@ -48,7 +51,7 @@ const WizardStepScheduleConfig: React.FC<WizardStepScheduleConfigProps> = ({
       {nextRunTimes && (
         <Alert severity="info" sx={{ py: 0.5 }}>
           <Typography variant="body2" fontWeight={600} gutterBottom>
-            Next 3 Run Times:
+            {t('wizard.scheduleWizard.config.nextRunTimes')}
           </Typography>
           <Box component="ul" sx={{ pl: 2, my: 0 }}>
             {nextRunTimes.map((time, index) => (

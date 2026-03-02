@@ -1,4 +1,5 @@
 import { useState, useImperativeHandle, forwardRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
@@ -51,6 +52,7 @@ export interface ScheduledChecksSectionRef {
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref) => {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [showDialog, setShowDialog] = useState(false)
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(null)
@@ -97,7 +99,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scheduled-checks'] })
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
-      toast.success('Check schedule updated')
+      toast.success(t('scheduledChecks.toasts.scheduleUpdated'))
       setShowDialog(false)
       setSelectedRepositoryId(null)
     },
@@ -113,7 +115,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
       return await repositoriesAPI.startCheck(repoId, {})
     },
     onSuccess: () => {
-      toast.success('Check started')
+      toast.success(t('scheduledChecks.toasts.checkStarted'))
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -150,7 +152,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
 
   const handleSubmit = () => {
     if (!selectedRepositoryId) {
-      toast.error('Please select a repository')
+      toast.error(t('scheduledChecks.validation.selectRepository'))
       return
     }
 
@@ -167,7 +169,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
   }
 
   const handleDelete = (check: ScheduledCheck) => {
-    if (confirm(`Disable scheduled check for ${check.repository_name}?`)) {
+    if (confirm(t('scheduledChecks.confirmDisable', { repositoryName: check.repository_name }))) {
       updateMutation.mutate({
         repoId: check.repository_id,
         data: { cron_expression: '' },
@@ -178,7 +180,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
   const columns: Column<ScheduledCheck>[] = [
     {
       id: 'repository',
-      label: 'Repository',
+      label: t('scheduledChecks.repository'),
       render: (check) => (
         <Box>
           <Typography variant="body2" fontWeight={500}>
@@ -192,12 +194,12 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
     },
     {
       id: 'schedule',
-      label: 'Schedule',
+      label: t('scheduledChecks.schedule'),
       render: (check) => {
         // Convert UTC cron expression to local time for display
         const localCron = check.check_cron_expression
           ? convertCronToLocal(check.check_cron_expression)
-          : 'Not configured'
+          : t('scheduledChecks.notConfigured')
         return (
           <Chip
             label={localCron}
@@ -211,13 +213,13 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
     },
     {
       id: 'last_check',
-      label: 'Last Check',
+      label: t('scheduledChecks.lastCheck'),
       render: (check) =>
-        check.last_scheduled_check ? formatDate(check.last_scheduled_check) : 'Never',
+        check.last_scheduled_check ? formatDate(check.last_scheduled_check) : t('scheduledChecks.never'),
     },
     {
       id: 'next_check',
-      label: 'Next Check',
+      label: t('scheduledChecks.nextCheck'),
       render: (check) =>
         check.next_scheduled_check ? (
           <Box>
@@ -227,7 +229,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
             </Typography>
           </Box>
         ) : (
-          'Not scheduled'
+          t('scheduledChecks.notScheduled')
         ),
     },
   ]
@@ -235,24 +237,24 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
   const actions: ActionButton<ScheduledCheck>[] = [
     {
       icon: <Play size={16} />,
-      label: 'Run Now',
+      label: t('common.buttons.run'),
       onClick: (check) => runCheckMutation.mutate(check.repository_id),
       color: 'primary',
-      tooltip: 'Run check now',
+      tooltip: t('scheduledChecks.tooltips.runNow'),
     },
     {
       icon: <Edit size={16} />,
-      label: 'Edit',
+      label: t('common.buttons.edit'),
       onClick: (check) => openEditDialog(check),
       color: 'default',
-      tooltip: 'Edit schedule',
+      tooltip: t('scheduledChecks.tooltips.editSchedule'),
     },
     {
       icon: <Trash2 size={16} />,
-      label: 'Delete',
+      label: t('common.buttons.delete'),
       onClick: (check) => handleDelete(check),
       color: 'error',
-      tooltip: 'Disable schedule',
+      tooltip: t('scheduledChecks.tooltips.disableSchedule'),
     },
   ]
 
@@ -261,7 +263,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
       {/* No repositories warning */}
       {repositories.length === 0 && (
         <Alert severity="info" sx={{ mb: 3 }}>
-          You need to create at least one repository before scheduling checks.
+          {t('scheduledChecks.needRepository')}
         </Alert>
       )}
 
@@ -277,8 +279,8 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
             enableHover={true}
             emptyState={{
               icon: <Shield size={48} />,
-              title: 'No scheduled checks',
-              description: 'Configure automatic repository checks to ensure data integrity',
+              title: t('scheduledChecks.noScheduledChecks'),
+              description: t('scheduledChecks.noScheduledChecksDesc'),
             }}
           />
         </CardContent>
@@ -287,16 +289,16 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
       {/* Add/Edit Dialog */}
       <Dialog open={showDialog} onClose={() => setShowDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
-          {selectedRepositoryId ? 'Edit Check Schedule' : 'Add Check Schedule'}
+          {selectedRepositoryId ? t('scheduledChecks.editCheckSchedule') : t('scheduledChecks.addCheckSchedule')}
         </DialogTitle>
         <DialogContent>
           <Stack spacing={3} sx={{ mt: 1 }}>
             <FormControl fullWidth required size="medium">
-              <InputLabel sx={{ fontSize: '1.1rem' }}>Repository</InputLabel>
+              <InputLabel sx={{ fontSize: '1.1rem' }}>{t('scheduledChecks.repository')}</InputLabel>
               <Select
                 value={selectedRepositoryId || ''}
                 onChange={(e) => setSelectedRepositoryId(Number(e.target.value))}
-                label="Repository"
+                label={t('scheduledChecks.repository')}
                 disabled={loadingRepositories || repositories.length === 0}
                 sx={{ fontSize: '1.1rem', height: { xs: 48, sm: 56 } }}
                 MenuProps={{
@@ -310,7 +312,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
                 {repositories.length === 0 ? (
                   <MenuItem disabled>
                     <Typography variant="body2" color="text.secondary">
-                      No repositories available
+                      {t('scheduledChecks.noRepositoriesAvailable')}
                     </Typography>
                   </MenuItem>
                 ) : (
@@ -336,7 +338,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
             </FormControl>
 
             <TextField
-              label="Check Schedule"
+              label={t('scheduledChecks.checkScheduleLabel')}
               value={formData.cron_expression}
               onChange={(e) => setFormData({ ...formData, cron_expression: e.target.value })}
               required
@@ -356,9 +358,9 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
                       onChange={(localCron) =>
                         setFormData({ ...formData, cron_expression: localCron })
                       }
-                      label="Check Schedule"
-                      helperText="When should this repository check run?"
-                      dialogTitle="Check Schedule Builder"
+                      label={t('scheduledChecks.checkScheduleLabel')}
+                      helperText={t('scheduledChecks.checkScheduleHelperText')}
+                      dialogTitle={t('scheduledChecks.checkScheduleBuilderTitle')}
                     />
                   </InputAdornment>
                 ),
@@ -369,28 +371,28 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
             />
 
             <TextField
-              label="Max Duration (seconds)"
+              label={t('scheduledChecks.maxDuration')}
               type="number"
               value={formData.max_duration}
               onChange={(e) => setFormData({ ...formData, max_duration: Number(e.target.value) })}
-              helperText="Time limit for check operation (3600 = 1 hour)"
+              helperText={t('scheduledChecks.maxDurationHint')}
               fullWidth
               inputProps={{ min: 60 }}
             />
 
             <Alert severity="info" sx={{ mt: 1 }}>
-              Notification settings for check jobs can be configured in Settings → Notifications
+              {t('scheduledChecks.notificationHint')}
             </Alert>
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShowDialog(false)}>Cancel</Button>
+          <Button onClick={() => setShowDialog(false)}>{t('common.buttons.cancel')}</Button>
           <Button
             onClick={handleSubmit}
             variant="contained"
             disabled={!selectedRepositoryId || updateMutation.isPending}
           >
-            {selectedRepositoryId ? 'Update' : 'Create'}
+            {selectedRepositoryId ? t('scheduledChecks.update') : t('scheduledChecks.create')}
           </Button>
         </DialogActions>
       </Dialog>

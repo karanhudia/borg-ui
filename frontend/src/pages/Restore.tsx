@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   Box,
   Card,
@@ -63,6 +64,7 @@ interface RestoreJob {
 }
 
 const Restore: React.FC = () => {
+  const { t } = useTranslation()
   const { trackArchive, EventAction } = useMatomo()
   const [selectedRepository, setSelectedRepository] = useState<string>('')
   const [selectedRepoData, setSelectedRepoData] = useState<Repository | null>(null)
@@ -440,10 +442,10 @@ const Restore: React.FC = () => {
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" fontWeight={600} gutterBottom>
-          Restore Archives
+          {t('restore.title')}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Select an archive to restore from backup
+          {t('restore.subtitle')}
         </Typography>
       </Box>
 
@@ -453,7 +455,7 @@ const Restore: React.FC = () => {
           <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
             <Database size={20} color="#2e7d32" />
             <Typography variant="h6" fontWeight={600}>
-              Select Repository
+              {t('restore.selectRepository')}
             </Typography>
           </Stack>
           <FormControl fullWidth sx={{ minWidth: { xs: '100%', sm: 300 } }}>
@@ -468,7 +470,7 @@ const Restore: React.FC = () => {
               sx={{ height: { xs: 48, sm: 56 } }}
             >
               <MenuItem value="" disabled>
-                {loadingRepositories ? 'Loading repositories...' : 'Select a repository...'}
+                {loadingRepositories ? t('restore.loadingRepositories') : t('restore.selectRepositoryPlaceholder')}
               </MenuItem>
               {repositories.map((repo: Repository) => (
                 <MenuItem key={repo.id} value={repo.path} disabled={repo.has_running_maintenance}>
@@ -484,7 +486,7 @@ const Restore: React.FC = () => {
                             color="warning.main"
                             sx={{ ml: 1 }}
                           >
-                            (Maintenance Running)
+                            {t('restore.maintenanceRunningParens')}
                           </Typography>
                         )}
                       </Typography>
@@ -519,8 +521,7 @@ const Restore: React.FC = () => {
       {selectedRepository && (
         <>
           <Alert severity="info" sx={{ mb: 3 }}>
-            Select an archive below to restore its contents. The entire archive will be restored to
-            the destination path you specify.
+            {t('restore.selectArchive')}
           </Alert>
 
           <Box sx={{ mb: 3 }}>
@@ -532,7 +533,7 @@ const Restore: React.FC = () => {
               loading={loadingArchives}
               emptyState={{
                 icon: <ArchiveIcon size={48} />,
-                title: 'No archives found in this repository',
+                title: t('restore.noArchives'),
               }}
               headerBgColor="background.default"
               enableHover={true}
@@ -546,10 +547,10 @@ const Restore: React.FC = () => {
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography variant="h6" fontWeight={600} gutterBottom>
-              Active Restores
+              {t('restore.activeRestores.title')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Pending and running restore operations
+              {t('restore.activeRestores.subtitle')}
             </Typography>
 
             <Stack spacing={3}>
@@ -572,7 +573,7 @@ const Restore: React.FC = () => {
           >
             <Clock size={20} />
             <Typography variant="h6" fontWeight={600}>
-              Recent Restores
+              {t('restore.recentRestores.title')}
             </Typography>
           </Stack>
 
@@ -582,7 +583,7 @@ const Restore: React.FC = () => {
             getRowKey={(job) => job.id.toString()}
             emptyState={{
               icon: <Clock size={48} />,
-              title: 'No restore jobs found',
+              title: t('restore.recentRestores.empty'),
             }}
             headerBgColor="background.default"
             enableHover={true}
@@ -603,7 +604,7 @@ const Restore: React.FC = () => {
             <RotateCcw size={24} />
             <Box>
               <Typography variant="h6" fontWeight={600}>
-                Restore Archive
+                {t('restore.dialog.title')}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {restoreArchive?.name}
@@ -624,13 +625,13 @@ const Restore: React.FC = () => {
               {archiveStats && (
                 <Alert severity="info">
                   <Typography variant="body2" fontWeight={500} gutterBottom>
-                    Archive Information
+                    {t('restore.dialog.archiveInfo')}
                   </Typography>
                   <Typography variant="body2">
-                    Files: {archiveStats.nfiles?.toLocaleString() || 'N/A'}
+                    {t('restore.dialog.files')} {archiveStats.nfiles?.toLocaleString() || 'N/A'}
                   </Typography>
                   <Typography variant="body2">
-                    Size:{' '}
+                    {t('restore.dialog.size')}{' '}
                     {archiveStats.original_size
                       ? formatBytesUtil(archiveStats.original_size)
                       : 'N/A'}
@@ -641,7 +642,7 @@ const Restore: React.FC = () => {
               {selectedPaths.length > 0 ? (
                 <Alert severity="success">
                   <Typography variant="body2" fontWeight={500} gutterBottom>
-                    Selected Items ({selectedPaths.length})
+                    {t('restore.dialog.selectedItems', { count: selectedPaths.length })}
                   </Typography>
                   <Box
                     sx={{
@@ -676,17 +677,16 @@ const Restore: React.FC = () => {
                     onClick={() => setShowBrowser(true)}
                     sx={{ mt: 1 }}
                   >
-                    Change Selection
+                    {t('restore.dialog.changeSelection')}
                   </Button>
                 </Alert>
               ) : (
                 <Alert severity="warning">
                   <Typography variant="body2" fontWeight={500} gutterBottom>
-                    Important
+                    {t('restore.dialog.important')}
                   </Typography>
                   <Typography variant="body2">
-                    This will restore the entire archive to the destination path. Existing files may
-                    be overwritten.
+                    {t('restore.dialog.fullRestoreWarning')}
                   </Typography>
                   <Button
                     size="small"
@@ -694,13 +694,13 @@ const Restore: React.FC = () => {
                     onClick={() => setShowBrowser(true)}
                     sx={{ mt: 1 }}
                   >
-                    Select Specific Files/Folders
+                    {t('restore.dialog.selectSpecific')}
                   </Button>
                 </Alert>
               )}
 
               <PathSelectorField
-                label="Destination Path"
+                label={t('restore.dialog.destinationPath')}
                 value={destination}
                 onChange={setDestination}
                 placeholder="/path/to/restore/location"
@@ -720,7 +720,7 @@ const Restore: React.FC = () => {
             }}
             disabled={restoreMutation.isPending}
           >
-            Cancel
+            {t('restore.dialog.cancel')}
           </Button>
           <Button
             variant="contained"
@@ -735,7 +735,7 @@ const Restore: React.FC = () => {
               )
             }
           >
-            {restoreMutation.isPending ? 'Starting...' : 'Start Restore'}
+            {restoreMutation.isPending ? t('restore.dialog.starting') : t('restore.dialog.start')}
           </Button>
         </DialogActions>
       </Dialog>

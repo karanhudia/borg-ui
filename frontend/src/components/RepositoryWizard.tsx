@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Dialog,
   DialogTitle,
@@ -110,6 +111,7 @@ const initialState: WizardState = {
 
 const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: RepositoryWizardProps) => {
   const { track, trackRepository, EventCategory, EventAction } = useMatomo()
+  const { t } = useTranslation()
   const [activeStep, setActiveStep] = useState(0)
   const [wizardState, setWizardState] = useState<WizardState>(initialState)
   const [sshConnections, setSshConnections] = useState<SSHConnection[]>([])
@@ -122,24 +124,24 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
 
   // Step definitions
   const steps = useMemo(() => {
-    const baseSteps = [{ key: 'location', label: 'Location', icon: <FolderOpen size={14} /> }]
+    const baseSteps = [{ key: 'location', label: t('repositoryWizard.steps.location'), icon: <FolderOpen size={14} /> }]
 
     // Add data source step only for full mode (not observe) and not import
     if (wizardState.repositoryMode === 'full' || mode === 'import') {
-      baseSteps.push({ key: 'source', label: 'Source', icon: <Database size={14} /> })
+      baseSteps.push({ key: 'source', label: t('repositoryWizard.steps.source'), icon: <Database size={14} /> })
     }
 
-    baseSteps.push({ key: 'security', label: 'Security', icon: <Shield size={14} /> })
+    baseSteps.push({ key: 'security', label: t('repositoryWizard.steps.security'), icon: <Shield size={14} /> })
 
     // Add backup config step only for full mode
     if (wizardState.repositoryMode === 'full') {
-      baseSteps.push({ key: 'config', label: 'Config', icon: <Settings size={14} /> })
+      baseSteps.push({ key: 'config', label: t('repositoryWizard.steps.config'), icon: <Settings size={14} /> })
     }
 
-    baseSteps.push({ key: 'review', label: 'Review', icon: <CheckCircle size={14} /> })
+    baseSteps.push({ key: 'review', label: t('repositoryWizard.steps.review'), icon: <CheckCircle size={14} /> })
 
     return baseSteps
-  }, [wizardState.repositoryMode, mode])
+  }, [wizardState.repositoryMode, mode, t])
 
   // Load SSH connections
   const loadSshData = async () => {
@@ -586,7 +588,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       >
         <DialogTitle sx={{ pt: 3, pb: 1 }}>
           <Typography variant="h5" component="div" fontWeight={700}>
-            {mode === 'create' ? 'Create' : mode === 'edit' ? 'Edit' : 'Import'} Repository
+            {mode === 'create' ? t('repositoryWizard.titleCreate') : mode === 'edit' ? t('repositoryWizard.titleEdit') : t('repositoryWizard.titleImport')}
           </Typography>
         </DialogTitle>
         <DialogContent>
@@ -603,22 +605,22 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
           <Box sx={{ flex: 1 }} />
           <Button disabled={activeStep === 0} onClick={handleBack}>
-            Back
+            {t('common.buttons.back')}
           </Button>
           {activeStep < steps.length - 1 ? (
             <Button variant="contained" onClick={handleNext} disabled={!canProceed()}>
-              Next
+              {t('common.buttons.next')}
             </Button>
           ) : (
             <Button variant="contained" onClick={handleSubmit} disabled={!canProceed()}>
               {mode === 'create'
-                ? 'Create Repository'
+                ? t('repositoryWizard.finalButtonCreate')
                 : mode === 'edit'
-                  ? 'Save Changes'
-                  : 'Import Repository'}
+                  ? t('repositoryWizard.finalButtonEdit')
+                  : t('repositoryWizard.finalButtonImport')}
             </Button>
           )}
         </DialogActions>
@@ -635,7 +637,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
           }
           setShowPathExplorer(false)
         }}
-        title="Select Repository Path"
+        title={t('repositoryWizard.fileExplorer.selectRepoPath')}
         initialPath={
           wizardState.repositoryLocation === 'ssh' && wizardState.repoSshConnectionId
             ? sshConnections.find((c) => c.id === wizardState.repoSshConnectionId)?.default_path ||
@@ -671,8 +673,8 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         }}
         title={
           wizardState.sourceSshConnectionId && wizardState.dataSource === 'local'
-            ? 'Select Source Directories (Remote Machine)'
-            : 'Select Source Directories or Files'
+            ? t('repositoryWizard.fileExplorer.selectSourceDirsRemote')
+            : t('repositoryWizard.fileExplorer.selectSourceDirs')
         }
         initialPath="/"
         multiSelect={true}
@@ -710,7 +712,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
                 })
                 setShowRemoteSourceExplorer(false)
               }}
-              title="Select Source Directories or Files (Remote)"
+              title={t('repositoryWizard.fileExplorer.selectSourceDirsOrFilesRemote')}
               initialPath="/"
               multiSelect={true}
               connectionType="ssh"
@@ -746,7 +748,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
                   excludePatterns: [...wizardState.excludePatterns, ...paths],
                 })
               }}
-              title="Select Directories/Files to Exclude"
+              title={t('repositoryWizard.fileExplorer.selectExclude')}
               initialPath="/"
               multiSelect={true}
               connectionType={isRemote ? 'ssh' : 'local'}

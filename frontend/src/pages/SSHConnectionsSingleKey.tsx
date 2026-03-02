@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { sshKeysAPI } from '../services/api'
 import {
@@ -72,6 +73,7 @@ interface SSHConnection {
 }
 
 export default function SSHConnectionsSingleKey() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { track, EventCategory, EventAction } = useMatomo()
 
@@ -475,21 +477,20 @@ export default function SSHConnectionsSingleKey() {
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" fontWeight={600} gutterBottom>
-          Remote Machines
+          {t('sshConnections.title')}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Manage remote machines with storage monitoring and logical mount points
+          {t('sshConnections.subtitle')}
         </Typography>
       </Box>
 
       {/* Info Alert */}
       <Alert severity="info" sx={{ mb: 3 }}>
         <Typography variant="body2" fontWeight={500}>
-          Single-Key System
+          {t('sshConnections.singleKeySystem.title')}
         </Typography>
         <Typography variant="caption">
-          This system uses one SSH key for all remote connections. Generate the system key once,
-          then deploy it to as many remote servers as needed.
+          {t('sshConnections.singleKeySystem.description')}
         </Typography>
       </Alert>
 
@@ -511,7 +512,7 @@ export default function SSHConnectionsSingleKey() {
                 </Box>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    Total Connections
+                    {t('sshConnections.stats.totalConnections')}
                   </Typography>
                   <Typography variant="h6" fontWeight={600}>
                     {stats.totalConnections}
@@ -536,7 +537,7 @@ export default function SSHConnectionsSingleKey() {
                 </Box>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    Active
+                    {t('sshConnections.stats.active')}
                   </Typography>
                   <Typography variant="h6" fontWeight={600}>
                     {stats.activeConnections}
@@ -561,7 +562,7 @@ export default function SSHConnectionsSingleKey() {
                 </Box>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    Failed
+                    {t('sshConnections.stats.failed')}
                   </Typography>
                   <Typography variant="h6" fontWeight={600}>
                     {stats.failedConnections}
@@ -579,7 +580,7 @@ export default function SSHConnectionsSingleKey() {
           <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
             <Key size={24} />
             <Typography variant="h6" fontWeight={600} sx={{ flex: 1 }}>
-              System SSH Key
+              {t('sshConnections.systemKey.title')}
             </Typography>
             {keyExists && (
               <Chip label="Active" color="success" size="small" icon={<CheckCircle size={14} />} />
@@ -590,8 +591,7 @@ export default function SSHConnectionsSingleKey() {
             // No key exists - show generation UI
             <Box>
               <Alert severity="warning" sx={{ mb: 2 }}>
-                No system SSH key found. Generate a new one or import an existing one to start
-                connecting to remote servers.
+                {t('sshConnections.systemKey.noKey')}
               </Alert>
               <Stack direction="row" spacing={2}>
                 <Button
@@ -599,14 +599,14 @@ export default function SSHConnectionsSingleKey() {
                   startIcon={<Plus size={18} />}
                   onClick={() => setGenerateDialogOpen(true)}
                 >
-                  Generate System SSH Key
+                  {t('sshConnections.systemKey.generate')}
                 </Button>
                 <Button
                   variant="outlined"
                   startIcon={<Key size={18} />}
                   onClick={() => setImportDialogOpen(true)}
                 >
-                  Import Existing Key
+                  {t('sshConnections.systemKey.import')}
                 </Button>
               </Stack>
             </Box>
@@ -617,7 +617,7 @@ export default function SSHConnectionsSingleKey() {
                 {/* Key Type */}
                 <Box>
                   <Typography variant="caption" color="text.secondary">
-                    Key Type
+                    {t('sshConnections.systemKey.type')}
                   </Typography>
                   <Typography variant="body2" fontWeight={500}>
                     {systemKey?.key_type?.toUpperCase() || 'Unknown'}
@@ -628,7 +628,7 @@ export default function SSHConnectionsSingleKey() {
                 {systemKey?.fingerprint && (
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Fingerprint
+                      {t('sshConnections.systemKey.fingerprint')}
                     </Typography>
                     <Typography
                       variant="body2"
@@ -653,7 +653,7 @@ export default function SSHConnectionsSingleKey() {
                     sx={{ mb: 0.5 }}
                   >
                     <Typography variant="caption" color="text.secondary">
-                      Public Key
+                      {t('sshConnections.systemKey.publicKey')}
                     </Typography>
                     <Tooltip title="Copy to clipboard">
                       <IconButton size="small" onClick={handleCopyPublicKey} sx={{ ml: 1 }}>
@@ -693,7 +693,7 @@ export default function SSHConnectionsSingleKey() {
                       startIcon={<Plus size={18} />}
                       onClick={() => setDeployDialogOpen(true)}
                     >
-                      Deploy to Server
+                      {t('sshConnections.systemKey.actions.deploy')}
                     </Button>
                   </Tooltip>
                   <Tooltip title="Add a connection for a manually deployed SSH key">
@@ -702,7 +702,7 @@ export default function SSHConnectionsSingleKey() {
                       startIcon={<Wifi size={18} />}
                       onClick={() => setTestConnectionDialogOpen(true)}
                     >
-                      Add Manual Connection
+                      {t('sshConnections.systemKey.actions.addManual')}
                     </Button>
                   </Tooltip>
                   <Tooltip title="Copy public key to clipboard">
@@ -711,7 +711,7 @@ export default function SSHConnectionsSingleKey() {
                       startIcon={<Copy size={18} />}
                       onClick={handleCopyPublicKey}
                     >
-                      Copy Key
+                      {t('sshConnections.systemKey.actions.copy')}
                     </Button>
                   </Tooltip>
                   <Tooltip title="Delete system SSH key (connections will be preserved)">
@@ -721,7 +721,7 @@ export default function SSHConnectionsSingleKey() {
                       startIcon={<Trash2 size={18} />}
                       onClick={() => setDeleteKeyDialogOpen(true)}
                     >
-                      Delete Key
+                      {t('sshConnections.systemKey.actions.delete')}
                     </Button>
                   </Tooltip>
                 </Stack>
@@ -795,7 +795,7 @@ export default function SSHConnectionsSingleKey() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Generate System SSH Key</DialogTitle>
+        <DialogTitle>{t('sshConnections.generateDialog.title')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Alert severity="info">
@@ -804,11 +804,11 @@ export default function SSHConnectionsSingleKey() {
             </Alert>
 
             <FormControl fullWidth>
-              <InputLabel>Key Type</InputLabel>
-              <Select value={keyType} label="Key Type" onChange={(e) => setKeyType(e.target.value)}>
-                <MenuItem value="ed25519">ED25519 (Recommended)</MenuItem>
-                <MenuItem value="rsa">RSA</MenuItem>
-                <MenuItem value="ecdsa">ECDSA</MenuItem>
+              <InputLabel>{t('sshConnections.generateDialog.keyType')}</InputLabel>
+              <Select value={keyType} label={t('sshConnections.generateDialog.keyType')} onChange={(e) => setKeyType(e.target.value)}>
+                <MenuItem value="ed25519">{t('sshConnections.generateDialog.ed25519')}</MenuItem>
+                <MenuItem value="rsa">{t('sshConnections.generateDialog.rsa')}</MenuItem>
+                <MenuItem value="ecdsa">{t('sshConnections.generateDialog.ecdsa')}</MenuItem>
               </Select>
             </FormControl>
           </Stack>
@@ -820,7 +820,7 @@ export default function SSHConnectionsSingleKey() {
             onClick={handleGenerateKey}
             disabled={generateKeyMutation.isPending}
           >
-            {generateKeyMutation.isPending ? 'Generating...' : 'Generate Key'}
+            {generateKeyMutation.isPending ? t('sshConnections.generateDialog.generating') : t('sshConnections.generateDialog.generate')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -832,7 +832,7 @@ export default function SSHConnectionsSingleKey() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Import Existing SSH Key</DialogTitle>
+        <DialogTitle>{t('sshConnections.importDialog.title')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Alert severity="info">
@@ -841,7 +841,7 @@ export default function SSHConnectionsSingleKey() {
             </Alert>
 
             <TextField
-              label="Key Name"
+              label={t('sshConnections.importDialog.keyName')}
               fullWidth
               value={importForm.name}
               onChange={(e) => setImportForm({ ...importForm, name: e.target.value })}
@@ -850,7 +850,7 @@ export default function SSHConnectionsSingleKey() {
             />
 
             <TextField
-              label="Private Key Path"
+              label={t('sshConnections.importDialog.privateKeyPath')}
               fullWidth
               required
               value={importForm.private_key_path}
@@ -861,7 +861,7 @@ export default function SSHConnectionsSingleKey() {
             />
 
             <TextField
-              label="Public Key Path (Optional)"
+              label={t('sshConnections.importDialog.publicKeyPath')}
               fullWidth
               value={importForm.public_key_path}
               onChange={(e) => setImportForm({ ...importForm, public_key_path: e.target.value })}
@@ -871,7 +871,7 @@ export default function SSHConnectionsSingleKey() {
             />
 
             <TextField
-              label="Description"
+              label={t('sshConnections.importDialog.description')}
               fullWidth
               value={importForm.description}
               onChange={(e) => setImportForm({ ...importForm, description: e.target.value })}
@@ -889,7 +889,7 @@ export default function SSHConnectionsSingleKey() {
             onClick={handleImportKey}
             disabled={importKeyMutation.isPending || !importForm.private_key_path}
           >
-            {importKeyMutation.isPending ? 'Importing...' : 'Import Key'}
+            {importKeyMutation.isPending ? t('sshConnections.importDialog.importing') : t('sshConnections.importDialog.import')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -901,11 +901,11 @@ export default function SSHConnectionsSingleKey() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Deploy SSH Key to Server</DialogTitle>
+        <DialogTitle>{t('sshConnections.deployDialog.title')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
-              label="Host"
+              label={t('sshConnections.deployDialog.host')}
               fullWidth
               value={connectionForm.host}
               onChange={(e) => setConnectionForm({ ...connectionForm, host: e.target.value })}
@@ -913,7 +913,7 @@ export default function SSHConnectionsSingleKey() {
               InputLabelProps={{ shrink: true }}
             />
             <TextField
-              label="Username"
+              label={t('sshConnections.deployDialog.username')}
               fullWidth
               value={connectionForm.username}
               onChange={(e) => setConnectionForm({ ...connectionForm, username: e.target.value })}
@@ -921,7 +921,7 @@ export default function SSHConnectionsSingleKey() {
               InputLabelProps={{ shrink: true }}
             />
             <TextField
-              label="Port"
+              label={t('sshConnections.deployDialog.port')}
               type="number"
               fullWidth
               value={connectionForm.port}
@@ -934,7 +934,7 @@ export default function SSHConnectionsSingleKey() {
               InputLabelProps={{ shrink: true }}
             />
             <TextField
-              label="Password"
+              label={t('sshConnections.deployDialog.password')}
               type="password"
               fullWidth
               value={connectionForm.password}
@@ -962,7 +962,7 @@ export default function SSHConnectionsSingleKey() {
               }
               label={
                 <Box>
-                  <Typography variant="body2">Use SFTP mode for key deployment</Typography>
+                  <Typography variant="body2">{t('sshConnections.deployDialog.sftpMode')}</Typography>
                   <Typography variant="caption" color="text.secondary">
                     Required by Hetzner Storage Box. Disable for Synology NAS or older SSH servers.
                   </Typography>
@@ -970,7 +970,7 @@ export default function SSHConnectionsSingleKey() {
               }
             />
             <TextField
-              label="Default Path (Optional)"
+              label={t('sshConnections.deployDialog.defaultPath')}
               fullWidth
               value={connectionForm.default_path}
               onChange={(e) =>
@@ -994,7 +994,7 @@ export default function SSHConnectionsSingleKey() {
             />
             */}
             <TextField
-              label="Mount Point (Optional)"
+              label={t('sshConnections.deployDialog.mountPoint')}
               fullWidth
               value={connectionForm.mount_point}
               onChange={(e) =>
@@ -1022,7 +1022,7 @@ export default function SSHConnectionsSingleKey() {
               !connectionForm.password
             }
           >
-            {deployKeyMutation.isPending ? 'Deploying...' : 'Deploy Key'}
+            {deployKeyMutation.isPending ? t('sshConnections.deployDialog.deploying') : t('sshConnections.deployDialog.deploy')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1034,29 +1034,26 @@ export default function SSHConnectionsSingleKey() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Add Manual Connection</DialogTitle>
+        <DialogTitle>{t('sshConnections.manualConnectionDialog.title')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Alert severity="info" sx={{ fontSize: '0.85rem' }}>
               <Typography variant="body2" fontWeight={600} gutterBottom>
-                Before adding this connection:
+                {t('sshConnections.manualConnectionDialog.instructions.title')}
               </Typography>
               <Typography variant="caption" component="div" sx={{ mb: 0.5 }}>
-                1. Copy the public key from above
+                1. {t('sshConnections.manualConnectionDialog.instructions.step1')}
               </Typography>
               <Typography variant="caption" component="div" sx={{ mb: 0.5 }}>
-                2. SSH into your server
+                2. {t('sshConnections.manualConnectionDialog.instructions.step2')}
               </Typography>
               <Typography variant="caption" component="div">
-                3. Add it to{' '}
-                <code style={{ background: '#e3f2fd', padding: '2px 4px', borderRadius: '2px' }}>
-                  ~/.ssh/authorized_keys
-                </code>
+                3. {t('sshConnections.manualConnectionDialog.instructions.step3')}
               </Typography>
             </Alert>
 
             <TextField
-              label="Host"
+              label={t('sshConnections.deployDialog.host')}
               fullWidth
               value={testConnectionForm.host}
               onChange={(e) =>
@@ -1066,7 +1063,7 @@ export default function SSHConnectionsSingleKey() {
               InputLabelProps={{ shrink: true }}
             />
             <TextField
-              label="Username"
+              label={t('sshConnections.deployDialog.username')}
               fullWidth
               value={testConnectionForm.username}
               onChange={(e) =>
@@ -1079,7 +1076,7 @@ export default function SSHConnectionsSingleKey() {
               InputLabelProps={{ shrink: true }}
             />
             <TextField
-              label="Port"
+              label={t('sshConnections.deployDialog.port')}
               type="number"
               fullWidth
               value={testConnectionForm.port}
@@ -1108,7 +1105,7 @@ export default function SSHConnectionsSingleKey() {
               !testConnectionForm.username
             }
           >
-            {testConnectionMutation.isPending ? 'Testing...' : 'Test & Add Connection'}
+            {testConnectionMutation.isPending ? 'Testing...' : t('sshConnections.manualConnectionDialog.submit')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1123,11 +1120,11 @@ export default function SSHConnectionsSingleKey() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Edit SSH Connection</DialogTitle>
+        <DialogTitle>{t('sshConnections.editConnectionDialog.title')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
-              label="Host"
+              label={t('sshConnections.deployDialog.host')}
               fullWidth
               value={editConnectionForm.host}
               onChange={(e) =>
@@ -1140,7 +1137,7 @@ export default function SSHConnectionsSingleKey() {
               InputLabelProps={{ shrink: true }}
             />
             <TextField
-              label="Username"
+              label={t('sshConnections.deployDialog.username')}
               fullWidth
               value={editConnectionForm.username}
               onChange={(e) =>
@@ -1153,7 +1150,7 @@ export default function SSHConnectionsSingleKey() {
               InputLabelProps={{ shrink: true }}
             />
             <TextField
-              label="Port"
+              label={t('sshConnections.deployDialog.port')}
               type="number"
               fullWidth
               value={editConnectionForm.port}
@@ -1179,7 +1176,7 @@ export default function SSHConnectionsSingleKey() {
               }
               label={
                 <Box>
-                  <Typography variant="body2">Use SFTP mode for key deployment</Typography>
+                  <Typography variant="body2">{t('sshConnections.deployDialog.sftpMode')}</Typography>
                   <Typography variant="caption" color="text.secondary">
                     Required by Hetzner Storage Box. Disable for Synology NAS or older SSH servers.
                   </Typography>
@@ -1187,7 +1184,7 @@ export default function SSHConnectionsSingleKey() {
               }
             />
             <TextField
-              label="Default Path (Optional)"
+              label={t('sshConnections.deployDialog.defaultPath')}
               fullWidth
               value={editConnectionForm.default_path}
               onChange={(e) =>
@@ -1217,7 +1214,7 @@ export default function SSHConnectionsSingleKey() {
             />
             */}
             <TextField
-              label="Mount Point (Optional)"
+              label={t('sshConnections.deployDialog.mountPoint')}
               fullWidth
               value={editConnectionForm.mount_point}
               onChange={(e) =>
@@ -1253,7 +1250,7 @@ export default function SSHConnectionsSingleKey() {
               !editConnectionForm.username
             }
           >
-            {updateConnectionMutation.isPending ? 'Updating...' : 'Update Connection'}
+            {updateConnectionMutation.isPending ? 'Updating...' : t('sshConnections.editConnectionDialog.submit')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1268,7 +1265,7 @@ export default function SSHConnectionsSingleKey() {
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>Delete SSH Connection</DialogTitle>
+        <DialogTitle>{t('sshConnections.deleteConnectionDialog.title')}</DialogTitle>
         <DialogContent>
           <Alert severity="warning" sx={{ mb: 2 }}>
             Are you sure you want to delete this connection?
@@ -1302,7 +1299,7 @@ export default function SSHConnectionsSingleKey() {
             onClick={confirmDeleteConnection}
             disabled={deleteConnectionMutation.isPending}
           >
-            {deleteConnectionMutation.isPending ? 'Deleting...' : 'Delete'}
+            {deleteConnectionMutation.isPending ? t('sshConnections.deleteConnectionDialog.deleting') : t('sshConnections.deleteConnectionDialog.delete')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1377,12 +1374,12 @@ export default function SSHConnectionsSingleKey() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Delete System SSH Key</DialogTitle>
+        <DialogTitle>{t('sshConnections.deleteKeyDialog.title')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Alert severity="warning" sx={{ mb: 1 }}>
               <Typography variant="body2" fontWeight={600} gutterBottom>
-                Are you sure you want to delete this SSH key?
+                {t('sshConnections.deleteKeyDialog.confirm')}
               </Typography>
             </Alert>
 
@@ -1423,7 +1420,7 @@ export default function SSHConnectionsSingleKey() {
             </Typography>
             <Box component="ul" sx={{ m: 0, pl: 3 }}>
               <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
-                Remove the SSH key from database and filesystem
+                {t('sshConnections.deleteKeyDialog.warning1')}
               </Typography>
               <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
                 Mark {connections.length} connection(s) as failed
@@ -1435,8 +1432,7 @@ export default function SSHConnectionsSingleKey() {
 
             <Alert severity="info" sx={{ mt: 2 }}>
               <Typography variant="body2">
-                Connection records will be preserved. Generate or import a new key, then deploy it
-                to restore access.
+                {t('sshConnections.deleteKeyDialog.warning2')}
               </Typography>
             </Alert>
           </Stack>

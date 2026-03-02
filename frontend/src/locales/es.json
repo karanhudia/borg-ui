@@ -27,16 +27,7 @@
       "deploy": "Desplegar",
       "view": "Ver"
     },
-    "status": {
-      "loading": "Cargando...",
-      "saving": "Guardando...",
-      "deleting": "Eliminando...",
-      "creating": "Creando...",
-      "updating": "Actualizando...",
-      "running": "Ejecutando...",
-      "starting": "Iniciando...",
-      "submitting": "Enviando..."
-    },
+    "status": "Estado",
     "never": "Nunca",
     "na": "N/D",
     "unknown": "Desconocido",
@@ -56,7 +47,6 @@
     "name": "Nombre",
     "description": "Descripción",
     "type": "Tipo",
-    "status": "Estado",
     "repository": "Repositorio",
     "schedule": "Programación",
     "created": "Creado",
@@ -316,6 +306,22 @@
       "duplicate": "Duplicar",
       "delete": "Eliminar",
       "never": "Nunca"
+    },
+    "toasts": {
+      "jobCreated": "Trabajo programado creado correctamente",
+      "jobCreateFailed": "Error al crear el trabajo programado",
+      "jobUpdated": "Trabajo programado actualizado correctamente",
+      "jobUpdateFailed": "Error al actualizar el trabajo programado",
+      "jobDeleted": "Trabajo programado eliminado correctamente",
+      "jobDeleteFailed": "Error al eliminar el trabajo programado",
+      "jobStatusUpdated": "Estado del trabajo actualizado",
+      "jobToggleFailed": "Error al cambiar el estado del trabajo",
+      "jobStarted": "Trabajo iniciado correctamente",
+      "jobRunFailed": "Error al ejecutar el trabajo",
+      "jobDuplicated": "Trabajo programado duplicado correctamente",
+      "jobDuplicateFailed": "Error al duplicar el trabajo",
+      "backupCancelled": "Copia de seguridad cancelada correctamente",
+      "backupCancelFailed": "Error al cancelar la copia de seguridad"
     }
   },
   "repositories": {
@@ -420,7 +426,8 @@
       "title": "Apariencia",
       "subtitle": "Personaliza el aspecto y la sensación de la aplicación",
       "theme": "Tema",
-      "chooseTheme": "Elige un tema"
+      "chooseTheme": "Elige un tema",
+      "themeAriaLabel": "Modo de tema"
     },
     "users": {
       "title": "Gestión de usuarios",
@@ -471,7 +478,24 @@
         "warning": "Esta acción no se puede deshacer.",
         "deleting": "Eliminando...",
         "confirm": "Eliminar"
+      },
+      "emptyState": {
+        "title": "No se encontraron usuarios",
+        "description": "Crea tu primer usuario para empezar"
       }
+    },
+    "toasts": {
+      "passwordChanged": "Contraseña cambiada correctamente",
+      "failedToChangePassword": "Error al cambiar la contraseña",
+      "userCreated": "Usuario creado correctamente",
+      "failedToCreateUser": "Error al crear el usuario",
+      "userUpdated": "Usuario actualizado correctamente",
+      "failedToUpdateUser": "Error al actualizar el usuario",
+      "userDeleted": "Usuario eliminado correctamente",
+      "failedToDeleteUser": "Error al eliminar el usuario",
+      "passwordReset": "Contraseña restablecida correctamente",
+      "failedToResetPassword": "Error al restablecer la contraseña",
+      "passwordsDoNotMatch": "Las nuevas contraseñas no coinciden"
     }
   },
   "sshConnections": {
@@ -604,7 +628,9 @@
       "contentHint": "Usa ${NOMBRE_PARAM} o ${NOMBRE_PARAM:-default} para parámetros",
       "parameters": "Parámetros del script",
       "parametersHint": "Marca la casilla para los parámetros que contienen datos sensibles.",
-      "treatAsSecret": "Tratar como secreto"
+      "treatAsSecret": "Tratar como secreto",
+      "nameHelperText": "Un nombre único para este script",
+      "descriptionHelperText": "Descripción opcional de lo que hace este script"
     },
     "usedInPlaces": "Este script se usa en {{count}} lugar(es). Los cambios afectarán a todas las asignaciones.",
     "buttons": {
@@ -626,7 +652,17 @@
       "stderr": "Error estándar:",
       "testAgain": "Probar de nuevo",
       "close": "Cerrar"
-    }
+    },
+    "errors": {
+      "failedToLoad": "Error al cargar los scripts",
+      "failedToLoadDetails": "Error al cargar los detalles del script"
+    },
+    "toasts": {
+      "scriptUpdated": "Script actualizado correctamente",
+      "scriptCreated": "Script creado correctamente",
+      "scriptDeleted": "Script eliminado correctamente"
+    },
+    "confirmDelete": "¿Estás seguro de que deseas eliminar \"{{name}}\"?"
   },
   "repositoryCard": {
     "archives": "Archivos",
@@ -638,8 +674,19 @@
       "info": "Info",
       "check": "Comprobar",
       "prune": "Podar",
-      "compact": "Compactar"
-    }
+      "compact": "Compactar",
+      "backupNow": "Copia ahora",
+      "viewArchives": "Ver archivos",
+      "delete": "Eliminar"
+    },
+    "edit": "Editar",
+    "lastCheck": "Última verificación",
+    "lastCompact": "Última compactación",
+    "encryption": "Cifrado",
+    "compression": "Compresión",
+    "sourcePaths": "Rutas de origen",
+    "path": "ruta",
+    "paths": "rutas"
   },
   "dialogs": {
     "deleteJob": {
@@ -649,7 +696,10 @@
       "warnings": {
         "undone": "Esta acción no se puede deshacer",
         "removeRecord": "Esto eliminará el registro del trabajo del sistema",
-        "noAffect": "Esto NO afectará a ningún dato de copia de seguridad real"
+        "noAffect": "Esto NO afectará a ningún dato de copia de seguridad real",
+        "historyRemoved": "El historial del trabajo se eliminará permanentemente",
+        "logsDeleted": "Los archivos de registro asociados serán eliminados",
+        "cannotRecover": "Esta información no se puede recuperar"
       },
       "confirm": "Eliminar permanentemente"
     },
@@ -675,10 +725,19 @@
       "cancelling": "Cancelando..."
     },
     "checkWarning": {
-      "title": "Comprobación de repositorio",
+      "title": "Verificar integridad del repositorio",
       "message": "Ejecutar una comprobación completa del repositorio puede llevar mucho tiempo para repositorios grandes.",
       "confirm": "Ejecutar comprobación",
-      "cancel": "Cancelar"
+      "cancel": "Cancelar",
+      "description": "Verificar la integridad del repositorio: {{repositoryName}}",
+      "important": "Importante:",
+      "repoWillBeLocked": "El repositorio quedará bloqueado",
+      "otherOperationsUnavailable": "Otras operaciones (info, archivos, copia de seguridad) no estarán disponibles hasta que la verificación se complete",
+      "progressTracking": "Seguimiento del progreso",
+      "progressTrackingDetail": "Puedes monitorizar el progreso en tiempo real. Nota: Las operaciones de verificación no se pueden cancelar una vez iniciadas.",
+      "otherReposAccessible": "Otros repositorios seguirán siendo accesibles durante esta operación.",
+      "maxDurationLabel": "Duración máxima (segundos)",
+      "maxDurationHelper": "Tiempo máximo para la operación de verificación. Predeterminado: 3600 segundos (1 hora). Establece 0 para ilimitado."
     },
     "compactWarning": {
       "title": "Compactar repositorio",
@@ -690,11 +749,27 @@
       "title": "Repositorio bloqueado",
       "message": "El repositorio está actualmente bloqueado. Esto puede deberse a una operación interrumpida.",
       "breakLock": "Forzar desbloqueo",
-      "cancel": "Cancelar"
+      "cancel": "Cancelar",
+      "breakLockWarning": "¿Estás SEGURO de que no hay ninguna copia de seguridad u operación en curso en este repositorio? ¡Forzar el desbloqueo mientras una operación está en curso puede corromper tu repositorio!",
+      "lockRemovedSuccess": "¡Bloqueo eliminado correctamente! Ahora puedes reintentar tu operación.",
+      "lockedDescription": "{{repositoryName}} está bloqueado por otro proceso o tiene un bloqueo obsoleto.",
+      "staleLockInfo": "Si no hay ninguna copia de seguridad en curso, probablemente sea un bloqueo obsoleto de una copia interrumpida.",
+      "whatCausesThis": "¿Qué causa esto?",
+      "causeInterrupted": "La copia de seguridad anterior fue interrumpida o se bloqueó",
+      "causeNetworkDrop": "La conexión de red se cayó durante la copia SSH",
+      "causeContainerRestart": "El contenedor se reinició durante una operación",
+      "causeCacheLocks": "Bloqueos de caché del repositorio por operaciones obsoletas",
+      "beforeBreaking": "Antes de forzar el desbloqueo:",
+      "beforeBreakingCheck1": "Asegúrate de que no haya ningún proceso de copia de seguridad en curso",
+      "beforeBreakingCheck2": "Verifica que ningún otro cliente esté accediendo a este repositorio",
+      "beforeBreakingCheck3": "Esto romperá tanto los bloqueos del repositorio como los de caché",
+      "adminRequired": "Se requieren privilegios de administrador:",
+      "adminRequiredDetail": "Solo los administradores pueden forzar el desbloqueo del repositorio. Por favor, contacta a tu administrador."
     },
     "errorDetails": {
       "title": "Detalles del error",
-      "close": "Cerrar"
+      "close": "Cerrar",
+      "viewFullLogs": "Ver registros completos"
     },
     "pruneRepository": {
       "title": "Podar repositorio",
@@ -729,6 +804,56 @@
     "logViewer": {
       "title": "Visor de registros",
       "close": "Cerrar"
+    },
+    "compact": {
+      "description": "Compactar repositorio: {{repositoryName}}",
+      "explanation": "La compactación elimina segmentos no utilizados y recupera espacio en disco de archivos eliminados.",
+      "important": "Importante:",
+      "repoWillBeLocked": "El repositorio quedará bloqueado",
+      "otherOperationsUnavailable": "Otras operaciones (info, archivos, copia de seguridad) no estarán disponibles hasta que la compactación se complete",
+      "progressTracking": "Seguimiento del progreso",
+      "progressTrackingDetail": "Puedes monitorizar el progreso en tiempo real",
+      "tip": "Consejo: Ejecuta la compactación después de podar archivos antiguos para liberar espacio. Otros repositorios seguirán siendo accesibles."
+    },
+    "mount": {
+      "readOnlyInfo": "El archivo se montará como un sistema de archivos de solo lectura dentro del contenedor. Recibirás un comando para acceder a él a través del terminal.",
+      "mountPointPlaceholder": "mi-copia-2024",
+      "mountPointHint": "Se montará en: {{path}}"
+    },
+    "prune": {
+      "whatDoesPruningDo": "¿Qué hace la poda?",
+      "explanation": "La poda elimina automáticamente archivos antiguos según reglas de retención. Esto ayuda a gestionar el tamaño del repositorio manteniendo solo las copias que necesitas.",
+      "dryRunTip": "Consejo: ¡Ejecuta siempre el \"Simulacro\" primero para ver qué se eliminará!",
+      "retentionPolicy": "Política de retención",
+      "retentionDescription": "Especifica cuántas copias conservar para cada período de tiempo",
+      "keepHourly": "Mantener por hora",
+      "keepHourlyHelper": "Últimas N copias horarias (0 = deshabilitado)",
+      "keepDaily": "Mantener por día",
+      "keepDailyHelper": "Últimas N copias diarias",
+      "keepWeekly": "Mantener por semana",
+      "keepWeeklyHelper": "Últimas N copias semanales",
+      "keepMonthly": "Mantener por mes",
+      "keepMonthlyHelper": "Últimas N copias mensuales",
+      "keepQuarterly": "Mantener por trimestre",
+      "keepQuarterlyHelper": "Últimas N copias trimestrales (0 = deshabilitado)",
+      "keepYearly": "Mantener por año",
+      "keepYearlyHelper": "Últimas N copias anuales",
+      "repositoryLabel": "Repositorio:",
+      "exampleExplanation": "Ejemplo: Con esta configuración, mantendrás las últimas 7 diarias, 4 semanales, 6 mensuales y 1 anual. Los archivos más antiguos serán eliminados.",
+      "dryRunResultsTitle": "Resultados del simulacro (Vista previa)",
+      "pruneResultsTitle": "Resultados de la poda",
+      "operationFailed": "Operación fallida",
+      "outputLabel": "Salida:",
+      "noOutput": "Sin salida",
+      "messagesLabel": "Mensajes:",
+      "dryRunSuccess": "Simulacro completado correctamente. Revisa la salida para ver qué archivos se eliminarían. Si todo parece correcto, haz clic en \"Podar archivos\" para ejecutar.",
+      "warningTitle": "Advertencia: ¡Los archivos eliminados no se pueden recuperar!",
+      "warningCompact": "Después de podar, ejecuta \"Compactar\" para liberar espacio en disco.",
+      "dryRunButton": "Simulacro (Vista previa)"
+    },
+    "fileExplorer": {
+      "selectDirectory": "Seleccionar directorio",
+      "root": "Raíz"
     }
   },
   "backupJobsTable": {
@@ -739,16 +864,46 @@
       "schedule": "Programación",
       "lastRun": "Última ejecución",
       "nextRun": "Próxima ejecución",
-      "enabled": "Habilitado"
+      "enabled": "Habilitado",
+      "jobId": "ID de trabajo",
+      "type": "Tipo",
+      "trigger": "Disparador",
+      "started": "Iniciado",
+      "duration": "Duración"
     },
     "actions": {
       "runNow": "Ejecutar ahora",
       "edit": "Editar",
       "duplicate": "Duplicar",
-      "delete": "Eliminar"
+      "delete": "Eliminar",
+      "viewLogs": "Ver registros",
+      "downloadLogs": "Descargar registros",
+      "errorDetails": "Detalles del error",
+      "cancel": "Cancelar",
+      "cancelJob": "Cancelar trabajo",
+      "breakLock": "Forzar desbloqueo"
     },
     "never": "Nunca",
-    "empty": "No se encontraron trabajos de copia de seguridad"
+    "empty": "No se encontraron trabajos de copia de seguridad",
+    "types": {
+      "backup": "Copia de seguridad",
+      "restore": "Restauración",
+      "check": "Verificación del repositorio",
+      "compact": "Compactar",
+      "prune": "Podar",
+      "package": "Instalación de paquete"
+    },
+    "scheduledById": "Programado (ID: {{id}})",
+    "manual": "Manual",
+    "toasts": {
+      "authRequired": "Autenticación requerida",
+      "downloadingLogs": "Descargando registros...",
+      "failedToCancel": "Error al cancelar el trabajo",
+      "cancelSuccess": "Trabajo cancelado correctamente",
+      "failedToDelete": "Error al eliminar el trabajo",
+      "deleteSuccess": "Trabajo eliminado correctamente",
+      "repositoryNotFound": "Repositorio no encontrado"
+    }
   },
   "scheduledJobsTable": {
     "columns": {
@@ -777,7 +932,23 @@
   },
   "archivesList": {
     "empty": "No se encontraron archivos",
-    "loading": "Cargando archivos..."
+    "loading": "Cargando archivos...",
+    "archivesFor": "Archivos de {{repositoryName}}",
+    "archive": "archivo",
+    "archives": "archivos",
+    "sortBy": "Ordenar por",
+    "newestFirst": "Más reciente primero",
+    "oldestFirst": "Más antiguo primero",
+    "filter": "Filtrar",
+    "allArchives": "Todos los archivos",
+    "scheduled": "Programado",
+    "manual": "Manual",
+    "grouped": "Agrupado",
+    "list": "Lista",
+    "noScheduledArchives": "No se encontraron archivos programados",
+    "noManualArchives": "No se encontraron archivos manuales",
+    "tryDifferentFilter": "Intenta seleccionar un filtro diferente",
+    "archivesPerPage": "Archivos por página:"
   },
   "repositoryInfo": {
     "title": "Información del repositorio",
@@ -785,7 +956,8 @@
     "location": "Ubicación",
     "totalSize": "Tamaño total",
     "archives": "Archivos",
-    "lastModified": "Última modificación"
+    "lastModified": "Última modificación",
+    "na": "N/D"
   },
   "systemSettings": {
     "title": "Configuración del sistema",
@@ -797,7 +969,49 @@
     "saving": "Guardando...",
     "savedSuccessfully": "Configuración del sistema guardada correctamente",
     "refreshNow": "Actualizar ahora",
-    "refreshing": "Actualizando..."
+    "refreshing": "Actualizando...",
+    "subtitle": "Configura ajustes del sistema, límites de recursos y tiempos de espera de operaciones",
+    "sourceCustomized": "[personalizado]",
+    "sourceFromEnv": "[desde entorno]",
+    "sourceDefault": "[predeterminado]",
+    "operationTimeoutsTitle": "Tiempos de espera de operaciones",
+    "operationTimeoutsDescription": "Configura los tiempos de espera para varias operaciones borg. Auméntalos para repositorios muy grandes (multi-terabyte, cientos de archivos) que pueden tardar más en procesarse.",
+    "mountTimeoutLabel": "Tiempo de espera de montaje (segundos)",
+    "mountTimeoutHelper": "Para montar archivos.",
+    "infoTimeoutLabel": "Tiempo de espera de Info (segundos)",
+    "infoTimeoutHelper": "Para comandos borg info.",
+    "listTimeoutLabel": "Tiempo de espera de List (segundos)",
+    "listTimeoutHelper": "Para listar archivos.",
+    "initTimeoutLabel": "Tiempo de espera de Init (segundos)",
+    "initTimeoutHelper": "Para inicializar el repositorio.",
+    "backupTimeoutLabel": "Tiempo de espera de Copia/Restauración (segundos)",
+    "backupTimeoutHelper": "Para copia de seguridad/restauración.",
+    "sourceSizeTimeoutLabel": "Tiempo de espera de tamaño de origen (segundos)",
+    "sourceSizeTimeoutHelper": "Para el cálculo del tamaño de origen (du).",
+    "repositoryMonitoringTitle": "Monitorización de repositorios",
+    "repositoryMonitoringDescription": "Configura la actualización automática de estadísticas de repositorio. Mantiene los datos del panel actualizados, especialmente útil para repositorios de solo observación donde las copias de seguridad son gestionadas externamente.",
+    "statsRefreshIntervalLabel": "Intervalo de actualización de estadísticas (minutos)",
+    "statsRefreshDisabled": "La actualización automática de estadísticas está deshabilitada",
+    "statsRefreshRangeError": "Debe estar entre 0 y {{max}} minutos",
+    "statsRefreshIntervalHelper": "Las estadísticas del repositorio (número de archivos, tamaño, última copia) se actualizarán cada {{interval}} minutos",
+    "lastRefreshed": "Última actualización:",
+    "manualRefreshAlert": "Establecer a 0 para deshabilitar la actualización automática. El planificador actualiza las estadísticas de todos los repositorios, incluidos los de solo observación donde las copias ocurren externamente.",
+    "archiveBrowsingLimitsTitle": "Límites de navegación de archivos",
+    "archiveBrowsingLimitsDescription": "Estos límites evitan errores de falta de memoria al navegar por archivos con millones de ficheros. El proceso borg se termina anticipadamente si se superan los límites.",
+    "maxFilesToLoadLabel": "Máximo de archivos a cargar",
+    "maxFilesRangeError": "Debe estar entre {{min}} y {{max}}",
+    "maxFilesHelperText": "Máximo de archivos al navegar. Actual: {{current}}M archivos",
+    "maxMemoryLabel": "Memoria máxima (MB)",
+    "maxMemoryRangeError": "Debe estar entre {{min}} MB y {{max}} MB",
+    "maxMemoryHelperText": "Memoria máxima para navegación. Actual: {{current}} GB",
+    "warningLabel": "Advertencia:",
+    "largeLimitsWarning": "Aumentar significativamente estos límites puede causar errores de falta de memoria y bloquear el servidor. Solo auméntalos si tienes suficiente RAM y necesitas navegar por archivos muy grandes.",
+    "failedToSaveSettings": "Error al guardar la configuración",
+    "failedToSaveBrowseLimits": "Error al guardar los límites de navegación",
+    "failedToSaveTimeoutSettings": "Error al guardar la configuración de tiempos de espera",
+    "statsRefreshStarted": "Actualización de estadísticas iniciada",
+    "statsRefreshCompleted": "Actualización de estadísticas completada",
+    "failedToStartStatsRefresh": "Error al iniciar la actualización de estadísticas"
   },
   "notifications": {
     "title": "Servicios de notificación",
@@ -844,6 +1058,76 @@
       "events": "Eventos",
       "repositories": "Repositorios",
       "lastUsed": "Último uso"
+    },
+    "alertDescription": "Recibe notificaciones sobre fallos de copia de seguridad, restauraciones completadas y problemas de trabajos programados a través de más de 100 servicios incluyendo correo electrónico, Slack, Discord, Telegram, Pushover y más.",
+    "hide": "Ocultar",
+    "show": "Mostrar",
+    "serviceUrlExamples": "Ejemplos de URL de servicio",
+    "appriseUrlExamplesTitle": "Ejemplos de URL de Apprise:",
+    "exampleEmailGmail": "Correo electrónico (Gmail):",
+    "exampleSlack": "Slack:",
+    "exampleDiscord": "Discord:",
+    "exampleTelegram": "Telegram:",
+    "exampleMicrosoftTeams": "Microsoft Teams:",
+    "examplePushover": "Pushover:",
+    "exampleNtfy": "ntfy:",
+    "exampleCustomWebhook": "Webhook personalizado:",
+    "fullAppriseDocumentation": "Documentación completa de Apprise",
+    "enabled": "Habilitado",
+    "disabled": "Deshabilitado",
+    "chip": {
+      "backupStart": "Inicio de copia",
+      "backupFail": "Fallo de copia",
+      "backupOk": "Copia correcta",
+      "restoreFail": "Fallo de restauración",
+      "restoreOk": "Restauración correcta",
+      "checkFail": "Fallo de verificación",
+      "checkOk": "Verificación correcta",
+      "schedulerError": "Error del planificador",
+      "allRepositories": "Todos los repositorios",
+      "repositoryCount": "{{count}} {{count, plural, one{Repositorio} other{Repositorios}}}",
+      "noneSelected": "Ninguno seleccionado"
+    },
+    "tooltip": {
+      "sendTest": "Enviar notificación de prueba",
+      "duplicate": "Duplicar notificación",
+      "edit": "Editar notificación",
+      "delete": "Eliminar notificación"
+    },
+    "failedToSendTest": "Error al enviar la notificación de prueba",
+    "form": {
+      "serviceName": "Nombre del servicio",
+      "serviceNamePlaceholder": "ej., Slack - Canal DevOps",
+      "serviceUrl": "URL del servicio",
+      "serviceUrlPlaceholder": "ej., slack://TokenA/TokenB/TokenC/",
+      "serviceUrlHelper": "Usa el formato de URL de Apprise. Ver ejemplos arriba.",
+      "tipLabel": "Consejo:",
+      "tipText": "Para automatización y monitorización, usa URLs jsons:// o json:// para recibir automáticamente datos JSON puros.",
+      "titlePrefix": "Prefijo de título (Opcional)",
+      "titlePrefixPlaceholder": "ej., [Producción] o [Dev]",
+      "titlePrefixHelper": "Agrega un prefijo personalizado a todos los títulos de notificación (ej., '[Producción] Copia de seguridad exitosa')",
+      "enableNotifications": "Habilitar notificaciones",
+      "notificationEnhancements": "Mejoras de notificación",
+      "includeJobName": "Incluir nombre del trabajo/programación en el título",
+      "includeJobNameHelper": "Agrega el nombre del trabajo o programación a los títulos de notificación para facilitar la identificación (ej., \"Copia exitosa - Copia diaria\")",
+      "notifyOn": "Notificar en:",
+      "started": "Iniciado",
+      "success": "Éxito",
+      "failure": "Fallo",
+      "schedulerErrors": "Errores del planificador",
+      "schedulerErrorsHelper": "Notifica cuando el planificador no puede iniciar una copia (ej., errores del sistema). Los fallos regulares de copia se gestionan arriba.",
+      "applyToRepositories": "Aplicar a repositorios",
+      "allRepositories": "Todos los repositorios",
+      "selectedRepositoriesOnly": "Solo repositorios seleccionados",
+      "selectRepositories": "Seleccionar repositorios",
+      "selectRepositoriesPlaceholder": "Elegir repositorios a monitorizar",
+      "selectRepositoriesHelper": "Enviar notificaciones solo para copias de seguridad de estos repositorios"
+    },
+    "category": {
+      "backupEvents": "Eventos de copia de seguridad",
+      "restoreEvents": "Eventos de restauración",
+      "checkJobs": "Trabajos de verificación",
+      "systemEvents": "Eventos del sistema"
     }
   },
   "preferences": {
@@ -868,7 +1152,20 @@
     "description": "Prueba funciones experimentales antes de que se lancen a todos. Estas funciones aún están en desarrollo y pueden cambiar.",
     "save": "Guardar",
     "saving": "Guardando...",
-    "settingUpdatedSuccessfully": "Configuración actualizada correctamente"
+    "settingUpdatedSuccessfully": "Configuración actualizada correctamente",
+    "bypassLocksInfoTitle": "Omitir bloqueos para comandos Info",
+    "enableBypassLocksInfo": "Habilitar omisión de bloqueo para todos los comandos borg info",
+    "bypassLocksInfoDescription": "Agrega --bypass-lock a todos los comandos borg info. Esto evita la contención de bloqueos cuando múltiples operaciones intentan acceder a repositorios SSH simultáneamente. Habilitar si ves errores de \"Repositorio bloqueado\".",
+    "bypassLocksListTitle": "Omitir bloqueos para comandos List",
+    "enableBypassLocksList": "Habilitar omisión de bloqueo para todos los comandos borg list",
+    "bypassLocksListDescription": "Agrega --bypass-lock a todos los comandos borg list. Esto evita la contención de bloqueos cuando múltiples operaciones de lectura (como info + list) se ejecutan simultáneamente. Habilitar si ves errores de \"Error al adquirir bloqueo\". Nota: Puede mostrar datos obsoletos si hay una copia de seguridad activa.",
+    "showLegacyRestoreTabTitle": "Mostrar pestaña de restauración heredada",
+    "showLegacyRestoreTabLabel": "Mostrar la pestaña Restaurar dedicada en la navegación",
+    "showLegacyRestoreTabDescription": "Habilitar esto para acceder a la pestaña de restauración heredada. La funcionalidad de restauración ahora está integrada en la página de Archivos, pero esta opción te permite usar la interfaz antigua si lo prefieres.",
+    "mqttIntegrationTitle": "Integración MQTT",
+    "enableMqtt": "Habilitar MQTT",
+    "mqttIntegrationDescription": "Activa la integración MQTT en la interfaz.",
+    "failedToUpdateSetting": "Error al actualizar la configuración: {{message}}"
   },
   "exportImport": {
     "title": "Exportar / Importar",
@@ -887,7 +1184,37 @@
       "button": "Importar configuración",
       "importing": "Importando...",
       "selectFile": "Seleccionar archivo..."
-    }
+    },
+    "failedToExport": "Error al exportar la configuración",
+    "importFailed": "Error de importación",
+    "importCompletedWithErrors": "Importación completada con errores",
+    "importSuccess": "Configuración importada correctamente",
+    "failedToImport": "Error al importar la configuración",
+    "selectAtLeastOneRepo": "Por favor selecciona al menos un repositorio para exportar",
+    "selectFileToImport": "Por favor selecciona un archivo para importar",
+    "selectYamlFileError": "Por favor selecciona un archivo YAML (.yaml o .yml)",
+    "exportAllRepositories": "Exportar todos los repositorios",
+    "selectRepositories": "Seleccionar repositorios",
+    "selectAll": "Seleccionar todo",
+    "clear": "Limpiar",
+    "loadingRepositories": "Cargando repositorios...",
+    "noRepositoriesAvailable": "No hay repositorios disponibles",
+    "includeSchedules": "Incluir programaciones de copia de seguridad y políticas de retención",
+    "selectYamlFile": "Seleccionar archivo YAML",
+    "selectedFile": "Seleccionado: {{name}}",
+    "conflictResolutionStrategy": "Estrategia de resolución de conflictos",
+    "strategySkipDuplicates": "Omitir duplicados - Mantener configuraciones existentes",
+    "strategyReplace": "Reemplazar - Sobrescribir configuraciones existentes",
+    "strategyRename": "Renombrar - Renombrar automáticamente configuraciones importadas",
+    "importantLabel": "Importante:",
+    "importSecurityWarning": "Las claves SSH y las frases de contraseña del repositorio no se pueden importar por razones de seguridad. Deberás configurarlas manualmente después de la importación.",
+    "importSummary": "Resumen de importación",
+    "repositoriesCreated": "Repositorios creados",
+    "repositoriesUpdated": "Repositorios actualizados",
+    "schedulesCreated": "Programaciones creadas",
+    "schedulesUpdated": "Programaciones actualizadas",
+    "warnings": "Advertencias",
+    "errors": "Errores"
   },
   "logManagement": {
     "title": "Gestión de registros",
@@ -896,7 +1223,9 @@
     "saving": "Guardando...",
     "savedSuccessfully": "Configuración de gestión de registros guardada correctamente",
     "clearLogs": "Ejecutar limpieza ahora",
-    "clearing": "Ejecutando limpieza..."
+    "clearing": "Ejecutando limpieza...",
+    "cleanupCompleted": "Limpieza de registros completada correctamente",
+    "failedToRunCleanup": "Error al ejecutar la limpieza de registros"
   },
   "cacheManagement": {
     "title": "Gestión de caché de archivos",
@@ -950,38 +1279,92 @@
     "expression": "Expresión Cron",
     "preview": "Vista previa",
     "apply": "Aplicar",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "everyMinutes_one": "Cada {{count}} minuto",
+    "everyMinutes_other": "Cada {{count}} minutos",
+    "everyHours_one": "Cada {{count}} hora",
+    "everyHours_other": "Cada {{count}} horas",
+    "dailyAt": "Diariamente a las {{time}}",
+    "noDaysSelected": "Ningún día seleccionado",
+    "daily": "Diario",
+    "weeklyAt": "Cada {{days}} a las {{time}}",
+    "monthlyOn": "Mensualmente el {{day}} a las {{time}}",
+    "customSchedule": "Programación personalizada: {{cron}}",
+    "am": "AM",
+    "pm": "PM",
+    "tabs": {
+      "minutes": "Minutos",
+      "hourly": "Por hora",
+      "daily": "Diario",
+      "weekly": "Semanal",
+      "monthly": "Mensual",
+      "custom": "Personalizado"
+    },
+    "applySchedule": "Aplicar programación",
+    "configureSchedule": "Configurar programación"
   },
   "sourceDirectories": {
-    "label": "Directorios de origen",
-    "add": "Agregar directorio",
-    "empty": "No se han agregado directorios de origen",
-    "placeholder": "Introduce la ruta del directorio",
-    "path_one": "{{count}} ruta",
-    "path_other": "{{count}} rutas"
+    "title": "Directorios y archivos de origen",
+    "subtitle": "Especifica qué directorios o archivos respaldar en este repositorio",
+    "atLeastOneRequired": "(se requiere al menos uno)",
+    "optionalSuffix": "(opcional)",
+    "warning": "Se requiere al menos un directorio o archivo de origen. Agrega los directorios o archivos que deseas respaldar.",
+    "placeholder": "/home/usuario/documentos o /var/log/app.log",
+    "browseTitle": "Explorar directorios y archivos",
+    "add": "Agregar"
   },
   "excludePatterns": {
-    "label": "Patrones de exclusión",
-    "add": "Agregar patrón",
-    "empty": "Sin patrones de exclusión",
-    "placeholder": "ej., *.log, /tmp/**"
+    "title": "Patrones de exclusión (Opcional)",
+    "hint": "Especifica patrones para excluir de la copia de seguridad (ej., *.log, *.tmp, __pycache__, node_modules)",
+    "placeholder": "*.log o /ruta/a/excluir",
+    "browseToExclude": "Explorar para excluir",
+    "add": "Agregar"
   },
   "pruneSettings": {
-    "title": "Configuración de poda",
     "keepHourly": "Mantener por hora",
+    "keepHourlyHint": "Copias de seguridad horarias a mantener (0 = deshabilitado)",
     "keepDaily": "Mantener por día",
+    "keepDailyHint": "Copias de seguridad diarias a mantener",
     "keepWeekly": "Mantener por semana",
+    "keepWeeklyHint": "Copias de seguridad semanales a mantener",
     "keepMonthly": "Mantener por mes",
-    "keepYearly": "Mantener por año"
+    "keepMonthlyHint": "Copias de seguridad mensuales a mantener",
+    "keepQuarterly": "Mantener por trimestre",
+    "keepQuarterlyHint": "Copias de seguridad trimestrales a mantener (0 = deshabilitado)",
+    "keepYearly": "Mantener por año",
+    "keepYearlyHint": "Copias de seguridad anuales a mantener"
   },
   "compressionSettings": {
-    "title": "Compresión",
-    "method": "Método de compresión",
-    "level": "Nivel de compresión"
+    "title": "Configuración de compresión",
+    "algorithmLabel": "Algoritmo de compresión",
+    "algorithmNone": "none - No comprimir",
+    "algorithmLz4": "lz4 - Velocidad muy alta, compresión muy baja (predeterminado)",
+    "algorithmZstd": "zstd - Algoritmo moderno de amplio rango (nivel predeterminado 3)",
+    "algorithmZlib": "zlib - Velocidad media, compresión media (nivel predeterminado 6)",
+    "algorithmLzma": "lzma - Velocidad baja, compresión alta (nivel predeterminado 6)",
+    "algorithmAuto": "auto - Selección automática de compresión",
+    "algorithmObfuscate": "obfuscate - Ofuscar datos comprimidos",
+    "levelLabel": "Nivel de compresión (Opcional)",
+    "levelPlaceholderZstd": "1-22 (predeterminado: 3)",
+    "levelPlaceholderZlib": "0-9 (predeterminado: 6)",
+    "levelPlaceholderLzma": "0-9 (predeterminado: 6, máx útil: 6)",
+    "levelPlaceholderDefault": "Dejar vacío para usar el predeterminado",
+    "levelHelperAuto": "El algoritmo auto usa lz4 como respaldo. El nivel no es aplicable.",
+    "levelHelperZstd": "zstd: Nivel 1-22. Mayor = mejor compresión pero más lento.",
+    "levelHelperZlib": "zlib: Nivel 0-9. Nivel 0 significa sin compresión (usa \"none\" en su lugar).",
+    "levelHelperLzma": "lzma: Nivel 0-9. Los niveles por encima de 6 son inútiles y desperdician CPU/RAM.",
+    "levelHelperDefault": "Dejar vacío para usar el nivel predeterminado.",
+    "autoDetect": "Detectar compresibilidad automáticamente (auto,C[,L])",
+    "autoDetectDesc": "Usa lz4 para probar si los datos son compresibles. Para datos incompresibles (ej., archivos multimedia), usa \"none\". Para datos compresibles, usa el algoritmo seleccionado.",
+    "obfuscateLabel": "Especificación de ofuscación (Opcional)",
+    "obfuscatePlaceholder": "ej., 110, 250",
+    "obfuscateHelper": "Ofusca los tamaños de fragmentos comprimidos para dificultar los ataques de identificación de huellas. Debe usarse con cifrado. El repositorio será más grande.",
+    "finalSpec": "Especificación de compresión final:"
   },
   "archiveNameTemplate": {
     "label": "Plantilla de nombre de archivo",
-    "hint": "Usa {now} para la fecha/hora actual"
+    "hint": "Personaliza la nomenclatura del archivo. Marcadores disponibles: {job_name}, {now}, {date}, {time}, {timestamp}",
+    "preview": "Vista previa:"
   },
   "remoteMachineCard": {
     "status": {
@@ -1100,7 +1483,15 @@
     },
     "validation": {
       "selectRepository": "Por favor selecciona un repositorio"
-    }
+    },
+    "confirmDisable": "¿Deshabilitar la verificación programada para {{repositoryName}}?",
+    "tooltips": {
+      "runNow": "Ejecutar verificación ahora",
+      "editSchedule": "Editar programación",
+      "disableSchedule": "Deshabilitar programación"
+    },
+    "checkScheduleHelperText": "¿Cuándo debe ejecutarse esta verificación del repositorio?",
+    "checkScheduleBuilderTitle": "Constructor de programación de verificación"
   },
   "repositorySelectorCard": {
     "title": "Seleccionar repositorio",
@@ -1413,7 +1804,11 @@
     "selected": "Seleccionado",
     "notSelected": "No seleccionado",
     "continueWithSelected": "Continuar con {{count}} seleccionados",
-    "continueRestoreAll": "Continuar (Restaurar todo)"
+    "continueRestoreAll": "Continuar (Restaurar todo)",
+    "selectionDescription": "Selecciona archivos o carpetas específicos para restaurar. Haz clic en las carpetas para navegar, haz clic en las casillas para seleccionar. Si no se hace ninguna selección, se restaurará el archivo completo.",
+    "sizeLimitPre": "Puedes aumentar el límite en",
+    "sizeLimitSettingsLink": "Configuración > Sistema",
+    "sizeLimitPost": ", o usa herramientas de línea de comandos como borg mount para archivos muy grandes."
   },
   "archiveContents": {
     "title": "Contenido del archivo",
@@ -1422,12 +1817,8 @@
     "emptyArchive": "Este archivo está vacío",
     "emptyArchiveDesc": "No se respaldaron archivos en este archivo. Esto puede ocurrir si el directorio de origen estaba vacío o inaccesible durante la copia de seguridad.",
     "noInfo": "No hay información de archivo disponible",
-    "root": "Raíz"
-  },
-  "archiveNameTemplate": {
-    "label": "Plantilla de nombre de archivo",
-    "hint": "Personaliza la nomenclatura del archivo. Marcadores disponibles: {job_name}, {now}, {date}, {time}, {timestamp}",
-    "preview": "Vista previa:"
+    "root": "Raíz",
+    "downloadFile": "Descargar archivo"
   },
   "codeEditor": {
     "loading": "Cargando editor..."
@@ -1453,33 +1844,6 @@
     "backupSourceDirs": "Respalda los directorios de origen en el repositorio",
     "futureBackups": "Este comando se usará para copias de seguridad futuras"
   },
-  "compressionSettings": {
-    "title": "Configuración de compresión",
-    "algorithmLabel": "Algoritmo de compresión",
-    "algorithmNone": "none - No comprimir",
-    "algorithmLz4": "lz4 - Velocidad muy alta, compresión muy baja (predeterminado)",
-    "algorithmZstd": "zstd - Algoritmo moderno de amplio rango (nivel predeterminado 3)",
-    "algorithmZlib": "zlib - Velocidad media, compresión media (nivel predeterminado 6)",
-    "algorithmLzma": "lzma - Velocidad baja, compresión alta (nivel predeterminado 6)",
-    "algorithmAuto": "auto - Selección automática de compresión",
-    "algorithmObfuscate": "obfuscate - Ofuscar datos comprimidos",
-    "levelLabel": "Nivel de compresión (Opcional)",
-    "levelPlaceholderZstd": "1-22 (predeterminado: 3)",
-    "levelPlaceholderZlib": "0-9 (predeterminado: 6)",
-    "levelPlaceholderLzma": "0-9 (predeterminado: 6, máx útil: 6)",
-    "levelPlaceholderDefault": "Dejar vacío para usar el predeterminado",
-    "levelHelperAuto": "El algoritmo auto usa lz4 como respaldo. El nivel no es aplicable.",
-    "levelHelperZstd": "zstd: Nivel 1-22. Mayor = mejor compresión pero más lento.",
-    "levelHelperZlib": "zlib: Nivel 0-9. Nivel 0 significa sin compresión (usa \"none\" en su lugar).",
-    "levelHelperLzma": "lzma: Nivel 0-9. Los niveles por encima de 6 son inútiles y desperdician CPU/RAM.",
-    "levelHelperDefault": "Dejar vacío para usar el nivel predeterminado.",
-    "autoDetect": "Detectar compresibilidad automáticamente (auto,C[,L])",
-    "autoDetectDesc": "Usa lz4 para probar si los datos son compresibles. Para datos incompresibles (ej., archivos multimedia), usa \"none\". Para datos compresibles, usa el algoritmo seleccionado.",
-    "obfuscateLabel": "Especificación de ofuscación (Opcional)",
-    "obfuscatePlaceholder": "ej., 110, 250",
-    "obfuscateHelper": "Ofusca los tamaños de fragmentos comprimidos para dificultar los ataques de identificación de huellas. Debe usarse con cifrado. El repositorio será más grande.",
-    "finalSpec": "Especificación de compresión final:"
-  },
   "cronBuilderComponent": {
     "runEvery": "Ejecutar cada",
     "minutesSuffix": "minutos.",
@@ -1498,13 +1862,6 @@
   "dataTable": {
     "actions": "Acciones",
     "rowsPerPage": "Filas por página:"
-  },
-  "excludePatterns": {
-    "title": "Patrones de exclusión (Opcional)",
-    "hint": "Especifica patrones para excluir de la copia de seguridad (ej., *.log, *.tmp, __pycache__, node_modules)",
-    "placeholder": "*.log o /ruta/a/excluir",
-    "browseToExclude": "Explorar para excluir",
-    "add": "Agregar"
   },
   "packages": {
     "title": "Paquetes del sistema",
@@ -1581,20 +1938,6 @@
   "protectedRoute": {
     "unavailable": "Esta función no está disponible actualmente"
   },
-  "pruneSettings": {
-    "keepHourly": "Mantener por hora",
-    "keepHourlyHint": "Copias de seguridad horarias a mantener (0 = deshabilitado)",
-    "keepDaily": "Mantener por día",
-    "keepDailyHint": "Copias de seguridad diarias a mantener",
-    "keepWeekly": "Mantener por semana",
-    "keepWeeklyHint": "Copias de seguridad semanales a mantener",
-    "keepMonthly": "Mantener por mes",
-    "keepMonthlyHint": "Copias de seguridad mensuales a mantener",
-    "keepQuarterly": "Mantener por trimestre",
-    "keepQuarterlyHint": "Copias de seguridad trimestrales a mantener (0 = deshabilitado)",
-    "keepYearly": "Mantener por año",
-    "keepYearlyHint": "Copias de seguridad anuales a mantener"
-  },
   "repositoryCell": {
     "noPath": "Sin información de ruta"
   },
@@ -1618,7 +1961,8 @@
     "testFailed": "Prueba fallida",
     "stdout": "Salida estándar:",
     "stderr": "Error estándar:",
-    "save": "Guardar"
+    "save": "Guardar",
+    "exitCode": "Código de salida: {{code}}"
   },
   "scriptParameters": {
     "title": "Parámetros del script",
@@ -1633,17 +1977,8 @@
     "preBackup": "Script previo a la copia de seguridad (se ejecuta una vez antes de todas las copias de seguridad)",
     "postBackup": "Script posterior a la copia de seguridad (se ejecuta una vez después de todas las copias de seguridad)",
     "runRepoScripts": "Ejecutar scripts a nivel de repositorio",
-    "runRepoScriptsDesc": "Si está habilitado, los scripts pre/post de cada repositorio se ejecutarán durante su copia de seguridad"
-  },
-  "sourceDirectories": {
-    "title": "Directorios y archivos de origen",
-    "subtitle": "Especifica qué directorios o archivos respaldar en este repositorio",
-    "atLeastOneRequired": "(se requiere al menos uno)",
-    "optionalSuffix": "(opcional)",
-    "warning": "Se requiere al menos un directorio o archivo de origen. Agrega los directorios o archivos que deseas respaldar.",
-    "placeholder": "/home/usuario/documentos o /var/log/app.log",
-    "browseTitle": "Explorar directorios y archivos",
-    "add": "Agregar"
+    "runRepoScriptsDesc": "Si está habilitado, los scripts pre/post de cada repositorio se ejecutarán durante su copia de seguridad",
+    "none": "Ninguno"
   },
   "repositoryWizard": {
     "titleCreate": "Crear repositorio",
@@ -1747,5 +2082,167 @@
     "selectDirectory": "Seleccionar directorio",
     "selectFile": "Seleccionar archivo",
     "selectPath": "Seleccionar ruta"
+  },
+  "cache": {
+    "subtitle": "Monitoriza y configura el sistema de caché de archivos basado en Redis para una navegación más rápida",
+    "cacheStatus": "Estado de la caché",
+    "cachedArchives": "Archivos en caché",
+    "memoryUsed": "Memoria utilizada",
+    "hitRate": "Tasa de aciertos",
+    "totalRequests": "{{count}} solicitudes totales",
+    "cacheTtl": "TTL de caché",
+    "cacheUsage": "Uso de caché",
+    "cacheUsageDetail": "{{used}} MB / {{max}} MB ({{percent}}%)",
+    "highUsageWarning": "El uso de caché está al {{percent}}%. Considera aumentar el límite de tamaño máximo o borrar entradas antiguas.",
+    "inMemoryWarning": "Usando caché en memoria. Redis no está disponible o no está configurado. La caché en memoria es limitada y se perderá al reiniciar.",
+    "clearAllCache": "Borrar toda la caché",
+    "cacheConfiguration": "Configuración de caché",
+    "ttlLabel": "TTL de caché (minutos)",
+    "ttlHelperText": "Tiempo antes de que expiren las entradas en caché. Rango: 1 minuto a 7 días. Actual: {{current}}",
+    "maxSizeLabel": "Tamaño máximo de caché (MB)",
+    "maxSizeHelperText": "Tamaño máximo de caché. Rango: 100 MB a 10 GB. Actual: {{current}} GB",
+    "redisUrlLabel": "URL de Redis externa (Opcional)",
+    "redisUrlHelperText": "Formato: redis://[contraseña@]host:puerto/bd, rediss:// para TLS, o unix:// para sockets Unix",
+    "testing": "Probando...",
+    "testConnection": "Probar conexión",
+    "noteLabel": "Nota:",
+    "ttlNoteText": "Los cambios de TTL solo afectan a nuevas entradas en caché. Las entradas existentes mantienen su TTL original hasta que expiren.",
+    "clearDialogTitle": "¿Borrar toda la caché?",
+    "clearConfirmCount": "Esto eliminará todas las {{count}} entradas de archivo en caché. La próxima vez que navegues por un archivo, necesitará reconstruir la caché (60-90 segundos para archivos grandes).",
+    "clearConfirmQuestion": "¿Estás seguro de que deseas continuar?",
+    "cancel": "Cancelar",
+    "clearSuccess": "Caché borrada correctamente ({{count}} entradas eliminadas)",
+    "failedToClearCache": "Error al borrar la caché",
+    "failedToSaveCacheSettings": "Error al guardar la configuración de caché",
+    "pleaseEnterRedisUrl": "Por favor, introduce una URL de Redis primero",
+    "redisConnected": "✓ Conectado a Redis: {{info}}",
+    "redisConnectFailed": "Error al conectar: {{message}}",
+    "usingInMemoryFallback": "Usando caché en memoria como respaldo",
+    "connectionTestFailed": "Error en la prueba de conexión"
+  },
+  "mqtt": {
+    "subtitle": "Configura la conexión al broker MQTT para la publicación de estado en Home Assistant",
+    "connectionTitle": "Conexión MQTT",
+    "connectionDescription": "Configura la conexión a tu broker MQTT.",
+    "enableMqttPublishing": "Habilitar publicación MQTT",
+    "brokerUrlLabel": "URL del broker",
+    "brokerUrlPlaceholder": "broker.example.com o localhost",
+    "brokerUrlHelper": "Nombre de host o dirección IP del broker MQTT",
+    "brokerPortLabel": "Puerto del broker",
+    "brokerPortHelper": "Puerto del broker MQTT (1883 estándar, 8883 para TLS)",
+    "usernameLabel": "Usuario",
+    "usernamePlaceholder": "Usuario opcional",
+    "usernameHelper": "Usuario MQTT opcional",
+    "passwordLabel": "Contraseña",
+    "passwordIsSet": "Contraseña configurada",
+    "passwordHelper": "Contraseña MQTT opcional",
+    "clientIdLabel": "ID de cliente",
+    "clientIdHelper": "Identificador de cliente MQTT",
+    "baseTopicLabel": "Tema base",
+    "baseTopicHelper": "Prefijo de tema raíz para todos los mensajes MQTT",
+    "qosLevelLabel": "Nivel de QoS",
+    "qosLevelHelper": "0 = como máximo una vez, 1 = al menos una vez, 2 = exactamente una vez",
+    "retainMessages": "Retener mensajes",
+    "tlsConfigTitle": "Configuración TLS/SSL",
+    "tlsConfigDescription": "Configura TLS/SSL para conexiones MQTT seguras. Requerido para brokers MQTT cifrados.",
+    "enableTls": "Habilitar TLS/SSL",
+    "caCertPathLabel": "Ruta del certificado CA",
+    "caCertPathHelper": "Ruta al archivo de certificado CA (opcional)",
+    "clientCertPathLabel": "Ruta del certificado de cliente",
+    "clientCertPathHelper": "Ruta al archivo de certificado de cliente (opcional)",
+    "clientKeyPathLabel": "Ruta de la clave de cliente",
+    "clientKeyPathHelper": "Ruta al archivo de clave de cliente (opcional)",
+    "noteLabel": "Nota:",
+    "dockerVolumesWarning": "Las rutas de certificados son relativas al sistema de archivos del contenedor. Para despliegues Docker, monta tus certificados en un volumen y referencia la ruta del contenedor (ej., /certs/ca.crt).",
+    "failedToSaveMqttSettings": "Error al guardar la configuración MQTT"
+  },
+  "remoteMachine": {
+    "used": "usado",
+    "free": "libre",
+    "percentUsed": "% usado",
+    "noStorageInfo": "Sin información de almacenamiento",
+    "refreshStorage": "Actualizar almacenamiento",
+    "defaultPath": "Ruta predeterminada",
+    "actions": {
+      "testConnection": "Probar conexión",
+      "refreshStorage": "Actualizar almacenamiento"
+    }
+  },
+  "repositoryInfoDialog": {
+    "failedToDownloadKeyfile": "Error al descargar el archivo de clave",
+    "noArchivesDescription": "Este repositorio ha sido inicializado pero no contiene archivos. Las estadísticas de almacenamiento aparecerán aquí después de crear tu primera copia de seguridad.",
+    "failedToLoad": "Error al cargar la información del repositorio. Asegúrate de que el repositorio sea accesible y esté correctamente inicializado."
+  },
+  "analyticsBanner": {
+    "viewDashboardLink": "Ver nuestro panel de análisis público",
+    "viewDashboardSuffix": "para ver exactamente lo que recopilamos.",
+    "changeAnytimeNote": "Puedes cambiar esto en cualquier momento en Configuración → Preferencias"
+  },
+  "repositoryScripts": {
+    "errors": {
+      "failedToAssign": "Error al asignar el script",
+      "failedToRemove": "Error al eliminar el script"
+    },
+    "confirmRemove": "¿Eliminar este script del repositorio?",
+    "parametersConfigured": "{{count}} parámetro(s) configurado(s)",
+    "tooltips": {
+      "parametersOutOfSync": "Los parámetros necesitan atención - la definición del script ha cambiado",
+      "configureParameters": "Configurar parámetros",
+      "remove": "Eliminar"
+    },
+    "chips": {
+      "outOfSync": "Desincronizado",
+      "continuesOnError": "Continúa en caso de error"
+    },
+    "dialog": {
+      "assignTitle": "Asignar script al repositorio",
+      "selectScriptLabel": "Seleccionar script",
+      "continueOnErrorLabel": "Continuar copia de seguridad si el script falla",
+      "continueOnErrorHelperText": "Anular predeterminado: Si está marcado, la copia de seguridad continuará aunque falle este script.",
+      "cancel": "Cancelar",
+      "assignScript": "Asignar script"
+    },
+    "parametersDialog": {
+      "title": "Configurar parámetros del script: {{scriptName}}",
+      "noParameters": "Este script no tiene parámetros.",
+      "cancel": "Cancelar",
+      "saveParameters": "Guardar parámetros"
+    }
+  },
+  "layout": {
+    "systemInformation": "Información del sistema",
+    "logoAlt": "Logo de Borg UI"
+  },
+  "logViewer": {
+    "title": "Registros de {{label}} - Trabajo #{{jobId}}",
+    "typeBackup": "Copia de seguridad",
+    "typeRestore": "Restauración",
+    "typeCheck": "Verificación",
+    "typeCompact": "Compactar",
+    "typePrune": "Podar",
+    "typePackage": "Paquete"
+  },
+  "mounts": {
+    "columns": {
+      "archive": "Archivo",
+      "mountLocation": "Ubicación de montaje",
+      "mounted": "Montado"
+    },
+    "actions": {
+      "copy": "Copiar",
+      "accessCommand": "Comando de acceso",
+      "copyAccessCommand": "Copiar comando de acceso",
+      "unmount": "Desmontar",
+      "unmountArchive": "Desmontar archivo",
+      "forceUnmount": "Forzar desmontaje",
+      "forceUnmountTooltip": "Forzar desmontaje (usar si está ocupado)"
+    },
+    "copiedToClipboard": "{{label}} copiado al portapapeles",
+    "infoAlert": "Nota: Los archivos montados aparecen como sistemas de archivos de solo lectura en tu gestor de archivos. Accede a ellos en la ruta del punto de montaje. Los montajes se limpian automáticamente al reiniciar el contenedor.",
+    "emptyDescription": "Monta archivos desde la página de Archivos para explorar su contenido directamente en tu gestor de archivos.",
+    "activeMounts": "Montajes activos"
+  },
+  "terminalLog": {
+    "inProgress": "{{type}} en progreso..."
   }
 }

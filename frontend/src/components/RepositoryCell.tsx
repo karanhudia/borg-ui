@@ -1,6 +1,7 @@
 import React from 'react'
 import { Box, Stack, Typography, Tooltip } from '@mui/material'
 import { HardDrive } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface RepositoryCellProps {
   repositoryName?: string | null
@@ -17,12 +18,13 @@ export const RepositoryCell: React.FC<RepositoryCellProps> = ({
   repositoryPath,
   withIcon = true,
 }) => {
+  const { t } = useTranslation()
   // Use the friendly name if available (from database), otherwise show path
-  const displayName = repositoryName || repositoryPath || 'Unknown'
+  const displayName = repositoryName || repositoryPath || t('common.unknown')
   const displayPath = repositoryPath || ''
 
   return (
-    <Tooltip title={displayPath || 'No path information'} placement="top" arrow>
+    <Tooltip title={displayPath || t('repositoryCell.noPath')} placement="top" arrow>
       <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ color: 'text.secondary' }}>
         {withIcon && <HardDrive size={16} style={{ flexShrink: 0, marginTop: 2 }} />}
         <Box sx={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>

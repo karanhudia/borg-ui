@@ -13,6 +13,7 @@ import {
   ToggleButtonGroup,
 } from '@mui/material'
 import { Shield, Key, FileKey, Upload, FileText } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 export interface SecurityStepData {
   encryption: string
@@ -28,6 +29,7 @@ interface WizardStepSecurityProps {
 }
 
 export default function WizardStepSecurity({ mode, data, onChange }: WizardStepSecurityProps) {
+  const { t } = useTranslation()
   const [keyfileMode, setKeyfileMode] = useState<'file' | 'paste'>('file')
   const [keyfileText, setKeyfileText] = useState('')
 
@@ -54,39 +56,39 @@ export default function WizardStepSecurity({ mode, data, onChange }: WizardStepS
       {mode === 'create' && (
         <>
           <FormControl fullWidth>
-            <InputLabel>Encryption Method</InputLabel>
+            <InputLabel>{t('wizard.security.encryptionMethodLabel')}</InputLabel>
             <Select
               value={data.encryption}
-              label="Encryption Method"
+              label={t('wizard.security.encryptionMethodLabel')}
               onChange={(e) => onChange({ encryption: e.target.value })}
             >
               <MenuItem value="repokey">
                 <Box>
                   <Typography variant="body2" fontWeight={600}>
-                    Repokey (Recommended)
+                    {t('wizard.security.repokey')}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Key stored in repository, protected by passphrase
+                    {t('wizard.security.repokeyDesc')}
                   </Typography>
                 </Box>
               </MenuItem>
               <MenuItem value="keyfile">
                 <Box>
                   <Typography variant="body2" fontWeight={600}>
-                    Keyfile
+                    {t('wizard.security.keyfile')}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Key stored separately, requires passphrase + keyfile
+                    {t('wizard.security.keyfileDesc')}
                   </Typography>
                 </Box>
               </MenuItem>
               <MenuItem value="none">
                 <Box>
                   <Typography variant="body2" fontWeight={600}>
-                    None (Unencrypted)
+                    {t('wizard.security.none')}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    No encryption - data stored in plaintext
+                    {t('wizard.security.noneDesc')}
                   </Typography>
                 </Box>
               </MenuItem>
@@ -96,11 +98,10 @@ export default function WizardStepSecurity({ mode, data, onChange }: WizardStepS
           {data.encryption === 'none' && (
             <Alert severity="warning">
               <Typography variant="body2" fontWeight={600} gutterBottom>
-                Security Warning
+                {t('wizard.security.securityWarningTitle')}
               </Typography>
               <Typography variant="body2">
-                Your backup data will be stored without encryption. Anyone with access to the
-                repository can read your files. This is not recommended for sensitive data.
+                {t('wizard.security.securityWarningBody')}
               </Typography>
             </Alert>
           )}
@@ -111,7 +112,7 @@ export default function WizardStepSecurity({ mode, data, onChange }: WizardStepS
       {mode === 'edit' && (
         <Alert severity="info" icon={<Shield size={20} />}>
           <Typography variant="body2">
-            Encryption settings cannot be changed after repository creation.
+            {t('wizard.security.encryptionReadonly')}
           </Typography>
         </Alert>
       )}
@@ -119,19 +120,19 @@ export default function WizardStepSecurity({ mode, data, onChange }: WizardStepS
       {/* Passphrase Input */}
       {data.encryption !== 'none' && (
         <TextField
-          label={mode === 'edit' ? 'Passphrase (Optional)' : 'Passphrase'}
+          label={mode === 'edit' ? t('wizard.security.passphraseOptional') : t('wizard.security.passphraseRequired')}
           type="password"
           value={data.passphrase}
           onChange={(e) => onChange({ passphrase: e.target.value })}
           placeholder={
-            mode === 'edit' ? 'Leave blank to keep last saved passphrase' : 'Enter passphrase'
+            mode === 'edit' ? t('wizard.security.passphrasePlaceholderEdit') : t('wizard.security.passphrasePlaceholderCreate')
           }
           required={mode !== 'edit'}
           fullWidth
           helperText={
             mode === 'edit'
-              ? 'Optional - leave blank to keep last saved passphrase'
-              : 'Keep this safe - you cannot access backups without it!'
+              ? t('wizard.security.passphraseHelperEdit')
+              : t('wizard.security.passphraseHelperCreate')
           }
           InputProps={{
             startAdornment: (
@@ -152,10 +153,10 @@ export default function WizardStepSecurity({ mode, data, onChange }: WizardStepS
             sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
           >
             <FileKey size={18} />
-            Borg Keyfile (Optional)
+            {t('wizard.security.borgKeyfileTitle')}
           </Typography>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-            Borg keyfiles are typically stored without a file extension in ~/.config/borg/keys/
+            {t('wizard.security.borgKeyfileDesc')}
           </Typography>
 
           <ToggleButtonGroup
@@ -167,11 +168,11 @@ export default function WizardStepSecurity({ mode, data, onChange }: WizardStepS
           >
             <ToggleButton value="file">
               <Upload size={16} style={{ marginRight: 6 }} />
-              Upload File
+              {t('wizard.security.uploadFile')}
             </ToggleButton>
             <ToggleButton value="paste">
               <FileText size={16} style={{ marginRight: 6 }} />
-              Paste Content
+              {t('wizard.security.pasteContent')}
             </ToggleButton>
           </ToggleButtonGroup>
 
@@ -190,7 +191,7 @@ export default function WizardStepSecurity({ mode, data, onChange }: WizardStepS
                 },
               }}
             >
-              {data.selectedKeyfile ? `Selected: ${data.selectedKeyfile.name}` : 'Choose Keyfile'}
+              {data.selectedKeyfile ? t('wizard.security.selectedKeyfile', { name: data.selectedKeyfile.name }) : t('wizard.security.chooseKeyfile')}
               <input
                 type="file"
                 hidden
@@ -218,8 +219,8 @@ export default function WizardStepSecurity({ mode, data, onChange }: WizardStepS
           {data.selectedKeyfile && (
             <Alert severity="success" sx={{ mt: 1.5 }}>
               {keyfileMode === 'file'
-                ? 'Keyfile will be uploaded after import'
-                : 'Keyfile content will be saved after import'}
+                ? t('wizard.security.keyfileUploadNote')
+                : t('wizard.security.keyfileContentNote')}
             </Alert>
           )}
         </Box>
@@ -227,12 +228,12 @@ export default function WizardStepSecurity({ mode, data, onChange }: WizardStepS
 
       {/* Remote Path */}
       <TextField
-        label="Remote Borg Path (Optional)"
+        label={t('wizard.security.remoteBorgPath')}
         value={data.remotePath}
         onChange={(e) => onChange({ remotePath: e.target.value })}
         placeholder="/usr/local/bin/borg"
         fullWidth
-        helperText="Path to borg executable on remote (if not in PATH)"
+        helperText={t('wizard.security.remoteBorgPathHelper')}
       />
     </Box>
   )

@@ -22,6 +22,7 @@ import {
   Inventory,
   FileDownload,
 } from '@mui/icons-material'
+import { useTranslation } from 'react-i18next'
 import { formatDateShort, formatBytes } from '../utils/dateUtils'
 import { repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
@@ -66,6 +67,8 @@ export default function RepositoryInfoDialog({
   isLoading,
   onClose,
 }: RepositoryInfoDialogProps) {
+  const { t } = useTranslation()
+
   const handleDownloadKeyfile = async () => {
     if (!repository) return
     try {
@@ -80,7 +83,7 @@ export default function RepositoryInfoDialog({
       document.body.removeChild(a)
       setTimeout(() => URL.revokeObjectURL(url), 100)
     } catch (err: unknown) {
-      let message = 'Failed to download keyfile'
+      let message = t('repositoryInfoDialog.failedToDownloadKeyfile')
       const errData = (err as { response?: { data?: unknown } })?.response?.data
       if (errData instanceof Blob) {
         // With responseType:'blob', error bodies also come back as Blob
@@ -112,7 +115,7 @@ export default function RepositoryInfoDialog({
         {isLoading ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
             <Typography variant="body2" color="text.secondary">
-              Loading repository info...
+              {t('dialogs.repositoryInfo.loadingInfo')}
             </Typography>
           </Box>
         ) : repositoryInfo ? (
@@ -133,11 +136,11 @@ export default function RepositoryInfoDialog({
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                       <Lock sx={{ color: '#7b1fa2', fontSize: 28 }} />
                       <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                        Encryption
+                        {t('dialogs.repositoryInfo.encryption')}
                       </Typography>
                     </Box>
                     {repository?.has_keyfile && (
-                      <Tooltip title="Export keyfile — keep this safe!" arrow placement="top">
+                      <Tooltip title={t('dialogs.repositoryInfo.exportKeyfileTooltip')} arrow placement="top">
                         <IconButton
                           onClick={handleDownloadKeyfile}
                           size="small"
@@ -170,7 +173,7 @@ export default function RepositoryInfoDialog({
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
                     <CalendarMonth sx={{ color: '#0277bd', fontSize: 28 }} />
                     <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                      Last Modified
+                      {t('dialogs.repositoryInfo.lastModified')}
                     </Typography>
                   </Box>
                   <Typography variant="body2" fontWeight={600} sx={{ color: '#0277bd', ml: 5 }}>
@@ -191,7 +194,7 @@ export default function RepositoryInfoDialog({
                   display="block"
                   sx={{ mb: 0.5 }}
                 >
-                  Repository Location
+                  {t('dialogs.repositoryInfo.repositoryLocation')}
                 </Typography>
                 <Typography
                   variant="body2"
@@ -208,7 +211,7 @@ export default function RepositoryInfoDialog({
             repositoryInfo.cache.stats.unique_size > 0 ? (
               <>
                 <Typography variant="h6" fontWeight={600} sx={{ mt: 1 }}>
-                  Storage Statistics
+                  {t('dialogs.repositoryInfo.storageStatistics')}
                 </Typography>
                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
                   {/* Total Data Size */}
@@ -217,7 +220,7 @@ export default function RepositoryInfoDialog({
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                         <DataUsage sx={{ color: '#2e7d32', fontSize: 24 }} />
                         <Typography variant="caption" color="text.secondary" fontWeight={500}>
-                          Total Size
+                          {t('dialogs.repositoryInfo.totalSize')}
                         </Typography>
                       </Box>
                       <Typography variant="h6" fontWeight={700} sx={{ color: '#2e7d32' }}>
@@ -232,7 +235,7 @@ export default function RepositoryInfoDialog({
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                         <Compress sx={{ color: '#1565c0', fontSize: 24 }} />
                         <Typography variant="caption" color="text.secondary" fontWeight={500}>
-                          Used on Disk
+                          {t('dialogs.repositoryInfo.usedOnDisk')}
                         </Typography>
                       </Box>
                       <Typography variant="h6" fontWeight={700} sx={{ color: '#1565c0' }}>
@@ -247,7 +250,7 @@ export default function RepositoryInfoDialog({
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                         <Inventory sx={{ color: '#e65100', fontSize: 24 }} />
                         <Typography variant="caption" color="text.secondary" fontWeight={500}>
-                          Unique Data
+                          {t('dialogs.repositoryInfo.uniqueData')}
                         </Typography>
                       </Box>
                       <Typography variant="h6" fontWeight={700} sx={{ color: '#e65100' }}>
@@ -262,7 +265,7 @@ export default function RepositoryInfoDialog({
                   <Card variant="outlined">
                     <CardContent sx={{ py: 1.5 }}>
                       <Typography variant="caption" color="text.secondary" display="block">
-                        Total Chunks
+                        {t('dialogs.repositoryInfo.totalChunks')}
                       </Typography>
                       <Typography variant="h6" fontWeight={600}>
                         {repositoryInfo.cache.stats.total_chunks?.toLocaleString()}
@@ -273,7 +276,7 @@ export default function RepositoryInfoDialog({
                   <Card variant="outlined">
                     <CardContent sx={{ py: 1.5 }}>
                       <Typography variant="caption" color="text.secondary" display="block">
-                        Unique Chunks
+                        {t('dialogs.repositoryInfo.uniqueChunks')}
                       </Typography>
                       <Typography variant="h6" fontWeight={600}>
                         {repositoryInfo.cache.stats.total_unique_chunks?.toLocaleString()}
@@ -285,25 +288,23 @@ export default function RepositoryInfoDialog({
             ) : (
               <Alert severity="info" icon={<Info />}>
                 <Typography variant="body2" fontWeight={600} gutterBottom>
-                  No backups yet
+                  {t('dialogs.repositoryInfo.noBackupsYet')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  This repository has been initialized but contains no archives. Storage statistics
-                  will appear here after you create your first backup.
+                  {t('repositoryInfoDialog.noArchivesDescription')}
                 </Typography>
               </Alert>
             )}
           </Box>
         ) : (
           <Alert severity="error">
-            Failed to load repository information. Make sure the repository is accessible and
-            properly initialized.
+            {t('repositoryInfoDialog.failedToLoad')}
           </Alert>
         )}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} variant="contained">
-          Close
+          {t('dialogs.repositoryInfo.close')}
         </Button>
       </DialogActions>
     </Dialog>

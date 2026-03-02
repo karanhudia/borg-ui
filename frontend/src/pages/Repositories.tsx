@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useMatomo } from '../hooks/useMatomo'
 import {
   Box,
@@ -73,6 +74,7 @@ interface PruneForm {
 }
 
 export default function Repositories() {
+  const { t } = useTranslation()
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const appState = useAppState()
@@ -409,7 +411,7 @@ export default function Repositories() {
       const locationMap = new Map<string, Repository[]>()
 
       sorted.forEach((repo: Repository) => {
-        let locationKey = 'Local Machine'
+        let locationKey = t('repositories.groups.localMachine')
 
         if (repo.path?.startsWith('ssh://')) {
           // Extract hostname from SSH URL: ssh://user@hostname:port/path
@@ -417,7 +419,7 @@ export default function Repositories() {
           if (match) {
             locationKey = match[1] // hostname
           } else {
-            locationKey = 'Remote (SSH)'
+            locationKey = t('repositories.groups.remoteSsh')
           }
         }
 
@@ -428,9 +430,10 @@ export default function Repositories() {
       })
 
       // Sort location keys: Local Machine first, then alphabetically
+      const localMachineKey = t('repositories.groups.localMachine')
       const sortedKeys = Array.from(locationMap.keys()).sort((a, b) => {
-        if (a === 'Local Machine') return -1
-        if (b === 'Local Machine') return 1
+        if (a === localMachineKey) return -1
+        if (b === localMachineKey) return 1
         return a.localeCompare(b)
       })
 
@@ -442,19 +445,19 @@ export default function Repositories() {
       const local = sorted.filter((r: Repository) => !r.path?.startsWith('ssh://'))
       const ssh = sorted.filter((r: Repository) => r.path?.startsWith('ssh://'))
 
-      if (local.length > 0) groups.push({ name: 'Local Repositories', repositories: local })
-      if (ssh.length > 0) groups.push({ name: 'Remote Repositories (SSH)', repositories: ssh })
+      if (local.length > 0) groups.push({ name: t('repositories.groups.local'), repositories: local })
+      if (ssh.length > 0) groups.push({ name: t('repositories.groups.remote'), repositories: ssh })
     } else if (groupBy === 'mode') {
       const full = sorted.filter((r: Repository) => r.mode === 'full' || !r.mode)
       const observe = sorted.filter((r: Repository) => r.mode === 'observe')
 
-      if (full.length > 0) groups.push({ name: 'Full Backup Repositories', repositories: full })
+      if (full.length > 0) groups.push({ name: t('repositories.groups.full'), repositories: full })
       if (observe.length > 0)
-        groups.push({ name: 'Observe-Only Repositories', repositories: observe })
+        groups.push({ name: t('repositories.groups.observeOnly'), repositories: observe })
     }
 
     return { groups: groups.length > 0 ? groups : [{ name: null, repositories: sorted }] }
-  }, [repositoriesData, searchQuery, sortBy, groupBy])
+  }, [repositoriesData, searchQuery, sortBy, groupBy, t])
 
   const repositories = repositoriesData?.data?.repositories || []
 
@@ -467,11 +470,10 @@ export default function Repositories() {
         >
           <Box sx={{ flex: 1, mr: 2 }}>
             <Typography variant="h4" fontWeight={600} gutterBottom>
-              Repository Management
+              {t('repositories.title')}
             </Typography>
             <Typography variant="body2" color="text.secondary" paragraph>
-              A repository is where your backed-up data will be stored. The files from your
-              configured sources will be backed up here.
+              {t('repositories.subtitle')}
             </Typography>
           </Box>
           {user?.is_admin && (
@@ -482,7 +484,7 @@ export default function Repositories() {
                 onClick={() => openWizard('create')}
                 sx={{ flexShrink: 0 }}
               >
-                Create Repository
+                {t('repositories.createRepository')}
               </Button>
               <Button
                 variant="outlined"
@@ -490,7 +492,7 @@ export default function Repositories() {
                 onClick={() => openWizard('import')}
                 sx={{ flexShrink: 0 }}
               >
-                Import Existing
+                {t('repositories.importExisting')}
               </Button>
             </Stack>
           )}
@@ -505,7 +507,7 @@ export default function Repositories() {
               {/* Search */}
               <TextField
                 size="small"
-                placeholder="Search repositories..."
+                placeholder={t('repositories.search')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 sx={{ flex: 1, minWidth: 200 }}
@@ -520,35 +522,35 @@ export default function Repositories() {
 
               {/* Sort By */}
               <FormControl size="small" sx={{ minWidth: 200 }}>
-                <InputLabel id="sort-label">Sort By</InputLabel>
+                <InputLabel id="sort-label">{t('repositories.sort.label')}</InputLabel>
                 <Select
                   labelId="sort-label"
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  label="Sort By"
+                  label={t('repositories.sort.label')}
                 >
-                  <MenuItem value="name-asc">Name (A-Z)</MenuItem>
-                  <MenuItem value="name-desc">Name (Z-A)</MenuItem>
-                  <MenuItem value="last-backup-recent">Last Backup (Recent)</MenuItem>
-                  <MenuItem value="last-backup-oldest">Last Backup (Oldest)</MenuItem>
-                  <MenuItem value="created-newest">Created (Newest)</MenuItem>
-                  <MenuItem value="created-oldest">Created (Oldest)</MenuItem>
+                  <MenuItem value="name-asc">{t('repositories.sort.nameAZ')}</MenuItem>
+                  <MenuItem value="name-desc">{t('repositories.sort.nameZA')}</MenuItem>
+                  <MenuItem value="last-backup-recent">{t('repositories.sort.lastBackupRecent')}</MenuItem>
+                  <MenuItem value="last-backup-oldest">{t('repositories.sort.lastBackupOldest')}</MenuItem>
+                  <MenuItem value="created-newest">{t('repositories.sort.createdNewest')}</MenuItem>
+                  <MenuItem value="created-oldest">{t('repositories.sort.createdOldest')}</MenuItem>
                 </Select>
               </FormControl>
 
               {/* Group By */}
               <FormControl size="small" sx={{ minWidth: 200 }}>
-                <InputLabel id="group-label">Group By</InputLabel>
+                <InputLabel id="group-label">{t('repositories.group.label')}</InputLabel>
                 <Select
                   labelId="group-label"
                   value={groupBy}
                   onChange={(e) => setGroupBy(e.target.value)}
-                  label="Group By"
+                  label={t('repositories.group.label')}
                 >
-                  <MenuItem value="none">None</MenuItem>
-                  <MenuItem value="location">Location (Hostname)</MenuItem>
-                  <MenuItem value="type">Repository Type</MenuItem>
-                  <MenuItem value="mode">Backup Mode</MenuItem>
+                  <MenuItem value="none">{t('repositories.group.none')}</MenuItem>
+                  <MenuItem value="location">{t('repositories.group.hostname')}</MenuItem>
+                  <MenuItem value="type">{t('repositories.group.type')}</MenuItem>
+                  <MenuItem value="mode">{t('repositories.group.mode')}</MenuItem>
                 </Select>
               </FormControl>
             </Stack>
@@ -560,7 +562,7 @@ export default function Repositories() {
       {isLoading ? (
         <Box sx={{ textAlign: 'center', py: 8 }}>
           <Typography variant="body2" color="text.secondary">
-            Loading repositories...
+            {t('repositories.loading')}
           </Typography>
         </Box>
       ) : repositories.length === 0 ? (
@@ -568,14 +570,13 @@ export default function Repositories() {
           <CardContent sx={{ textAlign: 'center', py: 8 }}>
             <Storage sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
             <Typography variant="h6" gutterBottom>
-              No Repositories Yet
+              {t('repositories.empty.title')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-              Create your first Borg repository to start backing up your data.
+              {t('repositories.empty.subtitle')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Create a local repository or remote repository via SSH. The type will be automatically
-              detected based on the path you provide.
+              {t('repositories.empty.hint')}
             </Typography>
             {user?.is_admin && (
               <Stack direction="row" spacing={2} justifyContent="center">
@@ -584,14 +585,14 @@ export default function Repositories() {
                   startIcon={<Add />}
                   onClick={() => openWizard('create')}
                 >
-                  Create Repository
+                  {t('repositories.createRepository')}
                 </Button>
                 <Button
                   variant="outlined"
                   startIcon={<FileUpload />}
                   onClick={() => openWizard('import')}
                 >
-                  Import Existing
+                  {t('repositories.importExisting')}
                 </Button>
               </Stack>
             )}
@@ -603,16 +604,16 @@ export default function Repositories() {
           <CardContent sx={{ textAlign: 'center', py: 8 }}>
             <Storage sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
             <Typography variant="h6" gutterBottom>
-              No Matching Repositories
+              {t('repositories.noMatch.title')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               {searchQuery
-                ? `No repositories match "${searchQuery}". Try a different search term.`
-                : 'No repositories found.'}
+                ? t('repositories.noMatch.message', { search: searchQuery })
+                : t('repositories.noMatch.fallback')}
             </Typography>
             {searchQuery && (
               <Button variant="outlined" onClick={() => setSearchQuery('')}>
-                Clear Search
+                {t('repositories.noMatch.clearSearch')}
               </Button>
             )}
           </CardContent>

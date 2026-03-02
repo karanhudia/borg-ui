@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import {
   Dialog,
   DialogTitle,
@@ -29,12 +30,13 @@ export default function ErrorDetailsDialog<T extends JobWithError>({
   onClose,
   onViewLogs,
 }: ErrorDetailsDialogProps<T>) {
+  const { t } = useTranslation()
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>
         {job && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Typography variant="h6">Error Details - Job #{job.id}</Typography>
+            <Typography variant="h6">{t('dialogs.errorDetails.title')} - Job #{job.id}</Typography>
             <StatusBadge status={job.status} />
           </Box>
         )}
@@ -53,7 +55,7 @@ export default function ErrorDetailsDialog<T extends JobWithError>({
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Close</Button>
+        <Button onClick={onClose}>{t('dialogs.errorDetails.close')}</Button>
         {job && onViewLogs && (
           <Button
             onClick={() => {
@@ -62,7 +64,7 @@ export default function ErrorDetailsDialog<T extends JobWithError>({
             }}
             variant="contained"
           >
-            View Full Logs
+            {t('dialogs.errorDetails.viewFullLogs')}
           </Button>
         )}
       </DialogActions>

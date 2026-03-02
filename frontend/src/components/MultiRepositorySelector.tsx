@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Autocomplete, TextField, Box, Typography, Stack, IconButton, Tooltip } from '@mui/material'
 import { HardDrive, ChevronUp, ChevronDown, X } from 'lucide-react'
 import { Repository } from '../types'
@@ -39,6 +40,7 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
   error = false,
   filterMode = null,
 }) => {
+  const { t } = useTranslation()
   // Track whether user has interacted with the field
   const [touched, setTouched] = React.useState(false)
 
@@ -123,7 +125,7 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
           <TextField
             {...params}
             label={label}
-            placeholder={selectedIds.length === 0 ? placeholder : 'Search or add more...'}
+            placeholder={selectedIds.length === 0 ? placeholder : t('multiRepositorySelector.searchOrAddMore')}
             helperText={helperText}
             required={required}
             size={size}
@@ -150,8 +152,8 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
         <Box sx={{ mt: 2 }}>
           <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
             {allowReorder && selectedRepos.length > 1
-              ? `Selected repositories (${selectedRepos.length}) - Use arrows to change backup order`
-              : `Selected repositories (${selectedRepos.length})`}
+              ? t('multiRepositorySelector.selectedCountWithOrder', { count: selectedRepos.length })
+              : t('multiRepositorySelector.selectedCount', { count: selectedRepos.length })}
           </Typography>
           <Stack spacing={1}>
             {selectedRepos.map((repo, index) => (
@@ -214,7 +216,7 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
                 <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
                   {allowReorder && selectedRepos.length > 1 && (
                     <>
-                      <Tooltip title="Move up" arrow>
+                      <Tooltip title={t('multiRepositorySelector.moveUp')} arrow>
                         <span>
                           <IconButton
                             size="small"
@@ -225,7 +227,7 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
                           </IconButton>
                         </span>
                       </Tooltip>
-                      <Tooltip title="Move down" arrow>
+                      <Tooltip title={t('multiRepositorySelector.moveDown')} arrow>
                         <span>
                           <IconButton
                             size="small"
@@ -238,7 +240,7 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
                       </Tooltip>
                     </>
                   )}
-                  <Tooltip title="Remove" arrow>
+                  <Tooltip title={t('multiRepositorySelector.remove')} arrow>
                     <span>
                       <IconButton
                         size="small"

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import {
@@ -52,6 +53,7 @@ interface UserType {
 }
 
 const Settings: React.FC = () => {
+  const { t } = useTranslation()
   const { user } = useAuth()
   const { mode, setTheme } = useTheme()
   const queryClient = useQueryClient()
@@ -126,12 +128,12 @@ const Settings: React.FC = () => {
     mutationFn: (passwordData: { current_password: string; new_password: string }) =>
       settingsAPI.changePassword(passwordData),
     onSuccess: () => {
-      toast.success('Password changed successfully')
+      toast.success(t('settings.toasts.passwordChanged'))
       setChangePasswordForm({ current_password: '', new_password: '', confirm_password: '' })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to change password')
+      toast.error(error.response?.data?.detail || t('settings.toasts.failedToChangePassword'))
     },
   })
 
@@ -145,13 +147,13 @@ const Settings: React.FC = () => {
   const createUserMutation = useMutation({
     mutationFn: settingsAPI.createUser,
     onSuccess: () => {
-      toast.success('User created successfully')
+      toast.success(t('settings.toasts.userCreated'))
       queryClient.invalidateQueries({ queryKey: ['users'] })
       setShowCreateUser(false)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to create user')
+      toast.error(error.response?.data?.detail || t('settings.toasts.failedToCreateUser'))
     },
   })
 
@@ -160,26 +162,26 @@ const Settings: React.FC = () => {
     mutationFn: ({ userId, userData }: { userId: number; userData: any }) =>
       settingsAPI.updateUser(userId, userData),
     onSuccess: () => {
-      toast.success('User updated successfully')
+      toast.success(t('settings.toasts.userUpdated'))
       queryClient.invalidateQueries({ queryKey: ['users'] })
       setEditingUser(null)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to update user')
+      toast.error(error.response?.data?.detail || t('settings.toasts.failedToUpdateUser'))
     },
   })
 
   const deleteUserMutation = useMutation({
     mutationFn: settingsAPI.deleteUser,
     onSuccess: () => {
-      toast.success('User deleted successfully')
+      toast.success(t('settings.toasts.userDeleted'))
       queryClient.invalidateQueries({ queryKey: ['users'] })
       setDeleteConfirmUser(null)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to delete user')
+      toast.error(error.response?.data?.detail || t('settings.toasts.failedToDeleteUser'))
     },
   })
 
@@ -187,13 +189,13 @@ const Settings: React.FC = () => {
     mutationFn: ({ userId, newPassword }: { userId: number; newPassword: string }) =>
       settingsAPI.resetUserPassword(userId, newPassword),
     onSuccess: () => {
-      toast.success('Password reset successfully')
+      toast.success(t('settings.toasts.passwordReset'))
       setShowPasswordModal(false)
       setSelectedUserId(null)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to reset password')
+      toast.error(error.response?.data?.detail || t('settings.toasts.failedToResetPassword'))
     },
   })
 
@@ -269,7 +271,7 @@ const Settings: React.FC = () => {
   const userColumns: Column<UserType>[] = [
     {
       id: 'user',
-      label: 'User',
+      label: t('settings.users.table.user'),
       render: (user) => (
         <Box>
           <Typography variant="body2" fontWeight={500}>
@@ -283,10 +285,10 @@ const Settings: React.FC = () => {
     },
     {
       id: 'status',
-      label: 'Status',
+      label: t('settings.users.table.status'),
       render: (user) => (
         <Chip
-          label={user.is_active ? 'Active' : 'Inactive'}
+          label={user.is_active ? t('settings.users.status.active') : t('settings.users.status.inactive')}
           color={user.is_active ? 'success' : 'error'}
           size="small"
         />
@@ -294,10 +296,10 @@ const Settings: React.FC = () => {
     },
     {
       id: 'role',
-      label: 'Role',
+      label: t('settings.users.table.role'),
       render: (user) => (
         <Chip
-          label={user.is_admin ? 'Admin' : 'User'}
+          label={user.is_admin ? t('settings.users.roles.admin') : t('settings.users.roles.user')}
           color={user.is_admin ? 'secondary' : 'default'}
           size="small"
         />
@@ -305,12 +307,12 @@ const Settings: React.FC = () => {
     },
     {
       id: 'created_at',
-      label: 'Created',
+      label: t('settings.users.table.created'),
       render: (user) => <Typography variant="body2">{formatDateShort(user.created_at)}</Typography>,
     },
     {
       id: 'last_login',
-      label: 'Last Login',
+      label: t('settings.users.table.lastLogin'),
       render: (user) => (
         <Typography variant="body2" color="text.secondary">
           {formatDateShort(user.last_login)}
@@ -323,24 +325,24 @@ const Settings: React.FC = () => {
   const userActions: ActionButton<UserType>[] = [
     {
       icon: <Edit size={16} />,
-      label: 'Edit User',
+      label: t('settings.users.actions.edit'),
       onClick: openEditUser,
       color: 'primary',
-      tooltip: 'Edit User',
+      tooltip: t('settings.users.actions.edit'),
     },
     {
       icon: <Key size={16} />,
-      label: 'Reset Password',
+      label: t('settings.users.actions.resetPassword'),
       onClick: (user) => openPasswordModal(user.id),
       color: 'warning',
-      tooltip: 'Reset Password',
+      tooltip: t('settings.users.actions.resetPassword'),
     },
     {
       icon: <Trash2 size={16} />,
-      label: 'Delete User',
+      label: t('settings.users.actions.delete'),
       onClick: setDeleteConfirmUser,
       color: 'error',
-      tooltip: 'Delete User',
+      tooltip: t('settings.users.actions.delete'),
     },
   ]
 
@@ -353,10 +355,10 @@ const Settings: React.FC = () => {
         <Box>
           <Box>
             <Typography variant="h6" fontWeight={600} gutterBottom>
-              Change Password
+              {t('settings.password.title')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Update your password to keep your account secure
+              {t('settings.password.subtitle')}
             </Typography>
           </Box>
           <Card sx={{ maxWidth: 600 }}>
@@ -365,7 +367,7 @@ const Settings: React.FC = () => {
                 onSubmit={(e) => {
                   e.preventDefault()
                   if (changePasswordForm.new_password !== changePasswordForm.confirm_password) {
-                    toast.error('New passwords do not match')
+                    toast.error(t('settings.toasts.passwordsDoNotMatch'))
                     return
                   }
                   changePasswordMutation.mutate({
@@ -376,7 +378,7 @@ const Settings: React.FC = () => {
               >
                 <Stack spacing={3}>
                   <TextField
-                    label="Current Password"
+                    label={t('settings.password.current')}
                     type="password"
                     value={changePasswordForm.current_password}
                     onChange={(e) =>
@@ -390,7 +392,7 @@ const Settings: React.FC = () => {
                   />
 
                   <TextField
-                    label="New Password"
+                    label={t('settings.password.new')}
                     type="password"
                     value={changePasswordForm.new_password}
                     onChange={(e) =>
@@ -401,7 +403,7 @@ const Settings: React.FC = () => {
                   />
 
                   <TextField
-                    label="Confirm New Password"
+                    label={t('settings.password.confirm')}
                     type="password"
                     value={changePasswordForm.confirm_password}
                     onChange={(e) =>
@@ -419,7 +421,7 @@ const Settings: React.FC = () => {
                     helperText={
                       changePasswordForm.confirm_password !== '' &&
                       changePasswordForm.new_password !== changePasswordForm.confirm_password
-                        ? 'Passwords do not match'
+                        ? t('settings.password.noMatch')
                         : ''
                     }
                   />
@@ -434,8 +436,8 @@ const Settings: React.FC = () => {
                       }
                     >
                       {changePasswordMutation.isPending
-                        ? 'Changing Password...'
-                        : 'Change Password'}
+                        ? t('settings.password.submitting')
+                        : t('settings.password.submit')}
                     </Button>
                   </Box>
                 </Stack>
@@ -450,10 +452,10 @@ const Settings: React.FC = () => {
         <Box>
           <Box>
             <Typography variant="h6" fontWeight={600} gutterBottom>
-              Appearance
+              {t('settings.appearance.title')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Customize the look and feel of the application
+              {t('settings.appearance.subtitle')}
             </Typography>
           </Box>
           <Card sx={{ maxWidth: 600 }}>
@@ -466,10 +468,10 @@ const Settings: React.FC = () => {
                     {mode === 'dark' ? <Moon size={24} /> : <Sun size={24} />}
                     <Box>
                       <Typography variant="subtitle1" fontWeight={500}>
-                        Theme
+                        {t('settings.appearance.theme')}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Choose a theme
+                        {t('settings.appearance.chooseTheme')}
                       </Typography>
                     </Box>
                   </Box>
@@ -479,7 +481,7 @@ const Settings: React.FC = () => {
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       onChange={(e) => setTheme(e.target.value as any)}
                       displayEmpty
-                      inputProps={{ 'aria-label': 'Theme mode' }}
+                      inputProps={{ 'aria-label': t('settings.appearance.themeAriaLabel') }}
                     >
                       {availableThemes.map((themeOption) => (
                         <MenuItem key={themeOption.id} value={themeOption.id}>
@@ -538,10 +540,10 @@ const Settings: React.FC = () => {
             sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}
           >
             <Typography variant="h6" fontWeight={600}>
-              User Management
+              {t('settings.users.title')}
             </Typography>
             <Button variant="contained" startIcon={<Plus size={18} />} onClick={openCreateUser}>
-              Add User
+              {t('settings.users.addUser')}
             </Button>
           </Box>
 
@@ -553,8 +555,8 @@ const Settings: React.FC = () => {
             loading={loadingUsers}
             emptyState={{
               icon: <Users size={48} />,
-              title: 'No users found',
-              description: 'Create your first user to get started',
+              title: t('settings.users.emptyState.title'),
+              description: t('settings.users.emptyState.description'),
             }}
             variant="outlined"
           />
@@ -574,12 +576,12 @@ const Settings: React.FC = () => {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>{editingUser ? 'Edit User' : 'Create User'}</DialogTitle>
+        <DialogTitle>{editingUser ? t('settings.users.editDialog.title') : t('settings.users.createDialog.title')}</DialogTitle>
         <form onSubmit={editingUser ? handleUpdateUser : handleCreateUser}>
           <DialogContent>
             <Stack spacing={3}>
               <TextField
-                label="Username"
+                label={t('settings.users.fields.username')}
                 value={userForm.username}
                 onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
                 required
@@ -587,7 +589,7 @@ const Settings: React.FC = () => {
               />
 
               <TextField
-                label="Email"
+                label={t('settings.users.fields.email')}
                 type="email"
                 value={userForm.email}
                 onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
@@ -597,7 +599,7 @@ const Settings: React.FC = () => {
 
               {!editingUser && (
                 <TextField
-                  label="Password"
+                  label={t('settings.users.fields.password')}
                   type="password"
                   value={userForm.password}
                   onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
@@ -613,7 +615,7 @@ const Settings: React.FC = () => {
                     onChange={(e) => setUserForm({ ...userForm, is_admin: e.target.checked })}
                   />
                 }
-                label="Admin User"
+                label={t('settings.users.fields.isAdmin')}
               />
             </Stack>
           </DialogContent>
@@ -624,10 +626,10 @@ const Settings: React.FC = () => {
                 setEditingUser(null)
               }}
             >
-              Cancel
+              {t('settings.users.buttons.cancel')}
             </Button>
             <Button type="submit" variant="contained">
-              {editingUser ? 'Update' : 'Create'}
+              {editingUser ? t('settings.users.buttons.update') : t('settings.users.buttons.create')}
             </Button>
           </DialogActions>
         </form>
@@ -643,11 +645,11 @@ const Settings: React.FC = () => {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Reset Password</DialogTitle>
+        <DialogTitle>{t('settings.users.resetPasswordDialog.title')}</DialogTitle>
         <form onSubmit={handleResetPassword}>
           <DialogContent>
             <TextField
-              label="New Password"
+              label={t('settings.password.new')}
               type="password"
               value={passwordForm.new_password}
               onChange={(e) => setPasswordForm({ new_password: e.target.value })}
@@ -662,10 +664,10 @@ const Settings: React.FC = () => {
                 setSelectedUserId(null)
               }}
             >
-              Cancel
+              {t('settings.users.buttons.cancel')}
             </Button>
             <Button type="submit" variant="contained">
-              Reset Password
+              {t('settings.users.actions.resetPassword')}
             </Button>
           </DialogActions>
         </form>
@@ -694,21 +696,20 @@ const Settings: React.FC = () => {
               <AlertCircle size={24} color="#d32f2f" />
             </Box>
             <Typography variant="h6" fontWeight={600}>
-              Delete User
+              {t('settings.users.deleteDialog.title')}
             </Typography>
           </Stack>
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2">
-            Are you sure you want to delete the user{' '}
-            <strong>"{deleteConfirmUser?.username}"</strong>?
+            {t('settings.users.deleteDialog.message', { username: deleteConfirmUser?.username })}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            This action cannot be undone.
+            {t('settings.users.deleteDialog.warning')}
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteConfirmUser(null)}>Cancel</Button>
+          <Button onClick={() => setDeleteConfirmUser(null)}>{t('settings.users.buttons.cancel')}</Button>
           <Button
             onClick={handleDeleteUser}
             variant="contained"
@@ -716,7 +717,7 @@ const Settings: React.FC = () => {
             disabled={deleteUserMutation.isPending}
             startIcon={deleteUserMutation.isPending ? <CircularProgress size={16} /> : null}
           >
-            {deleteUserMutation.isPending ? 'Deleting...' : 'Delete'}
+            {deleteUserMutation.isPending ? t('settings.users.deleteDialog.deleting') : t('settings.users.deleteDialog.confirm')}
           </Button>
         </DialogActions>
       </Dialog>

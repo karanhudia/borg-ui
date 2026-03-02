@@ -1,5 +1,6 @@
 import { Card, CardContent, Stack, Box, Typography, Button, IconButton } from '@mui/material'
 import { Eye, RotateCcw, HardDrive, Trash2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { formatDate } from '../utils/dateUtils'
 import { Archive } from '../types'
 
@@ -20,6 +21,7 @@ export default function ArchiveCard({
   onDelete,
   mountDisabled = false,
 }: ArchiveCardProps) {
+  const { t } = useTranslation()
   return (
     <Card
       variant="outlined"
@@ -56,7 +58,7 @@ export default function ArchiveCard({
               onClick={() => onView(archive)}
               sx={{ textTransform: 'none' }}
             >
-              View
+              {t('common.buttons.view')}
             </Button>
             <Button
               variant="outlined"
@@ -66,7 +68,7 @@ export default function ArchiveCard({
               onClick={() => onRestore(archive)}
               sx={{ textTransform: 'none' }}
             >
-              Restore
+              {t('archiveCard.restore')}
             </Button>
             <Button
               variant="outlined"
@@ -77,7 +79,7 @@ export default function ArchiveCard({
               sx={{ textTransform: 'none' }}
               disabled={mountDisabled}
             >
-              Mount
+              {t('archiveCard.mount')}
             </Button>
             <IconButton color="error" size="small" onClick={() => onDelete(archive.archive)}>
               <Trash2 size={18} />

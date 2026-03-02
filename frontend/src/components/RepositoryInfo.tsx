@@ -1,5 +1,6 @@
 import { Card, CardContent, Typography, Box, Chip } from '@mui/material'
 import { Database, Archive, HardDrive, Calendar } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { formatBytes, formatDate } from '../utils/dateUtils'
 
 interface RepositoryInfoProps {
@@ -30,6 +31,7 @@ export default function RepositoryInfo({
   archivesCount = 0,
   loading = false,
 }: RepositoryInfoProps) {
+  const { t } = useTranslation()
   const stats = repoInfo?.cache?.stats
 
   if (loading) {
@@ -37,7 +39,7 @@ export default function RepositoryInfo({
       <Card>
         <CardContent>
           <Typography variant="body2" color="text.secondary">
-            Loading repository info...
+            {t('dialogs.repositoryInfo.loadingInfo')}
           </Typography>
         </CardContent>
       </Card>
@@ -56,7 +58,7 @@ export default function RepositoryInfo({
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
               <Archive size={16} color="#666" />
               <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                Archives
+                {t('repositoryInfo.archives')}
               </Typography>
             </Box>
             <Typography variant="h6" fontWeight={600}>
@@ -68,11 +70,11 @@ export default function RepositoryInfo({
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
               <HardDrive size={16} color="#666" />
               <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                Total Size
+                {t('repositoryInfo.totalSize')}
               </Typography>
             </Box>
             <Typography variant="h6" fontWeight={600}>
-              {stats?.total_size ? formatBytes(stats.total_size) : 'N/A'}
+              {stats?.total_size ? formatBytes(stats.total_size) : t('repositoryInfo.na')}
             </Typography>
           </Box>
 
@@ -80,11 +82,11 @@ export default function RepositoryInfo({
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
               <Database size={16} color="#666" />
               <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                Deduplicated
+                {t('dialogs.repositoryInfo.uniqueData')}
               </Typography>
             </Box>
             <Typography variant="h6" fontWeight={600}>
-              {stats?.unique_csize ? formatBytes(stats.unique_csize) : 'N/A'}
+              {stats?.unique_csize ? formatBytes(stats.unique_csize) : t('repositoryInfo.na')}
             </Typography>
           </Box>
 
@@ -92,13 +94,13 @@ export default function RepositoryInfo({
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
               <Calendar size={16} color="#666" />
               <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                Last Modified
+                {t('repositoryInfo.lastModified')}
               </Typography>
             </Box>
             <Typography variant="body2" fontWeight={600}>
               {repoInfo.repository?.last_modified
                 ? formatDate(repoInfo.repository.last_modified)
-                : 'N/A'}
+                : t('repositoryInfo.na')}
             </Typography>
           </Box>
         </Box>
@@ -106,7 +108,7 @@ export default function RepositoryInfo({
         {repoInfo.encryption?.mode && (
           <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
             <Chip
-              label={`Encryption: ${repoInfo.encryption.mode}`}
+              label={`${t('repositoryInfo.encryption')}: ${repoInfo.encryption.mode}`}
               size="small"
               color="primary"
               variant="outlined"

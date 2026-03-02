@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Alert,
   Box,
@@ -67,6 +68,7 @@ export default function RepositoryScriptsTab({
   hasInlineScript,
   onClearInlineScript,
 }: RepositoryScriptsTabProps) {
+  const { t } = useTranslation()
   const [scripts, setScripts] = useState<RepositoryScript[]>([])
   const [availableScripts, setAvailableScripts] = useState<Script[]>([])
   const [loading, setLoading] = useState(true)
@@ -94,11 +96,11 @@ export default function RepositoryScriptsTab({
       onScriptsChange?.(scriptsData && scriptsData.length > 0)
     } catch (error) {
       console.error('Failed to fetch assigned scripts:', error)
-      toast.error('Failed to load assigned scripts')
+      toast.error(t('repositoryScriptsTab.failedToLoad'))
     } finally {
       setLoading(false)
     }
-  }, [repositoryId, hookType, onScriptsChange])
+  }, [repositoryId, hookType, onScriptsChange, t])
 
   const fetchAvailableScripts = React.useCallback(async () => {
     try {
@@ -134,7 +136,7 @@ export default function RepositoryScriptsTab({
         parameter_values: assignmentData.parameter_values,
       })
 
-      toast.success('Script assigned successfully')
+      toast.success(t('repositoryScriptsTab.assignedSuccessfully'))
       fetchAssignedScripts()
       setAddDialogOpen(false)
       setSelectedScriptId('')
@@ -143,22 +145,22 @@ export default function RepositoryScriptsTab({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Failed to assign script:', error)
-      toast.error(error.response?.data?.detail || 'Failed to assign script')
+      toast.error(error.response?.data?.detail || t('repositoryScripts.errors.failedToAssign'))
     }
   }
 
   const handleRemoveScript = async (scriptAssignmentId: number) => {
-    if (!confirm('Remove this script from the repository?')) return
+    if (!confirm(t('repositoryScripts.confirmRemove'))) return
 
     try {
       await api.delete(`/repositories/${repositoryId}/scripts/${scriptAssignmentId}`)
-      toast.success('Script removed successfully')
+      toast.success(t('repositoryScriptsTab.removedSuccessfully'))
       fetchAssignedScripts()
       if (onUpdate) onUpdate()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Failed to remove script:', error)
-      toast.error(error.response?.data?.detail || 'Failed to remove script')
+      toast.error(error.response?.data?.detail || t('repositoryScripts.errors.failedToRemove'))
     }
   }
 
@@ -170,7 +172,7 @@ export default function RepositoryScriptsTab({
       await api.put(`/repositories/${repositoryId}/scripts/${scriptAssignmentId}`, {
         parameter_values: parameterValues,
       })
-      toast.success('Parameters updated successfully')
+      toast.success(t('repositoryScriptsTab.parametersUpdatedSuccessfully'))
       fetchAssignedScripts()
       setEditParametersDialog({ open: false, script: null })
       if (onUpdate) onUpdate()
@@ -270,7 +272,7 @@ export default function RepositoryScriptsTab({
                 sx={{ height: 20, fontSize: '0.7rem' }}
               />
               {script.parameters && script.parameters.length > 0 && (
-                <Tooltip title={`${script.parameters.length} parameter(s) configured`}>
+                <Tooltip title={t('repositoryScripts.parametersConfigured', { count: script.parameters.length })}>
                   <Chip
                     label={`${script.parameters.length} param${script.parameters.length > 1 ? 's' : ''}`}
                     size="small"
@@ -281,10 +283,10 @@ export default function RepositoryScriptsTab({
                 </Tooltip>
               )}
               {areParametersOutOfSync(script) && (
-                <Tooltip title="Parameters need attention - script definition has changed">
+                <Tooltip title={t('repositoryScripts.tooltips.parametersOutOfSync')}>
                   <Chip
                     icon={<AlertTriangle size={12} />}
-                    label="Out of Sync"
+                    label={t('repositoryScripts.chips.outOfSync')}
                     size="small"
                     color="warning"
                     sx={{ height: 20, fontSize: '0.7rem' }}
@@ -308,7 +310,7 @@ export default function RepositoryScriptsTab({
               )}
               {isPreBackup && effectiveContinueOnError && (
                 <Chip
-                  label="Continues on Error"
+                  label={t('repositoryScripts.chips.continuesOnError')}
                   size="small"
                   color="warning"
                   variant="outlined"
@@ -327,7 +329,7 @@ export default function RepositoryScriptsTab({
               {/* Actions */}
               <Box sx={{ display: 'flex', gap: 0.25, ml: 'auto' }}>
                 {script.parameters && script.parameters.length > 0 && (
-                  <Tooltip title="Configure Parameters">
+                  <Tooltip title={t('repositoryScripts.tooltips.configureParameters')}>
                     <IconButton
                       size="small"
                       onClick={() => setEditParametersDialog({ open: true, script })}
@@ -338,7 +340,7 @@ export default function RepositoryScriptsTab({
                     </IconButton>
                   </Tooltip>
                 )}
-                <Tooltip title="Remove">
+                <Tooltip title={t('repositoryScripts.tooltips.remove')}>
                   <IconButton
                     size="small"
                     onClick={() => handleRemoveScript(script.id)}
@@ -357,7 +359,7 @@ export default function RepositoryScriptsTab({
   }
 
   if (loading) {
-    return <Typography>Loading scripts...</Typography>
+    return <Typography>{t('repositoryScriptsTab.loading')}</Typography>
   }
 
   return (
@@ -424,6 +426,7 @@ function RepositoryScriptDialog({
   scriptsCount,
   hasInlineScript,
 }: RepositoryScriptDialogProps) {
+  const { t } = useTranslation()
   const [continueOnError, setContinueOnError] = useState(true)
   const [parameterValues, setParameterValues] = useState<Record<string, string>>({})
   const isPreBackup = hookType === 'pre-backup'
@@ -462,7 +465,7 @@ function RepositoryScriptDialog({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Assign Script to Repository</DialogTitle>
+      <DialogTitle>{t('repositoryScripts.dialog.assignTitle')}</DialogTitle>
       <DialogContent>
         <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
           {isPreBackup && hasInlineScript && scriptsCount === 0 && (
@@ -471,10 +474,10 @@ function RepositoryScriptDialog({
             </Alert>
           )}
           <FormControl fullWidth>
-            <InputLabel>Select Script</InputLabel>
+            <InputLabel>{t('repositoryScripts.dialog.selectScriptLabel')}</InputLabel>
             <Select
               value={selectedScriptId}
-              label="Select Script"
+              label={t('repositoryScripts.dialog.selectScriptLabel')}
               onChange={(e) => onScriptSelect(e.target.value as number)}
               sx={{ height: { xs: 48, sm: 56 } }}
               MenuProps={{
@@ -520,19 +523,19 @@ function RepositoryScriptDialog({
                     onChange={(e) => setContinueOnError(e.target.checked)}
                   />
                 }
-                label="Continue backup if script fails"
+                label={t('repositoryScripts.dialog.continueOnErrorLabel')}
               />
               <FormHelperText sx={{ mt: -1, ml: 4 }}>
-                Override default: If checked, the backup will proceed even if this script fails.
+                {t('repositoryScripts.dialog.continueOnErrorHelperText')}
               </FormHelperText>
             </Box>
           )}
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose}>{t('repositoryScripts.dialog.cancel')}</Button>
         <Button onClick={handleSubmit} variant="contained" disabled={!selectedScriptId}>
-          Assign Script
+          {t('repositoryScripts.dialog.assignScript')}
         </Button>
       </DialogActions>
     </Dialog>
@@ -547,6 +550,7 @@ interface EditParametersDialogProps {
 }
 
 function EditParametersDialog({ open, onClose, script, onSubmit }: EditParametersDialogProps) {
+  const { t } = useTranslation()
   const [parameterValues, setParameterValues] = useState<Record<string, string>>({})
 
   // Initialize parameter values when dialog opens
@@ -564,7 +568,7 @@ function EditParametersDialog({ open, onClose, script, onSubmit }: EditParameter
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Configure Script Parameters: {script.script_name}</DialogTitle>
+      <DialogTitle>{t('repositoryScripts.parametersDialog.title', { scriptName: script.script_name })}</DialogTitle>
       <DialogContent>
         <Box sx={{ pt: 2 }}>
           {script.parameters && script.parameters.length > 0 ? (
@@ -574,14 +578,14 @@ function EditParametersDialog({ open, onClose, script, onSubmit }: EditParameter
               onChange={setParameterValues}
             />
           ) : (
-            <Alert severity="info">This script has no parameters.</Alert>
+            <Alert severity="info">{t('repositoryScripts.parametersDialog.noParameters')}</Alert>
           )}
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose}>{t('repositoryScripts.parametersDialog.cancel')}</Button>
         <Button onClick={handleSubmit} variant="contained">
-          Save Parameters
+          {t('repositoryScripts.parametersDialog.saveParameters')}
         </Button>
       </DialogActions>
     </Dialog>

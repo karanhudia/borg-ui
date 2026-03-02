@@ -11,6 +11,7 @@ import {
 } from '@mui/material'
 import { Clock } from 'lucide-react'
 import CronBuilder from './CronBuilder'
+import { useTranslation } from 'react-i18next'
 
 interface CronBuilderDialogProps {
   value: string
@@ -32,9 +33,10 @@ export const CronBuilderDialog: React.FC<CronBuilderDialogProps> = ({
   onChange,
   label,
   helperText,
-  buttonLabel = 'Apply Schedule',
-  dialogTitle = 'Configure Schedule',
+  buttonLabel,
+  dialogTitle,
 }) => {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [tempValue, setTempValue] = useState(value)
 
@@ -56,7 +58,7 @@ export const CronBuilderDialog: React.FC<CronBuilderDialogProps> = ({
   return (
     <>
       {/* Trigger Button */}
-      <Tooltip title="Open schedule builder" arrow>
+      <Tooltip title={t('cronBuilderDialog.openScheduleBuilder')} arrow>
         <IconButton onClick={handleOpen} edge="end">
           <Clock size={20} />
         </IconButton>
@@ -64,7 +66,7 @@ export const CronBuilderDialog: React.FC<CronBuilderDialogProps> = ({
 
       {/* Dialog with CronBuilder */}
       <Dialog open={open} onClose={handleCancel} maxWidth="sm" fullWidth>
-        <DialogTitle>{dialogTitle}</DialogTitle>
+        <DialogTitle>{dialogTitle || t('cronBuilder.configureSchedule')}</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
             <CronBuilder
@@ -76,9 +78,9 @@ export const CronBuilderDialog: React.FC<CronBuilderDialogProps> = ({
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCancel}>Cancel</Button>
+          <Button onClick={handleCancel}>{t('common.buttons.cancel')}</Button>
           <Button onClick={handleApply} variant="contained" color="primary">
-            {buttonLabel}
+            {buttonLabel || t('cronBuilder.applySchedule')}
           </Button>
         </DialogActions>
       </Dialog>

@@ -1,5 +1,6 @@
 import { Box, Stack, Typography, Alert } from '@mui/material'
 import { RefreshCw, CheckCircle, AlertCircle, Clock } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { formatTimeRange, formatDurationSeconds, formatRelativeTime } from '../utils/dateUtils'
 
 interface RestoreJob {
@@ -40,6 +41,7 @@ const getStatusIcon = (status: string) => {
 }
 
 export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCardProps) {
+  const { t } = useTranslation()
   // Extract a cleaner archive name (remove timestamp if present)
   const getArchiveName = (archiveName: string) => {
     // If archive name contains a timestamp pattern, extract the base name
@@ -66,7 +68,7 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
         <Box sx={{ flex: 1, minWidth: 0 }}>
           {showJobId && (
             <Typography variant="body1" fontWeight={500} sx={{ mb: 0.5 }}>
-              Restore Job #{job.id}
+              {t('restoreJobCard.title')} #{job.id}
             </Typography>
           )}
           <Stack direction="row" spacing={1} alignItems="baseline" sx={{ flexWrap: 'wrap' }}>
@@ -117,7 +119,7 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
                 }}
               />
               <Typography variant="body2" fontWeight={500} color="info.main">
-                Restoring files...
+                {t('restoreJobCard.restoringFiles')}
               </Typography>
             </Stack>
             <Typography variant="body2" color="text.secondary">
@@ -135,7 +137,7 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
           sx={{ flexWrap: 'wrap', gap: 1 }}
         >
           <Typography variant="body2" color="success.main" fontWeight={500}>
-            ✓ Completed
+            ✓ {t('restoreJobCard.completed')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {formatRelativeTime(job.completed_at)}
@@ -161,7 +163,7 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
           sx={{ flexWrap: 'wrap', gap: 1 }}
         >
           <Typography variant="body2" color="warning.main" fontWeight={500}>
-            ⚠ Completed with warnings
+            ⚠ {t('restoreJobCard.completedWithWarnings')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {formatRelativeTime(job.completed_at)}
@@ -194,7 +196,7 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
       {job.status === 'running' && job.progress_details?.current_file && (
         <Alert severity="info" sx={{ mb: 2, py: 0.5 }}>
           <Typography variant="caption" fontWeight={500}>
-            Current File:
+            {t('restoreJobCard.currentFile')}
           </Typography>
           <Typography
             variant="caption"
@@ -220,7 +222,7 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
         >
           <Box>
             <Typography variant="body2" color="text.secondary">
-              Files Restored:
+              {t('restoreJobCard.filesRestored')}
             </Typography>
             <Typography variant="body2" fontWeight={500}>
               {job.progress_details.nfiles?.toLocaleString() || '0'}
@@ -228,7 +230,7 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
           </Box>
           <Box>
             <Typography variant="body2" color="text.secondary">
-              Progress:
+              {t('restoreJobCard.progress')}
             </Typography>
             <Typography variant="body2" fontWeight={500} color="primary.main">
               {job.progress_details.progress_percent?.toFixed(1) || '0'}%
@@ -236,7 +238,7 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
           </Box>
           <Box>
             <Typography variant="body2" color="text.secondary">
-              Speed:
+              {t('restoreJobCard.speed')}
             </Typography>
             <Typography variant="body2" fontWeight={500} color="primary.main">
               {job.progress_details.restore_speed
@@ -247,7 +249,7 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
           {(job.progress_details.estimated_time_remaining || 0) > 0 && (
             <Box>
               <Typography variant="body2" color="text.secondary">
-                ETA:
+                {t('restoreJobCard.eta')}
               </Typography>
               <Typography variant="body2" fontWeight={500} color="success.main">
                 {formatDurationSeconds(job.progress_details.estimated_time_remaining || 0)}

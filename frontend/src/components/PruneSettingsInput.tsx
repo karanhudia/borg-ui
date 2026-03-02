@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Box, TextField } from '@mui/material'
 
 export interface PruneSettings {
@@ -21,6 +22,7 @@ const PruneSettingsInput: React.FC<PruneSettingsInputProps> = ({
   onChange,
   disabled = false,
 }) => {
+  const { t } = useTranslation()
   const handleChange = (field: keyof PruneSettings, value: string) => {
     const parsedValue = parseInt(value, 10)
     const finalValue = isNaN(parsedValue) ? 0 : Math.max(0, parsedValue)
@@ -33,63 +35,63 @@ const PruneSettingsInput: React.FC<PruneSettingsInputProps> = ({
   return (
     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
       <TextField
-        label="Keep Hourly"
+        label={t('pruneSettings.keepHourly')}
         type="number"
         value={values.keepHourly}
         onChange={(e) => handleChange('keepHourly', e.target.value)}
         inputProps={{ min: 0 }}
         size="small"
-        helperText="Hourly backups to keep (0 = disabled)"
+        helperText={t('pruneSettings.keepHourlyHint')}
         disabled={disabled}
       />
       <TextField
-        label="Keep Daily"
+        label={t('pruneSettings.keepDaily')}
         type="number"
         value={values.keepDaily}
         onChange={(e) => handleChange('keepDaily', e.target.value)}
         inputProps={{ min: 0 }}
         size="small"
-        helperText="Daily backups to keep"
+        helperText={t('pruneSettings.keepDailyHint')}
         disabled={disabled}
       />
       <TextField
-        label="Keep Weekly"
+        label={t('pruneSettings.keepWeekly')}
         type="number"
         value={values.keepWeekly}
         onChange={(e) => handleChange('keepWeekly', e.target.value)}
         inputProps={{ min: 0 }}
         size="small"
-        helperText="Weekly backups to keep"
+        helperText={t('pruneSettings.keepWeeklyHint')}
         disabled={disabled}
       />
       <TextField
-        label="Keep Monthly"
+        label={t('pruneSettings.keepMonthly')}
         type="number"
         value={values.keepMonthly}
         onChange={(e) => handleChange('keepMonthly', e.target.value)}
         inputProps={{ min: 0 }}
         size="small"
-        helperText="Monthly backups to keep"
+        helperText={t('pruneSettings.keepMonthlyHint')}
         disabled={disabled}
       />
       <TextField
-        label="Keep Quarterly"
+        label={t('pruneSettings.keepQuarterly')}
         type="number"
         value={values.keepQuarterly}
         onChange={(e) => handleChange('keepQuarterly', e.target.value)}
         inputProps={{ min: 0 }}
         size="small"
-        helperText="Quarterly backups to keep (0 = disabled)"
+        helperText={t('pruneSettings.keepQuarterlyHint')}
         disabled={disabled}
       />
       <TextField
-        label="Keep Yearly"
+        label={t('pruneSettings.keepYearly')}
         type="number"
         value={values.keepYearly}
         onChange={(e) => handleChange('keepYearly', e.target.value)}
         inputProps={{ min: 0 }}
         size="small"
-        helperText="Yearly backups to keep"
+        helperText={t('pruneSettings.keepYearlyHint')}
         disabled={disabled}
       />
     </Box>

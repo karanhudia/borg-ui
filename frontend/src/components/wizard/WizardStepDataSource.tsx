@@ -13,6 +13,7 @@ import {
   Tooltip,
 } from '@mui/material'
 import { HardDrive, Laptop, Ban } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import SourceDirectoriesInput from '../SourceDirectoriesInput'
 
 interface SSHConnection {
@@ -53,6 +54,8 @@ export default function WizardStepDataSource({
   onBrowseSource,
   onBrowseRemoteSource,
 }: WizardStepDataSourceProps) {
+  const { t } = useTranslation()
+
   // Remote-to-remote is not allowed
   const isRemoteToRemoteDisabled = repositoryLocation === 'ssh'
 
@@ -93,7 +96,7 @@ export default function WizardStepDataSource({
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Typography variant="subtitle2" gutterBottom>
-        Where is the data you want to back up?
+        {t('wizard.dataSource.title')}
       </Typography>
 
       <Box sx={{ display: 'flex', gap: 2, alignItems: 'stretch' }}>
@@ -159,16 +162,16 @@ export default function WizardStepDataSource({
                 </Box>
                 <Box>
                   <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
-                    Borg UI Server
+                    {t('wizard.borgUiServer')}
                   </Typography>
                 </Box>
               </Box>
               <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
-                Back up data from this server (local or mounted filesystems)
+                {t('wizard.dataSource.localDescription')}
               </Typography>
               {hasRemoteDirs && (
                 <Typography variant="caption" color="warning.main" sx={{ mt: 1, display: 'block' }}>
-                  Remove remote directories first to switch
+                  {t('wizard.dataSource.removeRemoteDirsFirst')}
                 </Typography>
               )}
             </CardContent>
@@ -179,7 +182,7 @@ export default function WizardStepDataSource({
         <Tooltip
           title={
             isRemoteToRemoteDisabled
-              ? 'Remote-to-remote backups are not supported. Select a local repository or use the same remote machine.'
+              ? t('wizard.dataSource.remoteToRemoteDisabledTooltip')
               : ''
           }
           arrow
@@ -254,14 +257,14 @@ export default function WizardStepDataSource({
                   </Box>
                   <Box>
                     <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
-                      Remote Client
+                      {t('wizard.remoteClient')}
                     </Typography>
                   </Box>
                 </Box>
                 <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
                   {isRemoteToRemoteDisabled
-                    ? 'Not available when repository is on a remote client'
-                    : 'Back up data from a remote machine via SSH'}
+                    ? t('wizard.dataSource.notAvailableRemoteRepo')
+                    : t('wizard.dataSource.remoteDescription')}
                 </Typography>
                 {hasLocalDirs && !isRemoteToRemoteDisabled && (
                   <Typography
@@ -269,7 +272,7 @@ export default function WizardStepDataSource({
                     color="warning.main"
                     sx={{ mt: 1, display: 'block' }}
                   >
-                    Remove local directories first to switch
+                    {t('wizard.dataSource.removeLocalDirsFirst')}
                   </Typography>
                 )}
               </CardContent>
@@ -282,9 +285,7 @@ export default function WizardStepDataSource({
       {isRemoteToRemoteDisabled && (
         <Alert severity="info">
           <Typography variant="body2">
-            <strong>Why is "Remote Client" disabled?</strong> When the repository is stored on a
-            remote server, the data source must be the Borg UI server. Remote-to-remote backups are
-            not supported.
+            <strong>{t('wizard.dataSource.remoteToRemoteTitle')}</strong> {t('wizard.dataSource.remoteToRemoteBody')}
           </Typography>
         </Alert>
       )}
@@ -309,18 +310,17 @@ export default function WizardStepDataSource({
         <>
           {!Array.isArray(sshConnections) || sshConnections.length === 0 ? (
             <Alert severity="warning">
-              No SSH connections configured. Please configure SSH connections in the SSH Keys page
-              first.
+              {t('wizard.noSshConnections')}
             </Alert>
           ) : (
             <>
               <FormControl fullWidth>
-                <InputLabel>Select Remote Client</InputLabel>
+                <InputLabel>{t('wizard.dataSource.selectRemoteClient')}</InputLabel>
                 <Select
                   value={
                     data.sourceSshConnectionId === '' ? '' : String(data.sourceSshConnectionId)
                   }
-                  label="Select Remote Client"
+                  label={t('wizard.dataSource.selectRemoteClient')}
                   onChange={(e) => {
                     const value = e.target.value
                     if (value) {
@@ -384,8 +384,7 @@ export default function WizardStepDataSource({
                     color="text.secondary"
                     sx={{ mt: 0.5, display: 'block' }}
                   >
-                    Browse remote directories or enter full paths manually (e.g.,
-                    /home/user/documents, /var/www)
+                    {t('wizard.dataSource.browseRemoteNote')}
                   </Typography>
                 </Box>
               )}
@@ -394,9 +393,7 @@ export default function WizardStepDataSource({
 
           <Alert severity="info">
             <Typography variant="body2">
-              <strong>Note:</strong> The Borg UI server will SSH into the remote machine to browse
-              and back up the selected directories. Ensure the SSH connection is properly configured
-              with the necessary permissions.
+              <strong>Note:</strong> {t('wizard.dataSource.remoteSshNote')}
             </Typography>
           </Alert>
         </>

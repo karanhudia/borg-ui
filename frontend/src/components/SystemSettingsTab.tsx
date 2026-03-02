@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
@@ -17,6 +18,7 @@ import { toast } from 'react-hot-toast'
 import { settingsAPI } from '../services/api'
 
 const SystemSettingsTab: React.FC = () => {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
 
   // Local state for browse limits
@@ -78,7 +80,7 @@ const SystemSettingsTab: React.FC = () => {
           sx={{ color: 'success.main', fontSize: '0.7rem', fontWeight: 500 }}
         >
           {' '}
-          [customized]
+          {t('systemSettings.sourceCustomized')}
         </Typography>
       )
     }
@@ -89,14 +91,14 @@ const SystemSettingsTab: React.FC = () => {
           sx={{ color: 'warning.main', fontSize: '0.7rem', fontWeight: 500 }}
         >
           {' '}
-          [from env]
+          {t('systemSettings.sourceFromEnv')}
         </Typography>
       )
     }
     return (
       <Typography component="span" sx={{ color: 'info.main', fontSize: '0.7rem', fontWeight: 500 }}>
         {' '}
-        [default]
+        {t('systemSettings.sourceDefault')}
       </Typography>
     )
   }
@@ -208,7 +210,7 @@ const SystemSettingsTab: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       const data = error.response?.data
-      let errorMsg = 'Failed to save browse limits'
+      let errorMsg = t('systemSettings.failedToSaveBrowseLimits')
       if (Array.isArray(data)) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         errorMsg = data.map((e: any) => e.msg).join(', ')
@@ -238,7 +240,7 @@ const SystemSettingsTab: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       const data = error.response?.data
-      let errorMsg = 'Failed to save timeout settings'
+      let errorMsg = t('systemSettings.failedToSaveTimeoutSettings')
       if (Array.isArray(data)) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         errorMsg = data.map((e: any) => e.msg).join(', ')
@@ -260,11 +262,11 @@ const SystemSettingsTab: React.FC = () => {
         saveBrowseLimitsMutation.mutateAsync(),
         saveTimeoutsMutation.mutateAsync(),
       ])
-      toast.success('System settings saved successfully')
+      toast.success(t('systemSettings.savedSuccessfully'))
       setHasChanges(false)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      toast.error(error.message || 'Failed to save settings')
+      toast.error(error.message || t('systemSettings.failedToSaveSettings'))
     }
   }
 
@@ -285,7 +287,7 @@ const SystemSettingsTab: React.FC = () => {
     try {
       const response = await settingsAPI.refreshAllStats()
       const data = response.data
-      toast.success(data.message || 'Stats refresh started')
+      toast.success(data.message || t('systemSettings.statsRefreshStarted'))
 
       // Poll for completion by checking last_stats_refresh
       const startTime = Date.now()
@@ -303,7 +305,7 @@ const SystemSettingsTab: React.FC = () => {
           if (newLastRefresh && new Date(newLastRefresh) > new Date(startTime)) {
             clearInterval(pollInterval)
             setIsRefreshingStats(false)
-            toast.success('Stats refresh completed')
+            toast.success(t('systemSettings.statsRefreshCompleted'))
             queryClient.invalidateQueries({ queryKey: ['repositories'] })
             queryClient.invalidateQueries({ queryKey: ['systemSettings'] })
           }
@@ -313,7 +315,7 @@ const SystemSettingsTab: React.FC = () => {
       }, 3000) // Poll every 3 seconds
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to start stats refresh')
+      toast.error(error.response?.data?.detail || t('systemSettings.failedToStartStatsRefresh'))
       setIsRefreshingStats(false)
     }
   }
@@ -336,10 +338,10 @@ const SystemSettingsTab: React.FC = () => {
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
           <Box>
             <Typography variant="h5" fontWeight={700} gutterBottom>
-              System Settings
+              {t('systemSettings.title')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Configure system-wide settings, resource limits, and operation timeouts
+              {t('systemSettings.subtitle')}
             </Typography>
           </Box>
           <Button
@@ -348,7 +350,7 @@ const SystemSettingsTab: React.FC = () => {
             onClick={handleSaveSettings}
             disabled={!hasChanges || isSaving || !!validationError}
           >
-            {isSaving ? 'Saving...' : 'Save Settings'}
+            {isSaving ? t('systemSettings.saving') : t('systemSettings.save')}
           </Button>
         </Box>
 
@@ -358,11 +360,10 @@ const SystemSettingsTab: React.FC = () => {
             <Stack spacing={3}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Clock size={24} />
-                <Typography variant="h6">Operation Timeouts</Typography>
+                <Typography variant="h6">{t('systemSettings.operationTimeoutsTitle')}</Typography>
               </Box>
               <Typography variant="body2" color="text.secondary">
-                Configure timeouts for various borg operations. Increase these for very large
-                repositories (multi-terabyte, hundreds of archives) that may take longer to process.
+                {t('systemSettings.operationTimeoutsDescription')}
               </Typography>
               <Divider />
 
@@ -374,7 +375,7 @@ const SystemSettingsTab: React.FC = () => {
                 }}
               >
                 <TextField
-                  label="Mount Timeout (seconds)"
+                  label={t('systemSettings.mountTimeoutLabel')}
                   type="number"
                   fullWidth
                   value={mountTimeout}
@@ -383,14 +384,14 @@ const SystemSettingsTab: React.FC = () => {
                   error={mountTimeout < MIN_TIMEOUT || mountTimeout > MAX_TIMEOUT}
                   helperText={
                     <>
-                      For mounting archives. {formatTimeout(mountTimeout)}
+                      {t('systemSettings.mountTimeoutHelper')} {formatTimeout(mountTimeout)}
                       {renderSourceLabel(timeoutSources?.mount_timeout)}
                     </>
                   }
                 />
 
                 <TextField
-                  label="Info Timeout (seconds)"
+                  label={t('systemSettings.infoTimeoutLabel')}
                   type="number"
                   fullWidth
                   value={infoTimeout}
@@ -399,14 +400,14 @@ const SystemSettingsTab: React.FC = () => {
                   error={infoTimeout < MIN_TIMEOUT || infoTimeout > MAX_TIMEOUT}
                   helperText={
                     <>
-                      For borg info commands. {formatTimeout(infoTimeout)}
+                      {t('systemSettings.infoTimeoutHelper')} {formatTimeout(infoTimeout)}
                       {renderSourceLabel(timeoutSources?.info_timeout)}
                     </>
                   }
                 />
 
                 <TextField
-                  label="List Timeout (seconds)"
+                  label={t('systemSettings.listTimeoutLabel')}
                   type="number"
                   fullWidth
                   value={listTimeout}
@@ -415,14 +416,14 @@ const SystemSettingsTab: React.FC = () => {
                   error={listTimeout < MIN_TIMEOUT || listTimeout > MAX_TIMEOUT}
                   helperText={
                     <>
-                      For listing archives. {formatTimeout(listTimeout)}
+                      {t('systemSettings.listTimeoutHelper')} {formatTimeout(listTimeout)}
                       {renderSourceLabel(timeoutSources?.list_timeout)}
                     </>
                   }
                 />
 
                 <TextField
-                  label="Init Timeout (seconds)"
+                  label={t('systemSettings.initTimeoutLabel')}
                   type="number"
                   fullWidth
                   value={initTimeout}
@@ -431,14 +432,14 @@ const SystemSettingsTab: React.FC = () => {
                   error={initTimeout < MIN_TIMEOUT || initTimeout > MAX_TIMEOUT}
                   helperText={
                     <>
-                      For repository init. {formatTimeout(initTimeout)}
+                      {t('systemSettings.initTimeoutHelper')} {formatTimeout(initTimeout)}
                       {renderSourceLabel(timeoutSources?.init_timeout)}
                     </>
                   }
                 />
 
                 <TextField
-                  label="Backup/Restore Timeout (seconds)"
+                  label={t('systemSettings.backupTimeoutLabel')}
                   type="number"
                   fullWidth
                   value={backupTimeout}
@@ -447,14 +448,14 @@ const SystemSettingsTab: React.FC = () => {
                   error={backupTimeout < MIN_TIMEOUT || backupTimeout > MAX_TIMEOUT}
                   helperText={
                     <>
-                      For backup/restore. {formatTimeout(backupTimeout)}
+                      {t('systemSettings.backupTimeoutHelper')} {formatTimeout(backupTimeout)}
                       {renderSourceLabel(timeoutSources?.backup_timeout)}
                     </>
                   }
                 />
 
                 <TextField
-                  label="Source Size Timeout (seconds)"
+                  label={t('systemSettings.sourceSizeTimeoutLabel')}
                   type="number"
                   fullWidth
                   value={sourceSizeTimeout}
@@ -463,7 +464,7 @@ const SystemSettingsTab: React.FC = () => {
                   error={sourceSizeTimeout < MIN_TIMEOUT || sourceSizeTimeout > MAX_TIMEOUT}
                   helperText={
                     <>
-                      For source size calculation (du). {formatTimeout(sourceSizeTimeout)}
+                      {t('systemSettings.sourceSizeTimeoutHelper')} {formatTimeout(sourceSizeTimeout)}
                       {renderSourceLabel(timeoutSources?.source_size_timeout)}
                     </>
                   }
@@ -479,18 +480,16 @@ const SystemSettingsTab: React.FC = () => {
             <Stack spacing={3}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <RefreshCw size={24} />
-                <Typography variant="h6">Repository Monitoring</Typography>
+                <Typography variant="h6">{t('systemSettings.repositoryMonitoringTitle')}</Typography>
               </Box>
               <Typography variant="body2" color="text.secondary">
-                Configure automatic refresh of repository statistics. This keeps dashboard data
-                up-to-date, especially useful for observe-only repositories where backups are
-                managed externally.
+                {t('systemSettings.repositoryMonitoringDescription')}
               </Typography>
               <Divider />
 
               <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
                 <TextField
-                  label="Stats Refresh Interval (minutes)"
+                  label={t('systemSettings.statsRefreshIntervalLabel')}
                   type="number"
                   value={statsRefreshInterval}
                   onChange={(e) => setStatsRefreshInterval(Number(e.target.value))}
@@ -498,10 +497,10 @@ const SystemSettingsTab: React.FC = () => {
                   error={statsRefreshInterval < 0 || statsRefreshInterval > MAX_STATS_REFRESH}
                   helperText={
                     statsRefreshInterval === 0
-                      ? 'Automatic stats refresh is disabled'
+                      ? t('systemSettings.statsRefreshDisabled')
                       : statsRefreshInterval < 0 || statsRefreshInterval > MAX_STATS_REFRESH
-                        ? `Must be between 0 and ${MAX_STATS_REFRESH} minutes`
-                        : `Repository stats (archive count, size, last backup) will be refreshed every ${statsRefreshInterval} minutes`
+                        ? t('systemSettings.statsRefreshRangeError', { max: MAX_STATS_REFRESH })
+                        : t('systemSettings.statsRefreshIntervalHelper', { interval: statsRefreshInterval })
                   }
                   sx={{ width: 300 }}
                 />
@@ -514,19 +513,18 @@ const SystemSettingsTab: React.FC = () => {
                   }
                   sx={{ height: 40 }}
                 >
-                  {isRefreshingStats ? 'Refreshing...' : 'Refresh Now'}
+                  {isRefreshingStats ? t('systemSettings.refreshing') : t('systemSettings.refreshNow')}
                 </Button>
               </Box>
 
               {systemSettings?.last_stats_refresh && (
                 <Typography variant="body2" color="text.secondary">
-                  Last refreshed: {new Date(systemSettings.last_stats_refresh).toLocaleString()}
+                  {t('systemSettings.lastRefreshed')} {new Date(systemSettings.last_stats_refresh).toLocaleString()}
                 </Typography>
               )}
 
               <Alert severity="info">
-                Set to 0 to disable automatic refresh. The scheduler refreshes stats for all
-                repositories, including observe-only ones where backups happen externally.
+                {t('systemSettings.manualRefreshAlert')}
               </Alert>
             </Stack>
           </CardContent>
@@ -538,11 +536,10 @@ const SystemSettingsTab: React.FC = () => {
             <Stack spacing={3}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Settings size={24} />
-                <Typography variant="h6">Archive Browsing Limits</Typography>
+                <Typography variant="h6">{t('systemSettings.archiveBrowsingLimitsTitle')}</Typography>
               </Box>
               <Typography variant="body2" color="text.secondary">
-                These limits prevent out-of-memory errors when browsing archives with millions of
-                files. The borg process is terminated early if limits are exceeded.
+                {t('systemSettings.archiveBrowsingLimitsDescription')}
               </Typography>
               <Divider />
 
@@ -550,7 +547,7 @@ const SystemSettingsTab: React.FC = () => {
                 sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}
               >
                 <TextField
-                  label="Max Files to Load"
+                  label={t('systemSettings.maxFilesToLoadLabel')}
                   type="number"
                   fullWidth
                   value={browseMaxItems}
@@ -559,13 +556,13 @@ const SystemSettingsTab: React.FC = () => {
                   error={browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES}
                   helperText={
                     browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES
-                      ? `Must be between ${MIN_FILES.toLocaleString()} and ${MAX_FILES.toLocaleString()}`
-                      : `Maximum files when browsing. Current: ${(browseMaxItems / 1_000_000).toFixed(1)}M files`
+                      ? t('systemSettings.maxFilesRangeError', { min: MIN_FILES.toLocaleString(), max: MAX_FILES.toLocaleString() })
+                      : t('systemSettings.maxFilesHelperText', { current: (browseMaxItems / 1_000_000).toFixed(1) })
                   }
                 />
 
                 <TextField
-                  label="Max Memory (MB)"
+                  label={t('systemSettings.maxMemoryLabel')}
                   type="number"
                   fullWidth
                   value={browseMaxMemoryMb}
@@ -574,16 +571,14 @@ const SystemSettingsTab: React.FC = () => {
                   error={browseMaxMemoryMb < MIN_MEMORY || browseMaxMemoryMb > MAX_MEMORY}
                   helperText={
                     browseMaxMemoryMb < MIN_MEMORY || browseMaxMemoryMb > MAX_MEMORY
-                      ? `Must be between ${MIN_MEMORY} MB and ${MAX_MEMORY} MB`
-                      : `Maximum memory for browsing. Current: ${(browseMaxMemoryMb / 1024).toFixed(2)} GB`
+                      ? t('systemSettings.maxMemoryRangeError', { min: MIN_MEMORY, max: MAX_MEMORY })
+                      : t('systemSettings.maxMemoryHelperText', { current: (browseMaxMemoryMb / 1024).toFixed(2) })
                   }
                 />
               </Box>
 
               <Alert severity="warning" icon={<AlertTriangle size={20} />}>
-                <strong>Warning:</strong> Increasing these limits significantly can cause
-                out-of-memory errors and crash the server. Only increase if you have sufficient RAM
-                and need to browse very large archives.
+                <strong>{t('systemSettings.warningLabel')}</strong> {t('systemSettings.largeLimitsWarning')}
               </Alert>
             </Stack>
           </CardContent>
