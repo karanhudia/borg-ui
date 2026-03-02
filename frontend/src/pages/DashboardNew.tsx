@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   Box,
   Card,
@@ -115,6 +116,7 @@ interface DashboardOverview {
 
 export default function DashboardNew() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
 
   const {
     data: overview,
@@ -203,10 +205,10 @@ export default function DashboardNew() {
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" fontWeight={600} gutterBottom>
-          Dashboard
+          {t('dashboard.title')}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Comprehensive overview of your backup infrastructure
+          {t('dashboard.subtitle')}
         </Typography>
       </Box>
 
@@ -237,13 +239,13 @@ export default function DashboardNew() {
               </Box>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="body2" color="text.secondary" noWrap>
-                  Repositories
+                  {t('dashboard.stats.repositories')}
                 </Typography>
                 <Typography variant="h5" fontWeight={600} sx={{ mt: 0.5 }}>
                   {overview.summary.total_repositories}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {overview.summary.ssh_repositories} SSH remote
+                  {overview.summary.ssh_repositories} {t('dashboard.stats.sshRemote')}
                 </Typography>
               </Box>
             </Stack>
@@ -268,13 +270,13 @@ export default function DashboardNew() {
               </Box>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="body2" color="text.secondary" noWrap>
-                  Active Schedules
+                  {t('dashboard.stats.activeSchedules')}
                 </Typography>
                 <Typography variant="h5" fontWeight={600} sx={{ mt: 0.5 }}>
                   {overview.summary.active_schedules}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  of {overview.summary.total_schedules} total
+                  {t('dashboard.stats.ofTotal', { count: overview.summary.total_schedules })}
                 </Typography>
               </Box>
             </Stack>
@@ -299,7 +301,7 @@ export default function DashboardNew() {
               </Box>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="body2" color="text.secondary" noWrap>
-                  Success Rate (30d)
+                  {t('dashboard.stats.successRate')}
                 </Typography>
                 <Typography variant="h5" fontWeight={600} sx={{ mt: 0.5 }}>
                   {overview.summary.success_rate_30d.toFixed(1)}%
@@ -331,13 +333,13 @@ export default function DashboardNew() {
               </Box>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="body2" color="text.secondary" noWrap>
-                  Failed (Last 30d)
+                  {t('dashboard.stats.failed30d')}
                 </Typography>
                 <Typography variant="h5" fontWeight={600} sx={{ mt: 0.5 }}>
                   {overview.summary.failed_jobs_30d}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Requires attention
+                  {t('dashboard.stats.requiresAttention')}
                 </Typography>
               </Box>
             </Stack>
@@ -362,7 +364,7 @@ export default function DashboardNew() {
               <Stack direction="row" spacing={1.5} alignItems="center">
                 <HardDrive size={20} />
                 <Typography variant="h6" fontWeight={600}>
-                  Storage Breakdown
+                  {t('dashboard.storageBreakdown')}
                 </Typography>
               </Stack>
               <Typography variant="h5" fontWeight={700} color="primary">
@@ -431,7 +433,7 @@ export default function DashboardNew() {
               })}
               {overview.storage.breakdown.length > 3 && (
                 <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center' }}>
-                  +{overview.storage.breakdown.length - 3} more repositories
+                  {t('dashboard.moreRepositories', { count: overview.storage.breakdown.length - 3 })}
                 </Typography>
               )}
             </Stack>
@@ -444,7 +446,7 @@ export default function DashboardNew() {
             <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
               <Server size={20} />
               <Typography variant="h6" fontWeight={600}>
-                System Resources
+                {t('dashboard.systemResources')}
               </Typography>
             </Stack>
 
@@ -453,7 +455,7 @@ export default function DashboardNew() {
                 <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
                   <Stack direction="row" spacing={0.5} alignItems="center">
                     <Cpu size={14} />
-                    <Typography variant="body2">CPU</Typography>
+                    <Typography variant="body2">{t('dashboard.cpu')}</Typography>
                   </Stack>
                   <Typography variant="body2" fontWeight={600}>
                     {overview.system_metrics.cpu_usage.toFixed(1)}%
@@ -477,7 +479,7 @@ export default function DashboardNew() {
                 <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
                   <Stack direction="row" spacing={0.5} alignItems="center">
                     <MemoryStick size={14} />
-                    <Typography variant="body2">Memory</Typography>
+                    <Typography variant="body2">{t('dashboard.memory')}</Typography>
                   </Stack>
                   <Typography variant="body2" fontWeight={600}>
                     {formatBytes(
@@ -505,7 +507,7 @@ export default function DashboardNew() {
                 <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
                   <Stack direction="row" spacing={0.5} alignItems="center">
                     <HardDrive size={14} />
-                    <Typography variant="body2">Disk</Typography>
+                    <Typography variant="body2">{t('dashboard.disk')}</Typography>
                   </Stack>
                   <Typography variant="body2" fontWeight={600}>
                     {formatBytes(
@@ -549,7 +551,7 @@ export default function DashboardNew() {
               <Stack direction="row" spacing={1.5} alignItems="center">
                 <Server size={20} />
                 <Typography variant="h6" fontWeight={600}>
-                  Repository Health
+                  {t('dashboard.repositoryHealth.title')}
                 </Typography>
               </Stack>
               {/* Health summary chips - compact */}
@@ -650,7 +652,7 @@ export default function DashboardNew() {
                           />
                         </Stack>
                         <Typography variant="caption" color="text.secondary">
-                          {repo.warnings[0] || 'Needs attention'} • {repo.archive_count} archives •{' '}
+                          {repo.warnings[0] || t('dashboard.repositoryHealth.needsAttention')} • {repo.archive_count} {t('dashboard.repositoryHealth.archives')} •{' '}
                           {repo.total_size}
                         </Typography>
                       </Box>
@@ -662,7 +664,7 @@ export default function DashboardNew() {
                     >
                       {repo.last_backup
                         ? formatDistanceToNow(new Date(repo.last_backup), { addSuffix: true })
-                        : 'Never backed up'}
+                        : t('dashboard.repositoryHealth.neverBackedUp')}
                     </Typography>
                   </Stack>
                 </Box>
@@ -705,7 +707,7 @@ export default function DashboardNew() {
                           />
                         </Stack>
                         <Typography variant="caption" color="text.secondary">
-                          Backups up to date • {repo.archive_count} archives • {repo.total_size}
+                          {t('dashboard.repositoryHealth.upToDate')} • {repo.archive_count} {t('dashboard.repositoryHealth.archives')} • {repo.total_size}
                         </Typography>
                       </Box>
                     </Stack>
@@ -716,7 +718,7 @@ export default function DashboardNew() {
                     >
                       {repo.last_backup
                         ? formatDistanceToNow(new Date(repo.last_backup), { addSuffix: true })
-                        : 'Never backed up'}
+                        : t('dashboard.repositoryHealth.neverBackedUp')}
                     </Typography>
                   </Stack>
                 </Box>
@@ -730,13 +732,13 @@ export default function DashboardNew() {
                   onClick={() => navigate('/repositories')}
                   sx={{ alignSelf: 'center', mt: 0.5, color: 'text.secondary' }}
                 >
-                  +{overview.repository_health.length - repoLimit} more repositories
+                  {t('dashboard.moreRepositories', { count: overview.repository_health.length - repoLimit })}
                 </Button>
               )}
 
               {overview.repository_health.length === 0 && (
                 <Alert severity="info" sx={{ mt: 1 }}>
-                  No repositories configured yet. Create your first repository to start backing up!
+                  {t('dashboard.noRepositories')}
                 </Alert>
               )}
             </Stack>
@@ -749,7 +751,7 @@ export default function DashboardNew() {
             <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
               <Clock size={20} />
               <Typography variant="h6" fontWeight={600}>
-                Upcoming & Maintenance
+                {t('dashboard.upcomingAndMaintenance')}
               </Typography>
             </Stack>
 
@@ -761,7 +763,7 @@ export default function DashboardNew() {
                   color="text.secondary"
                   sx={{ display: 'block', mb: 1.5, letterSpacing: 1 }}
                 >
-                  Next 24 hours
+                  {t('dashboard.repositoryHealth.next24h')}
                 </Typography>
                 <Stack spacing={1}>
                   {overview.upcoming_tasks.slice(0, taskLimit).map((task) => (
@@ -779,7 +781,7 @@ export default function DashboardNew() {
                       onClick={() => navigate('/schedule')}
                       sx={{ alignSelf: 'flex-start', p: 0, minWidth: 0, color: 'text.secondary' }}
                     >
-                      +{overview.upcoming_tasks.length - taskLimit} more scheduled
+                      {t('dashboard.moreScheduled', { count: overview.upcoming_tasks.length - taskLimit })}
                     </Button>
                   )}
                 </Stack>
@@ -794,12 +796,12 @@ export default function DashboardNew() {
                   color="text.secondary"
                   sx={{ display: 'block', mb: 1.5, letterSpacing: 1 }}
                 >
-                  Maintenance Needed
+                  {t('dashboard.repositoryHealth.maintenanceNeeded')}
                 </Typography>
 
                 {overview.maintenance_alerts.length === 0 ? (
                   <Alert severity="success" sx={{ mt: 1 }}>
-                    All systems healthy!
+                    {t('dashboard.repositoryHealth.allHealthy')}
                   </Alert>
                 ) : (
                   <Stack spacing={1}>
@@ -819,7 +821,11 @@ export default function DashboardNew() {
                           {alert.repository}
                         </Typography>
                         <Typography variant="caption" display="block">
-                          {alert.message}
+                          {alert.message === 'Never checked'
+                            ? t('dashboard.repositoryHealth.neverChecked')
+                            : alert.message === 'Never compacted'
+                              ? t('dashboard.repositoryHealth.neverCompacted')
+                              : alert.message}
                         </Typography>
                       </Alert>
                     ))}
@@ -831,7 +837,7 @@ export default function DashboardNew() {
                         onClick={() => navigate('/repositories')}
                         sx={{ alignSelf: 'center', color: 'text.secondary' }}
                       >
-                        +{overview.maintenance_alerts.length - alertLimit} more alerts
+                        {t('dashboard.moreAlerts', { count: overview.maintenance_alerts.length - alertLimit })}
                       </Button>
                     )}
                   </Stack>
@@ -848,7 +854,7 @@ export default function DashboardNew() {
           <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
             <Activity size={20} />
             <Typography variant="h6" fontWeight={600}>
-              Recent Activity
+              {t('dashboard.recentActivity.title')}
             </Typography>
           </Stack>
 
@@ -859,7 +865,7 @@ export default function DashboardNew() {
                   <Box sx={{ mt: 0.5 }}>{getActivityIcon(activity.type, activity.status)}</Box>
                   <Box sx={{ flex: 1 }}>
                     <Typography variant="body2" fontWeight={600}>
-                      {activity.message}
+                      {t(`dashboard.activityMessages.${activity.type}_${activity.status}`, { defaultValue: activity.message })}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       {activity.repository} •{' '}
@@ -882,7 +888,7 @@ export default function DashboardNew() {
 
             {overview.activity_feed.length === 0 && (
               <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ py: 2 }}>
-                No recent activity
+                {t('dashboard.recentActivity.empty')}
               </Typography>
             )}
           </Stack>
@@ -893,7 +899,7 @@ export default function DashboardNew() {
             onClick={() => navigate('/activity')}
             sx={{ mt: 2 }}
           >
-            View All Activity
+            {t('dashboard.recentActivity.viewAll')}
           </Button>
         </CardContent>
       </Card>

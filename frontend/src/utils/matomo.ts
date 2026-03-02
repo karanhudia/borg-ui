@@ -318,6 +318,17 @@ export const trackOptOut = (): void => {
 }
 
 /**
+ * Track language change event
+ * The selected language code is sent as the event value (name field)
+ */
+export const trackLanguageChange = (languageCode: string): void => {
+  if (!canTrack()) return
+
+  window._paq = window._paq || []
+  window._paq.push(['trackEvent', 'Settings', 'ChangeLanguage', languageCode])
+}
+
+/**
  * Track consent banner response
  * ONLY sends event if Matomo is already initialized
  * @param accepted - true if user accepted analytics, false if declined

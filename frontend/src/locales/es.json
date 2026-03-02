@@ -1,0 +1,1751 @@
+{
+  "common": {
+    "buttons": {
+      "save": "Guardar",
+      "cancel": "Cancelar",
+      "delete": "Eliminar",
+      "edit": "Editar",
+      "create": "Crear",
+      "update": "Actualizar",
+      "close": "Cerrar",
+      "confirm": "Confirmar",
+      "back": "Atrás",
+      "next": "Siguiente",
+      "finish": "Finalizar",
+      "add": "Agregar",
+      "remove": "Eliminar",
+      "copy": "Copiar",
+      "import": "Importar",
+      "export": "Exportar",
+      "generate": "Generar",
+      "test": "Probar",
+      "run": "Ejecutar",
+      "stop": "Detener",
+      "refresh": "Actualizar",
+      "clear": "Limpiar",
+      "reset": "Restablecer",
+      "deploy": "Desplegar",
+      "view": "Ver"
+    },
+    "status": {
+      "loading": "Cargando...",
+      "saving": "Guardando...",
+      "deleting": "Eliminando...",
+      "creating": "Creando...",
+      "updating": "Actualizando...",
+      "running": "Ejecutando...",
+      "starting": "Iniciando...",
+      "submitting": "Enviando..."
+    },
+    "never": "Nunca",
+    "na": "N/D",
+    "unknown": "Desconocido",
+    "yes": "Sí",
+    "no": "No",
+    "none": "Ninguno",
+    "enabled": "Habilitado",
+    "disabled": "Deshabilitado",
+    "active": "Activo",
+    "inactive": "Inactivo",
+    "optional": "Opcional",
+    "required": "Requerido",
+    "default": "Predeterminado:",
+    "path_one": "ruta",
+    "path_other": "rutas",
+    "actions": "Acciones",
+    "name": "Nombre",
+    "description": "Descripción",
+    "type": "Tipo",
+    "status": "Estado",
+    "repository": "Repositorio",
+    "schedule": "Programación",
+    "created": "Creado",
+    "lastLogin": "Último acceso",
+    "undoneWarning": "Esta acción no se puede deshacer.",
+    "version": "Versión"
+  },
+  "login": {
+    "title": "Borg Web UI",
+    "subtitle": "Inicia sesión para gestionar tus copias de seguridad",
+    "username": "Usuario",
+    "password": "Contraseña",
+    "submit": "Iniciar sesión",
+    "submitting": "Iniciando sesión...",
+    "errors": {
+      "usernameRequired": "El usuario es obligatorio",
+      "passwordRequired": "La contraseña es obligatoria"
+    },
+    "success": "¡Inicio de sesión exitoso!",
+    "successChangePassword": "¡Inicio de sesión exitoso! Por favor cambia tu contraseña.",
+    "failed": "Error al iniciar sesión"
+  },
+  "navigation": {
+    "appName": "Borg UI",
+    "sections": {
+      "dashboard": "PANEL",
+      "backup": "COPIA DE SEGURIDAD",
+      "settings": "CONFIGURACIÓN"
+    },
+    "items": {
+      "dashboard": "Panel",
+      "activity": "Actividad",
+      "remoteMachines": "Máquinas remotas",
+      "repositories": "Repositorios",
+      "backup": "Copia de seguridad",
+      "archives": "Archivos",
+      "restore": "Restaurar",
+      "schedule": "Programación"
+    },
+    "settings": {
+      "personal": "Personal",
+      "system": "Sistema",
+      "management": "Gestión",
+      "advanced": "Avanzado",
+      "account": "Cuenta",
+      "appearance": "Apariencia",
+      "notifications": "Notificaciones",
+      "preferences": "Preferencias",
+      "systemLabel": "Sistema",
+      "mqtt": "MQTT",
+      "cache": "Caché",
+      "logs": "Registros",
+      "packages": "Paquetes",
+      "mounts": "Montajes",
+      "scripts": "Scripts",
+      "users": "Usuarios",
+      "exportImport": "Exportar/Importar",
+      "beta": "Beta"
+    },
+    "versionInfo": "Información de versión",
+    "app": "App:",
+    "loading": "Cargando...",
+    "welcome": "Bienvenido,",
+    "logout": "Cerrar sesión"
+  },
+  "status": {
+    "completed": "Completado",
+    "completedWithWarnings": "Completado con advertencias",
+    "failed": "Fallido",
+    "running": "En ejecución",
+    "pending": "Pendiente",
+    "cancelled": "Cancelado"
+  },
+  "dashboard": {
+    "title": "Panel",
+    "subtitle": "Visión general completa de tu infraestructura de copias de seguridad",
+    "stats": {
+      "repositories": "Repositorios",
+      "sshRemote": "SSH remoto",
+      "activeSchedules": "Programaciones activas",
+      "ofTotal": "de {{count}} total",
+      "successRate": "Tasa de éxito (30d)",
+      "failed30d": "Fallidos (Últimos 30d)",
+      "requiresAttention": "Requiere atención"
+    },
+    "storageBreakdown": "Desglose de almacenamiento",
+    "systemResources": "Recursos del sistema",
+    "cpu": "CPU",
+    "memory": "Memoria",
+    "disk": "Disco",
+    "repositoryHealth": {
+      "title": "Estado de repositorios",
+      "upToDate": "Copias de seguridad al día",
+      "needsAttention": "Necesita atención",
+      "next24h": "Próximas 24 horas",
+      "maintenanceNeeded": "Mantenimiento necesario",
+      "allHealthy": "¡Todos los sistemas en buen estado!",
+      "neverBackedUp": "Nunca respaldado",
+      "archives": "archivos",
+      "neverChecked": "Nunca comprobado",
+      "neverCompacted": "Nunca compactado"
+    },
+    "noRepositories": "No hay repositorios configurados. ¡Crea tu primer repositorio para empezar a hacer copias de seguridad!",
+    "moreRepositories": "+{{count}} más repositorios",
+    "moreAlerts": "+{{count}} más alertas",
+    "moreScheduled": "+{{count}} más programados",
+    "recentActivity": {
+      "title": "Actividad reciente",
+      "empty": "Sin actividad reciente",
+      "viewAll": "Ver toda la actividad"
+    },
+    "upcomingAndMaintenance": "Próximos & Mantenimiento",
+    "activityMessages": {
+      "backup_completed": "Copia de seguridad completada",
+      "backup_failed": "Copia de seguridad fallida",
+      "backup_running": "Copia de seguridad en curso",
+      "backup_pending": "Copia de seguridad pendiente",
+      "check_completed": "Comprobación completada",
+      "check_failed": "Comprobación fallida",
+      "check_running": "Comprobación en curso",
+      "check_pending": "Comprobación pendiente",
+      "compact_completed": "Compactación completada",
+      "compact_failed": "Compactación fallida",
+      "compact_running": "Compactación en curso",
+      "compact_pending": "Compactación pendiente",
+      "prune_completed": "Poda completada",
+      "prune_failed": "Poda fallida",
+      "prune_running": "Poda en curso",
+      "prune_pending": "Poda pendiente",
+      "restore_completed": "Restauración completada",
+      "restore_failed": "Restauración fallida",
+      "restore_running": "Restauración en curso",
+      "restore_pending": "Restauración pendiente"
+    }
+  },
+  "backup": {
+    "title": "Operaciones de copia de seguridad",
+    "subtitle": "Gestiona y monitoriza tus trabajos de copia de seguridad",
+    "manualBackup": {
+      "title": "Copia de seguridad manual",
+      "subtitle": "Selecciona un repositorio e inicia un trabajo de copia de seguridad",
+      "repository": "Repositorio",
+      "loadingRepositories": "Cargando repositorios...",
+      "selectRepository": "Selecciona un repositorio...",
+      "maintenanceRunning": "Mantenimiento en curso",
+      "startBackup": "Iniciar copia de seguridad",
+      "starting": "Iniciando...",
+      "observeOnlyHidden": "Algunos repositorios están ocultos porque están configurados solo para observabilidad.",
+      "noRepositories": {
+        "title": "No se encontraron repositorios",
+        "subtitle": "Crea un repositorio en la página de Repositorios antes de iniciar una copia de seguridad"
+      }
+    },
+    "commandPreview": "Vista previa del comando",
+    "runningJobs": {
+      "title": "Trabajos en curso",
+      "subtitle": "Operaciones de copia de seguridad activas",
+      "jobTitle": "Trabajo de copia de seguridad {{id}}",
+      "repositoryPath": "Repositorio: {{path}}",
+      "viewLogs": "Ver registros",
+      "cancel": "Cancelar",
+      "progress": {
+        "initializing": "Inicializando copia de seguridad...",
+        "processing": "Procesando archivos...",
+        "finalizing": "Finalizando...",
+        "currentFile": "Archivo actual:",
+        "filesProcessed": "Archivos procesados:",
+        "originalSize": "Tamaño original:",
+        "compressed": "Comprimido:",
+        "deduplicated": "Deduplicado:",
+        "totalSourceSize": "Tamaño total de origen:",
+        "speed": "Velocidad:",
+        "eta": "ETA:"
+      }
+    },
+    "recentJobs": {
+      "title": "Trabajos recientes",
+      "subtitle": "Historial de operaciones de copia de seguridad",
+      "empty": "No se encontraron trabajos de copia de seguridad"
+    }
+  },
+  "archives": {
+    "title": "Explorador de archivos",
+    "subtitle": "Explora y gestiona tus archivos de copia de seguridad",
+    "loadingStats": "Cargando estadísticas del repositorio...",
+    "noRepositories": "No se encontraron repositorios. Crea un repositorio primero.",
+    "selectRepository": "Selecciona un repositorio para ver sus archivos",
+    "deletionStarted": "Eliminación de archivo iniciada en segundo plano (ID de trabajo: {{id}})",
+    "mountTimeout": "Tiempo de espera de montaje: Los repositorios grandes pueden necesitar más tiempo para montarse.",
+    "mountFailed": "Error al montar el archivo: {{error}}",
+    "restoreStarted": "¡Trabajo de restauración iniciado! Comprueba la pestaña de Actividad para monitorizar el progreso."
+  },
+  "restore": {
+    "title": "Restaurar archivos",
+    "subtitle": "Selecciona un archivo para restaurar desde la copia de seguridad",
+    "selectRepository": "Seleccionar repositorio",
+    "loadingRepositories": "Cargando repositorios...",
+    "selectRepositoryPlaceholder": "Selecciona un repositorio...",
+    "maintenanceRunning": "Mantenimiento en curso",
+    "maintenanceRunningParens": "(Mantenimiento en curso)",
+    "repositoryInfo": "Información del repositorio",
+    "selectArchive": "Selecciona un archivo a continuación para restaurar su contenido. El archivo completo se restaurará en la ruta de destino que especifiques.",
+    "noArchives": "No se encontraron archivos en este repositorio",
+    "activeRestores": {
+      "title": "Restauraciones activas",
+      "subtitle": "Operaciones de restauración pendientes y en curso"
+    },
+    "recentRestores": {
+      "title": "Restauraciones recientes",
+      "empty": "No se encontraron trabajos de restauración"
+    },
+    "dialog": {
+      "title": "Restaurar archivo",
+      "archiveInfo": "Información del archivo",
+      "files": "Archivos:",
+      "size": "Tamaño:",
+      "selectedItems": "Elementos seleccionados ({{count}})",
+      "changeSelection": "Cambiar selección",
+      "important": "Importante",
+      "fullRestoreWarning": "Esto restaurará el archivo completo en la ruta de destino. Los archivos existentes pueden ser sobreescritos.",
+      "selectSpecific": "Seleccionar archivos/carpetas específicos",
+      "destinationPath": "Ruta de destino",
+      "cancel": "Cancelar",
+      "starting": "Iniciando...",
+      "start": "Iniciar restauración"
+    }
+  },
+  "schedule": {
+    "title": "Programación",
+    "subtitle": "Gestiona copias de seguridad automatizadas y comprobaciones de repositorio",
+    "createBackup": "Crear programación de copia de seguridad",
+    "addCheck": "Agregar comprobación programada",
+    "tabs": {
+      "backupJobs": "Trabajos de copia de seguridad",
+      "repositoryChecks": "Comprobaciones de repositorio"
+    },
+    "noRepositories": "Necesitas crear al menos un repositorio antes de programar copias de seguridad.",
+    "maintenance": {
+      "pruning": "Podando archivos...",
+      "pruneCompleted": "Poda completada",
+      "pruneFailed": "Error en la poda",
+      "compacting": "Compactando repositorio...",
+      "compactCompleted": "Compactación completada",
+      "compactFailed": "Error en la compactación",
+      "completed": "Mantenimiento completado"
+    },
+    "table": {
+      "status": "Estado",
+      "jobName": "Nombre del trabajo",
+      "repository": "Repositorio",
+      "schedule": "Programación",
+      "lastRun": "Última ejecución",
+      "nextRun": "Próxima ejecución",
+      "enabled": "Habilitado",
+      "runNow": "Ejecutar ahora",
+      "edit": "Editar",
+      "duplicate": "Duplicar",
+      "delete": "Eliminar",
+      "never": "Nunca"
+    }
+  },
+  "repositories": {
+    "title": "Gestión de repositorios",
+    "subtitle": "Un repositorio es donde se almacenarán tus datos de copia de seguridad. Los archivos de tus fuentes configuradas se respaldarán aquí.",
+    "createRepository": "Crear repositorio",
+    "importExisting": "Importar existente",
+    "search": "Buscar repositorios...",
+    "sort": {
+      "label": "Ordenar por",
+      "nameAZ": "Nombre (A-Z)",
+      "nameZA": "Nombre (Z-A)",
+      "lastBackupRecent": "Última copia (Reciente)",
+      "lastBackupOldest": "Última copia (Más antigua)",
+      "createdNewest": "Creado (Más reciente)",
+      "createdOldest": "Creado (Más antiguo)"
+    },
+    "group": {
+      "label": "Agrupar por",
+      "none": "Ninguno",
+      "hostname": "Ubicación (Nombre de host)",
+      "type": "Tipo de repositorio",
+      "mode": "Modo de copia de seguridad"
+    },
+    "loading": "Cargando repositorios...",
+    "empty": {
+      "title": "Sin repositorios aún",
+      "subtitle": "Crea tu primer repositorio Borg para empezar a respaldar tus datos.",
+      "hint": "Crea un repositorio local o remoto mediante SSH."
+    },
+    "noMatch": {
+      "title": "Sin repositorios coincidentes",
+      "message": "Ningún repositorio coincide con \"{{search}}\". Prueba con un término de búsqueda diferente.",
+      "fallback": "No se encontraron repositorios.",
+      "clearSearch": "Borrar búsqueda"
+    },
+    "groups": {
+      "local": "Repositorios locales",
+      "remote": "Repositorios remotos (SSH)",
+      "full": "Repositorios de copia completa",
+      "observeOnly": "Repositorios solo de observación",
+      "localMachine": "Máquina local",
+      "remoteSsh": "Remoto (SSH)"
+    },
+    "moreCount": "+{{count}} más",
+    "labels": {
+      "archives": "Archivos",
+      "totalSize": "Tamaño total",
+      "lastBackup": "Última copia",
+      "nextBackup": "Próxima copia",
+      "location": "Ubicación",
+      "encryption": "Cifrado"
+    },
+    "observeOnly": "Solo observación",
+    "buttons": {
+      "info": "Info",
+      "check": "Comprobar",
+      "prune": "Podar",
+      "compact": "Compactar"
+    }
+  },
+  "activity": {
+    "title": "Actividad",
+    "subtitle": "Ver todas las operaciones y sus registros",
+    "filters": {
+      "type": "Tipo",
+      "status": "Estado",
+      "allTypes": "Todos los tipos",
+      "allStatus": "Todos los estados",
+      "types": {
+        "backup": "Copia de seguridad",
+        "restore": "Restauración",
+        "check": "Comprobación",
+        "compact": "Compactación",
+        "prune": "Poda",
+        "package": "Paquete"
+      },
+      "statuses": {
+        "completed": "Completado",
+        "failed": "Fallido",
+        "running": "En ejecución",
+        "pending": "Pendiente"
+      }
+    },
+    "empty": {
+      "title": "Sin actividad",
+      "message": "No hay operaciones que coincidan con tus filtros"
+    }
+  },
+  "settings": {
+    "password": {
+      "title": "Cambiar contraseña",
+      "subtitle": "Actualiza tu contraseña para mantener tu cuenta segura",
+      "current": "Contraseña actual",
+      "new": "Nueva contraseña",
+      "confirm": "Confirmar nueva contraseña",
+      "submit": "Cambiar contraseña",
+      "submitting": "Cambiando contraseña...",
+      "noMatch": "Las contraseñas no coinciden"
+    },
+    "appearance": {
+      "title": "Apariencia",
+      "subtitle": "Personaliza el aspecto y la sensación de la aplicación",
+      "theme": "Tema",
+      "chooseTheme": "Elige un tema"
+    },
+    "users": {
+      "title": "Gestión de usuarios",
+      "addUser": "Agregar usuario",
+      "table": {
+        "user": "Usuario",
+        "status": "Estado",
+        "role": "Rol",
+        "created": "Creado",
+        "lastLogin": "Último acceso"
+      },
+      "roles": {
+        "admin": "Administrador",
+        "user": "Usuario"
+      },
+      "status": {
+        "active": "Activo",
+        "inactive": "Inactivo"
+      },
+      "actions": {
+        "edit": "Editar usuario",
+        "resetPassword": "Restablecer contraseña",
+        "delete": "Eliminar usuario"
+      },
+      "createDialog": {
+        "title": "Crear usuario"
+      },
+      "editDialog": {
+        "title": "Editar usuario"
+      },
+      "fields": {
+        "username": "Usuario",
+        "email": "Correo electrónico",
+        "password": "Contraseña",
+        "isAdmin": "Usuario administrador"
+      },
+      "buttons": {
+        "cancel": "Cancelar",
+        "create": "Crear",
+        "update": "Actualizar"
+      },
+      "resetPasswordDialog": {
+        "title": "Restablecer contraseña"
+      },
+      "deleteDialog": {
+        "title": "Eliminar usuario",
+        "message": "¿Estás seguro de que deseas eliminar al usuario {{username}}?",
+        "warning": "Esta acción no se puede deshacer.",
+        "deleting": "Eliminando...",
+        "confirm": "Eliminar"
+      }
+    }
+  },
+  "sshConnections": {
+    "title": "Máquinas remotas",
+    "subtitle": "Gestiona máquinas remotas con monitorización de almacenamiento y puntos de montaje lógicos",
+    "singleKeySystem": {
+      "title": "Sistema de clave única",
+      "description": "Este sistema usa una clave SSH para todas las conexiones remotas. Genera la clave del sistema una vez, luego despliégala en tantos servidores remotos como necesites."
+    },
+    "stats": {
+      "totalConnections": "Total de conexiones",
+      "active": "Activas",
+      "failed": "Fallidas"
+    },
+    "systemKey": {
+      "title": "Clave SSH del sistema",
+      "noKey": "No se encontró clave SSH del sistema. Genera una nueva o importa una existente.",
+      "generate": "Generar clave SSH del sistema",
+      "import": "Importar clave existente",
+      "type": "Tipo de clave",
+      "fingerprint": "Huella digital",
+      "publicKey": "Clave pública",
+      "actions": {
+        "deploy": "Desplegar en servidor",
+        "addManual": "Agregar conexión manual",
+        "copy": "Copiar clave",
+        "delete": "Eliminar clave"
+      }
+    },
+    "generateDialog": {
+      "title": "Generar clave SSH del sistema",
+      "keyType": "Tipo de clave",
+      "ed25519": "ED25519 (Recomendado)",
+      "rsa": "RSA",
+      "ecdsa": "ECDSA",
+      "generating": "Generando...",
+      "generate": "Generar clave"
+    },
+    "importDialog": {
+      "title": "Importar clave SSH existente",
+      "keyName": "Nombre de la clave",
+      "privateKeyPath": "Ruta de la clave privada",
+      "publicKeyPath": "Ruta de la clave pública (Opcional)",
+      "description": "Descripción",
+      "importing": "Importando...",
+      "import": "Importar clave"
+    },
+    "deployDialog": {
+      "title": "Desplegar clave SSH en servidor",
+      "host": "Host",
+      "username": "Usuario",
+      "port": "Puerto",
+      "password": "Contraseña",
+      "sftpMode": "Usar modo SFTP para el despliegue de claves",
+      "defaultPath": "Ruta predeterminada (Opcional)",
+      "mountPoint": "Punto de montaje (Opcional)",
+      "deploying": "Desplegando...",
+      "deploy": "Desplegar clave"
+    },
+    "manualConnectionDialog": {
+      "title": "Agregar conexión manual",
+      "instructions": {
+        "title": "Antes de agregar esta conexión:",
+        "step1": "Copia la clave pública de arriba",
+        "step2": "Conéctate por SSH a tu servidor",
+        "step3": "Agrégala a ~/.ssh/authorized_keys"
+      },
+      "submit": "Probar y agregar conexión"
+    },
+    "editConnectionDialog": {
+      "title": "Editar conexión SSH",
+      "submit": "Actualizar conexión"
+    },
+    "deleteConnectionDialog": {
+      "title": "Eliminar conexión SSH",
+      "delete": "Eliminar",
+      "deleting": "Eliminando..."
+    },
+    "deleteKeyDialog": {
+      "title": "Eliminar clave SSH del sistema",
+      "confirm": "¿Estás seguro de que deseas eliminar esta clave SSH?",
+      "warning1": "Eliminar la clave SSH de la base de datos y el sistema de archivos",
+      "warning2": "Los registros de conexión se conservarán."
+    }
+  },
+  "scripts": {
+    "title": "Biblioteca de scripts",
+    "subtitle": "Scripts reutilizables para ganchos de copia de seguridad y mantenimiento",
+    "newScript": "Nuevo script",
+    "empty": "No se han creado scripts. Los scripts pueden asignarse a repositorios para ganchos previos y posteriores a la copia de seguridad.",
+    "table": {
+      "name": "Nombre",
+      "description": "Descripción",
+      "category": "Categoría",
+      "runOn": "Ejecutar en",
+      "timeout": "Tiempo límite",
+      "usage": "Uso",
+      "actions": "Acciones",
+      "timeoutSeconds": "{{timeout}}s",
+      "paramCount": "{{count}} parámetro(s)",
+      "usageCount": "{{count}} lugares de uso"
+    },
+    "actions": {
+      "test": "Probar script",
+      "edit": "Editar script",
+      "delete": "Eliminar script",
+      "cannotDeleteTemplates": "No se pueden eliminar plantillas"
+    },
+    "usedInCount": "El script se usa en {{count}} lugar(es)",
+    "runOn": {
+      "success": "Éxito - Solo tras copias de seguridad exitosas",
+      "failure": "Fallo - Solo tras copias de seguridad fallidas",
+      "warning": "Advertencia - Solo tras copias de seguridad con advertencias",
+      "always": "Siempre - Ejecutar independientemente del resultado",
+      "note": "Nota: La condición 'Ejecutar en' solo aplica a los ganchos posteriores a la copia de seguridad."
+    },
+    "createDialog": {
+      "title": "Crear script"
+    },
+    "editDialog": {
+      "title": "Editar script"
+    },
+    "fields": {
+      "name": "Nombre",
+      "description": "Descripción",
+      "runOn": "Ejecutar en",
+      "timeout": "Tiempo límite (segundos)",
+      "timeoutHint": "Tiempo máximo de ejecución (30-3600 segundos)",
+      "content": "Contenido del script",
+      "contentHint": "Usa ${NOMBRE_PARAM} o ${NOMBRE_PARAM:-default} para parámetros",
+      "parameters": "Parámetros del script",
+      "parametersHint": "Marca la casilla para los parámetros que contienen datos sensibles.",
+      "treatAsSecret": "Tratar como secreto"
+    },
+    "usedInPlaces": "Este script se usa en {{count}} lugar(es). Los cambios afectarán a todas las asignaciones.",
+    "buttons": {
+      "cancel": "Cancelar",
+      "create": "Crear",
+      "update": "Actualizar"
+    },
+    "testDialog": {
+      "title": "Probar script",
+      "hasParams": "Este script tiene parámetros. Proporciona valores a continuación para probarlo.",
+      "noParams": "Este script no tiene parámetros. Haz clic en 'Ejecutar prueba' para ejecutarlo.",
+      "running": "Ejecutando...",
+      "runTest": "Ejecutar prueba",
+      "runningScript": "Ejecutando script...",
+      "success": "Script ejecutado correctamente",
+      "failed": "Error al ejecutar el script",
+      "exitCode": "Código de salida: {{code}} | Tiempo de ejecución: {{time}}s",
+      "stdout": "Salida estándar:",
+      "stderr": "Error estándar:",
+      "testAgain": "Probar de nuevo",
+      "close": "Cerrar"
+    }
+  },
+  "repositoryCard": {
+    "archives": "Archivos",
+    "totalSize": "Tamaño total",
+    "lastBackup": "Última copia",
+    "nextBackup": "Próxima copia",
+    "observeOnly": "Solo observación",
+    "buttons": {
+      "info": "Info",
+      "check": "Comprobar",
+      "prune": "Podar",
+      "compact": "Compactar"
+    }
+  },
+  "dialogs": {
+    "deleteJob": {
+      "titleBackup": "¿Eliminar entrada de copia de seguridad?",
+      "titleJob": "¿Eliminar entrada de trabajo?",
+      "jobId": "(ID: {{id}})",
+      "warnings": {
+        "undone": "Esta acción no se puede deshacer",
+        "removeRecord": "Esto eliminará el registro del trabajo del sistema",
+        "noAffect": "Esto NO afectará a ningún dato de copia de seguridad real"
+      },
+      "confirm": "Eliminar permanentemente"
+    },
+    "deleteArchive": {
+      "title": "¿Eliminar archivo?",
+      "subtitle": "¿Estás seguro de que deseas eliminar este archivo?",
+      "archiveName": "Archivo: {{name}}",
+      "warning": "Esta acción no se puede deshacer. Los datos del archivo se eliminarán permanentemente del repositorio.",
+      "confirm": "Eliminar archivo",
+      "deleting": "Eliminando..."
+    },
+    "deleteSchedule": {
+      "title": "¿Eliminar programación?",
+      "message": "¿Estás seguro de que deseas eliminar esta programación?",
+      "warning": "Esta acción no se puede deshacer.",
+      "confirm": "Eliminar",
+      "deleting": "Eliminando..."
+    },
+    "cancelJob": {
+      "title": "¿Cancelar trabajo?",
+      "message": "¿Estás seguro de que deseas cancelar este trabajo?",
+      "confirm": "Cancelar trabajo",
+      "cancelling": "Cancelando..."
+    },
+    "checkWarning": {
+      "title": "Comprobación de repositorio",
+      "message": "Ejecutar una comprobación completa del repositorio puede llevar mucho tiempo para repositorios grandes.",
+      "confirm": "Ejecutar comprobación",
+      "cancel": "Cancelar"
+    },
+    "compactWarning": {
+      "title": "Compactar repositorio",
+      "message": "Compactar el repositorio liberará espacio pero puede llevar algún tiempo.",
+      "confirm": "Compactar",
+      "cancel": "Cancelar"
+    },
+    "lockError": {
+      "title": "Repositorio bloqueado",
+      "message": "El repositorio está actualmente bloqueado. Esto puede deberse a una operación interrumpida.",
+      "breakLock": "Forzar desbloqueo",
+      "cancel": "Cancelar"
+    },
+    "errorDetails": {
+      "title": "Detalles del error",
+      "close": "Cerrar"
+    },
+    "pruneRepository": {
+      "title": "Podar repositorio",
+      "confirm": "Ejecutar poda",
+      "cancel": "Cancelar"
+    },
+    "repositoryInfo": {
+      "title": "Información del repositorio",
+      "close": "Cerrar",
+      "loadingInfo": "Cargando información del repositorio...",
+      "encryption": "Cifrado",
+      "lastModified": "Última modificación",
+      "repositoryLocation": "Ubicación del repositorio",
+      "storageStatistics": "Estadísticas de almacenamiento",
+      "totalSize": "Tamaño total",
+      "usedOnDisk": "Usado en disco",
+      "uniqueData": "Datos únicos",
+      "totalChunks": "Total de fragmentos",
+      "uniqueChunks": "Fragmentos únicos",
+      "noBackupsYet": "Sin copias de seguridad aún",
+      "noBackupsDesc": "Este repositorio ha sido inicializado pero no contiene archivos. Las estadísticas de almacenamiento aparecerán aquí después de crear tu primera copia de seguridad.",
+      "loadFailed": "Error al cargar la información del repositorio. Asegúrate de que el repositorio sea accesible y esté correctamente inicializado.",
+      "exportKeyfileTooltip": "Exportar archivo de clave — ¡mantenlo seguro!"
+    },
+    "mountArchive": {
+      "title": "Montar archivo",
+      "mountPoint": "Punto de montaje",
+      "mount": "Montar",
+      "mounting": "Montando...",
+      "cancel": "Cancelar"
+    },
+    "logViewer": {
+      "title": "Visor de registros",
+      "close": "Cerrar"
+    }
+  },
+  "backupJobsTable": {
+    "columns": {
+      "status": "Estado",
+      "jobName": "Nombre del trabajo",
+      "repository": "Repositorio",
+      "schedule": "Programación",
+      "lastRun": "Última ejecución",
+      "nextRun": "Próxima ejecución",
+      "enabled": "Habilitado"
+    },
+    "actions": {
+      "runNow": "Ejecutar ahora",
+      "edit": "Editar",
+      "duplicate": "Duplicar",
+      "delete": "Eliminar"
+    },
+    "never": "Nunca",
+    "empty": "No se encontraron trabajos de copia de seguridad"
+  },
+  "scheduledJobsTable": {
+    "columns": {
+      "status": "Estado",
+      "jobName": "Nombre del trabajo",
+      "repository": "Repositorio",
+      "schedule": "Programación",
+      "lastRun": "Última ejecución",
+      "nextRun": "Próxima ejecución",
+      "enabled": "Habilitado"
+    },
+    "actions": {
+      "runNow": "Ejecutar ahora",
+      "edit": "Editar",
+      "delete": "Eliminar"
+    },
+    "never": "Nunca"
+  },
+  "archiveCard": {
+    "files": "Archivos:",
+    "size": "Tamaño:",
+    "restore": "Restaurar",
+    "browse": "Explorar",
+    "mount": "Montar",
+    "delete": "Eliminar"
+  },
+  "archivesList": {
+    "empty": "No se encontraron archivos",
+    "loading": "Cargando archivos..."
+  },
+  "repositoryInfo": {
+    "title": "Información del repositorio",
+    "encryption": "Cifrado",
+    "location": "Ubicación",
+    "totalSize": "Tamaño total",
+    "archives": "Archivos",
+    "lastModified": "Última modificación"
+  },
+  "systemSettings": {
+    "title": "Configuración del sistema",
+    "borgBinary": {
+      "label": "Ruta del binario Borg",
+      "hint": "Ruta al binario borg"
+    },
+    "save": "Guardar configuración",
+    "saving": "Guardando...",
+    "savedSuccessfully": "Configuración del sistema guardada correctamente",
+    "refreshNow": "Actualizar ahora",
+    "refreshing": "Actualizando..."
+  },
+  "notifications": {
+    "title": "Servicios de notificación",
+    "subtitle": "Configura servicios de notificación para alertas de copia de seguridad y restauración",
+    "settingsTitle": "Configuración de notificaciones",
+    "email": {
+      "title": "Notificaciones por correo electrónico",
+      "enabled": "Habilitar notificaciones por correo electrónico",
+      "smtp": {
+        "host": "Host SMTP",
+        "port": "Puerto SMTP",
+        "username": "Usuario",
+        "password": "Contraseña",
+        "from": "Dirección de origen",
+        "to": "Dirección de destino",
+        "tls": "Usar TLS"
+      }
+    },
+    "save": "Guardar",
+    "test": "Enviar prueba",
+    "saving": "Guardando...",
+    "addService": "Agregar servicio",
+    "editService": "Editar servicio de notificación",
+    "addServiceTitle": "Agregar servicio de notificación",
+    "deleteServiceTitle": "¿Eliminar servicio de notificación?",
+    "noServicesTitle": "No hay servicios de notificación configurados",
+    "noServicesSubtitle": "Agrega tu primer servicio de notificación para recibir alertas sobre fallos de copia de seguridad y otros eventos importantes.",
+    "serviceAddedSuccessfully": "Servicio de notificación agregado correctamente",
+    "serviceUpdatedSuccessfully": "Servicio de notificación actualizado correctamente",
+    "serviceDeletedSuccessfully": "Servicio de notificación eliminado correctamente",
+    "testSentSuccessfully": "¡Notificación de prueba enviada correctamente! Comprueba tu servicio.",
+    "failedToAdd": "Error al agregar el servicio de notificación",
+    "failedToUpdate": "Error al actualizar el servicio de notificación",
+    "failedToDelete": "Error al eliminar el servicio de notificación",
+    "failedToTest": "Error al probar la notificación",
+    "nameAndUrlRequired": "Se requieren nombre y URL del servicio",
+    "cancel": "Cancelar",
+    "update": "Actualizar",
+    "add": "Agregar",
+    "delete": "Eliminar",
+    "table": {
+      "service": "Servicio",
+      "status": "Estado",
+      "events": "Eventos",
+      "repositories": "Repositorios",
+      "lastUsed": "Último uso"
+    }
+  },
+  "preferences": {
+    "title": "Preferencias",
+    "subtitle": "Personaliza tu experiencia y gestiona tu privacidad",
+    "timezone": "Zona horaria",
+    "dateFormat": "Formato de fecha",
+    "save": "Guardar preferencias",
+    "saving": "Guardando...",
+    "updatedSuccessfully": "Preferencias actualizadas correctamente",
+    "analyticsTitle": "Análisis de uso anónimo",
+    "analyticsDescription": "Ayúdanos a mejorar Borg UI compartiendo datos de uso anónimos. Recopilamos vistas de página, clics en funciones y tipo de navegador, sin rastrear direcciones IP, nombres de host, cookies ni información de identificación personal.",
+    "enableAnalytics": "Habilitar análisis",
+    "languageTitle": "Idioma",
+    "languageDescription": "Elige el idioma de la interfaz",
+    "languageLabel": "Idioma de la interfaz",
+    "languageSaved": "Idioma actualizado correctamente"
+  },
+  "betaFeatures": {
+    "title": "Funciones beta",
+    "subtitle": "Habilitar funciones experimentales (pueden ser inestables)",
+    "description": "Prueba funciones experimentales antes de que se lancen a todos. Estas funciones aún están en desarrollo y pueden cambiar.",
+    "save": "Guardar",
+    "saving": "Guardando...",
+    "settingUpdatedSuccessfully": "Configuración actualizada correctamente"
+  },
+  "exportImport": {
+    "title": "Exportar / Importar",
+    "export": {
+      "title": "Exportar configuración",
+      "subtitle": "Descarga tu configuración actual",
+      "description": "Exporta tus repositorios, programaciones de copia de seguridad y configuración a un archivo YAML compatible con borgmatic.",
+      "button": "Exportar configuración",
+      "exporting": "Exportando...",
+      "success": "Configuración exportada correctamente"
+    },
+    "import": {
+      "title": "Importar configuración",
+      "subtitle": "Restaurar configuración desde un archivo",
+      "description": "Importa configuraciones YAML de borgmatic o exportaciones de Borg UI. Admite tanto el formato estándar de borgmatic como las exportaciones de Borg UI.",
+      "button": "Importar configuración",
+      "importing": "Importando...",
+      "selectFile": "Seleccionar archivo..."
+    }
+  },
+  "logManagement": {
+    "title": "Gestión de registros",
+    "retention": "Retención de registros (días)",
+    "save": "Guardar configuración",
+    "saving": "Guardando...",
+    "savedSuccessfully": "Configuración de gestión de registros guardada correctamente",
+    "clearLogs": "Ejecutar limpieza ahora",
+    "clearing": "Ejecutando limpieza..."
+  },
+  "cacheManagement": {
+    "title": "Gestión de caché de archivos",
+    "clearCache": "Limpiar toda la caché",
+    "clearing": "Limpiando...",
+    "cacheSize": "Tamaño de caché",
+    "save": "Guardar configuración",
+    "saving": "Guardando..."
+  },
+  "mountsManagement": {
+    "title": "Montajes activos",
+    "subtitle": "Gestiona archivos Borg montados. Los archivos se desmontan automáticamente al reiniciar el contenedor.",
+    "empty": "Sin montajes activos",
+    "unmount": "Desmontar",
+    "unmounting": "Desmontando...",
+    "unmountedSuccessfully": "Archivo desmontado correctamente"
+  },
+  "mqttSettings": {
+    "title": "Configuración MQTT",
+    "enabled": "Habilitar MQTT",
+    "broker": "URL del broker",
+    "username": "Usuario",
+    "password": "Contraseña",
+    "topic": "Prefijo del tema",
+    "save": "Guardar configuración",
+    "saving": "Guardando...",
+    "savedSuccessfully": "Configuración MQTT guardada correctamente",
+    "test": "Probar conexión",
+    "testing": "Probando..."
+  },
+  "repositoryScriptsTab": {
+    "title": "Scripts del repositorio",
+    "preBackup": "Script previo a la copia de seguridad",
+    "postBackup": "Script posterior a la copia de seguridad",
+    "save": "Guardar",
+    "saving": "Guardando...",
+    "noScript": "Sin script seleccionado",
+    "loading": "Cargando scripts...",
+    "failedToLoad": "Error al cargar los scripts asignados",
+    "assignedSuccessfully": "Script asignado correctamente",
+    "removedSuccessfully": "Script eliminado correctamente",
+    "parametersUpdatedSuccessfully": "Parámetros actualizados correctamente"
+  },
+  "cronBuilder": {
+    "title": "Constructor de expresiones Cron",
+    "minutes": "Minutos",
+    "hours": "Horas",
+    "dayOfMonth": "Día del mes",
+    "month": "Mes",
+    "dayOfWeek": "Día de la semana",
+    "expression": "Expresión Cron",
+    "preview": "Vista previa",
+    "apply": "Aplicar",
+    "cancel": "Cancelar"
+  },
+  "sourceDirectories": {
+    "label": "Directorios de origen",
+    "add": "Agregar directorio",
+    "empty": "No se han agregado directorios de origen",
+    "placeholder": "Introduce la ruta del directorio",
+    "path_one": "{{count}} ruta",
+    "path_other": "{{count}} rutas"
+  },
+  "excludePatterns": {
+    "label": "Patrones de exclusión",
+    "add": "Agregar patrón",
+    "empty": "Sin patrones de exclusión",
+    "placeholder": "ej., *.log, /tmp/**"
+  },
+  "pruneSettings": {
+    "title": "Configuración de poda",
+    "keepHourly": "Mantener por hora",
+    "keepDaily": "Mantener por día",
+    "keepWeekly": "Mantener por semana",
+    "keepMonthly": "Mantener por mes",
+    "keepYearly": "Mantener por año"
+  },
+  "compressionSettings": {
+    "title": "Compresión",
+    "method": "Método de compresión",
+    "level": "Nivel de compresión"
+  },
+  "archiveNameTemplate": {
+    "label": "Plantilla de nombre de archivo",
+    "hint": "Usa {now} para la fecha/hora actual"
+  },
+  "remoteMachineCard": {
+    "status": {
+      "connected": "Conectado",
+      "failed": "Fallido",
+      "unknown": "Desconocido"
+    },
+    "storage": "Almacenamiento",
+    "mountPoint": "Punto de montaje",
+    "actions": {
+      "edit": "Editar",
+      "delete": "Eliminar",
+      "deploy": "Desplegar clave"
+    }
+  },
+  "restoreJobCard": {
+    "title": "Trabajo de restauración",
+    "status": "Estado",
+    "archive": "Archivo",
+    "destination": "Destino",
+    "cancel": "Cancelar",
+    "restoringFiles": "Restaurando archivos...",
+    "completed": "Completado",
+    "completedWithWarnings": "Completado con advertencias",
+    "filesRestored": "Archivos restaurados:",
+    "progress": "Progreso:",
+    "speed": "Velocidad:",
+    "eta": "ETA:",
+    "currentFile": "Archivo actual:",
+    "duration": "Duración:"
+  },
+  "analyticsConsent": {
+    "title": "Ayuda a mejorar Borg UI",
+    "message": "Recopilamos datos de uso anónimos para entender cómo se usa Borg UI y mejorarlo. No se recopila información personal, direcciones IP, nombres de host ni datos de copia de seguridad.",
+    "accept": "Aceptar",
+    "decline": "Rechazar",
+    "learnMore": "Más información",
+    "viewDashboard": "Ver nuestro panel de análisis público",
+    "viewDashboardSuffix": "para ver exactamente lo que recopilamos.",
+    "enableToggle": "Habilitar análisis anónimos",
+    "continue": "Continuar",
+    "saving": "Guardando...",
+    "changeAnytime": "Puedes cambiar esto en cualquier momento en Configuración → Preferencias"
+  },
+  "lastRestoreSection": {
+    "title": "Última restauración",
+    "noRestores": "Sin restauraciones recientes",
+    "status": "Estado",
+    "archive": "Archivo",
+    "destination": "Destino",
+    "completed": "Completado",
+    "viewAll": "Ver todas las restauraciones"
+  },
+  "runningBackups": {
+    "title": "Copias de seguridad en curso",
+    "empty": "No hay copias de seguridad ejecutándose actualmente",
+    "jobId": "Trabajo #{{id}}",
+    "cancel": "Cancelar",
+    "sectionTitle": "Copias de seguridad programadas en curso",
+    "activeCount": "{{count}} activas",
+    "realtimeProgress": "Progreso en tiempo real de trabajos de copia de seguridad programados",
+    "running": "En ejecución",
+    "started": "Iniciado:",
+    "cancelBackup": "Cancelar copia de seguridad",
+    "currentFile": "Archivo actual:",
+    "filesProcessed": "Archivos procesados:",
+    "originalSize": "Tamaño original:",
+    "compressed": "Comprimido:",
+    "deduplicated": "Deduplicado:",
+    "totalSourceSize": "Tamaño total de origen:",
+    "speed": "Velocidad:",
+    "eta": "ETA:"
+  },
+  "backupHistory": {
+    "title": "Historial de copias de seguridad",
+    "empty": "Sin historial reciente de copias de seguridad",
+    "viewAll": "Ver todo",
+    "showing": "Mostrando {{filtered}} de {{total}} trabajos de copia de seguridad",
+    "showingFiltered": "Mostrando {{filtered}} de {{total}} trabajos de copia de seguridad (filtrado)",
+    "allSchedules": "Todas las programaciones",
+    "allRepositories": "Todos los repositorios",
+    "allStatus": "Todos los estados",
+    "completed": "Completado",
+    "failed": "Fallido",
+    "warning": "Advertencia",
+    "noJobsFound": "No se encontraron trabajos de copia de seguridad"
+  },
+  "scheduledChecks": {
+    "title": "Comprobaciones programadas",
+    "empty": "Sin comprobaciones programadas",
+    "nextRun": "Próxima ejecución",
+    "lastRun": "Última ejecución",
+    "repository": "Repositorio",
+    "schedule": "Programación",
+    "lastCheck": "Última comprobación",
+    "nextCheck": "Próxima comprobación",
+    "notConfigured": "No configurado",
+    "notScheduled": "No programado",
+    "never": "Nunca",
+    "editCheckSchedule": "Editar comprobación programada",
+    "addCheckSchedule": "Agregar comprobación programada",
+    "checkScheduleLabel": "Programación de comprobación",
+    "maxDuration": "Duración máxima (segundos)",
+    "maxDurationHint": "Límite de tiempo para la operación de comprobación (3600 = 1 hora)",
+    "notificationHint": "La configuración de notificaciones para trabajos de comprobación se puede configurar en Configuración → Notificaciones",
+    "noScheduledChecks": "Sin comprobaciones programadas",
+    "noScheduledChecksDesc": "Configura comprobaciones automáticas del repositorio para garantizar la integridad de los datos",
+    "needRepository": "Necesitas crear al menos un repositorio antes de programar comprobaciones.",
+    "disableConfirm": "¿Deshabilitar la comprobación programada para {{name}}?",
+    "noRepositoriesAvailable": "No hay repositorios disponibles",
+    "update": "Actualizar",
+    "create": "Crear",
+    "toasts": {
+      "scheduleUpdated": "Comprobación programada actualizada",
+      "checkStarted": "Comprobación iniciada"
+    },
+    "validation": {
+      "selectRepository": "Por favor selecciona un repositorio"
+    }
+  },
+  "repositorySelectorCard": {
+    "title": "Seleccionar repositorio",
+    "empty": "No hay repositorios disponibles",
+    "loading": "Cargando repositorios...",
+    "placeholder": "Selecciona un repositorio...",
+    "maintenanceRunning": "(Mantenimiento en curso)"
+  },
+  "multiRepositorySelector": {
+    "title": "Seleccionar repositorios",
+    "selectAll": "Seleccionar todo",
+    "deselectAll": "Deseleccionar todo",
+    "selected": "{{count}} seleccionados",
+    "selectedCount": "Repositorios seleccionados ({{count}})",
+    "selectedCountWithOrder": "Repositorios seleccionados ({{count}}) - Usa las flechas para cambiar el orden de copia de seguridad",
+    "moveUp": "Subir",
+    "moveDown": "Bajar",
+    "remove": "Eliminar",
+    "searchOrAddMore": "Buscar o agregar más..."
+  },
+  "wizard": {
+    "steps": {
+      "repository": "Repositorio",
+      "dataSource": "Fuente de datos",
+      "location": "Ubicación",
+      "schedule": "Programación",
+      "review": "Revisión"
+    },
+    "buttons": {
+      "back": "Atrás",
+      "next": "Siguiente",
+      "finish": "Finalizar",
+      "cancel": "Cancelar"
+    },
+    "borgUiServer": "Servidor Borg UI",
+    "remoteClient": "Cliente remoto",
+    "noSshConnections": "No hay conexiones SSH configuradas. Por favor configura las conexiones SSH en la página de Claves SSH primero.",
+    "backupFlowPreview": {
+      "localToLocal": "Respaldar datos locales en repositorio local",
+      "localToRemote": "Respaldar datos locales en repositorio remoto",
+      "remoteToLocal": "Respaldar datos remotos en repositorio local via SSHFS",
+      "default": "Respaldar datos en repositorio",
+      "remoteStorage": "Almacenamiento remoto",
+      "viaSSHFS": "via SSHFS",
+      "dirs_one": "{{count}} dir",
+      "dirs_other": "{{count}} dirs"
+    },
+    "backupConfig": {
+      "remoteSshfsNote": "Los directorios remotos se montan mediante SSHFS preservando sus rutas originales. Los patrones de exclusión funcionan igual que con fuentes locales (ej., */var/cache/*)."
+    },
+    "dataSource": {
+      "title": "¿Dónde están los datos que deseas respaldar?",
+      "localDescription": "Respaldar datos de este servidor (sistemas de archivos locales o montados)",
+      "removeRemoteDirsFirst": "Elimina los directorios remotos primero para cambiar",
+      "remoteToRemoteDisabledTooltip": "Las copias de seguridad remotas a remotas no son compatibles. Selecciona un repositorio local o usa la misma máquina remota.",
+      "notAvailableRemoteRepo": "No disponible cuando el repositorio está en un cliente remoto",
+      "remoteDescription": "Respaldar datos de una máquina remota mediante SSH",
+      "removeLocalDirsFirst": "Elimina los directorios locales primero para cambiar",
+      "remoteToRemoteTitle": "¿Por qué está deshabilitado \"Cliente remoto\"?",
+      "remoteToRemoteBody": "Cuando el repositorio está almacenado en un servidor remoto, la fuente de datos debe ser el servidor Borg UI. Las copias de seguridad remotas a remotas no son compatibles.",
+      "selectRemoteClient": "Seleccionar cliente remoto",
+      "browseRemoteNote": "Explora directorios remotos o introduce rutas completas manualmente (ej., /home/usuario/documentos, /var/www)",
+      "remoteSshNote": "El servidor Borg UI se conectará por SSH a la máquina remota para explorar y respaldar los directorios seleccionados. Asegúrate de que la conexión SSH esté correctamente configurada con los permisos necesarios."
+    },
+    "location": {
+      "repositoryNameLabel": "Nombre del repositorio",
+      "repositoryNameHelper": "Un nombre descriptivo para identificar este repositorio",
+      "repositoryModeLabel": "Modo del repositorio",
+      "fullRepository": "Repositorio completo",
+      "fullRepositoryDesc": "Crear copias de seguridad y explorar archivos",
+      "observabilityOnly": "Solo observabilidad",
+      "observabilityOnlyDesc": "Solo explorar y restaurar (sin copias de seguridad)",
+      "observabilityInfo": "Los repositorios de solo observabilidad pueden explorar y restaurar archivos existentes pero no pueden crear nuevas copias de seguridad.",
+      "readOnlyStorageLabel": "Acceso de almacenamiento de solo lectura",
+      "readOnlyStorageDesc": "Habilitar si el almacenamiento es de solo lectura o está bloqueado por otro proceso (agrega --bypass-lock)",
+      "whereToStore": "¿Dónde deben almacenarse las copias de seguridad?",
+      "borgUiServerDesc": "Almacenar copias de seguridad en el almacenamiento local de este servidor",
+      "remoteClientDesc": "Almacenar copias de seguridad en una máquina remota mediante SSH",
+      "remoteDisabledInfo": "Este repositorio está configurado para respaldar datos de una máquina remota. Las copias de seguridad remotas a remotas (respaldar de una máquina remota a otra) no son compatibles. Por favor mantén el repositorio en el Servidor Borg UI.",
+      "selectSshConnection": "Seleccionar conexión SSH",
+      "repositoryPathLabel": "Ruta del repositorio",
+      "repositoryPathHelper": "Ruta donde se almacenará el repositorio"
+    },
+    "restoreDestination": {
+      "title": "¿Dónde deben restaurarse los archivos?",
+      "subtitle": "Selecciona el destino y la ubicación para los archivos restaurados",
+      "borgUiServerDesc": "Restaurar en el almacenamiento local de este servidor",
+      "remoteMachine": "Máquina remota",
+      "remoteMachineDesc": "Restaurar en una máquina remota mediante SSH",
+      "sshToSshNotSupported": "La restauración SSH a SSH no es compatible. Solo están disponibles destinos locales para repositorios SSH.",
+      "selectSshConnection": "Seleccionar conexión SSH",
+      "restoreToOriginal": "Restaurar en ubicación original",
+      "restoreToOriginalDescLocal": "Recrear la estructura de directorios completa desde la raíz (/)",
+      "restoreToOriginalDescRemote": "Recrear la estructura de directorios completa desde la raíz (/) en la máquina remota",
+      "restoreToCustom": "Restaurar en ubicación personalizada",
+      "restoreToCustomDesc": "Elige dónde restaurar los archivos",
+      "customPathLabel": "Ruta de destino personalizada",
+      "customPathHelperLocal": "Elige un directorio con permisos de escritura donde se restaurarán los archivos",
+      "customPathHelperRemote": "Elige un directorio con permisos de escritura en la máquina remota",
+      "browseFilesystem": "Explorar sistema de archivos",
+      "browseRemoteFilesystem": "Explorar sistema de archivos remoto",
+      "filesWillBeRestoredTo": "Los archivos se restaurarán en:"
+    },
+    "restoreFiles": {
+      "title": "Seleccionar archivos a restaurar",
+      "subtitle": "Explora el archivo y selecciona los archivos o carpetas que deseas restaurar",
+      "noItemsFound": "No se encontraron elementos en este directorio",
+      "root": "Raíz",
+      "itemsSelected_one": "{{count}} elemento seleccionado",
+      "itemsSelected_other": "{{count}} elementos seleccionados",
+      "noItemsSelected": "Ningún elemento seleccionado",
+      "clearAll": "Borrar todo",
+      "selectDirTooltip": "Seleccionar directorio y todo su contenido",
+      "helpText": "Haz clic en los archivos para seleccionarlos, o en las carpetas para navegar. Usa la casilla junto a las carpetas para seleccionar directorios completos."
+    },
+    "restorePath": {
+      "title": "Elegir ubicación de restauración",
+      "subtitle": "Restaura archivos en sus rutas originales o selecciona un destino personalizado",
+      "restoreToOriginal": "Restaurar en ubicación original",
+      "restoreToOriginalDesc": "Recrear la estructura de directorios completa desde la raíz (/)",
+      "restoreToCustom": "Restaurar en ubicación personalizada",
+      "restoreToCustomDesc": "Elige dónde restaurar los archivos",
+      "customPathLabel": "Ruta de destino personalizada",
+      "customPathHelper": "Elige un directorio con permisos de escritura donde se restaurarán los archivos",
+      "browseFilesystem": "Explorar sistema de archivos",
+      "preview": "Vista previa",
+      "original": "Original:",
+      "andMoreFiles_one": "... y {{count}} archivo más",
+      "andMoreFiles_other": "... y {{count}} archivos más",
+      "noSshConnection": "Por favor selecciona una conexión SSH en el paso anterior."
+    },
+    "restoreReview": {
+      "readyEntireArchive": "Listo para restaurar el archivo completo desde {{archiveName}}",
+      "readyFiles_one": "Listo para restaurar {{count}} archivo desde {{archiveName}}",
+      "readyFiles_other": "Listo para restaurar {{count}} archivos desde {{archiveName}}",
+      "restoreDestination": "Destino de restauración",
+      "destinationType": "Tipo de destino",
+      "borgUiServer": "Servidor Borg UI",
+      "remoteMachine": "Máquina remota",
+      "sshConnection": "Conexión SSH",
+      "restoreStrategy": "Estrategia de restauración",
+      "originalLocation": "Ubicación original",
+      "customLocation": "Ubicación personalizada",
+      "customPath": "Ruta personalizada",
+      "notSet": "(no establecido)",
+      "restorePreview": "Vista previa de restauración",
+      "previewNote": "Vista previa de dónde se restaurarán los archivos:",
+      "andMoreFiles_one": "... y {{count}} archivo más",
+      "andMoreFiles_other": "... y {{count}} archivos más",
+      "filesToRestore": "Archivos a restaurar",
+      "numberOfItems": "Número de elementos",
+      "allFilesInArchive": "Todos los archivos del archivo",
+      "files_one": "{{count}} archivo",
+      "files_other": "{{count}} archivos",
+      "entireArchiveNote": "El archivo completo se restaurará con todos los archivos y directorios.",
+      "everythingLooksGood": "¡Todo parece correcto! Haz clic en \"Restaurar archivos\" para comenzar la operación de restauración."
+    },
+    "review": {
+      "configurationSummary": "Resumen de configuración",
+      "repository": "REPOSITORIO",
+      "name": "Nombre",
+      "mode": "Modo",
+      "full": "Completo",
+      "observeOnly": "Solo observación",
+      "location": "Ubicación",
+      "path": "Ruta",
+      "notSet": "(no establecido)",
+      "borgUiServer": "Servidor Borg UI",
+      "sshRemote": "SSH remoto",
+      "dataSource": "FUENTE DE DATOS",
+      "source": "Fuente",
+      "remoteClient": "Cliente remoto",
+      "directories": "Directorios",
+      "directoriesCount": "{{count}} configurados",
+      "excludePatterns": "Patrones de exclusión",
+      "security": "SEGURIDAD",
+      "encryption": "Cifrado",
+      "encryptionRepokey": "Repokey",
+      "encryptionKeyfile": "Archivo de clave",
+      "encryptionNone": "Ninguno",
+      "passphrase": "Frase de contraseña",
+      "passphraseSet": "••••••••",
+      "passphraseNotSet": "(no establecido)",
+      "backupConfiguration": "CONFIGURACIÓN DE COPIA DE SEGURIDAD",
+      "compression": "Compresión",
+      "customFlags": "Indicadores personalizados",
+      "repositoryInitialized": "El repositorio será inicializado",
+      "repositoryImportNote": "El repositorio será verificado antes de importar. Asegúrate de que la frase de contraseña sea correcta.",
+      "repositoryEditNote": "Los cambios se guardarán en la configuración del repositorio."
+    },
+    "security": {
+      "encryptionMethodLabel": "Método de cifrado",
+      "repokey": "Repokey (Recomendado)",
+      "repokeyDesc": "Clave almacenada en el repositorio, protegida por frase de contraseña",
+      "keyfile": "Archivo de clave",
+      "keyfileDesc": "Clave almacenada por separado, requiere frase de contraseña + archivo de clave",
+      "none": "Ninguno (Sin cifrado)",
+      "noneDesc": "Sin cifrado - datos almacenados en texto plano",
+      "securityWarningTitle": "Advertencia de seguridad",
+      "securityWarningBody": "Los datos de copia de seguridad se almacenarán sin cifrado. Cualquier persona con acceso al repositorio puede leer tus archivos. Esto no se recomienda para datos sensibles.",
+      "encryptionReadonly": "La configuración de cifrado no se puede cambiar después de crear el repositorio.",
+      "passphraseOptional": "Frase de contraseña (Opcional)",
+      "passphraseRequired": "Frase de contraseña",
+      "passphrasePlaceholderEdit": "Dejar en blanco para mantener la última frase guardada",
+      "passphrasePlaceholderCreate": "Introduce la frase de contraseña",
+      "passphraseHelperEdit": "Opcional - dejar en blanco para mantener la última frase guardada",
+      "passphraseHelperCreate": "¡Guárdala de forma segura - no podrás acceder a las copias de seguridad sin ella!",
+      "borgKeyfileTitle": "Archivo de clave Borg (Opcional)",
+      "borgKeyfileDesc": "Los archivos de clave Borg se almacenan típicamente sin extensión de archivo en ~/.config/borg/keys/",
+      "uploadFile": "Subir archivo",
+      "pasteContent": "Pegar contenido",
+      "chooseKeyfile": "Elegir archivo de clave",
+      "selectedKeyfile": "Seleccionado: {{name}}",
+      "keyfileUploadNote": "El archivo de clave se subirá después de importar",
+      "keyfileContentNote": "El contenido del archivo de clave se guardará después de importar",
+      "remoteBorgPath": "Ruta Borg remota (Opcional)",
+      "remoteBorgPathHelper": "Ruta al ejecutable borg en remoto (si no está en PATH)"
+    },
+    "scheduleWizard": {
+      "basicInfo": {
+        "jobNameLabel": "Nombre del trabajo",
+        "jobNamePlaceholder": "Copia diaria",
+        "descriptionLabel": "Descripción",
+        "descriptionPlaceholder": "Descripción opcional",
+        "repositoriesLabel": "Repositorios",
+        "repositoriesPlaceholder": "Seleccionar repositorios...",
+        "repositoriesHelper": "Usa las flechas para cambiar el orden de copia de seguridad.",
+        "selectAtLeastOne": "Selecciona al menos un repositorio para continuar."
+      },
+      "maintenance": {
+        "title": "Opciones de mantenimiento",
+        "subtitle": "Ejecutar poda y compactación tras las copias de seguridad para gestionar el espacio en disco.",
+        "info": "La poda elimina archivos antiguos. La compactación recupera espacio en disco.",
+        "pruneAfterBackup": "Ejecutar poda tras la copia de seguridad",
+        "pruneAfterBackupDesc": "Eliminar archivos antiguos según la política de retención",
+        "pruneCaution": "La poda elimina permanentemente copias de seguridad antiguas.",
+        "compactAfterPrune": "Ejecutar compactación tras la poda",
+        "compactAfterPruneDesc": "Recuperar espacio en disco liberando segmentos",
+        "compactInfo": "La compactación recupera espacio en disco tras la poda. Puede llevar tiempo en repositorios grandes."
+      },
+      "config": {
+        "scheduleLabel": "Programación (Expresión Cron)",
+        "scheduleHelper": "Haz clic en el icono del reloj para usar el constructor visual.",
+        "nextRunTimes": "Próximas 3 ejecuciones:"
+      },
+      "review": {
+        "readyToCreate": "¡Listo para crear la programación!",
+        "reviewAndConfirm": "Revisa y confirma a continuación.",
+        "jobSummary": "Resumen del trabajo",
+        "name": "Nombre",
+        "repositories": "Repositorios ({{count}})",
+        "schedule": "Programación",
+        "archiveNameTemplate": "Plantilla de nombre de archivo",
+        "scriptsConfiguration": "Configuración de scripts",
+        "preBackupScript": "Script previo a la copia de seguridad",
+        "postBackupScript": "Script posterior a la copia de seguridad",
+        "repositoryLevelScripts": "Scripts a nivel de repositorio",
+        "maintenanceSettings": "Configuración de mantenimiento",
+        "pruneAfterBackup": "Poda tras la copia de seguridad",
+        "enabled": "Habilitado",
+        "disabled": "Deshabilitado",
+        "compactAfterPrune": "Compactación tras la poda",
+        "none": "Ninguno"
+      },
+      "scripts": {
+        "scheduleLevelNote": "Nivel de programación: se ejecuta una vez por programación. Nivel de repositorio: se ejecuta para cada repositorio.",
+        "selectRepoFirst": "Selecciona al menos un repositorio en el Paso 1 para configurar scripts."
+      }
+    }
+  },
+  "repositoryStatsGrid": {
+    "totalArchives": "Total de archivos",
+    "spaceUsed": "Espacio usado",
+    "spaceSaved": "Espacio ahorrado",
+    "compression": "Compresión",
+    "deduplication": "Deduplicación"
+  },
+  "upcomingJobs": {
+    "title": "Trabajos próximos (Próximas 24 horas)",
+    "repositories": "{{count}} repositorios"
+  },
+  "scheduledJobsTableSection": {
+    "title": "Todos los trabajos programados",
+    "noJobsFound": "No se encontraron trabajos programados",
+    "noJobsDesc": "Crea tu primer trabajo de copia de seguridad programado"
+  },
+  "advancedRepositoryOptions": {
+    "title": "Opciones avanzadas",
+    "subtitle": "Configura la ruta borg remota, indicadores personalizados y ganchos de copia de seguridad para casos de uso avanzados",
+    "remoteBorgPath": "Ruta Borg remota (Opcional)",
+    "remoteBorgPathHint": "Ruta al binario borg en el servidor remoto (dejar vacío para usar el predeterminado)",
+    "customFlags": "Indicadores personalizados (Opcional)",
+    "customFlagsHint": "Indicadores de línea de comandos personalizados para borg create (ej., --stats, --progress, --list)",
+    "scripts": "Scripts",
+    "scriptsOptional": "(Opcional)",
+    "scriptsHint": "Configura scripts en línea o asigna scripts reutilizables de tu Biblioteca de Scripts.",
+    "preBackupScript": "Script previo a la copia de seguridad",
+    "postBackupScript": "Script posterior a la copia de seguridad"
+  },
+  "archiveBrowser": {
+    "title": "Explorar archivo",
+    "selectAllVisible": "Seleccionar todos los visibles",
+    "clearSelection": "Limpiar selección",
+    "selectionInfo": "Selecciona archivos o carpetas específicos para restaurar. Haz clic en las carpetas para explorar, haz clic en las casillas para seleccionar. Si no se hace ninguna selección, se restaurará el archivo completo.",
+    "archiveTooLarge": "Archivo demasiado grande",
+    "archiveTooLargeDesc": "Este archivo contiene demasiados archivos para explorarlo de forma segura en la interfaz.",
+    "emptyDirectory": "Este directorio está vacío",
+    "selectedCount": "{{count}} seleccionados",
+    "root": "Raíz",
+    "selected": "Seleccionado",
+    "notSelected": "No seleccionado",
+    "continueWithSelected": "Continuar con {{count}} seleccionados",
+    "continueRestoreAll": "Continuar (Restaurar todo)"
+  },
+  "archiveContents": {
+    "title": "Contenido del archivo",
+    "loading": "Cargando contenido del archivo...",
+    "emptyDirectory": "Este directorio está vacío",
+    "emptyArchive": "Este archivo está vacío",
+    "emptyArchiveDesc": "No se respaldaron archivos en este archivo. Esto puede ocurrir si el directorio de origen estaba vacío o inaccesible durante la copia de seguridad.",
+    "noInfo": "No hay información de archivo disponible",
+    "root": "Raíz"
+  },
+  "archiveNameTemplate": {
+    "label": "Plantilla de nombre de archivo",
+    "hint": "Personaliza la nomenclatura del archivo. Marcadores disponibles: {job_name}, {now}, {date}, {time}, {timestamp}",
+    "preview": "Vista previa:"
+  },
+  "codeEditor": {
+    "loading": "Cargando editor..."
+  },
+  "commandPreview": {
+    "howBackupWillWork": "Cómo funcionará la copia de seguridad:",
+    "howBackupWorks": "Cómo funciona la copia de seguridad:",
+    "step1InitRepo": "Paso 1: Inicializar repositorio",
+    "step1MountRemote": "Paso 1: Montar {{type}} remoto",
+    "step2MountRemote": "Paso 2: Montar {{type}} remoto",
+    "step2RunBackup": "Paso 2: Ejecutar copia de seguridad",
+    "step3RunBackup": "Paso 3: Ejecutar copia de seguridad",
+    "step3Cleanup": "Paso 3: Limpieza",
+    "step4Cleanup": "Paso 4: Limpieza",
+    "stepRunBackup": "Ejecutar copia de seguridad",
+    "initRepositoryDesc": "Crea un repositorio cifrado en la ubicación especificada",
+    "mountDirectory": "Directorio",
+    "mountDirectories": "Directorios",
+    "mountDisplayText": "Monta el directorio remoto bajo la raíz temporal compartida",
+    "mountDisplayTextMultiple": "Monta {{count}} directorios únicos bajo la raíz temporal compartida (los archivos comparten el montaje padre)",
+    "archivesPreserve": "Los archivos preservan las rutas originales (las exclusiones funcionan intuitivamente)",
+    "cleanupDesc": "Desmonta el directorio remoto después de que se completa la copia de seguridad",
+    "backupSourceDirs": "Respalda los directorios de origen en el repositorio",
+    "futureBackups": "Este comando se usará para copias de seguridad futuras"
+  },
+  "compressionSettings": {
+    "title": "Configuración de compresión",
+    "algorithmLabel": "Algoritmo de compresión",
+    "algorithmNone": "none - No comprimir",
+    "algorithmLz4": "lz4 - Velocidad muy alta, compresión muy baja (predeterminado)",
+    "algorithmZstd": "zstd - Algoritmo moderno de amplio rango (nivel predeterminado 3)",
+    "algorithmZlib": "zlib - Velocidad media, compresión media (nivel predeterminado 6)",
+    "algorithmLzma": "lzma - Velocidad baja, compresión alta (nivel predeterminado 6)",
+    "algorithmAuto": "auto - Selección automática de compresión",
+    "algorithmObfuscate": "obfuscate - Ofuscar datos comprimidos",
+    "levelLabel": "Nivel de compresión (Opcional)",
+    "levelPlaceholderZstd": "1-22 (predeterminado: 3)",
+    "levelPlaceholderZlib": "0-9 (predeterminado: 6)",
+    "levelPlaceholderLzma": "0-9 (predeterminado: 6, máx útil: 6)",
+    "levelPlaceholderDefault": "Dejar vacío para usar el predeterminado",
+    "levelHelperAuto": "El algoritmo auto usa lz4 como respaldo. El nivel no es aplicable.",
+    "levelHelperZstd": "zstd: Nivel 1-22. Mayor = mejor compresión pero más lento.",
+    "levelHelperZlib": "zlib: Nivel 0-9. Nivel 0 significa sin compresión (usa \"none\" en su lugar).",
+    "levelHelperLzma": "lzma: Nivel 0-9. Los niveles por encima de 6 son inútiles y desperdician CPU/RAM.",
+    "levelHelperDefault": "Dejar vacío para usar el nivel predeterminado.",
+    "autoDetect": "Detectar compresibilidad automáticamente (auto,C[,L])",
+    "autoDetectDesc": "Usa lz4 para probar si los datos son compresibles. Para datos incompresibles (ej., archivos multimedia), usa \"none\". Para datos compresibles, usa el algoritmo seleccionado.",
+    "obfuscateLabel": "Especificación de ofuscación (Opcional)",
+    "obfuscatePlaceholder": "ej., 110, 250",
+    "obfuscateHelper": "Ofusca los tamaños de fragmentos comprimidos para dificultar los ataques de identificación de huellas. Debe usarse con cifrado. El repositorio será más grande.",
+    "finalSpec": "Especificación de compresión final:"
+  },
+  "cronBuilderComponent": {
+    "runEvery": "Ejecutar cada",
+    "minutesSuffix": "minutos.",
+    "hoursAtMinute": "horas al minuto",
+    "pastTheHour": "de la hora.",
+    "runDailyAt": "Ejecutar diariamente a las",
+    "runOn": "Ejecutar el",
+    "at": "a las",
+    "runOnDay": "Ejecutar el día"
+  },
+  "cronBuilderDialog": {
+    "openScheduleBuilder": "Abrir constructor de programación",
+    "applySchedule": "Aplicar programación",
+    "configureSchedule": "Configurar programación"
+  },
+  "dataTable": {
+    "actions": "Acciones",
+    "rowsPerPage": "Filas por página:"
+  },
+  "excludePatterns": {
+    "title": "Patrones de exclusión (Opcional)",
+    "hint": "Especifica patrones para excluir de la copia de seguridad (ej., *.log, *.tmp, __pycache__, node_modules)",
+    "placeholder": "*.log o /ruta/a/excluir",
+    "browseToExclude": "Explorar para excluir",
+    "add": "Agregar"
+  },
+  "packages": {
+    "title": "Paquetes del sistema",
+    "subtitle": "Instala paquetes del sistema que pueden usarse en tus scripts de copia de seguridad. Los paquetes se reinstalan automáticamente cuando se recrea el contenedor.",
+    "hint": "Simplemente introduce el nombre de un paquete (ej., wakeonlan, curl) y se instalará usando sudo apt-get install -y. Para casos avanzados, puedes habilitar comandos de instalación personalizados.",
+    "installedPackages": "Paquetes instalados",
+    "addPackage": "Agregar paquete",
+    "empty": "Sin paquetes instalados",
+    "emptyDesc": "Agrega paquetes del sistema para usar en tus scripts de copia de seguridad",
+    "columns": {
+      "package": "Paquete",
+      "status": "Estado",
+      "installed": "Instalado"
+    },
+    "status": {
+      "installed": "Instalado",
+      "pending": "Pendiente",
+      "installing": "Instalando",
+      "failed": "Fallido"
+    },
+    "actions": {
+      "install": "Instalar",
+      "installTooltip": "Instalar paquete",
+      "reinstall": "Reinstalar",
+      "reinstallTooltip": "Reinstalar paquete",
+      "edit": "Editar",
+      "editTooltip": "Editar paquete",
+      "delete": "Eliminar",
+      "deleteTooltip": "Eliminar paquete"
+    },
+    "createDialog": {
+      "titleAdd": "Agregar paquete del sistema",
+      "titleEdit": "Editar paquete"
+    },
+    "fields": {
+      "packageName": "Nombre del paquete",
+      "packageNameHintAdvanced": "Nombre del paquete para referencia",
+      "packageNameHintSimple": "ej., wakeonlan, curl, jq (ejecutará: sudo apt-get update && sudo apt-get install -y <nombre>)",
+      "advancedMode": "Avanzado: Comando de instalación personalizado",
+      "installCommand": "Comando de instalación",
+      "installCommandHint": "ej., apt-get install -y wakeonlan o pip install some-package",
+      "description": "Descripción (Opcional)",
+      "descriptionHint": "Breve descripción de lo que hace este paquete"
+    },
+    "buttons": {
+      "updating": "Actualizando...",
+      "updatePackage": "Actualizar paquete",
+      "adding": "Agregando...",
+      "addPackage": "Agregar paquete"
+    },
+    "deleteDialog": {
+      "title": "Eliminar paquete",
+      "message": "¿Estás seguro de que deseas eliminar \"{{name}}\" de la lista?",
+      "note": "Esto no desinstalará el paquete del sistema, solo lo eliminará de la lista.",
+      "deleting": "Eliminando...",
+      "confirm": "Eliminar"
+    },
+    "resultDialog": {
+      "successful": "Instalación exitosa",
+      "failed": "Instalación fallida",
+      "installing": "Instalando...",
+      "installingDesc": "Instalando paquete... Esto puede llevar unos minutos.",
+      "stdout": "Salida estándar:",
+      "stderr": "Error estándar:",
+      "exitCode": "Código de salida: {{code}}",
+      "close": "Cerrar"
+    },
+    "toasts": {
+      "addedSuccessfully": "Paquete agregado correctamente",
+      "updatedSuccessfully": "Paquete actualizado correctamente",
+      "removedSuccessfully": "Paquete eliminado correctamente"
+    }
+  },
+  "protectedRoute": {
+    "unavailable": "Esta función no está disponible actualmente"
+  },
+  "pruneSettings": {
+    "keepHourly": "Mantener por hora",
+    "keepHourlyHint": "Copias de seguridad horarias a mantener (0 = deshabilitado)",
+    "keepDaily": "Mantener por día",
+    "keepDailyHint": "Copias de seguridad diarias a mantener",
+    "keepWeekly": "Mantener por semana",
+    "keepWeeklyHint": "Copias de seguridad semanales a mantener",
+    "keepMonthly": "Mantener por mes",
+    "keepMonthlyHint": "Copias de seguridad mensuales a mantener",
+    "keepQuarterly": "Mantener por trimestre",
+    "keepQuarterlyHint": "Copias de seguridad trimestrales a mantener (0 = deshabilitado)",
+    "keepYearly": "Mantener por año",
+    "keepYearlyHint": "Copias de seguridad anuales a mantener"
+  },
+  "repositoryCell": {
+    "noPath": "Sin información de ruta"
+  },
+  "repositoryScriptsSection": {
+    "preBackup": "Scripts previos a la copia de seguridad",
+    "postBackup": "Scripts posteriores a la copia de seguridad",
+    "createFirst": "Crea el repositorio primero para agregar scripts de la biblioteca",
+    "addFromLibrary": "Agregar script de la biblioteca",
+    "add": "Agregar",
+    "inlineScript": "Script en línea",
+    "configured": "Configurado"
+  },
+  "scriptEditor": {
+    "testRun": "Ejecución de prueba",
+    "testing": "Probando...",
+    "timeoutLabel": "Tiempo límite (segundos)",
+    "timeoutHint": "Tiempo máximo de espera para la ejecución del script",
+    "continueOnFailure": "Continuar la copia de seguridad si el script falla",
+    "testPassed": "Prueba superada",
+    "testWarnings": "Prueba completada con advertencias",
+    "testFailed": "Prueba fallida",
+    "stdout": "Salida estándar:",
+    "stderr": "Error estándar:",
+    "save": "Guardar"
+  },
+  "scriptParameters": {
+    "title": "Parámetros del script",
+    "paramCount_one": "{{count}} parámetro",
+    "paramCount_other": "{{count}} parámetros",
+    "showPassword": "Mostrar contraseña",
+    "hidePassword": "Ocultar contraseña"
+  },
+  "scriptSelector": {
+    "title": "Scripts a nivel de programación",
+    "subtitle": "Estos scripts se ejecutan una vez por programación (ej., encender el servidor antes de todas las copias de seguridad, apagarlo después)",
+    "preBackup": "Script previo a la copia de seguridad (se ejecuta una vez antes de todas las copias de seguridad)",
+    "postBackup": "Script posterior a la copia de seguridad (se ejecuta una vez después de todas las copias de seguridad)",
+    "runRepoScripts": "Ejecutar scripts a nivel de repositorio",
+    "runRepoScriptsDesc": "Si está habilitado, los scripts pre/post de cada repositorio se ejecutarán durante su copia de seguridad"
+  },
+  "sourceDirectories": {
+    "title": "Directorios y archivos de origen",
+    "subtitle": "Especifica qué directorios o archivos respaldar en este repositorio",
+    "atLeastOneRequired": "(se requiere al menos uno)",
+    "optionalSuffix": "(opcional)",
+    "warning": "Se requiere al menos un directorio o archivo de origen. Agrega los directorios o archivos que deseas respaldar.",
+    "placeholder": "/home/usuario/documentos o /var/log/app.log",
+    "browseTitle": "Explorar directorios y archivos",
+    "add": "Agregar"
+  },
+  "repositoryWizard": {
+    "titleCreate": "Crear repositorio",
+    "titleEdit": "Editar repositorio",
+    "titleImport": "Importar repositorio",
+    "steps": {
+      "location": "Ubicación",
+      "source": "Fuente",
+      "security": "Seguridad",
+      "config": "Configuración",
+      "review": "Revisión"
+    },
+    "finalButtonCreate": "Crear repositorio",
+    "finalButtonEdit": "Guardar cambios",
+    "finalButtonImport": "Importar repositorio",
+    "fileExplorer": {
+      "selectRepoPath": "Seleccionar ruta del repositorio",
+      "selectSourceDirs": "Seleccionar directorios o archivos de origen",
+      "selectSourceDirsRemote": "Seleccionar directorios de origen (Máquina remota)",
+      "selectSourceDirsOrFilesRemote": "Seleccionar directorios o archivos de origen (Remoto)",
+      "selectExclude": "Seleccionar directorios/archivos a excluir"
+    }
+  },
+  "restoreWizard": {
+    "title": "Restaurar archivos",
+    "fromArchive": "Desde archivo: {{archiveName}}",
+    "steps": {
+      "files": "Archivos",
+      "destination": "Destino",
+      "review": "Revisión"
+    },
+    "buttons": {
+      "restore": "Restaurar archivos"
+    },
+    "fileExplorer": {
+      "selectRestoreDestination": "Seleccionar destino de restauración"
+    }
+  },
+  "scheduleWizard": {
+    "titleCreate": "Crear programación de copia de seguridad",
+    "titleEdit": "Editar programación de copia de seguridad",
+    "steps": {
+      "basic": "Básico",
+      "schedule": "Programación",
+      "scripts": "Scripts",
+      "maintenance": "Mantenimiento",
+      "review": "Revisión"
+    },
+    "finalButtonCreate": "Crear programación",
+    "finalButtonEdit": "Guardar cambios"
+  },
+  "terminalLogViewer": {
+    "title": "Registros de copia de seguridad",
+    "tailLabel": "Mostrando las últimas 500 de {{total}} líneas (cola en vivo)",
+    "linesLabel": "{{count}} de {{total}} líneas",
+    "copyLogs": "Copiar registros",
+    "download": "Descargar",
+    "liveStreaming": "Transmisión en vivo (Últimas 500 líneas)",
+    "linesDisplayed": "{{count}} líneas mostradas",
+    "showingLast": "Mostrando las últimas 500 de {{total}} líneas (los errores suelen aparecer al final)",
+    "jumpToStart": "Ir al inicio",
+    "waitingForLogs": "Esperando registros...",
+    "noLogsAvailable": "No hay registros disponibles",
+    "newLogsAvailable": "Nuevos registros disponibles - Haz clic para desplazarte al final",
+    "toasts": {
+      "logsCopied": "Registros copiados al portapapeles",
+      "logsDownloaded": "Registros descargados",
+      "failedToLoad": "Error al cargar los registros"
+    }
+  },
+  "fileExplorer": {
+    "defaultTitle": "Seleccionar directorio",
+    "searchPlaceholder": "Buscar...",
+    "newFolder": "Nueva carpeta",
+    "loading": "Cargando...",
+    "noItemsFound": "No se encontraron elementos",
+    "tryDifferentSearch": "Prueba con una búsqueda diferente",
+    "emptyDirectory": "Directorio vacío",
+    "sshInfoAlert": "Las conexiones SSH se muestran a continuación. Configura puntos de montaje en la página de Claves SSH para nombres de visualización más claros.",
+    "selectedCount": "{{count}} seleccionados",
+    "cancel": "Cancelar",
+    "useCurrent": "Usar actual",
+    "select": "Seleccionar",
+    "selectWithCount": "Seleccionar ({{count}})",
+    "createFolderTitle": "Crear nueva carpeta",
+    "folderNameLabel": "Nombre de la carpeta",
+    "folderNamePlaceholder": "Introduce el nombre de la carpeta",
+    "creating": "Creando...",
+    "create": "Crear",
+    "chips": {
+      "remote": "Remoto",
+      "host": "Host",
+      "borg": "Borg"
+    }
+  },
+  "cronExpressionInput": {
+    "label": "Programación"
+  },
+  "pathSelectorField": {
+    "browseFilesystem": "Explorar sistema de archivos",
+    "selectDirectory": "Seleccionar directorio",
+    "selectFile": "Seleccionar archivo",
+    "selectPath": "Seleccionar ruta"
+  }
+}
