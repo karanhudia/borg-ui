@@ -4,6 +4,8 @@ import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider, createTheme } from '@mui/material/styles'
 import { Toaster } from 'react-hot-toast'
+import { I18nextProvider } from 'react-i18next'
+import i18n from '../i18n'
 
 // Create a theme for testing
 const theme = createTheme({
@@ -39,14 +41,16 @@ export function AllProviders({ children, queryClient }: AllProvidersProps) {
   const testQueryClient = queryClient || createTestQueryClient()
 
   return (
-    <QueryClientProvider client={testQueryClient}>
-      <BrowserRouter>
-        <ThemeProvider theme={theme}>
-          {children}
-          <Toaster position="top-right" />
-        </ThemeProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
+    <I18nextProvider i18n={i18n}>
+      <QueryClientProvider client={testQueryClient}>
+        <BrowserRouter>
+          <ThemeProvider theme={theme}>
+            {children}
+            <Toaster position="top-right" />
+          </ThemeProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </I18nextProvider>
   )
 }
 
