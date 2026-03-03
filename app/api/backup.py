@@ -144,7 +144,7 @@ async def get_backup_status(
         if not job:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Backup job not found"
+                detail={"key": "backend.errors.backup.backupJobNotFound"}
             )
 
         return {
@@ -189,13 +189,13 @@ async def cancel_backup(
         if not job:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Backup job not found"
+                detail={"key": "backend.errors.backup.backupJobNotFound"}
             )
 
         if job.status != "running":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Can only cancel running jobs"
+                detail={"key": "backend.errors.backup.canOnlyCancelRunningJobs"}
             )
 
         # Try to terminate the actual process
@@ -213,7 +213,7 @@ async def cancel_backup(
 
         logger.info("Backup cancelled", job_id=job_id, user=current_user.username, process_killed=process_killed)
         return {
-            "message": "Backup cancelled successfully",
+            "message": "backend.success.backup.backupCancelled",
             "process_terminated": process_killed
         }
     except HTTPException:
@@ -273,7 +273,7 @@ async def download_backup_logs(
         if not job:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Backup job not found"
+                detail={"key": "backend.errors.backup.backupJobNotFound"}
             )
 
         # Only allow download for completed failed/cancelled backups
@@ -287,7 +287,7 @@ async def download_backup_logs(
         if not job.logs:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="No logs available for this backup (successful backups don't save logs)"
+                detail={"key": "backend.errors.backup.noLogsAvailable"}
             )
 
         # Handle file-based logs
@@ -298,7 +298,7 @@ async def download_backup_logs(
             if not log_file.exists():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Log file not found: {log_filename}"
+                    detail={"key": "backend.errors.backup.logFileNotFound", "params": {"filename": log_filename}}
                 )
 
             # Return file as download
@@ -342,7 +342,7 @@ async def stream_backup_logs(
         if not job:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Backup job not found"
+                detail={"key": "backend.errors.backup.backupJobNotFound"}
             )
 
         # Check if logs are available
