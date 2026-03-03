@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Frontend Utility and Hardcoded String Cleanup** - Build translateBackendKey utility and remove all hardcoded English strings from frontend page components
 - [x] **Phase 2: Locale File Structure and Key Skeleton** - Establish backend.* namespace in all three locale files and enable dev-mode missing-key detection (completed 2026-03-03)
 - [x] **Phase 3: Backend API Migration (Auth + High-Traffic Domains)** - Convert all HTTPException.detail and message fields in auth.py, repositories.py, and backup.py to translation keys (completed 2026-03-03)
-- [ ] **Phase 4: Backend Services and Remaining API Files** - Migrate restore.py, schedule.py, and all remaining API files plus the services layer that writes stored error_message fields
+- [x] **Phase 4: Backend Services and Remaining API Files** - Migrate restore.py, schedule.py, and all remaining API files plus the services layer that writes stored error_message fields (completed 2026-03-03)
 - [ ] **Phase 5: Locale File Completion and CI Validation** - Complete Spanish and German translations for all new backend.* keys and add automated key-sync enforcement
 
 ## Phase Details
@@ -99,5 +99,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Frontend Utility and Hardcoded String Cleanup | 4/4 | Complete | 2026-03-03 |
 | 2. Locale File Structure and Key Skeleton | 0/1 | Complete    | 2026-03-03 |
 | 3. Backend API Migration (Auth + High-Traffic Domains) | 4/4 | Complete   | 2026-03-03 |
-| 4. Backend Services and Remaining API Files | 0/4 | Not started | - |
+| 4. Backend Services and Remaining API Files | 4/4 | Complete   | 2026-03-03 |
 | 5. Locale File Completion and CI Validation | 0/? | Not started | - |
