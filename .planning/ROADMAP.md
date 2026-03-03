@@ -17,6 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Backend API Migration (Auth + High-Traffic Domains)** - Convert all HTTPException.detail and message fields in auth.py, repositories.py, and backup.py to translation keys (completed 2026-03-03)
 - [x] **Phase 4: Backend Services and Remaining API Files** - Migrate restore.py, schedule.py, and all remaining API files plus the services layer that writes stored error_message fields (gap closure in progress) (completed 2026-03-03)
 - [ ] **Phase 5: Locale File Completion and CI Validation** - Complete Spanish and German translations for all new backend.* keys and add automated key-sync enforcement
+- [ ] **Phase 6: Fix Services Layer Raw English Paths** - Close integration gaps found by milestone audit: borg_errors.py primary backup failure path, restore_service.py failure paths, and backup.py cancel job.error_message (gap closure)
 
 ## Phase Details
 
@@ -83,18 +84,34 @@ Plans:
 ### Phase 5: Locale File Completion and CI Validation
 **Goal**: All new `backend.*` keys have complete Spanish and German translations (not just English placeholders), and a CI script enforces key-set parity across all three locale files going forward
 **Depends on**: Phase 4
+**Gap Closure**: Closes LOC-02, LOC-03, LOC-04, QUAL-02 gaps identified by v1.0 milestone audit
 **Requirements**: LOC-02, LOC-03, LOC-04, QUAL-02
 **Success Criteria** (what must be TRUE):
   1. Switching the UI to Spanish shows proper Spanish translations for all backend-originating error and success messages (no English fallthrough or raw key strings)
   2. Switching the UI to German shows proper German translations for all backend-originating error and success messages
   3. `en.json`, `es.json`, and `de.json` contain identical key sets — verified by running the CI script locally, which exits 0
   4. The CI script fails (non-zero exit) when a key exists in `en.json` but is absent from `es.json` or `de.json`, preventing future divergence
+  5. The CI script is referenced in `frontend/package.json` `scripts` section and invoked as a step in `.github/workflows/tests.yml`, so key parity is enforced automatically on every commit
+**Plans**: TBD
+
+### Phase 6: Fix Services Layer Raw English Paths
+**Goal**: All `error_message` fields written by the services layer use JSON-encoded translation key format — including the primary borg backup failure path, restore failure paths, and the backup API cancel endpoint — so both ErrorDetailsDialog and RestoreJobCard inline display always render translated text
+**Depends on**: Phase 4
+**Gap Closure**: Closes SVC-01, SVC-02 gaps identified by v1.0 milestone audit; fixes RestoreJobCard inline display integration gap
+**Requirements**: SVC-01, SVC-02
+**Success Criteria** (what must be TRUE):
+  1. When a backup job fails due to a borg error (e.g. exit code 13, lock timeout, repository not found), ErrorDetailsDialog displays the error in the user's selected language, not raw English
+  2. When a restore job fails (zero files extracted, non-zero exit code, exception), ErrorDetailsDialog displays translated text
+  3. When a backup is cancelled, the stored `error_message` uses a locale key string (matching the existing fix in restore.py cancel)
+  4. `backup_service.py` post-hook failure append uses `json.dumps({"key": ...})` format — no raw English mixed into error_message alongside JSON-encoded lines
+  5. All new locale keys (borg error mappings, restore failure keys, backup cancel keys) are present in en.json, es.json, and de.json
+  6. `RestoreJobCard.tsx` inline `error_message` display renders translated text via `translateBackendKey` — not raw JSON key strings — so both the card view and ErrorDetailsDialog show translated error text
 **Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -103,3 +120,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 3. Backend API Migration (Auth + High-Traffic Domains) | 4/4 | Complete   | 2026-03-03 |
 | 4. Backend Services and Remaining API Files | 6/6 | Complete   | 2026-03-03 |
 | 5. Locale File Completion and CI Validation | 0/? | Not started | - |
+| 6. Fix Services Layer Raw English Paths | 0/? | Not started | - |

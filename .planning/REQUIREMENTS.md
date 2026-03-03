@@ -37,8 +37,8 @@
 
 ### Backend Service Layer Migration
 
-- [x] **SVC-01**: `error_message` fields written by `app/services/backup_service.py` use `{key}` or `{key, params}` format (excluding the `LOCK_ERROR::` sentinel which must remain as-is)
-- [x] **SVC-02**: `error_message` fields written by `app/services/restore_service.py` use `{key}` or `{key, params}` format
+- [ ] **SVC-01**: `error_message` fields written by `app/services/backup_service.py` use `{key}` or `{key, params}` format (excluding the `LOCK_ERROR::` sentinel which must remain as-is)
+- [ ] **SVC-02**: `error_message` fields written by `app/services/restore_service.py` use `{key}` or `{key, params}` format
 - [x] **SVC-03**: `error_message` fields written by `app/utils/process_utils.py` and other services use `{key}` or `{key, params}` format
 
 ### Quality and Validation
@@ -93,8 +93,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BKND-04 | Phase 4 | Complete |
 | BKND-05 | Phase 4 | Complete |
 | BKND-06 | Phase 4 | Complete |
-| SVC-01 | Phase 4 | Complete |
-| SVC-02 | Phase 4 | Complete |
+| SVC-01 | Phase 6 | Pending |
+| SVC-02 | Phase 6 | Pending |
 | SVC-03 | Phase 4 | Complete |
 | QUAL-01 | Phase 2 | Complete |
 | QUAL-02 | Phase 5 | Pending |
@@ -103,6 +103,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 - v1 requirements: 22 total
 - Mapped to phases: 22
 - Unmapped: 0 ✓
+- Pending (gap closure): SVC-01 (Phase 6), SVC-02 (Phase 6), LOC-02 (Phase 5), LOC-03 (Phase 5), LOC-04 (Phase 5), QUAL-02 (Phase 5)
 
 ---
 *Requirements defined: 2026-03-03*
