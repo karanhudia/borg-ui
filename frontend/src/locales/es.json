@@ -1562,16 +1562,11 @@
   },
   "repositorySelectorCard": {
     "title": "Seleccionar repositorio",
-    "empty": "No hay repositorios disponibles",
     "loading": "Cargando repositorios...",
     "placeholder": "Selecciona un repositorio...",
     "maintenanceRunning": "(Mantenimiento en curso)"
   },
   "multiRepositorySelector": {
-    "title": "Seleccionar repositorios",
-    "selectAll": "Seleccionar todo",
-    "deselectAll": "Deseleccionar todo",
-    "selected": "{{count}} seleccionados",
     "selectedCount": "Repositorios seleccionados ({{count}})",
     "selectedCountWithOrder": "Repositorios seleccionados ({{count}}) - Usa las flechas para cambiar el orden de copia de seguridad",
     "moveUp": "Subir",
@@ -2323,279 +2318,279 @@
   "backend": {
     "errors": {
       "auth": {
-        "cannotDeleteSelf": "Cannot delete yourself",
-        "currentPasswordIncorrect": "Current password is incorrect",
-        "emailAlreadyRegistered": "Email already registered",
-        "failedUpdatePassword": "Failed to update password",
-        "inactiveUser": "Account is inactive",
-        "incorrectCredentials": "Incorrect username or password",
-        "notEnoughPermissions": "Not enough permissions",
-        "userNotFound": "User not found",
-        "usernameAlreadyRegistered": "Username already registered"
+        "cannotDeleteSelf": "No puedes eliminarte a ti mismo",
+        "currentPasswordIncorrect": "La contraseña actual es incorrecta",
+        "emailAlreadyRegistered": "El correo electrónico ya está registrado",
+        "failedUpdatePassword": "Error al actualizar la contraseña",
+        "inactiveUser": "La cuenta está inactiva",
+        "incorrectCredentials": "Nombre de usuario o contraseña incorrectos",
+        "notEnoughPermissions": "Permisos insuficientes",
+        "userNotFound": "Usuario no encontrado",
+        "usernameAlreadyRegistered": "El nombre de usuario ya está registrado"
       },
       "repo": {
-        "repositoryNotFound": "Repository not found",
-        "repositoryNameExists": "Repository name already exists",
-        "repositoryPathExists": "Repository path already exists",
-        "repositoryDirNotExist": "Repository directory does not exist: {{path}}",
-        "notValidBorgRepository": "Not a valid Borg repository: {{path}}",
-        "parentDirectoryNotWritable": "Parent directory is not writable: {{path}}. Please ensure the directory exists with correct permissions.",
-        "permissionDeniedCreateDirectory": "Permission denied: cannot create directory at '{{path}}'. To store repositories on your host machine, use paths starting with '/local/'.",
-        "permissionDeniedCreateParentDirectory": "Permission denied: cannot create parent directory '{{path}}'. Please ensure the directory exists on your host machine with proper permissions.",
-        "encryptedPassphraseRequired": "Passphrase is required for encryption mode '{{mode}}'",
-        "encryptedPassphraseIncorrect": "Repository is encrypted but the passphrase is incorrect or missing. Please provide the correct passphrase.",
-        "encryptionKeyfileNotRequired": "Repository uses '{{mode}}' encryption, which does not require a keyfile. Keyfile upload is only needed for 'keyfile' or 'keyfile-blake2' encryption modes.",
-        "adminAccessRequired": "Admin access required",
-        "sshConnectionNotFound": "SSH connection with ID {{id}} not found",
-        "atLeastOneSourceDirRequired": "At least one source directory is required for full mode repositories",
-        "keyfileEmpty": "Keyfile is empty",
-        "repoHasNoKeyfile": "This repository has no keyfile",
-        "cannotSwitchToFullModeNoSourceDirs": "Cannot switch to full mode: at least one source directory is required",
-        "cannotDeleteRepoWithArchives": "Cannot delete repository with existing archives. Please delete all archives first.",
-        "checkAlreadyRunning": "A check operation is already running for this repository",
-        "compactAlreadyRunning": "A compact operation is already running for this repository",
-        "breakLockTimeout": "Timeout while trying to break lock",
-        "checkJobNotFound": "Check job not found",
-        "compactJobNotFound": "Compact job not found",
-        "sshUrlWithoutConnectionId": "Path appears to be an SSH URL but no connection_id provided. Please select an SSH connection."
+        "repositoryNotFound": "Repositorio no encontrado",
+        "repositoryNameExists": "El nombre del repositorio ya existe",
+        "repositoryPathExists": "La ruta del repositorio ya existe",
+        "repositoryDirNotExist": "El directorio del repositorio no existe: {{path}}",
+        "notValidBorgRepository": "No es un repositorio Borg válido: {{path}}",
+        "parentDirectoryNotWritable": "El directorio padre no tiene permisos de escritura: {{path}}. Asegúrese de que el directorio exista con los permisos correctos.",
+        "permissionDeniedCreateDirectory": "Permiso denegado: no se puede crear el directorio en '{{path}}'. Para almacenar repositorios en su máquina anfitriona, use rutas que comiencen con '/local/'.",
+        "permissionDeniedCreateParentDirectory": "Permiso denegado: no se puede crear el directorio padre '{{path}}'. Asegúrese de que el directorio exista en su máquina anfitriona con los permisos correctos.",
+        "encryptedPassphraseRequired": "Se requiere contraseña para el modo de cifrado '{{mode}}'",
+        "encryptedPassphraseIncorrect": "El repositorio está cifrado pero la contraseña es incorrecta o falta. Proporcione la contraseña correcta.",
+        "encryptionKeyfileNotRequired": "El repositorio usa cifrado '{{mode}}', que no requiere un archivo de clave. La carga del archivo de clave solo es necesaria para los modos de cifrado 'keyfile' o 'keyfile-blake2'.",
+        "adminAccessRequired": "Se requiere acceso de administrador",
+        "sshConnectionNotFound": "Conexión SSH con ID {{id}} no encontrada",
+        "atLeastOneSourceDirRequired": "Se requiere al menos un directorio de origen para repositorios en modo completo",
+        "keyfileEmpty": "El archivo de clave está vacío",
+        "repoHasNoKeyfile": "Este repositorio no tiene archivo de clave",
+        "cannotSwitchToFullModeNoSourceDirs": "No se puede cambiar al modo completo: se requiere al menos un directorio de origen",
+        "cannotDeleteRepoWithArchives": "No se puede eliminar el repositorio con archivos existentes. Elimine todos los archivos primero.",
+        "checkAlreadyRunning": "Ya hay una operación de verificación en curso para este repositorio",
+        "compactAlreadyRunning": "Ya hay una operación de compactación en curso para este repositorio",
+        "breakLockTimeout": "Tiempo de espera al intentar romper el bloqueo",
+        "checkJobNotFound": "Trabajo de verificación no encontrado",
+        "compactJobNotFound": "Trabajo de compactación no encontrado",
+        "sshUrlWithoutConnectionId": "La ruta parece ser una URL SSH pero no se proporcionó connection_id. Seleccione una conexión SSH."
       },
       "backup": {
-        "backupJobNotFound": "Backup job not found",
-        "canOnlyCancelRunningJobs": "Can only cancel running jobs",
-        "noLogsAvailable": "No logs available for this backup (successful backups don't save logs)",
-        "logFileNotFound": "Log file not found: {{filename}}"
+        "backupJobNotFound": "Trabajo de copia de seguridad no encontrado",
+        "canOnlyCancelRunningJobs": "Solo se pueden cancelar trabajos en ejecución",
+        "noLogsAvailable": "No hay registros disponibles para esta copia de seguridad (las copias exitosas no guardan registros)",
+        "logFileNotFound": "Archivo de registro no encontrado: {{filename}}"
       },
       "restore": {
-        "cancelledByUser": "Restore cancelled by user",
-        "cancelledByUserProcessNotFound": "Restore cancelled by user (process not found, may have already completed)",
-        "canOnlyCancelRunningJobs": "Can only cancel running jobs",
-        "failedCancelRestore": "Failed to cancel restore",
-        "failedFetchRepositories": "Failed to fetch repositories",
-        "failedGetRestoreJobs": "Failed to get restore jobs",
-        "failedGetRestoreStatus": "Failed to get restore status",
-        "failedPreviewRestore": "Failed to preview restore",
-        "repositoryNotFound": "Repository not found",
-        "restoreJobNotFound": "Restore job not found",
-        "sshToSshNotSupported": "Restoring from SSH repository to SSH destination is not supported"
+        "cancelledByUser": "Restauración cancelada por el usuario",
+        "cancelledByUserProcessNotFound": "Restauración cancelada por el usuario (proceso no encontrado, puede que ya haya completado)",
+        "canOnlyCancelRunningJobs": "Solo se pueden cancelar trabajos en ejecución",
+        "failedCancelRestore": "Error al cancelar la restauración",
+        "failedFetchRepositories": "Error al obtener repositorios",
+        "failedGetRestoreJobs": "Error al obtener trabajos de restauración",
+        "failedGetRestoreStatus": "Error al obtener el estado de restauración",
+        "failedPreviewRestore": "Error al previsualizar la restauración",
+        "repositoryNotFound": "Repositorio no encontrado",
+        "restoreJobNotFound": "Trabajo de restauración no encontrado",
+        "sshToSshNotSupported": "No se admite la restauración desde un repositorio SSH a un destino SSH"
       },
       "schedule": {
-        "adminAccessRequired": "Admin access required",
-        "invalidCronExpression": "Invalid cron expression",
-        "jobNameExists": "Job name already exists",
-        "noRepositoriesConfigured": "Scheduled job has no repositories configured",
-        "observabilityOnlyRepo": "Cannot schedule backups for observability-only repositories",
-        "repositoryNotFound": "Repository not found",
-        "scheduledJobNotFound": "Scheduled job not found"
+        "adminAccessRequired": "Se requiere acceso de administrador",
+        "invalidCronExpression": "Expresión cron no válida",
+        "jobNameExists": "El nombre del trabajo ya existe",
+        "noRepositoriesConfigured": "El trabajo programado no tiene repositorios configurados",
+        "observabilityOnlyRepo": "No se pueden programar copias de seguridad para repositorios de solo observabilidad",
+        "repositoryNotFound": "Repositorio no encontrado",
+        "scheduledJobNotFound": "Trabajo programado no encontrado"
       },
       "ssh": {
-        "adminAccessRequired": "Admin access required",
-        "cannotEnableAsBackupSource": "Cannot enable as backup source: {{error}}",
-        "connectionTestFailed": "SSH connection test failed: {{error}}",
-        "failedCollectStorage": "Failed to collect storage information",
-        "failedGenerateKey": "Failed to generate SSH key: {{error}}",
-        "invalidKeyType": "Invalid key type. Must be one of: {{types}}",
-        "invalidPrivateKeyFormat": "Invalid private key format",
-        "invalidPublicKeyFormat": "Invalid public key format",
-        "keyDeployFailed": "Failed to deploy SSH key: {{error}}",
-        "keyGeneratedButDeployFailed": "SSH key generated but deployment failed: {{error}}",
-        "keyNameAlreadyExists": "SSH key name already exists",
-        "keyRemoveFailed": "Failed to remove SSH key: {{error}}",
-        "noSystemKeyFound": "No system SSH key found",
-        "privateKeyFileNotFound": "Private key file not found: {{path}}",
-        "publicKeyFileNotFound": "Public key file not found: {{path}}",
-        "sshConnectionNotFound": "SSH connection not found",
-        "sshKeyNotFound": "SSH key not found",
-        "systemKeyAlreadyExists": "System SSH key already exists"
+        "adminAccessRequired": "Se requiere acceso de administrador",
+        "cannotEnableAsBackupSource": "No se puede habilitar como fuente de copia de seguridad: {{error}}",
+        "connectionTestFailed": "Prueba de conexión SSH fallida: {{error}}",
+        "failedCollectStorage": "Error al recopilar información de almacenamiento",
+        "failedGenerateKey": "Error al generar clave SSH: {{error}}",
+        "invalidKeyType": "Tipo de clave no válido. Debe ser uno de: {{types}}",
+        "invalidPrivateKeyFormat": "Formato de clave privada no válido",
+        "invalidPublicKeyFormat": "Formato de clave pública no válido",
+        "keyDeployFailed": "Error al desplegar la clave SSH: {{error}}",
+        "keyGeneratedButDeployFailed": "Clave SSH generada pero el despliegue falló: {{error}}",
+        "keyNameAlreadyExists": "El nombre de la clave SSH ya existe",
+        "keyRemoveFailed": "Error al eliminar la clave SSH: {{error}}",
+        "noSystemKeyFound": "No se encontró clave SSH del sistema",
+        "privateKeyFileNotFound": "Archivo de clave privada no encontrado: {{path}}",
+        "publicKeyFileNotFound": "Archivo de clave pública no encontrado: {{path}}",
+        "sshConnectionNotFound": "Conexión SSH no encontrada",
+        "sshKeyNotFound": "Clave SSH no encontrada",
+        "systemKeyAlreadyExists": "La clave SSH del sistema ya existe"
       },
       "settings": {
-        "adminAccessRequired": "Admin access required",
-        "atLeastOneSettingRequired": "At least one setting must be provided",
-        "cannotDeleteLastAdmin": "Cannot delete the last admin user",
-        "cannotDeleteOwnAccount": "Cannot delete your own account",
-        "emailAlreadyExists": "Email already exists",
-        "failedConnectRedis": "Failed to connect to Redis: {{error}}",
-        "invalidLogSavePolicy": "Invalid log_save_policy. Must be one of: {{policies}}",
-        "logSizeTooSmall": "log_max_total_size_mb must be at least 10 MB",
-        "userNotFound": "User not found",
-        "usernameAlreadyExists": "Username already exists"
+        "adminAccessRequired": "Se requiere acceso de administrador",
+        "atLeastOneSettingRequired": "Se debe proporcionar al menos una configuración",
+        "cannotDeleteLastAdmin": "No se puede eliminar el último usuario administrador",
+        "cannotDeleteOwnAccount": "No puedes eliminar tu propia cuenta",
+        "emailAlreadyExists": "El correo electrónico ya existe",
+        "failedConnectRedis": "Error al conectar a Redis: {{error}}",
+        "invalidLogSavePolicy": "Política log_save_policy no válida. Debe ser una de: {{policies}}",
+        "logSizeTooSmall": "log_max_total_size_mb debe ser al menos 10 MB",
+        "userNotFound": "Usuario no encontrado",
+        "usernameAlreadyExists": "El nombre de usuario ya existe"
       },
       "activity": {
-        "adminOnlyDelete": "Only administrators can delete job entries",
-        "cannotDeleteRunningJob": "Cannot delete running job. Cancel it first or wait for completion.",
-        "invalidJobType": "Invalid job type: {{jobType}}",
-        "jobNotFound": "{{jobType}} job not found"
+        "adminOnlyDelete": "Solo los administradores pueden eliminar entradas de trabajo",
+        "cannotDeleteRunningJob": "No se puede eliminar un trabajo en ejecución. Cancélelo primero o espere a que finalice.",
+        "invalidJobType": "Tipo de trabajo no válido: {{jobType}}",
+        "jobNotFound": "Trabajo de {{jobType}} no encontrado"
       },
       "archives": {
-        "adminAccessRequired": "Admin access required",
-        "deleteAlreadyRunning": "Delete operation is already running for this archive (Job ID: {{jobId}})",
-        "deleteJobNotFound": "Delete job not found",
-        "failedGetArchiveContents": "Failed to get archive contents",
-        "failedGetArchiveInfo": "Failed to get archive info",
-        "failedListArchives": "Failed to list archives"
+        "adminAccessRequired": "Se requiere acceso de administrador",
+        "deleteAlreadyRunning": "La operación de eliminación ya está en curso para este archivo (ID de trabajo: {{jobId}})",
+        "deleteJobNotFound": "Trabajo de eliminación no encontrado",
+        "failedGetArchiveContents": "Error al obtener el contenido del archivo",
+        "failedGetArchiveInfo": "Error al obtener información del archivo",
+        "failedListArchives": "Error al listar los archivos"
       },
       "borg": {
-        "repositoryDoesNotExist": "Repository does not exist at the specified path",
-        "repositoryAlreadyExists": "Repository already exists at this location",
-        "notValidBorgRepository": "Not a valid BorgBackup repository",
-        "repositoryCheckNeeded": "Repository check needed before operations can continue",
-        "lockTimeout": "Could not acquire repository lock — the repository is locked by another process or has a stale lock",
-        "lockError": "Repository locking error",
-        "passphraseWrong": "Incorrect repository passphrase",
-        "archiveDoesNotExist": "Archive does not exist",
-        "archiveAlreadyExists": "Archive with this name already exists"
+        "repositoryDoesNotExist": "El repositorio no existe en la ruta especificada",
+        "repositoryAlreadyExists": "Ya existe un repositorio en esta ubicación",
+        "notValidBorgRepository": "No es un repositorio BorgBackup válido",
+        "repositoryCheckNeeded": "Se necesita verificar el repositorio antes de continuar con las operaciones",
+        "lockTimeout": "No se pudo adquirir el bloqueo del repositorio — el repositorio está bloqueado por otro proceso o tiene un bloqueo obsoleto",
+        "lockError": "Error de bloqueo del repositorio",
+        "passphraseWrong": "Contraseña del repositorio incorrecta",
+        "archiveDoesNotExist": "El archivo no existe",
+        "archiveAlreadyExists": "Ya existe un archivo con este nombre"
       },
       "browse": {
-        "archiveMemoryTooHigh": "Archive memory too high: {{estimatedMb}} MB estimated (max {{maxMb}} MB)",
-        "archiveTooLarge": "Archive too large: {{linesRead}} items read (max {{maxItems}})"
+        "archiveMemoryTooHigh": "Memoria del archivo demasiado alta: {{estimatedMb}} MB estimados (máximo {{maxMb}} MB)",
+        "archiveTooLarge": "Archivo demasiado grande: {{linesRead}} elementos leídos (máximo {{maxItems}})"
       },
       "filesystem": {
-        "folderAlreadyExists": "Folder '{{name}}' already exists",
-        "invalidConnectionType": "Invalid connection type",
-        "invalidFolderName": "Invalid folder name",
-        "pathNotDirectory": "Path is not a directory: {{path}}",
-        "pathNotFound": "Path not found: {{path}}",
-        "permissionDenied": "Permission denied: {{path}}",
-        "permissionDeniedCreateFolder": "Permission denied to create folder",
-        "sshConnectionDetailsRequired": "SSH connection details required",
-        "sshConnectionTimeout": "SSH connection timeout",
-        "sshParamsRequired": "SSH key ID, host, and username are required for SSH browsing"
+        "folderAlreadyExists": "La carpeta '{{name}}' ya existe",
+        "invalidConnectionType": "Tipo de conexión no válido",
+        "invalidFolderName": "Nombre de carpeta no válido",
+        "pathNotDirectory": "La ruta no es un directorio: {{path}}",
+        "pathNotFound": "Ruta no encontrada: {{path}}",
+        "permissionDenied": "Permiso denegado: {{path}}",
+        "permissionDeniedCreateFolder": "Permiso denegado para crear la carpeta",
+        "sshConnectionDetailsRequired": "Se requieren los detalles de la conexión SSH",
+        "sshConnectionTimeout": "Tiempo de espera de la conexión SSH",
+        "sshParamsRequired": "Se requieren el ID de clave SSH, el host y el nombre de usuario para la navegación SSH"
       },
       "mounts": {
-        "canOnlyUnmountBorgMounts": "Can only unmount Borg archive mounts via this endpoint",
-        "mountInfoNotFound": "Mount succeeded but info not found",
-        "mountNotFound": "Mount {{mountId}} not found",
-        "unmountFailed": "Failed to unmount {{mountId}}"
+        "canOnlyUnmountBorgMounts": "Solo se pueden desmontar montajes de archivos Borg a través de este endpoint",
+        "mountInfoNotFound": "El montaje se realizó pero no se encontró la información",
+        "mountNotFound": "Montaje {{mountId}} no encontrado",
+        "unmountFailed": "Error al desmontar {{mountId}}"
       },
       "notifications": {
-        "settingNotFound": "Notification setting not found"
+        "settingNotFound": "Configuración de notificación no encontrada"
       },
       "packages": {
-        "jobNotFound": "Job not found",
-        "packageAlreadyExists": "Package '{{name}}' already exists",
-        "packageNotFound": "Package not found"
+        "jobNotFound": "Trabajo no encontrado",
+        "packageAlreadyExists": "El paquete '{{name}}' ya existe",
+        "packageNotFound": "Paquete no encontrado"
       },
       "scripts": {
-        "adminAccessRequired": "Admin access required",
-        "scriptCannotBeEmpty": "Script cannot be empty",
-        "scriptExecutionTimedOut": "Script execution timed out (30 second limit)",
-        "scriptNotFound": "Script not found",
-        "cannotEditTemplateScript": "Cannot edit template scripts. Create a copy instead.",
-        "cannotDeleteTemplateScript": "Cannot delete template scripts",
-        "scriptInUse": "Cannot delete script: it is used in {{count}} {{places}}: {{repos}}",
-        "hookTypeMustBe": "hook_type must be 'pre-backup' or 'post-backup'",
-        "scriptAlreadyAssigned": "Script '{{name}}' is already assigned to this repository as {{hookType}}",
-        "scriptAssignmentNotFound": "Script assignment not found"
+        "adminAccessRequired": "Se requiere acceso de administrador",
+        "scriptCannotBeEmpty": "El script no puede estar vacío",
+        "scriptExecutionTimedOut": "Tiempo de espera de ejecución del script (límite de 30 segundos)",
+        "scriptNotFound": "Script no encontrado",
+        "cannotEditTemplateScript": "No se pueden editar los scripts de plantilla. Crea una copia en su lugar.",
+        "cannotDeleteTemplateScript": "No se pueden eliminar los scripts de plantilla",
+        "scriptInUse": "No se puede eliminar el script: se usa en {{count}} {{places}}: {{repos}}",
+        "hookTypeMustBe": "hook_type debe ser 'pre-backup' o 'post-backup'",
+        "scriptAlreadyAssigned": "El script '{{name}}' ya está asignado a este repositorio como {{hookType}}",
+        "scriptAssignmentNotFound": "Asignación de script no encontrada"
       },
       "service": {
-        "backupCompletedWithWarning": "Backup completed with warning (exit code {{exitCode}})",
-        "backupWarningPostHooksFailed": "Backup succeeded with warning but post-backup hooks failed: {{failed}}/{{total}} scripts failed",
-        "containerRestartedDuringBackup": "Container restarted during backup operation",
-        "containerRestartedDuringOperation": "Container restarted during operation",
-        "containerRestartedDuringRestore": "Container restarted during restore operation",
-        "failedCreateDestinationDir": "Failed to create destination directory: {{error}}",
-        "failedPrepareSourcePaths": "Failed to prepare source paths: all SSH mounts failed or no valid paths",
-        "postBackupHooksFailed": "Backup succeeded but post-backup hooks failed: {{failed}}/{{total}} scripts failed",
-        "preBackupHooksFailed": "Pre-backup hooks failed: {{failed}}/{{total}} scripts failed",
-        "restoreCompletedWithWarnings": "Restore completed with warnings (exit code {{exitCode}})",
-        "unsupportedExecutionMode": "Unsupported execution mode: {{mode}}",
-        "warningFailedBreakLock": "(Warning: Failed to automatically break lock)",
-        "warningRemoteProcessMayBeRunning": "(Warning: Remote process may still be running, manual verification recommended)"
+        "backupCompletedWithWarning": "Copia de seguridad completada con advertencia (código de salida {{exitCode}})",
+        "backupWarningPostHooksFailed": "La copia de seguridad se completó con advertencia pero los hooks post-copia fallaron: {{failed}}/{{total}} scripts fallaron",
+        "containerRestartedDuringBackup": "El contenedor se reinició durante la operación de copia de seguridad",
+        "containerRestartedDuringOperation": "El contenedor se reinició durante la operación",
+        "containerRestartedDuringRestore": "El contenedor se reinició durante la operación de restauración",
+        "failedCreateDestinationDir": "Error al crear el directorio de destino: {{error}}",
+        "failedPrepareSourcePaths": "Error al preparar las rutas de origen: todos los montajes SSH fallaron o no hay rutas válidas",
+        "postBackupHooksFailed": "La copia de seguridad se completó pero los hooks post-copia fallaron: {{failed}}/{{total}} scripts fallaron",
+        "preBackupHooksFailed": "Los hooks pre-copia fallaron: {{failed}}/{{total}} scripts fallaron",
+        "restoreCompletedWithWarnings": "Restauración completada con advertencias (código de salida {{exitCode}})",
+        "unsupportedExecutionMode": "Modo de ejecución no compatible: {{mode}}",
+        "warningFailedBreakLock": "(Advertencia: Error al romper el bloqueo automáticamente)",
+        "warningRemoteProcessMayBeRunning": "(Advertencia: El proceso remoto puede seguir en ejecución, se recomienda verificación manual)"
       }
     },
     "success": {
       "activity": {
-        "jobDeleted": "{{jobType}} job deleted successfully"
+        "jobDeleted": "Trabajo de {{jobType}} eliminado correctamente"
       },
       "archives": {
-        "deletionCancelled": "Delete job cancelled successfully",
-        "deletionStarted": "Archive deletion started in background"
+        "deletionCancelled": "Trabajo de eliminación cancelado correctamente",
+        "deletionStarted": "Eliminación del archivo iniciada en segundo plano"
       },
       "auth": {
-        "loggedOut": "Successfully logged out",
-        "userDeleted": "User deleted successfully",
-        "passwordChanged": "Password changed successfully"
+        "loggedOut": "Sesión cerrada correctamente",
+        "userDeleted": "Usuario eliminado correctamente",
+        "passwordChanged": "Contraseña cambiada correctamente"
       },
       "repo": {
-        "repositoryImported": "Repository imported successfully",
-        "repositoryUpdated": "Repository updated successfully",
-        "repositoryDeleted": "Repository deleted successfully",
-        "checkJobStarted": "Check job started",
-        "compactJobStarted": "Compact job started",
-        "repositoryInitialized": "Repository initialized successfully",
-        "lockBroken": "Lock successfully broken. You can now retry your operation.",
-        "lockRemoved": "Lock successfully removed. You can now start a new backup.",
-        "repositoryCreated": "Repository created successfully",
-        "repositoryAlreadyExists": "Repository already exists at this location and has been added to the UI",
-        "keyfileUploaded": "Keyfile uploaded successfully"
+        "repositoryImported": "Repositorio importado correctamente",
+        "repositoryUpdated": "Repositorio actualizado correctamente",
+        "repositoryDeleted": "Repositorio eliminado correctamente",
+        "checkJobStarted": "Trabajo de verificación iniciado",
+        "compactJobStarted": "Trabajo de compactación iniciado",
+        "repositoryInitialized": "Repositorio inicializado correctamente",
+        "lockBroken": "Bloqueo roto correctamente. Ahora puede reintentar su operación.",
+        "lockRemoved": "Bloqueo eliminado correctamente. Ahora puede iniciar una nueva copia de seguridad.",
+        "repositoryCreated": "Repositorio creado correctamente",
+        "repositoryAlreadyExists": "El repositorio ya existe en esta ubicación y se ha añadido a la interfaz",
+        "keyfileUploaded": "Archivo de clave cargado correctamente"
       },
       "backup": {
-        "backupCancelled": "Backup cancelled successfully"
+        "backupCancelled": "Copia de seguridad cancelada correctamente"
       },
       "filesystem": {
-        "folderCreated": "Folder created successfully"
+        "folderCreated": "Carpeta creada correctamente"
       },
       "restore": {
-        "restoreJobStarted": "Restore job started",
-        "restoreCancelled": "Restore cancelled successfully"
+        "restoreJobStarted": "Trabajo de restauración iniciado",
+        "restoreCancelled": "Restauración cancelada correctamente"
       },
       "schedule": {
-        "scheduledJobCreated": "Scheduled job created successfully",
-        "scheduledJobUpdated": "Scheduled job updated successfully",
-        "scheduledJobDeleted": "Scheduled job deleted successfully",
-        "scheduledJobEnabled": "Scheduled job enabled successfully",
-        "scheduledJobDisabled": "Scheduled job disabled successfully",
-        "scheduledJobDuplicated": "Scheduled job duplicated successfully",
-        "scheduledJobStarted": "Scheduled job started successfully",
-        "scheduledJobStartedMulti": "Multi-repository schedule started ({{count}} repositories)"
+        "scheduledJobCreated": "Trabajo programado creado correctamente",
+        "scheduledJobUpdated": "Trabajo programado actualizado correctamente",
+        "scheduledJobDeleted": "Trabajo programado eliminado correctamente",
+        "scheduledJobEnabled": "Trabajo programado habilitado correctamente",
+        "scheduledJobDisabled": "Trabajo programado deshabilitado correctamente",
+        "scheduledJobDuplicated": "Trabajo programado duplicado correctamente",
+        "scheduledJobStarted": "Trabajo programado iniciado correctamente",
+        "scheduledJobStartedMulti": "Programa de múltiples repositorios iniciado ({{count}} repositorios)"
       },
       "scripts": {
-        "cleanupCompleted": "Cleaned up {{count}} orphaned script association(s)",
-        "noOrphanedAssociations": "No orphaned script associations found"
+        "cleanupCompleted": "Se limpiaron {{count}} asociación(es) de scripts huérfanos",
+        "noOrphanedAssociations": "No se encontraron asociaciones de scripts huérfanos"
       },
       "ssh": {
-        "connectionCreated": "SSH connection created successfully",
-        "connectionDeleted": "SSH connection deleted successfully",
-        "connectionTestFailed": "SSH connection test failed",
-        "connectionTestSuccess": "SSH connection test successful",
-        "connectionUpdated": "SSH connection updated successfully",
-        "sshKeyCreated": "SSH key created successfully",
-        "sshKeyDeleted": "SSH key deleted successfully",
-        "sshKeyDeployFailed": "SSH key deployment failed",
-        "sshKeyDeployed": "SSH key deployed successfully",
-        "sshKeyGeneratedAndDeployed": "SSH key generated and deployed successfully",
-        "sshKeyGeneratedDeploymentSkipped": "SSH key generated successfully (deployment skipped)",
-        "sshKeyRemoved": "SSH key removed successfully",
-        "sshKeyUpdated": "SSH key updated successfully",
-        "storageRefreshed": "Storage information refreshed successfully",
-        "systemKeyGenerated": "System SSH key generated successfully",
-        "systemKeyImported": "System SSH key imported successfully"
+        "connectionCreated": "Conexión SSH creada correctamente",
+        "connectionDeleted": "Conexión SSH eliminada correctamente",
+        "connectionTestFailed": "Prueba de conexión SSH fallida",
+        "connectionTestSuccess": "Prueba de conexión SSH exitosa",
+        "connectionUpdated": "Conexión SSH actualizada correctamente",
+        "sshKeyCreated": "Clave SSH creada correctamente",
+        "sshKeyDeleted": "Clave SSH eliminada correctamente",
+        "sshKeyDeployFailed": "Despliegue de clave SSH fallido",
+        "sshKeyDeployed": "Clave SSH desplegada correctamente",
+        "sshKeyGeneratedAndDeployed": "Clave SSH generada y desplegada correctamente",
+        "sshKeyGeneratedDeploymentSkipped": "Clave SSH generada correctamente (despliegue omitido)",
+        "sshKeyRemoved": "Clave SSH eliminada correctamente",
+        "sshKeyUpdated": "Clave SSH actualizada correctamente",
+        "storageRefreshed": "Información de almacenamiento actualizada correctamente",
+        "systemKeyGenerated": "Clave SSH del sistema generada correctamente",
+        "systemKeyImported": "Clave SSH del sistema importada correctamente"
       },
       "packages": {
-        "installationInProgress": "Package '{{name}}' installation already in progress",
-        "installationStarted": "Package '{{name}}' installation started",
-        "packageRemoved": "Package '{{name}}' removed from list"
+        "installationInProgress": "La instalación del paquete '{{name}}' ya está en curso",
+        "installationStarted": "Instalación del paquete '{{name}}' iniciada",
+        "packageRemoved": "Paquete '{{name}}' eliminado de la lista"
       },
       "settings": {
-        "allCacheCleared": "Cleared all cache ({{count}} entries)",
-        "cacheCleared": "Cleared {{count}} cache entries for repository {{repositoryId}}",
-        "cacheSettingsUpdated": "Cache settings updated successfully",
-        "logCleanupCompleted": "Log cleanup completed. Deleted {{count}} files ({{sizeMb}} MB freed)",
-        "noRepositoriesToRefresh": "No repositories to refresh",
-        "passwordChanged": "Password changed successfully",
-        "passwordReset": "Password reset successfully",
-        "preferencesUpdated": "Preferences updated successfully",
-        "profileUpdated": "Profile updated successfully",
-        "statsRefreshStarted": "Stats refresh started for {{count}} repositories",
-        "systemCleanupCompleted": "System cleanup completed successfully",
-        "systemSettingsUpdated": "System settings updated successfully",
-        "userCreated": "User created successfully",
-        "userDeleted": "User deleted successfully",
-        "userUpdated": "User updated successfully"
+        "allCacheCleared": "Se limpió toda la caché ({{count}} entradas)",
+        "cacheCleared": "Se limpiaron {{count}} entradas de caché para el repositorio {{repositoryId}}",
+        "cacheSettingsUpdated": "Configuración de caché actualizada correctamente",
+        "logCleanupCompleted": "Limpieza de registros completada. Se eliminaron {{count}} archivos ({{sizeMb}} MB liberados)",
+        "noRepositoriesToRefresh": "No hay repositorios para actualizar",
+        "passwordChanged": "Contraseña cambiada correctamente",
+        "passwordReset": "Contraseña restablecida correctamente",
+        "preferencesUpdated": "Preferencias actualizadas correctamente",
+        "profileUpdated": "Perfil actualizado correctamente",
+        "statsRefreshStarted": "Actualización de estadísticas iniciada para {{count}} repositorios",
+        "systemCleanupCompleted": "Limpieza del sistema completada correctamente",
+        "systemSettingsUpdated": "Configuración del sistema actualizada correctamente",
+        "userCreated": "Usuario creado correctamente",
+        "userDeleted": "Usuario eliminado correctamente",
+        "userUpdated": "Usuario actualizado correctamente"
       }
     },
     "messages": {
       "repo": {
-        "repositoryLocked": "Repository is locked by another process or has a stale lock"
+        "repositoryLocked": "El repositorio está bloqueado por otro proceso o tiene un bloqueo obsoleto"
       }
     }
   }
