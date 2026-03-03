@@ -2335,7 +2335,18 @@
         "notValidBorgRepository": "Not a valid Borg repository: {{path}}",
         "encryptedPassphraseRequired": "Passphrase is required for encryption mode '{{mode}}'",
         "adminAccessRequired": "Admin access required",
-        "sshConnectionNotFound": "SSH connection with ID {{id}} not found"
+        "sshConnectionNotFound": "SSH connection with ID {{id}} not found",
+        "atLeastOneSourceDirRequired": "At least one source directory is required for full mode repositories",
+        "keyfileEmpty": "Keyfile is empty",
+        "repoHasNoKeyfile": "This repository has no keyfile",
+        "cannotSwitchToFullModeNoSourceDirs": "Cannot switch to full mode: at least one source directory is required",
+        "cannotDeleteRepoWithArchives": "Cannot delete repository with existing archives. Please delete all archives first.",
+        "checkAlreadyRunning": "A check operation is already running for this repository",
+        "compactAlreadyRunning": "A compact operation is already running for this repository",
+        "breakLockTimeout": "Timeout while trying to break lock",
+        "checkJobNotFound": "Check job not found",
+        "compactJobNotFound": "Compact job not found",
+        "sshUrlWithoutConnectionId": "Path appears to be an SSH URL but no connection_id provided. Please select an SSH connection."
       },
       "backup": {
         "backupJobNotFound": "Backup job not found",
@@ -2388,7 +2399,10 @@
         "compactJobStarted": "Compact job started",
         "repositoryInitialized": "Repository initialized successfully",
         "lockBroken": "Lock successfully broken. You can now retry your operation.",
-        "lockRemoved": "Lock successfully removed. You can now start a new backup."
+        "lockRemoved": "Lock successfully removed. You can now start a new backup.",
+        "repositoryCreated": "Repository created successfully",
+        "repositoryAlreadyExists": "Repository already exists at this location and has been added to the UI",
+        "keyfileUploaded": "Keyfile uploaded successfully"
       },
       "backup": {
         "backupCancelled": "Backup cancelled successfully"
