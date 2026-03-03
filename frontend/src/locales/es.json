@@ -2319,5 +2319,112 @@
   },
   "terminalLog": {
     "inProgress": "{{type}} en progreso..."
+  },
+  "backend": {
+    "errors": {
+      "auth": {
+        "incorrectCredentials": "Incorrect username or password",
+        "inactiveUser": "Account is inactive",
+        "userNotFound": "User not found",
+        "cannotDeleteSelf": "Cannot delete yourself",
+        "currentPasswordIncorrect": "Current password is incorrect",
+        "failedUpdatePassword": "Failed to update password",
+        "usernameAlreadyRegistered": "Username already registered",
+        "emailAlreadyRegistered": "Email already registered"
+      },
+      "repo": {
+        "repositoryNotFound": "Repository not found",
+        "repositoryNameExists": "Repository name already exists",
+        "repositoryPathExists": "Repository path already exists",
+        "notValidBorgRepository": "Not a valid Borg repository: {{path}}",
+        "encryptedPassphraseRequired": "Passphrase is required for encryption mode '{{mode}}'",
+        "adminAccessRequired": "Admin access required",
+        "sshConnectionNotFound": "SSH connection with ID {{id}} not found"
+      },
+      "backup": {
+        "backupJobNotFound": "Backup job not found",
+        "canOnlyCancelRunningJobs": "Can only cancel running jobs",
+        "noLogsAvailable": "No logs available for this backup (successful backups don't save logs)",
+        "logFileNotFound": "Log file not found: {{filename}}"
+      },
+      "restore": {
+        "repositoryNotFound": "Repository not found",
+        "restoreJobNotFound": "Restore job not found",
+        "canOnlyCancelRunningJobs": "Can only cancel running jobs",
+        "sshToSshNotSupported": "Restoring from SSH repository to SSH destination is not supported"
+      },
+      "schedule": {
+        "invalidCronExpression": "Invalid cron expression",
+        "jobNameExists": "Job name already exists",
+        "scheduledJobNotFound": "Scheduled job not found",
+        "observabilityOnlyRepo": "Cannot schedule backups for observability-only repositories"
+      },
+      "ssh": {
+        "sshKeyNotFound": "SSH key not found",
+        "sshConnectionNotFound": "SSH connection not found",
+        "connectionTestFailed": "SSH connection test failed: {{error}}",
+        "keyDeployFailed": "Failed to deploy SSH key: {{error}}",
+        "keyRemoveFailed": "Failed to remove SSH key: {{error}}"
+      },
+      "borg": {
+        "repositoryDoesNotExist": "Repository does not exist at the specified path",
+        "repositoryAlreadyExists": "Repository already exists at this location",
+        "notValidBorgRepository": "Not a valid BorgBackup repository",
+        "repositoryCheckNeeded": "Repository check needed before operations can continue",
+        "lockTimeout": "Could not acquire repository lock — the repository is locked by another process or has a stale lock",
+        "lockError": "Repository locking error",
+        "passphraseWrong": "Incorrect repository passphrase",
+        "archiveDoesNotExist": "Archive does not exist",
+        "archiveAlreadyExists": "Archive with this name already exists"
+      }
+    },
+    "success": {
+      "auth": {
+        "loggedOut": "Successfully logged out",
+        "userDeleted": "User deleted successfully",
+        "passwordChanged": "Password changed successfully"
+      },
+      "repo": {
+        "repositoryImported": "Repository imported successfully",
+        "repositoryUpdated": "Repository updated successfully",
+        "repositoryDeleted": "Repository deleted successfully",
+        "checkJobStarted": "Check job started",
+        "compactJobStarted": "Compact job started",
+        "repositoryInitialized": "Repository initialized successfully",
+        "lockBroken": "Lock successfully broken. You can now retry your operation.",
+        "lockRemoved": "Lock successfully removed. You can now start a new backup."
+      },
+      "backup": {
+        "backupCancelled": "Backup cancelled successfully"
+      },
+      "restore": {
+        "restoreJobStarted": "Restore job started",
+        "restoreCancelled": "Restore cancelled successfully"
+      },
+      "schedule": {
+        "scheduledJobCreated": "Scheduled job created successfully",
+        "scheduledJobUpdated": "Scheduled job updated successfully",
+        "scheduledJobDeleted": "Scheduled job deleted successfully",
+        "scheduledJobEnabled": "Scheduled job enabled successfully",
+        "scheduledJobDisabled": "Scheduled job disabled successfully",
+        "scheduledJobDuplicated": "Scheduled job duplicated successfully",
+        "scheduledJobStarted": "Scheduled job started successfully"
+      },
+      "ssh": {
+        "sshKeyCreated": "SSH key created successfully",
+        "sshKeyDeleted": "SSH key deleted successfully",
+        "sshKeyDeployed": "SSH key deployed successfully",
+        "sshKeyRemoved": "SSH key removed successfully",
+        "connectionCreated": "SSH connection created successfully",
+        "connectionUpdated": "SSH connection updated successfully",
+        "connectionDeleted": "SSH connection deleted successfully",
+        "connectionTestSuccess": "SSH connection test successful"
+      }
+    },
+    "messages": {
+      "repo": {
+        "repositoryLocked": "Repository is locked by another process or has a stale lock"
+      }
+    }
   }
 }
