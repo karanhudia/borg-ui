@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-03T15:57:11.892Z"
+last_updated: "2026-03-03T16:11:12.816Z"
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 13
-  completed_plans: 11
+  completed_plans: 12
 ---
 
 # Project State
@@ -23,11 +23,11 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 4 of 5 (Backend Services and Remaining API Files)
-Plan: 2 of 4 in current phase (04-02 complete — ssh_keys.py and settings.py migrated; 29 new locale keys; BKND-06 SSH+settings portion satisfied)
+Plan: 3 of 4 in current phase (04-03 complete — 9 remaining API files migrated; 8 new error domains + 3 success domains; BKND-06 fully satisfied)
 Status: Phase 4 in progress
-Last activity: 2026-03-03 — Plan 04-02 complete: ssh_keys.py and settings.py fully migrated to translation key dict format; 29 new locale keys added to en/es/de; new backend.errors.settings and backend.success.settings domains established
+Last activity: 2026-03-03 — Plan 04-03 complete: archives, mounts, activity, filesystem, browse, packages, notifications, scripts, scripts_library all migrated to translation key dict format; 204 locale keys added to en/es/de; BKND-06 fully satisfied
 
-Progress: [██████████████░] 75%
+Progress: [████████████████] 92%
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Progress: [██████████████░] 75%
 *Updated after each plan completion*
 | Phase 04-backend-services-and-remaining-api-files P01 | 7 | 2 tasks | 5 files |
 | Phase 04-backend-services-and-remaining-api-files P02 | 9 | 2 tasks | 5 files |
+| Phase 04-backend-services-and-remaining-api-files P03 | 10 | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,10 @@ Recent decisions affecting current work:
 - [Phase 04-01]: cancel_restore DB writes use json.dumps({key: ...}) for translatable error messages in error_message column
 - [Phase 04-02]: Cross-domain key reuse: settings.py change_password uses auth.currentPasswordIncorrect; cache clear uses repo.repositoryNotFound — avoids duplicating semantically identical keys
 - [Phase 04-02]: Parameterized message fields in settings.py use bare key strings — params not passed to frontend at this phase, Phase 5 will wire params
+- [Phase 04-03]: browse.py archiveMemoryTooHigh uses round(estimated_memory_mb) for integer params to avoid float format issues in i18next interpolation
+- [Phase 04-03]: scripts.py and scripts_library.py have user-facing HTTPException.detail strings — migrated to backend.errors.scripts domain with 10 keys
+- [Phase 04-03]: activity.py and packages.py success message fields use bare key strings — params not passed at this phase, Phase 5 will wire params
+- [Phase 04-03]: Cross-domain key reuse: restore.repositoryNotFound reused in archives/browse/scripts_library; settings.adminAccessRequired reused in packages; ssh.sshKeyNotFound reused in filesystem
 
 ### Pending Todos
 
@@ -100,5 +105,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 04-02-PLAN.md — ssh_keys.py and settings.py fully migrated to translation key dict format; 29 new locale keys added to en/es/de; new backend.errors.settings and backend.success.settings domains established; BKND-06 (SSH + settings portion) satisfied.
+Stopped at: Completed 04-03-PLAN.md — 9 remaining API files (archives, mounts, activity, filesystem, browse, packages, notifications, scripts, scripts_library) fully migrated to translation key dict format; 8 new error domains and 3 success domains; BKND-06 fully satisfied.
 Resume file: None
