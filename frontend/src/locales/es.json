@@ -1562,11 +1562,16 @@
   },
   "repositorySelectorCard": {
     "title": "Seleccionar repositorio",
+    "empty": "No repositories available",
     "loading": "Cargando repositorios...",
     "placeholder": "Selecciona un repositorio...",
     "maintenanceRunning": "(Mantenimiento en curso)"
   },
   "multiRepositorySelector": {
+    "title": "Select Repositories",
+    "selectAll": "Select all",
+    "deselectAll": "Deselect all",
+    "selected": "{{count}} selected",
     "selectedCount": "Repositorios seleccionados ({{count}})",
     "selectedCountWithOrder": "Repositorios seleccionados ({{count}}) - Usa las flechas para cambiar el orden de copia de seguridad",
     "moveUp": "Subir",
@@ -2357,6 +2362,8 @@
       "backup": {
         "backupJobNotFound": "Trabajo de copia de seguridad no encontrado",
         "canOnlyCancelRunningJobs": "Solo se pueden cancelar trabajos en ejecución",
+        "cancelledByUser": "Backup cancelled by user",
+        "cancelledByUserProcessNotFound": "Backup cancelled by user (process not found, may have already completed)",
         "noLogsAvailable": "No hay registros disponibles para esta copia de seguridad (las copias exitosas no guardan registros)",
         "logFileNotFound": "Archivo de registro no encontrado: {{filename}}"
       },
@@ -2437,7 +2444,10 @@
         "lockError": "Error de bloqueo del repositorio",
         "passphraseWrong": "Contraseña del repositorio incorrecta",
         "archiveDoesNotExist": "El archivo no existe",
-        "archiveAlreadyExists": "Ya existe un archivo con este nombre"
+        "archiveAlreadyExists": "Ya existe un archivo con este nombre",
+        "additionalErrors": "Additional errors encountered: {{count}}",
+        "exitCodeError": "Borg error (exit code {{exitCode}})",
+        "unknownError": "Unknown borg error occurred"
       },
       "browse": {
         "archiveMemoryTooHigh": "Memoria del archivo demasiado alta: {{estimatedMb}} MB estimados (máximo {{maxMb}} MB)",
@@ -2494,7 +2504,14 @@
         "restoreCompletedWithWarnings": "Restauración completada con advertencias (código de salida {{exitCode}})",
         "unsupportedExecutionMode": "Modo de ejecución no compatible: {{mode}}",
         "warningFailedBreakLock": "(Advertencia: Error al romper el bloqueo automáticamente)",
-        "warningRemoteProcessMayBeRunning": "(Advertencia: El proceso remoto puede seguir en ejecución, se recomienda verificación manual)"
+        "warningRemoteProcessMayBeRunning": "(Advertencia: El proceso remoto puede seguir en ejecución, se recomienda verificación manual)",
+        "postBackupHooksAlsoFailed": "Post-backup hooks also failed: {{failed}}/{{total}} scripts failed",
+        "restoreFailedZeroFiles": "Restore failed: 0 files extracted (exit code {{exitCode}}). Check logs for details.",
+        "restoreFailedZeroFilesPermission": "Restore failed: 0 files extracted (exit code {{exitCode}}). Permission denied - you may need root access or different destination path.",
+        "restoreFailedZeroFilesPathNotFound": "Restore failed: 0 files extracted (exit code {{exitCode}}). Path not found in archive or destination doesn't exist.",
+        "restoreFailedZeroFilesNoOutput": "Restore failed: 0 files extracted (exit code {{exitCode}}). No error output from borg. Files may not exist in archive or permission denied.",
+        "restoreFailedExitCode": "Restore process exited with code {{exitCode}}",
+        "restoreFailed": "Restore failed"
       }
     },
     "success": {
