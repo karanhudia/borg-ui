@@ -229,6 +229,13 @@
       "title": "Recent Jobs",
       "subtitle": "History of backup operations",
       "empty": "No backup jobs found"
+    },
+    "toasts": {
+      "started": "Backup started successfully!",
+      "startFailed": "Failed to start backup",
+      "cancelled": "Backup cancelled successfully!",
+      "cancelFailed": "Failed to cancel backup",
+      "selectRepository": "Please select a repository first"
     }
   },
   "archives": {
@@ -240,7 +247,13 @@
     "deletionStarted": "Archive deletion started in background (Job ID: {{id}})",
     "mountTimeout": "Mount timeout: Large repositories may need more time to mount.",
     "mountFailed": "Failed to mount archive: {{error}}",
-    "restoreStarted": "Restore job started! Check the Activity tab to monitor progress."
+    "restoreStarted": "Restore job started! Check the Activity tab to monitor progress.",
+    "mountSuccess": "Archive mounted successfully!\n\nMount is inside the container. To access files, run:\n\n{{command}}",
+    "toasts": {
+      "deleteFailed": "Failed to delete archive",
+      "restoreFailed": "Failed to start restore",
+      "notSelected": "Repository or archive not selected"
+    }
   },
   "restore": {
     "title": "Restore Archives",
@@ -275,6 +288,11 @@
       "cancel": "Cancel",
       "starting": "Starting...",
       "start": "Start Restore"
+    },
+    "toasts": {
+      "started": "Restore job started!",
+      "startFailed": "Failed to start restore",
+      "selectDestination": "Please select a destination path"
     }
   },
   "schedule": {
@@ -384,6 +402,22 @@
       "check": "Check",
       "prune": "Prune",
       "compact": "Compact"
+    },
+    "toasts": {
+      "deleted": "Repository deleted successfully",
+      "deleteFailed": "Failed to delete repository",
+      "checkStarted": "Check operation started",
+      "checkFailed": "Failed to start check",
+      "compactStarted": "Compact operation started",
+      "compactFailed": "Failed to start compact",
+      "dryRunCompleted": "Dry run completed - review results below",
+      "pruned": "Repository pruned successfully!",
+      "pruneFailed": "Failed to prune repository",
+      "updated": "Repository updated successfully",
+      "created": "Repository created successfully",
+      "importedWithKeyfile": "Repository imported and keyfile saved successfully",
+      "imported": "Repository imported successfully",
+      "wizardFailed": "Failed to {{mode}} repository"
     }
   },
   "activity": {
@@ -582,6 +616,25 @@
       "confirm": "Are you sure you want to delete this SSH key?",
       "warning1": "Remove the SSH key from database and filesystem",
       "warning2": "Connection records will be preserved."
+    },
+    "toasts": {
+      "keyGenerated": "System SSH key generated successfully!",
+      "keyGenerateFailed": "Failed to generate SSH key",
+      "keyImported": "System SSH key imported successfully!",
+      "keyImportFailed": "Failed to import SSH key",
+      "keyDeployed": "SSH key deployed successfully!",
+      "keyDeployFailed": "Failed to deploy SSH key",
+      "connectionTestSuccess": "Connection test successful!",
+      "connectionTestFailed": "Connection test failed",
+      "connectionUpdated": "Connection updated successfully! Testing connection...",
+      "connectionUpdateFailed": "Failed to update connection",
+      "connectionDeleted": "Connection deleted successfully!",
+      "connectionDeleteFailed": "Failed to delete connection",
+      "storageRefreshed": "Storage information refreshed!",
+      "storageRefreshFailed": "Failed to refresh storage",
+      "keyDeleted": "System SSH key deleted successfully!",
+      "keyDeleteFailed": "Failed to delete SSH key",
+      "publicKeyCopied": "Public key copied to clipboard!"
     }
   },
   "scripts": {
