@@ -26,6 +26,7 @@ import {
   formatDurationSeconds,
   convertCronToLocal,
 } from '../utils/dateUtils'
+import { translateBackendKey } from '../utils/translateBackendKey'
 import ScheduledChecksSection, {
   ScheduledChecksSectionRef,
 } from '../components/ScheduledChecksSection'
@@ -210,7 +211,7 @@ const Schedule: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || t('schedule.toasts.jobCreateFailed'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('schedule.toasts.jobCreateFailed'))
     },
   })
 
@@ -227,7 +228,7 @@ const Schedule: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || t('schedule.toasts.jobUpdateFailed'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('schedule.toasts.jobUpdateFailed'))
     },
   })
 
@@ -243,7 +244,7 @@ const Schedule: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || t('schedule.toasts.jobDeleteFailed'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('schedule.toasts.jobDeleteFailed'))
     },
   })
 
@@ -258,7 +259,7 @@ const Schedule: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || t('schedule.toasts.jobToggleFailed'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('schedule.toasts.jobToggleFailed'))
     },
   })
 
@@ -274,7 +275,7 @@ const Schedule: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || t('schedule.toasts.jobRunFailed'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('schedule.toasts.jobRunFailed'))
     },
   })
 
@@ -289,7 +290,7 @@ const Schedule: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || t('schedule.toasts.jobDuplicateFailed'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('schedule.toasts.jobDuplicateFailed'))
     },
   })
 
@@ -302,7 +303,7 @@ const Schedule: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || t('schedule.toasts.backupCancelFailed'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('schedule.toasts.backupCancelFailed'))
     },
   })
 

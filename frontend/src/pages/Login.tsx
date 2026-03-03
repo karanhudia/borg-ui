@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../hooks/useAuth.tsx'
 import { Shield } from 'lucide-react'
 import { useMatomo } from '../hooks/useMatomo'
+import { translateBackendKey } from '../utils/translateBackendKey'
 
 interface LoginForm {
   username: string
@@ -42,7 +43,7 @@ export default function Login() {
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || t('login.failed'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('login.failed'))
     } finally {
       setIsLoading(false)
     }

@@ -23,6 +23,7 @@ import {
 import { Save, Trash2, AlertTriangle, HardDrive } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { settingsAPI } from '../services/api'
+import { translateBackendKey } from '../utils/translateBackendKey'
 
 interface LogStorage {
   total_size_mb: number
@@ -122,7 +123,7 @@ const LogManagementTab: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to save settings')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('logManagement.failedToSaveSettings'))
     },
   })
 
@@ -133,13 +134,13 @@ const LogManagementTab: React.FC = () => {
       return response.data
     },
     onSuccess: (data) => {
-      toast.success(data.message || t('logManagement.cleanupCompleted'))
+      toast.success(translateBackendKey(data.message) || t('logManagement.cleanupCompleted'))
       queryClient.invalidateQueries({ queryKey: ['log-storage-stats'] })
       queryClient.invalidateQueries({ queryKey: ['system-settings'] })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || t('logManagement.failedToRunCleanup'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('logManagement.failedToRunCleanup'))
     },
   })
 

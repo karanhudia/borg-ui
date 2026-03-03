@@ -35,6 +35,7 @@ import { toast } from 'react-hot-toast'
 import DataTable, { Column, ActionButton } from './DataTable'
 import { formatDateShort } from '../utils/dateUtils'
 import { useTranslation } from 'react-i18next'
+import { translateBackendKey } from '../utils/translateBackendKey'
 
 interface PackageType {
   id: number
@@ -139,7 +140,7 @@ export default function PackagesTab() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to add package')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('packages.toasts.addFailed'))
     },
   })
 
@@ -158,7 +159,7 @@ export default function PackagesTab() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to update package')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('packages.toasts.updateFailed'))
     },
   })
 
@@ -169,14 +170,14 @@ export default function PackagesTab() {
       return response.data
     },
     onSuccess: (data: InstallJobResponse) => {
-      toast.success(data.message)
+      toast.success(translateBackendKey(data.message))
       setActiveJobId(data.job_id)
       setJobStatus(null) // Reset job status
       queryClient.invalidateQueries({ queryKey: ['packages'] })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to fix broken dependencies')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('packages.toasts.fixFailed'))
     },
   })
 
@@ -193,7 +194,7 @@ export default function PackagesTab() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to remove package')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('packages.toasts.removeFailed'))
     },
   })
 
@@ -204,14 +205,14 @@ export default function PackagesTab() {
       return response.data
     },
     onSuccess: (data: InstallJobResponse) => {
-      toast.success(data.message)
+      toast.success(translateBackendKey(data.message))
       setActiveJobId(data.job_id)
       setJobStatus(null) // Reset job status
       queryClient.invalidateQueries({ queryKey: ['packages'] })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to reinstall package')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('packages.toasts.reinstallFailed'))
     },
   })
 

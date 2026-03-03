@@ -24,6 +24,7 @@ import {
 import { Edit, Trash2, Play, Shield } from 'lucide-react'
 import { repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
+import { translateBackendKey } from '../utils/translateBackendKey'
 import {
   formatDate,
   formatRelativeTime,
@@ -105,7 +106,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to update check schedule')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('scheduledChecks.toasts.updateFailed'))
     },
   })
 
@@ -119,7 +120,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to update checks')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('scheduledChecks.toasts.checkFailed'))
     },
   })
 

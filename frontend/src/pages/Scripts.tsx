@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { translateBackendKey } from '../utils/translateBackendKey'
 import {
   Box,
   Button,
@@ -222,7 +223,7 @@ export default function Scripts() {
       console.error('Failed to save script:', error)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const onError = (error: any) => {
-        toast.error(error.response?.data?.detail || 'Failed to save script')
+        toast.error(translateBackendKey(error.response?.data?.detail) || t('scripts.toasts.saveFailed'))
       }
       onError(error)
     }
@@ -242,7 +243,7 @@ export default function Scripts() {
       console.error('Failed to delete script:', error)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const onError = (error: any) => {
-        toast.error(error.response?.data?.detail || 'Failed to delete script')
+        toast.error(translateBackendKey(error.response?.data?.detail) || t('scripts.toasts.deleteFailed'))
       }
       onError(error)
     }
@@ -274,7 +275,7 @@ export default function Scripts() {
         success: false,
         exit_code: -1,
         stdout: '',
-        stderr: error.response?.data?.detail || error.message || 'Failed to test script',
+        stderr: translateBackendKey(error.response?.data?.detail) || error.message || 'Failed to test script',
         execution_time: 0,
       })
     } finally {

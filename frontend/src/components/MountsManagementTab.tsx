@@ -13,6 +13,7 @@ import {
 import { HardDrive, XCircle, Trash2, AlertCircle, FolderOpen, Copy } from 'lucide-react'
 import { mountsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
+import { translateBackendKey } from '../utils/translateBackendKey'
 import { formatDate } from '../utils/dateUtils'
 import DataTable, { Column, ActionButton } from './DataTable'
 
@@ -51,7 +52,7 @@ export default function MountsManagementTab() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to unmount path')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('mountsManagement.failedToUnmount'))
     },
   })
 

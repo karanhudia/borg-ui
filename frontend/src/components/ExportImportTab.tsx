@@ -25,6 +25,7 @@ import {
 import { Download, Upload, FileText, CheckCircle, AlertCircle } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { configExportImportAPI } from '../services/api'
+import { translateBackendKey } from '../utils/translateBackendKey'
 
 interface Repository {
   id: number
@@ -103,7 +104,7 @@ const ExportImportTab: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || t('exportImport.failedToExport'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('exportImport.failedToExport'))
     },
   })
 
@@ -125,7 +126,7 @@ const ExportImportTab: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || t('exportImport.failedToImport'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('exportImport.failedToImport'))
     },
   })
 

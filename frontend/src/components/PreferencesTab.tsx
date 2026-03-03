@@ -19,6 +19,7 @@ import {
 import { BarChart3, Info, Globe } from 'lucide-react'
 import { settingsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
+import { translateBackendKey } from '../utils/translateBackendKey'
 import { resetOptOutCache, trackOptOut, trackLanguageChange } from '../utils/matomo'
 import i18n from '../i18n'
 
@@ -74,7 +75,7 @@ export default function PreferencesTab() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to update preferences')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('preferences.updateFailed'))
     },
   })
 

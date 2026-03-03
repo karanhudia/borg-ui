@@ -27,6 +27,7 @@ import {
 import { Folder, File, ChevronRight, Home, CheckSquare, Square, MinusSquare } from 'lucide-react'
 import { restoreAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
+import { translateBackendKey } from '../utils/translateBackendKey'
 
 interface ArchiveItem {
   name: string
@@ -74,7 +75,7 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
         setItems(response.data.items || [])
       } catch (err: unknown) {
         const error = err as { response?: { data?: { detail?: string }; status?: number } }
-        const errorMsg = error.response?.data?.detail || 'Failed to load archive contents'
+        const errorMsg = translateBackendKey(error.response?.data?.detail) || t('archiveBrowser.failedToLoadContents')
         const statusCode = error.response?.status
         setError(errorMsg)
         setIsSizeLimitError(statusCode === 413)

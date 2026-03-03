@@ -48,6 +48,7 @@ import {
 } from 'lucide-react'
 import { notificationsAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
+import { translateBackendKey } from '../utils/translateBackendKey'
 import { formatDate } from '../utils/dateUtils'
 import { Repository } from '../types'
 import MultiRepositorySelector from './MultiRepositorySelector'
@@ -129,7 +130,7 @@ const NotificationsTab: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || t('notifications.failedToAdd'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('notifications.failedToAdd'))
     },
   })
 
@@ -146,7 +147,7 @@ const NotificationsTab: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || t('notifications.failedToUpdate'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('notifications.failedToUpdate'))
     },
   })
 
@@ -160,7 +161,7 @@ const NotificationsTab: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || t('notifications.failedToDelete'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('notifications.failedToDelete'))
     },
   })
 
@@ -171,13 +172,13 @@ const NotificationsTab: React.FC = () => {
       if (response.data.success) {
         toast.success(t('notifications.testSentSuccessfully'))
       } else {
-        toast.error(response.data.message || t('notifications.failedToSendTest'))
+        toast.error(translateBackendKey(response.data.message) || t('notifications.failedToSendTest'))
       }
       setTesting(null)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || t('notifications.failedToTest'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('notifications.failedToTest'))
       setTesting(null)
     },
   })
