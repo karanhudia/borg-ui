@@ -23,6 +23,7 @@ import {
 import { Save, Trash2, AlertTriangle, Server, Zap, Database } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { settingsAPI } from '../services/api'
+import { translateBackendKey } from '../utils/translateBackendKey'
 
 interface CacheStats {
   backend: string
@@ -99,7 +100,7 @@ const CacheManagementTab: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || t('cache.failedToSaveCacheSettings'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('cache.failedToSaveCacheSettings'))
     },
   })
 
@@ -116,7 +117,7 @@ const CacheManagementTab: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || t('cache.failedToClearCache'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('cache.failedToClearCache'))
       setClearDialogOpen(false)
     },
   })
@@ -152,7 +153,7 @@ const CacheManagementTab: React.FC = () => {
       } else {
         toast.error(
           t('cache.redisConnectFailed', {
-            message: data.message || t('cache.usingInMemoryFallback'),
+            message: translateBackendKey(data.message) || t('cache.usingInMemoryFallback'),
           }),
           {
             duration: 5000,
@@ -161,7 +162,7 @@ const CacheManagementTab: React.FC = () => {
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      const errorMsg = error.response?.data?.detail || t('cache.connectionTestFailed')
+      const errorMsg = translateBackendKey(error.response?.data?.detail) || t('cache.connectionTestFailed')
       toast.error(errorMsg, { duration: 5000 })
     } finally {
       setTestingConnection(false)

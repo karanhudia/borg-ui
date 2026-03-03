@@ -19,6 +19,7 @@ import {
 import { Folder, File, ChevronRight, Home, CheckSquare, Square, MinusSquare } from 'lucide-react'
 import { restoreAPI } from '../../services/api'
 import { useTranslation } from 'react-i18next'
+import { translateBackendKey } from '../../utils/translateBackendKey'
 
 interface ArchiveItem {
   name: string
@@ -62,7 +63,7 @@ export default function WizardStepRestoreFiles({
         setItems(response.data.items || [])
       } catch (err: unknown) {
         const error = err as { response?: { data?: { detail?: string } } }
-        const errorMsg = error.response?.data?.detail || 'Failed to load archive contents'
+        const errorMsg = translateBackendKey(error.response?.data?.detail) || t('wizard.restoreFiles.failedToLoadContents')
         setError(errorMsg)
       } finally {
         setLoading(false)

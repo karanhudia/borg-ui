@@ -14,6 +14,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
+import { translateBackendKey } from '../utils/translateBackendKey'
 
 interface LockErrorDialogProps {
   open: boolean
@@ -50,7 +51,7 @@ export default function LockErrorDialog({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       error: any
     ) {
-      toast.error(error.response?.data?.detail || 'Failed to break lock')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('dialogs.lockError.failedToBreakLock'))
     } finally {
       setBreaking(false)
     }

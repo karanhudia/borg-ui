@@ -16,6 +16,7 @@ import {
 import { Save, AlertTriangle, Settings, Clock, RefreshCw } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { settingsAPI } from '../services/api'
+import { translateBackendKey } from '../utils/translateBackendKey'
 
 const SystemSettingsTab: React.FC = () => {
   const { t } = useTranslation()
@@ -215,7 +216,7 @@ const SystemSettingsTab: React.FC = () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         errorMsg = data.map((e: any) => e.msg).join(', ')
       } else if (data?.detail) {
-        errorMsg = data.detail
+        errorMsg = translateBackendKey(data.detail)
       }
       throw new Error(errorMsg)
     },
@@ -245,7 +246,7 @@ const SystemSettingsTab: React.FC = () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         errorMsg = data.map((e: any) => e.msg).join(', ')
       } else if (data?.detail) {
-        errorMsg = data.detail
+        errorMsg = translateBackendKey(data.detail)
       }
       throw new Error(errorMsg)
     },
@@ -287,7 +288,7 @@ const SystemSettingsTab: React.FC = () => {
     try {
       const response = await settingsAPI.refreshAllStats()
       const data = response.data
-      toast.success(data.message || t('systemSettings.statsRefreshStarted'))
+      toast.success(translateBackendKey(data.message) || t('systemSettings.statsRefreshStarted'))
 
       // Poll for completion by checking last_stats_refresh
       const startTime = Date.now()
@@ -315,7 +316,7 @@ const SystemSettingsTab: React.FC = () => {
       }, 3000) // Poll every 3 seconds
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || t('systemSettings.failedToStartStatsRefresh'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('systemSettings.failedToStartStatsRefresh'))
       setIsRefreshingStats(false)
     }
   }

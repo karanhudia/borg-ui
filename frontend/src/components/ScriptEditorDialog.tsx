@@ -18,6 +18,7 @@ import {
 import { Play, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 import CodeEditor from './CodeEditor'
 import api from '../services/api'
+import { translateBackendKey } from '../utils/translateBackendKey'
 
 interface ScriptEditorDialogProps {
   open: boolean
@@ -74,7 +75,7 @@ export default function ScriptEditorDialog({
       setTestResult({
         success: false,
         stdout: '',
-        stderr: error.response?.data?.detail || error.message || 'Unknown error occurred',
+        stderr: translateBackendKey(error.response?.data?.detail) || error.message || 'Unknown error occurred',
         exit_code: -1,
         execution_time: 0,
       })

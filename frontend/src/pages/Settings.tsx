@@ -40,6 +40,7 @@ import MqttSettingsTab from '../components/MqttSettingsTab'
 import Scripts from './Scripts'
 import Activity from './Activity'
 import { formatDateShort } from '../utils/dateUtils'
+import { translateBackendKey } from '../utils/translateBackendKey'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
 
 interface UserType {
@@ -133,7 +134,7 @@ const Settings: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || t('settings.toasts.failedToChangePassword'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('settings.toasts.failedToChangePassword'))
     },
   })
 
@@ -153,7 +154,7 @@ const Settings: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || t('settings.toasts.failedToCreateUser'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('settings.toasts.failedToCreateUser'))
     },
   })
 
@@ -168,7 +169,7 @@ const Settings: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || t('settings.toasts.failedToUpdateUser'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('settings.toasts.failedToUpdateUser'))
     },
   })
 
@@ -181,7 +182,7 @@ const Settings: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || t('settings.toasts.failedToDeleteUser'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('settings.toasts.failedToDeleteUser'))
     },
   })
 
@@ -195,7 +196,7 @@ const Settings: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || t('settings.toasts.failedToResetPassword'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('settings.toasts.failedToResetPassword'))
     },
   })
 

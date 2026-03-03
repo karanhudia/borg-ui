@@ -20,6 +20,7 @@ import {
 import { Save, Wifi, Lock, Key, Shield, AlertTriangle, Eye, EyeOff } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { settingsAPI } from '../services/api'
+import { translateBackendKey } from '../utils/translateBackendKey'
 
 const MqttSettingsTab: React.FC = () => {
   const { t } = useTranslation()
@@ -144,7 +145,7 @@ const MqttSettingsTab: React.FC = () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         errorMsg = data.map((e: any) => e.msg).join(', ')
       } else if (data?.detail) {
-        errorMsg = data.detail
+        errorMsg = translateBackendKey(data.detail)
       }
       throw new Error(errorMsg)
     },

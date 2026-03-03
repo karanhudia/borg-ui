@@ -23,6 +23,7 @@ import {
 import { Trash2, FileCode, Clock, AlertTriangle, Settings } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import api from '../services/api'
+import { translateBackendKey } from '../utils/translateBackendKey'
 import ScriptParameterInputs, { ScriptParameter } from './ScriptParameterInputs'
 
 interface Script {
@@ -145,7 +146,7 @@ export default function RepositoryScriptsTab({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Failed to assign script:', error)
-      toast.error(error.response?.data?.detail || t('repositoryScripts.errors.failedToAssign'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('repositoryScripts.errors.failedToAssign'))
     }
   }
 
@@ -160,7 +161,7 @@ export default function RepositoryScriptsTab({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Failed to remove script:', error)
-      toast.error(error.response?.data?.detail || t('repositoryScripts.errors.failedToRemove'))
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('repositoryScripts.errors.failedToRemove'))
     }
   }
 
@@ -179,7 +180,7 @@ export default function RepositoryScriptsTab({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Failed to update parameters:', error)
-      toast.error(error.response?.data?.detail || 'Failed to update parameters')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('repositoryScripts.errors.failedToUpdateParameters'))
     }
   }
 
