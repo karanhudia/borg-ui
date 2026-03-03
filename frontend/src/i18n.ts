@@ -24,6 +24,13 @@ i18n.use(initReactI18next).init({
     escapeValue: false, // React handles XSS
   },
   returnNull: false,
+  // QUAL-01: Warn on missing keys in development — requires saveMissing: true to fire
+  saveMissing: true,
+  missingKeyHandler: (_lngs, _ns, key) => {
+    if (import.meta.env.DEV) {
+      console.warn(`[i18n] Missing translation key: "${key}"`)
+    }
+  },
 })
 
 export default i18n
