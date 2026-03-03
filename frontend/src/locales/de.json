@@ -2418,6 +2418,20 @@
         "userNotFound": "User not found",
         "usernameAlreadyExists": "Username already exists"
       },
+      "activity": {
+        "adminOnlyDelete": "Only administrators can delete job entries",
+        "cannotDeleteRunningJob": "Cannot delete running job. Cancel it first or wait for completion.",
+        "invalidJobType": "Invalid job type: {{jobType}}",
+        "jobNotFound": "{{jobType}} job not found"
+      },
+      "archives": {
+        "adminAccessRequired": "Admin access required",
+        "deleteAlreadyRunning": "Delete operation is already running for this archive (Job ID: {{jobId}})",
+        "deleteJobNotFound": "Delete job not found",
+        "failedGetArchiveContents": "Failed to get archive contents",
+        "failedGetArchiveInfo": "Failed to get archive info",
+        "failedListArchives": "Failed to list archives"
+      },
       "borg": {
         "repositoryDoesNotExist": "Repository does not exist at the specified path",
         "repositoryAlreadyExists": "Repository already exists at this location",
@@ -2428,9 +2442,58 @@
         "passphraseWrong": "Incorrect repository passphrase",
         "archiveDoesNotExist": "Archive does not exist",
         "archiveAlreadyExists": "Archive with this name already exists"
+      },
+      "browse": {
+        "archiveMemoryTooHigh": "Archive memory too high: {{estimatedMb}} MB estimated (max {{maxMb}} MB)",
+        "archiveTooLarge": "Archive too large: {{linesRead}} items read (max {{maxItems}})"
+      },
+      "filesystem": {
+        "folderAlreadyExists": "Folder '{{name}}' already exists",
+        "invalidConnectionType": "Invalid connection type",
+        "invalidFolderName": "Invalid folder name",
+        "pathNotDirectory": "Path is not a directory: {{path}}",
+        "pathNotFound": "Path not found: {{path}}",
+        "permissionDenied": "Permission denied: {{path}}",
+        "permissionDeniedCreateFolder": "Permission denied to create folder",
+        "sshConnectionDetailsRequired": "SSH connection details required",
+        "sshConnectionTimeout": "SSH connection timeout",
+        "sshParamsRequired": "SSH key ID, host, and username are required for SSH browsing"
+      },
+      "mounts": {
+        "canOnlyUnmountBorgMounts": "Can only unmount Borg archive mounts via this endpoint",
+        "mountInfoNotFound": "Mount succeeded but info not found",
+        "mountNotFound": "Mount {{mountId}} not found",
+        "unmountFailed": "Failed to unmount {{mountId}}"
+      },
+      "notifications": {
+        "settingNotFound": "Notification setting not found"
+      },
+      "packages": {
+        "jobNotFound": "Job not found",
+        "packageAlreadyExists": "Package '{{name}}' already exists",
+        "packageNotFound": "Package not found"
+      },
+      "scripts": {
+        "adminAccessRequired": "Admin access required",
+        "scriptCannotBeEmpty": "Script cannot be empty",
+        "scriptExecutionTimedOut": "Script execution timed out (30 second limit)",
+        "scriptNotFound": "Script not found",
+        "cannotEditTemplateScript": "Cannot edit template scripts. Create a copy instead.",
+        "cannotDeleteTemplateScript": "Cannot delete template scripts",
+        "scriptInUse": "Cannot delete script: it is used in {{count}} {{places}}: {{repos}}",
+        "hookTypeMustBe": "hook_type must be 'pre-backup' or 'post-backup'",
+        "scriptAlreadyAssigned": "Script '{{name}}' is already assigned to this repository as {{hookType}}",
+        "scriptAssignmentNotFound": "Script assignment not found"
       }
     },
     "success": {
+      "activity": {
+        "jobDeleted": "{{jobType}} job deleted successfully"
+      },
+      "archives": {
+        "deletionCancelled": "Delete job cancelled successfully",
+        "deletionStarted": "Archive deletion started in background"
+      },
       "auth": {
         "loggedOut": "Successfully logged out",
         "userDeleted": "User deleted successfully",
@@ -2476,6 +2539,11 @@
         "sshKeyDeployed": "SSH key deployed successfully",
         "sshKeyRemoved": "SSH key removed successfully",
         "storageRefreshed": "Storage information refreshed successfully"
+      },
+      "packages": {
+        "installationInProgress": "Package '{{name}}' installation already in progress",
+        "installationStarted": "Package '{{name}}' installation started",
+        "packageRemoved": "Package '{{name}}' removed from list"
       },
       "settings": {
         "allCacheCleared": "Cleared all cache ({{count}} entries)",
