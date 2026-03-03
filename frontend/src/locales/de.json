@@ -52,7 +52,10 @@
     "created": "Erstellt",
     "lastLogin": "Letzte Anmeldung",
     "undoneWarning": "Diese Aktion kann nicht rückgängig gemacht werden.",
-    "version": "Version"
+    "version": "Version",
+    "errors": {
+      "unexpectedError": "An unexpected error occurred"
+    }
   },
   "login": {
     "title": "Borg Web UI",

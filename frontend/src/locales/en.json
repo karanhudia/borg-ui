@@ -52,7 +52,10 @@
     "created": "Created",
     "lastLogin": "Last Login",
     "undoneWarning": "This action cannot be undone.",
-    "version": "Version"
+    "version": "Version",
+    "errors": {
+      "unexpectedError": "An unexpected error occurred"
+    }
   },
   "login": {
     "title": "Borg Web UI",
