@@ -28,6 +28,7 @@ import {
   parseBytes,
 } from '../utils/dateUtils'
 import { generateBorgCreateCommand } from '../utils/borgUtils'
+import { translateBackendKey } from '../utils/translateBackendKey'
 import { BackupJob } from '../types'
 import BackupJobsTable from '../components/BackupJobsTable'
 import LogViewerDialog from '../components/LogViewerDialog'
@@ -79,7 +80,7 @@ const Backup: React.FC = () => {
   const startBackupMutation = useMutation({
     mutationFn: (repository: string) => backupAPI.startBackup(repository),
     onSuccess: () => {
-      toast.success('Backup started successfully!')
+      toast.success(t('backup.toasts.started'))
       queryClient.invalidateQueries({ queryKey: ['backup-status-manual'] })
       trackBackup(
         EventAction.START,
@@ -90,7 +91,7 @@ const Backup: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(`Failed to start backup: ${error.response?.data?.detail || error.message}`)
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('backup.toasts.startFailed'))
     },
   })
 
@@ -98,13 +99,13 @@ const Backup: React.FC = () => {
   const cancelBackupMutation = useMutation({
     mutationFn: (jobId: string) => backupAPI.cancelJob(jobId),
     onSuccess: () => {
-      toast.success('Backup cancelled successfully!')
+      toast.success(t('backup.toasts.cancelled'))
       queryClient.invalidateQueries({ queryKey: ['backup-status-manual'] })
       trackBackup(EventAction.STOP, 'manual')
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(`Failed to cancel backup: ${error.response?.data?.detail || error.message}`)
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('backup.toasts.cancelFailed'))
     },
   })
 
@@ -130,7 +131,7 @@ const Backup: React.FC = () => {
   // Handle start backup
   const handleStartBackup = () => {
     if (!selectedRepository) {
-      toast.error('Please select a repository first')
+      toast.error(t('backup.toasts.selectRepository'))
       return
     }
     startBackupMutation.mutate(selectedRepository)

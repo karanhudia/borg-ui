@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { Box, Typography, CircularProgress } from '@mui/material'
 import { Folder } from 'lucide-react'
 import { archivesAPI, repositoriesAPI, mountsAPI, restoreAPI } from '../services/api'
+import { translateBackendKey } from '../utils/translateBackendKey'
 import RepositorySelectorCard from '../components/RepositorySelectorCard'
 import RepositoryStatsGrid from '../components/RepositoryStatsGrid'
 import ArchivesList from '../components/ArchivesList'
@@ -114,7 +115,7 @@ const Archives: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(`Failed to delete archive: ${error.response?.data?.detail || error.message}`)
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('archives.toasts.deleteFailed'))
     },
   })
 
@@ -135,7 +136,7 @@ const Archives: React.FC = () => {
       const accessCommand = `docker exec -it ${containerName} bash -c "cd ${mountPoint} && bash"`
 
       toast.success(
-        `Archive mounted successfully!\n\nMount is inside the container. To access files, run:\n\n${accessCommand}`,
+        t('archives.mountSuccess', { command: accessCommand }),
         {
           duration: 15000,
           style: {
@@ -150,7 +151,7 @@ const Archives: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      const errorDetail = error.response?.data?.detail || error.message
+      const errorDetail = translateBackendKey(error.response?.data?.detail) || error.message
       const isMountTimeout = errorDetail.toLowerCase().includes('mount timeout')
 
       if (isMountTimeout) {
@@ -207,10 +208,7 @@ const Archives: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      const errorDetail = error.response?.data?.detail || error.message || 'Unknown error'
-      const errorMessage =
-        typeof errorDetail === 'string' ? errorDetail : JSON.stringify(errorDetail)
-      toast.error(`Failed to start restore: ${errorMessage}`)
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('archives.toasts.restoreFailed'))
     },
   })
 
@@ -266,7 +264,7 @@ const Archives: React.FC = () => {
   // Handle restore from wizard
   const handleRestoreFromWizard = (data: RestoreData) => {
     if (!selectedRepository || !restoreArchive) {
-      toast.error('Repository or archive not selected')
+      toast.error(t('archives.toasts.notSelected'))
       return
     }
 
