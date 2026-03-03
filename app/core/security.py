@@ -86,7 +86,7 @@ async def get_current_user(
         if not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Inactive user"
+                detail={"key": "backend.errors.auth.inactiveUser"}
             )
 
         return user
@@ -175,7 +175,7 @@ async def get_current_active_user(
     """Get the current active user"""
     current_user = await get_current_user(request, db)
     if not current_user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
+        raise HTTPException(status_code=400, detail={"key": "backend.errors.auth.inactiveUser"})
     return current_user
 
 
