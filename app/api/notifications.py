@@ -121,7 +121,7 @@ async def get_notification_setting(
     if not setting:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Notification setting not found"
+            detail={"key": "backend.errors.notifications.settingNotFound"}
         )
 
     return setting
@@ -169,7 +169,7 @@ async def update_notification_setting(
     if not setting:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Notification setting not found"
+            detail={"key": "backend.errors.notifications.settingNotFound"}
         )
 
     # Update fields
@@ -208,7 +208,7 @@ async def delete_notification_setting(
     if not setting:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Notification setting not found"
+            detail={"key": "backend.errors.notifications.settingNotFound"}
         )
 
     db.delete(setting)

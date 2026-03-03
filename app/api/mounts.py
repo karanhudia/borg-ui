@@ -109,7 +109,7 @@ async def mount_borg_archive(
         if not mount_info:
             raise HTTPException(
                 status_code=500,
-                detail="Mount succeeded but info not found"
+                detail={"key": "backend.errors.mounts.mountInfoNotFound"}
             )
 
         logger.info(
@@ -169,14 +169,14 @@ async def unmount_borg_archive(
         if not mount_info:
             raise HTTPException(
                 status_code=404,
-                detail=f"Mount {mount_id} not found"
+                detail={"key": "backend.errors.mounts.mountNotFound", "params": {"mountId": mount_id}}
             )
 
         # Only allow unmounting Borg mounts (not backup job SSHFS mounts)
         if mount_info.mount_type != MountType.BORG_ARCHIVE:
             raise HTTPException(
                 status_code=400,
-                detail="Can only unmount Borg archive mounts via this endpoint"
+                detail={"key": "backend.errors.mounts.canOnlyUnmountBorgMounts"}
             )
 
         # Unmount
@@ -185,7 +185,7 @@ async def unmount_borg_archive(
         if not success:
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to unmount {mount_id}"
+                detail={"key": "backend.errors.mounts.unmountFailed", "params": {"mountId": mount_id}}
             )
 
         logger.info(
@@ -301,14 +301,14 @@ async def get_mount_info(
         if not mount_info:
             raise HTTPException(
                 status_code=404,
-                detail=f"Mount {mount_id} not found"
+                detail={"key": "backend.errors.mounts.mountNotFound", "params": {"mountId": mount_id}}
             )
 
         # Only show user-facing mounts
         if mount_info.mount_type != MountType.BORG_ARCHIVE:
             raise HTTPException(
                 status_code=404,
-                detail=f"Mount {mount_id} not found"
+                detail={"key": "backend.errors.mounts.mountNotFound", "params": {"mountId": mount_id}}
             )
 
         return serialize_mount(mount_info)

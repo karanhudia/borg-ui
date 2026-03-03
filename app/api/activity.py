@@ -580,7 +580,7 @@ async def delete_job(
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators can delete job entries"
+            detail={"key": "backend.errors.activity.adminOnlyDelete"}
         )
 
     # Map job type to model
@@ -594,19 +594,19 @@ async def delete_job(
     }
 
     if job_type not in job_models:
-        raise HTTPException(status_code=400, detail=f"Invalid job type: {job_type}")
+        raise HTTPException(status_code=400, detail={"key": "backend.errors.activity.invalidJobType", "params": {"jobType": job_type}})
 
     job_model = job_models[job_type]
     job = db.query(job_model).filter(job_model.id == job_id).first()
 
     if not job:
-        raise HTTPException(status_code=404, detail=f"{job_type.capitalize()} job not found")
+        raise HTTPException(status_code=404, detail={"key": "backend.errors.activity.jobNotFound", "params": {"jobType": job_type.capitalize()}})
 
     # Prevent deletion of running jobs (allow pending to clean up stuck jobs)
     if job.status == 'running':
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot delete running job. Cancel it first or wait for completion."
+            detail={"key": "backend.errors.activity.cannotDeleteRunningJob"}
         )
 
     # Delete log file if it exists
@@ -629,7 +629,7 @@ async def delete_job(
 
         return {
             "success": True,
-            "message": f"{job_type.capitalize()} job deleted successfully",
+            "message": "backend.success.activity.jobDeleted",
             "job_id": job_id,
             "job_type": job_type
         }
