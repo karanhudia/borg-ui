@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-03T11:58:00Z"
+last_updated: "2026-03-03T13:01:38Z"
 progress:
-  total_phases: 1
+  total_phases: 5
   completed_phases: 1
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 5
+  completed_plans: 5
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** Every user-facing string — whether from the frontend or backend — must be translatable, so users can operate the UI entirely in their own language.
-**Current focus:** Phase 1 - Frontend Utility and Hardcoded String Cleanup
+**Current focus:** Phase 2 - Locale File Structure and Key Skeleton
 
 ## Current Position
 
-Phase: 1 of 5 (Frontend Utility and Hardcoded String Cleanup)
-Plan: 4 of 4 in current phase (01-04 complete — Phase 1 done)
-Status: Phase 1 complete
-Last activity: 2026-03-03 — Plan 01-04 complete: removed hardcoded third-position fallbacks from stderr chains in ScriptEditorDialog.tsx and Scripts.tsx; UTIL-03 marked complete; all 8 Phase 1 requirements now [x]
+Phase: 2 of 5 (Locale File Structure and Key Skeleton)
+Plan: 1 of 1 in current phase (02-01 complete — Phase 2 done)
+Status: Phase 2 complete
+Last activity: 2026-03-03 — Plan 02-01 complete: added backend namespace with 60+ keys to en/es/de locale files; enabled missingKeyHandler in i18n.ts; LOC-01 and QUAL-01 requirements complete
 
-Progress: [████░░░░░░] 40%
+Progress: [████████░░] 48%
 
 ## Performance Metrics
 
@@ -41,9 +41,10 @@ Progress: [████░░░░░░] 40%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-frontend-utility-and-hardcoded-string-cleanup | 4 | 20 min | 5 min |
+| 02-locale-file-structure-and-key-skeleton | 1 | 3 min | 3 min |
 
 **Recent Trend:**
-- Last 5 plans: 8 min, 11 min, 0 min (03), 1 min (04)
+- Last 5 plans: 8 min, 11 min, 0 min (03), 1 min (04), 3 min (02-01)
 - Trend: stable
 
 *Updated after each plan completion*
@@ -64,6 +65,9 @@ Recent decisions affecting current work:
 - 01-02: Archives.tsx multi-line mount success toast replaced with t('archives.mountSuccess', { command }) to preserve interpolation
 - 01-02: SSHConnectionsSingleKey response.data.error paths also wrapped through translateBackendKey() for consistency across all success/error code paths
 - 01-02: English placeholders used in es.json and de.json for all new toast keys — Phase 5 will add proper translations
+- 02-01: backend namespace added as last top-level key in all three locale files — purely additive, no existing keys removed
+- 02-01: es.json and de.json use English placeholder values for backend.* keys — Phase 5 will add real translations
+- 02-01: missingKeyHandler uses console.warn gated on import.meta.env.DEV — no output in production; saveMissing: true required alongside handler to fire
 
 ### Pending Todos
 
@@ -78,5 +82,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 01-04-PLAN.md — Phase 1 fully complete. All 8 requirements marked [x]. Ready for Phase 2.
+Stopped at: Completed 02-01-PLAN.md — Phase 2 complete. backend namespace with 60+ keys added to en/es/de. missingKeyHandler enabled in i18n.ts. Ready for Phase 3.
 Resume file: None
