@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: in_progress
-last_updated: "2026-03-03T19:45:00Z"
+status: unknown
+last_updated: "2026-03-03T19:44:27.130Z"
 progress:
-  total_phases: 5
-  completed_phases: 4
-  total_plans: 16
-  completed_plans: 16
+  total_phases: 6
+  completed_phases: 5
+  total_plans: 17
+  completed_plans: 17
 ---
 
 # Project State
@@ -23,9 +23,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 5 of 5 (Locale File Completion and CI Validation)
-Plan: 1 of 1 in current phase (05-01 complete — es.json and de.json stripped of 17 Phase 6 keys; 211 backend.* keys now have real Spanish/German translations; both files at 2047-key parity with committed en.json)
-Status: Phase 5 Plan 1 complete
-Last activity: 2026-03-03 — Plan 05-01 complete: es.json and de.json updated to 2047 keys matching committed en.json; 211 backend.* English placeholders replaced with real Spanish/German translations; LOC-02 and LOC-03 satisfied
+Plan: 2 of 2 in current phase (05-02 complete — check:locales npm script added; locale parity CI step added to test-frontend job; scripts/check-locale-parity.js committed; 17 missing keys added to es.json and de.json; LOC-04 and QUAL-02 satisfied)
+Status: Phase 5 complete
+Last activity: 2026-03-04 — Plan 05-02 complete: check:locales npm script wired into package.json; GitHub Actions test-frontend job now runs locale parity check; all 3 locale files share 2064 keys in parity
 
 Progress: [████████████████] 100%
 
@@ -56,6 +56,7 @@ Progress: [████████████████] 100%
 | Phase 04-backend-services-and-remaining-api-files P06 | 2 | 2 tasks | 6 files |
 | Phase 04-backend-services-and-remaining-api-files P05 | 3 | 2 tasks | 4 files |
 | Phase 05-locale-file-completion-and-ci-validation P01 | 5 | 2 tasks | 2 files |
+| Phase 05-locale-file-completion-and-ci-validation P02 | 3 | 4 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -104,6 +105,7 @@ Recent decisions affecting current work:
 - [Phase 04-backend-services-and-remaining-api-files]: 04-05: Internal test_ssh_key_connection helper returns locale key string — caller uses conditional success/failure key selection instead of propagating raw message
 - [Phase 05-01]: Phase 6 keys excluded by construction — filter_keys walks committed en.json as reference so keys absent from committed en.json are automatically excluded from output
 - [Phase 05-01]: archiveBrowser.failedToLoadContents parity fix handled automatically — key is in committed en.json and working tree de.json had the German value
+- [Phase 05-02]: 05-02: scripts/check-locale-parity.js committed from untracked — CI requires it in git; 17 missing keys auto-fixed in es.json and de.json with English placeholders after parity script caught pre-existing drift
 
 ### Pending Todos
 
@@ -117,6 +119,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-03
-Stopped at: Completed 05-01-PLAN.md — es.json and de.json updated to 2047 keys matching committed en.json; 211 backend.* English placeholders replaced with real Spanish/German translations; 17 Phase 6 keys stripped; LOC-02 and LOC-03 satisfied.
+Last session: 2026-03-04
+Stopped at: Completed 05-02-PLAN.md — check:locales npm script added to package.json; CI parity step wired into test-frontend job; scripts/check-locale-parity.js committed; 17 missing keys fixed in es.json and de.json; LOC-04 and QUAL-02 satisfied; all 5 phases complete.
 Resume file: None

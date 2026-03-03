@@ -24,7 +24,7 @@
 - [x] **LOC-01**: A `backend` namespace exists in `en.json` with sub-sections for `errors`, `success`, and `messages` covering all backend-originating strings
 - [x] **LOC-02**: All new `backend.*` keys present in `es.json` with Spanish translations
 - [x] **LOC-03**: All new `backend.*` keys present in `de.json` with German translations
-- [ ] **LOC-04**: en.json, es.json, and de.json contain identical key sets (no drift)
+- [x] **LOC-04**: en.json, es.json, and de.json contain identical key sets (no drift)
 
 ### Backend API Layer Migration
 
@@ -44,7 +44,7 @@
 ### Quality and Validation
 
 - [x] **QUAL-01**: i18next `missingKeyHandler` enabled in development mode to log warnings when a key is missing from locale files
-- [ ] **QUAL-02**: A CI/local script validates that en.json, es.json, and de.json contain the same key set
+- [x] **QUAL-02**: A CI/local script validates that en.json, es.json, and de.json contain the same key set
 
 ## v2 Requirements
 
@@ -86,7 +86,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LOC-01 | Phase 2 | Complete |
 | LOC-02 | Phase 5 | Complete |
 | LOC-03 | Phase 5 | Complete |
-| LOC-04 | Phase 5 | Pending |
+| LOC-04 | Phase 5 | Complete |
 | BKND-01 | Phase 3 | Complete |
 | BKND-02 | Phase 3 | Complete |
 | BKND-03 | Phase 3 | Complete |
@@ -97,7 +97,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SVC-02 | Phase 6 | Pending |
 | SVC-03 | Phase 4 | Complete |
 | QUAL-01 | Phase 2 | Complete |
-| QUAL-02 | Phase 5 | Pending |
+| QUAL-02 | Phase 5 | Complete |
 
 **Coverage:**
 - v1 requirements: 22 total
