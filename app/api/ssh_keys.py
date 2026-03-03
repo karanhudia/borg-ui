@@ -340,17 +340,17 @@ async def create_ssh_key(
 ):
     """Create a new SSH key"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.ssh.adminAccessRequired"})
+
     try:
         # Check if SSH key name already exists
         existing_key = db.query(SSHKey).filter(SSHKey.name == key_data.name).first()
         if existing_key:
-            raise HTTPException(status_code=400, detail="SSH key name already exists")
-        
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.ssh.keyNameAlreadyExists"})
+
         # Validate SSH key format
         if not key_data.public_key.startswith(('ssh-rsa', 'ssh-ed25519', 'ecdsa-sha2')):
-            raise HTTPException(status_code=400, detail="Invalid public key format")
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.ssh.invalidPublicKeyFormat"})
         
         # Encrypt private key
         encryption_key = settings.secret_key.encode()[:32]
@@ -372,10 +372,10 @@ async def create_ssh_key(
         db.refresh(ssh_key)
         
         logger.info("SSH key created", name=key_data.name, user=current_user.username)
-        
+
         return {
             "success": True,
-            "message": "SSH key created successfully",
+            "message": "backend.success.ssh.sshKeyCreated",
             "ssh_key": {
                 "id": ssh_key.id,
                 "name": ssh_key.name,
@@ -410,7 +410,7 @@ async def generate_ssh_key(
 ):
     """Generate the system SSH key (one-time only)"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.ssh.adminAccessRequired"})
 
     try:
         # Check if system key already exists
@@ -418,19 +418,19 @@ async def generate_ssh_key(
         if existing_system_key:
             raise HTTPException(
                 status_code=400,
-                detail="System SSH key already exists. Only one system key is allowed. Delete the existing key first if you want to generate a new one."
+                detail={"key": "backend.errors.ssh.systemKeyAlreadyExists"}
             )
 
         # Validate key type
         valid_types = ["rsa", "ed25519", "ecdsa"]
         if key_data.key_type not in valid_types:
-            raise HTTPException(status_code=400, detail=f"Invalid key type. Must be one of: {', '.join(valid_types)}")
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.ssh.invalidKeyType", "params": {"types": ', '.join(valid_types)}})
 
         # Generate SSH key pair
         key_result = await generate_ssh_key_pair(key_data.key_type)
 
         if not key_result["success"]:
-            raise HTTPException(status_code=500, detail=f"Failed to generate SSH key: {key_result['error']}")
+            raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedGenerateKey", "params": {"error": key_result['error']}})
 
         # Generate fingerprint
         fingerprint = await generate_ssh_key_fingerprint(key_result["public_key"])
@@ -503,7 +503,7 @@ async def import_ssh_key(
 ):
     """Import an existing SSH key from filesystem (e.g., mounted volume)"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.ssh.adminAccessRequired"})
 
     try:
         # Check if system key already exists
@@ -511,18 +511,18 @@ async def import_ssh_key(
         if existing_system_key:
             raise HTTPException(
                 status_code=400,
-                detail="System SSH key already exists. Only one system key is allowed. Delete the existing key first if you want to import a new one."
+                detail={"key": "backend.errors.ssh.systemKeyAlreadyExists"}
             )
 
         # Check if name already exists
         existing_name = db.query(SSHKey).filter(SSHKey.name == key_data.name).first()
         if existing_name:
-            raise HTTPException(status_code=400, detail=f"SSH key with name '{key_data.name}' already exists")
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.ssh.keyNameAlreadyExists"})
 
         # Read private key from filesystem
         private_key_path = key_data.private_key_path
         if not os.path.exists(private_key_path):
-            raise HTTPException(status_code=404, detail=f"Private key file not found: {private_key_path}")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.privateKeyFileNotFound", "params": {"path": private_key_path}})
 
         try:
             with open(private_key_path, 'r') as f:
@@ -532,7 +532,7 @@ async def import_ssh_key(
 
         # Validate private key format
         if not private_key.strip().startswith('-----BEGIN'):
-            raise HTTPException(status_code=400, detail="Invalid private key format. Must be in OpenSSH format.")
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.ssh.invalidPrivateKeyFormat"})
 
         # Determine public key path
         if key_data.public_key_path:
@@ -542,7 +542,7 @@ async def import_ssh_key(
 
         # Read public key from filesystem
         if not os.path.exists(public_key_path):
-            raise HTTPException(status_code=404, detail=f"Public key file not found: {public_key_path}")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.publicKeyFileNotFound", "params": {"path": public_key_path}})
 
         try:
             with open(public_key_path, 'r') as f:
@@ -559,7 +559,7 @@ async def import_ssh_key(
         elif public_key.startswith('ecdsa-sha2'):
             key_type = 'ecdsa'
         else:
-            raise HTTPException(status_code=400, detail="Invalid public key format. Must start with ssh-rsa, ssh-ed25519, or ecdsa-sha2")
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.ssh.invalidPublicKeyFormat"})
 
         # Generate fingerprint
         fingerprint = await generate_ssh_key_fingerprint(public_key)
@@ -637,13 +637,13 @@ async def quick_ssh_setup(
 ):
     """Quick setup: Generate SSH key and optionally deploy to remote server"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.ssh.adminAccessRequired"})
 
     try:
         # Step 1: Generate SSH key
         key_result = await generate_ssh_key_pair(setup_data.key_type)
         if not key_result["success"]:
-            raise HTTPException(status_code=500, detail=f"Failed to generate SSH key: {key_result['error']}")
+            raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedGenerateKey", "params": {"error": key_result['error']}})
 
         # Encrypt private key
         encryption_key = settings.secret_key.encode()[:32]
@@ -723,7 +723,7 @@ async def quick_ssh_setup(
 
                 raise HTTPException(
                     status_code=500,
-                    detail=f"SSH key generated but deployment failed: {deploy_result.get('error', 'Unknown error')}"
+                    detail={"key": "backend.errors.ssh.keyGeneratedButDeployFailed", "params": {"error": deploy_result.get('error', 'Unknown error')}}
                 )
         else:
             # Deployment skipped
@@ -757,14 +757,14 @@ async def deploy_ssh_key(
 ):
     """Deploy SSH key to remote server"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.ssh.adminAccessRequired"})
+
     try:
         # Get SSH key
         ssh_key = db.query(SSHKey).filter(SSHKey.id == key_id).first()
         if not ssh_key:
-            raise HTTPException(status_code=404, detail="SSH key not found")
-        
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.sshKeyNotFound"})
+
         # Check if connection already exists
         existing_connection = db.query(SSHConnection).filter(
             SSHConnection.ssh_key_id == key_id,
@@ -903,8 +903,8 @@ async def test_ssh_connection(
         # Get SSH key
         ssh_key = db.query(SSHKey).filter(SSHKey.id == key_id).first()
         if not ssh_key:
-            raise HTTPException(status_code=404, detail="SSH key not found")
-        
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.sshKeyNotFound"})
+
         # Get or create connection record
         connection = db.query(SSHConnection).filter(
             SSHConnection.ssh_key_id == key_id,
@@ -972,7 +972,7 @@ async def update_ssh_connection(
     try:
         connection = db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
         if not connection:
-            raise HTTPException(status_code=404, detail="SSH connection not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.sshConnectionNotFound"})
 
         # Update connection details
         if connection_data.host is not None:
@@ -998,7 +998,7 @@ async def update_ssh_connection(
 
         return {
             "success": True,
-            "message": "SSH connection updated successfully",
+            "message": "backend.success.ssh.connectionUpdated",
             "connection": {
                 "id": connection.id,
                 "host": connection.host,
@@ -1026,7 +1026,7 @@ async def refresh_connection_storage(
     try:
         connection = db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
         if not connection:
-            raise HTTPException(status_code=404, detail="SSH connection not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.sshConnectionNotFound"})
 
         # If connection has no SSH key, link it to the system key
         ssh_key = connection.ssh_key
@@ -1034,7 +1034,7 @@ async def refresh_connection_storage(
             # Get system SSH key
             system_key = db.query(SSHKey).filter(SSHKey.is_system_key == True).first()
             if not system_key:
-                raise HTTPException(status_code=404, detail="No system SSH key found. Generate or import one first.")
+                raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.noSystemKeyFound"})
 
             # Link connection to system key
             connection.ssh_key_id = system_key.id
@@ -1081,7 +1081,7 @@ async def refresh_connection_storage(
 
             return {
                 "success": True,
-                "message": "Storage information refreshed successfully",
+                "message": "backend.success.ssh.storageRefreshed",
                 "storage": storage
             }
         else:
@@ -1089,7 +1089,7 @@ async def refresh_connection_storage(
                          connection_id=connection_id)
             return {
                 "success": False,
-                "message": "Failed to collect storage information",
+                "message": "backend.errors.ssh.failedCollectStorage",
                 "storage": None
             }
 
@@ -1109,7 +1109,7 @@ async def test_existing_connection(
     try:
         connection = db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
         if not connection:
-            raise HTTPException(status_code=404, detail="SSH connection not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.sshConnectionNotFound"})
 
         # If connection has no SSH key, link it to the system key
         ssh_key = connection.ssh_key
@@ -1117,7 +1117,7 @@ async def test_existing_connection(
             # Get system SSH key
             system_key = db.query(SSHKey).filter(SSHKey.is_system_key == True).first()
             if not system_key:
-                raise HTTPException(status_code=404, detail="No system SSH key found. Generate or import one first.")
+                raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.noSystemKeyFound"})
 
             # Link connection to system key
             connection.ssh_key_id = system_key.id
@@ -1191,12 +1191,12 @@ async def redeploy_key_to_connection(
         # Get the connection
         connection = db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
         if not connection:
-            raise HTTPException(status_code=404, detail="SSH connection not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.sshConnectionNotFound"})
 
         # Get system SSH key
         system_key = db.query(SSHKey).filter(SSHKey.is_system_key == True).first()
         if not system_key:
-            raise HTTPException(status_code=404, detail="No system SSH key found. Generate or import one first.")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.noSystemKeyFound"})
 
         logger.info("Redeploying SSH key to existing connection",
                    connection_id=connection_id,
@@ -1262,7 +1262,7 @@ async def delete_ssh_connection(
     try:
         connection = db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
         if not connection:
-            raise HTTPException(status_code=404, detail="SSH connection not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.sshConnectionNotFound"})
 
         host = connection.host
 
@@ -1308,8 +1308,8 @@ async def get_ssh_key(
     try:
         ssh_key = db.query(SSHKey).filter(SSHKey.id == key_id).first()
         if not ssh_key:
-            raise HTTPException(status_code=404, detail="SSH key not found")
-        
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.sshKeyNotFound"})
+
         return {
             "success": True,
             "ssh_key": {
@@ -1351,13 +1351,13 @@ async def update_ssh_key(
 ):
     """Update SSH key"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.ssh.adminAccessRequired"})
+
     try:
         ssh_key = db.query(SSHKey).filter(SSHKey.id == key_id).first()
         if not ssh_key:
-            raise HTTPException(status_code=404, detail="SSH key not found")
-        
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.sshKeyNotFound"})
+
         # Update fields
         if key_data.name is not None:
             # Check if name already exists
@@ -1366,7 +1366,7 @@ async def update_ssh_key(
                 SSHKey.id != key_id
             ).first()
             if existing_key:
-                raise HTTPException(status_code=400, detail="SSH key name already exists")
+                raise HTTPException(status_code=400, detail={"key": "backend.errors.ssh.keyNameAlreadyExists"})
             ssh_key.name = key_data.name
         
         if key_data.description is not None:
@@ -1409,12 +1409,12 @@ async def delete_ssh_key(
 ):
     """Delete SSH key. Connections will be preserved but marked as failed."""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.ssh.adminAccessRequired"})
 
     try:
         ssh_key = db.query(SSHKey).filter(SSHKey.id == key_id).first()
         if not ssh_key:
-            raise HTTPException(status_code=404, detail="SSH key not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.sshKeyNotFound"})
 
         key_name = ssh_key.name
         key_type = ssh_key.key_type
@@ -1918,14 +1918,14 @@ async def toggle_backup_source(
 ):
     """Enable/disable SSH connection as backup source and verify Borg installation"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.ssh.adminAccessRequired"})
 
     try:
         from app.services.remote_backup_service import remote_backup_service
 
         connection = db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
         if not connection:
-            raise HTTPException(status_code=404, detail="SSH connection not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.sshConnectionNotFound"})
 
         # If enabling, verify borg is installed on remote host
         if enable:
@@ -1936,7 +1936,7 @@ async def toggle_backup_source(
                 error_msg = result.get("error", "Borg is not installed on remote host")
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Cannot enable as backup source: {error_msg}. Please install Borg on the remote host first."
+                    detail={"key": "backend.errors.ssh.cannotEnableAsBackupSource", "params": {"error": error_msg}}
                 )
 
             # Update connection with borg info
@@ -2010,14 +2010,14 @@ async def verify_borg_installation(
 ):
     """Verify Borg is installed on remote host"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.ssh.adminAccessRequired"})
 
     try:
         from app.services.remote_backup_service import remote_backup_service
 
         connection = db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
         if not connection:
-            raise HTTPException(status_code=404, detail="SSH connection not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.sshConnectionNotFound"})
 
         logger.info("Verifying Borg installation", connection_id=connection_id)
         result = await remote_backup_service.verify_remote_borg(connection_id)
