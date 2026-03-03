@@ -77,8 +77,7 @@ export default function ScriptEditorDialog({
         stdout: '',
         stderr:
           translateBackendKey(error.response?.data?.detail) ||
-          error.message ||
-          'Unknown error occurred',
+          error.message,
         exit_code: -1,
         execution_time: 0,
       })

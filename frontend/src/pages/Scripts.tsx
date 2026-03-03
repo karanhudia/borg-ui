@@ -281,8 +281,7 @@ export default function Scripts() {
         stdout: '',
         stderr:
           translateBackendKey(error.response?.data?.detail) ||
-          error.message ||
-          'Failed to test script',
+          error.message,
         execution_time: 0,
       })
     } finally {
