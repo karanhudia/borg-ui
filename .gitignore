@@ -135,3 +135,4 @@ security-reports/
 trivy-*.json
 trivy-*.txt
 trivy-*.sarif
+.planning/
