@@ -92,6 +92,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Frontend Utility and Hardcoded String Cleanup | 4/4 | Complete | 2026-03-03 |
 | 2. Locale File Structure and Key Skeleton | 0/1 | Complete    | 2026-03-03 |
-| 3. Backend API Migration (Auth + High-Traffic Domains) | 1/3 | In Progress|  |
+| 3. Backend API Migration (Auth + High-Traffic Domains) | 2/3 | In Progress|  |
 | 4. Backend Services and Remaining API Files | 0/? | Not started | - |
 | 5. Locale File Completion and CI Validation | 0/? | Not started | - |

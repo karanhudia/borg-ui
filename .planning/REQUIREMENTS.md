@@ -28,7 +28,7 @@
 
 ### Backend API Layer Migration
 
-- [ ] **BKND-01**: All `HTTPException.detail` strings and `message` response fields in `app/api/auth.py` return translation keys in `{key}` or `{key, params}` format
+- [x] **BKND-01**: All `HTTPException.detail` strings and `message` response fields in `app/api/auth.py` return translation keys in `{key}` or `{key, params}` format
 - [ ] **BKND-02**: All `HTTPException.detail` strings and `message` response fields in `app/api/repositories.py` return translation keys
 - [x] **BKND-03**: All `HTTPException.detail` strings and `message` response fields in `app/api/backup.py` return translation keys
 - [ ] **BKND-04**: All `HTTPException.detail` strings and `message` response fields in `app/api/restore.py` return translation keys
@@ -87,7 +87,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LOC-02 | Phase 5 | Pending |
 | LOC-03 | Phase 5 | Pending |
 | LOC-04 | Phase 5 | Pending |
-| BKND-01 | Phase 3 | Pending |
+| BKND-01 | Phase 3 | Complete |
 | BKND-02 | Phase 3 | Pending |
 | BKND-03 | Phase 3 | Complete |
 | BKND-04 | Phase 4 | Pending |
