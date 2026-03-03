@@ -716,7 +716,9 @@
     "toasts": {
       "scriptUpdated": "Script actualizado correctamente",
       "scriptCreated": "Script creado correctamente",
-      "scriptDeleted": "Script eliminado correctamente"
+      "scriptDeleted": "Script eliminado correctamente",
+      "saveFailed": "Failed to save script",
+      "deleteFailed": "Failed to delete script"
     },
     "confirmDelete": "¿Estás seguro de que deseas eliminar \"{{name}}\"?"
   },
@@ -820,7 +822,8 @@
       "beforeBreakingCheck2": "Verifica que ningún otro cliente esté accediendo a este repositorio",
       "beforeBreakingCheck3": "Esto romperá tanto los bloqueos del repositorio como los de caché",
       "adminRequired": "Se requieren privilegios de administrador:",
-      "adminRequiredDetail": "Solo los administradores pueden forzar el desbloqueo del repositorio. Por favor, contacta a tu administrador."
+      "adminRequiredDetail": "Solo los administradores pueden forzar el desbloqueo del repositorio. Por favor, contacta a tu administrador.",
+      "failedToBreakLock": "Failed to break repository lock"
     },
     "errorDetails": {
       "title": "Detalles del error",
@@ -1200,7 +1203,11 @@
     "languageTitle": "Idioma",
     "languageDescription": "Elige el idioma de la interfaz",
     "languageLabel": "Idioma de la interfaz",
-    "languageSaved": "Idioma actualizado correctamente"
+    "languageSaved": "Idioma actualizado correctamente",
+    "updateFailed": "Failed to update preferences",
+    "analyticsTransparencyBold": "Transparencia total:",
+    "analyticsTransparencyLink": "Ver nuestro panel de análisis públicamente",
+    "analyticsTransparencyAfterLink": "para ver exactamente qué recopilamos. Autoalojado, sin terceros."
   },
   "betaFeatures": {
     "title": "Funciones beta",
@@ -1281,7 +1288,8 @@
     "clearLogs": "Ejecutar limpieza ahora",
     "clearing": "Ejecutando limpieza...",
     "cleanupCompleted": "Limpieza de registros completada correctamente",
-    "failedToRunCleanup": "Error al ejecutar la limpieza de registros"
+    "failedToRunCleanup": "Error al ejecutar la limpieza de registros",
+    "failedToSaveSettings": "Failed to save log management settings"
   },
   "cacheManagement": {
     "title": "Gestión de caché de archivos",
@@ -1297,7 +1305,8 @@
     "empty": "Sin montajes activos",
     "unmount": "Desmontar",
     "unmounting": "Desmontando...",
-    "unmountedSuccessfully": "Archivo desmontado correctamente"
+    "unmountedSuccessfully": "Archivo desmontado correctamente",
+    "failedToUnmount": "Failed to unmount path"
   },
   "mqttSettings": {
     "title": "Configuración MQTT",
@@ -1535,7 +1544,9 @@
     "create": "Crear",
     "toasts": {
       "scheduleUpdated": "Comprobación programada actualizada",
-      "checkStarted": "Comprobación iniciada"
+      "checkStarted": "Comprobación iniciada",
+      "updateFailed": "Failed to update check schedule",
+      "checkFailed": "Failed to start check"
     },
     "validation": {
       "selectRepository": "Por favor selecciona un repositorio"
@@ -1661,7 +1672,8 @@
       "noItemsSelected": "Ningún elemento seleccionado",
       "clearAll": "Borrar todo",
       "selectDirTooltip": "Seleccionar directorio y todo su contenido",
-      "helpText": "Haz clic en los archivos para seleccionarlos, o en las carpetas para navegar. Usa la casilla junto a las carpetas para seleccionar directorios completos."
+      "helpText": "Haz clic en los archivos para seleccionarlos, o en las carpetas para navegar. Usa la casilla junto a las carpetas para seleccionar directorios completos.",
+      "failedToLoadContents": "Failed to load archive contents"
     },
     "restorePath": {
       "title": "Elegir ubicación de restauración",
@@ -1864,7 +1876,8 @@
     "selectionDescription": "Selecciona archivos o carpetas específicos para restaurar. Haz clic en las carpetas para navegar, haz clic en las casillas para seleccionar. Si no se hace ninguna selección, se restaurará el archivo completo.",
     "sizeLimitPre": "Puedes aumentar el límite en",
     "sizeLimitSettingsLink": "Configuración > Sistema",
-    "sizeLimitPost": ", o usa herramientas de línea de comandos como borg mount para archivos muy grandes."
+    "sizeLimitPost": ", o usa herramientas de línea de comandos como borg mount para archivos muy grandes.",
+    "failedToLoadContents": "Failed to load archive contents"
   },
   "archiveContents": {
     "title": "Contenido del archivo",
@@ -1988,7 +2001,12 @@
     "toasts": {
       "addedSuccessfully": "Paquete agregado correctamente",
       "updatedSuccessfully": "Paquete actualizado correctamente",
-      "removedSuccessfully": "Paquete eliminado correctamente"
+      "removedSuccessfully": "Paquete eliminado correctamente",
+      "addFailed": "Failed to add package",
+      "updateFailed": "Failed to update package",
+      "fixFailed": "Failed to fix broken dependencies",
+      "removeFailed": "Failed to remove package",
+      "reinstallFailed": "Failed to reinstall package"
     }
   },
   "protectedRoute": {
@@ -2237,7 +2255,8 @@
   "repositoryScripts": {
     "errors": {
       "failedToAssign": "Error al asignar el script",
-      "failedToRemove": "Error al eliminar el script"
+      "failedToRemove": "Error al eliminar el script",
+      "failedToUpdateParameters": "Failed to update script parameters"
     },
     "confirmRemove": "¿Eliminar este script del repositorio?",
     "parametersConfigured": "{{count}} parámetro(s) configurado(s)",

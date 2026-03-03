@@ -716,7 +716,9 @@
     "toasts": {
       "scriptUpdated": "Script updated successfully",
       "scriptCreated": "Script created successfully",
-      "scriptDeleted": "Script deleted successfully"
+      "scriptDeleted": "Script deleted successfully",
+      "saveFailed": "Failed to save script",
+      "deleteFailed": "Failed to delete script"
     },
     "confirmDelete": "Are you sure you want to delete \"{{name}}\"?"
   },
@@ -820,7 +822,8 @@
       "beforeBreakingCheck2": "Check that no other client is accessing this repository",
       "beforeBreakingCheck3": "This will break both repository and cache locks",
       "adminRequired": "Admin privileges required:",
-      "adminRequiredDetail": "Only administrators can break repository locks. Please contact your admin for assistance."
+      "adminRequiredDetail": "Only administrators can break repository locks. Please contact your admin for assistance.",
+      "failedToBreakLock": "Failed to break repository lock"
     },
     "errorDetails": {
       "title": "Error Details",
@@ -1200,7 +1203,11 @@
     "languageTitle": "Language",
     "languageDescription": "Choose the interface language",
     "languageLabel": "Interface Language",
-    "languageSaved": "Language updated successfully"
+    "languageSaved": "Language updated successfully",
+    "updateFailed": "Failed to update preferences",
+    "analyticsTransparencyBold": "Full Transparency:",
+    "analyticsTransparencyLink": "View our analytics dashboard publicly",
+    "analyticsTransparencyAfterLink": "to see exactly what we collect. Self-hosted, no third parties."
   },
   "betaFeatures": {
     "title": "Beta Features",
@@ -1281,7 +1288,8 @@
     "clearLogs": "Run Cleanup Now",
     "clearing": "Running Cleanup...",
     "cleanupCompleted": "Log cleanup completed successfully",
-    "failedToRunCleanup": "Failed to run log cleanup"
+    "failedToRunCleanup": "Failed to run log cleanup",
+    "failedToSaveSettings": "Failed to save log management settings"
   },
   "cacheManagement": {
     "title": "Archive Cache Management",
@@ -1297,7 +1305,8 @@
     "empty": "No Active Mounts",
     "unmount": "Unmount",
     "unmounting": "Unmounting...",
-    "unmountedSuccessfully": "Archive unmounted successfully"
+    "unmountedSuccessfully": "Archive unmounted successfully",
+    "failedToUnmount": "Failed to unmount path"
   },
   "mqttSettings": {
     "title": "MQTT Settings",
@@ -1535,7 +1544,9 @@
     "create": "Create",
     "toasts": {
       "scheduleUpdated": "Check schedule updated",
-      "checkStarted": "Check started"
+      "checkStarted": "Check started",
+      "updateFailed": "Failed to update check schedule",
+      "checkFailed": "Failed to start check"
     },
     "validation": {
       "selectRepository": "Please select a repository"
@@ -1656,7 +1667,8 @@
       "noItemsSelected": "No items selected",
       "clearAll": "Clear all",
       "selectDirTooltip": "Select directory and all contents",
-      "helpText": "Click files to select them, or click folders to navigate. Use the checkbox next to folders to select entire directories."
+      "helpText": "Click files to select them, or click folders to navigate. Use the checkbox next to folders to select entire directories.",
+      "failedToLoadContents": "Failed to load archive contents"
     },
     "restorePath": {
       "title": "Choose restore location",
@@ -1859,7 +1871,8 @@
     "selectionDescription": "Select specific files or folders to restore. Click folders to browse, click checkboxes to select. If no selection is made, the entire archive will be restored.",
     "sizeLimitPre": "You can increase the limit in",
     "sizeLimitSettingsLink": "Settings > System",
-    "sizeLimitPost": ", or use command-line tools like borg mount for very large archives."
+    "sizeLimitPost": ", or use command-line tools like borg mount for very large archives.",
+    "failedToLoadContents": "Failed to load archive contents"
   },
   "archiveContents": {
     "title": "Archive Contents",
@@ -1983,7 +1996,12 @@
     "toasts": {
       "addedSuccessfully": "Package added successfully",
       "updatedSuccessfully": "Package updated successfully",
-      "removedSuccessfully": "Package removed successfully"
+      "removedSuccessfully": "Package removed successfully",
+      "addFailed": "Failed to add package",
+      "updateFailed": "Failed to update package",
+      "fixFailed": "Failed to fix broken dependencies",
+      "removeFailed": "Failed to remove package",
+      "reinstallFailed": "Failed to reinstall package"
     }
   },
   "protectedRoute": {
@@ -2232,7 +2250,8 @@
   "repositoryScripts": {
     "errors": {
       "failedToAssign": "Failed to assign script",
-      "failedToRemove": "Failed to remove script"
+      "failedToRemove": "Failed to remove script",
+      "failedToUpdateParameters": "Failed to update script parameters"
     },
     "confirmRemove": "Remove this script from the repository?",
     "parametersConfigured": "{{count}} parameter(s) configured",
