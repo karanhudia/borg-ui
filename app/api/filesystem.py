@@ -601,7 +601,7 @@ async def create_folder(
             try:
                 os.makedirs(full_path, exist_ok=False)
                 logger.info("Created local folder", path=full_path, user=current_user.username)
-                return {"success": True, "path": full_path, "message": "Folder created successfully"}
+                return {"success": True, "path": full_path, "message": "backend.success.filesystem.folderCreated"}
             except FileExistsError:
                 raise HTTPException(status_code=400, detail={"key": "backend.errors.filesystem.folderAlreadyExists", "params": {"name": folder_name}})
             except PermissionError:
@@ -664,7 +664,7 @@ async def create_folder(
 
                 if result.returncode == 0 or "File exists" not in result.stderr:
                     logger.info("Created remote folder", host=host, path=full_path)
-                    return {"success": True, "path": full_path, "message": "Folder created successfully"}
+                    return {"success": True, "path": full_path, "message": "backend.success.filesystem.folderCreated"}
                 elif "File exists" in result.stderr:
                     raise HTTPException(status_code=400, detail={"key": "backend.errors.filesystem.folderAlreadyExists", "params": {"name": folder_name}})
                 else:

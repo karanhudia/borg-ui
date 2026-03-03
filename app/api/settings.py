@@ -1292,10 +1292,6 @@ async def update_cache_settings(
         if reconfigure_result:
             response["backend"] = reconfigure_result["backend"]
             response["connection_info"] = reconfigure_result.get("connection_info")
-            if reconfigure_result["backend"] == "redis":
-                response["message"] += f" Connected to Redis: {reconfigure_result.get('connection_info', 'N/A')}"
-            elif reconfigure_result["backend"] == "in-memory":
-                response["message"] += " Using in-memory cache (Redis connection failed)."
 
         return response
 
