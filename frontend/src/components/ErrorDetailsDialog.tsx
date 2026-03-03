@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { translateBackendKey } from '../utils/translateBackendKey'
 import {
   Dialog,
   DialogTitle,
@@ -51,7 +52,10 @@ export default function ErrorDetailsDialog<T extends JobWithError>({
               component="pre"
               sx={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}
             >
-              {job.error_message}
+              {job.error_message
+                .split('\n')
+                .map(line => translateBackendKey(line))
+                .join('\n')}
             </Typography>
           </Alert>
         )}

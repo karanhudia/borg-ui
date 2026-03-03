@@ -1,6 +1,7 @@
 """
 Utility functions for process management and orphan detection
 """
+import json
 import os
 import subprocess
 import structlog
@@ -160,7 +161,7 @@ def cleanup_orphaned_jobs(db: Session):
     for job in running_backup_jobs:
         # Backup jobs don't have process_pid tracking, so we mark them all as failed on restart
         job.status = "failed"
-        job.error_message = "Container restarted during backup operation"
+        job.error_message = json.dumps({"key": "backend.errors.service.containerRestartedDuringBackup"})
         job.completed_at = datetime.utcnow()
 
         logger.info("Orphaned backup job detected",
@@ -171,7 +172,7 @@ def cleanup_orphaned_jobs(db: Session):
     for job in running_restore_jobs:
         # Restore jobs don't have process_pid tracking, so we mark them all as failed on restart
         job.status = "failed"
-        job.error_message = "Container restarted during restore operation"
+        job.error_message = json.dumps({"key": "backend.errors.service.containerRestartedDuringRestore"})
         job.completed_at = datetime.utcnow()
 
         logger.info("Orphaned restore job detected",
@@ -183,7 +184,7 @@ def cleanup_orphaned_jobs(db: Session):
         if not is_process_alive(job.process_pid, job.process_start_time):
             # Process is dead! Mark job as failed
             job.status = "failed"
-            job.error_message = "Container restarted during operation"
+            job.error_message = json.dumps({"key": "backend.errors.service.containerRestartedDuringOperation"})
             job.completed_at = datetime.utcnow()
 
             logger.info("Orphaned check job detected",
@@ -207,12 +208,12 @@ def cleanup_orphaned_jobs(db: Session):
                     else:
                         logger.warning("Failed to break lock for local repository",
                                       repository_id=repository.id)
-                        job.error_message += " (Warning: Failed to automatically break lock)"
+                        job.error_message += "\n" + json.dumps({"key": "backend.errors.service.warningFailedBreakLock"})
                 else:
                     # For remote repos, don't auto-break lock (remote process may still be running)
                     logger.warning("Orphaned check job for remote repository - manual lock break may be needed",
                                   repository_id=repository.id)
-                    job.error_message += " (Warning: Remote process may still be running, manual verification recommended)"
+                    job.error_message += "\n" + json.dumps({"key": "backend.errors.service.warningRemoteProcessMayBeRunning"})
         else:
             # Process is still alive! This is unexpected
             logger.warning("Check job marked as running and process is still alive",
@@ -224,7 +225,7 @@ def cleanup_orphaned_jobs(db: Session):
         if not is_process_alive(job.process_pid, job.process_start_time):
             # Process is dead! Mark job as failed
             job.status = "failed"
-            job.error_message = "Container restarted during operation"
+            job.error_message = json.dumps({"key": "backend.errors.service.containerRestartedDuringOperation"})
             job.completed_at = datetime.utcnow()
 
             logger.info("Orphaned compact job detected",
@@ -248,12 +249,12 @@ def cleanup_orphaned_jobs(db: Session):
                     else:
                         logger.warning("Failed to break lock for local repository",
                                       repository_id=repository.id)
-                        job.error_message += " (Warning: Failed to automatically break lock)"
+                        job.error_message += "\n" + json.dumps({"key": "backend.errors.service.warningFailedBreakLock"})
                 else:
                     # For remote repos, don't auto-break lock
                     logger.warning("Orphaned compact job for remote repository - manual lock break may be needed",
                                   repository_id=repository.id)
-                    job.error_message += " (Warning: Remote process may still be running, manual verification recommended)"
+                    job.error_message += "\n" + json.dumps({"key": "backend.errors.service.warningRemoteProcessMayBeRunning"})
         else:
             # Process is still alive! This is unexpected
             logger.warning("Compact job marked as running and process is still alive",

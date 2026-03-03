@@ -78,7 +78,7 @@ class RestoreService:
                 job = db_session.query(RestoreJob).filter(RestoreJob.id == job_id).first()
                 if job:
                     job.status = "failed"
-                    job.error_message = f"Unsupported execution mode: {execution_mode}"
+                    job.error_message = json.dumps({"key": "backend.errors.service.unsupportedExecutionMode", "params": {"mode": execution_mode}})
                     job.completed_at = datetime.now(timezone.utc)
                     db_session.commit()
             finally:
@@ -137,7 +137,7 @@ class RestoreService:
                 except Exception as e:
                     logger.error("Failed to create destination directory", error=str(e))
                     job.status = "failed"
-                    job.error_message = f"Failed to create destination directory: {str(e)}"
+                    job.error_message = json.dumps({"key": "backend.errors.service.failedCreateDestinationDir", "params": {"error": str(e)}})
                     job.completed_at = datetime.now(timezone.utc)
                     db_session.commit()
                     return
@@ -419,7 +419,7 @@ class RestoreService:
                         job.completed_at = datetime.now(timezone.utc)
 
                         stderr_output = "\n".join(stderr_lines)
-                        job.error_message = f"Restore completed with warnings (exit code {process.returncode})"
+                        job.error_message = json.dumps({"key": "backend.errors.service.restoreCompletedWithWarnings", "params": {"exitCode": process.returncode}})
                         job.logs = f"STDOUT:\n{chr(10).join(stdout_lines)}\n\nSTDERR:\n{stderr_output}"
 
                         logger.warning("Restore completed with warnings",
@@ -815,7 +815,7 @@ class RestoreService:
             # Mark as completed
             job.status = "completed" if process.returncode == 0 else "completed_with_warnings"
             if process.returncode == 1:
-                job.error_message = f"Restore completed with warnings (exit code 1)"
+                job.error_message = json.dumps({"key": "backend.errors.service.restoreCompletedWithWarnings", "params": {"exitCode": 1}})
             job.progress = 100
             job.progress_percent = 100.0
             job.completed_at = datetime.now(timezone.utc)
