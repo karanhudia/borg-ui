@@ -273,7 +273,7 @@ async def update_system_settings(
 ):
     """Update system settings (admin only)"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
 
     try:
         # Validate log management settings
@@ -284,14 +284,14 @@ async def update_system_settings(
             if settings_update.log_save_policy not in valid_policies:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Invalid log_save_policy. Must be one of: {', '.join(valid_policies)}"
+                    detail={"key": "backend.errors.settings.invalidLogSavePolicy", "params": {"policies": ', '.join(valid_policies)}}
                 )
 
         if settings_update.log_max_total_size_mb is not None:
             if settings_update.log_max_total_size_mb < 10:
                 raise HTTPException(
                     status_code=400,
-                    detail="log_max_total_size_mb must be at least 10 MB"
+                    detail={"key": "backend.errors.settings.logSizeTooSmall"}
                 )
 
             # Check if new limit is below current usage
@@ -428,7 +428,7 @@ async def update_system_settings(
 
         response = {
             "success": True,
-            "message": "System settings updated successfully"
+            "message": "backend.success.settings.systemSettingsUpdated"
         }
         if warnings:
             response["warnings"] = warnings
@@ -495,7 +495,7 @@ async def refresh_all_stats(
     Check last_stats_refresh timestamp to know when it completed.
     """
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
 
     try:
         import asyncio
@@ -509,7 +509,7 @@ async def refresh_all_stats(
         if not repo_ids:
             return {
                 "success": True,
-                "message": "No repositories to refresh",
+                "message": "backend.success.settings.noRepositoriesToRefresh",
                 "repository_count": 0
             }
 
@@ -518,7 +518,7 @@ async def refresh_all_stats(
 
         return {
             "success": True,
-            "message": f"Stats refresh started for {len(repo_ids)} repositories. Check back shortly.",
+            "message": "backend.success.settings.statsRefreshStarted",
             "repository_count": len(repo_ids)
         }
     except Exception as e:
@@ -532,7 +532,7 @@ async def get_users(
 ):
     """Get all users (admin only)"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
 
     try:
         users = db.query(User).all()
@@ -563,18 +563,18 @@ async def create_user(
 ):
     """Create a new user (admin only)"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
 
     try:
         # Check if username already exists
         existing_user = db.query(User).filter(User.username == user_data.username).first()
         if existing_user:
-            raise HTTPException(status_code=400, detail="Username already exists")
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.settings.usernameAlreadyExists"})
 
         # Check if email already exists
         existing_email = db.query(User).filter(User.email == user_data.email).first()
         if existing_email:
-            raise HTTPException(status_code=400, detail="Email already exists")
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.settings.emailAlreadyExists"})
 
         # Create new user
         hashed_password = get_password_hash(user_data.password)
@@ -594,7 +594,7 @@ async def create_user(
 
         return {
             "success": True,
-            "message": "User created successfully",
+            "message": "backend.success.settings.userCreated",
             "user": {
                 "id": new_user.id,
                 "username": new_user.username,
@@ -618,12 +618,12 @@ async def update_user(
 ):
     """Update user (admin only)"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
 
     try:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.settings.userNotFound"})
 
         # Update user fields
         if user_data.username is not None:
@@ -633,7 +633,7 @@ async def update_user(
                 User.id != user_id
             ).first()
             if existing_user:
-                raise HTTPException(status_code=400, detail="Username already exists")
+                raise HTTPException(status_code=400, detail={"key": "backend.errors.settings.usernameAlreadyExists"})
             user.username = user_data.username
 
         if user_data.email is not None:
@@ -643,7 +643,7 @@ async def update_user(
                 User.id != user_id
             ).first()
             if existing_email:
-                raise HTTPException(status_code=400, detail="Email already exists")
+                raise HTTPException(status_code=400, detail={"key": "backend.errors.settings.emailAlreadyExists"})
             user.email = user_data.email
 
         if user_data.is_active is not None:
@@ -659,7 +659,7 @@ async def update_user(
 
         return {
             "success": True,
-            "message": "User updated successfully"
+            "message": "backend.success.settings.userUpdated"
         }
     except HTTPException:
         raise
@@ -675,22 +675,22 @@ async def delete_user(
 ):
     """Delete user (admin only)"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
 
     try:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.settings.userNotFound"})
 
         # Prevent deleting the last admin user
         if user.is_admin:
             admin_count = db.query(User).filter(User.is_admin == True).count()
             if admin_count <= 1:
-                raise HTTPException(status_code=400, detail="Cannot delete the last admin user")
+                raise HTTPException(status_code=400, detail={"key": "backend.errors.settings.cannotDeleteLastAdmin"})
 
         # Prevent deleting yourself
         if user.id == current_user.id:
-            raise HTTPException(status_code=400, detail="Cannot delete your own account")
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.settings.cannotDeleteOwnAccount"})
 
         db.delete(user)
         db.commit()
@@ -699,7 +699,7 @@ async def delete_user(
 
         return {
             "success": True,
-            "message": "User deleted successfully"
+            "message": "backend.success.settings.userDeleted"
         }
     except HTTPException:
         raise
@@ -716,12 +716,12 @@ async def reset_user_password(
 ):
     """Reset user password (admin only)"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
 
     try:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.settings.userNotFound"})
 
         hashed_password = get_password_hash(password_data.new_password)
         user.password_hash = hashed_password
@@ -732,7 +732,7 @@ async def reset_user_password(
 
         return {
             "success": True,
-            "message": "Password reset successfully"
+            "message": "backend.success.settings.passwordReset"
         }
     except HTTPException:
         raise  # Re-raise HTTP exceptions to preserve status codes
@@ -750,7 +750,7 @@ async def change_password(
     try:
         # Verify current password
         if not verify_password(password_data.current_password, current_user.password_hash):
-            raise HTTPException(status_code=400, detail="Current password is incorrect")
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.auth.currentPasswordIncorrect"})
 
         # Update password
         hashed_password = get_password_hash(password_data.new_password)
@@ -763,7 +763,7 @@ async def change_password(
 
         return {
             "success": True,
-            "message": "Password changed successfully"
+            "message": "backend.success.settings.passwordChanged"
         }
     except HTTPException:
         raise
@@ -803,7 +803,7 @@ async def update_profile(
                 User.id != current_user.id
             ).first()
             if existing_user:
-                raise HTTPException(status_code=400, detail="Username already exists")
+                raise HTTPException(status_code=400, detail={"key": "backend.errors.settings.usernameAlreadyExists"})
             current_user.username = profile_data.username
 
         if profile_data.email is not None:
@@ -813,7 +813,7 @@ async def update_profile(
                 User.id != current_user.id
             ).first()
             if existing_email:
-                raise HTTPException(status_code=400, detail="Email already exists")
+                raise HTTPException(status_code=400, detail={"key": "backend.errors.settings.emailAlreadyExists"})
             current_user.email = profile_data.email
 
         current_user.updated_at = datetime.utcnow()
@@ -823,7 +823,7 @@ async def update_profile(
 
         return {
             "success": True,
-            "message": "Profile updated successfully"
+            "message": "backend.success.settings.profileUpdated"
         }
     except HTTPException:
         raise
@@ -864,7 +864,7 @@ async def update_preferences(
 
         return {
             "success": True,
-            "message": "Preferences updated successfully"
+            "message": "backend.success.settings.preferencesUpdated"
         }
     except Exception as e:
         logger.error("Failed to update preferences", error=str(e))
@@ -877,7 +877,7 @@ async def cleanup_system(
 ):
     """Run system cleanup (admin only)"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
 
     try:
         # Get system settings
@@ -913,7 +913,7 @@ async def cleanup_system(
 
         return {
             "success": True,
-            "message": "System cleanup completed successfully",
+            "message": "backend.success.settings.systemCleanupCompleted",
             "results": cleanup_results
         }
     except Exception as e:
@@ -987,7 +987,7 @@ async def manual_log_cleanup(
     - Returns detailed cleanup statistics
     """
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
 
     try:
         from app.services.log_manager import log_manager
@@ -1025,7 +1025,7 @@ async def manual_log_cleanup(
 
         return {
             "success": result["success"],
-            "message": f"Log cleanup completed. Deleted {result['total_deleted_count']} files, freed {result['total_deleted_size_mb']} MB.",
+            "message": "backend.success.settings.logCleanupCompleted",
             "cleanup_results": {
                 "age_cleanup": {
                     "deleted_count": result["age_cleanup"]["deleted_count"],
@@ -1115,14 +1115,14 @@ async def clear_cache(
     - Number of cache entries cleared
     """
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
 
     try:
         if repository_id is not None:
             # Validate repository exists
             repository = db.query(Repository).filter(Repository.id == repository_id).first()
             if not repository:
-                raise HTTPException(status_code=404, detail="Repository not found")
+                raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
 
             # Clear cache for specific repository
             cleared_count = await archive_cache.clear_repository(repository_id)
@@ -1134,7 +1134,7 @@ async def clear_cache(
             return {
                 "cleared_count": cleared_count,
                 "repository_id": repository_id,
-                "message": f"Cleared {cleared_count} cache entries for repository {repository_id}"
+                "message": "backend.success.settings.cacheCleared"
             }
         else:
             # Clear all cache
@@ -1146,7 +1146,7 @@ async def clear_cache(
             return {
                 "cleared_count": cleared_count,
                 "repository_id": None,
-                "message": f"Cleared all cache ({cleared_count} entries)"
+                "message": "backend.success.settings.allCacheCleared"
             }
 
     except HTTPException:
@@ -1189,10 +1189,10 @@ async def update_cache_settings(
     - Redis connection result if redis_url was changed
     """
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
 
     if cache_ttl_minutes is None and cache_max_size_mb is None and redis_url is None and browse_max_items is None and browse_max_memory_mb is None:
-        raise HTTPException(status_code=400, detail="At least one setting must be provided")
+        raise HTTPException(status_code=400, detail={"key": "backend.errors.settings.atLeastOneSettingRequired"})
 
     try:
         # Get or create system settings
@@ -1231,7 +1231,7 @@ async def update_cache_settings(
                            error=str(reconfig_error))
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Failed to connect to Redis: {str(reconfig_error)}"
+                    detail={"key": "backend.errors.settings.failedConnectRedis", "params": {"error": str(reconfig_error)}}
                 )
 
         # Update TTL
@@ -1285,7 +1285,7 @@ async def update_cache_settings(
             "redis_url": settings.redis_url,
             "browse_max_items": settings.browse_max_items,
             "browse_max_memory_mb": settings.browse_max_memory_mb,
-            "message": "Cache settings updated successfully. Note: TTL changes only affect new cache entries."
+            "message": "backend.success.settings.cacheSettingsUpdated"
         }
 
         # Add reconfiguration result if available
