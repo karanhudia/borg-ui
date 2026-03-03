@@ -68,6 +68,7 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
+    "check:locales": "node ../scripts/check-locale-parity.js",
     "release": "cd .. && ./scripts/release.sh",
     "start:dev": "cd .. && ./scripts/dev.sh",
     "prepare": "husky"
