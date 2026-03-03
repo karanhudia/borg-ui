@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: unknown
-last_updated: "2026-03-03T18:06:56.865Z"
+status: in_progress
+last_updated: "2026-03-03T19:45:00Z"
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 4
-  total_plans: 15
-  completed_plans: 15
+  total_plans: 16
+  completed_plans: 16
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** Every user-facing string — whether from the frontend or backend — must be translatable, so users can operate the UI entirely in their own language.
-**Current focus:** Phase 4 - Backend Services and Remaining API Files
+**Current focus:** Phase 5 - Locale File Completion and CI Validation
 
 ## Current Position
 
-Phase: 4 of 5 (Backend Services and Remaining API Files)
-Plan: 6 of 6 in current phase (04-06 complete — settings.py corruption removed, filesystem.py and scripts_library.py migrated to locale keys; backend.success.filesystem and backend.success.scripts domains added to all 3 locale files; BKND-06 gaps closed)
-Status: Phase 4 complete
-Last activity: 2026-03-03 — Plan 04-06 complete: settings.py response["message"] += lines removed, filesystem.py "Folder created successfully" replaced with locale key, scripts_library.py cleanup messages migrated to locale keys; 3 new locale keys added
+Phase: 5 of 5 (Locale File Completion and CI Validation)
+Plan: 1 of 1 in current phase (05-01 complete — es.json and de.json stripped of 17 Phase 6 keys; 211 backend.* keys now have real Spanish/German translations; both files at 2047-key parity with committed en.json)
+Status: Phase 5 Plan 1 complete
+Last activity: 2026-03-03 — Plan 05-01 complete: es.json and de.json updated to 2047 keys matching committed en.json; 211 backend.* English placeholders replaced with real Spanish/German translations; LOC-02 and LOC-03 satisfied
 
-Progress: [████████████████] 96%
+Progress: [████████████████] 100%
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Progress: [████████████████] 96%
 | Phase 04-backend-services-and-remaining-api-files P04 | 3 | 2 tasks | 7 files |
 | Phase 04-backend-services-and-remaining-api-files P06 | 2 | 2 tasks | 6 files |
 | Phase 04-backend-services-and-remaining-api-files P05 | 3 | 2 tasks | 4 files |
+| Phase 05-locale-file-completion-and-ci-validation P01 | 5 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -101,6 +102,8 @@ Recent decisions affecting current work:
 - [Phase 04-backend-services-and-remaining-api-files]: [Phase 04-06]: es.json and de.json use English placeholder values for new filesystem and scripts success domains — Phase 5 adds real translations
 - [Phase 04-backend-services-and-remaining-api-files]: 04-05: msg_parts dynamic join at delete endpoint dropped — static sshKeyDeleted key used; connection/repository counts logged, not user-facing
 - [Phase 04-backend-services-and-remaining-api-files]: 04-05: Internal test_ssh_key_connection helper returns locale key string — caller uses conditional success/failure key selection instead of propagating raw message
+- [Phase 05-01]: Phase 6 keys excluded by construction — filter_keys walks committed en.json as reference so keys absent from committed en.json are automatically excluded from output
+- [Phase 05-01]: archiveBrowser.failedToLoadContents parity fix handled automatically — key is in committed en.json and working tree de.json had the German value
 
 ### Pending Todos
 
@@ -115,5 +118,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 04-05-PLAN.md — 13 ssh_keys.py message response fields migrated to backend.success.ssh.* locale keys; 7 new keys in all 3 locale files (connectionTestFailed, sshKeyDeployFailed, sshKeyGeneratedAndDeployed, sshKeyGeneratedDeploymentSkipped, sshKeyUpdated, systemKeyGenerated, systemKeyImported); BKND-06 verification truth #4 satisfied.
+Stopped at: Completed 05-01-PLAN.md — es.json and de.json updated to 2047 keys matching committed en.json; 211 backend.* English placeholders replaced with real Spanish/German translations; 17 Phase 6 keys stripped; LOC-02 and LOC-03 satisfied.
 Resume file: None

@@ -22,8 +22,8 @@
 ### Locale File Structure
 
 - [x] **LOC-01**: A `backend` namespace exists in `en.json` with sub-sections for `errors`, `success`, and `messages` covering all backend-originating strings
-- [ ] **LOC-02**: All new `backend.*` keys present in `es.json` with Spanish translations
-- [ ] **LOC-03**: All new `backend.*` keys present in `de.json` with German translations
+- [x] **LOC-02**: All new `backend.*` keys present in `es.json` with Spanish translations
+- [x] **LOC-03**: All new `backend.*` keys present in `de.json` with German translations
 - [ ] **LOC-04**: en.json, es.json, and de.json contain identical key sets (no drift)
 
 ### Backend API Layer Migration
@@ -84,8 +84,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | UTIL-02 | Phase 1 | Complete |
 | UTIL-03 | Phase 1 | Complete |
 | LOC-01 | Phase 2 | Complete |
-| LOC-02 | Phase 5 | Pending |
-| LOC-03 | Phase 5 | Pending |
+| LOC-02 | Phase 5 | Complete |
+| LOC-03 | Phase 5 | Complete |
 | LOC-04 | Phase 5 | Pending |
 | BKND-01 | Phase 3 | Complete |
 | BKND-02 | Phase 3 | Complete |
