@@ -260,6 +260,11 @@ jobs:
           cd frontend
           npm ci
 
+      - name: Check locale key parity
+        run: |
+          cd frontend
+          npm run check:locales
+
       - name: TypeScript type check
         run: |
           cd frontend
