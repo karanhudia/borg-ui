@@ -2387,11 +2387,36 @@
         "scheduledJobNotFound": "Scheduled job not found"
       },
       "ssh": {
-        "sshKeyNotFound": "SSH key not found",
-        "sshConnectionNotFound": "SSH connection not found",
+        "adminAccessRequired": "Admin access required",
+        "cannotEnableAsBackupSource": "Cannot enable as backup source: {{error}}",
         "connectionTestFailed": "SSH connection test failed: {{error}}",
+        "failedCollectStorage": "Failed to collect storage information",
+        "failedGenerateKey": "Failed to generate SSH key: {{error}}",
+        "invalidKeyType": "Invalid key type. Must be one of: {{types}}",
+        "invalidPrivateKeyFormat": "Invalid private key format",
+        "invalidPublicKeyFormat": "Invalid public key format",
         "keyDeployFailed": "Failed to deploy SSH key: {{error}}",
-        "keyRemoveFailed": "Failed to remove SSH key: {{error}}"
+        "keyGeneratedButDeployFailed": "SSH key generated but deployment failed: {{error}}",
+        "keyNameAlreadyExists": "SSH key name already exists",
+        "keyRemoveFailed": "Failed to remove SSH key: {{error}}",
+        "noSystemKeyFound": "No system SSH key found",
+        "privateKeyFileNotFound": "Private key file not found: {{path}}",
+        "publicKeyFileNotFound": "Public key file not found: {{path}}",
+        "sshConnectionNotFound": "SSH connection not found",
+        "sshKeyNotFound": "SSH key not found",
+        "systemKeyAlreadyExists": "System SSH key already exists"
+      },
+      "settings": {
+        "adminAccessRequired": "Admin access required",
+        "atLeastOneSettingRequired": "At least one setting must be provided",
+        "cannotDeleteLastAdmin": "Cannot delete the last admin user",
+        "cannotDeleteOwnAccount": "Cannot delete your own account",
+        "emailAlreadyExists": "Email already exists",
+        "failedConnectRedis": "Failed to connect to Redis: {{error}}",
+        "invalidLogSavePolicy": "Invalid log_save_policy. Must be one of: {{policies}}",
+        "logSizeTooSmall": "log_max_total_size_mb must be at least 10 MB",
+        "userNotFound": "User not found",
+        "usernameAlreadyExists": "Username already exists"
       },
       "borg": {
         "repositoryDoesNotExist": "Repository does not exist at the specified path",
@@ -2442,14 +2467,32 @@
         "scheduledJobStartedMulti": "Multi-repository schedule started ({{count}} repositories)"
       },
       "ssh": {
+        "connectionCreated": "SSH connection created successfully",
+        "connectionDeleted": "SSH connection deleted successfully",
+        "connectionTestSuccess": "SSH connection test successful",
+        "connectionUpdated": "SSH connection updated successfully",
         "sshKeyCreated": "SSH key created successfully",
         "sshKeyDeleted": "SSH key deleted successfully",
         "sshKeyDeployed": "SSH key deployed successfully",
         "sshKeyRemoved": "SSH key removed successfully",
-        "connectionCreated": "SSH connection created successfully",
-        "connectionUpdated": "SSH connection updated successfully",
-        "connectionDeleted": "SSH connection deleted successfully",
-        "connectionTestSuccess": "SSH connection test successful"
+        "storageRefreshed": "Storage information refreshed successfully"
+      },
+      "settings": {
+        "allCacheCleared": "Cleared all cache ({{count}} entries)",
+        "cacheCleared": "Cleared {{count}} cache entries for repository {{repositoryId}}",
+        "cacheSettingsUpdated": "Cache settings updated successfully",
+        "logCleanupCompleted": "Log cleanup completed. Deleted {{count}} files ({{sizeMb}} MB freed)",
+        "noRepositoriesToRefresh": "No repositories to refresh",
+        "passwordChanged": "Password changed successfully",
+        "passwordReset": "Password reset successfully",
+        "preferencesUpdated": "Preferences updated successfully",
+        "profileUpdated": "Profile updated successfully",
+        "statsRefreshStarted": "Stats refresh started for {{count}} repositories",
+        "systemCleanupCompleted": "System cleanup completed successfully",
+        "systemSettingsUpdated": "System settings updated successfully",
+        "userCreated": "User created successfully",
+        "userDeleted": "User deleted successfully",
+        "userUpdated": "User updated successfully"
       }
     },
     "messages": {
