@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-03T14:02:00Z"
+last_updated: "2026-03-03T14:31:49Z"
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 11
-  completed_plans: 9
+  completed_plans: 10
 ---
 
 # Project State
@@ -23,18 +23,18 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 3 of 5 (Backend API Migration: Auth and High-Traffic Domains)
-Plan: 3 of N in current phase (03-03 complete — repositories.py fully migrated; BKND-02 complete)
+Plan: 4 of N in current phase (03-04 complete — BKND-02 gap closure: 8 remaining raw strings migrated, 6 new locale keys)
 Status: Phase 3 in progress
-Last activity: 2026-03-03 — Plan 03-03 complete: repositories.py fully migrated (46 translation key sites); 13 new locale keys added to en/es/de; BKND-02 complete
+Last activity: 2026-03-03 — Plan 03-04 complete: 8 remaining raw English HTTPException.detail strings migrated; 6 new locale keys added to en/es/de; BKND-02 definitively complete
 
-Progress: [█████████████░] 68%
+Progress: [█████████████░] 70%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3 (phase 3 plans: 03-01, 03-02, 03-03)
-- Average duration: 10 min
-- Total execution time: 0.52 hours
+- Total plans completed: 4 (phase 3 plans: 03-01, 03-02, 03-03, 03-04)
+- Average duration: 8 min
+- Total execution time: 0.55 hours
 
 **By Phase:**
 
@@ -76,6 +76,9 @@ Recent decisions affecting current work:
 - 03-03: checkAlreadyRunning and compactAlreadyRunning use static key form (Job ID dropped) — cleaner UX, locale value is the simplified message
 - 03-03: Conditional message variable pattern (lines 672/675) assigns key strings; return {"message": message} unchanged
 - 03-03: Import endpoint "Repository path already exists in database with name ..." left as raw English — parameterized with dynamic name, outside migration table scope
+- 03-04: Lines 761 and 858 both reuse existing notValidBorgRepository key (already has {{path}} param) — no new key needed for either site
+- 03-04: Line 852 passphrase error uses static key encryptedPassphraseIncorrect (no params) — message is fixed regardless of input
+- 03-04: es.json and de.json use English placeholder values for all 6 new keys — Phase 5 will add proper translations
 
 ### Pending Todos
 
@@ -90,5 +93,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 03-03-PLAN.md — repositories.py fully migrated (46 translation key sites, 13 new locale keys). BKND-02 complete. Ready for next Phase 3 plan.
+Stopped at: Completed 03-04-PLAN.md — BKND-02 gap closure: 8 remaining raw English detail strings migrated, 6 new locale keys added to all 3 locale files. BKND-02 definitively complete.
 Resume file: None
