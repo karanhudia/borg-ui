@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-03T16:18:39.708Z"
+last_updated: "2026-03-03T18:05:45.248Z"
 progress:
   total_phases: 4
-  completed_phases: 4
-  total_plans: 13
-  completed_plans: 13
+  completed_phases: 3
+  total_plans: 15
+  completed_plans: 15
 ---
 
 # Project State
@@ -23,11 +23,11 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 4 of 5 (Backend Services and Remaining API Files)
-Plan: 4 of 4 in current phase (04-04 complete — services layer migrated to json.dumps key format; backend.errors.service domain with 13 keys; SVC-01/02/03 satisfied)
+Plan: 6 of 6 in current phase (04-06 complete — settings.py corruption removed, filesystem.py and scripts_library.py migrated to locale keys; backend.success.filesystem and backend.success.scripts domains added to all 3 locale files; BKND-06 gaps closed)
 Status: Phase 4 complete
-Last activity: 2026-03-03 — Plan 04-04 complete: backup_service, restore_service, process_utils migrated; ErrorDetailsDialog updated for line-by-line translateBackendKey rendering; 13 service locale keys added
+Last activity: 2026-03-03 — Plan 04-06 complete: settings.py response["message"] += lines removed, filesystem.py "Folder created successfully" replaced with locale key, scripts_library.py cleanup messages migrated to locale keys; 3 new locale keys added
 
-Progress: [████████████████] 92%
+Progress: [████████████████] 96%
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Progress: [████████████████] 92%
 | Phase 04-backend-services-and-remaining-api-files P03 | 10 | 2 tasks | 12 files |
 | Phase 04-backend-services-and-remaining-api-files P04 | 3 | 2 tasks | 7 files |
 | Phase 04-backend-services-and-remaining-api-files P04 | 3 | 2 tasks | 7 files |
+| Phase 04-backend-services-and-remaining-api-files P06 | 2 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -94,6 +95,9 @@ Recent decisions affecting current work:
 - [Phase 04-03]: activity.py and packages.py success message fields use bare key strings — params not passed at this phase, Phase 5 will wire params
 - [Phase 04-03]: Cross-domain key reuse: restore.repositoryNotFound reused in archives/browse/scripts_library; settings.adminAccessRequired reused in packages; ssh.sshKeyNotFound reused in filesystem
 - [Phase 04-04]: Service layer error_message writes use json.dumps key format; ErrorDetailsDialog renders line-by-line through translateBackendKey for mixed content (JSON keys, LOCK_ERROR:: sentinel, borg output)
+- [Phase 04-backend-services-and-remaining-api-files]: [Phase 04-06]: settings.py message key corruption removed — response[message] += lines were redundant since CacheManagementTab.tsx handles connection_info separately
+- [Phase 04-backend-services-and-remaining-api-files]: [Phase 04-06]: scripts_library.py cleanup response adds count field mirroring cleaned_up for i18next {{count}} interpolation
+- [Phase 04-backend-services-and-remaining-api-files]: [Phase 04-06]: es.json and de.json use English placeholder values for new filesystem and scripts success domains — Phase 5 adds real translations
 
 ### Pending Todos
 
@@ -108,5 +112,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 04-04-PLAN.md — services layer (backup_service, restore_service, process_utils) migrated to json.dumps key format; ErrorDetailsDialog updated for line-by-line translateBackendKey rendering; backend.errors.service domain with 13 keys; SVC-01/02/03 satisfied.
+Stopped at: Completed 04-06-PLAN.md — settings.py corruption removed (response["message"] += lines deleted), filesystem.py and scripts_library.py migrated to locale keys; backend.success.filesystem and backend.success.scripts domains added to all 3 locale files; BKND-06 gaps fully closed.
 Resume file: None
