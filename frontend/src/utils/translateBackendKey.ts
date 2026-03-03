@@ -23,12 +23,12 @@ export function translateBackendKey(
   fallbackKey = 'common.errors.unexpectedError',
 ): string {
   if (detail === null || detail === undefined) {
-    return i18n.t(fallbackKey)
+    return String(i18n.t(fallbackKey))
   }
 
   // Shape 1: { key, params } object — new backend structured format
   if (typeof detail === 'object' && typeof detail.key === 'string') {
-    return i18n.t(detail.key, detail.params ?? {})
+    return String(i18n.t(detail.key, detail.params ?? {}))
   }
 
   // Shape 2: JSON-encoded { key, params } string — stored error_message format
@@ -36,7 +36,7 @@ export function translateBackendKey(
     try {
       const parsed = JSON.parse(detail)
       if (parsed !== null && typeof parsed === 'object' && typeof parsed.key === 'string') {
-        return i18n.t(parsed.key, parsed.params ?? {})
+        return String(i18n.t(parsed.key, parsed.params ?? {}))
       }
     } catch {
       // Not valid JSON — fall through to string shapes
@@ -45,7 +45,7 @@ export function translateBackendKey(
 
   // Shape 3: dot-notation key string — new backend simple key format
   if (typeof detail === 'string' && /^[\w]+\.[\w.]+$/.test(detail)) {
-    return i18n.t(detail)
+    return String(i18n.t(detail))
   }
 
   // Shape 4: raw English string — legacy backend, return as-is
@@ -53,5 +53,5 @@ export function translateBackendKey(
     return detail
   }
 
-  return i18n.t(fallbackKey)
+  return String(i18n.t(fallbackKey))
 }

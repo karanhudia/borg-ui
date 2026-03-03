@@ -52,7 +52,10 @@
     "created": "Creado",
     "lastLogin": "Último acceso",
     "undoneWarning": "Esta acción no se puede deshacer.",
-    "version": "Versión"
+    "version": "Versión",
+    "errors": {
+      "unexpectedError": "An unexpected error occurred"
+    }
   },
   "login": {
     "title": "Borg Web UI",
