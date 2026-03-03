@@ -31,8 +31,8 @@
 - [x] **BKND-01**: All `HTTPException.detail` strings and `message` response fields in `app/api/auth.py` return translation keys in `{key}` or `{key, params}` format
 - [x] **BKND-02**: All `HTTPException.detail` strings and `message` response fields in `app/api/repositories.py` return translation keys
 - [x] **BKND-03**: All `HTTPException.detail` strings and `message` response fields in `app/api/backup.py` return translation keys
-- [ ] **BKND-04**: All `HTTPException.detail` strings and `message` response fields in `app/api/restore.py` return translation keys
-- [ ] **BKND-05**: All `HTTPException.detail` strings and `message` response fields in `app/api/schedule.py` return translation keys
+- [x] **BKND-04**: All `HTTPException.detail` strings and `message` response fields in `app/api/restore.py` return translation keys
+- [x] **BKND-05**: All `HTTPException.detail` strings and `message` response fields in `app/api/schedule.py` return translation keys
 - [ ] **BKND-06**: All `HTTPException.detail` strings and `message` response fields in all remaining API files (settings, users, scripts, ssh, activity, etc.) return translation keys
 
 ### Backend Service Layer Migration
@@ -90,8 +90,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BKND-01 | Phase 3 | Complete |
 | BKND-02 | Phase 3 | Complete |
 | BKND-03 | Phase 3 | Complete |
-| BKND-04 | Phase 4 | Pending |
-| BKND-05 | Phase 4 | Pending |
+| BKND-04 | Phase 4 | Complete |
+| BKND-05 | Phase 4 | Complete |
 | BKND-06 | Phase 4 | Pending |
 | SVC-01 | Phase 4 | Pending |
 | SVC-02 | Phase 4 | Pending |

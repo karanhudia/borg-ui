@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-03T14:31:49Z"
+last_updated: "2026-03-03T15:43:32.693Z"
 progress:
-  total_phases: 5
-  completed_phases: 2
-  total_plans: 11
+  total_phases: 4
+  completed_phases: 3
+  total_plans: 13
   completed_plans: 10
 ---
 
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** Every user-facing string — whether from the frontend or backend — must be translatable, so users can operate the UI entirely in their own language.
-**Current focus:** Phase 3 - Backend API Migration: Auth and High-Traffic Domains
+**Current focus:** Phase 4 - Backend Services and Remaining API Files
 
 ## Current Position
 
-Phase: 3 of 5 (Backend API Migration: Auth and High-Traffic Domains)
-Plan: 4 of N in current phase (03-04 complete — BKND-02 gap closure: 8 remaining raw strings migrated, 6 new locale keys)
-Status: Phase 3 in progress
-Last activity: 2026-03-03 — Plan 03-04 complete: 8 remaining raw English HTTPException.detail strings migrated; 6 new locale keys added to en/es/de; BKND-02 definitively complete
+Phase: 4 of 5 (Backend Services and Remaining API Files)
+Plan: 1 of 4 in current phase (04-01 complete — restore.py and schedule.py migrated; 11 new locale keys; BKND-04 and BKND-05 satisfied)
+Status: Phase 4 in progress
+Last activity: 2026-03-03 — Plan 04-01 complete: restore.py and schedule.py fully migrated to translation key dict format; 11 new locale keys added to en/es/de
 
-Progress: [█████████████░] 70%
+Progress: [██████████████░] 75%
 
 ## Performance Metrics
 
@@ -48,6 +48,7 @@ Progress: [█████████████░] 70%
 - Trend: stable
 
 *Updated after each plan completion*
+| Phase 04-backend-services-and-remaining-api-files P01 | 7 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,9 @@ Recent decisions affecting current work:
 - 03-04: Lines 761 and 858 both reuse existing notValidBorgRepository key (already has {{path}} param) — no new key needed for either site
 - 03-04: Line 852 passphrase error uses static key encryptedPassphraseIncorrect (no params) — message is fixed regardless of input
 - 03-04: es.json and de.json use English placeholder values for all 6 new keys — Phase 5 will add proper translations
+- [Phase 04-01]: Conditional toggle message uses a message variable pre-assigned to the key string — avoids f-string in message field
+- [Phase 04-01]: Multi-repo run-now message returns scheduledJobStartedMulti key without count param — Phase 5 will wire params
+- [Phase 04-01]: cancel_restore DB writes use json.dumps({key: ...}) for translatable error messages in error_message column
 
 ### Pending Todos
 
@@ -93,5 +97,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 03-04-PLAN.md — BKND-02 gap closure: 8 remaining raw English detail strings migrated, 6 new locale keys added to all 3 locale files. BKND-02 definitively complete.
+Stopped at: Completed 04-01-PLAN.md — restore.py and schedule.py migrated to translation key dict format; 11 new locale keys added to en/es/de; BKND-04 and BKND-05 definitively complete.
 Resume file: None
