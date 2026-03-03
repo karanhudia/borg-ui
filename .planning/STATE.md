@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-03T15:43:32.693Z"
+last_updated: "2026-03-03T15:57:11.892Z"
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 13
-  completed_plans: 10
+  completed_plans: 11
 ---
 
 # Project State
@@ -23,9 +23,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 4 of 5 (Backend Services and Remaining API Files)
-Plan: 1 of 4 in current phase (04-01 complete — restore.py and schedule.py migrated; 11 new locale keys; BKND-04 and BKND-05 satisfied)
+Plan: 2 of 4 in current phase (04-02 complete — ssh_keys.py and settings.py migrated; 29 new locale keys; BKND-06 SSH+settings portion satisfied)
 Status: Phase 4 in progress
-Last activity: 2026-03-03 — Plan 04-01 complete: restore.py and schedule.py fully migrated to translation key dict format; 11 new locale keys added to en/es/de
+Last activity: 2026-03-03 — Plan 04-02 complete: ssh_keys.py and settings.py fully migrated to translation key dict format; 29 new locale keys added to en/es/de; new backend.errors.settings and backend.success.settings domains established
 
 Progress: [██████████████░] 75%
 
@@ -49,6 +49,7 @@ Progress: [██████████████░] 75%
 
 *Updated after each plan completion*
 | Phase 04-backend-services-and-remaining-api-files P01 | 7 | 2 tasks | 5 files |
+| Phase 04-backend-services-and-remaining-api-files P02 | 9 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,8 @@ Recent decisions affecting current work:
 - [Phase 04-01]: Conditional toggle message uses a message variable pre-assigned to the key string — avoids f-string in message field
 - [Phase 04-01]: Multi-repo run-now message returns scheduledJobStartedMulti key without count param — Phase 5 will wire params
 - [Phase 04-01]: cancel_restore DB writes use json.dumps({key: ...}) for translatable error messages in error_message column
+- [Phase 04-02]: Cross-domain key reuse: settings.py change_password uses auth.currentPasswordIncorrect; cache clear uses repo.repositoryNotFound — avoids duplicating semantically identical keys
+- [Phase 04-02]: Parameterized message fields in settings.py use bare key strings — params not passed to frontend at this phase, Phase 5 will wire params
 
 ### Pending Todos
 
@@ -97,5 +100,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 04-01-PLAN.md — restore.py and schedule.py migrated to translation key dict format; 11 new locale keys added to en/es/de; BKND-04 and BKND-05 definitively complete.
+Stopped at: Completed 04-02-PLAN.md — ssh_keys.py and settings.py fully migrated to translation key dict format; 29 new locale keys added to en/es/de; new backend.errors.settings and backend.success.settings domains established; BKND-06 (SSH + settings portion) satisfied.
 Resume file: None
