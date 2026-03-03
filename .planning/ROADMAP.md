@@ -29,7 +29,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. A `translateBackendKey` utility exists in `frontend/src/utils/` and correctly handles all four input shapes: plain English string, plain key string, `{key, params}` object, and JSON-encoded object
   3. All 69 `error.response?.data?.detail` call sites in the frontend display translated text through the utility instead of raw backend strings or `[object Object]`
   4. All frontend `data.message` success field call sites display translated text via i18next rather than passing the raw string to toast
-**Plans**: TBD
+**Plans**: 4 plans
 
 ### Phase 2: Locale File Structure and Key Skeleton
 **Goal**: A `backend` namespace exists in all three locale files with the correct sub-structure, and the development environment warns immediately when a translation key is missing
@@ -39,7 +39,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. `en.json`, `es.json`, and `de.json` each contain a top-level `backend` key with sub-sections for `errors`, `success`, and `messages` (with domain groupings: auth, repo, backup, restore, schedule, borg)
   2. The browser console shows a warning when a translation key is missing during development, rather than silently displaying the raw key string
   3. All three locale files have matching key structure within the `backend` namespace (no file has keys absent in another)
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 02-01-PLAN.md — Populate backend namespace in locale files and enable missingKeyHandler
 
 ### Phase 3: Backend API Migration (Auth + High-Traffic Domains)
 **Goal**: The three highest-traffic backend domains — authentication, repositories, and backup — return translation keys instead of raw English strings, with all new keys present in all three locale files
@@ -83,7 +86,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Frontend Utility and Hardcoded String Cleanup | 4/4 | Complete | 2026-03-03 |
-| 2. Locale File Structure and Key Skeleton | 0/? | Not started | - |
+| 2. Locale File Structure and Key Skeleton | 0/1 | Not started | - |
 | 3. Backend API Migration (Auth + High-Traffic Domains) | 0/? | Not started | - |
 | 4. Backend Services and Remaining API Files | 0/? | Not started | - |
 | 5. Locale File Completion and CI Validation | 0/? | Not started | - |
