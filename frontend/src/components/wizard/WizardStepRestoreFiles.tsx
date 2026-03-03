@@ -73,7 +73,7 @@ export default function WizardStepRestoreFiles({
     }
 
     fetchContents()
-  }, [repositoryId, archiveName, currentPath])
+  }, [repositoryId, archiveName, currentPath, t])
 
   // Parse breadcrumb path
   const pathParts = currentPath ? currentPath.split('/').filter(Boolean) : []
