@@ -2531,6 +2531,9 @@
       "backup": {
         "backupCancelled": "Backup cancelled successfully"
       },
+      "filesystem": {
+        "folderCreated": "Folder created successfully"
+      },
       "restore": {
         "restoreJobStarted": "Restore job started",
         "restoreCancelled": "Restore cancelled successfully"
@@ -2545,16 +2548,27 @@
         "scheduledJobStarted": "Scheduled job started successfully",
         "scheduledJobStartedMulti": "Multi-repository schedule started ({{count}} repositories)"
       },
+      "scripts": {
+        "cleanupCompleted": "Cleaned up {{count}} orphaned script association(s)",
+        "noOrphanedAssociations": "No orphaned script associations found"
+      },
       "ssh": {
         "connectionCreated": "SSH connection created successfully",
         "connectionDeleted": "SSH connection deleted successfully",
+        "connectionTestFailed": "SSH connection test failed",
         "connectionTestSuccess": "SSH connection test successful",
         "connectionUpdated": "SSH connection updated successfully",
         "sshKeyCreated": "SSH key created successfully",
         "sshKeyDeleted": "SSH key deleted successfully",
+        "sshKeyDeployFailed": "SSH key deployment failed",
         "sshKeyDeployed": "SSH key deployed successfully",
+        "sshKeyGeneratedAndDeployed": "SSH key generated and deployed successfully",
+        "sshKeyGeneratedDeploymentSkipped": "SSH key generated successfully (deployment skipped)",
         "sshKeyRemoved": "SSH key removed successfully",
-        "storageRefreshed": "Storage information refreshed successfully"
+        "sshKeyUpdated": "SSH key updated successfully",
+        "storageRefreshed": "Storage information refreshed successfully",
+        "systemKeyGenerated": "System SSH key generated successfully",
+        "systemKeyImported": "System SSH key imported successfully"
       },
       "packages": {
         "installationInProgress": "Package '{{name}}' installation already in progress",

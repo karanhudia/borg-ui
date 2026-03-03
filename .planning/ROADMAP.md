@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Frontend Utility and Hardcoded String Cleanup** - Build translateBackendKey utility and remove all hardcoded English strings from frontend page components
 - [x] **Phase 2: Locale File Structure and Key Skeleton** - Establish backend.* namespace in all three locale files and enable dev-mode missing-key detection (completed 2026-03-03)
 - [x] **Phase 3: Backend API Migration (Auth + High-Traffic Domains)** - Convert all HTTPException.detail and message fields in auth.py, repositories.py, and backup.py to translation keys (completed 2026-03-03)
-- [x] **Phase 4: Backend Services and Remaining API Files** - Migrate restore.py, schedule.py, and all remaining API files plus the services layer that writes stored error_message fields (completed 2026-03-03)
+- [ ] **Phase 4: Backend Services and Remaining API Files** - Migrate restore.py, schedule.py, and all remaining API files plus the services layer that writes stored error_message fields (gap closure in progress)
 - [ ] **Phase 5: Locale File Completion and CI Validation** - Complete Spanish and German translations for all new backend.* keys and add automated key-sync enforcement
 
 ## Phase Details
@@ -70,13 +70,15 @@ Plans:
   2. Stored `error_message` values written by backup and restore services are key strings (or JSON-encoded `{key, params}` for parameterized messages) and display translated text in ErrorDetailsDialog when rendered
   3. The `LOCK_ERROR::` sentinel in `error_message` continues to be parsed correctly by the regex in `BackupJobsTable.tsx` — the lock path extraction still works
   4. No backend API file returns a raw hardcoded English string in `HTTPException.detail` or `message` fields
-**Plans**: 4 plans
+**Plans**: 6 plans
 
 Plans:
 - [ ] 04-01-PLAN.md — Migrate restore.py and schedule.py to translation keys (BKND-04, BKND-05)
 - [ ] 04-02-PLAN.md — Migrate ssh_keys.py and settings.py; establish settings locale domain (BKND-06 partial)
 - [ ] 04-03-PLAN.md — Migrate remaining API files (archives, mounts, activity, filesystem, browse, packages, notifications, scripts) (BKND-06 complete)
 - [ ] 04-04-PLAN.md — Migrate services layer (backup_service, restore_service, process_utils) and update ErrorDetailsDialog (SVC-01, SVC-02, SVC-03)
+- [ ] 04-05-PLAN.md — Gap closure: migrate 13 unmigrated ssh_keys.py message response fields; add 7 new backend.success.ssh keys (BKND-06)
+- [ ] 04-06-PLAN.md — Gap closure: fix settings.py key corruption; migrate filesystem.py and scripts_library.py success messages; add filesystem and scripts success locale domains (BKND-06)
 
 ### Phase 5: Locale File Completion and CI Validation
 **Goal**: All new `backend.*` keys have complete Spanish and German translations (not just English placeholders), and a CI script enforces key-set parity across all three locale files going forward
@@ -99,5 +101,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Frontend Utility and Hardcoded String Cleanup | 4/4 | Complete | 2026-03-03 |
 | 2. Locale File Structure and Key Skeleton | 0/1 | Complete    | 2026-03-03 |
 | 3. Backend API Migration (Auth + High-Traffic Domains) | 4/4 | Complete   | 2026-03-03 |
-| 4. Backend Services and Remaining API Files | 4/4 | Complete   | 2026-03-03 |
+| 4. Backend Services and Remaining API Files | 4/6 | Gap closure planned | 2026-03-03 |
 | 5. Locale File Completion and CI Validation | 0/? | Not started | - |
