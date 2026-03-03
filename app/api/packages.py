@@ -51,7 +51,7 @@ async def list_packages(
 ):
     """List all installed packages"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
 
     packages = db.query(InstalledPackage).order_by(InstalledPackage.name).all()
     return packages
@@ -64,12 +64,12 @@ async def create_package(
 ):
     """Add a new package to install"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
 
     # Check if package already exists
     existing = db.query(InstalledPackage).filter(InstalledPackage.name == package.name).first()
     if existing:
-        raise HTTPException(status_code=400, detail=f"Package '{package.name}' already exists")
+        raise HTTPException(status_code=400, detail={"key": "backend.errors.packages.packageAlreadyExists", "params": {"name": package.name}})
 
     # Create package record
     new_package = InstalledPackage(
@@ -93,11 +93,11 @@ async def install_package(
 ):
     """Start package installation job (non-blocking)"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
 
     package = db.query(InstalledPackage).filter(InstalledPackage.id == package_id).first()
     if not package:
-        raise HTTPException(status_code=404, detail="Package not found")
+        raise HTTPException(status_code=404, detail={"key": "backend.errors.packages.packageNotFound"})
 
     # Check if there's already a running job for this package
     existing_job = db.query(PackageInstallJob).filter(
@@ -108,7 +108,7 @@ async def install_package(
     if existing_job:
         return {
             "job_id": existing_job.id,
-            "message": f"Package '{package.name}' installation already in progress",
+            "message": "backend.success.packages.installationInProgress",
             "status": existing_job.status
         }
 
@@ -122,7 +122,7 @@ async def install_package(
 
         return {
             "job_id": job.id,
-            "message": f"Package '{package.name}' installation started",
+            "message": "backend.success.packages.installationStarted",
             "status": job.status
         }
 
@@ -141,11 +141,11 @@ async def update_package(
 ):
     """Update package details"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
 
     existing_package = db.query(InstalledPackage).filter(InstalledPackage.id == package_id).first()
     if not existing_package:
-        raise HTTPException(status_code=404, detail="Package not found")
+        raise HTTPException(status_code=404, detail={"key": "backend.errors.packages.packageNotFound"})
 
     # Check if name conflicts with another package
     if package.name != existing_package.name:
@@ -154,7 +154,7 @@ async def update_package(
             InstalledPackage.id != package_id
         ).first()
         if name_conflict:
-            raise HTTPException(status_code=400, detail=f"Package name '{package.name}' already exists")
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.packages.packageAlreadyExists", "params": {"name": package.name}})
 
     # Update package details
     existing_package.name = package.name
@@ -176,18 +176,18 @@ async def delete_package(
 ):
     """Remove a package from the list (does not uninstall from system)"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
 
     package = db.query(InstalledPackage).filter(InstalledPackage.id == package_id).first()
     if not package:
-        raise HTTPException(status_code=404, detail="Package not found")
+        raise HTTPException(status_code=404, detail={"key": "backend.errors.packages.packageNotFound"})
 
     package_name = package.name
     db.delete(package)
     db.commit()
 
     logger.info("Package removed from list", package=package_name, user=current_user.username)
-    return {"message": f"Package '{package_name}' removed from list"}
+    return {"message": "backend.success.packages.packageRemoved"}
 
 @router.post("/{package_id}/reinstall")
 async def reinstall_package(
@@ -197,11 +197,11 @@ async def reinstall_package(
 ):
     """Reinstall a package"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
 
     package = db.query(InstalledPackage).filter(InstalledPackage.id == package_id).first()
     if not package:
-        raise HTTPException(status_code=404, detail="Package not found")
+        raise HTTPException(status_code=404, detail={"key": "backend.errors.packages.packageNotFound"})
 
     # Reset status to pending before reinstalling
     package.status = "pending"
@@ -220,11 +220,11 @@ async def get_job_status(
 ):
     """Get the status of a package installation job"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
 
     job = db.query(PackageInstallJob).filter(PackageInstallJob.id == job_id).first()
     if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
+        raise HTTPException(status_code=404, detail={"key": "backend.errors.packages.jobNotFound"})
 
     return {
         "id": job.id,
@@ -245,7 +245,7 @@ async def list_jobs(
 ):
     """List all package installation jobs"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
 
     jobs = db.query(PackageInstallJob).order_by(PackageInstallJob.created_at.desc()).limit(50).all()
 

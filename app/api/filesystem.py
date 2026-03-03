@@ -148,7 +148,7 @@ async def browse_filesystem(
             if not all([ssh_key_id, host, username]):
                 raise HTTPException(
                     status_code=400,
-                    detail="SSH key ID, host, and username are required for SSH browsing"
+                    detail={"key": "backend.errors.filesystem.sshParamsRequired"}
                 )
 
             # Check if SSH connection has a default_path and use it when path is "/" or "/local"
@@ -170,7 +170,7 @@ async def browse_filesystem(
 
             return await browse_ssh_filesystem(path, ssh_key_id, host, username, port, db)
         else:
-            raise HTTPException(status_code=400, detail="Invalid connection type")
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.filesystem.invalidConnectionType"})
 
     except HTTPException:
         raise
@@ -186,11 +186,11 @@ async def browse_local_filesystem(path: str) -> BrowseResponse:
 
     # Check if path exists
     if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail=f"Path not found: {path}")
+        raise HTTPException(status_code=404, detail={"key": "backend.errors.filesystem.pathNotFound", "params": {"path": path}})
 
     # Check if path is a directory
     if not os.path.isdir(path):
-        raise HTTPException(status_code=400, detail=f"Path is not a directory: {path}")
+        raise HTTPException(status_code=400, detail={"key": "backend.errors.filesystem.pathNotDirectory", "params": {"path": path}})
 
     items = []
 
@@ -249,7 +249,7 @@ async def browse_local_filesystem(path: str) -> BrowseResponse:
         )
 
     except PermissionError:
-        raise HTTPException(status_code=403, detail=f"Permission denied: {path}")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.filesystem.permissionDenied", "params": {"path": path}})
 
 
 async def browse_ssh_filesystem(
@@ -269,7 +269,7 @@ async def browse_ssh_filesystem(
     # Get SSH key
     ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
     if not ssh_key:
-        raise HTTPException(status_code=404, detail="SSH key not found")
+        raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.sshKeyNotFound"})
 
     # Decrypt private key
     encryption_key = settings.secret_key.encode()[:32]
@@ -436,7 +436,7 @@ async def browse_ssh_filesystem(
         )
 
     except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=504, detail="SSH connection timeout")
+        raise HTTPException(status_code=504, detail={"key": "backend.errors.filesystem.sshConnectionTimeout"})
     except HTTPException:
         raise
     except Exception as e:
@@ -490,11 +490,11 @@ async def validate_path(
             from app.config import settings
 
             if not all([ssh_key_id, host, username]):
-                raise HTTPException(status_code=400, detail="SSH parameters required")
+                raise HTTPException(status_code=400, detail={"key": "backend.errors.filesystem.sshParamsRequired"})
 
             ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
             if not ssh_key:
-                raise HTTPException(status_code=404, detail="SSH key not found")
+                raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.sshKeyNotFound"})
 
             # Decrypt private key
             encryption_key = settings.secret_key.encode()[:32]
@@ -555,7 +555,7 @@ async def validate_path(
                     except Exception as e:
                         logger.warning("Failed to delete temporary SSH key file", error=str(e))
         else:
-            raise HTTPException(status_code=400, detail="Invalid connection type")
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.filesystem.invalidConnectionType"})
 
     except HTTPException:
         raise
@@ -592,7 +592,7 @@ async def create_folder(
         # Sanitize folder name to prevent path traversal
         folder_name = folder_name.strip().replace('/', '').replace('..', '')
         if not folder_name:
-            raise HTTPException(status_code=400, detail="Invalid folder name")
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.filesystem.invalidFolderName"})
 
         full_path = os.path.join(path, folder_name)
 
@@ -603,21 +603,21 @@ async def create_folder(
                 logger.info("Created local folder", path=full_path, user=current_user.username)
                 return {"success": True, "path": full_path, "message": "Folder created successfully"}
             except FileExistsError:
-                raise HTTPException(status_code=400, detail=f"Folder '{folder_name}' already exists")
+                raise HTTPException(status_code=400, detail={"key": "backend.errors.filesystem.folderAlreadyExists", "params": {"name": folder_name}})
             except PermissionError:
-                raise HTTPException(status_code=403, detail="Permission denied to create folder")
+                raise HTTPException(status_code=403, detail={"key": "backend.errors.filesystem.permissionDeniedCreateFolder"})
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Failed to create folder: {str(e)}")
 
         elif connection_type == "ssh":
             # Create folder via SFTP (works with restricted shells like Hetzner)
             if not all([ssh_key_id, host, username]):
-                raise HTTPException(status_code=400, detail="SSH connection details required")
+                raise HTTPException(status_code=400, detail={"key": "backend.errors.filesystem.sshConnectionDetailsRequired"})
 
             # Get SSH key
             ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
             if not ssh_key:
-                raise HTTPException(status_code=404, detail="SSH key not found")
+                raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.sshKeyNotFound"})
 
             # Decrypt private key
             encryption_key = settings.secret_key.encode()[:32]
@@ -666,7 +666,7 @@ async def create_folder(
                     logger.info("Created remote folder", host=host, path=full_path)
                     return {"success": True, "path": full_path, "message": "Folder created successfully"}
                 elif "File exists" in result.stderr:
-                    raise HTTPException(status_code=400, detail=f"Folder '{folder_name}' already exists")
+                    raise HTTPException(status_code=400, detail={"key": "backend.errors.filesystem.folderAlreadyExists", "params": {"name": folder_name}})
                 else:
                     error_msg = result.stderr.strip() if result.stderr else "Unknown error"
                     logger.error("Failed to create remote folder",
@@ -688,7 +688,7 @@ async def create_folder(
                     except Exception:
                         pass
         else:
-            raise HTTPException(status_code=400, detail="Invalid connection type")
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.filesystem.invalidConnectionType"})
 
     except HTTPException:
         raise

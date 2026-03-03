@@ -32,7 +32,7 @@ async def list_archives(
         if not repo:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Repository not found"
+                detail={"key": "backend.errors.restore.repositoryNotFound"}
             )
 
         result = await borg.list_archives(
@@ -54,7 +54,7 @@ async def list_archives(
         logger.error("Failed to list archives", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to list archives"
+            detail={"key": "backend.errors.archives.failedListArchives"}
         )
 
 @router.get("/{archive_id}/info")
@@ -73,7 +73,7 @@ async def get_archive_info(
         if not repo:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Repository not found"
+                detail={"key": "backend.errors.restore.repositoryNotFound"}
             )
 
         result = await borg.info_archive(
@@ -176,7 +176,7 @@ async def get_archive_info(
         logger.error("Failed to get archive info", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get archive info"
+            detail={"key": "backend.errors.archives.failedGetArchiveInfo"}
         )
 
 @router.get("/{archive_id}/contents")
@@ -194,7 +194,7 @@ async def get_archive_contents(
         if not repo:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Repository not found"
+                detail={"key": "backend.errors.restore.repositoryNotFound"}
             )
 
         result = await borg.list_archive_contents(
@@ -218,7 +218,7 @@ async def get_archive_contents(
         logger.error("Failed to get archive contents", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get archive contents"
+            detail={"key": "backend.errors.archives.failedGetArchiveContents"}
         )
 
 @router.delete("/{archive_id}")
@@ -230,7 +230,7 @@ async def delete_archive(
 ):
     """Delete an archive in the background (non-blocking)"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.archives.adminAccessRequired"})
 
     try:
         # Validate repository exists first
@@ -238,7 +238,7 @@ async def delete_archive(
         if not repo:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Repository not found"
+                detail={"key": "backend.errors.restore.repositoryNotFound"}
             )
 
         # Check if there's already a running delete job for this archive
@@ -251,7 +251,7 @@ async def delete_archive(
         if running_job:
             raise HTTPException(
                 status_code=409,
-                detail=f"Delete operation is already running for this archive (Job ID: {running_job.id})"
+                detail={"key": "backend.errors.archives.deleteAlreadyRunning", "params": {"jobId": running_job.id}}
             )
 
         # Create delete job record
@@ -280,7 +280,7 @@ async def delete_archive(
         return {
             "job_id": delete_job.id,
             "status": "pending",
-            "message": "Archive deletion started in background"
+            "message": "backend.success.archives.deletionStarted"
         }
     except HTTPException:
         raise
@@ -401,7 +401,7 @@ async def get_delete_job_status(
     try:
         job = db.query(DeleteArchiveJob).filter(DeleteArchiveJob.id == job_id).first()
         if not job:
-            raise HTTPException(status_code=404, detail="Delete job not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.archives.deleteJobNotFound"})
 
         # Read log file if it exists
         logs = None
@@ -439,11 +439,11 @@ async def cancel_delete_job(
 ):
     """Cancel a running delete job"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.archives.adminAccessRequired"})
 
     try:
         await delete_archive_service.cancel_delete(job_id, db)
-        return {"message": "Delete job cancelled successfully"}
+        return {"message": "backend.success.archives.deletionCancelled"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

@@ -28,10 +28,10 @@ async def test_script(
 ):
     """Test run a script using the shared script executor"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.scripts.adminAccessRequired"})
 
     if not request.script or request.script.strip() == "":
-        raise HTTPException(status_code=400, detail="Script cannot be empty")
+        raise HTTPException(status_code=400, detail={"key": "backend.errors.scripts.scriptCannotBeEmpty"})
 
     # Use shared script executor with sandboxed environment
     result = await execute_script(
@@ -54,7 +54,7 @@ async def test_script(
     if result["exit_code"] == -1 and "timed out" in result["stderr"]:
         raise HTTPException(
             status_code=400,
-            detail="Script execution timed out (30 second limit)"
+            detail={"key": "backend.errors.scripts.scriptExecutionTimedOut"}
         )
 
     return ScriptTestResponse(

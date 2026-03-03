@@ -32,7 +32,7 @@ async def browse_archive_contents(
     try:
         repository = db.query(Repository).filter(Repository.id == repository_id).first()
         if not repository:
-            raise HTTPException(status_code=404, detail="Repository not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"})
 
         # Get memory limit settings from database
         settings = db.query(SystemSettings).first()
@@ -68,10 +68,7 @@ async def browse_archive_contents(
                            max_allowed=max_items)
                 raise HTTPException(
                     status_code=413,
-                    detail=f"Archive is too large to browse (>{lines_read:,} files). "
-                           f"Maximum supported: {max_items:,} files. "
-                           f"You can increase this limit in Settings > System, "
-                           f"or use command-line tools for very large archives."
+                    detail={"key": "backend.errors.browse.archiveTooLarge", "params": {"linesRead": lines_read, "maxItems": max_items}}
                 )
 
             # Parse all items
@@ -97,10 +94,7 @@ async def browse_archive_contents(
                                max_allowed_mb=max_memory_mb)
                     raise HTTPException(
                         status_code=413,
-                        detail=f"Archive estimated to require {estimated_memory_mb:.0f}MB memory. "
-                               f"Maximum allowed: {max_memory_mb}MB. "
-                               f"You can increase this limit in Settings > System, "
-                               f"or use command-line tools for very large archives."
+                        detail={"key": "backend.errors.browse.archiveMemoryTooHigh", "params": {"estimatedMb": round(estimated_memory_mb), "maxMb": max_memory_mb}}
                     )
 
                 # Process items

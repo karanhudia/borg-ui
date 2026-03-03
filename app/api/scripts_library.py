@@ -176,7 +176,7 @@ async def get_script(
     """Get script details including content and usage"""
     script = db.query(Script).filter(Script.id == script_id).first()
     if not script:
-        raise HTTPException(status_code=404, detail="Script not found")
+        raise HTTPException(status_code=404, detail={"key": "backend.errors.scripts.scriptNotFound"})
 
     # Read script content from file
     try:
@@ -362,11 +362,11 @@ async def update_script(
     """Update an existing script"""
     script = db.query(Script).filter(Script.id == script_id).first()
     if not script:
-        raise HTTPException(status_code=404, detail="Script not found")
+        raise HTTPException(status_code=404, detail={"key": "backend.errors.scripts.scriptNotFound"})
 
     # Don't allow editing templates
     if script.is_template:
-        raise HTTPException(status_code=400, detail="Cannot edit template scripts. Create a copy instead.")
+        raise HTTPException(status_code=400, detail={"key": "backend.errors.scripts.cannotEditTemplateScript"})
 
     # Update name if provided
     if script_data.name is not None:
@@ -463,11 +463,11 @@ async def delete_script(
     """Delete a script"""
     script = db.query(Script).filter(Script.id == script_id).first()
     if not script:
-        raise HTTPException(status_code=404, detail="Script not found")
+        raise HTTPException(status_code=404, detail={"key": "backend.errors.scripts.scriptNotFound"})
 
     # Don't allow deleting templates
     if script.is_template:
-        raise HTTPException(status_code=400, detail="Cannot delete template scripts")
+        raise HTTPException(status_code=400, detail={"key": "backend.errors.scripts.cannotDeleteTemplateScript"})
 
     # Check if script is in use (only count associations with existing repositories)
     repo_scripts = db.query(RepositoryScript).filter(
@@ -509,7 +509,7 @@ async def delete_script(
         places_text = "place" if len(valid_repo_scripts) == 1 else "places"
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot delete script: it is used in {len(valid_repo_scripts)} {places_text}: {', '.join(repo_details)}"
+            detail={"key": "backend.errors.scripts.scriptInUse", "params": {"count": len(valid_repo_scripts), "places": places_text, "repos": ', '.join(repo_details)}}
         )
 
     # Delete script file
@@ -538,7 +538,7 @@ async def test_script(
     """Test execute a script (doesn't save execution to history)"""
     script = db.query(Script).filter(Script.id == script_id).first()
     if not script:
-        raise HTTPException(status_code=404, detail="Script not found")
+        raise HTTPException(status_code=404, detail={"key": "backend.errors.scripts.scriptNotFound"})
 
     # Read script content
     try:
@@ -623,7 +623,7 @@ async def get_repository_scripts(
     """Get all scripts assigned to a repository"""
     repository = db.query(Repository).filter(Repository.id == repository_id).first()
     if not repository:
-        raise HTTPException(status_code=404, detail="Repository not found")
+        raise HTTPException(status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"})
 
     # Get pre-backup scripts
     pre_scripts = db.query(RepositoryScript).filter(
@@ -678,16 +678,16 @@ async def assign_script_to_repository(
     # Validate repository exists
     repository = db.query(Repository).filter(Repository.id == repository_id).first()
     if not repository:
-        raise HTTPException(status_code=404, detail="Repository not found")
+        raise HTTPException(status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"})
 
     # Validate script exists
     script = db.query(Script).filter(Script.id == assignment.script_id).first()
     if not script:
-        raise HTTPException(status_code=404, detail="Script not found")
+        raise HTTPException(status_code=404, detail={"key": "backend.errors.scripts.scriptNotFound"})
 
     # Validate hook_type
     if assignment.hook_type not in ["pre-backup", "post-backup"]:
-        raise HTTPException(status_code=400, detail="hook_type must be 'pre-backup' or 'post-backup'")
+        raise HTTPException(status_code=400, detail={"key": "backend.errors.scripts.hookTypeMustBe"})
 
     # Check if already assigned
     existing = db.query(RepositoryScript).filter(
@@ -699,7 +699,7 @@ async def assign_script_to_repository(
     if existing:
         raise HTTPException(
             status_code=400,
-            detail=f"Script '{script.name}' is already assigned to this repository as {assignment.hook_type}"
+            detail={"key": "backend.errors.scripts.scriptAlreadyAssigned", "params": {"name": script.name, "hookType": assignment.hook_type}}
         )
 
     # Process parameter values - validate and encrypt password-type parameters
@@ -792,7 +792,7 @@ async def update_repository_script_assignment(
     ).options(joinedload(RepositoryScript.script)).first()
 
     if not repo_script:
-        raise HTTPException(status_code=404, detail="Script assignment not found")
+        raise HTTPException(status_code=404, detail={"key": "backend.errors.scripts.scriptAssignmentNotFound"})
 
     if update_data.execution_order is not None:
         repo_script.execution_order = update_data.execution_order
@@ -872,7 +872,7 @@ async def remove_script_from_repository(
     ).first()
 
     if not repo_script:
-        raise HTTPException(status_code=404, detail="Script assignment not found")
+        raise HTTPException(status_code=404, detail={"key": "backend.errors.scripts.scriptAssignmentNotFound"})
 
     script_id = repo_script.script_id
 
@@ -905,7 +905,7 @@ async def cleanup_orphaned_script_associations(
     This removes RepositoryScript entries that reference deleted repositories.
     Useful for fixing database inconsistencies."""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.scripts.adminAccessRequired"})
 
     # Find all script associations
     all_repo_scripts = db.query(RepositoryScript).options(
