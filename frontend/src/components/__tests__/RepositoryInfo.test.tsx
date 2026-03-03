@@ -66,7 +66,7 @@ describe('RepositoryInfo', () => {
 
     it('displays formatted deduplicated size', () => {
       render(<RepositoryInfo repoInfo={mockRepoInfo} />)
-      expect(screen.getByText('Deduplicated')).toBeInTheDocument()
+      expect(screen.getByText('Unique Data')).toBeInTheDocument()
       expect(screen.getByText('25.00 MB')).toBeInTheDocument()
     })
 

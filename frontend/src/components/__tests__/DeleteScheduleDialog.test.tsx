@@ -46,7 +46,7 @@ describe('DeleteScheduleDialog', () => {
       />
     )
 
-    expect(screen.getByText('Delete Scheduled Job')).toBeInTheDocument()
+    expect(screen.getByText('Delete Schedule?')).toBeInTheDocument()
     expect(screen.getByText(/Are you sure you want to delete/i)).toBeInTheDocument()
     expect(screen.getByText(/"Test Schedule"/i)).toBeInTheDocument()
   })
@@ -65,7 +65,7 @@ describe('DeleteScheduleDialog', () => {
       />
     )
 
-    expect(screen.queryByText('Delete Scheduled Job')).not.toBeInTheDocument()
+    expect(screen.queryByText('Delete Schedule?')).not.toBeInTheDocument()
   })
 
   it('displays job name in dialog', () => {
@@ -120,7 +120,7 @@ describe('DeleteScheduleDialog', () => {
       />
     )
 
-    const deleteButton = screen.getByRole('button', { name: /delete job/i })
+    const deleteButton = screen.getByRole('button', { name: /^delete$/i })
     fireEvent.click(deleteButton)
 
     expect(onConfirm).toHaveBeenCalledTimes(1)
@@ -193,7 +193,7 @@ describe('DeleteScheduleDialog', () => {
       />
     )
 
-    expect(screen.getByText('Delete Scheduled Job')).toBeInTheDocument()
+    expect(screen.getByText('Delete Schedule?')).toBeInTheDocument()
   })
 
   it('renders dialog with title and buttons', () => {
@@ -211,8 +211,8 @@ describe('DeleteScheduleDialog', () => {
     )
 
     // Check that key dialog elements are rendered
-    expect(screen.getByText('Delete Scheduled Job')).toBeInTheDocument()
+    expect(screen.getByText('Delete Schedule?')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /delete job/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^delete$/i })).toBeInTheDocument()
   })
 })

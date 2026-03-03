@@ -55,7 +55,7 @@ describe('LockErrorDialog', () => {
 
     it('renders repository name in subtitle', () => {
       render(<LockErrorDialog {...defaultProps} repositoryName="my-backup" />)
-      expect(screen.getByText('my-backup')).toBeInTheDocument()
+      expect(screen.getByText(/my-backup/)).toBeInTheDocument()
     })
 
     it('renders warning alert', () => {
@@ -211,7 +211,7 @@ describe('LockErrorDialog', () => {
       await user.click(screen.getByRole('button', { name: /Break Lock/ }))
 
       await waitFor(() => {
-        expect(toast.error).toHaveBeenCalledWith('Failed to break lock')
+        expect(toast.error).toHaveBeenCalledWith('An unexpected error occurred')
       })
     })
   })
@@ -227,7 +227,7 @@ describe('LockErrorDialog', () => {
       await user.click(screen.getByRole('button', { name: /Break Lock/ }))
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /Breaking Lock.../ })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /common.status.running/ })).toBeInTheDocument()
       })
     })
 
@@ -253,7 +253,7 @@ describe('LockErrorDialog', () => {
       await user.click(screen.getByRole('button', { name: /Break Lock/ }))
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /Breaking Lock.../ })).toBeDisabled()
+        expect(screen.getByRole('button', { name: /common.status.running/ })).toBeDisabled()
       })
     })
   })

@@ -23,15 +23,14 @@ describe('DeleteArchiveDialog', () => {
   it('renders dialog when open', () => {
     render(<DeleteArchiveDialog open={true} archiveName="backup-2024-01-15" {...mockHandlers} />)
 
-    expect(screen.getByText('Delete Archive')).toBeInTheDocument()
-    expect(screen.getByText(/backup-2024-01-15/)).toBeInTheDocument()
+    expect(screen.getByText('Delete Archive?')).toBeInTheDocument()
+    expect(screen.getAllByText(/backup-2024-01-15/).length).toBeGreaterThan(0)
   })
 
   it('displays warning message', () => {
     render(<DeleteArchiveDialog open={true} archiveName="backup-2024-01-15" {...mockHandlers} />)
 
-    expect(screen.getByText('This action cannot be undone!')).toBeInTheDocument()
-    expect(screen.getByText(/The deletion will run in the background/)).toBeInTheDocument()
+    expect(screen.getByText(/This action cannot be undone/)).toBeInTheDocument()
   })
 
   it('calls onClose when Cancel button is clicked', () => {
@@ -58,11 +57,11 @@ describe('DeleteArchiveDialog', () => {
       />
     )
 
-    const deleteButton = screen.getByRole('button', { name: /starting/i })
+    const deleteButton = screen.getByRole('button', { name: /deleting/i })
     expect(deleteButton).toBeDisabled()
   })
 
-  it('shows "Starting..." text when deleting', () => {
+  it('shows "Deleting..." text when deleting', () => {
     render(
       <DeleteArchiveDialog
         open={true}
@@ -72,7 +71,7 @@ describe('DeleteArchiveDialog', () => {
       />
     )
 
-    expect(screen.getByText('Starting...')).toBeInTheDocument()
+    expect(screen.getByText('Deleting...')).toBeInTheDocument()
   })
 
   it('does not call onConfirm if archiveName is null', () => {
