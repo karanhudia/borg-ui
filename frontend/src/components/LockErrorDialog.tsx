@@ -51,7 +51,10 @@ export default function LockErrorDialog({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       error: any
     ) {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('dialogs.lockError.failedToBreakLock'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('dialogs.lockError.failedToBreakLock')
+      )
     } finally {
       setBreaking(false)
     }

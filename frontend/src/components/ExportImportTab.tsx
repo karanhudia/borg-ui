@@ -104,7 +104,9 @@ const ExportImportTab: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('exportImport.failedToExport'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('exportImport.failedToExport')
+      )
     },
   })
 
@@ -126,7 +128,9 @@ const ExportImportTab: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('exportImport.failedToImport'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('exportImport.failedToImport')
+      )
     },
   })
 

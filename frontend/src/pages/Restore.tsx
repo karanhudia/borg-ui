@@ -194,7 +194,9 @@ const Restore: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('restore.toasts.startFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('restore.toasts.startFailed')
+      )
     },
   })
 

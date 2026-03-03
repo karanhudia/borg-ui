@@ -1,10 +1,6 @@
 import i18n from '../i18n'
 
-type BackendDetail =
-  | string
-  | { key: string; params?: Record<string, unknown> }
-  | null
-  | undefined
+type BackendDetail = string | { key: string; params?: Record<string, unknown> } | null | undefined
 
 /**
  * Translates a backend-originating detail/message value into a user-facing string.
@@ -20,7 +16,7 @@ type BackendDetail =
  */
 export function translateBackendKey(
   detail: BackendDetail,
-  fallbackKey = 'common.errors.unexpectedError',
+  fallbackKey = 'common.errors.unexpectedError'
 ): string {
   if (detail === null || detail === undefined) {
     return String(i18n.t(fallbackKey))

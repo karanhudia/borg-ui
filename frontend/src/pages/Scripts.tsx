@@ -223,7 +223,9 @@ export default function Scripts() {
       console.error('Failed to save script:', error)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const onError = (error: any) => {
-        toast.error(translateBackendKey(error.response?.data?.detail) || t('scripts.toasts.saveFailed'))
+        toast.error(
+          translateBackendKey(error.response?.data?.detail) || t('scripts.toasts.saveFailed')
+        )
       }
       onError(error)
     }
@@ -243,7 +245,9 @@ export default function Scripts() {
       console.error('Failed to delete script:', error)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const onError = (error: any) => {
-        toast.error(translateBackendKey(error.response?.data?.detail) || t('scripts.toasts.deleteFailed'))
+        toast.error(
+          translateBackendKey(error.response?.data?.detail) || t('scripts.toasts.deleteFailed')
+        )
       }
       onError(error)
     }
@@ -275,7 +279,10 @@ export default function Scripts() {
         success: false,
         exit_code: -1,
         stdout: '',
-        stderr: translateBackendKey(error.response?.data?.detail) || error.message || 'Failed to test script',
+        stderr:
+          translateBackendKey(error.response?.data?.detail) ||
+          error.message ||
+          'Failed to test script',
         execution_time: 0,
       })
     } finally {

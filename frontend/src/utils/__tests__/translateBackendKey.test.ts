@@ -17,13 +17,13 @@ import { translateBackendKey } from '../translateBackendKey'
 describe('translateBackendKey', () => {
   it('Shape 1: {key, params} object — calls i18n.t with key and params', () => {
     expect(translateBackendKey({ key: 'errors.repo.not_found', params: { name: 'myrepo' } })).toBe(
-      'errors.repo.not_found({"name":"myrepo"})',
+      'errors.repo.not_found({"name":"myrepo"})'
     )
   })
 
   it('Shape 1: {key} object without params — calls i18n.t with key only', () => {
     expect(translateBackendKey({ key: 'errors.auth.invalid_credentials' })).toBe(
-      'errors.auth.invalid_credentials',
+      'errors.auth.invalid_credentials'
     )
   })
 
@@ -33,13 +33,13 @@ describe('translateBackendKey', () => {
 
   it('Shape 2: JSON-encoded {key} string without params — parses and translates', () => {
     expect(translateBackendKey('{"key":"backend.errors.auth.not_found"}')).toBe(
-      'backend.errors.auth.not_found',
+      'backend.errors.auth.not_found'
     )
   })
 
   it('Shape 3: dot-notation key string — passes to i18n.t directly', () => {
     expect(translateBackendKey('errors.auth.invalid_credentials')).toBe(
-      'errors.auth.invalid_credentials',
+      'errors.auth.invalid_credentials'
     )
   })
 

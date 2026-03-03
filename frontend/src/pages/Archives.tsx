@@ -115,7 +115,9 @@ const Archives: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('archives.toasts.deleteFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('archives.toasts.deleteFailed')
+      )
     },
   })
 
@@ -135,18 +137,15 @@ const Archives: React.FC = () => {
       const containerName = 'borg-web-ui'
       const accessCommand = `docker exec -it ${containerName} bash -c "cd ${mountPoint} && bash"`
 
-      toast.success(
-        t('archives.mountSuccess', { command: accessCommand }),
-        {
-          duration: 15000,
-          style: {
-            maxWidth: '600px',
-            whiteSpace: 'pre-wrap',
-            fontFamily: 'monospace',
-            fontSize: '13px',
-          },
-        }
-      )
+      toast.success(t('archives.mountSuccess', { command: accessCommand }), {
+        duration: 15000,
+        style: {
+          maxWidth: '600px',
+          whiteSpace: 'pre-wrap',
+          fontFamily: 'monospace',
+          fontSize: '13px',
+        },
+      })
       trackArchive(EventAction.MOUNT, selectedRepository?.name)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -208,7 +207,9 @@ const Archives: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('archives.toasts.restoreFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('archives.toasts.restoreFailed')
+      )
     },
   })
 

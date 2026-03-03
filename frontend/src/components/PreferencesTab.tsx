@@ -75,7 +75,9 @@ export default function PreferencesTab() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('preferences.updateFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('preferences.updateFailed')
+      )
     },
   })
 

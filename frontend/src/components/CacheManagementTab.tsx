@@ -100,7 +100,9 @@ const CacheManagementTab: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('cache.failedToSaveCacheSettings'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('cache.failedToSaveCacheSettings')
+      )
     },
   })
 
@@ -117,7 +119,9 @@ const CacheManagementTab: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('cache.failedToClearCache'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('cache.failedToClearCache')
+      )
       setClearDialogOpen(false)
     },
   })
@@ -162,7 +166,8 @@ const CacheManagementTab: React.FC = () => {
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      const errorMsg = translateBackendKey(error.response?.data?.detail) || t('cache.connectionTestFailed')
+      const errorMsg =
+        translateBackendKey(error.response?.data?.detail) || t('cache.connectionTestFailed')
       toast.error(errorMsg, { duration: 5000 })
     } finally {
       setTestingConnection(false)

@@ -146,7 +146,10 @@ export default function RepositoryScriptsTab({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Failed to assign script:', error)
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('repositoryScripts.errors.failedToAssign'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('repositoryScripts.errors.failedToAssign')
+      )
     }
   }
 
@@ -161,7 +164,10 @@ export default function RepositoryScriptsTab({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Failed to remove script:', error)
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('repositoryScripts.errors.failedToRemove'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('repositoryScripts.errors.failedToRemove')
+      )
     }
   }
 
@@ -180,7 +186,10 @@ export default function RepositoryScriptsTab({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Failed to update parameters:', error)
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('repositoryScripts.errors.failedToUpdateParameters'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('repositoryScripts.errors.failedToUpdateParameters')
+      )
     }
   }
 

@@ -134,7 +134,10 @@ const Settings: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('settings.toasts.failedToChangePassword'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('settings.toasts.failedToChangePassword')
+      )
     },
   })
 
@@ -154,7 +157,9 @@ const Settings: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('settings.toasts.failedToCreateUser'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('settings.toasts.failedToCreateUser')
+      )
     },
   })
 
@@ -169,7 +174,9 @@ const Settings: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('settings.toasts.failedToUpdateUser'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('settings.toasts.failedToUpdateUser')
+      )
     },
   })
 
@@ -182,7 +189,9 @@ const Settings: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('settings.toasts.failedToDeleteUser'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('settings.toasts.failedToDeleteUser')
+      )
     },
   })
 
@@ -196,7 +205,10 @@ const Settings: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('settings.toasts.failedToResetPassword'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('settings.toasts.failedToResetPassword')
+      )
     },
   })
 

@@ -316,7 +316,10 @@ const SystemSettingsTab: React.FC = () => {
       }, 3000) // Poll every 3 seconds
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('systemSettings.failedToStartStatsRefresh'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('systemSettings.failedToStartStatsRefresh')
+      )
       setIsRefreshingStats(false)
     }
   }

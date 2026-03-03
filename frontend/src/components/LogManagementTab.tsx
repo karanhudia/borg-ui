@@ -123,7 +123,9 @@ const LogManagementTab: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('logManagement.failedToSaveSettings'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('logManagement.failedToSaveSettings')
+      )
     },
   })
 
@@ -140,7 +142,9 @@ const LogManagementTab: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('logManagement.failedToRunCleanup'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('logManagement.failedToRunCleanup')
+      )
     },
   })
 

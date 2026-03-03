@@ -52,7 +52,9 @@ export default function MountsManagementTab() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('mountsManagement.failedToUnmount'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('mountsManagement.failedToUnmount')
+      )
     },
   })
 

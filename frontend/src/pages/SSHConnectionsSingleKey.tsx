@@ -158,7 +158,10 @@ export default function SSHConnectionsSingleKey() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Failed to generate SSH key:', error)
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('sshConnections.toasts.keyGenerateFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('sshConnections.toasts.keyGenerateFailed')
+      )
     },
   })
 
@@ -180,7 +183,10 @@ export default function SSHConnectionsSingleKey() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Failed to import SSH key:', error)
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('sshConnections.toasts.keyImportFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('sshConnections.toasts.keyImportFailed')
+      )
     },
   })
 
@@ -207,7 +213,10 @@ export default function SSHConnectionsSingleKey() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Failed to deploy SSH key:', error)
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('sshConnections.toasts.keyDeployFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('sshConnections.toasts.keyDeployFailed')
+      )
     },
   })
 
@@ -227,7 +236,10 @@ export default function SSHConnectionsSingleKey() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Failed to test connection:', error)
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('sshConnections.toasts.connectionTestFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('sshConnections.toasts.connectionTestFailed')
+      )
     },
   })
 
@@ -255,7 +267,10 @@ export default function SSHConnectionsSingleKey() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Failed to update connection:', error)
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('sshConnections.toasts.connectionUpdateFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('sshConnections.toasts.connectionUpdateFailed')
+      )
     },
   })
 
@@ -271,7 +286,10 @@ export default function SSHConnectionsSingleKey() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Failed to delete connection:', error)
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('sshConnections.toasts.connectionDeleteFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('sshConnections.toasts.connectionDeleteFailed')
+      )
     },
   })
 
@@ -285,7 +303,10 @@ export default function SSHConnectionsSingleKey() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Failed to refresh storage:', error)
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('sshConnections.toasts.storageRefreshFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('sshConnections.toasts.storageRefreshFailed')
+      )
     },
   })
 
@@ -295,7 +316,10 @@ export default function SSHConnectionsSingleKey() {
       if (response.data.success) {
         toast.success(t('sshConnections.toasts.connectionTestSuccess'))
       } else {
-        toast.error(translateBackendKey(response.data.error) || t('sshConnections.toasts.connectionTestFailed'))
+        toast.error(
+          translateBackendKey(response.data.error) ||
+            t('sshConnections.toasts.connectionTestFailed')
+        )
       }
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
       track(EventCategory.SSH, EventAction.TEST, 'connection')
@@ -303,7 +327,10 @@ export default function SSHConnectionsSingleKey() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Failed to test connection:', error)
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('sshConnections.toasts.connectionTestFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('sshConnections.toasts.connectionTestFailed')
+      )
     },
   })
 
@@ -319,7 +346,10 @@ export default function SSHConnectionsSingleKey() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Failed to delete SSH key:', error)
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('sshConnections.toasts.keyDeleteFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('sshConnections.toasts.keyDeleteFailed')
+      )
     },
   })
 
@@ -334,13 +364,18 @@ export default function SSHConnectionsSingleKey() {
         setRedeployPassword('')
         track(EventCategory.SSH, EventAction.START, 'deploy')
       } else {
-        toast.error(translateBackendKey(response.data.error) || t('sshConnections.toasts.keyDeployFailed'))
+        toast.error(
+          translateBackendKey(response.data.error) || t('sshConnections.toasts.keyDeployFailed')
+        )
       }
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Failed to redeploy SSH key:', error)
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('sshConnections.toasts.keyDeployFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('sshConnections.toasts.keyDeployFailed')
+      )
     },
   })
 
