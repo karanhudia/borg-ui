@@ -32,6 +32,7 @@ import {
 } from 'lucide-react'
 import { restoreAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
+import { translateBackendKey } from '../utils/translateBackendKey'
 import { useMatomo } from '../hooks/useMatomo'
 import { formatDate, formatBytes as formatBytesUtil, formatTimeRange } from '../utils/dateUtils'
 import RepositoryInfo from '../components/RepositoryInfo'
@@ -180,7 +181,7 @@ const Restore: React.FC = () => {
       repository_id: number
     }) => restoreAPI.startRestore(repository, archive, paths, destination, repository_id),
     onSuccess: () => {
-      toast.success('Restore job started!')
+      toast.success(t('restore.toasts.started'))
       // Track restore started
       trackArchive(EventAction.START, selectedRepoData?.name)
 
@@ -193,7 +194,7 @@ const Restore: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(`Failed to start restore: ${error.response?.data?.detail || error.message}`)
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('restore.toasts.startFailed'))
     },
   })
 
@@ -211,7 +212,7 @@ const Restore: React.FC = () => {
   // Handle restore
   const handleRestore = () => {
     if (!destination) {
-      toast.error('Please select a destination path')
+      toast.error(t('restore.toasts.selectDestination'))
       return
     }
     if (selectedRepository && restoreArchive && selectedRepoData) {

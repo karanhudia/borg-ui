@@ -39,6 +39,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
+import { translateBackendKey } from '../utils/translateBackendKey'
 import RemoteMachineCard from '../components/RemoteMachineCard'
 import { useMatomo } from '../hooks/useMatomo'
 
@@ -149,7 +150,7 @@ export default function SSHConnectionsSingleKey() {
     mutationFn: (data: { name: string; key_type: string; description?: string }) =>
       sshKeysAPI.generateSSHKey(data),
     onSuccess: () => {
-      toast.success('System SSH key generated successfully!')
+      toast.success(t('sshConnections.toasts.keyGenerated'))
       queryClient.invalidateQueries({ queryKey: ['system-ssh-key'] })
       setGenerateDialogOpen(false)
       track(EventCategory.SSH, EventAction.CREATE, 'key')
@@ -157,7 +158,7 @@ export default function SSHConnectionsSingleKey() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Failed to generate SSH key:', error)
-      toast.error(error.response?.data?.detail || 'Failed to generate SSH key')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('sshConnections.toasts.keyGenerateFailed'))
     },
   })
 
@@ -165,7 +166,7 @@ export default function SSHConnectionsSingleKey() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: (data: any) => sshKeysAPI.importSSHKey(data),
     onSuccess: () => {
-      toast.success('System SSH key imported successfully!')
+      toast.success(t('sshConnections.toasts.keyImported'))
       queryClient.invalidateQueries({ queryKey: ['system-ssh-key'] })
       setImportDialogOpen(false)
       setImportForm({
@@ -179,7 +180,7 @@ export default function SSHConnectionsSingleKey() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Failed to import SSH key:', error)
-      toast.error(error.response?.data?.detail || 'Failed to import SSH key')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('sshConnections.toasts.keyImportFailed'))
     },
   })
 
@@ -188,7 +189,7 @@ export default function SSHConnectionsSingleKey() {
     mutationFn: (data: { keyId: number; connectionData: any }) =>
       sshKeysAPI.deploySSHKey(data.keyId, data.connectionData),
     onSuccess: () => {
-      toast.success('SSH key deployed successfully!')
+      toast.success(t('sshConnections.toasts.keyDeployed'))
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
       setDeployDialogOpen(false)
       setConnectionForm({
@@ -206,7 +207,7 @@ export default function SSHConnectionsSingleKey() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Failed to deploy SSH key:', error)
-      toast.error(error.response?.data?.detail || 'Failed to deploy SSH key')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('sshConnections.toasts.keyDeployFailed'))
     },
   })
 
@@ -216,17 +217,17 @@ export default function SSHConnectionsSingleKey() {
       sshKeysAPI.testSSHConnection(data.keyId, data.connectionData),
     onSuccess: (response) => {
       if (response.data.success) {
-        toast.success('Connection test successful!')
+        toast.success(t('sshConnections.toasts.connectionTestSuccess'))
         track(EventCategory.SSH, EventAction.CREATE, 'connection')
       } else {
-        toast.error('Connection test failed')
+        toast.error(t('sshConnections.toasts.connectionTestFailed'))
       }
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Failed to test connection:', error)
-      toast.error(error.response?.data?.detail || 'Connection test failed')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('sshConnections.toasts.connectionTestFailed'))
     },
   })
 
@@ -235,7 +236,7 @@ export default function SSHConnectionsSingleKey() {
     mutationFn: (data: { connectionId: number; connectionData: any }) =>
       sshKeysAPI.updateSSHConnection(data.connectionId, data.connectionData),
     onSuccess: async (_response, variables) => {
-      toast.success('Connection updated successfully! Testing connection...')
+      toast.success(t('sshConnections.toasts.connectionUpdated'))
       setEditConnectionDialogOpen(false)
       setSelectedConnection(null)
       track(EventCategory.SSH, EventAction.EDIT, 'connection')
@@ -254,14 +255,14 @@ export default function SSHConnectionsSingleKey() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Failed to update connection:', error)
-      toast.error(error.response?.data?.detail || 'Failed to update connection')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('sshConnections.toasts.connectionUpdateFailed'))
     },
   })
 
   const deleteConnectionMutation = useMutation({
     mutationFn: (connectionId: number) => sshKeysAPI.deleteSSHConnection(connectionId),
     onSuccess: () => {
-      toast.success('Connection deleted successfully!')
+      toast.success(t('sshConnections.toasts.connectionDeleted'))
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
       setDeleteConnectionDialogOpen(false)
       setSelectedConnection(null)
@@ -270,21 +271,21 @@ export default function SSHConnectionsSingleKey() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Failed to delete connection:', error)
-      toast.error(error.response?.data?.detail || 'Failed to delete connection')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('sshConnections.toasts.connectionDeleteFailed'))
     },
   })
 
   const refreshStorageMutation = useMutation({
     mutationFn: (connectionId: number) => sshKeysAPI.refreshConnectionStorage(connectionId),
     onSuccess: () => {
-      toast.success('Storage information refreshed!')
+      toast.success(t('sshConnections.toasts.storageRefreshed'))
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
       track(EventCategory.SSH, EventAction.VIEW, 'storage')
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Failed to refresh storage:', error)
-      toast.error(error.response?.data?.detail || 'Failed to refresh storage')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('sshConnections.toasts.storageRefreshFailed'))
     },
   })
 
@@ -292,9 +293,9 @@ export default function SSHConnectionsSingleKey() {
     mutationFn: (connectionId: number) => sshKeysAPI.testExistingConnection(connectionId),
     onSuccess: (response) => {
       if (response.data.success) {
-        toast.success('Connection test successful!')
+        toast.success(t('sshConnections.toasts.connectionTestSuccess'))
       } else {
-        toast.error(response.data.error || 'Connection test failed')
+        toast.error(translateBackendKey(response.data.error) || t('sshConnections.toasts.connectionTestFailed'))
       }
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
       track(EventCategory.SSH, EventAction.TEST, 'connection')
@@ -302,14 +303,14 @@ export default function SSHConnectionsSingleKey() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Failed to test connection:', error)
-      toast.error(error.response?.data?.detail || 'Failed to test connection')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('sshConnections.toasts.connectionTestFailed'))
     },
   })
 
   const deleteKeyMutation = useMutation({
     mutationFn: (keyId: number) => sshKeysAPI.deleteSSHKey(keyId),
     onSuccess: () => {
-      toast.success('System SSH key deleted successfully!')
+      toast.success(t('sshConnections.toasts.keyDeleted'))
       queryClient.invalidateQueries({ queryKey: ['system-ssh-key'] })
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
       setDeleteKeyDialogOpen(false)
@@ -318,7 +319,7 @@ export default function SSHConnectionsSingleKey() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Failed to delete SSH key:', error)
-      toast.error(error.response?.data?.detail || 'Failed to delete SSH key')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('sshConnections.toasts.keyDeleteFailed'))
     },
   })
 
@@ -327,19 +328,19 @@ export default function SSHConnectionsSingleKey() {
       sshKeysAPI.redeployKeyToConnection(connectionId, password),
     onSuccess: (response) => {
       if (response.data.success) {
-        toast.success('SSH key deployed successfully!')
+        toast.success(t('sshConnections.toasts.keyDeployed'))
         queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
         setRedeployKeyDialogOpen(false)
         setRedeployPassword('')
         track(EventCategory.SSH, EventAction.START, 'deploy')
       } else {
-        toast.error(response.data.error || 'Failed to deploy SSH key')
+        toast.error(translateBackendKey(response.data.error) || t('sshConnections.toasts.keyDeployFailed'))
       }
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Failed to redeploy SSH key:', error)
-      toast.error(error.response?.data?.detail || 'Failed to deploy SSH key')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('sshConnections.toasts.keyDeployFailed'))
     },
   })
 
@@ -381,7 +382,7 @@ export default function SSHConnectionsSingleKey() {
   const handleCopyPublicKey = () => {
     if (systemKey?.public_key) {
       navigator.clipboard.writeText(systemKey.public_key)
-      toast.success('Public key copied to clipboard!')
+      toast.success(t('sshConnections.toasts.publicKeyCopied'))
     }
   }
 

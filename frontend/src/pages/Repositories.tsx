@@ -21,6 +21,7 @@ import {
 } from '@mui/material'
 import { Add, Storage, FileUpload, Search, FilterList } from '@mui/icons-material'
 import { repositoriesAPI, RepositoryData } from '../services/api'
+import { translateBackendKey } from '../utils/translateBackendKey'
 import { useAuth } from '../hooks/useAuth'
 import { useAppState } from '../context/AppContext'
 import { AxiosResponse } from 'axios'
@@ -145,14 +146,14 @@ export default function Repositories() {
   const deleteRepositoryMutation = useMutation({
     mutationFn: repositoriesAPI.deleteRepository,
     onSuccess: () => {
-      toast.success('Repository deleted successfully')
+      toast.success(t('repositories.toasts.deleted'))
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
       queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
       appState.refetch()
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to delete repository')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.deleteFailed'))
     },
   })
 
@@ -161,7 +162,7 @@ export default function Repositories() {
       repositoriesAPI.checkRepository(repositoryId, maxDuration),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSuccess: (_response: any, variables: { repositoryId: number; maxDuration: number }) => {
-      toast.success('Check operation started')
+      toast.success(t('repositories.toasts.checkStarted'))
       trackMaintenance(EventAction.START, 'Check', checkingRepository?.name)
       setCheckingRepository(null)
       setRepositoriesWithJobs((prev) => new Set(prev).add(variables.repositoryId))
@@ -169,7 +170,7 @@ export default function Repositories() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      const detail = error.response?.data?.detail || 'Failed to start check'
+      const detail = translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.checkFailed')
       if (error.response?.status === 409) {
         toast.error(detail, { duration: 5000 })
       } else {
@@ -183,7 +184,7 @@ export default function Repositories() {
     mutationFn: repositoriesAPI.compactRepository,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSuccess: (_response: any, repositoryId: number) => {
-      toast.success('Compact operation started')
+      toast.success(t('repositories.toasts.compactStarted'))
       trackMaintenance(EventAction.START, 'Compact', compactingRepository?.name)
       setCompactingRepository(null)
       setRepositoriesWithJobs((prev) => new Set(prev).add(repositoryId))
@@ -191,7 +192,7 @@ export default function Repositories() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      const detail = error.response?.data?.detail || 'Failed to start compact'
+      const detail = translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.compactFailed')
       if (error.response?.status === 409) {
         toast.error(detail, { duration: 5000 })
       } else {
@@ -209,9 +210,9 @@ export default function Repositories() {
     onSuccess: (response: any) => {
       setPruneResults(response.data)
       if (response.data.dry_run) {
-        toast.success('Dry run completed - review results below')
+        toast.success(t('repositories.toasts.dryRunCompleted'))
       } else {
-        toast.success('Repository pruned successfully!')
+        toast.success(t('repositories.toasts.pruned'))
         trackMaintenance(EventAction.START, 'Prune', pruningRepository?.name)
         queryClient.invalidateQueries({ queryKey: ['repositories'] })
         queryClient.invalidateQueries({ queryKey: ['repository-archives', pruningRepository?.id] })
@@ -219,7 +220,7 @@ export default function Repositories() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to prune repository')
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.pruneFailed'))
       setPruneResults(null)
     },
   })
@@ -311,7 +312,7 @@ export default function Repositories() {
     try {
       if (wizardMode === 'edit' && wizardRepository) {
         await repositoriesAPI.updateRepository(wizardRepository.id, data)
-        toast.success('Repository updated successfully')
+        toast.success(t('repositories.toasts.updated'))
       } else if (wizardMode === 'import') {
         // Include keyfile content in the import request so the backend can write it
         // to disk before running `borg info` to verify the repository.
@@ -322,18 +323,18 @@ export default function Repositories() {
         await repositoriesAPI.importRepository(importData)
         toast.success(
           keyfile
-            ? 'Repository imported and keyfile saved successfully'
-            : 'Repository imported successfully'
+            ? t('repositories.toasts.importedWithKeyfile')
+            : t('repositories.toasts.imported')
         )
       } else {
         await repositoriesAPI.createRepository(data)
-        toast.success('Repository created successfully')
+        toast.success(t('repositories.toasts.created'))
       }
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
       closeWizard()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || `Failed to ${wizardMode} repository`)
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.wizardFailed', { mode: wizardMode }))
     }
   }
 
