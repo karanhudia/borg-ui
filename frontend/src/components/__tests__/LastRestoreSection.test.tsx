@@ -34,7 +34,7 @@ describe('LastRestoreSection', () => {
   it('renders "no restores" message when restoreJob is null', () => {
     render(<LastRestoreSection restoreJob={null} />)
 
-    expect(screen.getByText('No restores performed yet from this repository')).toBeInTheDocument()
+    expect(screen.getByText('No recent restores')).toBeInTheDocument()
   })
 
   it('renders RestoreJobCard when restoreJob exists', () => {
@@ -60,7 +60,7 @@ describe('LastRestoreSection', () => {
     const { rerender } = render(<LastRestoreSection restoreJob={null} />)
 
     // Check icon is present (we can't easily test Lucide icons, but component renders)
-    expect(screen.getByText('No restores performed yet from this repository')).toBeInTheDocument()
+    expect(screen.getByText('No recent restores')).toBeInTheDocument()
 
     rerender(<LastRestoreSection restoreJob={mockRestoreJob} />)
 

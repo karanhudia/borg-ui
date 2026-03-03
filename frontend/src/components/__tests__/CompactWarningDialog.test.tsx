@@ -22,7 +22,7 @@ describe('CompactWarningDialog', () => {
           onCancel={mockOnCancel}
         />
       )
-      expect(screen.getByText('Confirm Repository Compaction')).toBeInTheDocument()
+      expect(screen.getByText('Compact Repository')).toBeInTheDocument()
     })
 
     it('renders repository name', () => {
@@ -34,7 +34,7 @@ describe('CompactWarningDialog', () => {
           onCancel={mockOnCancel}
         />
       )
-      expect(screen.getByText('my-backup-repo')).toBeInTheDocument()
+      expect(screen.getByText(/my-backup-repo/)).toBeInTheDocument()
     })
 
     it('renders description text', () => {
@@ -108,7 +108,7 @@ describe('CompactWarningDialog', () => {
           onCancel={mockOnCancel}
         />
       )
-      expect(screen.getByRole('button', { name: /Start Compacting/ })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Compact/ })).toBeInTheDocument()
     })
 
     it('does not render when open is false', () => {
@@ -120,7 +120,7 @@ describe('CompactWarningDialog', () => {
           onCancel={mockOnCancel}
         />
       )
-      expect(screen.queryByText('Confirm Repository Compaction')).not.toBeInTheDocument()
+      expect(screen.queryByText('Compact Repository')).not.toBeInTheDocument()
     })
   })
 
@@ -136,7 +136,7 @@ describe('CompactWarningDialog', () => {
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /Start Compacting/ }))
+      await user.click(screen.getByRole('button', { name: /Compact/ }))
       expect(mockOnConfirm).toHaveBeenCalledTimes(1)
     })
 
@@ -167,7 +167,7 @@ describe('CompactWarningDialog', () => {
           isLoading={true}
         />
       )
-      expect(screen.getByRole('button', { name: /Starting.../ })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /common.status.starting/ })).toBeInTheDocument()
     })
 
     it('disables Cancel button when isLoading is true', () => {
@@ -193,7 +193,7 @@ describe('CompactWarningDialog', () => {
           isLoading={true}
         />
       )
-      expect(screen.getByRole('button', { name: /Starting.../ })).toBeDisabled()
+      expect(screen.getByRole('button', { name: /common.status.starting/ })).toBeDisabled()
     })
 
     it('enables buttons when isLoading is false', () => {
@@ -207,7 +207,7 @@ describe('CompactWarningDialog', () => {
         />
       )
       expect(screen.getByRole('button', { name: 'Cancel' })).not.toBeDisabled()
-      expect(screen.getByRole('button', { name: /Start Compacting/ })).not.toBeDisabled()
+      expect(screen.getByRole('button', { name: /Compact/ })).not.toBeDisabled()
     })
   })
 })

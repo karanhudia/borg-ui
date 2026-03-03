@@ -47,7 +47,7 @@ describe('MountArchiveDialog', () => {
   it('renders mount point input with placeholder', () => {
     render(<MountArchiveDialog open={true} archive={mockArchive} mountPoint="" {...mockHandlers} />)
 
-    const input = screen.getByLabelText('Mount Name')
+    const input = screen.getByLabelText('Mount Point')
     expect(input).toBeInTheDocument()
     expect(input).toHaveAttribute('placeholder', 'my-backup-2024')
   })
@@ -62,14 +62,14 @@ describe('MountArchiveDialog', () => {
       />
     )
 
-    const input = screen.getByLabelText('Mount Name') as HTMLInputElement
+    const input = screen.getByLabelText('Mount Point') as HTMLInputElement
     expect(input.value).toBe('my-mount')
   })
 
   it('calls onMountPointChange when input changes', () => {
     render(<MountArchiveDialog open={true} archive={mockArchive} mountPoint="" {...mockHandlers} />)
 
-    const input = screen.getByLabelText('Mount Name')
+    const input = screen.getByLabelText('Mount Point')
     fireEvent.change(input, { target: { value: 'new-mount' } })
 
     expect(mockHandlers.onMountPointChange).toHaveBeenCalledWith('new-mount')

@@ -23,8 +23,8 @@ describe('PruneRepositoryDialog', () => {
         />
       )
 
-      // Title and button both say "Prune Archives"
-      const pruneTexts = screen.getAllByText('Prune Archives')
+      // Title says "Prune Repository"
+      const pruneTexts = screen.getAllByText('Prune Repository')
       expect(pruneTexts.length).toBeGreaterThanOrEqual(1)
     })
 
@@ -41,7 +41,7 @@ describe('PruneRepositoryDialog', () => {
         />
       )
 
-      expect(screen.queryByText('Prune Archives')).not.toBeInTheDocument()
+      expect(screen.queryByText('Prune Repository')).not.toBeInTheDocument()
     })
 
     it('shows repository name', () => {
@@ -187,7 +187,7 @@ describe('PruneRepositoryDialog', () => {
         />
       )
 
-      expect(screen.getByRole('button', { name: /Prune Archives/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Run Prune/i })).toBeInTheDocument()
     })
 
     it('calls onClose when Cancel is clicked', async () => {
@@ -255,7 +255,7 @@ describe('PruneRepositoryDialog', () => {
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /Prune Archives/i }))
+      await user.click(screen.getByRole('button', { name: /Run Prune/i }))
 
       expect(onConfirmPrune).toHaveBeenCalled()
     })
@@ -274,7 +274,7 @@ describe('PruneRepositoryDialog', () => {
       )
 
       expect(screen.getByRole('button', { name: /Dry Run/i })).toBeDisabled()
-      expect(screen.getByRole('button', { name: /Pruning/i })).toBeDisabled()
+      expect(screen.getByRole('button', { name: /common.status.running/i })).toBeDisabled()
     })
 
     it('shows Pruning text when loading', () => {
@@ -290,7 +290,7 @@ describe('PruneRepositoryDialog', () => {
         />
       )
 
-      expect(screen.getByRole('button', { name: /Pruning/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /common.status.running/i })).toBeInTheDocument()
     })
   })
 

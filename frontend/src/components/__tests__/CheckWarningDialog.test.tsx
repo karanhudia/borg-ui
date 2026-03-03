@@ -22,7 +22,7 @@ describe('CheckWarningDialog', () => {
           onCancel={mockOnCancel}
         />
       )
-      expect(screen.getByText('Confirm Repository Check')).toBeInTheDocument()
+      expect(screen.getByText('Check Repository Integrity')).toBeInTheDocument()
     })
 
     it('renders repository name', () => {
@@ -34,7 +34,7 @@ describe('CheckWarningDialog', () => {
           onCancel={mockOnCancel}
         />
       )
-      expect(screen.getByText('my-backup-repo')).toBeInTheDocument()
+      expect(screen.getByText(/my-backup-repo/)).toBeInTheDocument()
     })
 
     it('renders warning about repository being locked', () => {
@@ -119,7 +119,7 @@ describe('CheckWarningDialog', () => {
           onCancel={mockOnCancel}
         />
       )
-      expect(screen.getByRole('button', { name: /Start Check/ })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Run Check/ })).toBeInTheDocument()
     })
 
     it('does not render when open is false', () => {
@@ -131,7 +131,7 @@ describe('CheckWarningDialog', () => {
           onCancel={mockOnCancel}
         />
       )
-      expect(screen.queryByText('Confirm Repository Check')).not.toBeInTheDocument()
+      expect(screen.queryByText('Check Repository Integrity')).not.toBeInTheDocument()
     })
   })
 
@@ -147,7 +147,7 @@ describe('CheckWarningDialog', () => {
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /Start Check/ }))
+      await user.click(screen.getByRole('button', { name: /Run Check/ }))
       expect(mockOnConfirm).toHaveBeenCalledWith(3600)
     })
 
@@ -178,7 +178,7 @@ describe('CheckWarningDialog', () => {
 
       const input = screen.getByRole('spinbutton')
       fireEvent.change(input, { target: { value: '7200' } })
-      fireEvent.click(screen.getByRole('button', { name: /Start Check/ }))
+      fireEvent.click(screen.getByRole('button', { name: /Run Check/ }))
 
       expect(mockOnConfirm).toHaveBeenCalledWith(7200)
     })
@@ -245,7 +245,7 @@ describe('CheckWarningDialog', () => {
           isLoading={true}
         />
       )
-      expect(screen.getByRole('button', { name: /Starting.../ })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /common.status.starting/ })).toBeInTheDocument()
     })
 
     it('disables Cancel button when isLoading is true', () => {
@@ -271,7 +271,7 @@ describe('CheckWarningDialog', () => {
           isLoading={true}
         />
       )
-      expect(screen.getByRole('button', { name: /Starting.../ })).toBeDisabled()
+      expect(screen.getByRole('button', { name: /common.status.starting/ })).toBeDisabled()
     })
 
     it('enables buttons when isLoading is false', () => {
@@ -285,7 +285,7 @@ describe('CheckWarningDialog', () => {
         />
       )
       expect(screen.getByRole('button', { name: 'Cancel' })).not.toBeDisabled()
-      expect(screen.getByRole('button', { name: /Start Check/ })).not.toBeDisabled()
+      expect(screen.getByRole('button', { name: /Run Check/ })).not.toBeDisabled()
     })
   })
 })

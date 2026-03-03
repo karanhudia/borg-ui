@@ -56,7 +56,7 @@ describe('ArchivesList', () => {
       <ArchivesList archives={[]} repositoryName="Test Repo" loading={false} {...mockHandlers} />
     )
 
-    expect(screen.getByText('No archives found in this repository')).toBeInTheDocument()
+    expect(screen.getByText('No archives found')).toBeInTheDocument()
   })
 
   it('renders header with repository name and count', () => {

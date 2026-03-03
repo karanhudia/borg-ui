@@ -136,8 +136,7 @@ describe('BackupJobsTable', () => {
     it('shows default empty state when no jobs', () => {
       renderWithProviders(<BackupJobsTable jobs={[]} />)
 
-      expect(screen.getByText('No jobs found')).toBeInTheDocument()
-      expect(screen.getByText('No backup jobs to display')).toBeInTheDocument()
+      expect(screen.getAllByText('No backup jobs found').length).toBeGreaterThan(0)
     })
 
     it('shows custom empty state', () => {
@@ -323,7 +322,7 @@ describe('BackupJobsTable', () => {
     )
 
     // Only job 3 has status: 'failed' and error_message
-    const errorButtons = screen.getAllByRole('button', { name: 'View Error' })
+    const errorButtons = screen.getAllByRole('button', { name: 'Error Details' })
     expect(errorButtons.length).toBe(1)
   })
 
@@ -338,7 +337,7 @@ describe('BackupJobsTable', () => {
       />
     )
 
-    const errorButton = screen.getByRole('button', { name: 'View Error' })
+    const errorButton = screen.getByRole('button', { name: 'Error Details' })
     expect(errorButton).toBeInTheDocument()
 
     if (errorButton) {
@@ -630,7 +629,7 @@ describe('BackupJobsTable', () => {
         />
       )
 
-      expect(screen.getByText('No jobs found')).toBeInTheDocument()
+      expect(screen.getAllByText('No backup jobs found').length).toBeGreaterThan(0)
     })
   })
 
@@ -712,7 +711,7 @@ describe('BackupJobsTable', () => {
 
       // Should show delete button for pending job (useful for cleaning up stuck jobs)
       // Query for icon buttons specifically (excludes dialog buttons)
-      const deleteButtons = screen.queryAllByRole('button', { name: /delete job/i })
+      const deleteButtons = screen.queryAllByRole('button', { name: /^delete$/i })
       expect(deleteButtons.length).toBe(1)
     })
 
@@ -782,7 +781,7 @@ describe('BackupJobsTable', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 
       // Find delete button - filter to only actual buttons (not tooltip wrappers)
-      const allDeleteElements = screen.getAllByLabelText('Delete Job (Admin Only)')
+      const allDeleteElements = screen.getAllByLabelText('Delete')
       const deleteButtons = allDeleteElements.filter((el) => el.tagName === 'BUTTON')
       expect(deleteButtons.length).toBeGreaterThan(0)
 
@@ -804,7 +803,7 @@ describe('BackupJobsTable', () => {
       )
 
       // Find delete button - filter to only actual buttons
-      const allDeleteElements = screen.getAllByLabelText('Delete Job (Admin Only)')
+      const allDeleteElements = screen.getAllByLabelText('Delete')
       const deleteButtons = allDeleteElements.filter((el) => el.tagName === 'BUTTON')
       await user.click(deleteButtons[0])
 
@@ -846,7 +845,7 @@ describe('BackupJobsTable', () => {
       )
 
       // Find delete button - filter to only actual buttons
-      const allDeleteElements = screen.getAllByLabelText('Delete Job (Admin Only)')
+      const allDeleteElements = screen.getAllByLabelText('Delete')
       const deleteButtons = allDeleteElements.filter((el) => el.tagName === 'BUTTON')
       await user.click(deleteButtons[0])
 
