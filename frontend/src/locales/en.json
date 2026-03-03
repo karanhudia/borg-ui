@@ -2480,6 +2480,21 @@
         "hookTypeMustBe": "hook_type must be 'pre-backup' or 'post-backup'",
         "scriptAlreadyAssigned": "Script '{{name}}' is already assigned to this repository as {{hookType}}",
         "scriptAssignmentNotFound": "Script assignment not found"
+      },
+      "service": {
+        "backupCompletedWithWarning": "Backup completed with warning (exit code {{exitCode}})",
+        "backupWarningPostHooksFailed": "Backup succeeded with warning but post-backup hooks failed: {{failed}}/{{total}} scripts failed",
+        "containerRestartedDuringBackup": "Container restarted during backup operation",
+        "containerRestartedDuringOperation": "Container restarted during operation",
+        "containerRestartedDuringRestore": "Container restarted during restore operation",
+        "failedCreateDestinationDir": "Failed to create destination directory: {{error}}",
+        "failedPrepareSourcePaths": "Failed to prepare source paths: all SSH mounts failed or no valid paths",
+        "postBackupHooksFailed": "Backup succeeded but post-backup hooks failed: {{failed}}/{{total}} scripts failed",
+        "preBackupHooksFailed": "Pre-backup hooks failed: {{failed}}/{{total}} scripts failed",
+        "restoreCompletedWithWarnings": "Restore completed with warnings (exit code {{exitCode}})",
+        "unsupportedExecutionMode": "Unsupported execution mode: {{mode}}",
+        "warningFailedBreakLock": "(Warning: Failed to automatically break lock)",
+        "warningRemoteProcessMayBeRunning": "(Warning: Remote process may still be running, manual verification recommended)"
       }
     },
     "success": {
