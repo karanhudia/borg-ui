@@ -106,7 +106,10 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('scheduledChecks.toasts.updateFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('scheduledChecks.toasts.updateFailed')
+      )
     },
   })
 
@@ -120,7 +123,9 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('scheduledChecks.toasts.checkFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('scheduledChecks.toasts.checkFailed')
+      )
     },
   })
 

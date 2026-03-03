@@ -63,7 +63,9 @@ export default function WizardStepRestoreFiles({
         setItems(response.data.items || [])
       } catch (err: unknown) {
         const error = err as { response?: { data?: { detail?: string } } }
-        const errorMsg = translateBackendKey(error.response?.data?.detail) || t('wizard.restoreFiles.failedToLoadContents')
+        const errorMsg =
+          translateBackendKey(error.response?.data?.detail) ||
+          t('wizard.restoreFiles.failedToLoadContents')
         setError(errorMsg)
       } finally {
         setLoading(false)

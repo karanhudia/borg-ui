@@ -153,7 +153,9 @@ export default function Repositories() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.deleteFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.deleteFailed')
+      )
     },
   })
 
@@ -170,7 +172,8 @@ export default function Repositories() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      const detail = translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.checkFailed')
+      const detail =
+        translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.checkFailed')
       if (error.response?.status === 409) {
         toast.error(detail, { duration: 5000 })
       } else {
@@ -192,7 +195,8 @@ export default function Repositories() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      const detail = translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.compactFailed')
+      const detail =
+        translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.compactFailed')
       if (error.response?.status === 409) {
         toast.error(detail, { duration: 5000 })
       } else {
@@ -220,7 +224,9 @@ export default function Repositories() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.pruneFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.pruneFailed')
+      )
       setPruneResults(null)
     },
   })
@@ -322,9 +328,7 @@ export default function Repositories() {
         }
         await repositoriesAPI.importRepository(importData)
         toast.success(
-          keyfile
-            ? t('repositories.toasts.importedWithKeyfile')
-            : t('repositories.toasts.imported')
+          keyfile ? t('repositories.toasts.importedWithKeyfile') : t('repositories.toasts.imported')
         )
       } else {
         await repositoriesAPI.createRepository(data)
@@ -334,7 +338,10 @@ export default function Repositories() {
       closeWizard()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.wizardFailed', { mode: wizardMode }))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('repositories.toasts.wizardFailed', { mode: wizardMode })
+      )
     }
   }
 

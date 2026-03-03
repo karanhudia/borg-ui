@@ -75,7 +75,10 @@ export default function ScriptEditorDialog({
       setTestResult({
         success: false,
         stdout: '',
-        stderr: translateBackendKey(error.response?.data?.detail) || error.message || 'Unknown error occurred',
+        stderr:
+          translateBackendKey(error.response?.data?.detail) ||
+          error.message ||
+          'Unknown error occurred',
         exit_code: -1,
         execution_time: 0,
       })

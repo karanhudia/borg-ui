@@ -140,7 +140,9 @@ export default function PackagesTab() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('packages.toasts.addFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('packages.toasts.addFailed')
+      )
     },
   })
 
@@ -159,7 +161,9 @@ export default function PackagesTab() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('packages.toasts.updateFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('packages.toasts.updateFailed')
+      )
     },
   })
 
@@ -177,7 +181,9 @@ export default function PackagesTab() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('packages.toasts.fixFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('packages.toasts.fixFailed')
+      )
     },
   })
 
@@ -194,7 +200,9 @@ export default function PackagesTab() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('packages.toasts.removeFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('packages.toasts.removeFailed')
+      )
     },
   })
 
@@ -212,7 +220,9 @@ export default function PackagesTab() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('packages.toasts.reinstallFailed'))
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('packages.toasts.reinstallFailed')
+      )
     },
   })
 

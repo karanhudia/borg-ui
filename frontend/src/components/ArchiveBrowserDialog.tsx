@@ -75,7 +75,9 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
         setItems(response.data.items || [])
       } catch (err: unknown) {
         const error = err as { response?: { data?: { detail?: string }; status?: number } }
-        const errorMsg = translateBackendKey(error.response?.data?.detail) || t('archiveBrowser.failedToLoadContents')
+        const errorMsg =
+          translateBackendKey(error.response?.data?.detail) ||
+          t('archiveBrowser.failedToLoadContents')
         const statusCode = error.response?.status
         setError(errorMsg)
         setIsSizeLimitError(statusCode === 413)
