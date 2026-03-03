@@ -88,7 +88,7 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
     }
 
     fetchContents()
-  }, [open, repositoryId, archiveName, currentPath])
+  }, [open, repositoryId, archiveName, currentPath, t])
 
   // Parse breadcrumb path
   const pathParts = currentPath ? currentPath.split('/').filter(Boolean) : []

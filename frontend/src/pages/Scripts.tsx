@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import {
@@ -98,11 +98,7 @@ export default function Scripts() {
     category: 'custom',
   })
 
-  useEffect(() => {
-    fetchScripts()
-  }, [])
-
-  const fetchScripts = async () => {
+  const fetchScripts = useCallback(async () => {
     try {
       const response = await api.get('/scripts')
       setScripts(Array.isArray(response.data) ? response.data : [])
@@ -112,7 +108,11 @@ export default function Scripts() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [t])
+
+  useEffect(() => {
+    fetchScripts()
+  }, [fetchScripts])
 
   const handleCreate = () => {
     setEditingScript(null)
