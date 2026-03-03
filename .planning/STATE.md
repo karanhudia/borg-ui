@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-03T13:01:38Z"
+last_updated: "2026-03-03T13:49:00Z"
 progress:
   total_phases: 5
-  completed_phases: 1
-  total_plans: 5
-  completed_plans: 5
+  completed_phases: 2
+  total_plans: 11
+  completed_plans: 7
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** Every user-facing string — whether from the frontend or backend — must be translatable, so users can operate the UI entirely in their own language.
-**Current focus:** Phase 2 - Locale File Structure and Key Skeleton
+**Current focus:** Phase 3 - Backend API Migration: Auth and High-Traffic Domains
 
 ## Current Position
 
-Phase: 2 of 5 (Locale File Structure and Key Skeleton)
-Plan: 1 of 1 in current phase (02-01 complete — Phase 2 done)
-Status: Phase 2 complete
-Last activity: 2026-03-03 — Plan 02-01 complete: added backend namespace with 60+ keys to en/es/de locale files; enabled missingKeyHandler in i18n.ts; LOC-01 and QUAL-01 requirements complete
+Phase: 3 of 5 (Backend API Migration: Auth and High-Traffic Domains)
+Plan: 2 of N in current phase (03-02 complete — backup.py migrated)
+Status: Phase 3 in progress
+Last activity: 2026-03-03 — Plan 03-02 complete: backup.py migrated — 4x backupJobNotFound, canOnlyCancelRunningJobs, noLogsAvailable, logFileNotFound (parameterized), backupCancelled success key; BKND-03 complete
 
-Progress: [████████░░] 48%
+Progress: [████████████░░] 60%
 
 ## Performance Metrics
 
@@ -68,6 +68,9 @@ Recent decisions affecting current work:
 - 02-01: backend namespace added as last top-level key in all three locale files — purely additive, no existing keys removed
 - 02-01: es.json and de.json use English placeholder values for backend.* keys — Phase 5 will add real translations
 - 02-01: missingKeyHandler uses console.warn gated on import.meta.env.DEV — no output in production; saveMissing: true required alongside handler to fire
+- 03-02: Stream logs endpoint "Backup job not found" migrated despite being absent from research table — uses get_current_user (axios-authenticated), errors surface to users
+- 03-02: Download endpoint auth strings intentionally left as raw English — browser navigation, not axios-intercepted
+- 03-02: Cannot download logs for running backup intentionally left as raw English — browser download handler, not react-query
 
 ### Pending Todos
 
@@ -82,5 +85,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 02-01-PLAN.md — Phase 2 complete. backend namespace with 60+ keys added to en/es/de. missingKeyHandler enabled in i18n.ts. Ready for Phase 3.
+Stopped at: Completed 03-02-PLAN.md — backup.py fully migrated to translation keys. BKND-03 complete. Ready for next Phase 3 plan.
 Resume file: None
