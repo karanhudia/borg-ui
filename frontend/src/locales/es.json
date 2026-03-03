@@ -2366,16 +2366,26 @@
         "logFileNotFound": "Log file not found: {{filename}}"
       },
       "restore": {
+        "cancelledByUser": "Restore cancelled by user",
+        "cancelledByUserProcessNotFound": "Restore cancelled by user (process not found, may have already completed)",
+        "canOnlyCancelRunningJobs": "Can only cancel running jobs",
+        "failedCancelRestore": "Failed to cancel restore",
+        "failedFetchRepositories": "Failed to fetch repositories",
+        "failedGetRestoreJobs": "Failed to get restore jobs",
+        "failedGetRestoreStatus": "Failed to get restore status",
+        "failedPreviewRestore": "Failed to preview restore",
         "repositoryNotFound": "Repository not found",
         "restoreJobNotFound": "Restore job not found",
-        "canOnlyCancelRunningJobs": "Can only cancel running jobs",
         "sshToSshNotSupported": "Restoring from SSH repository to SSH destination is not supported"
       },
       "schedule": {
+        "adminAccessRequired": "Admin access required",
         "invalidCronExpression": "Invalid cron expression",
         "jobNameExists": "Job name already exists",
-        "scheduledJobNotFound": "Scheduled job not found",
-        "observabilityOnlyRepo": "Cannot schedule backups for observability-only repositories"
+        "noRepositoriesConfigured": "Scheduled job has no repositories configured",
+        "observabilityOnlyRepo": "Cannot schedule backups for observability-only repositories",
+        "repositoryNotFound": "Repository not found",
+        "scheduledJobNotFound": "Scheduled job not found"
       },
       "ssh": {
         "sshKeyNotFound": "SSH key not found",
@@ -2429,7 +2439,8 @@
         "scheduledJobEnabled": "Scheduled job enabled successfully",
         "scheduledJobDisabled": "Scheduled job disabled successfully",
         "scheduledJobDuplicated": "Scheduled job duplicated successfully",
-        "scheduledJobStarted": "Scheduled job started successfully"
+        "scheduledJobStarted": "Scheduled job started successfully",
+        "scheduledJobStartedMulti": "Multi-repository schedule started ({{count}} repositories)"
       },
       "ssh": {
         "sshKeyCreated": "SSH key created successfully",
