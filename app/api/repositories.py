@@ -567,10 +567,7 @@ async def create_repository(
                                error=str(e))
                     raise HTTPException(
                         status_code=400,
-                        detail=f"Permission denied: Cannot create directory at '{repo_path}'. "
-                               f"To store repositories on your host machine, use paths starting with '/local/' "
-                               f"(e.g., '/local{repo_path}' for accessing your host filesystem). "
-                               f"The container's root filesystem (/) is mapped to /local/ inside the container."
+                        detail={"key": "backend.errors.repo.permissionDeniedCreateDirectory", "params": {"path": repo_path}}
                     )
             else:
                 # For /local/ paths, we need to ensure the parent directory exists
@@ -591,9 +588,7 @@ async def create_repository(
                                error=str(e))
                     raise HTTPException(
                         status_code=400,
-                        detail=f"Permission denied: Cannot create parent directory '{parent_dir}'. "
-                               f"Please ensure the directory exists on your host machine and has proper permissions. "
-                               f"On your host: sudo mkdir -p {parent_dir.replace('/local', '')} && sudo chown -R $(whoami) {parent_dir.replace('/local', '')}"
+                        detail={"key": "backend.errors.repo.permissionDeniedCreateParentDirectory", "params": {"path": parent_dir}}
                     )
                 except Exception as e:
                     logger.error("Failed to create parent directories",
@@ -610,8 +605,7 @@ async def create_repository(
                                parent_dir=parent_dir)
                     raise HTTPException(
                         status_code=400,
-                        detail=f"Parent directory is not writable: {parent_dir}. "
-                               f"On your host machine, run: sudo chown -R $(whoami) {parent_dir.replace('/local', '')}"
+                        detail={"key": "backend.errors.repo.parentDirectoryNotWritable", "params": {"path": parent_dir}}
                     )
 
         # Initialize Borg repository
@@ -750,7 +744,7 @@ async def import_repository(
             if not os.path.exists(repo_path):
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Repository directory does not exist: {repo_path}"
+                    detail={"key": "backend.errors.repo.repositoryDirNotExist", "params": {"path": repo_path}}
                 )
 
             # Check if it's a valid Borg repository by looking for config file
@@ -758,7 +752,7 @@ async def import_repository(
             if not os.path.exists(config_path):
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Not a valid Borg repository: {repo_path}. Missing 'config' file."
+                    detail={"key": "backend.errors.repo.notValidBorgRepository", "params": {"path": repo_path}}
                 )
 
         else:
@@ -849,13 +843,12 @@ async def import_repository(
             if "passphrase" in error_msg.lower() or "encrypted" in error_msg.lower():
                 raise HTTPException(
                     status_code=400,
-                    detail="Repository is encrypted but passphrase is incorrect or missing. "
-                           "Please provide the correct passphrase."
+                    detail={"key": "backend.errors.repo.encryptedPassphraseIncorrect"}
                 )
             elif "not a valid repository" in error_msg.lower():
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Not a valid Borg repository: {repo_path}"
+                    detail={"key": "backend.errors.repo.notValidBorgRepository", "params": {"path": repo_path}}
                 )
             else:
                 raise HTTPException(
@@ -975,8 +968,7 @@ async def upload_keyfile(
         if repository.encryption not in ["keyfile", "keyfile-blake2"]:
             raise HTTPException(
                 status_code=400,
-                detail=f"Repository uses '{repository.encryption}' encryption, which doesn't require a keyfile. "
-                       f"Keyfile upload is only needed for 'keyfile' or 'keyfile-blake2' encryption modes."
+                detail={"key": "backend.errors.repo.encryptionKeyfileNotRequired", "params": {"mode": repository.encryption}}
             )
 
         # Validate keyfile content
