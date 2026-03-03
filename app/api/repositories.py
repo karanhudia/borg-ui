@@ -37,7 +37,7 @@ def get_connection_details(connection_id: int, db: Session) -> Dict[str, Any]:
 
     connection = db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
     if not connection:
-        raise HTTPException(status_code=404, detail=f"SSH connection with ID {connection_id} not found")
+        raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.sshConnectionNotFound", "params": {"id": connection_id}})
 
     return {
         "host": connection.host,
@@ -453,7 +453,7 @@ async def create_repository(
 ):
     """Create a new repository"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"})
 
     try:
         # Validate source directories are provided (only for full mode repositories)
@@ -461,7 +461,7 @@ async def create_repository(
             if not repo_data.source_directories or len(repo_data.source_directories) == 0:
                 raise HTTPException(
                     status_code=400,
-                    detail="At least one source directory is required for full mode repositories. Source directories specify what data will be backed up to this repository."
+                    detail={"key": "backend.errors.repo.atLeastOneSourceDirRequired"}
                 )
 
         # Validate passphrase for encrypted repositories
@@ -469,7 +469,7 @@ async def create_repository(
             if not repo_data.passphrase or repo_data.passphrase.strip() == "":
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Passphrase is required for encryption mode '{repo_data.encryption}'. Use encryption='none' for unencrypted repositories."
+                    detail={"key": "backend.errors.repo.encryptedPassphraseRequired", "params": {"mode": repo_data.encryption}}
                 )
 
         # Validate connection_id and path
@@ -488,7 +488,7 @@ async def create_repository(
             if repo_path.startswith("ssh://"):
                 raise HTTPException(
                     status_code=400,
-                    detail="Path appears to be an SSH URL but no connection_id provided. Please select an SSH connection."
+                    detail={"key": "backend.errors.repo.sshUrlWithoutConnectionId"}
                 )
 
             if not os.path.isabs(repo_path):
@@ -545,12 +545,12 @@ async def create_repository(
         # Check if repository name already exists
         existing_repo = db.query(Repository).filter(Repository.name == repo_data.name).first()
         if existing_repo:
-            raise HTTPException(status_code=400, detail="Repository name already exists")
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.repo.repositoryNameExists"})
 
         # Check if repository path already exists
         existing_path = db.query(Repository).filter(Repository.path == repo_path).first()
         if existing_path:
-            raise HTTPException(status_code=400, detail="Repository path already exists")
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.repo.repositoryPathExists"})
 
         # Create repository directory if local (but not if using /local mount)
         if not repo_data.connection_id:
@@ -670,10 +670,10 @@ async def create_repository(
         # Determine response message
         already_existed = init_result.get("already_existed", False)
         if already_existed:
-            message = "Repository already exists at this location and has been added to the UI"
+            message = "backend.success.repo.repositoryAlreadyExists"
             logger.info("Existing repository added", name=repo_data.name, path=repo_path, user=current_user.username)
         else:
-            message = "Repository created successfully"
+            message = "backend.success.repo.repositoryCreated"
             logger.info("Repository created", name=repo_data.name, path=repo_path, user=current_user.username)
 
         # Sync repositories with MQTT to publish new repository
@@ -709,7 +709,7 @@ async def import_repository(
 ):
     """Import an existing Borg repository"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"})
 
     try:
         # Validate source directories are provided (only for full mode repositories)
@@ -717,7 +717,7 @@ async def import_repository(
             if not repo_data.source_directories or len(repo_data.source_directories) == 0:
                 raise HTTPException(
                     status_code=400,
-                    detail="At least one source directory is required for full mode repositories. Source directories specify what data will be backed up to this repository."
+                    detail={"key": "backend.errors.repo.atLeastOneSourceDirRequired"}
                 )
 
         # Validate connection_id and path
@@ -736,7 +736,7 @@ async def import_repository(
             if repo_path.startswith("ssh://"):
                 raise HTTPException(
                     status_code=400,
-                    detail="Path appears to be an SSH URL but no connection_id provided. Please select an SSH connection."
+                    detail={"key": "backend.errors.repo.sshUrlWithoutConnectionId"}
                 )
 
             if not os.path.isabs(repo_path):
@@ -805,7 +805,7 @@ async def import_repository(
         # Check if repository name already exists
         existing_repo = db.query(Repository).filter(Repository.name == repo_data.name).first()
         if existing_repo:
-            raise HTTPException(status_code=400, detail="Repository name already exists in the database")
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.repo.repositoryNameExists"})
 
         # Check if repository path already exists in database
         existing_path = db.query(Repository).filter(Repository.path == repo_path).first()
@@ -963,13 +963,13 @@ async def upload_keyfile(
     elsewhere and use keyfile-based encryption modes.
     """
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"})
 
     try:
         # Get repository
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
-            raise HTTPException(status_code=404, detail="Repository not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
 
         # Verify repository uses keyfile encryption
         if repository.encryption not in ["keyfile", "keyfile-blake2"]:
@@ -982,7 +982,7 @@ async def upload_keyfile(
         # Validate keyfile content
         content = await keyfile.read()
         if not content:
-            raise HTTPException(status_code=400, detail="Keyfile is empty")
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.repo.keyfileEmpty"})
 
         keyfile_name = _borg_keyfile_name(repository.path)
 
@@ -1035,14 +1035,14 @@ async def download_keyfile(
     (Borg-created repos use a hash-based filename; imported repos use our path-based convention).
     """
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"})
 
     repository = db.query(Repository).filter(Repository.id == repo_id).first()
     if not repository:
-        raise HTTPException(status_code=404, detail="Repository not found")
+        raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
 
     if not repository.has_keyfile:
-        raise HTTPException(status_code=404, detail="This repository has no keyfile")
+        raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repoHasNoKeyfile"})
 
     try:
         import tempfile
@@ -1100,7 +1100,7 @@ async def get_repository(
     try:
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
-            raise HTTPException(status_code=404, detail="Repository not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
 
         # Check system-wide bypass_lock_on_list setting
         from app.database.models import SystemSettings
@@ -1143,12 +1143,12 @@ async def update_repository(
 ):
     """Update repository"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"})
 
     try:
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
-            raise HTTPException(status_code=404, detail="Repository not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
 
         # Update fields
         if repo_data.name is not None:
@@ -1158,7 +1158,7 @@ async def update_repository(
                 Repository.id != repo_id
             ).first()
             if existing_repo:
-                raise HTTPException(status_code=400, detail="Repository name already exists")
+                raise HTTPException(status_code=400, detail={"key": "backend.errors.repo.repositoryNameExists"})
             repository.name = repo_data.name
 
         # Store raw path first (will be reconstructed for SSH below)
@@ -1225,7 +1225,7 @@ async def update_repository(
                     Repository.id != repo_id
                 ).first()
                 if existing_path:
-                    raise HTTPException(status_code=400, detail="Repository path already exists")
+                    raise HTTPException(status_code=400, detail={"key": "backend.errors.repo.repositoryPathExists"})
 
                 path_changed = (final_path != old_path)
                 repository.path = final_path
@@ -1236,7 +1236,7 @@ async def update_repository(
                     Repository.id != repo_id
                 ).first()
                 if existing_path:
-                    raise HTTPException(status_code=400, detail="Repository path already exists")
+                    raise HTTPException(status_code=400, detail={"key": "backend.errors.repo.repositoryPathExists"})
 
                 path_changed = (path_to_use != old_path)
                 repository.path = path_to_use
@@ -1348,7 +1348,7 @@ async def update_repository(
             if repo_data.mode == "full" and (not repository.source_directories or repository.source_directories == "[]"):
                 raise HTTPException(
                     status_code=400,
-                    detail="Cannot switch to full mode: at least one source directory is required"
+                    detail={"key": "backend.errors.repo.cannotSwitchToFullModeNoSourceDirs"}
                 )
             repository.mode = repo_data.mode
             # If switching to observe mode, log it
@@ -1399,12 +1399,12 @@ async def delete_repository(
 ):
     """Delete repository (admin only)"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"})
 
     try:
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
-            raise HTTPException(status_code=404, detail="Repository not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
 
         # Check system-wide bypass_lock_on_list setting
         from app.database.models import SystemSettings
@@ -1419,7 +1419,7 @@ async def delete_repository(
                 if archives_data and len(archives_data) > 0:
                     raise HTTPException(
                         status_code=400,
-                        detail="Cannot delete repository with existing archives. Please delete all archives first."
+                        detail={"key": "backend.errors.repo.cannotDeleteRepoWithArchives"}
                     )
             except:
                 pass
@@ -1527,7 +1527,7 @@ async def check_repository(
     try:
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
-            raise HTTPException(status_code=404, detail="Repository not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
 
         # Check if there's already a running check job for this repository
         running_job = db.query(CheckJob).filter(
@@ -1538,7 +1538,7 @@ async def check_repository(
         if running_job:
             raise HTTPException(
                 status_code=409,
-                detail=f"A check operation is already running for this repository (Job ID: {running_job.id})"
+                detail={"key": "backend.errors.repo.checkAlreadyRunning"}
             )
 
         # Extract max_duration from request body (default to 3600)
@@ -1584,12 +1584,12 @@ async def compact_repository(
 ):
     """Start a background compact job to free space"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"})
 
     try:
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
-            raise HTTPException(status_code=404, detail="Repository not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
 
         # Check if there's already a running compact job for this repository
         running_job = db.query(CompactJob).filter(
@@ -1600,7 +1600,7 @@ async def compact_repository(
         if running_job:
             raise HTTPException(
                 status_code=409,
-                detail=f"A compact operation is already running for this repository (Job ID: {running_job.id})"
+                detail={"key": "backend.errors.repo.compactAlreadyRunning"}
             )
 
         # Create compact job record
@@ -1645,12 +1645,12 @@ async def prune_repository(
 ):
     """Start a background prune job to remove old archives based on retention policy"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"})
 
     try:
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
-            raise HTTPException(status_code=404, detail="Repository not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
 
         # Check if there's already a running prune job for this repository
         running_job = db.query(PruneJob).filter(
@@ -1751,7 +1751,7 @@ async def get_repository_statistics(
     try:
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
-            raise HTTPException(status_code=404, detail="Repository not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
 
         # Check system-wide bypass_lock_on_list setting
         from app.database.models import SystemSettings
@@ -2161,7 +2161,7 @@ async def list_repository_archives(
         try:
             repository = db.query(Repository).filter(Repository.id == repo_id).first()
             if not repository:
-                raise HTTPException(status_code=404, detail="Repository not found")
+                raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
 
             # Get system settings for global bypass_lock_on_list setting
             from app.database.models import SystemSettings
@@ -2292,7 +2292,7 @@ async def get_repository_info(
         try:
             repository = db.query(Repository).filter(Repository.id == repo_id).first()
             if not repository:
-                raise HTTPException(status_code=404, detail="Repository not found")
+                raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
 
             # Get system settings for global bypass_lock_on_info setting
             from app.database.models import SystemSettings
@@ -2428,7 +2428,7 @@ async def break_repository_lock(
     try:
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
-            raise HTTPException(status_code=404, detail="Repository not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
 
         logger.warning("User requested lock break", repo_id=repo_id, user=current_user.username)
 
@@ -2469,7 +2469,7 @@ async def get_archive_info(
     try:
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
-            raise HTTPException(status_code=404, detail="Repository not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
 
         # Build borg info command with repo::archive format
         archive_path = f"{repository.path}::{archive_name}"
@@ -2631,7 +2631,7 @@ async def list_archive_files(
     try:
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
-            raise HTTPException(status_code=404, detail="Repository not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
 
         # Get system settings for global bypass_lock_on_list setting
         from app.database.models import SystemSettings
@@ -2784,7 +2784,7 @@ async def break_repository_lock(
         # Get repository from database
         repository = db.query(Repository).filter(Repository.id == repository_id).first()
         if not repository:
-            raise HTTPException(status_code=404, detail="Repository not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
 
         logger.info("Breaking repository lock",
                    repository=repository.path,
@@ -2846,7 +2846,7 @@ async def break_repository_lock(
         logger.error("Timeout breaking repository lock", repository_id=repository_id)
         raise HTTPException(
             status_code=500,
-            detail="Timeout while trying to break lock"
+            detail={"key": "backend.errors.repo.breakLockTimeout"}
         )
     except HTTPException:
         raise
@@ -2870,7 +2870,7 @@ async def get_check_job_status(
     try:
         job = db.query(CheckJob).filter(CheckJob.id == job_id).first()
         if not job:
-            raise HTTPException(status_code=404, detail="Check job not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.checkJobNotFound"})
 
         # Read log file if it exists (like prune/compact jobs)
         log_content = ""
@@ -2946,7 +2946,7 @@ async def get_compact_job_status(
     try:
         job = db.query(CompactJob).filter(CompactJob.id == job_id).first()
         if not job:
-            raise HTTPException(status_code=404, detail="Compact job not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.compactJobNotFound"})
 
         return {
             "id": job.id,
@@ -3065,7 +3065,7 @@ async def update_check_schedule(
 
         repo = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repo:
-            raise HTTPException(status_code=404, detail="Repository not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
 
         # Update check schedule settings
         cron_expression = request.get("cron_expression")
@@ -3143,7 +3143,7 @@ async def get_check_schedule(
     try:
         repo = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repo:
-            raise HTTPException(status_code=404, detail="Repository not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
 
         return {
             "repository_id": repo.id,
