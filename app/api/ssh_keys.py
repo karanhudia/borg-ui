@@ -477,7 +477,7 @@ async def generate_ssh_key(
 
         return {
             "success": True,
-            "message": "System SSH key generated successfully",
+            "message": "backend.success.ssh.systemKeyGenerated",
             "ssh_key": {
                 "id": ssh_key.id,
                 "name": ssh_key.name,
@@ -611,7 +611,7 @@ async def import_ssh_key(
 
         return {
             "success": True,
-            "message": f"System SSH key imported successfully from {private_key_path}",
+            "message": "backend.success.ssh.systemKeyImported",
             "ssh_key": {
                 "id": ssh_key.id,
                 "name": ssh_key.name,
@@ -693,7 +693,7 @@ async def quick_ssh_setup(
 
                 return {
                     "success": True,
-                    "message": "SSH key generated and deployed successfully",
+                    "message": "backend.success.ssh.sshKeyGeneratedAndDeployed",
                     "ssh_key": {
                         "id": ssh_key.id,
                         "name": ssh_key.name,
@@ -733,7 +733,7 @@ async def quick_ssh_setup(
 
             return {
                 "success": True,
-                "message": "SSH key generated successfully (deployment skipped)",
+                "message": "backend.success.ssh.sshKeyGeneratedDeploymentSkipped",
                 "ssh_key": {
                     "id": ssh_key.id,
                     "name": ssh_key.name,
@@ -822,7 +822,7 @@ async def deploy_ssh_key(
         
         return {
             "success": deploy_result["success"],
-            "message": "SSH key deployed successfully" if deploy_result["success"] else "SSH key deployment failed",
+            "message": "backend.success.ssh.sshKeyDeployed" if deploy_result["success"] else "backend.success.ssh.sshKeyDeployFailed",
             "connection": {
                 "id": existing_connection.id,
                 "host": existing_connection.host,
@@ -944,7 +944,7 @@ async def test_ssh_connection(
         
         return {
             "success": test_result["success"],
-            "message": test_result.get("message", "Connection test completed"),
+            "message": "backend.success.ssh.connectionTestSuccess" if test_result["success"] else "backend.success.ssh.connectionTestFailed",
             "connection": {
                 "id": connection.id,
                 "host": connection.host,
@@ -1168,7 +1168,7 @@ async def test_existing_connection(
 
         return {
             "success": test_result["success"],
-            "message": "Connection tested successfully" if test_result["success"] else "Connection test failed",
+            "message": "backend.success.ssh.connectionTestSuccess" if test_result["success"] else "backend.success.ssh.connectionTestFailed",
             "status": connection.status,
             "error": connection.error_message
         }
@@ -1227,7 +1227,7 @@ async def redeploy_key_to_connection(
 
             return {
                 "success": True,
-                "message": "SSH key deployed successfully to this connection"
+                "message": "backend.success.ssh.sshKeyDeployed"
             }
         else:
             # Update connection with error
@@ -1242,7 +1242,7 @@ async def redeploy_key_to_connection(
 
             return {
                 "success": False,
-                "message": "Failed to deploy SSH key",
+                "message": "backend.success.ssh.sshKeyDeployFailed",
                 "error": connection.error_message
             }
 
@@ -1290,7 +1290,7 @@ async def delete_ssh_connection(
 
         return {
             "success": True,
-            "message": "SSH connection deleted successfully"
+            "message": "backend.success.ssh.connectionDeleted"
         }
     except HTTPException:
         raise
@@ -1383,7 +1383,7 @@ async def update_ssh_key(
         
         return {
             "success": True,
-            "message": "SSH key updated successfully",
+            "message": "backend.success.ssh.sshKeyUpdated",
             "ssh_key": {
                 "id": ssh_key.id,
                 "name": ssh_key.name,
@@ -1469,15 +1469,9 @@ async def delete_ssh_key(
                    repository_count=repository_count,
                    user=current_user.username)
 
-        msg_parts = ["SSH key deleted successfully."]
-        if connection_count > 0:
-            msg_parts.append(f"{connection_count} connection(s) preserved.")
-        if repository_count > 0:
-            msg_parts.append(f"{repository_count} repository/repositories cleared.")
-
         return {
             "success": True,
-            "message": " ".join(msg_parts)
+            "message": "backend.success.ssh.sshKeyDeleted"
         }
     except HTTPException:
         raise
@@ -1813,7 +1807,7 @@ async def test_ssh_key_connection(ssh_key: SSHKey, host: str, username: str, por
                 )
                 return {
                     "success": True,
-                    "message": "SSH connection successful",
+                    "message": "backend.success.ssh.connectionTestSuccess",
                     "output": stdout.decode().strip(),
                     "key_file": key_file_path
                 }
