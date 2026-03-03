@@ -716,7 +716,9 @@
     "toasts": {
       "scriptUpdated": "Skript erfolgreich aktualisiert",
       "scriptCreated": "Skript erfolgreich erstellt",
-      "scriptDeleted": "Skript erfolgreich gelöscht"
+      "scriptDeleted": "Skript erfolgreich gelöscht",
+      "saveFailed": "Failed to save script",
+      "deleteFailed": "Failed to delete script"
     },
     "confirmDelete": "Bist du sicher, dass du \"{{name}}\" löschen möchtest?"
   },
@@ -820,7 +822,8 @@
       "beforeBreakingCheck2": "Überprüfen, dass kein anderer Client auf dieses Repository zugreift",
       "beforeBreakingCheck3": "Dies bricht sowohl Repository- als auch Cache-Sperren",
       "adminRequired": "Administratorrechte erforderlich:",
-      "adminRequiredDetail": "Nur Administratoren können Repository-Sperren aufheben. Bitte wende dich an deinen Administrator."
+      "adminRequiredDetail": "Nur Administratoren können Repository-Sperren aufheben. Bitte wende dich an deinen Administrator.",
+      "failedToBreakLock": "Failed to break repository lock"
     },
     "errorDetails": {
       "title": "Fehlerdetails",
@@ -1200,7 +1203,11 @@
     "languageTitle": "Sprache",
     "languageDescription": "Wähle die Sprache der Benutzeroberfläche",
     "languageLabel": "Oberflächensprache",
-    "languageSaved": "Sprache erfolgreich aktualisiert"
+    "languageSaved": "Sprache erfolgreich aktualisiert",
+    "updateFailed": "Failed to update preferences",
+    "analyticsTransparencyBold": "Volle Transparenz:",
+    "analyticsTransparencyLink": "Unser Analyse-Dashboard öffentlich einsehen",
+    "analyticsTransparencyAfterLink": "um genau zu sehen, was wir erfassen. Selbst gehostet, keine Drittanbieter."
   },
   "betaFeatures": {
     "title": "Beta-Funktionen",
@@ -1281,7 +1288,8 @@
     "clearLogs": "Bereinigung jetzt ausführen",
     "clearing": "Bereinigung läuft...",
     "cleanupCompleted": "Protokollbereinigung erfolgreich abgeschlossen",
-    "failedToRunCleanup": "Protokollbereinigung konnte nicht ausgeführt werden"
+    "failedToRunCleanup": "Protokollbereinigung konnte nicht ausgeführt werden",
+    "failedToSaveSettings": "Failed to save log management settings"
   },
   "cacheManagement": {
     "title": "Archiv-Cache-Verwaltung",
@@ -1297,7 +1305,8 @@
     "empty": "Keine aktiven Einhängepunkte",
     "unmount": "Aushängen",
     "unmounting": "Hängt aus...",
-    "unmountedSuccessfully": "Archiv erfolgreich ausgehängt"
+    "unmountedSuccessfully": "Archiv erfolgreich ausgehängt",
+    "failedToUnmount": "Failed to unmount path"
   },
   "mqttSettings": {
     "title": "MQTT-Einstellungen",
@@ -1535,7 +1544,9 @@
     "create": "Erstellen",
     "toasts": {
       "scheduleUpdated": "Überprüfungszeitplan aktualisiert",
-      "checkStarted": "Überprüfung gestartet"
+      "checkStarted": "Überprüfung gestartet",
+      "updateFailed": "Failed to update check schedule",
+      "checkFailed": "Failed to start check"
     },
     "validation": {
       "selectRepository": "Bitte Repository auswählen"
@@ -1661,7 +1672,8 @@
       "noItemsSelected": "Keine Elemente ausgewählt",
       "clearAll": "Alle löschen",
       "selectDirTooltip": "Verzeichnis und alle Inhalte auswählen",
-      "helpText": "Klicke auf Dateien, um sie auszuwählen, oder auf Ordner, um zu navigieren. Verwende das Kontrollkästchen neben Ordnern, um ganze Verzeichnisse auszuwählen."
+      "helpText": "Klicke auf Dateien, um sie auszuwählen, oder auf Ordner, um zu navigieren. Verwende das Kontrollkästchen neben Ordnern, um ganze Verzeichnisse auszuwählen.",
+      "failedToLoadContents": "Failed to load archive contents"
     },
     "restorePath": {
       "title": "Wiederherstellungsort wählen",
@@ -1988,7 +2000,12 @@
     "toasts": {
       "addedSuccessfully": "Paket erfolgreich hinzugefügt",
       "updatedSuccessfully": "Paket erfolgreich aktualisiert",
-      "removedSuccessfully": "Paket erfolgreich entfernt"
+      "removedSuccessfully": "Paket erfolgreich entfernt",
+      "addFailed": "Failed to add package",
+      "updateFailed": "Failed to update package",
+      "fixFailed": "Failed to fix broken dependencies",
+      "removeFailed": "Failed to remove package",
+      "reinstallFailed": "Failed to reinstall package"
     }
   },
   "protectedRoute": {
@@ -2237,7 +2254,8 @@
   "repositoryScripts": {
     "errors": {
       "failedToAssign": "Skript konnte nicht zugewiesen werden",
-      "failedToRemove": "Skript konnte nicht entfernt werden"
+      "failedToRemove": "Skript konnte nicht entfernt werden",
+      "failedToUpdateParameters": "Failed to update script parameters"
     },
     "confirmRemove": "Dieses Skript aus dem Repository entfernen?",
     "parametersConfigured": "{{count}} Parameter konfiguriert",
