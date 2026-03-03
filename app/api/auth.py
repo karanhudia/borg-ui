@@ -79,14 +79,14 @@ async def login(
         logger.warning("Failed login attempt", username=form_data.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail={"key": "backend.errors.auth.incorrectCredentials"},
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Inactive user"
+            detail={"key": "backend.errors.auth.inactiveUser"}
         )
 
     # Update last login timestamp
@@ -112,7 +112,7 @@ async def login(
 async def logout(current_user: User = Depends(get_current_user)):
     """Logout user (client should discard token)"""
     logger.info("User logged out", username=current_user.username)
-    return {"message": "Successfully logged out"}
+    return {"message": "backend.success.auth.loggedOut"}
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
@@ -154,16 +154,16 @@ async def create_new_user(
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already registered"
+            detail={"key": "backend.errors.auth.usernameAlreadyRegistered"}
         )
-    
+
     # Check if email already exists (if provided)
     if user_data.email:
         existing_email = db.query(User).filter(User.email == user_data.email).first()
         if existing_email:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
+                detail={"key": "backend.errors.auth.emailAlreadyRegistered"}
             )
     
     user = create_user(
@@ -189,9 +189,9 @@ async def update_user(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail={"key": "backend.errors.auth.userNotFound"}
         )
-    
+
     # Update fields if provided
     if user_data.email is not None:
         # Check if email is already taken by another user
@@ -203,7 +203,7 @@ async def update_user(
             if existing_email:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Email already registered"
+                    detail={"key": "backend.errors.auth.emailAlreadyRegistered"}
                 )
         user.email = user_data.email
     
@@ -229,21 +229,21 @@ async def delete_user(
     if user_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete yourself"
+            detail={"key": "backend.errors.auth.cannotDeleteSelf"}
         )
-    
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail={"key": "backend.errors.auth.userNotFound"}
         )
     
     db.delete(user)
     db.commit()
     
     logger.info("User deleted", user_id=user_id, deleted_by=current_user.username)
-    return {"message": "User deleted successfully"}
+    return {"message": "backend.success.auth.userDeleted"}
 
 @router.post("/change-password")
 async def change_password(
@@ -258,15 +258,15 @@ async def change_password(
     if not verify_password(password_data.current_password, current_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Current password is incorrect"
+            detail={"key": "backend.errors.auth.currentPasswordIncorrect"}
         )
-    
+
     # Update password
     success = update_user_password(db, current_user.id, password_data.new_password)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update password"
+            detail={"key": "backend.errors.auth.failedUpdatePassword"}
         )
 
     # Clear must_change_password flag after successful password change
@@ -274,4 +274,4 @@ async def change_password(
     db.commit()
 
     logger.info("Password changed", username=current_user.username)
-    return {"message": "Password changed successfully"} 
+    return {"message": "backend.success.auth.passwordChanged"}

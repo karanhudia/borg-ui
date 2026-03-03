@@ -13,7 +13,7 @@ This milestone completes full internationalization coverage for the borg-ui appl
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Frontend Utility and Hardcoded String Cleanup** - Build translateBackendKey utility and remove all hardcoded English strings from frontend page components
-- [ ] **Phase 2: Locale File Structure and Key Skeleton** - Establish backend.* namespace in all three locale files and enable dev-mode missing-key detection
+- [x] **Phase 2: Locale File Structure and Key Skeleton** - Establish backend.* namespace in all three locale files and enable dev-mode missing-key detection (completed 2026-03-03)
 - [ ] **Phase 3: Backend API Migration (Auth + High-Traffic Domains)** - Convert all HTTPException.detail and message fields in auth.py, repositories.py, and backup.py to translation keys
 - [ ] **Phase 4: Backend Services and Remaining API Files** - Migrate restore.py, schedule.py, and all remaining API files plus the services layer that writes stored error_message fields
 - [ ] **Phase 5: Locale File Completion and CI Validation** - Complete Spanish and German translations for all new backend.* keys and add automated key-sync enforcement
@@ -54,7 +54,12 @@ Plans:
   3. Backup errors and success messages display translated text in the frontend
   4. Dynamic error messages containing variable data (e.g., repository name, file path) use the `{key, params}` pattern and render with the correct interpolated values in all three languages
   5. All new keys introduced in this phase are present in `en.json`, `es.json`, and `de.json` in the same commits (no missing-key warnings in dev console after this phase)
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — Migrate auth.py and security.py to translation keys (BKND-01)
+- [ ] 03-02-PLAN.md — Migrate backup.py to translation keys (BKND-03)
+- [ ] 03-03-PLAN.md — Add 13 new locale keys and migrate repositories.py to translation keys (BKND-02)
 
 ### Phase 4: Backend Services and Remaining API Files
 **Goal**: All remaining backend API files and the services layer that writes stored `error_message` fields to the database return translation keys, with the `LOCK_ERROR::` sentinel explicitly preserved
@@ -86,7 +91,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Frontend Utility and Hardcoded String Cleanup | 4/4 | Complete | 2026-03-03 |
-| 2. Locale File Structure and Key Skeleton | 0/1 | Not started | - |
-| 3. Backend API Migration (Auth + High-Traffic Domains) | 0/? | Not started | - |
+| 2. Locale File Structure and Key Skeleton | 0/1 | Complete    | 2026-03-03 |
+| 3. Backend API Migration (Auth + High-Traffic Domains) | 0/3 | Not started | - |
 | 4. Backend Services and Remaining API Files | 0/? | Not started | - |
 | 5. Locale File Completion and CI Validation | 0/? | Not started | - |
