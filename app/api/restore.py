@@ -54,7 +54,7 @@ async def preview_restore(
         logger.error("Failed to preview restore", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to preview restore"
+            detail={"key": "backend.errors.restore.failedPreviewRestore"}
         )
 
 @router.post("/start")
@@ -68,14 +68,13 @@ async def start_restore(
         # Fetch repository to determine repository_type
         repository = db.query(Repository).filter(Repository.id == restore_request.repository_id).first()
         if not repository:
-            raise HTTPException(status_code=404, detail="Repository not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"})
 
         # Validate scenario: SSH repository → SSH destination is not supported
         if repository.repository_type == 'ssh' and restore_request.destination_type == 'ssh':
             raise HTTPException(
                 status_code=400,
-                detail="Restoring from SSH repository to SSH destination is not supported. "
-                       "Please select a local destination for SSH repositories."
+                detail={"key": "backend.errors.restore.sshToSshNotSupported"}
             )
 
         # Determine execution_mode based on repository_type + destination_type
@@ -132,7 +131,7 @@ async def start_restore(
         return {
             "job_id": restore_job.id,
             "status": "pending",
-            "message": "Restore job started"
+            "message": "backend.success.restore.restoreJobStarted"
         }
     except HTTPException:
         raise
@@ -166,7 +165,7 @@ async def get_repositories(
         logger.error("Failed to fetch repositories", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to fetch repositories"
+            detail={"key": "backend.errors.restore.failedFetchRepositories"}
         )
 
 @router.get("/archives/{repository_id}")
@@ -201,7 +200,7 @@ async def get_archive_contents(
     try:
         repository = db.query(Repository).filter(Repository.id == repository_id).first()
         if not repository:
-            raise HTTPException(status_code=404, detail="Repository not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"})
 
         # Check cache first
         all_items = await archive_cache.get(repository_id, archive_name)
@@ -410,7 +409,7 @@ async def get_restore_jobs(
         logger.error("Failed to get restore jobs", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get restore jobs"
+            detail={"key": "backend.errors.restore.failedGetRestoreJobs"}
         )
 
 @router.get("/status/{job_id}")
@@ -425,7 +424,7 @@ async def get_restore_status(
         if not job:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Restore job not found"
+                detail={"key": "backend.errors.restore.restoreJobNotFound"}
             )
 
         return {
@@ -453,7 +452,7 @@ async def get_restore_status(
         logger.error("Failed to get restore status", job_id=job_id, error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get restore status"
+            detail={"key": "backend.errors.restore.failedGetRestoreStatus"}
         )
 
 @router.post("/cancel/{job_id}")
@@ -468,13 +467,13 @@ async def cancel_restore(
         if not job:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Restore job not found"
+                detail={"key": "backend.errors.restore.restoreJobNotFound"}
             )
 
         if job.status != "running":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Can only cancel running jobs"
+                detail={"key": "backend.errors.restore.canOnlyCancelRunningJobs"}
             )
 
         # Try to terminate the actual process
@@ -485,14 +484,14 @@ async def cancel_restore(
         job.status = "cancelled"
         job.completed_at = datetime.now(timezone.utc)
         if process_killed:
-            job.error_message = "Restore cancelled by user"
+            job.error_message = json.dumps({"key": "backend.errors.restore.cancelledByUser"})
         else:
-            job.error_message = "Restore cancelled by user (process not found, may have already completed)"
+            job.error_message = json.dumps({"key": "backend.errors.restore.cancelledByUserProcessNotFound"})
         db.commit()
 
         logger.info("Restore cancelled", job_id=job_id, user=current_user.username, process_killed=process_killed)
         return {
-            "message": "Restore cancelled successfully",
+            "message": "backend.success.restore.restoreCancelled",
             "process_terminated": process_killed
         }
     except HTTPException:
@@ -501,5 +500,5 @@ async def cancel_restore(
         logger.error("Failed to cancel restore", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to cancel restore"
+            detail={"key": "backend.errors.restore.failedCancelRestore"}
         )

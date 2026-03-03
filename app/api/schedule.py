@@ -166,7 +166,7 @@ async def create_scheduled_job(
 ):
     """Create a new scheduled job"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.schedule.adminAccessRequired"})
 
     try:
         logger.info("STEP 0: Schedule creation request received",
@@ -247,12 +247,12 @@ async def create_scheduled_job(
             cron = croniter.croniter(job_data.cron_expression, datetime.now(timezone.utc))
             next_run = cron.get_next(datetime)
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid cron expression: {str(e)}")
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.invalidCronExpression", "params": {"error": str(e)}})
 
         # Check if job name already exists
         existing_job = db.query(ScheduledJob).filter(ScheduledJob.name == job_data.name).first()
         if existing_job:
-            raise HTTPException(status_code=400, detail="Job name already exists")
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.jobNameExists"})
 
         # Validate repositories are not in observability-only mode
         from app.database.models import Repository
@@ -263,12 +263,12 @@ async def create_scheduled_job(
             if repo and repo.mode == "observe":
                 raise HTTPException(
                     status_code=400,
-                    detail="Cannot schedule backups for observability-only repositories. This repository is configured for browsing and restoring existing archives only."
+                    detail={"key": "backend.errors.schedule.observabilityOnlyRepo"}
                 )
         elif job_data.repository_id:
             repo = db.query(Repository).filter_by(id=job_data.repository_id).first()
             if repo and repo.mode == "observe":
-                raise HTTPException(status_code=400, detail=f"Repository '{repo.name}' is in observability-only mode")
+                raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.observabilityOnlyRepo", "params": {"name": repo.name}})
 
         # Check multi-repo and deduplicate
         unique_repo_ids = None
@@ -300,9 +300,9 @@ async def create_scheduled_job(
             for repo_id in unique_repo_ids:
                 repo = db.query(Repository).filter_by(id=repo_id).first()
                 if not repo:
-                    raise HTTPException(status_code=400, detail=f"Repository ID {repo_id} not found")
+                    raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.repositoryNotFound", "params": {"id": repo_id}})
                 if repo.mode == "observe":
-                    raise HTTPException(status_code=400, detail=f"Repository '{repo.name}' is in observability-only mode")
+                    raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.observabilityOnlyRepo", "params": {"name": repo.name}})
 
         # Create scheduled job
         scheduled_job = ScheduledJob(
@@ -405,10 +405,10 @@ async def create_scheduled_job(
                        schedule_id=scheduled_job.id)
 
         logger.info("Scheduled job created", name=job_data.name, user=current_user.username)
-        
+
         return {
             "success": True,
-            "message": "Scheduled job created successfully",
+            "message": "backend.success.schedule.scheduledJobCreated",
             "job": {
                 "id": scheduled_job.id,
                 "name": scheduled_job.name,
@@ -577,8 +577,8 @@ async def get_scheduled_job(
     try:
         job = db.query(ScheduledJob).filter(ScheduledJob.id == job_id).first()
         if not job:
-            raise HTTPException(status_code=404, detail="Scheduled job not found")
-        
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.schedule.scheduledJobNotFound"})
+
         # Calculate next run times
         try:
             cron = croniter.croniter(job.cron_expression, datetime.now(timezone.utc))
@@ -632,13 +632,13 @@ async def update_scheduled_job(
 ):
     """Update scheduled job"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.schedule.adminAccessRequired"})
+
     try:
         job = db.query(ScheduledJob).filter(ScheduledJob.id == job_id).first()
         if not job:
-            raise HTTPException(status_code=404, detail="Scheduled job not found")
-        
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.schedule.scheduledJobNotFound"})
+
         # Update fields
         if job_data.name is not None:
             # Check if name already exists
@@ -647,7 +647,7 @@ async def update_scheduled_job(
                 ScheduledJob.id != job_id
             ).first()
             if existing_job:
-                raise HTTPException(status_code=400, detail="Job name already exists")
+                raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.jobNameExists"})
             job.name = job_data.name
         
         if job_data.cron_expression is not None:
@@ -657,8 +657,8 @@ async def update_scheduled_job(
                 job.cron_expression = job_data.cron_expression
                 job.next_run = cron.get_next(datetime)
             except Exception as e:
-                raise HTTPException(status_code=400, detail=f"Invalid cron expression: {str(e)}")
-        
+                raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.invalidCronExpression", "params": {"error": str(e)}})
+
         if job_data.repository is not None:
             # Validate repository is not in observability-only mode
             from app.database.models import Repository
@@ -666,7 +666,7 @@ async def update_scheduled_job(
             if repo and repo.mode == "observe":
                 raise HTTPException(
                     status_code=400,
-                    detail="Cannot schedule backups for observability-only repositories. This repository is configured for browsing and restoring existing archives only."
+                    detail={"key": "backend.errors.schedule.observabilityOnlyRepo"}
                 )
             job.repository = job_data.repository
 
@@ -709,7 +709,7 @@ async def update_scheduled_job(
             from app.database.models import Repository
             repo = db.query(Repository).filter_by(id=job_data.repository_id).first()
             if repo and repo.mode == "observe":
-                raise HTTPException(status_code=400, detail=f"Repository '{repo.name}' is in observability-only mode")
+                raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.observabilityOnlyRepo", "params": {"name": repo.name}})
             job.repository_id = job_data.repository_id
 
         if job_data.run_repository_scripts is not None:
@@ -749,9 +749,9 @@ async def update_scheduled_job(
             for repo_id in unique_repo_ids:
                 repo = db.query(Repository).filter_by(id=repo_id).first()
                 if not repo:
-                    raise HTTPException(status_code=400, detail=f"Repository ID {repo_id} not found")
+                    raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.repositoryNotFound", "params": {"id": repo_id}})
                 if repo.mode == "observe":
-                    raise HTTPException(status_code=400, detail=f"Repository '{repo.name}' is in observability-only mode")
+                    raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.observabilityOnlyRepo", "params": {"name": repo.name}})
 
             # Delete existing junction table entries
             db.query(ScheduledJobRepository).filter_by(scheduled_job_id=job_id).delete()
@@ -771,10 +771,10 @@ async def update_scheduled_job(
         db.commit()
         
         logger.info("Scheduled job updated", job_id=job_id, user=current_user.username)
-        
+
         return {
             "success": True,
-            "message": "Scheduled job updated successfully"
+            "message": "backend.success.schedule.scheduledJobUpdated"
         }
     except HTTPException:
         db.rollback()
@@ -792,12 +792,12 @@ async def delete_scheduled_job(
 ):
     """Delete scheduled job (admin only)"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.schedule.adminAccessRequired"})
+
     try:
         job = db.query(ScheduledJob).filter(ScheduledJob.id == job_id).first()
         if not job:
-            raise HTTPException(status_code=404, detail="Scheduled job not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.schedule.scheduledJobNotFound"})
 
         # Step 1: Set scheduled_job_id to NULL for all backup jobs linked to this schedule
         # This preserves backup history while breaking the link
@@ -819,7 +819,7 @@ async def delete_scheduled_job(
 
         return {
             "success": True,
-            "message": "Scheduled job deleted successfully"
+            "message": "backend.success.schedule.scheduledJobDeleted"
         }
     except HTTPException:
         db.rollback()
@@ -837,22 +837,23 @@ async def toggle_scheduled_job(
 ):
     """Toggle scheduled job enabled/disabled state"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.schedule.adminAccessRequired"})
+
     try:
         job = db.query(ScheduledJob).filter(ScheduledJob.id == job_id).first()
         if not job:
-            raise HTTPException(status_code=404, detail="Scheduled job not found")
-        
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.schedule.scheduledJobNotFound"})
+
         job.enabled = not job.enabled
         job.updated_at = datetime.now(timezone.utc)
         db.commit()
-        
+
         logger.info("Scheduled job toggled", job_id=job_id, enabled=job.enabled, user=current_user.username)
-        
+
+        message = "backend.success.schedule.scheduledJobEnabled" if job.enabled else "backend.success.schedule.scheduledJobDisabled"
         return {
             "success": True,
-            "message": f"Scheduled job {'enabled' if job.enabled else 'disabled'} successfully",
+            "message": message,
             "enabled": job.enabled
         }
     except HTTPException:
@@ -869,13 +870,13 @@ async def duplicate_scheduled_job(
 ):
     """Duplicate a scheduled job with a new name"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.schedule.adminAccessRequired"})
 
     try:
         # Get the original job
         original_job = db.query(ScheduledJob).filter(ScheduledJob.id == job_id).first()
         if not original_job:
-            raise HTTPException(status_code=404, detail="Scheduled job not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.schedule.scheduledJobNotFound"})
 
         # Generate a unique name for the copy
         base_name = f"Copy of {original_job.name}"
@@ -891,7 +892,7 @@ async def duplicate_scheduled_job(
             cron = croniter.croniter(original_job.cron_expression, datetime.now(timezone.utc))
             next_run = cron.get_next(datetime)
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid cron expression: {str(e)}")
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.invalidCronExpression", "params": {"error": str(e)}})
 
         # Create the duplicate job
         duplicated_job = ScheduledJob(
@@ -970,7 +971,7 @@ async def duplicate_scheduled_job(
 
         return {
             "success": True,
-            "message": "Scheduled job duplicated successfully",
+            "message": "backend.success.schedule.scheduledJobDuplicated",
             "job": {
                 "id": duplicated_job.id,
                 "name": duplicated_job.name,
@@ -994,7 +995,7 @@ async def run_scheduled_job_now(
 ):
     """Run a scheduled job immediately"""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.schedule.adminAccessRequired"})
 
     try:
         from app.database.models import BackupJob, Repository
@@ -1002,7 +1003,7 @@ async def run_scheduled_job_now(
 
         job = db.query(ScheduledJob).filter(ScheduledJob.id == job_id).first()
         if not job:
-            raise HTTPException(status_code=404, detail="Scheduled job not found")
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.schedule.scheduledJobNotFound"})
 
         # Check if this is a multi-repo schedule or single-repo schedule
         repo_links = db.query(ScheduledJobRepository)\
@@ -1022,7 +1023,7 @@ async def run_scheduled_job_now(
             asyncio.create_task(execute_multi_repo_schedule_by_id(job_id))
 
             return {
-                "message": f"Multi-repository schedule started ({len(repo_links)} repositories)",
+                "message": "backend.success.schedule.scheduledJobStartedMulti",
                 "status": "pending"
             }
 
@@ -1035,7 +1036,7 @@ async def run_scheduled_job_now(
                 repo = db.query(Repository).filter(Repository.path == job.repository).first()
 
             if not repo:
-                raise HTTPException(status_code=404, detail="Repository not found for scheduled job")
+                raise HTTPException(status_code=404, detail={"key": "backend.errors.schedule.repositoryNotFound"})
 
             # Create backup job record with scheduled_job_id
             backup_job = BackupJob(
@@ -1083,10 +1084,10 @@ async def run_scheduled_job_now(
             return {
                 "job_id": backup_job.id,
                 "status": "pending",
-                "message": "Scheduled job started successfully"
+                "message": "backend.success.schedule.scheduledJobStarted"
             }
         else:
-            raise HTTPException(status_code=400, detail="Scheduled job has no repositories configured")
+            raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.noRepositoriesConfigured"})
 
     except HTTPException:
         raise
