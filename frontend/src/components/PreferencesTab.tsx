@@ -173,16 +173,16 @@ export default function PreferencesTab() {
 
                 <Alert severity="info" icon={<Info size={20} />} sx={{ mt: 2 }}>
                   <Typography variant="body2">
-                    <strong>Full Transparency:</strong>{' '}
+                    <strong>{t('preferences.analyticsTransparencyBold')}</strong>{' '}
                     <a
                       href="https://analytics.nullcodeai.dev/"
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{ color: 'inherit', textDecoration: 'underline' }}
                     >
-                      View our analytics dashboard publicly
+                      {t('preferences.analyticsTransparencyLink')}
                     </a>{' '}
-                    to see exactly what we collect. Self-hosted, no third parties.
+                    {t('preferences.analyticsTransparencyAfterLink')}
                   </Typography>
                 </Alert>
               </>
