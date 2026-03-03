@@ -17,7 +17,7 @@
 
 - [x] **UTIL-01**: A `translateBackendKey(error)` utility exists in `frontend/src/utils/` that handles plain-string `detail`, `{key}` object, and `{key, params}` object shapes (backward-compatible during migration)
 - [x] **UTIL-02**: All 69 frontend sites using `error.response?.data?.detail` display translated text via the utility instead of raw backend strings
-- [ ] **UTIL-03**: All frontend sites displaying `data.message` success fields translate the returned key via i18next
+- [x] **UTIL-03**: All frontend sites displaying `data.message` success fields translate the returned key via i18next
 
 ### Locale File Structure
 
@@ -82,7 +82,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FRONT-05 | Phase 1 | Complete |
 | UTIL-01 | Phase 1 | Complete |
 | UTIL-02 | Phase 1 | Complete |
-| UTIL-03 | Phase 1 | Pending |
+| UTIL-03 | Phase 1 | Complete |
 | LOC-01 | Phase 2 | Pending |
 | LOC-02 | Phase 5 | Pending |
 | LOC-03 | Phase 5 | Pending |
