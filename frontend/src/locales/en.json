@@ -2318,14 +2318,15 @@
   "backend": {
     "errors": {
       "auth": {
-        "incorrectCredentials": "Incorrect username or password",
-        "inactiveUser": "Account is inactive",
-        "userNotFound": "User not found",
         "cannotDeleteSelf": "Cannot delete yourself",
         "currentPasswordIncorrect": "Current password is incorrect",
+        "emailAlreadyRegistered": "Email already registered",
         "failedUpdatePassword": "Failed to update password",
-        "usernameAlreadyRegistered": "Username already registered",
-        "emailAlreadyRegistered": "Email already registered"
+        "inactiveUser": "Account is inactive",
+        "incorrectCredentials": "Incorrect username or password",
+        "notEnoughPermissions": "Not enough permissions",
+        "userNotFound": "User not found",
+        "usernameAlreadyRegistered": "Username already registered"
       },
       "repo": {
         "repositoryNotFound": "Repository not found",
