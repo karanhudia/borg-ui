@@ -927,11 +927,12 @@ async def cleanup_orphaned_script_associations(
         return {
             "success": True,
             "cleaned_up": len(orphaned_ids),
-            "message": f"Cleaned up {len(orphaned_ids)} orphaned script association(s)"
+            "count": len(orphaned_ids),
+            "message": "backend.success.scripts.cleanupCompleted"
         }
 
     return {
         "success": True,
         "cleaned_up": 0,
-        "message": "No orphaned script associations found"
+        "message": "backend.success.scripts.noOrphanedAssociations"
     }
