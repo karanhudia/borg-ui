@@ -1396,8 +1396,8 @@ class BackupService:
                            using_library=hook_result["using_library"])
 
                 if not hook_result["success"]:
-                    error_msg = f"Pre-backup hooks failed: {hook_result['scripts_failed']}/{hook_result['scripts_executed']} scripts failed"
-                    logger.error(error_msg, job_id=job_id)
+                    error_msg = json.dumps({"key": "backend.errors.service.preBackupHooksFailed", "params": {"failed": hook_result['scripts_failed'], "total": hook_result['scripts_executed']}})
+                    logger.error("Pre-backup hooks failed", job_id=job_id, scripts_failed=hook_result['scripts_failed'], scripts_executed=hook_result['scripts_executed'])
 
                     # Check if we should continue or abort
                     if not repo_record.continue_on_hook_failure:
@@ -1443,7 +1443,7 @@ class BackupService:
             if not processed_source_paths:
                 logger.error("No valid source paths after processing (all SSH mounts failed?)", job_id=job_id)
                 job.status = "failed"
-                job.error_message = "Failed to prepare source paths: all SSH mounts failed or no valid paths"
+                job.error_message = json.dumps({"key": "backend.errors.service.failedPrepareSourcePaths"})
                 job.completed_at = datetime.utcnow()
                 db.commit()
                 mqtt_service.sync_state_with_db(db, reason="backup failed: no valid source paths")
@@ -1894,7 +1894,7 @@ class BackupService:
                                      scripts_failed=hook_result["scripts_failed"])
                         # Mark as failed if post-hooks fail
                         job.status = "failed"
-                        job.error_message = f"Backup succeeded but post-backup hooks failed: {hook_result['scripts_failed']}/{hook_result['scripts_executed']} scripts failed"
+                        job.error_message = json.dumps({"key": "backend.errors.service.postBackupHooksFailed", "params": {"failed": hook_result['scripts_failed'], "total": hook_result['scripts_executed']}})
 
                 # Send notification after post-hook completes
                 if post_hook_failed:
@@ -1924,7 +1924,7 @@ class BackupService:
                 # Warning (legacy exit code 1 or modern exit codes 100-127)
                 job.status = "completed_with_warnings"
                 job.progress = 100
-                job.error_message = f"Backup completed with warning (exit code {actual_returncode})"
+                job.error_message = json.dumps({"key": "backend.errors.service.backupCompletedWithWarning", "params": {"exitCode": actual_returncode}})
                 logger.warning("Backup completed with warning", job_id=job_id, exit_code=actual_returncode)
                 # Update archive statistics with final deduplicated size
                 await self._update_archive_stats(db, job_id, repository, archive_name, env)
@@ -1959,7 +1959,7 @@ class BackupService:
                                      scripts_failed=hook_result["scripts_failed"])
                         # Mark as failed if post-hooks fail
                         job.status = "failed"
-                        job.error_message = f"Backup succeeded with warning but post-backup hooks failed: {hook_result['scripts_failed']}/{hook_result['scripts_executed']} scripts failed"
+                        job.error_message = json.dumps({"key": "backend.errors.service.backupWarningPostHooksFailed", "params": {"failed": hook_result['scripts_failed'], "total": hook_result['scripts_executed']}})
 
                 # Send notification after post-hook completes (for warning case)
                 if post_hook_failed:
