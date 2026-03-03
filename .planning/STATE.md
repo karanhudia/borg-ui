@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-03T18:05:45.248Z"
+last_updated: "2026-03-03T18:06:56.865Z"
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 15
   completed_plans: 15
 ---
@@ -54,6 +54,7 @@ Progress: [████████████████] 96%
 | Phase 04-backend-services-and-remaining-api-files P04 | 3 | 2 tasks | 7 files |
 | Phase 04-backend-services-and-remaining-api-files P04 | 3 | 2 tasks | 7 files |
 | Phase 04-backend-services-and-remaining-api-files P06 | 2 | 2 tasks | 6 files |
+| Phase 04-backend-services-and-remaining-api-files P05 | 3 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -98,6 +99,8 @@ Recent decisions affecting current work:
 - [Phase 04-backend-services-and-remaining-api-files]: [Phase 04-06]: settings.py message key corruption removed — response[message] += lines were redundant since CacheManagementTab.tsx handles connection_info separately
 - [Phase 04-backend-services-and-remaining-api-files]: [Phase 04-06]: scripts_library.py cleanup response adds count field mirroring cleaned_up for i18next {{count}} interpolation
 - [Phase 04-backend-services-and-remaining-api-files]: [Phase 04-06]: es.json and de.json use English placeholder values for new filesystem and scripts success domains — Phase 5 adds real translations
+- [Phase 04-backend-services-and-remaining-api-files]: 04-05: msg_parts dynamic join at delete endpoint dropped — static sshKeyDeleted key used; connection/repository counts logged, not user-facing
+- [Phase 04-backend-services-and-remaining-api-files]: 04-05: Internal test_ssh_key_connection helper returns locale key string — caller uses conditional success/failure key selection instead of propagating raw message
 
 ### Pending Todos
 
@@ -112,5 +115,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 04-06-PLAN.md — settings.py corruption removed (response["message"] += lines deleted), filesystem.py and scripts_library.py migrated to locale keys; backend.success.filesystem and backend.success.scripts domains added to all 3 locale files; BKND-06 gaps fully closed.
+Stopped at: Completed 04-05-PLAN.md — 13 ssh_keys.py message response fields migrated to backend.success.ssh.* locale keys; 7 new keys in all 3 locale files (connectionTestFailed, sshKeyDeployFailed, sshKeyGeneratedAndDeployed, sshKeyGeneratedDeploymentSkipped, sshKeyUpdated, systemKeyGenerated, systemKeyImported); BKND-06 verification truth #4 satisfied.
 Resume file: None
