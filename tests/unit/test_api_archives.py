@@ -141,4 +141,4 @@ class TestDownloadFileEndpoint:
         )
 
         assert response.status_code == 404
-        assert response.json()["detail"]["key"] == "backend.errors.restore.repositoryNotFound"
+        assert response.json()["detail"]["key"] == "backend.errors.archives.repositoryNotFound"
