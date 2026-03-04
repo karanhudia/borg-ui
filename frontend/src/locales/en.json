@@ -2331,7 +2331,12 @@
         "incorrectCredentials": "Incorrect username or password",
         "notEnoughPermissions": "Not enough permissions",
         "userNotFound": "User not found",
-        "usernameAlreadyRegistered": "Username already registered"
+        "usernameAlreadyRegistered": "Username already registered",
+        "authTokenRequired": "Authentication token required",
+        "invalidToken": "Invalid token",
+        "invalidAuthentication": "Invalid authentication",
+        "invalidAuthToken": "Invalid authentication token",
+        "invalidOrExpiredToken": "Invalid or expired token"
       },
       "repo": {
         "repositoryNotFound": "Repository not found",
@@ -2357,7 +2362,39 @@
         "breakLockTimeout": "Timeout while trying to break lock",
         "checkJobNotFound": "Check job not found",
         "compactJobNotFound": "Compact job not found",
-        "sshUrlWithoutConnectionId": "Path appears to be an SSH URL but no connection_id provided. Please select an SSH connection."
+        "sshUrlWithoutConnectionId": "Path appears to be an SSH URL but no connection_id provided. Please select an SSH connection.",
+        "failedToRetrieveRepositories": "Failed to retrieve repositories",
+        "failedToCreateParentDirectory": "Failed to create parent directory",
+        "failedToInitializeRepository": "Failed to initialize repository",
+        "failedToCreateRepository": "Failed to create repository",
+        "failedToVerifyRepository": "Failed to verify repository",
+        "failedToImportRepository": "Failed to import repository",
+        "failedToUploadKeyfile": "Failed to upload keyfile",
+        "failedToExportKeyfile": "Failed to export keyfile",
+        "failedToRetrieveRepository": "Failed to retrieve repository",
+        "failedToUpdateRepository": "Failed to update repository",
+        "failedToDeleteRepository": "Failed to delete repository",
+        "failedToStartCheck": "Failed to start check",
+        "failedToStartCompact": "Failed to start compact",
+        "pruneAlreadyRunning": "A prune operation is already running for this repository",
+        "failedToStartPrune": "Failed to start prune",
+        "failedToGetStatistics": "Failed to get repository statistics",
+        "failedToListArchives": "Failed to list archives",
+        "failedToGetRepositoryInfo": "Failed to get repository info",
+        "failedToBreakLock": "Failed to break lock",
+        "failedToGetArchiveInfo": "Failed to get archive info",
+        "failedToListArchiveFiles": "Failed to list archive files",
+        "failedToGetJobStatus": "Failed to get job status",
+        "failedToGetCheckJobs": "Failed to get check jobs",
+        "failedToGetCompactJobs": "Failed to get compact jobs",
+        "failedToGetRunningJobs": "Failed to get running jobs",
+        "invalidCronExpression": "Invalid cron expression",
+        "failedToUpdateCheckSchedule": "Failed to update check schedule",
+        "failedToGetCheckSchedule": "Failed to get check schedule",
+        "failedParseArchiveList": "Failed to parse archive list",
+        "failedParseRepositoryInfo": "Failed to parse repository info",
+        "failedParseArchiveInfo": "Failed to parse archive info",
+        "failedExportKeyfile": "Failed to export keyfile"
       },
       "backup": {
         "backupJobNotFound": "Backup job not found",
@@ -2365,7 +2402,11 @@
         "cancelledByUser": "Backup cancelled by user",
         "cancelledByUserProcessNotFound": "Backup cancelled by user (process not found, may have already completed)",
         "noLogsAvailable": "No logs available for this backup (successful backups don't save logs)",
-        "logFileNotFound": "Log file not found: {{filename}}"
+        "logFileNotFound": "Log file not found: {{filename}}",
+        "failedGetBackupJobs": "Failed to get backup jobs",
+        "failedGetBackupStatus": "Failed to get backup status",
+        "failedCancelBackup": "Failed to cancel backup",
+        "cannotDownloadLogsForRunningBackup": "Cannot download logs for running backup"
       },
       "restore": {
         "cancelledByUser": "Restore cancelled by user",
@@ -2378,7 +2419,10 @@
         "failedPreviewRestore": "Failed to preview restore",
         "repositoryNotFound": "Repository not found",
         "restoreJobNotFound": "Restore job not found",
-        "sshToSshNotSupported": "Restoring from SSH repository to SSH destination is not supported"
+        "sshToSshNotSupported": "Restoring from SSH repository to SSH destination is not supported",
+        "failedStartRestore": "Failed to start restore",
+        "failedFetchArchives": "Failed to fetch archives",
+        "failedFetchArchiveContents": "Failed to fetch archive contents"
       },
       "schedule": {
         "adminAccessRequired": "Admin access required",
@@ -2387,7 +2431,18 @@
         "noRepositoriesConfigured": "Scheduled job has no repositories configured",
         "observabilityOnlyRepo": "Cannot schedule backups for observability-only repositories",
         "repositoryNotFound": "Repository not found",
-        "scheduledJobNotFound": "Scheduled job not found"
+        "scheduledJobNotFound": "Scheduled job not found",
+        "failedRetrieveScheduledJobs": "Failed to retrieve scheduled jobs: {{error}}",
+        "dbConstraintError": "Database constraint error: {{error}}",
+        "failedCreateScheduledJob": "Failed to create scheduled job: {{error}}",
+        "failedGetUpcomingJobs": "Failed to get upcoming jobs: {{error}}",
+        "failedRetrieveScheduledJob": "Failed to retrieve scheduled job: {{error}}",
+        "failedUpdateScheduledJob": "Failed to update scheduled job: {{error}}",
+        "failedDeleteScheduledJob": "Failed to delete scheduled job: {{error}}",
+        "failedToggleScheduledJob": "Failed to toggle scheduled job: {{error}}",
+        "failedDuplicateScheduledJob": "Failed to duplicate scheduled job: {{error}}",
+        "failedRunScheduledJob": "Failed to run scheduled job: {{error}}",
+        "failedValidateCronExpression": "Failed to validate cron expression: {{error}}"
       },
       "ssh": {
         "adminAccessRequired": "Admin access required",
@@ -2407,7 +2462,29 @@
         "publicKeyFileNotFound": "Public key file not found: {{path}}",
         "sshConnectionNotFound": "SSH connection not found",
         "sshKeyNotFound": "SSH key not found",
-        "systemKeyAlreadyExists": "System SSH key already exists"
+        "systemKeyAlreadyExists": "System SSH key already exists",
+        "failedRetrieveSystemSshKey": "Failed to retrieve system SSH key: {{error}}",
+        "failedRetrieveSshKeys": "Failed to retrieve SSH keys: {{error}}",
+        "failedCreateSshKey": "Failed to create SSH key: {{error}}",
+        "failedGenerateSystemSshKey": "Failed to generate system SSH key: {{error}}",
+        "failedReadPrivateKey": "Failed to read private key: {{error}}",
+        "failedReadPublicKey": "Failed to read public key: {{error}}",
+        "failedImportSystemSshKey": "Failed to import system SSH key: {{error}}",
+        "quickSshSetupFailed": "Quick SSH setup failed: {{error}}",
+        "failedDeploySshKey": "Failed to deploy SSH key: {{error}}",
+        "failedRetrieveSshConnections": "Failed to retrieve SSH connections: {{error}}",
+        "failedTestSshConnection": "Failed to test SSH connection: {{error}}",
+        "failedUpdateSshConnection": "Failed to update SSH connection: {{error}}",
+        "failedRefreshStorage": "Failed to refresh storage: {{error}}",
+        "failedTestConnection": "Failed to test connection: {{error}}",
+        "failedRedeploySshKey": "Failed to redeploy SSH key: {{error}}",
+        "failedDeleteSshConnection": "Failed to delete SSH connection: {{error}}",
+        "failedRetrieveSshKey": "Failed to retrieve SSH key: {{error}}",
+        "failedUpdateSshKey": "Failed to update SSH key: {{error}}",
+        "failedDeleteSshKey": "Failed to delete SSH key: {{error}}",
+        "failedToggleBackupSource": "Failed to toggle backup source: {{error}}",
+        "failedListBackupSources": "Failed to list backup sources: {{error}}",
+        "failedVerifyBorgInstallation": "Failed to verify Borg installation: {{error}}"
       },
       "settings": {
         "adminAccessRequired": "Admin access required",
@@ -2419,13 +2496,32 @@
         "invalidLogSavePolicy": "Invalid log_save_policy. Must be one of: {{policies}}",
         "logSizeTooSmall": "log_max_total_size_mb must be at least 10 MB",
         "userNotFound": "User not found",
-        "usernameAlreadyExists": "Username already exists"
+        "usernameAlreadyExists": "Username already exists",
+        "failedRetrieveSystemSettings": "Failed to retrieve system settings: {{error}}",
+        "failedUpdateSystemSettings": "Failed to update system settings: {{error}}",
+        "failedStartStatsRefresh": "Failed to start stats refresh: {{error}}",
+        "failedRetrieveUsers": "Failed to retrieve users: {{error}}",
+        "failedCreateUser": "Failed to create user: {{error}}",
+        "failedUpdateUser": "Failed to update user: {{error}}",
+        "failedDeleteUser": "Failed to delete user: {{error}}",
+        "failedResetPassword": "Failed to reset password: {{error}}",
+        "failedChangePassword": "Failed to change password: {{error}}",
+        "failedUpdateProfile": "Failed to update profile: {{error}}",
+        "failedUpdatePreferences": "Failed to update preferences: {{error}}",
+        "failedRunSystemCleanup": "Failed to run system cleanup: {{error}}",
+        "failedGetLogStorageStats": "Failed to get log storage statistics: {{error}}",
+        "failedRunLogCleanup": "Failed to run log cleanup: {{error}}",
+        "failedGetCacheStats": "Failed to get cache statistics: {{error}}",
+        "failedClearCache": "Failed to clear cache: {{error}}",
+        "failedUpdateCacheSettings": "Failed to update cache settings: {{error}}"
       },
       "activity": {
         "adminOnlyDelete": "Only administrators can delete job entries",
         "cannotDeleteRunningJob": "Cannot delete running job. Cancel it first or wait for completion.",
         "invalidJobType": "Invalid job type: {{jobType}}",
-        "jobNotFound": "{{jobType}} job not found"
+        "jobNotFound": "{{jobType}} job not found",
+        "cannotDownloadLogsForRunningJob": "Cannot download logs for running job",
+        "noLogsAvailableForJob": "No logs available for this job"
       },
       "archives": {
         "adminAccessRequired": "Admin access required",
@@ -2433,7 +2529,10 @@
         "deleteJobNotFound": "Delete job not found",
         "failedGetArchiveContents": "Failed to get archive contents",
         "failedGetArchiveInfo": "Failed to get archive info",
-        "failedListArchives": "Failed to list archives"
+        "failedListArchives": "Failed to list archives",
+        "repositoryNotFound": "Repository not found",
+        "fileNotFoundAfterExtraction": "File not found after extraction",
+        "failedExtractFile": "Failed to extract file: {{error}}"
       },
       "borg": {
         "repositoryDoesNotExist": "Repository does not exist at the specified path",
@@ -2469,7 +2568,11 @@
         "canOnlyUnmountBorgMounts": "Can only unmount Borg archive mounts via this endpoint",
         "mountInfoNotFound": "Mount succeeded but info not found",
         "mountNotFound": "Mount {{mountId}} not found",
-        "unmountFailed": "Failed to unmount {{mountId}}"
+        "unmountFailed": "Failed to unmount {{mountId}}",
+        "failedMountArchive": "Failed to mount archive",
+        "failedUnmount": "Failed to unmount",
+        "failedListMounts": "Failed to list mounts",
+        "failedGetMountInfo": "Failed to get mount info"
       },
       "notifications": {
         "settingNotFound": "Notification setting not found"
@@ -2477,7 +2580,8 @@
       "packages": {
         "jobNotFound": "Job not found",
         "packageAlreadyExists": "Package '{{name}}' already exists",
-        "packageNotFound": "Package not found"
+        "packageNotFound": "Package not found",
+        "failedStartInstallation": "Failed to start installation"
       },
       "scripts": {
         "adminAccessRequired": "Admin access required",
@@ -2512,6 +2616,18 @@
         "restoreFailedZeroFilesNoOutput": "Restore failed: 0 files extracted (exit code {{exitCode}}). No error output from borg. Files may not exist in archive or permission denied.",
         "restoreFailedExitCode": "Restore process exited with code {{exitCode}}",
         "restoreFailed": "Restore failed"
+      },
+      "dashboard": {
+        "failedGetSystemMetrics": "Failed to get system metrics",
+        "failedGetDashboardStatus": "Failed to get dashboard status",
+        "failedGetMetrics": "Failed to get metrics",
+        "failedGetSchedule": "Failed to get schedule"
+      },
+      "events": {
+        "notAuthenticated": "Not authenticated",
+        "invalidAuthCredentials": "Invalid authentication credentials",
+        "userNotFoundOrInactive": "User not found or inactive",
+        "failedStartEventStream": "Failed to start event stream"
       }
     },
     "success": {

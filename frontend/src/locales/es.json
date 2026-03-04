@@ -2331,7 +2331,12 @@
         "incorrectCredentials": "Nombre de usuario o contraseña incorrectos",
         "notEnoughPermissions": "Permisos insuficientes",
         "userNotFound": "Usuario no encontrado",
-        "usernameAlreadyRegistered": "El nombre de usuario ya está registrado"
+        "usernameAlreadyRegistered": "El nombre de usuario ya está registrado",
+        "authTokenRequired": "Token de autenticación requerido",
+        "invalidToken": "Token inválido",
+        "invalidAuthentication": "Autenticación inválida",
+        "invalidAuthToken": "Token de autenticación inválido",
+        "invalidOrExpiredToken": "Token inválido o expirado"
       },
       "repo": {
         "repositoryNotFound": "Repositorio no encontrado",
@@ -2357,7 +2362,39 @@
         "breakLockTimeout": "Tiempo de espera al intentar romper el bloqueo",
         "checkJobNotFound": "Trabajo de verificación no encontrado",
         "compactJobNotFound": "Trabajo de compactación no encontrado",
-        "sshUrlWithoutConnectionId": "La ruta parece ser una URL SSH pero no se proporcionó connection_id. Seleccione una conexión SSH."
+        "sshUrlWithoutConnectionId": "La ruta parece ser una URL SSH pero no se proporcionó connection_id. Seleccione una conexión SSH.",
+        "failedToRetrieveRepositories": "Failed to retrieve repositories",
+        "failedToCreateParentDirectory": "Failed to create parent directory",
+        "failedToInitializeRepository": "Failed to initialize repository",
+        "failedToCreateRepository": "Failed to create repository",
+        "failedToVerifyRepository": "Failed to verify repository",
+        "failedToImportRepository": "Failed to import repository",
+        "failedToUploadKeyfile": "Failed to upload keyfile",
+        "failedToExportKeyfile": "Failed to export keyfile",
+        "failedToRetrieveRepository": "Failed to retrieve repository",
+        "failedToUpdateRepository": "Failed to update repository",
+        "failedToDeleteRepository": "Failed to delete repository",
+        "failedToStartCheck": "Failed to start check",
+        "failedToStartCompact": "Failed to start compact",
+        "pruneAlreadyRunning": "A prune operation is already running for this repository",
+        "failedToStartPrune": "Failed to start prune",
+        "failedToGetStatistics": "Failed to get repository statistics",
+        "failedToListArchives": "Failed to list archives",
+        "failedToGetRepositoryInfo": "Failed to get repository info",
+        "failedToBreakLock": "Failed to break lock",
+        "failedToGetArchiveInfo": "Failed to get archive info",
+        "failedToListArchiveFiles": "Failed to list archive files",
+        "failedToGetJobStatus": "Failed to get job status",
+        "failedToGetCheckJobs": "Failed to get check jobs",
+        "failedToGetCompactJobs": "Failed to get compact jobs",
+        "failedToGetRunningJobs": "Failed to get running jobs",
+        "invalidCronExpression": "Invalid cron expression",
+        "failedToUpdateCheckSchedule": "Failed to update check schedule",
+        "failedToGetCheckSchedule": "Failed to get check schedule",
+        "failedParseArchiveList": "Error al analizar la lista de archivos",
+        "failedParseRepositoryInfo": "Error al analizar la información del repositorio",
+        "failedParseArchiveInfo": "Error al analizar la información del archivo",
+        "failedExportKeyfile": "Error al exportar el archivo de claves"
       },
       "backup": {
         "backupJobNotFound": "Trabajo de copia de seguridad no encontrado",
@@ -2365,7 +2402,11 @@
         "cancelledByUser": "Copia de seguridad cancelada por el usuario",
         "cancelledByUserProcessNotFound": "Copia de seguridad cancelada por el usuario (proceso no encontrado, puede que ya haya terminado)",
         "noLogsAvailable": "No hay registros disponibles para esta copia de seguridad (las copias exitosas no guardan registros)",
-        "logFileNotFound": "Archivo de registro no encontrado: {{filename}}"
+        "logFileNotFound": "Archivo de registro no encontrado: {{filename}}",
+        "failedGetBackupJobs": "Error al obtener los trabajos de copia de seguridad",
+        "failedGetBackupStatus": "Error al obtener el estado de la copia de seguridad",
+        "failedCancelBackup": "Error al cancelar la copia de seguridad",
+        "cannotDownloadLogsForRunningBackup": "No se pueden descargar los registros de una copia de seguridad en ejecución"
       },
       "restore": {
         "cancelledByUser": "Restauración cancelada por el usuario",
@@ -2378,7 +2419,10 @@
         "failedPreviewRestore": "Error al previsualizar la restauración",
         "repositoryNotFound": "Repositorio no encontrado",
         "restoreJobNotFound": "Trabajo de restauración no encontrado",
-        "sshToSshNotSupported": "No se admite la restauración desde un repositorio SSH a un destino SSH"
+        "sshToSshNotSupported": "No se admite la restauración desde un repositorio SSH a un destino SSH",
+        "failedStartRestore": "Error al iniciar la restauración",
+        "failedFetchArchives": "Error al obtener los archivos",
+        "failedFetchArchiveContents": "Error al obtener el contenido del archivo"
       },
       "schedule": {
         "adminAccessRequired": "Se requiere acceso de administrador",
@@ -2387,7 +2431,18 @@
         "noRepositoriesConfigured": "El trabajo programado no tiene repositorios configurados",
         "observabilityOnlyRepo": "No se pueden programar copias de seguridad para repositorios de solo observabilidad",
         "repositoryNotFound": "Repositorio no encontrado",
-        "scheduledJobNotFound": "Trabajo programado no encontrado"
+        "scheduledJobNotFound": "Trabajo programado no encontrado",
+        "failedRetrieveScheduledJobs": "Error al obtener los trabajos programados: {{error}}",
+        "dbConstraintError": "Error de restricción de base de datos: {{error}}",
+        "failedCreateScheduledJob": "Error al crear el trabajo programado: {{error}}",
+        "failedGetUpcomingJobs": "Error al obtener los trabajos próximos: {{error}}",
+        "failedRetrieveScheduledJob": "Error al obtener el trabajo programado: {{error}}",
+        "failedUpdateScheduledJob": "Error al actualizar el trabajo programado: {{error}}",
+        "failedDeleteScheduledJob": "Error al eliminar el trabajo programado: {{error}}",
+        "failedToggleScheduledJob": "Error al alternar el trabajo programado: {{error}}",
+        "failedDuplicateScheduledJob": "Error al duplicar el trabajo programado: {{error}}",
+        "failedRunScheduledJob": "Error al ejecutar el trabajo programado: {{error}}",
+        "failedValidateCronExpression": "Error al validar la expresión cron: {{error}}"
       },
       "ssh": {
         "adminAccessRequired": "Se requiere acceso de administrador",
@@ -2407,7 +2462,29 @@
         "publicKeyFileNotFound": "Archivo de clave pública no encontrado: {{path}}",
         "sshConnectionNotFound": "Conexión SSH no encontrada",
         "sshKeyNotFound": "Clave SSH no encontrada",
-        "systemKeyAlreadyExists": "La clave SSH del sistema ya existe"
+        "systemKeyAlreadyExists": "La clave SSH del sistema ya existe",
+        "failedRetrieveSystemSshKey": "Error al obtener la clave SSH del sistema: {{error}}",
+        "failedRetrieveSshKeys": "Error al obtener las claves SSH: {{error}}",
+        "failedCreateSshKey": "Error al crear la clave SSH: {{error}}",
+        "failedGenerateSystemSshKey": "Error al generar la clave SSH del sistema: {{error}}",
+        "failedReadPrivateKey": "Error al leer la clave privada: {{error}}",
+        "failedReadPublicKey": "Error al leer la clave pública: {{error}}",
+        "failedImportSystemSshKey": "Error al importar la clave SSH del sistema: {{error}}",
+        "quickSshSetupFailed": "Configuración rápida de SSH fallida: {{error}}",
+        "failedDeploySshKey": "Error al desplegar la clave SSH: {{error}}",
+        "failedRetrieveSshConnections": "Error al obtener las conexiones SSH: {{error}}",
+        "failedTestSshConnection": "Error al probar la conexión SSH: {{error}}",
+        "failedUpdateSshConnection": "Error al actualizar la conexión SSH: {{error}}",
+        "failedRefreshStorage": "Error al actualizar el almacenamiento: {{error}}",
+        "failedTestConnection": "Error al probar la conexión: {{error}}",
+        "failedRedeploySshKey": "Error al volver a desplegar la clave SSH: {{error}}",
+        "failedDeleteSshConnection": "Error al eliminar la conexión SSH: {{error}}",
+        "failedRetrieveSshKey": "Error al obtener la clave SSH: {{error}}",
+        "failedUpdateSshKey": "Error al actualizar la clave SSH: {{error}}",
+        "failedDeleteSshKey": "Error al eliminar la clave SSH: {{error}}",
+        "failedToggleBackupSource": "Error al alternar la fuente de copia de seguridad: {{error}}",
+        "failedListBackupSources": "Error al listar las fuentes de copia de seguridad: {{error}}",
+        "failedVerifyBorgInstallation": "Error al verificar la instalación de Borg: {{error}}"
       },
       "settings": {
         "adminAccessRequired": "Se requiere acceso de administrador",
@@ -2419,13 +2496,32 @@
         "invalidLogSavePolicy": "Política log_save_policy no válida. Debe ser una de: {{policies}}",
         "logSizeTooSmall": "log_max_total_size_mb debe ser al menos 10 MB",
         "userNotFound": "Usuario no encontrado",
-        "usernameAlreadyExists": "El nombre de usuario ya existe"
+        "usernameAlreadyExists": "El nombre de usuario ya existe",
+        "failedRetrieveSystemSettings": "Error al obtener la configuración del sistema: {{error}}",
+        "failedUpdateSystemSettings": "Error al actualizar la configuración del sistema: {{error}}",
+        "failedStartStatsRefresh": "Error al iniciar la actualización de estadísticas: {{error}}",
+        "failedRetrieveUsers": "Error al obtener los usuarios: {{error}}",
+        "failedCreateUser": "Error al crear el usuario: {{error}}",
+        "failedUpdateUser": "Error al actualizar el usuario: {{error}}",
+        "failedDeleteUser": "Error al eliminar el usuario: {{error}}",
+        "failedResetPassword": "Error al restablecer la contraseña: {{error}}",
+        "failedChangePassword": "Error al cambiar la contraseña: {{error}}",
+        "failedUpdateProfile": "Error al actualizar el perfil: {{error}}",
+        "failedUpdatePreferences": "Error al actualizar las preferencias: {{error}}",
+        "failedRunSystemCleanup": "Error al ejecutar la limpieza del sistema: {{error}}",
+        "failedGetLogStorageStats": "Error al obtener las estadísticas de almacenamiento de registros: {{error}}",
+        "failedRunLogCleanup": "Error al ejecutar la limpieza de registros: {{error}}",
+        "failedGetCacheStats": "Error al obtener las estadísticas de caché: {{error}}",
+        "failedClearCache": "Error al limpiar el caché: {{error}}",
+        "failedUpdateCacheSettings": "Error al actualizar la configuración de caché: {{error}}"
       },
       "activity": {
         "adminOnlyDelete": "Solo los administradores pueden eliminar entradas de trabajo",
         "cannotDeleteRunningJob": "No se puede eliminar un trabajo en ejecución. Cancélelo primero o espere a que finalice.",
         "invalidJobType": "Tipo de trabajo no válido: {{jobType}}",
-        "jobNotFound": "Trabajo de {{jobType}} no encontrado"
+        "jobNotFound": "Trabajo de {{jobType}} no encontrado",
+        "cannotDownloadLogsForRunningJob": "No se pueden descargar los registros de un trabajo en ejecución",
+        "noLogsAvailableForJob": "No hay registros disponibles para este trabajo"
       },
       "archives": {
         "adminAccessRequired": "Se requiere acceso de administrador",
@@ -2433,7 +2529,10 @@
         "deleteJobNotFound": "Trabajo de eliminación no encontrado",
         "failedGetArchiveContents": "Error al obtener el contenido del archivo",
         "failedGetArchiveInfo": "Error al obtener información del archivo",
-        "failedListArchives": "Error al listar los archivos"
+        "failedListArchives": "Error al listar los archivos",
+        "repositoryNotFound": "Repositorio no encontrado",
+        "fileNotFoundAfterExtraction": "Archivo no encontrado después de la extracción",
+        "failedExtractFile": "Error al extraer el archivo: {{error}}"
       },
       "borg": {
         "repositoryDoesNotExist": "El repositorio no existe en la ruta especificada",
@@ -2469,7 +2568,11 @@
         "canOnlyUnmountBorgMounts": "Solo se pueden desmontar montajes de archivos Borg a través de este endpoint",
         "mountInfoNotFound": "El montaje se realizó pero no se encontró la información",
         "mountNotFound": "Montaje {{mountId}} no encontrado",
-        "unmountFailed": "Error al desmontar {{mountId}}"
+        "unmountFailed": "Error al desmontar {{mountId}}",
+        "failedMountArchive": "Error al montar el archivo",
+        "failedUnmount": "Error al desmontar",
+        "failedListMounts": "Error al listar los puntos de montaje",
+        "failedGetMountInfo": "Error al obtener información del punto de montaje"
       },
       "notifications": {
         "settingNotFound": "Configuración de notificación no encontrada"
@@ -2477,7 +2580,8 @@
       "packages": {
         "jobNotFound": "Trabajo no encontrado",
         "packageAlreadyExists": "El paquete '{{name}}' ya existe",
-        "packageNotFound": "Paquete no encontrado"
+        "packageNotFound": "Paquete no encontrado",
+        "failedStartInstallation": "Error al iniciar la instalación"
       },
       "scripts": {
         "adminAccessRequired": "Se requiere acceso de administrador",
@@ -2512,6 +2616,18 @@
         "restoreFailedZeroFilesNoOutput": "Restauración fallida: 0 archivos extraídos (código de salida {{exitCode}}). Sin salida de error de Borg. Es posible que los archivos no existan en el archivo o que el acceso esté denegado.",
         "restoreFailedExitCode": "El proceso de restauración terminó con el código {{exitCode}}",
         "restoreFailed": "La restauración falló"
+      },
+      "dashboard": {
+        "failedGetSystemMetrics": "Error al obtener las métricas del sistema",
+        "failedGetDashboardStatus": "Error al obtener el estado del panel",
+        "failedGetMetrics": "Error al obtener las métricas",
+        "failedGetSchedule": "Error al obtener el calendario"
+      },
+      "events": {
+        "notAuthenticated": "No autenticado",
+        "invalidAuthCredentials": "Credenciales de autenticación inválidas",
+        "userNotFoundOrInactive": "Usuario no encontrado o inactivo",
+        "failedStartEventStream": "Error al iniciar el flujo de eventos"
       }
     },
     "success": {
