@@ -1,33 +1,32 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: unknown
-last_updated: "2026-03-04T04:48:22.881Z"
+milestone: v2.0
+milestone_name: (not yet defined)
+status: planning_next_milestone
+last_updated: "2026-03-04T11:00:00Z"
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 20
-  completed_plans: 20
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-03)
+See: .planning/PROJECT.md (updated 2026-03-04 after v1.0 milestone)
 
 **Core value:** Every user-facing string — whether from the frontend or backend — must be translatable, so users can operate the UI entirely in their own language.
-**Current focus:** Phase 6 - Fix Services Layer Raw-English Paths
+**Current focus:** Planning next milestone — run /gsd:new-milestone to define v2.0
 
 ## Current Position
 
-Phase: 6 of 6 (Fix Services Layer Raw-English Paths)
-Plan: 1 of 2 in current phase (06-01 complete — SVC-01 confirmed satisfied in backup_service.py; SVC-02 fixed in restore_service.py line 451; raw-stderr ternary removed; error_message always uses json.dumps key format)
-Status: Phase 6 in progress (1 of 2 plans complete)
-Last activity: 2026-03-04 — Plan 06-01 complete: removed raw-stderr ternary from restore_service.py line 451; SVC-01 and SVC-02 both satisfied; services layer error_message writes are fully clean
+Phase: v1.0 shipped ✅ — milestone archived
+Status: Ready for next milestone planning
+Last activity: 2026-03-04 — v1.0 milestone complete: 22/22 requirements satisfied, 6 phases, 20 plans, 95 files changed; archived to .planning/milestones/
 
-Progress: [████████████████] 95%
+Progress: [████████████████] 100% (v1.0)
 
 ## Performance Metrics
 
@@ -116,16 +115,14 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None yet.
+None — v1.0 milestone complete. Tech debt items documented in PROJECT.md.
 
 ### Blockers/Concerns
 
-- Phase 3/4: The 656+ `detail=` site count is a grep count; actual unique keys likely 80-120. Do a domain-by-domain tally at Phase 3 start to right-size locale file work.
-- Phase 4: Verify `error_message` column max length can accommodate JSON-encoded `{key, params}` strings before migrating services layer.
-- Phase 5: Spanish and German translations for new backend.* keys may need a human reviewer — identify this dependency early.
+None.
 
 ## Session Continuity
 
 Last session: 2026-03-04
-Stopped at: Completed 06-01-PLAN.md — removed raw-stderr ternary from restore_service.py line 451; SVC-01 (backup_service.py confirmed clean) and SVC-02 (restore_service.py line 451 fixed) both satisfied; 1 file modified; requirements SVC-01 and SVC-02 marked complete.
+Stopped at: v1.0 milestone archived — MILESTONES.md updated, PROJECT.md evolved, ROADMAP.md reorganized, REQUIREMENTS.md deleted, RETROSPECTIVE.md created.
 Resume file: None

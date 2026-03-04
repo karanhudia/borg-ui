@@ -289,28 +289,46 @@ def is_lock_error(exit_code: int = None, msgid: str = None) -> bool:
     return False
 
 
+import json as _json
+
+# Maps Borg message IDs to backend.errors.borg locale keys
+_MSGID_TO_LOCALE_KEY = {
+    "Repository.DoesNotExist": "repositoryDoesNotExist",
+    "Repository.AlreadyExists": "repositoryAlreadyExists",
+    "Repository.InvalidRepository": "notValidBorgRepository",
+    "Repository.CheckNeeded": "repositoryCheckNeeded",
+    "LockTimeout": "lockTimeout",
+    "LockErrorT": "lockTimeout",
+    "LockFailed": "lockTimeout",
+    "LockError": "lockError",
+    "NotLocked": "lockError",
+    "NotMyLock": "lockError",
+    "PassphraseWrong": "passphraseWrong",
+    "PasscommandFailed": "passphraseWrong",
+    "Archive.DoesNotExist": "archiveDoesNotExist",
+    "Archive.AlreadyExists": "archiveAlreadyExists",
+}
+
+
 def format_error_message(msgid: str = None, original_message: str = None, exit_code: int = None) -> str:
     """
-    Format a comprehensive error message with msgid details and suggestions
+    Format a JSON-encoded locale key string for a Borg error.
+
+    Returns a json.dumps({"key": "backend.errors.borg.X", ...}) string
+    that can be stored in error_message and rendered by translateBackendKey.
 
     Args:
         msgid: Borg message ID
-        original_message: Original error message from Borg
+        original_message: Original error message from Borg (unused — borg output is out of scope)
         exit_code: Process exit code
 
     Returns:
-        Formatted error message with details and suggestions
+        JSON-encoded locale key string
     """
-    parts = []
+    if msgid and msgid in _MSGID_TO_LOCALE_KEY:
+        return _json.dumps({"key": f"backend.errors.borg.{_MSGID_TO_LOCALE_KEY[msgid]}"})
 
     if exit_code is not None:
-        parts.append(f"[Exit Code {exit_code}] {get_exit_code_message(exit_code)}")
+        return _json.dumps({"key": "backend.errors.borg.exitCodeError", "params": {"exitCode": exit_code}})
 
-    if msgid:
-        details = get_error_details(msgid, original_message)
-        parts.append(f"\n{details['message']}")
-        parts.append(f"\n💡 Suggestion: {details['suggestion']}")
-    elif original_message:
-        parts.append(f"\n{original_message}")
-
-    return "\n".join(parts) if parts else "Unknown error occurred"
+    return _json.dumps({"key": "backend.errors.borg.unknownError"})
