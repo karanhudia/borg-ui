@@ -54,7 +54,7 @@
     "undoneWarning": "Diese Aktion kann nicht rückgängig gemacht werden.",
     "version": "Version",
     "errors": {
-      "unexpectedError": "An unexpected error occurred"
+      "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten"
     }
   },
   "login": {
@@ -231,11 +231,11 @@
       "empty": "Keine Sicherungsaufgaben gefunden"
     },
     "toasts": {
-      "started": "Backup started successfully!",
-      "startFailed": "Failed to start backup",
-      "cancelled": "Backup cancelled successfully!",
-      "cancelFailed": "Failed to cancel backup",
-      "selectRepository": "Please select a repository first"
+      "started": "Sicherung erfolgreich gestartet!",
+      "startFailed": "Sicherung konnte nicht gestartet werden",
+      "cancelled": "Sicherung erfolgreich abgebrochen!",
+      "cancelFailed": "Sicherung konnte nicht abgebrochen werden",
+      "selectRepository": "Bitte zuerst ein Repository auswählen"
     }
   },
   "archives": {
@@ -248,11 +248,11 @@
     "mountTimeout": "Einhänge-Timeout: Große Repositories benötigen möglicherweise mehr Zeit zum Einhängen.",
     "mountFailed": "Fehler beim Einhängen des Archivs: {{error}}",
     "restoreStarted": "Wiederherstellungsaufgabe gestartet! Überprüfe den Aktivitäts-Tab, um den Fortschritt zu überwachen.",
-    "mountSuccess": "Archive mounted successfully!\n\nMount is inside the container. To access files, run:\n\n{{command}}",
+    "mountSuccess": "Archiv erfolgreich eingehängt!\n\nEinhängepunkt befindet sich im Container. Um auf Dateien zuzugreifen, ausführen:\n\n{{command}}",
     "toasts": {
-      "deleteFailed": "Failed to delete archive",
-      "restoreFailed": "Failed to start restore",
-      "notSelected": "Repository or archive not selected"
+      "deleteFailed": "Archiv konnte nicht gelöscht werden",
+      "restoreFailed": "Wiederherstellung konnte nicht gestartet werden",
+      "notSelected": "Repository oder Archiv nicht ausgewählt"
     }
   },
   "restore": {
@@ -290,9 +290,9 @@
       "start": "Wiederherstellung starten"
     },
     "toasts": {
-      "started": "Restore job started!",
-      "startFailed": "Failed to start restore",
-      "selectDestination": "Please select a destination path"
+      "started": "Wiederherstellungsauftrag gestartet!",
+      "startFailed": "Wiederherstellung konnte nicht gestartet werden",
+      "selectDestination": "Bitte einen Zielpfad auswählen"
     }
   },
   "schedule": {
@@ -404,20 +404,20 @@
       "compact": "Komprimieren"
     },
     "toasts": {
-      "deleted": "Repository deleted successfully",
-      "deleteFailed": "Failed to delete repository",
-      "checkStarted": "Check operation started",
-      "checkFailed": "Failed to start check",
-      "compactStarted": "Compact operation started",
-      "compactFailed": "Failed to start compact",
-      "dryRunCompleted": "Dry run completed - review results below",
-      "pruned": "Repository pruned successfully!",
-      "pruneFailed": "Failed to prune repository",
-      "updated": "Repository updated successfully",
-      "created": "Repository created successfully",
-      "importedWithKeyfile": "Repository imported and keyfile saved successfully",
-      "imported": "Repository imported successfully",
-      "wizardFailed": "Failed to {{mode}} repository"
+      "deleted": "Repository erfolgreich gelöscht",
+      "deleteFailed": "Repository konnte nicht gelöscht werden",
+      "checkStarted": "Überprüfung gestartet",
+      "checkFailed": "Überprüfung konnte nicht gestartet werden",
+      "compactStarted": "Komprimierung gestartet",
+      "compactFailed": "Komprimierung konnte nicht gestartet werden",
+      "dryRunCompleted": "Testlauf abgeschlossen – Ergebnisse unten prüfen",
+      "pruned": "Repository erfolgreich bereinigt!",
+      "pruneFailed": "Repository konnte nicht bereinigt werden",
+      "updated": "Repository erfolgreich aktualisiert",
+      "created": "Repository erfolgreich erstellt",
+      "importedWithKeyfile": "Repository importiert und Schlüsseldatei erfolgreich gespeichert",
+      "imported": "Repository erfolgreich importiert",
+      "wizardFailed": "Repository konnte nicht {{mode}} werden"
     }
   },
   "activity": {
@@ -618,23 +618,23 @@
       "warning2": "Verbindungsaufzeichnungen bleiben erhalten."
     },
     "toasts": {
-      "keyGenerated": "System SSH key generated successfully!",
-      "keyGenerateFailed": "Failed to generate SSH key",
-      "keyImported": "System SSH key imported successfully!",
-      "keyImportFailed": "Failed to import SSH key",
-      "keyDeployed": "SSH key deployed successfully!",
-      "keyDeployFailed": "Failed to deploy SSH key",
-      "connectionTestSuccess": "Connection test successful!",
-      "connectionTestFailed": "Connection test failed",
-      "connectionUpdated": "Connection updated successfully! Testing connection...",
-      "connectionUpdateFailed": "Failed to update connection",
-      "connectionDeleted": "Connection deleted successfully!",
-      "connectionDeleteFailed": "Failed to delete connection",
-      "storageRefreshed": "Storage information refreshed!",
-      "storageRefreshFailed": "Failed to refresh storage",
-      "keyDeleted": "System SSH key deleted successfully!",
-      "keyDeleteFailed": "Failed to delete SSH key",
-      "publicKeyCopied": "Public key copied to clipboard!"
+      "keyGenerated": "System-SSH-Schlüssel erfolgreich generiert!",
+      "keyGenerateFailed": "SSH-Schlüssel konnte nicht generiert werden",
+      "keyImported": "System-SSH-Schlüssel erfolgreich importiert!",
+      "keyImportFailed": "SSH-Schlüssel konnte nicht importiert werden",
+      "keyDeployed": "SSH-Schlüssel erfolgreich bereitgestellt!",
+      "keyDeployFailed": "SSH-Schlüssel konnte nicht bereitgestellt werden",
+      "connectionTestSuccess": "Verbindungstest erfolgreich!",
+      "connectionTestFailed": "Verbindungstest fehlgeschlagen",
+      "connectionUpdated": "Verbindung erfolgreich aktualisiert! Verbindung wird getestet...",
+      "connectionUpdateFailed": "Verbindung konnte nicht aktualisiert werden",
+      "connectionDeleted": "Verbindung erfolgreich gelöscht!",
+      "connectionDeleteFailed": "Verbindung konnte nicht gelöscht werden",
+      "storageRefreshed": "Speicherinformationen aktualisiert!",
+      "storageRefreshFailed": "Speicher konnte nicht aktualisiert werden",
+      "keyDeleted": "System-SSH-Schlüssel erfolgreich gelöscht!",
+      "keyDeleteFailed": "SSH-Schlüssel konnte nicht gelöscht werden",
+      "publicKeyCopied": "Öffentlicher Schlüssel in Zwischenablage kopiert!"
     }
   },
   "scripts": {
@@ -717,8 +717,8 @@
       "scriptUpdated": "Skript erfolgreich aktualisiert",
       "scriptCreated": "Skript erfolgreich erstellt",
       "scriptDeleted": "Skript erfolgreich gelöscht",
-      "saveFailed": "Failed to save script",
-      "deleteFailed": "Failed to delete script"
+      "saveFailed": "Skript konnte nicht gespeichert werden",
+      "deleteFailed": "Skript konnte nicht gelöscht werden"
     },
     "confirmDelete": "Bist du sicher, dass du \"{{name}}\" löschen möchtest?"
   },
@@ -823,7 +823,7 @@
       "beforeBreakingCheck3": "Dies bricht sowohl Repository- als auch Cache-Sperren",
       "adminRequired": "Administratorrechte erforderlich:",
       "adminRequiredDetail": "Nur Administratoren können Repository-Sperren aufheben. Bitte wende dich an deinen Administrator.",
-      "failedToBreakLock": "Failed to break repository lock"
+      "failedToBreakLock": "Repository-Sperre konnte nicht aufgehoben werden"
     },
     "errorDetails": {
       "title": "Fehlerdetails",
@@ -1204,7 +1204,7 @@
     "languageDescription": "Wähle die Sprache der Benutzeroberfläche",
     "languageLabel": "Oberflächensprache",
     "languageSaved": "Sprache erfolgreich aktualisiert",
-    "updateFailed": "Failed to update preferences",
+    "updateFailed": "Einstellungen konnten nicht aktualisiert werden",
     "analyticsTransparencyBold": "Volle Transparenz:",
     "analyticsTransparencyLink": "Unser Analyse-Dashboard öffentlich einsehen",
     "analyticsTransparencyAfterLink": "um genau zu sehen, was wir erfassen. Selbst gehostet, keine Drittanbieter."
@@ -1289,7 +1289,7 @@
     "clearing": "Bereinigung läuft...",
     "cleanupCompleted": "Protokollbereinigung erfolgreich abgeschlossen",
     "failedToRunCleanup": "Protokollbereinigung konnte nicht ausgeführt werden",
-    "failedToSaveSettings": "Failed to save log management settings"
+    "failedToSaveSettings": "Protokollverwaltungseinstellungen konnten nicht gespeichert werden"
   },
   "cacheManagement": {
     "title": "Archiv-Cache-Verwaltung",
@@ -1306,7 +1306,7 @@
     "unmount": "Aushängen",
     "unmounting": "Hängt aus...",
     "unmountedSuccessfully": "Archiv erfolgreich ausgehängt",
-    "failedToUnmount": "Failed to unmount path"
+    "failedToUnmount": "Pfad konnte nicht ausgehängt werden"
   },
   "mqttSettings": {
     "title": "MQTT-Einstellungen",
@@ -1545,8 +1545,8 @@
     "toasts": {
       "scheduleUpdated": "Überprüfungszeitplan aktualisiert",
       "checkStarted": "Überprüfung gestartet",
-      "updateFailed": "Failed to update check schedule",
-      "checkFailed": "Failed to start check"
+      "updateFailed": "Überprüfungszeitplan konnte nicht aktualisiert werden",
+      "checkFailed": "Überprüfung konnte nicht gestartet werden"
     },
     "validation": {
       "selectRepository": "Bitte Repository auswählen"
@@ -1562,16 +1562,16 @@
   },
   "repositorySelectorCard": {
     "title": "Repository auswählen",
-    "empty": "No repositories available",
+    "empty": "Keine Repositories verfügbar",
     "loading": "Lädt Repositories...",
     "placeholder": "Repository auswählen...",
     "maintenanceRunning": "(Wartung läuft)"
   },
   "multiRepositorySelector": {
-    "title": "Select Repositories",
-    "selectAll": "Select all",
-    "deselectAll": "Deselect all",
-    "selected": "{{count}} selected",
+    "title": "Repositories auswählen",
+    "selectAll": "Alle auswählen",
+    "deselectAll": "Alle abwählen",
+    "selected": "{{count}} ausgewählt",
     "selectedCount": "Ausgewählte Repositories ({{count}})",
     "selectedCountWithOrder": "Ausgewählte Repositories ({{count}}) - Verwende Pfeile, um die Sicherungsreihenfolge zu ändern",
     "moveUp": "Nach oben",
@@ -1673,7 +1673,7 @@
       "clearAll": "Alle löschen",
       "selectDirTooltip": "Verzeichnis und alle Inhalte auswählen",
       "helpText": "Klicke auf Dateien, um sie auszuwählen, oder auf Ordner, um zu navigieren. Verwende das Kontrollkästchen neben Ordnern, um ganze Verzeichnisse auszuwählen.",
-      "failedToLoadContents": "Failed to load archive contents"
+      "failedToLoadContents": "Archivinhalt konnte nicht geladen werden"
     },
     "restorePath": {
       "title": "Wiederherstellungsort wählen",
@@ -2002,11 +2002,11 @@
       "addedSuccessfully": "Paket erfolgreich hinzugefügt",
       "updatedSuccessfully": "Paket erfolgreich aktualisiert",
       "removedSuccessfully": "Paket erfolgreich entfernt",
-      "addFailed": "Failed to add package",
-      "updateFailed": "Failed to update package",
-      "fixFailed": "Failed to fix broken dependencies",
-      "removeFailed": "Failed to remove package",
-      "reinstallFailed": "Failed to reinstall package"
+      "addFailed": "Paket konnte nicht hinzugefügt werden",
+      "updateFailed": "Paket konnte nicht aktualisiert werden",
+      "fixFailed": "Beschädigte Abhängigkeiten konnten nicht behoben werden",
+      "removeFailed": "Paket konnte nicht entfernt werden",
+      "reinstallFailed": "Paket konnte nicht neu installiert werden"
     }
   },
   "protectedRoute": {
@@ -2256,7 +2256,7 @@
     "errors": {
       "failedToAssign": "Skript konnte nicht zugewiesen werden",
       "failedToRemove": "Skript konnte nicht entfernt werden",
-      "failedToUpdateParameters": "Failed to update script parameters"
+      "failedToUpdateParameters": "Skriptparameter konnten nicht aktualisiert werden"
     },
     "confirmRemove": "Dieses Skript aus dem Repository entfernen?",
     "parametersConfigured": "{{count}} Parameter konfiguriert",
@@ -2363,34 +2363,34 @@
         "checkJobNotFound": "Prüfauftrag nicht gefunden",
         "compactJobNotFound": "Komprimierungsauftrag nicht gefunden",
         "sshUrlWithoutConnectionId": "Der Pfad scheint eine SSH-URL zu sein, aber es wurde keine connection_id angegeben. Bitte wählen Sie eine SSH-Verbindung aus.",
-        "failedToRetrieveRepositories": "Failed to retrieve repositories",
-        "failedToCreateParentDirectory": "Failed to create parent directory",
-        "failedToInitializeRepository": "Failed to initialize repository",
-        "failedToCreateRepository": "Failed to create repository",
-        "failedToVerifyRepository": "Failed to verify repository",
-        "failedToImportRepository": "Failed to import repository",
-        "failedToUploadKeyfile": "Failed to upload keyfile",
-        "failedToExportKeyfile": "Failed to export keyfile",
-        "failedToRetrieveRepository": "Failed to retrieve repository",
-        "failedToUpdateRepository": "Failed to update repository",
-        "failedToDeleteRepository": "Failed to delete repository",
-        "failedToStartCheck": "Failed to start check",
-        "failedToStartCompact": "Failed to start compact",
-        "pruneAlreadyRunning": "A prune operation is already running for this repository",
-        "failedToStartPrune": "Failed to start prune",
-        "failedToGetStatistics": "Failed to get repository statistics",
-        "failedToListArchives": "Failed to list archives",
-        "failedToGetRepositoryInfo": "Failed to get repository info",
-        "failedToBreakLock": "Failed to break lock",
-        "failedToGetArchiveInfo": "Failed to get archive info",
-        "failedToListArchiveFiles": "Failed to list archive files",
-        "failedToGetJobStatus": "Failed to get job status",
-        "failedToGetCheckJobs": "Failed to get check jobs",
-        "failedToGetCompactJobs": "Failed to get compact jobs",
-        "failedToGetRunningJobs": "Failed to get running jobs",
-        "invalidCronExpression": "Invalid cron expression",
-        "failedToUpdateCheckSchedule": "Failed to update check schedule",
-        "failedToGetCheckSchedule": "Failed to get check schedule",
+        "failedToRetrieveRepositories": "Repositories konnten nicht abgerufen werden",
+        "failedToCreateParentDirectory": "Übergeordnetes Verzeichnis konnte nicht erstellt werden",
+        "failedToInitializeRepository": "Repository konnte nicht initialisiert werden",
+        "failedToCreateRepository": "Repository konnte nicht erstellt werden",
+        "failedToVerifyRepository": "Repository konnte nicht verifiziert werden",
+        "failedToImportRepository": "Repository konnte nicht importiert werden",
+        "failedToUploadKeyfile": "Schlüsseldatei konnte nicht hochgeladen werden",
+        "failedToExportKeyfile": "Schlüsseldatei konnte nicht exportiert werden",
+        "failedToRetrieveRepository": "Repository konnte nicht abgerufen werden",
+        "failedToUpdateRepository": "Repository konnte nicht aktualisiert werden",
+        "failedToDeleteRepository": "Repository konnte nicht gelöscht werden",
+        "failedToStartCheck": "Überprüfung konnte nicht gestartet werden",
+        "failedToStartCompact": "Komprimierung konnte nicht gestartet werden",
+        "pruneAlreadyRunning": "Für dieses Repository wird bereits eine Bereinigungsoperation ausgeführt",
+        "failedToStartPrune": "Bereinigung konnte nicht gestartet werden",
+        "failedToGetStatistics": "Repository-Statistiken konnten nicht abgerufen werden",
+        "failedToListArchives": "Archive konnten nicht aufgelistet werden",
+        "failedToGetRepositoryInfo": "Repository-Informationen konnten nicht abgerufen werden",
+        "failedToBreakLock": "Sperre konnte nicht aufgehoben werden",
+        "failedToGetArchiveInfo": "Archivinformationen konnten nicht abgerufen werden",
+        "failedToListArchiveFiles": "Archivdateien konnten nicht aufgelistet werden",
+        "failedToGetJobStatus": "Auftragsstatus konnte nicht abgerufen werden",
+        "failedToGetCheckJobs": "Prüfaufträge konnten nicht abgerufen werden",
+        "failedToGetCompactJobs": "Komprimierungsaufträge konnten nicht abgerufen werden",
+        "failedToGetRunningJobs": "Laufende Aufträge konnten nicht abgerufen werden",
+        "invalidCronExpression": "Ungültiger Cron-Ausdruck",
+        "failedToUpdateCheckSchedule": "Überprüfungszeitplan konnte nicht aktualisiert werden",
+        "failedToGetCheckSchedule": "Überprüfungszeitplan konnte nicht abgerufen werden",
         "failedParseArchiveList": "Fehler beim Parsen der Archivliste",
         "failedParseRepositoryInfo": "Fehler beim Parsen der Repository-Informationen",
         "failedParseArchiveInfo": "Fehler beim Parsen der Archiv-Informationen",
