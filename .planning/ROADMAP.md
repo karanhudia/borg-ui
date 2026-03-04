@@ -120,4 +120,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Backend API Migration (Auth + High-Traffic Domains) | 4/4 | Complete   | 2026-03-03 |
 | 4. Backend Services and Remaining API Files | 6/6 | Complete   | 2026-03-03 |
 | 5. Locale File Completion and CI Validation | 3/3 | Complete   | 2026-03-04 |
-| 6. Fix Services Layer Raw English Paths | 0/? | Not started | - |
+| 6. Fix Services Layer Raw English Paths | 1/2 | In Progress|  |

@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-04T04:28:18.040Z"
+last_updated: "2026-03-04T04:47:38.825Z"
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 18
-  completed_plans: 18
+  total_plans: 20
+  completed_plans: 19
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** Every user-facing string — whether from the frontend or backend — must be translatable, so users can operate the UI entirely in their own language.
-**Current focus:** Phase 5 - Locale File Completion and CI Validation
+**Current focus:** Phase 6 - Fix Services Layer Raw-English Paths
 
 ## Current Position
 
-Phase: 5 of 5 (Locale File Completion and CI Validation)
-Plan: 2 of 2 in current phase (05-02 complete — check:locales npm script added; locale parity CI step added to test-frontend job; scripts/check-locale-parity.js committed; 17 missing keys added to es.json and de.json; LOC-04 and QUAL-02 satisfied)
-Status: Phase 5 complete
-Last activity: 2026-03-04 — Plan 05-02 complete: check:locales npm script wired into package.json; GitHub Actions test-frontend job now runs locale parity check; all 3 locale files share 2064 keys in parity
+Phase: 6 of 6 (Fix Services Layer Raw-English Paths)
+Plan: 1 of 2 in current phase (06-01 complete — SVC-01 confirmed satisfied in backup_service.py; SVC-02 fixed in restore_service.py line 451; raw-stderr ternary removed; error_message always uses json.dumps key format)
+Status: Phase 6 in progress (1 of 2 plans complete)
+Last activity: 2026-03-04 — Plan 06-01 complete: removed raw-stderr ternary from restore_service.py line 451; SVC-01 and SVC-02 both satisfied; services layer error_message writes are fully clean
 
-Progress: [████████████████] 100%
+Progress: [████████████████] 95%
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Progress: [████████████████] 100%
 | Phase 05-locale-file-completion-and-ci-validation P01 | 5 | 2 tasks | 2 files |
 | Phase 05-locale-file-completion-and-ci-validation P02 | 3 | 4 tasks | 5 files |
 | Phase 05-locale-file-completion-and-ci-validation P03 | 2 | 2 tasks | 2 files |
+| Phase 06-fix-services-layer-raw-english-paths P01 | 5 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -108,6 +109,8 @@ Recent decisions affecting current work:
 - [Phase 05-01]: archiveBrowser.failedToLoadContents parity fix handled automatically — key is in committed en.json and working tree de.json had the German value
 - [Phase 05-02]: 05-02: scripts/check-locale-parity.js committed from untracked — CI requires it in git; 17 missing keys auto-fixed in es.json and de.json with English placeholders after parity script caught pre-existing drift
 - [Phase 05-locale-file-completion-and-ci-validation]: 05-03: Real Spanish and German translations added for all 12 placeholder backend.* keys — LOC-02 and LOC-03 fully satisfied; no English placeholders remain in any backend.* key
+- [Phase 06-01]: SVC-02: Raw stderr_output ternary removed from restore_service.py line 451 — error_message always uses restoreFailedExitCode json.dumps key format; debug info preserved in job.logs
+- [Phase 06-01]: SVC-01: backup_service.py confirmed already correct — error_msg pre-assigned as json.dumps; error_parts contains only LOCK_ERROR::, format_error_message(), and json.dumps() items
 
 ### Pending Todos
 
@@ -122,5 +125,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-04
-Stopped at: Completed 05-03-PLAN.md — real Spanish and German translations added for 12 placeholder backend.* keys in es.json and de.json; LOC-02, LOC-03, LOC-04, QUAL-02 all satisfied; parity confirmed at 2064 keys; Phase 5 fully complete.
+Stopped at: Completed 06-01-PLAN.md — removed raw-stderr ternary from restore_service.py line 451; SVC-01 (backup_service.py confirmed clean) and SVC-02 (restore_service.py line 451 fixed) both satisfied; 1 file modified; requirements SVC-01 and SVC-02 marked complete.
 Resume file: None
