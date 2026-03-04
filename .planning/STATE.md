@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-04T04:47:38.825Z"
+last_updated: "2026-03-04T04:48:22.881Z"
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 20
-  completed_plans: 19
+  completed_plans: 20
 ---
 
 # Project State
@@ -59,6 +59,7 @@ Progress: [████████████████] 95%
 | Phase 05-locale-file-completion-and-ci-validation P02 | 3 | 4 tasks | 5 files |
 | Phase 05-locale-file-completion-and-ci-validation P03 | 2 | 2 tasks | 2 files |
 | Phase 06-fix-services-layer-raw-english-paths P01 | 5 | 2 tasks | 1 files |
+| Phase 06-fix-services-layer-raw-english-paths P02 | 8 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -111,6 +112,7 @@ Recent decisions affecting current work:
 - [Phase 05-locale-file-completion-and-ci-validation]: 05-03: Real Spanish and German translations added for all 12 placeholder backend.* keys — LOC-02 and LOC-03 fully satisfied; no English placeholders remain in any backend.* key
 - [Phase 06-01]: SVC-02: Raw stderr_output ternary removed from restore_service.py line 451 — error_message always uses restoreFailedExitCode json.dumps key format; debug info preserved in job.logs
 - [Phase 06-01]: SVC-01: backup_service.py confirmed already correct — error_msg pre-assigned as json.dumps; error_parts contains only LOCK_ERROR::, format_error_message(), and json.dumps() items
+- [Phase 06-fix-services-layer-raw-english-paths]: 06-02: RestoreJobCard split('\n').map(line => translateBackendKey(line)) pattern mirrors ErrorDetailsDialog.tsx; no mock needed for translateBackendKey in tests as i18n is initialized via setup.ts
 
 ### Pending Todos
 

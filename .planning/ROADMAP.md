@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Backend API Migration (Auth + High-Traffic Domains)** - Convert all HTTPException.detail and message fields in auth.py, repositories.py, and backup.py to translation keys (completed 2026-03-03)
 - [x] **Phase 4: Backend Services and Remaining API Files** - Migrate restore.py, schedule.py, and all remaining API files plus the services layer that writes stored error_message fields (gap closure in progress) (completed 2026-03-03)
 - [x] **Phase 5: Locale File Completion and CI Validation** - Complete Spanish and German translations for all new backend.* keys and add automated key-sync enforcement (completed 2026-03-03)
-- [ ] **Phase 6: Fix Services Layer Raw English Paths** - Close integration gaps found by milestone audit: borg_errors.py primary backup failure path, restore_service.py failure paths, and backup.py cancel job.error_message (gap closure)
+- [x] **Phase 6: Fix Services Layer Raw English Paths** - Close integration gaps found by milestone audit: borg_errors.py primary backup failure path, restore_service.py failure paths, and backup.py cancel job.error_message (gap closure) (completed 2026-03-04)
 
 ## Phase Details
 
@@ -120,4 +120,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Backend API Migration (Auth + High-Traffic Domains) | 4/4 | Complete   | 2026-03-03 |
 | 4. Backend Services and Remaining API Files | 6/6 | Complete   | 2026-03-03 |
 | 5. Locale File Completion and CI Validation | 3/3 | Complete   | 2026-03-04 |
-| 6. Fix Services Layer Raw English Paths | 1/2 | In Progress|  |
+| 6. Fix Services Layer Raw English Paths | 2/2 | Complete   | 2026-03-04 |
