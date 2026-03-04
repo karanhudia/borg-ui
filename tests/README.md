@@ -30,7 +30,7 @@ This testing suite provides:
 python3 tests/test_archive_contents.py
 
 # 3. Run API tests
-python3 test_app.py
+python3 tests/manual/test_app.py
 ```
 
 ## Test Components
@@ -102,7 +102,7 @@ python3 tests/test_archive_contents.py --url http://localhost:7879
     ...
 ```
 
-### 3. API Testing (`test_app.py`)
+### 3. API Testing (`tests/manual/test_app.py`)
 
 Tests all Borg UI API endpoints:
 
@@ -117,13 +117,13 @@ Tests all Borg UI API endpoints:
 
 **Usage:**
 ```bash
-python3 test_app.py
+python3 tests/manual/test_app.py
 
 # Test different instance
-python3 test_app.py --url http://localhost:7879
+python3 tests/manual/test_app.py --url http://localhost:7879
 
 # Save results to JSON
-python3 test_app.py --output results.json
+python3 tests/manual/test_app.py --output results.json
 ```
 
 ## Test Scenarios
@@ -341,7 +341,7 @@ test_configs = [
 
 ### Adding API Tests
 
-Edit `test_app.py`:
+Edit `tests/manual/test_app.py`:
 
 ```python
 def test_my_feature(self) -> bool:
@@ -394,7 +394,7 @@ jobs:
       - name: Run tests
         run: |
           python3 tests/test_archive_contents.py
-          python3 test_app.py
+          python3 tests/manual/test_app.py
 ```
 
 ## Test Coverage

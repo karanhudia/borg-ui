@@ -27,7 +27,7 @@ echo "📍 Testing application at: $URL"
 echo ""
 
 # Run the test suite
-python3 test_app.py --url "$URL"
+python3 "$(dirname "$0")/test_app.py" --url "$URL"
 
 # Check exit code
 if [ $? -eq 0 ]; then

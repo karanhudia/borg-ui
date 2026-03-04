@@ -77,12 +77,12 @@ cmd_shell() {
 
 cmd_test() {
     print_info "Running tests..."
-    if [ -f "./test.sh" ]; then
-        ./test.sh http://localhost:8000
+    if [ -f "./tests/manual/test.sh" ]; then
+        ./tests/manual/test.sh http://localhost:8000
     else
         print_warning "test.sh not found, running Python tests directly..."
-        if [ -f "./test_app.py" ]; then
-            python3 test_app.py http://localhost:8000
+        if [ -f "./tests/manual/test_app.py" ]; then
+            python3 tests/manual/test_app.py http://localhost:8000
         else
             print_error "No test files found"
             exit 1
