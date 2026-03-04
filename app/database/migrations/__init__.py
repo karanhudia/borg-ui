@@ -2,6 +2,7 @@
 Database migrations package
 Automatically discovers and runs numbered migration files
 """
+import sys
 import structlog
 from pathlib import Path
 from sqlalchemy import text
@@ -43,6 +44,7 @@ def run_migrations():
                 # Execute the upgrade function
                 migration_module.upgrade(connection)
                 connection.commit()
+                sys.stdout.flush()
 
                 logger.info(f" Migration completed: {migration_name}")
 
