@@ -66,6 +66,21 @@ def upgrade(connection):
 
         new_ddl = "CREATE TABLE delete_archive_jobs_new (\n" + ",\n".join(col_defs) + "\n)"
 
+        # ── Clean up orphaned rows before copying ────────────────────────────
+        # FK enforcement is ON (set by SQLAlchemy event listener in database.py).
+        # Rows whose repository_id no longer exists in repositories would cause
+        # the INSERT into the new table to fail. Delete them first.
+        orphans = connection.execute(text(
+            "SELECT COUNT(*) FROM delete_archive_jobs"
+            " WHERE repository_id NOT IN (SELECT id FROM repositories)"
+        )).scalar()
+        if orphans:
+            connection.execute(text(
+                "DELETE FROM delete_archive_jobs"
+                " WHERE repository_id NOT IN (SELECT id FROM repositories)"
+            ))
+            print(f"  Removed {orphans} orphaned delete_archive_jobs row(s) with no matching repository")
+
         # ── Guard against stale temp table from a previous interrupted run ───
         connection.execute(text("DROP TABLE IF EXISTS delete_archive_jobs_new"))
         connection.execute(text(new_ddl))
