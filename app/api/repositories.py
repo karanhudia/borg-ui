@@ -443,7 +443,7 @@ async def get_repositories(
         }
     except Exception as e:
         logger.error("Failed to get repositories", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve repositories: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToRetrieveRepositories"})
 
 @router.post("/")
 async def create_repository(
@@ -596,7 +596,7 @@ async def create_repository(
                                error=str(e))
                     raise HTTPException(
                         status_code=400,
-                        detail=f"Failed to create parent directory: {str(e)}"
+                        detail={"key": "backend.errors.repo.failedToCreateParentDirectory"}
                     )
 
                 # Verify parent directory is writable
@@ -618,7 +618,7 @@ async def create_repository(
         )
 
         if not init_result["success"]:
-            raise HTTPException(status_code=500, detail=f"Failed to initialize repository: {init_result['error']}")
+            raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToInitializeRepository"})
 
         # Serialize source directories as JSON
         source_directories_json = None
@@ -693,7 +693,7 @@ async def create_repository(
         raise
     except Exception as e:
         logger.error("Failed to create repository", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to create repository: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToCreateRepository"})
 
 @router.post("/import")
 async def import_repository(
@@ -806,7 +806,7 @@ async def import_repository(
         if existing_path:
             raise HTTPException(
                 status_code=400,
-                detail=f"Repository path already exists in database with name '{existing_path.name}'"
+                detail={"key": "backend.errors.repo.repositoryPathExists"}
             )
 
         # Write keyfile to disk before verification so borg can find it
@@ -853,7 +853,7 @@ async def import_repository(
             else:
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Failed to verify repository: {error_msg}"
+                    detail={"key": "backend.errors.repo.failedToVerifyRepository"}
                 )
 
         # Extract repository info from verification
@@ -926,7 +926,7 @@ async def import_repository(
 
         return {
             "success": True,
-            "message": "Repository imported successfully",
+            "message": "backend.success.repo.repositoryImported",
             "repository": {
                 "id": repository.id,
                 "name": repository.name,
@@ -940,7 +940,7 @@ async def import_repository(
         raise
     except Exception as e:
         logger.error("Failed to import repository", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to import repository: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToImportRepository"})
 
 @router.post("/{repo_id}/keyfile")
 async def upload_keyfile(
@@ -1005,7 +1005,7 @@ async def upload_keyfile(
 
         return {
             "success": True,
-            "message": "Keyfile uploaded successfully",
+            "message": "backend.success.repo.keyfileUploaded",
             "keyfile_name": keyfile_name
         }
 
@@ -1013,7 +1013,7 @@ async def upload_keyfile(
         raise
     except Exception as e:
         logger.error("Failed to upload keyfile", repo_id=repo_id, error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to upload keyfile: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToUploadKeyfile"})
 
 @router.get("/{repo_id}/keyfile")
 async def download_keyfile(
@@ -1060,7 +1060,7 @@ async def download_keyfile(
             if process.returncode != 0:
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Failed to export keyfile: {stderr.decode().strip()[:120]}"
+                    detail={"key": "backend.errors.repo.failedToExportKeyfile"}
                 )
 
             with open(tmp_path, "rb") as f:
@@ -1080,7 +1080,7 @@ async def download_keyfile(
         raise
     except Exception as e:
         logger.error("Failed to download keyfile", repo_id=repo_id, error=str(e))
-        raise HTTPException(status_code=500, detail="Failed to export keyfile")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedExportKeyfile"})
 
 @router.get("/{repo_id}")
 async def get_repository(
@@ -1124,7 +1124,7 @@ async def get_repository(
         raise
     except Exception as e:
         logger.error("Failed to get repository", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve repository: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToRetrieveRepository"})
 
 @router.put("/{repo_id}")
 async def update_repository(
@@ -1277,7 +1277,7 @@ async def update_repository(
                         if not init_result["success"]:
                             raise HTTPException(
                                 status_code=500,
-                                detail=f"Failed to initialize repository at new path: {init_result['error']}"
+                                detail={"key": "backend.errors.repo.failedToInitializeRepository"}
                             )
 
                         logger.info("Successfully initialized borg repository at new path",
@@ -1299,7 +1299,7 @@ async def update_repository(
                     if not init_result["success"]:
                         raise HTTPException(
                             status_code=500,
-                            detail=f"Failed to initialize repository at new path: {init_result['error']}"
+                            detail={"key": "backend.errors.repo.failedToInitializeRepository"}
                         )
 
                     logger.info("Successfully initialized borg repository at new path after verification failure",
@@ -1375,13 +1375,13 @@ async def update_repository(
 
         return {
             "success": True,
-            "message": "Repository updated successfully"
+            "message": "backend.success.repo.repositoryUpdated"
         }
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Failed to update repository", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to update repository: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToUpdateRepository"})
 
 @router.delete("/{repo_id}")
 async def delete_repository(
@@ -1500,13 +1500,13 @@ async def delete_repository(
 
         return {
             "success": True,
-            "message": "Repository deleted successfully"
+            "message": "backend.success.repo.repositoryDeleted"
         }
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Failed to delete repository", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to delete repository: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToDeleteRepository"})
 
 @router.post("/{repo_id}/check")
 async def check_repository(
@@ -1560,13 +1560,13 @@ async def check_repository(
         return {
             "job_id": check_job.id,
             "status": "pending",
-            "message": "Check job started"
+            "message": "backend.success.repo.checkJobStarted"
         }
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Failed to start check job", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to start check: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToStartCheck"})
 
 @router.post("/{repo_id}/compact")
 async def compact_repository(
@@ -1620,13 +1620,13 @@ async def compact_repository(
         return {
             "job_id": compact_job.id,
             "status": "pending",
-            "message": "Compact job started"
+            "message": "backend.success.repo.compactJobStarted"
         }
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Failed to start compact job", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to start compact: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToStartCompact"})
 
 @router.post("/{repo_id}/prune")
 async def prune_repository(
@@ -1653,7 +1653,7 @@ async def prune_repository(
         if running_job:
             raise HTTPException(
                 status_code=409,
-                detail=f"A prune operation is already running for this repository (Job ID: {running_job.id})"
+                detail={"key": "backend.errors.repo.pruneAlreadyRunning"}
             )
 
         # Extract retention policy from request
@@ -1731,7 +1731,7 @@ async def prune_repository(
         raise
     except Exception as e:
         logger.error("Failed to start prune job", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to start prune: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToStartPrune"})
 
 @router.get("/{repo_id}/stats")
 async def get_repository_statistics(
@@ -1761,7 +1761,7 @@ async def get_repository_statistics(
         raise
     except Exception as e:
         logger.error("Failed to get repository statistics", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to get repository statistics: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetStatistics"})
 
 async def check_remote_borg_installation(host: str, username: str, port: int, ssh_key_id: int) -> Dict[str, Any]:
     """Check if borg is installed on remote machine"""
@@ -2098,7 +2098,7 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
             logger.info("Repository initialized successfully", path=path)
             return {
                 "success": True,
-                "message": "Repository initialized successfully",
+                "message": "backend.success.repo.repositoryInitialized",
                 "already_existed": False
             }
         else:
@@ -2107,7 +2107,7 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
                 logger.info("Repository already exists at path, treating as success", path=path)
                 return {
                     "success": True,
-                    "message": "Repository already exists at this location",
+                    "message": "backend.success.repo.repositoryAlreadyExists",
                     "already_existed": True
                 }
 
@@ -2216,7 +2216,7 @@ async def list_repository_archives(
                         status_code=423,  # 423 Locked status code
                         detail={
                             "error": "repository_locked",
-                            "message": "Repository is locked by another process or has a stale lock",
+                            "message": "backend.errors.repo.repositoryLocked",
                             "suggestion": "If no backup is currently running, this is likely a stale lock. You can break the lock to continue.",
                             "repository_id": repo_id,
                             "can_break_lock": True
@@ -2224,7 +2224,7 @@ async def list_repository_archives(
                     )
 
                 logger.error("Failed to list archives", error=error_msg)
-                raise HTTPException(status_code=500, detail=f"Failed to list archives: {error_msg}")
+                raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToListArchives"})
 
             # Success - break out of retry loop
             break
@@ -2248,7 +2248,7 @@ async def list_repository_archives(
                 retry_delay *= 2
                 continue
             logger.error("Failed to list archives after retries", error=error_msg, repo_id=repo_id)
-            raise HTTPException(status_code=500, detail=f"Failed to list archives: {error_msg}")
+            raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToListArchives"})
 
     # Parse JSON output
     try:
@@ -2268,7 +2268,7 @@ async def list_repository_archives(
         }
     except json.JSONDecodeError as e:
         logger.error("Failed to parse borg list output", error=str(e))
-        raise HTTPException(status_code=500, detail="Failed to parse archive list")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedParseArchiveList"})
 
 @router.get("/{repo_id}/info")
 async def get_repository_info(
@@ -2347,7 +2347,7 @@ async def get_repository_info(
                         status_code=423,  # 423 Locked status code
                         detail={
                             "error": "repository_locked",
-                            "message": "Repository is locked by another process or has a stale lock",
+                            "message": "backend.errors.repo.repositoryLocked",
                             "suggestion": "If no backup is currently running, this is likely a stale lock. You can break the lock to continue.",
                             "repository_id": repo_id,
                             "can_break_lock": True
@@ -2355,7 +2355,7 @@ async def get_repository_info(
                     )
 
                 logger.error("Failed to get repository info", error=error_msg)
-                raise HTTPException(status_code=500, detail=f"Failed to get repository info: {error_msg}")
+                raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetRepositoryInfo"})
 
             # Success - break out of retry loop
             break
@@ -2379,7 +2379,7 @@ async def get_repository_info(
                 retry_delay *= 2
                 continue
             logger.error("Failed to get repository info after retries", error=error_msg, repo_id=repo_id)
-            raise HTTPException(status_code=500, detail=f"Failed to get repository info: {error_msg}")
+            raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetRepositoryInfo"})
 
     # Parse JSON output
     try:
@@ -2405,10 +2405,10 @@ async def get_repository_info(
         raise
     except json.JSONDecodeError as e:
         logger.error("Failed to parse borg info output", error=str(e))
-        raise HTTPException(status_code=500, detail="Failed to parse repository info")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedParseRepositoryInfo"})
     except Exception as e:
         logger.error("Failed to get repository info", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to get repository info: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetRepositoryInfo"})
 
 @router.post("/{repo_id}/break-lock")
 async def break_repository_lock(
@@ -2435,18 +2435,18 @@ async def break_repository_lock(
             logger.info("Successfully broke repository lock", repo_id=repo_id, user=current_user.username)
             return {
                 "success": True,
-                "message": "Lock successfully broken. You can now retry your operation."
+                "message": "backend.success.repo.lockBroken"
             }
         else:
             error_msg = result.get("stderr", "Unknown error")
             logger.error("Failed to break lock", repo_id=repo_id, error=error_msg)
-            raise HTTPException(status_code=500, detail=f"Failed to break lock: {error_msg}")
+            raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToBreakLock"})
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Error breaking repository lock", repo_id=repo_id, error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to break lock: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToBreakLock"})
 
 @router.get("/{repo_id}/archives/{archive_name}/info")
 async def get_archive_info(
@@ -2504,7 +2504,7 @@ async def get_archive_info(
         if process.returncode != 0:
             error_msg = stderr.decode() if stderr else "Unknown error"
             logger.error("Failed to get archive info", archive_name=archive_name, error=error_msg)
-            raise HTTPException(status_code=500, detail=f"Failed to get archive info: {error_msg}")
+            raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetArchiveInfo"})
 
         # Parse JSON output
         info_data = json.loads(stdout.decode())
@@ -2606,10 +2606,10 @@ async def get_archive_info(
         raise
     except json.JSONDecodeError as e:
         logger.error("Failed to parse borg info output", error=str(e))
-        raise HTTPException(status_code=500, detail="Failed to parse archive info")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedParseArchiveInfo"})
     except Exception as e:
         logger.error("Failed to get archive info", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to get archive info: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetArchiveInfo"})
 
 @router.get("/{repo_id}/archives/{archive_name}/files")
 async def list_archive_files(
@@ -2672,7 +2672,7 @@ async def list_archive_files(
         if process.returncode != 0:
             error_msg = stderr.decode() if stderr else "Unknown error"
             logger.error("Failed to list archive files", archive_name=archive_name, error=error_msg)
-            raise HTTPException(status_code=500, detail=f"Failed to list archive files: {error_msg}")
+            raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToListArchiveFiles"})
 
         # Parse JSON-lines output (one JSON object per line)
         files = []
@@ -2712,7 +2712,7 @@ async def list_archive_files(
         raise
     except Exception as e:
         logger.error("Failed to list archive files", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to list archive files: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToListArchiveFiles"})
 
 async def get_repository_stats(path: str, bypass_lock: bool = False) -> Dict[str, Any]:
     """Get repository statistics"""
@@ -2820,7 +2820,7 @@ async def break_repository_lock(
                        user=current_user.username)
             return {
                 "success": True,
-                "message": "Lock successfully removed. You can now start a new backup.",
+                "message": "backend.success.repo.lockRemoved",
                 "repository": repository.path,
                 "output": stdout_str
             }
@@ -2831,7 +2831,7 @@ async def break_repository_lock(
                         stderr=stderr_str)
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to break lock: {stderr_str}"
+                detail={"key": "backend.errors.repo.failedToBreakLock"}
             )
 
     except asyncio.TimeoutError:
@@ -2848,7 +2848,7 @@ async def break_repository_lock(
                     error=str(e))
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to break lock: {str(e)}"
+            detail={"key": "backend.errors.repo.failedToBreakLock"}
         )
 
 # Check job endpoints
@@ -2892,7 +2892,7 @@ async def get_check_job_status(
         raise
     except Exception as e:
         logger.error("Failed to get check job status", error=str(e), job_id=job_id)
-        raise HTTPException(status_code=500, detail=f"Failed to get job status: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetJobStatus"})
 
 @router.get("/{repo_id}/check-jobs")
 async def get_repository_check_jobs(
@@ -2925,7 +2925,7 @@ async def get_repository_check_jobs(
         }
     except Exception as e:
         logger.error("Failed to get check jobs", error=str(e), repository_id=repo_id)
-        raise HTTPException(status_code=500, detail=f"Failed to get check jobs: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetCheckJobs"})
 
 # Compact job endpoints
 @router.get("/compact-jobs/{job_id}")
@@ -2955,7 +2955,7 @@ async def get_compact_job_status(
         raise
     except Exception as e:
         logger.error("Failed to get compact job status", error=str(e), job_id=job_id)
-        raise HTTPException(status_code=500, detail=f"Failed to get job status: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetJobStatus"})
 
 @router.get("/{repo_id}/compact-jobs")
 async def get_repository_compact_jobs(
@@ -2987,7 +2987,7 @@ async def get_repository_compact_jobs(
         }
     except Exception as e:
         logger.error("Failed to get compact jobs", error=str(e), repository_id=repo_id)
-        raise HTTPException(status_code=500, detail=f"Failed to get compact jobs: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetCompactJobs"})
 
 # Helper endpoint to check if repository has running maintenance jobs
 @router.get("/{repo_id}/running-jobs")
@@ -3041,7 +3041,7 @@ async def get_running_jobs(
         return result
     except Exception as e:
         logger.error("Failed to get running jobs", error=str(e), repository_id=repo_id)
-        raise HTTPException(status_code=500, detail=f"Failed to get running jobs: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetRunningJobs"})
 
 @router.put("/{repo_id}/check-schedule")
 async def update_check_schedule(
@@ -3071,7 +3071,7 @@ async def update_check_schedule(
                     croniter(cron_expression)
                     repo.check_cron_expression = cron_expression
                 except Exception as e:
-                    raise HTTPException(status_code=400, detail=f"Invalid cron expression: {str(e)}")
+                    raise HTTPException(status_code=400, detail={"key": "backend.errors.repo.invalidCronExpression"})
 
         max_duration = request.get("max_duration")
         if max_duration is not None:
@@ -3123,7 +3123,7 @@ async def update_check_schedule(
         raise
     except Exception as e:
         logger.error("Failed to update check schedule", error=str(e), repo_id=repo_id)
-        raise HTTPException(status_code=500, detail=f"Failed to update check schedule: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToUpdateCheckSchedule"})
 
 @router.get("/{repo_id}/check-schedule")
 async def get_check_schedule(
@@ -3153,4 +3153,4 @@ async def get_check_schedule(
         raise
     except Exception as e:
         logger.error("Failed to get check schedule", error=str(e), repo_id=repo_id)
-        raise HTTPException(status_code=500, detail=f"Failed to get check schedule: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetCheckSchedule"})

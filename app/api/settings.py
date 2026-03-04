@@ -263,7 +263,7 @@ async def get_system_settings(
         }
     except Exception as e:
         logger.error("Failed to get system settings", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve system settings: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedRetrieveSystemSettings", "params": {"error": str(e)}})
 
 @router.put("/system")
 async def update_system_settings(
@@ -439,7 +439,7 @@ async def update_system_settings(
         raise
     except Exception as e:
         logger.error("Failed to update system settings", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to update system settings: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedUpdateSystemSettings", "params": {"error": str(e)}})
 
 async def _run_stats_refresh_background(repo_ids: list, username: str):
     """Background task to refresh stats for all repositories"""
@@ -523,7 +523,7 @@ async def refresh_all_stats(
         }
     except Exception as e:
         logger.error("Failed to start stats refresh", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to start stats refresh: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedStartStatsRefresh", "params": {"error": str(e)}})
 
 @router.get("/users")
 async def get_users(
@@ -553,7 +553,7 @@ async def get_users(
         }
     except Exception as e:
         logger.error("Failed to get users", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve users: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedRetrieveUsers", "params": {"error": str(e)}})
 
 @router.post("/users")
 async def create_user(
@@ -607,7 +607,7 @@ async def create_user(
         raise
     except Exception as e:
         logger.error("Failed to create user", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to create user: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedCreateUser", "params": {"error": str(e)}})
 
 @router.put("/users/{user_id}")
 async def update_user(
@@ -665,7 +665,7 @@ async def update_user(
         raise
     except Exception as e:
         logger.error("Failed to update user", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to update user: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedUpdateUser", "params": {"error": str(e)}})
 
 @router.delete("/users/{user_id}")
 async def delete_user(
@@ -705,7 +705,7 @@ async def delete_user(
         raise
     except Exception as e:
         logger.error("Failed to delete user", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to delete user: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedDeleteUser", "params": {"error": str(e)}})
 
 @router.post("/users/{user_id}/reset-password")
 async def reset_user_password(
@@ -738,7 +738,7 @@ async def reset_user_password(
         raise  # Re-raise HTTP exceptions to preserve status codes
     except Exception as e:
         logger.error("Failed to reset user password", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to reset password: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedResetPassword", "params": {"error": str(e)}})
 
 @router.post("/change-password")
 async def change_password(
@@ -769,7 +769,7 @@ async def change_password(
         raise
     except Exception as e:
         logger.error("Failed to change password", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to change password: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedChangePassword", "params": {"error": str(e)}})
 
 @router.get("/profile")
 async def get_profile(current_user: User = Depends(get_current_user)):
@@ -829,7 +829,7 @@ async def update_profile(
         raise
     except Exception as e:
         logger.error("Failed to update profile", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to update profile: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedUpdateProfile", "params": {"error": str(e)}})
 
 @router.get("/preferences")
 async def get_preferences(current_user: User = Depends(get_current_user)):
@@ -868,7 +868,7 @@ async def update_preferences(
         }
     except Exception as e:
         logger.error("Failed to update preferences", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to update preferences: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedUpdatePreferences", "params": {"error": str(e)}})
 
 @router.post("/system/cleanup")
 async def cleanup_system(
@@ -919,7 +919,7 @@ async def cleanup_system(
     except Exception as e:
         error_msg = str(e) if str(e) else "Unknown error occurred"
         logger.error("Failed to run system cleanup", error=error_msg)
-        raise HTTPException(status_code=500, detail=f"Failed to run system cleanup: {error_msg}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedRunSystemCleanup", "params": {"error": error_msg}})
 
 @router.get("/system/logs/storage")
 async def get_log_storage_stats(
@@ -969,7 +969,7 @@ async def get_log_storage_stats(
         }
     except Exception as e:
         logger.error("Failed to get log storage stats", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to get log storage statistics: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedGetLogStorageStats", "params": {"error": str(e)}})
 
 @router.post("/system/logs/cleanup")
 async def manual_log_cleanup(
@@ -1049,7 +1049,7 @@ async def manual_log_cleanup(
         }
     except Exception as e:
         logger.error("Failed to run manual log cleanup", user=current_user.username, error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to run log cleanup: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedRunLogCleanup", "params": {"error": str(e)}})
 
 
 # ============================================================================
@@ -1094,7 +1094,7 @@ async def get_cache_stats(
 
     except Exception as e:
         logger.error("Failed to get cache stats", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to get cache statistics: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedGetCacheStats", "params": {"error": str(e)}})
 
 
 @router.post("/cache/clear")
@@ -1156,7 +1156,7 @@ async def clear_cache(
                     user=current_user.username,
                     repository_id=repository_id,
                     error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to clear cache: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedClearCache", "params": {"error": str(e)}})
 
 
 @router.put("/cache/settings")
@@ -1302,4 +1302,4 @@ async def update_cache_settings(
         logger.error("Failed to update cache settings",
                     user=current_user.username,
                     error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to update cache settings: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedUpdateCacheSettings", "params": {"error": str(e)}})

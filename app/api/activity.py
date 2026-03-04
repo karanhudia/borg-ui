@@ -287,13 +287,13 @@ async def get_job_logs(
     }
 
     if job_type not in job_models:
-        raise HTTPException(status_code=400, detail=f"Invalid job type: {job_type}")
+        raise HTTPException(status_code=400, detail={"key": "backend.errors.activity.invalidJobType", "params": {"jobType": job_type}})
 
     job_model = job_models[job_type]
     job = db.query(job_model).filter(job_model.id == job_id).first()
 
     if not job:
-        raise HTTPException(status_code=404, detail=f"{job_type.capitalize()} job not found")
+        raise HTTPException(status_code=404, detail={"key": "backend.errors.activity.jobNotFound", "params": {"jobType": job_type}})
 
     # For completed/failed jobs, prefer log_file_path (full borg output) over logs (hooks only)
     if job.status in ['completed', 'failed', 'completed_with_warnings']:
@@ -476,7 +476,7 @@ async def download_job_logs(
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication token required"
+            detail={"key": "backend.errors.auth.authTokenRequired"}
         )
 
     try:
@@ -484,7 +484,7 @@ async def download_job_logs(
         if not username:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token"
+                detail={"key": "backend.errors.auth.invalidToken"}
             )
 
         # Get user from database
@@ -492,13 +492,13 @@ async def download_job_logs(
         if not current_user or not current_user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found or inactive"
+                detail={"key": "backend.errors.auth.userNotFound"}
             )
     except Exception as e:
         logger.error("Failed to verify token for log download", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication token"
+            detail={"key": "backend.errors.auth.invalidAuthToken"}
         )
 
     # Map job type to model
@@ -512,19 +512,19 @@ async def download_job_logs(
     }
 
     if job_type not in job_models:
-        raise HTTPException(status_code=400, detail=f"Invalid job type: {job_type}")
+        raise HTTPException(status_code=400, detail={"key": "backend.errors.activity.invalidJobType", "params": {"jobType": job_type}})
 
     job_model = job_models[job_type]
     job = db.query(job_model).filter(job_model.id == job_id).first()
 
     if not job:
-        raise HTTPException(status_code=404, detail=f"{job_type.capitalize()} job not found")
+        raise HTTPException(status_code=404, detail={"key": "backend.errors.activity.jobNotFound", "params": {"jobType": job_type}})
 
     # Don't allow downloading logs for running jobs
     if job.status == 'running':
         raise HTTPException(
             status_code=400,
-            detail="Cannot download logs for running job"
+            detail={"key": "backend.errors.activity.cannotDownloadLogsForRunningJob"}
         )
 
     # Try to get logs from log file first
@@ -558,7 +558,7 @@ async def download_job_logs(
     # No logs available
     raise HTTPException(
         status_code=404,
-        detail="No logs available for this job"
+        detail={"key": "backend.errors.activity.noLogsAvailableForJob"}
     )
 
 

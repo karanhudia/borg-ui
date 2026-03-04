@@ -139,7 +139,7 @@ async def start_restore(
         logger.error("Failed to start restore", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to start restore: {str(e)}"
+            detail={"key": "backend.errors.restore.failedStartRestore", "params": {"error": str(e)}}
         )
 
 @router.get("/repositories")
@@ -185,7 +185,7 @@ async def get_archives(
         logger.error("Failed to fetch archives", repository_id=repository_id, error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch archives: {str(e)}"
+            detail={"key": "backend.errors.restore.failedFetchArchives", "params": {"error": str(e)}}
         )
 
 @router.get("/contents/{repository_id}/{archive_name}")
@@ -368,7 +368,7 @@ async def get_archive_contents(
                     archive_name=archive_name, path=path, error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch archive contents: {str(e)}"
+            detail={"key": "backend.errors.restore.failedFetchArchiveContents", "params": {"error": str(e)}}
         )
 
 @router.get("/jobs")

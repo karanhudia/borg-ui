@@ -129,7 +129,7 @@ async def get_all_backup_jobs(
         logger.error("Failed to get backup jobs", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get backup jobs"
+            detail={"key": "backend.errors.backup.failedGetBackupJobs"}
         )
 
 @router.get("/status/{job_id}")
@@ -174,7 +174,7 @@ async def get_backup_status(
         logger.error("Failed to get backup status", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get backup status"
+            detail={"key": "backend.errors.backup.failedGetBackupStatus"}
         )
 
 @router.post("/cancel/{job_id}")
@@ -222,7 +222,7 @@ async def cancel_backup(
         logger.error("Failed to cancel backup", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to cancel backup"
+            detail={"key": "backend.errors.backup.failedCancelBackup"}
         )
 
 @router.get("/logs/{job_id}/download")
@@ -239,7 +239,7 @@ async def download_backup_logs(
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication token required"
+            detail={"key": "backend.errors.auth.authTokenRequired"}
         )
 
     try:
@@ -247,7 +247,7 @@ async def download_backup_logs(
         if not username:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token"
+                detail={"key": "backend.errors.auth.invalidToken"}
             )
 
         # Get user from database
@@ -255,7 +255,7 @@ async def download_backup_logs(
         if not current_user or not current_user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found or inactive"
+                detail={"key": "backend.errors.auth.userNotFound"}
             )
     except HTTPException:
         raise
@@ -263,7 +263,7 @@ async def download_backup_logs(
         logger.error("Token verification failed", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication"
+            detail={"key": "backend.errors.auth.invalidAuthentication"}
         )
     try:
         from fastapi.responses import FileResponse
@@ -280,7 +280,7 @@ async def download_backup_logs(
         if job.status == "running":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot download logs for running backup"
+                detail={"key": "backend.errors.backup.cannotDownloadLogsForRunningBackup"}
             )
 
         # Check if logs are available

@@ -135,7 +135,7 @@ async def mount_borg_archive(
         )
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to mount archive: {str(e)}"
+            detail={"key": "backend.errors.mounts.failedMountArchive", "params": {"error": str(e)}}
         )
 
 
@@ -207,7 +207,7 @@ async def unmount_borg_archive(
         )
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to unmount: {str(e)}"
+            detail={"key": "backend.errors.mounts.failedUnmount", "params": {"error": str(e)}}
         )
 
 
@@ -277,7 +277,7 @@ async def list_mounts(
         )
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to list mounts: {str(e)}"
+            detail={"key": "backend.errors.mounts.failedListMounts", "params": {"error": str(e)}}
         )
 
 
@@ -324,5 +324,5 @@ async def get_mount_info(
         )
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to get mount info: {str(e)}"
+            detail={"key": "backend.errors.mounts.failedGetMountInfo", "params": {"error": str(e)}}
         )

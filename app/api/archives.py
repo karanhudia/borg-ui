@@ -306,7 +306,7 @@ async def download_file_from_archive(
     if not username:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token"
+            detail={"key": "backend.errors.auth.invalidOrExpiredToken"}
         )
 
     # Get user from database
@@ -314,7 +314,7 @@ async def download_file_from_archive(
     if not current_user or not current_user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or inactive"
+            detail={"key": "backend.errors.auth.userNotFound"}
         )
 
     try:
@@ -323,7 +323,7 @@ async def download_file_from_archive(
         if not repo:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Repository not found"
+                detail={"key": "backend.errors.archives.repositoryNotFound"}
             )
 
         # Create a temporary directory for extraction
@@ -345,7 +345,7 @@ async def download_file_from_archive(
             if not result.get("success"):
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Failed to extract file: {result.get('stderr', 'Unknown error')}"
+                    detail={"key": "backend.errors.archives.failedExtractFile", "params": {"error": result.get('stderr', 'Unknown error')}}
                 )
 
             # Find the extracted file
@@ -354,7 +354,7 @@ async def download_file_from_archive(
             if not os.path.exists(extracted_file_path):
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="File not found after extraction"
+                    detail={"key": "backend.errors.archives.fileNotFoundAfterExtraction"}
                 )
 
             # Get the filename for the download

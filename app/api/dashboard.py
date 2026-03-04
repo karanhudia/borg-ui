@@ -89,7 +89,7 @@ def get_system_metrics() -> SystemMetrics:
         logger.error("Failed to get system metrics", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get system metrics"
+            detail={"key": "backend.errors.dashboard.failedGetSystemMetrics"}
         )
 
 def get_scheduled_jobs(db: Session) -> List[ScheduledJobInfo]:
@@ -160,7 +160,7 @@ async def get_dashboard_status(
         logger.error("Error getting dashboard status", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get dashboard status"
+            detail={"key": "backend.errors.dashboard.failedGetDashboardStatus"}
         )
 
 @router.get("/metrics", response_model=MetricsResponse)
@@ -198,7 +198,7 @@ async def get_dashboard_metrics(current_user: User = Depends(get_current_user)):
         logger.error("Error getting metrics", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get metrics"
+            detail={"key": "backend.errors.dashboard.failedGetMetrics"}
         )
 
 @router.get("/schedule", response_model=ScheduleResponse)
@@ -225,7 +225,7 @@ async def get_dashboard_schedule(
         logger.error("Error getting schedule", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get schedule"
+            detail={"key": "backend.errors.dashboard.failedGetSchedule"}
         )
 
 

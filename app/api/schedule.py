@@ -156,7 +156,7 @@ async def get_scheduled_jobs(
         }
     except Exception as e:
         logger.error("Failed to get scheduled jobs", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve scheduled jobs: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.schedule.failedRetrieveScheduledJobs", "params": {"error": str(e)}})
 
 @router.post("/")
 async def create_scheduled_job(
@@ -454,11 +454,11 @@ async def create_scheduled_job(
 
             raise HTTPException(
                 status_code=500,
-                detail=f"Database constraint error: {error_msg}. Please check logs for details or contact support."
+                detail={"key": "backend.errors.schedule.dbConstraintError", "params": {"error": error_msg}}
             )
 
         logger.error("Failed to create scheduled job", error=error_msg)
-        raise HTTPException(status_code=500, detail=f"Failed to create scheduled job: {error_msg}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.schedule.failedCreateScheduledJob", "params": {"error": error_msg}})
 
 @router.get("/cron-presets")
 async def get_cron_presets(current_user: User = Depends(get_current_user)):
@@ -565,7 +565,7 @@ async def get_upcoming_jobs(
         }
     except Exception as e:
         logger.error("Failed to get upcoming jobs", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to get upcoming jobs: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.schedule.failedGetUpcomingJobs", "params": {"error": str(e)}})
 
 @router.get("/{job_id}")
 async def get_scheduled_job(
@@ -621,7 +621,7 @@ async def get_scheduled_job(
         raise
     except Exception as e:
         logger.error("Failed to get scheduled job", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve scheduled job: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.schedule.failedRetrieveScheduledJob", "params": {"error": str(e)}})
 
 @router.put("/{job_id}")
 async def update_scheduled_job(
@@ -782,7 +782,7 @@ async def update_scheduled_job(
     except Exception as e:
         db.rollback()  # Rollback any partial changes
         logger.error("Failed to update scheduled job - rolled back transaction", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to update scheduled job: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.schedule.failedUpdateScheduledJob", "params": {"error": str(e)}})
 
 @router.delete("/{job_id}")
 async def delete_scheduled_job(
@@ -827,7 +827,7 @@ async def delete_scheduled_job(
     except Exception as e:
         db.rollback()
         logger.error("Failed to delete scheduled job", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to delete scheduled job: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.schedule.failedDeleteScheduledJob", "params": {"error": str(e)}})
 
 @router.post("/{job_id}/toggle")
 async def toggle_scheduled_job(
@@ -860,7 +860,7 @@ async def toggle_scheduled_job(
         raise
     except Exception as e:
         logger.error("Failed to toggle scheduled job", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to toggle scheduled job: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.schedule.failedToggleScheduledJob", "params": {"error": str(e)}})
 
 @router.post("/{job_id}/duplicate")
 async def duplicate_scheduled_job(
@@ -985,7 +985,7 @@ async def duplicate_scheduled_job(
     except Exception as e:
         db.rollback()  # Rollback any partial changes
         logger.error("Failed to duplicate scheduled job - rolled back transaction", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to duplicate scheduled job: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.schedule.failedDuplicateScheduledJob", "params": {"error": str(e)}})
 
 @router.post("/{job_id}/run-now")
 async def run_scheduled_job_now(
@@ -1093,7 +1093,7 @@ async def run_scheduled_job_now(
         raise
     except Exception as e:
         logger.error("Failed to run scheduled job", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to run scheduled job: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.schedule.failedRunScheduledJob", "params": {"error": str(e)}})
 
 @router.post("/validate-cron")
 async def validate_cron_expression(
@@ -1129,7 +1129,7 @@ async def validate_cron_expression(
         }
     except Exception as e:
         logger.error("Failed to validate cron expression", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to validate cron expression: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.schedule.failedValidateCronExpression", "params": {"error": str(e)}})
 
 # Background task to check and run scheduled jobs
 async def run_script_from_library(

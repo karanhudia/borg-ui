@@ -138,12 +138,12 @@ async def stream_events(
                 token_str = auth_header.split(" ")[1]
 
         if not token_str:
-            raise HTTPException(status_code=401, detail="Not authenticated")
+            raise HTTPException(status_code=401, detail={"key": "backend.errors.events.notAuthenticated"})
 
         # Verify token and get username
         username = verify_token(token_str)
         if not username:
-            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+            raise HTTPException(status_code=401, detail={"key": "backend.errors.events.invalidAuthCredentials"})
 
         # Create a scoped database session just for authentication
         # Close it immediately to avoid holding connections during SSE streaming
@@ -151,7 +151,7 @@ async def stream_events(
         try:
             user = db.query(User).filter(User.username == username).first()
             if not user or not user.is_active:
-                raise HTTPException(status_code=401, detail="User not found or inactive")
+                raise HTTPException(status_code=401, detail={"key": "backend.errors.events.userNotFoundOrInactive"})
             user_id = str(user.id)
         finally:
             db.close()  # IMPORTANT: Close DB connection before starting SSE stream
@@ -170,7 +170,7 @@ async def stream_events(
         raise
     except Exception as e:
         logger.error("Failed to start event stream", error=str(e))
-        raise HTTPException(status_code=500, detail="Failed to start event stream")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.events.failedStartEventStream"})
 
 # Background task for monitoring backup jobs
 async def monitor_backup_jobs():

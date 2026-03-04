@@ -130,7 +130,7 @@ async def install_package(
         logger.error("Failed to start package installation",
                     package=package.name,
                     error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to start installation: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.packages.failedStartInstallation", "params": {"error": str(e)}})
 
 @router.put("/{package_id}", response_model=PackageResponse)
 async def update_package(

@@ -296,7 +296,7 @@ async def get_system_key(
         }
     except Exception as e:
         logger.error("Failed to get system SSH key", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve system SSH key: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedRetrieveSystemSshKey", "params": {"error": str(e)}})
 
 @router.get("")
 @router.get("/")
@@ -329,7 +329,7 @@ async def get_ssh_keys(
         }
     except Exception as e:
         logger.error("Failed to get SSH keys", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve SSH keys: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedRetrieveSshKeys", "params": {"error": str(e)}})
 
 @router.post("")
 @router.post("/")
@@ -389,7 +389,7 @@ async def create_ssh_key(
         raise
     except Exception as e:
         logger.error("Failed to create SSH key", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to create SSH key: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedCreateSshKey", "params": {"error": str(e)}})
 
 class SSHKeyGenerate(BaseModel):
     name: str
@@ -493,7 +493,7 @@ async def generate_ssh_key(
         raise
     except Exception as e:
         logger.error("Failed to generate system SSH key", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to generate system SSH key: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedGenerateSystemSshKey", "params": {"error": str(e)}})
 
 @router.post("/import")
 async def import_ssh_key(
@@ -528,7 +528,7 @@ async def import_ssh_key(
             with open(private_key_path, 'r') as f:
                 private_key = f.read()
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to read private key: {str(e)}")
+            raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedReadPrivateKey", "params": {"error": str(e)}})
 
         # Validate private key format
         if not private_key.strip().startswith('-----BEGIN'):
@@ -548,7 +548,7 @@ async def import_ssh_key(
             with open(public_key_path, 'r') as f:
                 public_key = f.read().strip()
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to read public key: {str(e)}")
+            raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedReadPublicKey", "params": {"error": str(e)}})
 
         # Validate public key format and detect key type
         key_type = None
@@ -627,7 +627,7 @@ async def import_ssh_key(
         raise
     except Exception as e:
         logger.error("Failed to import system SSH key", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to import system SSH key: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedImportSystemSshKey", "params": {"error": str(e)}})
 
 @router.post("/quick-setup")
 async def quick_ssh_setup(
@@ -746,7 +746,7 @@ async def quick_ssh_setup(
         raise
     except Exception as e:
         logger.error("Quick SSH setup failed", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Quick SSH setup failed: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.quickSshSetupFailed", "params": {"error": str(e)}})
 
 @router.post("/{key_id}/deploy")
 async def deploy_ssh_key(
@@ -837,7 +837,7 @@ async def deploy_ssh_key(
         raise
     except Exception as e:
         logger.error("Failed to deploy SSH key", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to deploy SSH key: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedDeploySshKey", "params": {"error": str(e)}})
 
 @router.get("/connections")
 async def get_ssh_connections(
@@ -889,7 +889,7 @@ async def get_ssh_connections(
         }
     except Exception as e:
         logger.error("Failed to get SSH connections", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve SSH connections: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedRetrieveSshConnections", "params": {"error": str(e)}})
 
 @router.post("/{key_id}/test-connection")
 async def test_ssh_connection(
@@ -959,7 +959,7 @@ async def test_ssh_connection(
         raise
     except Exception as e:
         logger.error("Failed to test SSH connection", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to test SSH connection: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedTestSshConnection", "params": {"error": str(e)}})
 
 @router.put("/connections/{connection_id}")
 async def update_ssh_connection(
@@ -1014,7 +1014,7 @@ async def update_ssh_connection(
         raise
     except Exception as e:
         logger.error("Failed to update SSH connection", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to update SSH connection: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedUpdateSshConnection", "params": {"error": str(e)}})
 
 @router.post("/connections/{connection_id}/refresh-storage")
 async def refresh_connection_storage(
@@ -1097,7 +1097,7 @@ async def refresh_connection_storage(
         raise
     except Exception as e:
         logger.error("Failed to refresh storage", error=str(e), connection_id=connection_id)
-        raise HTTPException(status_code=500, detail=f"Failed to refresh storage: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedRefreshStorage", "params": {"error": str(e)}})
 
 @router.post("/connections/{connection_id}/test")
 async def test_existing_connection(
@@ -1177,7 +1177,7 @@ async def test_existing_connection(
         raise
     except Exception as e:
         logger.error("Failed to test connection", error=str(e), connection_id=connection_id)
-        raise HTTPException(status_code=500, detail=f"Failed to test connection: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedTestConnection", "params": {"error": str(e)}})
 
 @router.post("/connections/{connection_id}/redeploy")
 async def redeploy_key_to_connection(
@@ -1250,7 +1250,7 @@ async def redeploy_key_to_connection(
         raise
     except Exception as e:
         logger.error("Failed to redeploy SSH key", error=str(e), connection_id=connection_id)
-        raise HTTPException(status_code=500, detail=f"Failed to redeploy SSH key: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedRedeploySshKey", "params": {"error": str(e)}})
 
 @router.delete("/connections/{connection_id}")
 async def delete_ssh_connection(
@@ -1296,7 +1296,7 @@ async def delete_ssh_connection(
         raise
     except Exception as e:
         logger.error("Failed to delete SSH connection", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to delete SSH connection: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedDeleteSshConnection", "params": {"error": str(e)}})
 
 @router.get("/{key_id}")
 async def get_ssh_key(
@@ -1340,7 +1340,7 @@ async def get_ssh_key(
         raise
     except Exception as e:
         logger.error("Failed to get SSH key", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve SSH key: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedRetrieveSshKey", "params": {"error": str(e)}})
 
 @router.put("/{key_id}")
 async def update_ssh_key(
@@ -1399,7 +1399,7 @@ async def update_ssh_key(
         raise
     except Exception as e:
         logger.error("Failed to update SSH key", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to update SSH key: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedUpdateSshKey", "params": {"error": str(e)}})
 
 @router.delete("/{key_id}")
 async def delete_ssh_key(
@@ -1477,7 +1477,7 @@ async def delete_ssh_key(
         raise
     except Exception as e:
         logger.error("Failed to delete SSH key", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to delete SSH key: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedDeleteSshKey", "params": {"error": str(e)}})
 
 async def generate_ssh_key_fingerprint(public_key: str) -> str:
     """Generate SSH key fingerprint (SHA256)"""
@@ -1963,7 +1963,7 @@ async def toggle_backup_source(
         logger.error("Failed to toggle backup source",
                     connection_id=connection_id,
                     error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to toggle backup source: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedToggleBackupSource", "params": {"error": str(e)}})
 
 @router.get("/connections/backup-sources")
 async def list_backup_sources(
@@ -1994,7 +1994,7 @@ async def list_backup_sources(
         }
     except Exception as e:
         logger.error("Failed to list backup sources", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to list backup sources: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedListBackupSources", "params": {"error": str(e)}})
 
 @router.post("/connections/{connection_id}/verify-borg")
 async def verify_borg_installation(
@@ -2037,4 +2037,4 @@ async def verify_borg_installation(
         logger.error("Failed to verify Borg installation",
                     connection_id=connection_id,
                     error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to verify Borg installation: {str(e)}")
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedVerifyBorgInstallation", "params": {"error": str(e)}})
