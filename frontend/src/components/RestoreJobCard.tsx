@@ -2,6 +2,7 @@ import { Box, Stack, Typography, Alert } from '@mui/material'
 import { RefreshCw, CheckCircle, AlertCircle, Clock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatTimeRange, formatDurationSeconds, formatRelativeTime } from '../utils/dateUtils'
+import { translateBackendKey } from '../utils/translateBackendKey'
 
 interface RestoreJob {
   id: number
@@ -183,13 +184,17 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
 
       {job.status === 'completed_with_warnings' && job.error_message && (
         <Alert severity="warning" sx={{ mt: 2, mb: 2 }}>
-          <Typography variant="body2">{job.error_message}</Typography>
+          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+            {job.error_message.split('\n').map(line => translateBackendKey(line)).join('\n')}
+          </Typography>
         </Alert>
       )}
 
       {job.status === 'failed' && job.error_message && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          <Typography variant="body2">{job.error_message}</Typography>
+          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+            {job.error_message.split('\n').map(line => translateBackendKey(line)).join('\n')}
+          </Typography>
         </Alert>
       )}
 
