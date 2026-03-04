@@ -54,7 +54,7 @@ export default function ErrorDetailsDialog<T extends JobWithError>({
             >
               {job.error_message
                 .split('\n')
-                .map(line => translateBackendKey(line))
+                .map((line) => translateBackendKey(line))
                 .join('\n')}
             </Typography>
           </Alert>

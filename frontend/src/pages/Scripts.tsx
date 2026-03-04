@@ -279,9 +279,7 @@ export default function Scripts() {
         success: false,
         exit_code: -1,
         stdout: '',
-        stderr:
-          translateBackendKey(error.response?.data?.detail) ||
-          error.message,
+        stderr: translateBackendKey(error.response?.data?.detail) || error.message,
         execution_time: 0,
       })
     } finally {

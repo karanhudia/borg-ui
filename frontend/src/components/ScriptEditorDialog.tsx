@@ -75,9 +75,7 @@ export default function ScriptEditorDialog({
       setTestResult({
         success: false,
         stdout: '',
-        stderr:
-          translateBackendKey(error.response?.data?.detail) ||
-          error.message,
+        stderr: translateBackendKey(error.response?.data?.detail) || error.message,
         exit_code: -1,
         execution_time: 0,
       })

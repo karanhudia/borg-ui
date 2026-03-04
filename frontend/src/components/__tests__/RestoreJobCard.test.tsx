@@ -283,7 +283,10 @@ describe('RestoreJobCard', () => {
         ...baseJob,
         archive: 'backup',
         status: 'failed',
-        error_message: JSON.stringify({ key: 'backend.errors.service.restoreFailedExitCode', params: { exitCode: 1 } }),
+        error_message: JSON.stringify({
+          key: 'backend.errors.service.restoreFailedExitCode',
+          params: { exitCode: 1 },
+        }),
       }
       render(<RestoreJobCard job={job} />)
       // Should render translated text, not raw JSON
