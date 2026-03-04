@@ -390,7 +390,15 @@ class RestoreService:
                         elif not stderr_output.strip():
                             error_hint = "No error output from borg. Files may not exist in archive or permission denied."
 
-                        job.error_message = f"Restore failed: 0 files extracted (exit code {process.returncode}). {error_hint}"
+                        if "permission denied" in stderr_output.lower():
+                            _restore_key = "restoreFailedZeroFilesPermission"
+                        elif "no such file" in stderr_output.lower():
+                            _restore_key = "restoreFailedZeroFilesPathNotFound"
+                        elif not stderr_output.strip():
+                            _restore_key = "restoreFailedZeroFilesNoOutput"
+                        else:
+                            _restore_key = "restoreFailedZeroFiles"
+                        job.error_message = json.dumps({"key": f"backend.errors.service.{_restore_key}", "params": {"exitCode": process.returncode}})
                         job.completed_at = datetime.now(timezone.utc)
                         job.logs = f"STDOUT:\n{chr(10).join(stdout_lines) if stdout_lines else '(no output)'}\n\nSTDERR:\n{stderr_output if stderr_output else '(no output)'}"
 
@@ -440,7 +448,7 @@ class RestoreService:
                 else:
                     job.status = "failed"
                     stderr_output = "\n".join(stderr_lines)
-                    job.error_message = stderr_output or f"Process exited with code {process.returncode}"
+                    job.error_message = json.dumps({"key": "backend.errors.service.restoreFailedExitCode", "params": {"exitCode": process.returncode}})
                     job.completed_at = datetime.now(timezone.utc)
                     job.logs = f"STDOUT:\n{chr(10).join(stdout_lines)}\n\nSTDERR:\n{stderr_output}"
 
@@ -463,7 +471,7 @@ class RestoreService:
                 # Handle any unexpected errors during extraction
                 logger.error("Unexpected error during extraction", job_id=job_id, error=str(e))
                 job.status = "failed"
-                job.error_message = str(e)
+                job.error_message = json.dumps({"key": "backend.errors.service.restoreFailed"})
                 job.completed_at = datetime.now(timezone.utc)
                 db_session.commit()
 
@@ -477,7 +485,7 @@ class RestoreService:
                 job = db_session.query(RestoreJob).filter(RestoreJob.id == job_id).first()
                 if job:
                     job.status = "failed"
-                    job.error_message = str(e)
+                    job.error_message = json.dumps({"key": "backend.errors.service.restoreFailed"})
                     job.completed_at = datetime.now(timezone.utc)
                     db_session.commit()
 
@@ -846,7 +854,7 @@ class RestoreService:
                 job = db_session.query(RestoreJob).filter(RestoreJob.id == job_id).first()
                 if job:
                     job.status = "failed"
-                    job.error_message = str(e)
+                    job.error_message = json.dumps({"key": "backend.errors.service.restoreFailed"})
                     job.completed_at = datetime.now(timezone.utc)
                     db_session.commit()
 
