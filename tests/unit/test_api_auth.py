@@ -259,7 +259,7 @@ class TestAuthenticationLogin:
         )
 
         assert response.status_code == 401
-        assert "Incorrect username or password" in response.json()["detail"]
+        assert response.json()["detail"]["key"] == "backend.errors.auth.incorrectCredentials"
 
     def test_login_nonexistent_user(self, test_client: TestClient):
         """Test login with non-existent user"""
@@ -284,7 +284,7 @@ class TestAuthenticationLogin:
         )
 
         assert response.status_code == 401
-        assert "Incorrect username or password" in response.json()["detail"]
+        assert response.json()["detail"]["key"] == "backend.errors.auth.incorrectCredentials"
 
     def test_login_with_inactive_user_returns_401(
         self,
@@ -318,7 +318,7 @@ class TestAuthenticationLogin:
         assert response.status_code == 401, \
             f"Expected 401 for inactive user, got {response.status_code}. " \
             f"This means the inactive user bug fix was not applied!"
-        assert "Inactive user" in response.json()["detail"]
+        assert response.json()["detail"]["key"] == "backend.errors.auth.inactiveUser"
 
     def test_login_case_sensitive_username(self, test_client: TestClient, test_user):
         """Test that username is case sensitive"""

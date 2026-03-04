@@ -227,7 +227,7 @@ class TestUpdateSystemSettings:
         )
 
         assert response.status_code == 400
-        assert "Invalid log_save_policy" in response.json()["detail"]
+        assert response.json()["detail"]["key"] == "backend.errors.settings.invalidLogSavePolicy"
 
     def test_validate_log_max_size_minimum(self, client, admin_token):
         """Should enforce minimum log max size"""
@@ -238,7 +238,7 @@ class TestUpdateSystemSettings:
         )
 
         assert response.status_code == 400
-        assert "at least 10 MB" in response.json()["detail"]
+        assert response.json()["detail"]["key"] == "backend.errors.settings.logSizeTooSmall"
 
     def test_update_requires_admin(self, client, user_token):
         """Should require admin access to update settings"""
@@ -249,7 +249,7 @@ class TestUpdateSystemSettings:
         )
 
         assert response.status_code == 403
-        assert "Admin access required" in response.json()["detail"]
+        assert response.json()["detail"]["key"] == "backend.errors.settings.adminAccessRequired"
 
     def test_warning_when_new_limit_below_usage(self, client, admin_token, test_db, monkeypatch):
         """Should warn when new limit is below current usage"""
@@ -394,7 +394,7 @@ class TestManualLogCleanup:
         )
 
         assert response.status_code == 403
-        assert "Admin access required" in response.json()["detail"]
+        assert response.json()["detail"]["key"] == "backend.errors.settings.adminAccessRequired"
 
     def test_manual_cleanup_uses_settings(self, client, admin_token, test_db, monkeypatch):
         """Should use settings from database"""

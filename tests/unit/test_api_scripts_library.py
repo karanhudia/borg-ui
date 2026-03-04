@@ -396,8 +396,8 @@ class TestScriptDeleteErrorMessages:
         # Try to delete - should fail with clear message
         response = test_client.delete(f"/api/scripts/{script.id}", headers=admin_headers)
         assert response.status_code == 400
-        assert "1 place" in response.json()["detail"]
-        assert "test-repo (pre-backup)" in response.json()["detail"]
+        assert response.json()["detail"]["key"] == "backend.errors.scripts.scriptInUse"
+        assert response.json()["detail"]["params"]["repos"] == "test-repo (pre-backup)"
 
     def test_delete_error_message_multiple_hooks_same_repo(self, test_client, admin_headers, test_db):
         """Error message shows both hook types when script used twice on same repo"""
@@ -445,16 +445,16 @@ class TestScriptDeleteErrorMessages:
         assert response.status_code == 400
         detail = response.json()["detail"]
 
-        # Should say "2 places" not "2 repository(ies)"
-        assert "2 places" in detail
+        assert detail["key"] == "backend.errors.scripts.scriptInUse"
+        assert detail["params"]["count"] == 2
 
         # Should show repository name once with both hook types
-        assert "Downloads" in detail
-        assert "pre-backup" in detail
-        assert "post-backup" in detail
+        assert "Downloads" in detail["params"]["repos"]
+        assert "pre-backup" in detail["params"]["repos"]
+        assert "post-backup" in detail["params"]["repos"]
 
         # Should NOT show "Downloads, Downloads"
-        assert detail.count("Downloads") == 1
+        assert detail["params"]["repos"].count("Downloads") == 1
 
     def test_delete_error_message_multiple_repos(self, test_client, admin_headers, test_db):
         """Error message lists all repositories when used in multiple places"""
@@ -515,11 +515,11 @@ class TestScriptDeleteErrorMessages:
         assert response.status_code == 400
         detail = response.json()["detail"]
 
-        # Should say "3 places"
-        assert "3 places" in detail
+        assert detail["key"] == "backend.errors.scripts.scriptInUse"
+        assert detail["params"]["count"] == 3
 
         # Should show both repositories with their hook types
-        assert "Downloads" in detail
-        assert "Documents" in detail
-        assert "pre-backup" in detail
-        assert "post-backup" in detail
+        assert "Downloads" in detail["params"]["repos"]
+        assert "Documents" in detail["params"]["repos"]
+        assert "pre-backup" in detail["params"]["repos"]
+        assert "post-backup" in detail["params"]["repos"]

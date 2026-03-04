@@ -1,3 +1,4 @@
+import json
 import pytest
 from datetime import datetime, timezone
 from unittest.mock import Mock, patch, mock_open, MagicMock
@@ -156,7 +157,7 @@ class TestProcessUtils:
 
         # Verify backup job was marked failed
         assert mock_backup_job.status == "failed"
-        assert "Container restarted" in mock_backup_job.error_message
+        assert json.loads(mock_backup_job.error_message)["key"] == "backend.errors.service.containerRestartedDuringBackup"
         assert mock_backup_job.completed_at is not None
 
         # Verify commit was called

@@ -62,7 +62,7 @@ class TestArchivesResourceValidation:
         )
 
         assert response.status_code == 404
-        assert "Repository not found" in response.json()["detail"]
+        assert response.json()["detail"]["key"] == "backend.errors.restore.repositoryNotFound"
 
     def test_get_archive_info_nonexistent_repository_returns_404(
         self,
@@ -76,7 +76,7 @@ class TestArchivesResourceValidation:
         )
 
         assert response.status_code == 404
-        assert "Repository not found" in response.json()["detail"]
+        assert response.json()["detail"]["key"] == "backend.errors.restore.repositoryNotFound"
 
     def test_get_archive_contents_nonexistent_repository_returns_404(
         self,
@@ -90,7 +90,7 @@ class TestArchivesResourceValidation:
         )
 
         assert response.status_code == 404
-        assert "Repository not found" in response.json()["detail"]
+        assert response.json()["detail"]["key"] == "backend.errors.restore.repositoryNotFound"
 
     def test_delete_archive_nonexistent_repository_returns_404(
         self,
@@ -104,7 +104,7 @@ class TestArchivesResourceValidation:
         )
 
         assert response.status_code == 404
-        assert "Repository not found" in response.json()["detail"]
+        assert response.json()["detail"]["key"] == "backend.errors.restore.repositoryNotFound"
 
 
 @pytest.mark.unit
@@ -141,4 +141,4 @@ class TestDownloadFileEndpoint:
         )
 
         assert response.status_code == 404
-        assert "Repository not found" in response.json()["detail"]
+        assert response.json()["detail"]["key"] == "backend.errors.restore.repositoryNotFound"

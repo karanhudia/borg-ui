@@ -107,7 +107,7 @@ class TestDeleteJobEndpoint:
         assert data["success"] is True
         assert data["job_id"] == job_id
         assert data["job_type"] == "backup"
-        assert "deleted successfully" in data["message"].lower()
+        assert data["message"] == "backend.success.activity.jobDeleted"
 
         # Verify job is deleted from database
         deleted_job = test_db.query(BackupJob).filter(BackupJob.id == job_id).first()
@@ -137,7 +137,7 @@ class TestDeleteJobEndpoint:
 
         assert response.status_code == 403
         data = response.json()
-        assert "admin" in data["detail"].lower()
+        assert data["detail"]["key"] == "backend.errors.activity.adminOnlyDelete"
 
         # Verify job is NOT deleted
         job_still_exists = test_db.query(BackupJob).filter(BackupJob.id == job.id).first()
@@ -166,7 +166,7 @@ class TestDeleteJobEndpoint:
 
         assert response.status_code == 400
         data = response.json()
-        assert "running" in data["detail"].lower()
+        assert data["detail"]["key"] == "backend.errors.activity.cannotDeleteRunningJob"
 
         # Verify job is NOT deleted
         job_still_exists = test_db.query(BackupJob).filter(BackupJob.id == job.id).first()
@@ -195,7 +195,7 @@ class TestDeleteJobEndpoint:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["message"] == "Backup job deleted successfully"
+        assert data["message"] == "backend.success.activity.jobDeleted"
 
         # Verify job IS deleted
         job_deleted = test_db.query(BackupJob).filter(BackupJob.id == job.id).first()
@@ -240,7 +240,7 @@ class TestDeleteJobEndpoint:
 
         assert response.status_code == 404
         data = response.json()
-        assert "not found" in data["detail"].lower()
+        assert data["detail"]["key"] == "backend.errors.activity.jobNotFound"
 
     def test_delete_invalid_job_type(self, test_client, admin_headers):
         """Test deleting with invalid job type returns 400"""
@@ -251,7 +251,7 @@ class TestDeleteJobEndpoint:
 
         assert response.status_code == 400
         data = response.json()
-        assert "invalid job type" in data["detail"].lower()
+        assert data["detail"]["key"] == "backend.errors.activity.invalidJobType"
 
     def test_delete_restore_job_success(self, test_client, admin_headers, test_db):
         """Test admin can delete completed restore job"""

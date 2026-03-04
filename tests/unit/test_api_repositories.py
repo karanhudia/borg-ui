@@ -159,7 +159,7 @@ class TestRepositoriesListAndGet:
         response = test_client.get("/api/repositories/99999", headers=admin_headers)
 
         assert response.status_code == 404
-        assert "not found" in response.json()["detail"].lower()
+        assert response.json()["detail"]["key"] == "backend.errors.repo.repositoryNotFound"
 
     def test_get_repository_by_id_negative_id(self, test_client: TestClient, admin_headers):
         """Test getting repository with negative ID"""
