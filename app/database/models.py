@@ -347,7 +347,7 @@ class DeleteArchiveJob(Base):
     __tablename__ = "delete_archive_jobs"
 
     id = Column(Integer, primary_key=True, index=True)
-    repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=False)
+    repository_id = Column(Integer, ForeignKey("repositories.id", ondelete="CASCADE"), nullable=False)
     repository_path = Column(String, nullable=True)  # Captured at job creation for display even if repo is deleted
     archive_name = Column(String, nullable=False)  # Name of the archive being deleted
     status = Column(String, default="pending")  # pending, running, completed, failed, cancelled
