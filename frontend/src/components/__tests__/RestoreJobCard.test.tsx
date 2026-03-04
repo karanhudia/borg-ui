@@ -278,6 +278,18 @@ describe('RestoreJobCard', () => {
       expect(screen.getByText('Disk full - cannot restore files')).toBeInTheDocument()
     })
 
+    it('translates JSON key string error_message for failed status', () => {
+      const job = {
+        ...baseJob,
+        archive: 'backup',
+        status: 'failed',
+        error_message: JSON.stringify({ key: 'backend.errors.service.restoreFailedExitCode', params: { exitCode: 1 } }),
+      }
+      render(<RestoreJobCard job={job} />)
+      // Should render translated text, not raw JSON
+      expect(screen.queryByText(/^\{"key":/)).not.toBeInTheDocument()
+    })
+
     it('displays AlertCircle icon for failed status', () => {
       const job = {
         ...baseJob,
@@ -301,6 +313,20 @@ describe('RestoreJobCard', () => {
 
       // Should not have error alert
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('completed_with_warnings status', () => {
+    it('translates JSON key string error_message for completed_with_warnings status', () => {
+      const job = {
+        ...baseJob,
+        archive: 'backup',
+        status: 'completed_with_warnings',
+        error_message: JSON.stringify({ key: 'backend.errors.service.restoreFailed' }),
+      }
+      render(<RestoreJobCard job={job} />)
+      // Should render translated text, not raw JSON
+      expect(screen.queryByText(/^\{"key":/)).not.toBeInTheDocument()
     })
   })
 
