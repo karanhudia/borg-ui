@@ -1,82 +1,108 @@
-"""
-Migration 067: Add CASCADE delete to script_executions.backup_job_id foreign key
+"""Add CASCADE delete to script_executions.backup_job_id foreign key
 
 When a backup job is deleted, automatically delete all related script executions.
 This prevents foreign key constraint errors when deleting backup jobs from the activity feed.
 
-Since SQLite doesn't support modifying foreign keys directly, we need to:
-1. Create a new table with the correct foreign key constraint
-2. Copy all data from the old table
-3. Drop the old table
-4. Rename the new table
+Since SQLite doesn't support modifying foreign keys directly, we need to recreate
+the table using the table-recreation pattern.
+
+The migration is fully idempotent:
+- Skips immediately if ON DELETE CASCADE is already present (subsequent startups).
+- Builds the new table DDL from PRAGMA table_info so it is immune to columns
+  added by later migrations.
+- Uses DROP TABLE IF EXISTS to guard against stale temp tables from interrupted runs.
+- Uses explicit column names in INSERT SELECT (avoids wildcard select) to avoid column mismatch.
 """
 
-import structlog
 from sqlalchemy import text
 
-logger = structlog.get_logger()
 
+def upgrade(connection):
+    """Add ON DELETE CASCADE to script_executions.backup_job_id foreign key"""
 
-def upgrade(db):
-    """Add CASCADE delete to backup_job_id foreign key"""
+    # ── Idempotency guard ────────────────────────────────────────────────────
+    # PRAGMA foreign_key_list returns rows:
+    #   (id, seq, table, from, to, on_update, on_delete, match)
+    # row[3] is the "from" column; row[6] is the on_delete action
+    fk_rows = connection.execute(
+        text("PRAGMA foreign_key_list(script_executions)")
+    ).fetchall()
+
+    already_cascades = any(row[3] == "backup_job_id" and row[6] == "CASCADE" for row in fk_rows)
+
+    if already_cascades:
+        print("✓ script_executions.backup_job_id FK already has ON DELETE CASCADE — skipping migration 067")
+        return
+
+    print("⚠️  Fixing script_executions foreign key constraint (adding ON DELETE CASCADE to backup_job_id)...")
+
     try:
-        logger.info("Adding CASCADE delete to script_executions.backup_job_id foreign key")
+        # ── Build new table DDL from the live schema ─────────────────────────
+        # PRAGMA table_info rows: (cid, name, type, notnull, dflt_value, pk)
+        col_rows = connection.execute(
+            text("PRAGMA table_info(script_executions)")
+        ).fetchall()
 
-        # First, check if the table exists
-        result = db.execute(text(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='script_executions'"
+        col_defs = []
+        for _cid, name, type_, notnull, dflt_value, pk in col_rows:
+            if pk:
+                col_defs.append(f"    {name} {type_} PRIMARY KEY AUTOINCREMENT")
+            else:
+                parts = [f"    {name}", type_]
+                if notnull:
+                    parts.append("NOT NULL")
+                if dflt_value is not None:
+                    parts.append(f"DEFAULT {dflt_value}")
+                col_defs.append(" ".join(parts))
+
+        # Append all four FK constraints; backup_job_id gets ON DELETE CASCADE
+        col_defs.append("    FOREIGN KEY (script_id) REFERENCES scripts (id)")
+        col_defs.append("    FOREIGN KEY (repository_id) REFERENCES repositories (id)")
+        col_defs.append(
+            "    FOREIGN KEY (backup_job_id) REFERENCES backup_jobs (id) ON DELETE CASCADE"
+        )
+        col_defs.append("    FOREIGN KEY (triggered_by_user_id) REFERENCES users (id)")
+
+        new_ddl = "CREATE TABLE script_executions_new (\n" + ",\n".join(col_defs) + "\n)"
+
+        # ── Guard against stale temp table from a previous interrupted run ───
+        connection.execute(text("DROP TABLE IF EXISTS script_executions_new"))
+        connection.execute(text(new_ddl))
+
+        # ── Copy using explicit column names (avoids column count mismatch) ─────
+        col_names = ", ".join(row[1] for row in col_rows)
+        connection.execute(text(
+            f"INSERT INTO script_executions_new ({col_names})"
+            f" SELECT {col_names} FROM script_executions"
         ))
-        if not result.fetchone():
-            logger.info("script_executions table does not exist, skipping migration")
-            return
 
-        # Create new table with CASCADE delete
-        db.execute(text("""
-            CREATE TABLE script_executions_new (
-                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-                script_id INTEGER NOT NULL,
-                repository_id INTEGER,
-                backup_job_id INTEGER,
-                hook_type VARCHAR(50),
-                status VARCHAR(50) NOT NULL,
-                started_at DATETIME,
-                completed_at DATETIME,
-                execution_time FLOAT,
-                exit_code INTEGER,
-                stdout TEXT,
-                stderr TEXT,
-                error_message TEXT,
-                triggered_by VARCHAR(50),
-                triggered_by_user_id INTEGER,
-                FOREIGN KEY(script_id) REFERENCES scripts (id),
-                FOREIGN KEY(repository_id) REFERENCES repositories (id),
-                FOREIGN KEY(backup_job_id) REFERENCES backup_jobs (id) ON DELETE CASCADE,
-                FOREIGN KEY(triggered_by_user_id) REFERENCES users (id)
-            )
-        """))
+        # ── Swap tables ───────────────────────────────────────────────────────
+        connection.execute(text("DROP TABLE script_executions"))
+        connection.execute(text("ALTER TABLE script_executions_new RENAME TO script_executions"))
 
-        # Copy data from old table to new table
-        db.execute(text("""
-            INSERT INTO script_executions_new
-            SELECT * FROM script_executions
-        """))
+        # ── Recreate indexes ──────────────────────────────────────────────────
+        connection.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_script_executions_script_id"
+            " ON script_executions (script_id)"
+        ))
+        connection.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_script_executions_repository_id"
+            " ON script_executions (repository_id)"
+        ))
+        connection.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_script_executions_backup_job_id"
+            " ON script_executions (backup_job_id)"
+        ))
 
-        # Drop old table
-        db.execute(text("DROP TABLE script_executions"))
-
-        # Rename new table to original name
-        db.execute(text("ALTER TABLE script_executions_new RENAME TO script_executions"))
-
-        # Recreate indexes
-        db.execute(text("CREATE INDEX ix_script_executions_script_id ON script_executions (script_id)"))
-        db.execute(text("CREATE INDEX ix_script_executions_repository_id ON script_executions (repository_id)"))
-        db.execute(text("CREATE INDEX ix_script_executions_backup_job_id ON script_executions (backup_job_id)"))
-
-        db.commit()
-
-        logger.info("✓ Added CASCADE delete to script_executions.backup_job_id foreign key")
+        print("✓ script_executions.backup_job_id FK now has ON DELETE CASCADE")
+        print("✓ Backup jobs can now be deleted without leaving orphaned script execution rows")
 
     except Exception as e:
-        db.rollback()
-        logger.error("Failed to add CASCADE delete to script_executions", error=str(e))
-        raise
+        print(f"✗ Error fixing script_executions foreign key constraint: {e}")
+        print("  Note: Deleting backup jobs with script executions may still fail")
+        # Don't raise - allow migration to continue
+
+
+def downgrade(connection):
+    """No downgrade action - removing CASCADE would re-introduce the IntegrityError bug"""
+    print("✓ Downgrade skipped — reverting ON DELETE CASCADE would restore the IntegrityError bug")
