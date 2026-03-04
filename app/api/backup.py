@@ -206,9 +206,9 @@ async def cancel_backup(
         job.status = "cancelled"
         job.completed_at = datetime.utcnow()
         if process_killed:
-            job.error_message = "Backup cancelled by user"
+            job.error_message = '{"key": "backend.errors.backup.cancelledByUser"}'
         else:
-            job.error_message = "Backup cancelled by user (process not found, may have already completed)"
+            job.error_message = '{"key": "backend.errors.backup.cancelledByUserProcessNotFound"}'
         db.commit()
 
         logger.info("Backup cancelled", job_id=job_id, user=current_user.username, process_killed=process_killed)

@@ -2012,7 +2012,7 @@ class BackupService:
 
                     # Add additional errors if present
                     if len(errors) > 1:
-                        error_parts.append(f"\n\nAdditional errors encountered: {len(errors) - 1}")
+                        error_parts.append(json.dumps({"key": "backend.errors.borg.additionalErrors", "params": {"count": len(errors) - 1}}))
                 else:
                     # Fallback to simple exit code message
                     error_parts.append(format_error_message(
@@ -2056,7 +2056,7 @@ class BackupService:
                                      job_id=job_id,
                                      scripts_failed=hook_result["scripts_failed"])
                         # Append hook failure to error message
-                        job.error_message += f"\n\nPost-backup hooks also failed: {hook_result['scripts_failed']}/{hook_result['scripts_executed']} scripts failed"
+                        job.error_message += "\n" + json.dumps({"key": "backend.errors.service.postBackupHooksAlsoFailed", "params": {"failed": hook_result['scripts_failed'], "total": hook_result['scripts_executed']}})
                     else:
                         logger.info("Post-backup hooks executed successfully despite backup failure", job_id=job_id)
 
@@ -2187,7 +2187,7 @@ class BackupService:
             # Try to update job status - may fail if job was deleted during execution
             try:
                 job.status = "failed"
-                job.error_message = str(e)
+                job.error_message = json.dumps({"key": "backend.errors.borg.unknownError"})
                 job.completed_at = datetime.utcnow()
                 db.commit()
                 mqtt_service.sync_state_with_db(db, reason="backup failed with exception")
