@@ -274,32 +274,33 @@ def _build_payload(params, repository_ids):
     }
 
 
+def _normalise(field, value):
+    """Normalise a field value for comparison.
+
+    - repository_ids: sort for order-insensitive comparison
+    - string fields: treat None and '' as equivalent (empty)
+    """
+    if field == "repository_ids":
+        return sorted(value) if value else []
+    if isinstance(value, str) or value is None:
+        return value or ""
+    return value
+
+
 def _needs_update(existing, desired):
     """Compare existing schedule against desired state.
 
     :returns: True if any managed field differs.
     """
     for field in MANAGED_FIELDS:
-        existing_val = existing.get(field)
-        desired_val = desired.get(field)
-        # Sort repository_ids for order-insensitive comparison
-        if field == "repository_ids":
-            existing_val = sorted(existing_val) if existing_val else []
-            desired_val = sorted(desired_val) if desired_val else []
-        if existing_val != desired_val:
+        if _normalise(field, existing.get(field)) != _normalise(field, desired.get(field)):
             return True
     return False
 
 
 def _extract_managed(schedule):
     """Extract only managed fields from a schedule dict for diff comparison."""
-    result = {}
-    for field in MANAGED_FIELDS:
-        val = schedule.get(field)
-        if field == "repository_ids":
-            val = sorted(val) if val else []
-        result[field] = val
-    return result
+    return {field: _normalise(field, schedule.get(field)) for field in MANAGED_FIELDS}
 
 
 def run_module():
