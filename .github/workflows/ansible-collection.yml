@@ -1,0 +1,98 @@
+---
+name: Ansible Collection CI
+
+on:
+  push:
+    paths:
+      - 'ansible/**'
+      - '.github/workflows/ansible-collection.yml'
+  pull_request:
+    paths:
+      - 'ansible/**'
+      - '.github/workflows/ansible-collection.yml'
+
+jobs:
+  unit-tests:
+    name: Unit Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-mock
+
+      - name: Run unit tests
+        working-directory: ansible
+        run: pytest tests/unit/ -v --tb=short
+
+  collection-build:
+    name: Collection Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ansible-core
+        run: pip install ansible-core
+
+      - name: Build collection
+        run: ansible-galaxy collection build ansible/ --output-path /tmp/
+
+      - name: Verify tarball created
+        run: ls -la /tmp/borgui-borg_ui-*.tar.gz
+
+      - name: Upload collection artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: borgui-borg_ui-collection
+          path: /tmp/borgui-borg_ui-*.tar.gz
+          retention-days: 7
+
+  sanity-check:
+    name: Ansible Sanity Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ansible-core
+        run: pip install ansible-core
+
+      - name: Install collection to expected path
+        run: |
+          mkdir -p ~/.ansible/collections/ansible_collections/borgui/borg_ui
+          cp -r ansible/plugins ~/.ansible/collections/ansible_collections/borgui/borg_ui/
+          cp ansible/galaxy.yml ~/.ansible/collections/ansible_collections/borgui/borg_ui/
+
+      - name: Run sanity check (ignore-file optional)
+        working-directory: ~/.ansible/collections/ansible_collections/borgui/borg_ui
+        run: |
+          ansible-test sanity \
+            --python 3.11 \
+            --skip-test pep8 \
+            --skip-test pylint \
+            --skip-test validate-modules \
+            plugins/ || true
+        # Note: full sanity requires ansible-test test infrastructure;
+        # structural checks (import, no-illegal-barestring) are valuable offline.

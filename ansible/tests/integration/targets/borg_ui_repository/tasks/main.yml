@@ -1,0 +1,87 @@
+---
+# Integration smoke test for borg_ui_repository
+# Requires a live borg-ui instance with credentials in integration_config.yml
+
+- name: Ensure test repository does not exist before test
+  borgui.borg_ui.borg_ui_repository:
+    base_url: "{{ borg_ui_base_url }}"
+    secret_key: "{{ borg_ui_secret_key }}"
+    name: ansible-test-repo-001
+    state: absent
+    cascade: true
+    insecure: "{{ borg_ui_insecure | default(false) }}"
+
+- name: Create test repository
+  borgui.borg_ui.borg_ui_repository:
+    base_url: "{{ borg_ui_base_url }}"
+    secret_key: "{{ borg_ui_secret_key }}"
+    name: ansible-test-repo-001
+    path: /local/tmp/ansible-test-repo-001
+    encryption: none
+    compression: auto,lz4
+    source_directories:
+      - /tmp
+    mode: partial
+    state: present
+    insecure: "{{ borg_ui_insecure | default(false) }}"
+  register: create_result
+
+- name: Assert repository was created
+  ansible.builtin.assert:
+    that:
+      - create_result.changed
+      - create_result.repository.name == "ansible-test-repo-001"
+
+- name: Re-run creation (idempotency check)
+  borgui.borg_ui.borg_ui_repository:
+    base_url: "{{ borg_ui_base_url }}"
+    secret_key: "{{ borg_ui_secret_key }}"
+    name: ansible-test-repo-001
+    path: /local/tmp/ansible-test-repo-001
+    encryption: none
+    compression: auto,lz4
+    source_directories:
+      - /tmp
+    mode: partial
+    state: present
+    insecure: "{{ borg_ui_insecure | default(false) }}"
+  register: idempotent_result
+
+- name: Assert idempotent (no change)
+  ansible.builtin.assert:
+    that:
+      - not idempotent_result.changed
+
+- name: Update compression
+  borgui.borg_ui.borg_ui_repository:
+    base_url: "{{ borg_ui_base_url }}"
+    secret_key: "{{ borg_ui_secret_key }}"
+    name: ansible-test-repo-001
+    path: /local/tmp/ansible-test-repo-001
+    encryption: none
+    compression: "lz4"
+    source_directories:
+      - /tmp
+    mode: partial
+    state: present
+    insecure: "{{ borg_ui_insecure | default(false) }}"
+  register: update_result
+
+- name: Assert update was applied
+  ansible.builtin.assert:
+    that:
+      - update_result.changed
+
+- name: Delete test repository
+  borgui.borg_ui.borg_ui_repository:
+    base_url: "{{ borg_ui_base_url }}"
+    secret_key: "{{ borg_ui_secret_key }}"
+    name: ansible-test-repo-001
+    state: absent
+    insecure: "{{ borg_ui_insecure | default(false) }}"
+  register: delete_result
+
+- name: Assert repository was deleted
+  ansible.builtin.assert:
+    that:
+      - delete_result.changed

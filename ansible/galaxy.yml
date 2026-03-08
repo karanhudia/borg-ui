@@ -1,0 +1,28 @@
+---
+namespace: borgui
+name: borg_ui
+version: 1.0.0
+readme: README.md
+authors:
+  - borg-ui contributors
+description: >
+  Ansible collection for managing borg-ui backup resources via its REST API.
+  Provides idiomatic resource modules for repositories, schedules, SSH connections,
+  notification channels, and backup operations.
+license:
+  - MIT
+license_file: ''
+tags:
+  - backup
+  - borg
+  - borgbackup
+  - infrastructure
+repository: https://github.com/borgui/borg-ui
+homepage: https://github.com/borgui/borg-ui
+issues: https://github.com/borgui/borg-ui/issues
+build_ignore:
+  - '*.pyc'
+  - '**/__pycache__'
+  - '.git'
+  - '.gitignore'
+  - 'tests/integration'

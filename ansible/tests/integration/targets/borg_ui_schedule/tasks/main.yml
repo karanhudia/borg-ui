@@ -1,0 +1,62 @@
+---
+# Integration smoke test for borg_ui_schedule
+# Requires a live borg-ui instance with a pre-existing repository
+
+- name: Ensure test schedule does not exist before test
+  borgui.borg_ui.borg_ui_schedule:
+    base_url: "{{ borg_ui_base_url }}"
+    secret_key: "{{ borg_ui_secret_key }}"
+    name: ansible-test-schedule-001
+    state: absent
+    insecure: "{{ borg_ui_insecure | default(false) }}"
+
+- name: Create test schedule
+  borgui.borg_ui.borg_ui_schedule:
+    base_url: "{{ borg_ui_base_url }}"
+    secret_key: "{{ borg_ui_secret_key }}"
+    name: ansible-test-schedule-001
+    cron_expression: "0 4 * * *"
+    enabled: false
+    description: "Ansible integration test schedule"
+    repositories: "{{ borg_ui_test_repositories | default([]) }}"
+    state: present
+    insecure: "{{ borg_ui_insecure | default(false) }}"
+  register: create_result
+
+- name: Assert schedule was created
+  ansible.builtin.assert:
+    that:
+      - create_result.changed
+      - create_result.schedule.name == "ansible-test-schedule-001"
+
+- name: Re-run (idempotency check)
+  borgui.borg_ui.borg_ui_schedule:
+    base_url: "{{ borg_ui_base_url }}"
+    secret_key: "{{ borg_ui_secret_key }}"
+    name: ansible-test-schedule-001
+    cron_expression: "0 4 * * *"
+    enabled: false
+    description: "Ansible integration test schedule"
+    repositories: "{{ borg_ui_test_repositories | default([]) }}"
+    state: present
+    insecure: "{{ borg_ui_insecure | default(false) }}"
+  register: idempotent_result
+
+- name: Assert idempotent
+  ansible.builtin.assert:
+    that:
+      - not idempotent_result.changed
+
+- name: Delete test schedule
+  borgui.borg_ui.borg_ui_schedule:
+    base_url: "{{ borg_ui_base_url }}"
+    secret_key: "{{ borg_ui_secret_key }}"
+    name: ansible-test-schedule-001
+    state: absent
+    insecure: "{{ borg_ui_insecure | default(false) }}"
+  register: delete_result
+
+- name: Assert schedule was deleted
+  ansible.builtin.assert:
+    that:
+      - delete_result.changed
