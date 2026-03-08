@@ -138,29 +138,28 @@ of the log-save policy.
 
 ## Working implementation
 
-Both sub-issues are fixed and running in a fork. You can pull and test immediately
-without building anything:
+Both sub-issues are fixed in a fork. Clone and build to try it:
 
 ```bash
+git clone https://github.com/djlongy/borg-ui.git
+cd borg-ui
+docker build -f Dockerfile.dev -t borg-ui-dev .
 docker run -d \
   --name borg-ui-test \
   -p 8082:8081 \
   -e SECRET_KEY=changeme \
   -e ADMIN_USERNAME=admin \
   -e ADMIN_PASSWORD=admin \
-  ghcr.io/djlongy/borg-ui:latest
+  borg-ui-dev
 ```
 
-Or clone and build yourself:
+Configure a repository with a pre-backup script and run a backup — pre-script output
+appears at the top of the log viewer while the job is running, and the full transcript
+(pre-script + borg output) is visible after completion regardless of the log-save policy.
 
-```bash
-git clone https://github.com/djlongy/borg-ui.git
-cd borg-ui
-# Native build (arm64 / Apple Silicon)
-docker build -f Dockerfile.dev -t borg-ui-dev .
-# Cross-compile for amd64
-docker buildx build --platform linux/amd64 -f Dockerfile.dev -t borg-ui-dev:amd64 .
-```
+> `Dockerfile.dev` uses `npx vite build` (skips TypeScript type-checking) so the
+> build completes even if dev dependencies are mismatched. On amd64 hosts use
+> `docker buildx build --platform linux/amd64 -f Dockerfile.dev ...` instead.
 
 **Relevant commit**: [`c8f5e74`](https://github.com/djlongy/borg-ui/commit/c8f5e74)
 `feat(sudo): add use_sudo option for remote SSH backups + fix log viewer`
