@@ -7,7 +7,6 @@ import croniter
 import json
 import os
 import asyncio
-import re
 
 from app.database.database import get_db, SessionLocal
 from app.database.models import User, ScheduledJob, ScheduledJobRepository, CompactJob, PruneJob, Repository, BackupJob, Script, RepositoryScript
@@ -16,6 +15,7 @@ from app.core.borg import BorgInterface
 from app.config import settings
 from app.services.notification_service import notification_service
 from app.utils.datetime_utils import serialize_datetime
+from app.utils.archive_names import build_archive_name
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["schedule"])
@@ -1051,20 +1051,10 @@ async def run_scheduled_job_now(
             db.refresh(backup_job)
 
             # Generate archive name from template
-            archive_name = None
-            if job.archive_name_template:
-                # Replace template placeholders
-                archive_name = job.archive_name_template
-                archive_name = archive_name.replace("{job_name}", re.sub(r'[\s/\\]+', '-', job.name))
-                archive_name = archive_name.replace("{repo_name}", re.sub(r'[\s/\\]+', '-', repo.name))
-                archive_name = archive_name.replace("{now}", datetime.now().strftime('%Y-%m-%dT%H:%M:%S'))
-                archive_name = archive_name.replace("{date}", datetime.now().strftime('%Y-%m-%d'))
-                archive_name = archive_name.replace("{time}", datetime.now().strftime('%H:%M:%S'))
-                archive_name = archive_name.replace("{timestamp}", str(int(datetime.now().timestamp())))
-            else:
-                # Default template if none specified: use job name
-                safe_name = re.sub(r'[\s/\\]+', '-', job.name)
-                archive_name = f"{safe_name}-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
+            archive_name = build_archive_name(
+                job.name, repo.name, job.archive_name_template,
+                datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+            )
 
             # Execute backup with optional prune/compact asynchronously (non-blocking)
             asyncio.create_task(
@@ -1351,19 +1341,10 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
             backup_jobs.append(backup_job)
 
             # Generate archive name from template
-            archive_name = None
-            if scheduled_job.archive_name_template:
-                archive_name = scheduled_job.archive_name_template
-                archive_name = archive_name.replace("{job_name}", re.sub(r'[\s/\\]+', '-', scheduled_job.name))
-                archive_name = archive_name.replace("{repo_name}", re.sub(r'[\s/\\]+', '-', repo.name))
-                archive_name = archive_name.replace("{now}", timestamp_now)
-                archive_name = archive_name.replace("{date}", timestamp_date)
-                archive_name = archive_name.replace("{time}", timestamp_time)
-                archive_name = archive_name.replace("{timestamp}", timestamp_unix)
-            else:
-                safe_job = re.sub(r'[\s/\\]+', '-', scheduled_job.name)
-                safe_repo = re.sub(r'[\s/\\]+', '-', repo.name)
-                archive_name = f"{safe_job}-{safe_repo}-{timestamp_now}"
+            archive_name = build_archive_name(
+                scheduled_job.name, repo.name, scheduled_job.archive_name_template,
+                timestamp_now
+            )
 
             # Run repository-level pre-scripts if enabled
             if scheduled_job.run_repository_scripts:
@@ -1866,20 +1847,10 @@ async def check_scheduled_jobs():
                         db.refresh(backup_job)
 
                         # Generate archive name from template
-                        archive_name = None
-                        if job.archive_name_template:
-                            # Replace template placeholders
-                            archive_name = job.archive_name_template
-                            archive_name = archive_name.replace("{job_name}", re.sub(r'[\s/\\]+', '-', job.name))
-                            archive_name = archive_name.replace("{repo_name}", re.sub(r'[\s/\\]+', '-', repo.name))
-                            archive_name = archive_name.replace("{now}", datetime.now().strftime('%Y-%m-%dT%H:%M:%S'))
-                            archive_name = archive_name.replace("{date}", datetime.now().strftime('%Y-%m-%d'))
-                            archive_name = archive_name.replace("{time}", datetime.now().strftime('%H:%M:%S'))
-                            archive_name = archive_name.replace("{timestamp}", str(int(datetime.now().timestamp())))
-                        else:
-                            # Default template if none specified: use job name
-                            safe_name = re.sub(r'[\s/\\]+', '-', job.name)
-                            archive_name = f"{safe_name}-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
+                        archive_name = build_archive_name(
+                            job.name, repo.name, job.archive_name_template,
+                            datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+                        )
 
                         # Execute backup with optional prune/compact asynchronously (non-blocking)
                         asyncio.create_task(
