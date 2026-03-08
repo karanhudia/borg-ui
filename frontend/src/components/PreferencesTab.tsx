@@ -27,6 +27,7 @@ const LANGUAGES = [
   { code: 'en', label: 'English' },
   { code: 'es', label: 'Español' },
   { code: 'de', label: 'Deutsch' },
+  { code: 'it', label: 'Italiano' },
 ]
 
 interface Preferences {
