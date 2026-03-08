@@ -13,78 +13,124 @@ module: borg_ui_connection
 short_description: Manage borg-ui SSH connections
 version_added: "1.0.0"
 description:
-  - Update or delete existing SSH connections in a borg-ui instance.
-  - Uses the borg-ui REST API.
-  - Supports check mode for dry-run operations.
-  - "SSH connections are created via the borg-ui UI (SSH Keys -> Quick Setup) or
-    the quick-setup API endpoint. This module manages connections that already
-    exist."
+  - Update or delete existing SSH connections in a borg-ui instance via the
+    REST API.
+  - An B(SSH connection) in borg-ui represents the credentials and settings
+    needed to reach a remote source host via SSH. borg-ui uses it to mount
+    source directories before running C(borg create).
+  - B(This module cannot create SSH connections.) Connections are created
+    through the borg-ui web UI (C(SSH Keys > Quick Setup)) or the
+    C(POST /api/ssh-keys/quick-setup) endpoint. Once created, this module can
+    update their settings or delete them.
+  - The identity key is the combination of I(host) + I(ssh_username) + I(port).
+    All three must match an existing connection exactly.
+  - Supports C(--check) (dry-run) and C(--diff) mode.
 options:
   base_url:
-    description: Base URL of the borg-ui instance.
+    description:
+      - Base URL of the borg-ui instance, including scheme and port.
+      - "Examples: C(https://nas.example.com:8081), C(http://192.168.0.23:8081)."
     type: str
     required: true
   token:
-    description: Pre-existing JWT Bearer token for authentication.
+    description:
+      - Pre-existing JWT Bearer token obtained from C(POST /api/auth/login).
+      - Mutually exclusive with I(secret_key) and I(secret_key_file).
     type: str
     no_log: true
   secret_key:
-    description: borg-ui SECRET_KEY used to mint a JWT on the fly.
+    description:
+      - borg-ui C(SECRET_KEY) value. The module mints a short-lived JWT —
+        no separate login step required.
+      - Mutually exclusive with I(token) and I(secret_key_file).
     type: str
     no_log: true
   secret_key_file:
-    description: Path to a file containing the borg-ui SECRET_KEY.
+    description:
+      - Path to a file containing the borg-ui C(SECRET_KEY).
+      - Mutually exclusive with I(token) and I(secret_key).
     type: path
   api_username:
-    description: Username to embed in the minted JWT (borg-ui API user).
+    description:
+      - borg-ui username to embed in the minted JWT. Must match an active
+        user in borg-ui (default account is C(admin)).
+      - B(Not) the SSH username used to connect to the remote host — see
+        I(ssh_username) for that.
     type: str
     default: admin
   insecure:
-    description: Skip TLS certificate verification.
+    description:
+      - Skip TLS certificate verification. Set C(true) for self-signed certs.
     type: bool
     default: false
   state:
-    description: Desired state of the connection.
+    description:
+      - C(present) — update the connection settings if any mutable field has
+        changed. Fails if the connection does not already exist (this module
+        cannot create connections).
+      - C(absent) — delete the connection. Fails if any repository references
+        it unless I(cascade=true).
     type: str
     default: present
     choices: [present, absent]
   host:
     description:
-      - Hostname or IP of the SSH server.
-      - Used together with I(ssh_username) and I(port) as the identity key.
+      - Hostname or IP address of the remote SSH source host.
+      - Part of the identity key; must match exactly what borg-ui recorded
+        when the connection was set up.
+      - "Examples: C(web-01.example.com), C(192.168.30.81)."
     type: str
     required: true
   ssh_username:
     description:
-      - SSH login username on the remote host.
-      - Maps to the C(username) field in the borg-ui API.
+      - SSH login username on the remote host (the account borg-ui uses to
+        authenticate and mount source directories).
+      - Part of the identity key; must match exactly what borg-ui recorded.
+      - "Examples: C(ansible), C(backup), C(root)."
     type: str
     required: true
   port:
-    description: SSH port on the remote host.
+    description:
+      - TCP port for the SSH service on the remote host.
+      - Part of the identity key; must match exactly what borg-ui recorded.
     type: int
     default: 22
   use_sftp_mode:
-    description: Whether to use SFTP mode for file transfers.
+    description:
+      - C(false) — borg-ui uses native SSH to mount the source directory
+        (standard; works with most SSH servers).
+      - C(true) — borg-ui uses SFTP to access files. Required for some
+        hosted or appliance SSH servers (Hetzner Storage Box, some NAS
+        devices) that restrict shell access.
     type: bool
     default: false
   default_path:
-    description: Default filesystem path on the remote host.
+    description:
+      - Default filesystem path on the remote host. Used as the base path
+        when no explicit path is provided in other operations.
     type: str
     default: ""
   ssh_path_prefix:
-    description: Path prefix prepended to SSH paths.
+    description:
+      - Prefix prepended to all paths when building SSH remote paths.
+        Useful for chroot-jailed SSH accounts.
     type: str
     default: ""
   mount_point:
-    description: Mount point for the remote filesystem.
+    description:
+      - Local mount point on the borg-ui host where the remote filesystem is
+        mounted before backup. Leave empty to use a temporary mount point.
     type: str
     default: ""
   cascade:
     description:
-      - When I(state=absent), allow deletion even if repositories reference this connection.
-      - "The API DELETE nulls out the foreign key references server-side."
-      - If C(false) and repositories reference this connection, the module will fail.
+      - Controls behaviour when I(state=absent) and one or more repositories
+        reference this connection.
+      - C(false) — fail with an error listing the referencing repositories
+        (safe default).
+      - C(true) — delete the connection and null out the
+        C(source_ssh_connection_id) field in all referencing repositories
+        (repositories become local/unlinked but are not deleted).
     type: bool
     default: false
 author:
@@ -94,41 +140,46 @@ seealso:
 """
 
 EXAMPLES = r"""
-- name: Update an SSH connection's default path
+# The identity key is host + ssh_username + port — all three must match
+# an existing connection in borg-ui exactly.
+
+- name: Update default path on an existing SSH connection
   borgui.borg_ui.borg_ui_connection:
-    base_url: https://nas:8081
-    token: "{{ borg_ui_token }}"
-    host: backup-server.example.com
-    ssh_username: ansible
+    base_url: https://borgui.example.com
+    secret_key: "{{ lookup('community.hashi_vault.hashi_vault', 'secret/borgui:secret_key') }}"
+    host: web-01.example.com    # must match what borg-ui has on record
+    ssh_username: ansible        # SSH login user (not the borg-ui API user)
     port: 22
-    default_path: /opt/backups
+    default_path: /opt
     state: present
 
-- name: Enable SFTP mode on a connection
+- name: Enable SFTP mode (required for some NAS or hosted SSH servers)
   borgui.borg_ui.borg_ui_connection:
-    base_url: https://nas:8081
+    base_url: https://borgui.example.com
     secret_key: "{{ borg_ui_secret_key }}"
-    host: backup-server.example.com
-    ssh_username: ansible
+    host: storage.hetzner.com
+    ssh_username: u123456
+    port: 23
     use_sftp_mode: true
     state: present
 
-- name: Remove a connection (fail if repositories reference it)
+- name: Remove a connection (fails if any repository still references it)
   borgui.borg_ui.borg_ui_connection:
-    base_url: https://nas:8081
-    token: "{{ borg_ui_token }}"
-    host: backup-server.example.com
+    base_url: https://borgui.example.com
+    secret_key: "{{ borg_ui_secret_key }}"
+    host: web-01.example.com
     ssh_username: ansible
     state: absent
+    cascade: false    # default — safe, explicit
 
-- name: Remove a connection and cascade-null repository references
+- name: Remove a connection and unlink all referencing repositories
   borgui.borg_ui.borg_ui_connection:
-    base_url: https://nas:8081
-    token: "{{ borg_ui_token }}"
-    host: backup-server.example.com
+    base_url: https://borgui.example.com
+    secret_key: "{{ borg_ui_secret_key }}"
+    host: web-01.example.com
     ssh_username: ansible
     state: absent
-    cascade: true
+    cascade: true    # repositories keep their data but lose the SSH link
 """
 
 RETURN = r"""

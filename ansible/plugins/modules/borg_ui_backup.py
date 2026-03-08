@@ -15,77 +15,108 @@ version_added: "1.0.0"
 description:
   - Start a backup job, poll its status, or request cancellation via the
     borg-ui REST API.
-  - This module is B(NOT) idempotent by design — every invocation with
-    C(action=start) creates a new backup run.
-  - Supports check mode (action=start will report changed=True without
-    actually triggering a backup).
+  - B(This module is NOT idempotent.) Every C(action=start) invocation
+    creates a new backup run regardless of whether one recently completed.
+    Use M(borgui.borg_ui.borg_ui_schedule) to manage scheduled recurring
+    backups instead.
+  - The I(repository) parameter takes the repository B(label) (the I(name)
+    field set in M(borgui.borg_ui.borg_ui_repository)), B(not) a filesystem
+    path or hostname. The module resolves the label to a path internally.
+  - Supports C(--check) mode: C(action=start) reports C(changed=True) without
+    actually triggering a backup.
 options:
   base_url:
-    description: Base URL of the borg-ui instance.
+    description:
+      - Base URL of the borg-ui instance, including scheme and port.
+      - "Examples: C(https://nas.example.com:8081), C(http://192.168.0.23:8081)."
     type: str
     required: true
   token:
-    description: Pre-existing JWT Bearer token for authentication.
+    description:
+      - Pre-existing JWT Bearer token obtained from C(POST /api/auth/login).
+      - Mutually exclusive with I(secret_key) and I(secret_key_file).
     type: str
     no_log: true
   secret_key:
-    description: borg-ui SECRET_KEY used to mint a JWT on the fly.
+    description:
+      - borg-ui C(SECRET_KEY) value. The module mints a short-lived JWT —
+        no separate login step required.
+      - Mutually exclusive with I(token) and I(secret_key_file).
     type: str
     no_log: true
   secret_key_file:
-    description: Path to a file containing the borg-ui SECRET_KEY.
+    description:
+      - Path to a file containing the borg-ui C(SECRET_KEY).
+      - Mutually exclusive with I(token) and I(secret_key).
     type: path
   username:
-    description: Username to embed in the minted JWT.
+    description:
+      - borg-ui username to embed in the minted JWT. Must match an active
+        user in borg-ui (default account is C(admin)).
     type: str
     default: admin
   insecure:
-    description: Skip TLS certificate verification.
+    description:
+      - Skip TLS certificate verification. Set C(true) for self-signed certs.
     type: bool
     default: false
   repository:
     description:
-      - Name of the repository to back up.
-      - The module resolves this name to a repository path via the
-        C(GET /api/repositories/) endpoint.
+      - The B(label) (I(name) field) of the repository to back up — B(not) a
+        filesystem path or hostname.
+      - "Example: C(web-01) (as created by M(borgui.borg_ui.borg_ui_repository))."
+      - The module resolves this label to the repository path via
+        C(GET /api/repositories/) and passes the path to the backup API.
       - Required when I(action=start).
     type: str
   action:
     description:
-      - The backup action to perform.
-      - C(start) triggers a new backup job.
-      - C(status) queries the status of an existing job.
-      - C(cancel) reports that cancellation is not supported via the API.
+      - C(start) — trigger a new on-demand backup job for I(repository).
+        Returns a I(job_id) immediately; use I(wait=true) to block until
+        completion.
+      - C(status) — query the current status of an existing job by I(job_id).
+        Does not change anything (C(changed=False)).
+      - C(cancel) — informational only. The borg-ui API does not expose a
+        cancel endpoint; the module returns a message explaining this without
+        making any changes.
     type: str
     required: true
     choices: [start, status, cancel]
   job_id:
     description:
-      - Backup job ID.
+      - Integer ID of the backup job to inspect or cancel.
       - Required when I(action=status) or I(action=cancel).
+      - Returned as I(job_id) in the result of a previous C(action=start)
+        call.
     type: int
   wait:
     description:
-      - Wait for the backup job to complete before returning.
-      - Only valid with I(action=start).
+      - C(false) — start the backup job and return immediately with the
+        I(job_id). The backup continues in the background.
+      - C(true) — poll the job status every I(poll_interval) seconds until it
+        reaches a terminal state (C(completed), C(failed), C(error)) or
+        I(wait_timeout) is exceeded.
+      - Only valid when I(action=start).
     type: bool
     default: false
   wait_timeout:
     description:
-      - Maximum time in seconds to wait for backup completion.
-      - Only used when I(wait=true).
+      - Maximum number of seconds to wait for backup completion when
+        I(wait=true). The module fails if this limit is exceeded.
     type: int
     default: 3600
   poll_interval:
     description:
-      - Seconds between status polls when I(wait=true).
+      - Seconds between status-poll API calls when I(wait=true).
+      - Lower values give faster feedback but increase API load.
     type: int
     default: 5
 notes:
-  - This module is NOT idempotent. Each C(action=start) invocation creates
-    a new backup run.
-  - The borg-ui API does not expose a cancel endpoint.
-    C(action=cancel) returns a descriptive message without making changes.
+  - Use M(borgui.borg_ui.borg_ui_schedule) for recurring, scheduled backups.
+    This module is intended for on-demand runs, post-deploy triggers, and
+    maintenance workflows.
+  - The borg-ui API does not expose a job cancel endpoint.
+    C(action=cancel) returns an informational message only.
 author:
   - borg-ui contributors
 seealso:
@@ -94,37 +125,51 @@ seealso:
 """
 
 EXAMPLES = r"""
-- name: Start a backup and return immediately
-  borgui.borg_ui.borg_ui_backup:
-    base_url: https://nas:8081
-    token: "{{ borg_ui_token }}"
-    repository: vault-01
-    action: start
+# repository: is the label (name) of the repository, not a path or hostname
 
-- name: Start a backup and wait for completion
+- name: Trigger an on-demand backup and return immediately
   borgui.borg_ui.borg_ui_backup:
-    base_url: https://nas:8081
-    token: "{{ borg_ui_token }}"
-    repository: vault-01
+    base_url: https://borgui.example.com
+    secret_key: "{{ lookup('community.hashi_vault.hashi_vault', 'secret/borgui:secret_key') }}"
+    repository: web-01    # label as set in borg_ui_repository
+    action: start
+  register: backup_job
+
+- name: Show the job ID for monitoring
+  ansible.builtin.debug:
+    msg: "Backup started — job_id={{ backup_job.job_id }}"
+
+- name: Trigger backup and wait for it to finish (up to 2 hours)
+  borgui.borg_ui.borg_ui_backup:
+    base_url: https://borgui.example.com
+    secret_key: "{{ borg_ui_secret_key }}"
+    repository: db-primary
     action: start
     wait: true
     wait_timeout: 7200
-    poll_interval: 10
+    poll_interval: 15
   register: backup_result
 
-- name: Check status of a running backup
-  borgui.borg_ui.borg_ui_backup:
-    base_url: https://nas:8081
-    token: "{{ borg_ui_token }}"
-    action: status
-    job_id: 42
+- name: Fail if backup did not succeed
+  ansible.builtin.assert:
+    that:
+      - backup_result.status == "completed"
+    fail_msg: "Backup ended with status={{ backup_result.status }}"
 
-- name: Attempt to cancel a backup (informational only)
+- name: Check the status of a running or recent backup job
   borgui.borg_ui.borg_ui_backup:
-    base_url: https://nas:8081
-    token: "{{ borg_ui_token }}"
+    base_url: https://borgui.example.com
+    secret_key: "{{ borg_ui_secret_key }}"
+    action: status
+    job_id: "{{ backup_job.job_id }}"
+  register: status_result
+
+- name: Attempt to cancel a backup (informational — API does not support it)
+  borgui.borg_ui.borg_ui_backup:
+    base_url: https://borgui.example.com
+    secret_key: "{{ borg_ui_secret_key }}"
     action: cancel
-    job_id: 42
+    job_id: "{{ backup_job.job_id }}"
 """
 
 RETURN = r"""

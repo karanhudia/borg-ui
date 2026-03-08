@@ -13,70 +13,111 @@ module: borg_ui_schedule
 short_description: Manage borg-ui scheduled backup jobs
 version_added: "1.0.0"
 description:
-  - Create, update, or delete scheduled backup jobs in a borg-ui instance.
-  - Repository names are resolved to IDs automatically via the borg-ui API.
-  - Idempotent — only makes changes when the desired state differs from current state.
+  - Create, update, or delete scheduled backup jobs in a borg-ui instance via
+    the REST API.
+  - A B(schedule) defines when backups run and which repositories are included.
+    Multiple repositories can share one schedule.
+  - The I(name) is a display label shown in the borg-ui web UI and acts as the
+    B(identity key) — the module uses it to look up whether the schedule already
+    exists. It is B(not) a cron expression or a hostname.
+  - Repository names in I(repositories) must match the I(name) (label) of
+    existing C(borg_ui_repository) objects — B(not) hostnames or paths.
+  - The module manages the B(full) repositories list. To avoid accidentally
+    removing unrelated repositories from a shared schedule, always supply the
+    complete desired list.
+  - Supports C(--check) (dry-run) and C(--diff) mode.
 options:
   base_url:
-    description: Base URL of the borg-ui instance.
+    description:
+      - Base URL of the borg-ui instance, including scheme and port.
+      - "Examples: C(https://nas.example.com:8081), C(http://192.168.0.23:8081)."
     type: str
     required: true
   token:
-    description: Pre-existing JWT Bearer token for authentication.
+    description:
+      - Pre-existing JWT Bearer token obtained from C(POST /api/auth/login).
+      - Mutually exclusive with I(secret_key) and I(secret_key_file).
     type: str
     no_log: true
   secret_key:
-    description: borg-ui SECRET_KEY used to mint a JWT.
+    description:
+      - borg-ui C(SECRET_KEY) value. The module mints a short-lived JWT —
+        no separate login step required.
+      - Mutually exclusive with I(token) and I(secret_key_file).
     type: str
     no_log: true
   secret_key_file:
-    description: Path to file containing the borg-ui SECRET_KEY.
+    description:
+      - Path to a file containing the borg-ui C(SECRET_KEY).
+      - Mutually exclusive with I(token) and I(secret_key).
     type: path
   username:
-    description: Username to embed in the minted JWT.
+    description:
+      - borg-ui username to embed in the minted JWT. Must match an active
+        user in borg-ui (default account is C(admin)).
     type: str
     default: admin
   insecure:
-    description: Skip TLS certificate verification.
+    description:
+      - Skip TLS certificate verification. Set C(true) for self-signed certs.
     type: bool
     default: false
   name:
     description:
-      - Name of the scheduled job.
-      - Used as the identity key for matching existing jobs.
+      - Display label for the schedule as shown in the borg-ui web UI.
+      - This is the B(identity key) used to look up whether the schedule
+        already exists. It is B(not) a cron expression, a hostname, or a
+        repository reference.
+      - Choose a short, descriptive label such as C(nightly-prod) or
+        C(weekly-db-archive). Cannot be changed after creation.
     type: str
     required: true
   cron_expression:
     description:
-      - Cron expression defining the schedule.
+      - Standard five-field cron expression defining when the job runs.
+      - "Format: C(minute hour day-of-month month day-of-week)."
+      - "C(0 2 * * *)     — every day at 02:00."
+      - "C(30 3 * * 0)    — every Sunday at 03:30."
+      - "C(0 */6 * * *)   — every 6 hours."
       - Required when I(state=present).
     type: str
   enabled:
-    description: Whether the scheduled job is enabled.
+    description:
+      - C(true) — the schedule runs at the time defined by I(cron_expression).
+      - C(false) — the schedule is paused (definition kept, no runs triggered).
     type: bool
     default: true
   description:
-    description: Human-readable description of the scheduled job.
+    description: Optional free-text description shown in the borg-ui web UI.
     type: str
     default: ""
   repositories:
     description:
-      - List of repository names to include in this schedule.
-      - Names are resolved to IDs via the borg-ui repositories API.
-      - If a name cannot be resolved, the module fails.
+      - Complete list of repository B(labels) (the I(name) field of each
+        C(borg_ui_repository)) to include in this schedule.
+      - These are B(not) hostnames, IPs, or filesystem paths — they are the
+        display labels you set when creating each repository.
+      - The module resolves each label to its integer repository ID via
+        C(GET /api/repositories/). The module fails if any label is not found.
+      - This list is B(authoritative) — repositories absent from this list are
+        removed from the schedule on the next run.
     type: list
     elements: str
     default: []
   run_prune_after:
-    description: Run prune after backup completes.
+    description:
+      - Run C(borg prune) on each repository after the backup completes,
+        using the C(prune_keep_*) retention policy defined below.
     type: bool
     default: false
   run_compact_after:
-    description: Run compact after backup completes.
+    description:
+      - Run C(borg compact) on each repository after the backup (and optional
+        prune) completes. Reclaims disk space from deleted segments.
     type: bool
     default: false
   prune_keep_hourly:
-    description: Number of hourly archives to keep.
+    description: Number of hourly archives to keep. Set C(0) to disable.
     type: int
     default: 0
   prune_keep_daily:
@@ -92,7 +133,7 @@ options:
     type: int
     default: 6
   prune_keep_quarterly:
-    description: Number of quarterly archives to keep.
+    description: Number of quarterly archives to keep. Set C(0) to disable.
     type: int
     default: 0
   prune_keep_yearly:
@@ -100,61 +141,73 @@ options:
     type: int
     default: 1
   state:
-    description: Desired state of the scheduled job.
+    description:
+      - C(present) — create the schedule if it does not exist, or update it
+        if any managed field has changed.
+      - C(absent) — delete the schedule entirely.
     type: str
     default: present
-    choices:
-      - present
-      - absent
+    choices: [present, absent]
 author:
   - borg-ui contributors
+seealso:
+  - module: borgui.borg_ui.borg_ui_repository
 """
 
 EXAMPLES = r"""
-- name: Create a nightly backup schedule
+# ---------------------------------------------------------------------------
+# repositories: list the repository *labels* (name field), not hostnames
+# ---------------------------------------------------------------------------
+
+- name: Nightly backup schedule — two repositories
   borgui.borg_ui.borg_ui_schedule:
-    base_url: https://nas:8081
-    token: "{{ borg_ui_token }}"
-    name: nightly-mgt
-    cron_expression: "0 2 * * *"
-    description: "Nightly backup of management servers"
-    repositories:
-      - vault-01
-      - gitlab-01
+    base_url: https://borgui.example.com
+    secret_key: "{{ lookup('community.hashi_vault.hashi_vault', 'secret/borgui:secret_key') }}"
+    name: nightly-prod           # display label; identity key for this schedule
+    cron_expression: "0 2 * * *" # every day at 02:00
+    description: "Nightly /opt backup for production VMs"
+    repositories:                # these are repository *labels*, not hostnames
+      - web-01
+      - db-primary
     prune_keep_daily: 7
     prune_keep_weekly: 4
     prune_keep_monthly: 6
     prune_keep_yearly: 1
+    run_prune_after: true
     state: present
 
-- name: Disable a schedule
+- name: Weekly deep archive with compaction
   borgui.borg_ui.borg_ui_schedule:
-    base_url: https://nas:8081
-    token: "{{ borg_ui_token }}"
-    name: nightly-mgt
+    base_url: https://borgui.example.com
+    secret_key: "{{ borg_ui_secret_key }}"
+    name: weekly-archive
+    cron_expression: "0 4 * * 0"  # every Sunday at 04:00
+    description: "Weekly full archive with compaction"
+    repositories:
+      - web-01
+      - db-primary
+      - media-store
+    run_prune_after: true
+    run_compact_after: true
+    prune_keep_daily: 0
+    prune_keep_weekly: 8
+    prune_keep_monthly: 12
+    prune_keep_yearly: 5
+    state: present
+
+- name: Pause a schedule without deleting it
+  borgui.borg_ui.borg_ui_schedule:
+    base_url: https://borgui.example.com
+    secret_key: "{{ borg_ui_secret_key }}"
+    name: nightly-prod
     cron_expression: "0 2 * * *"
     enabled: false
     state: present
 
-- name: Enable pruning and compaction after backup
+- name: Remove a schedule entirely
   borgui.borg_ui.borg_ui_schedule:
-    base_url: https://nas:8081
-    secret_key_file: /etc/borg-ui/secret_key
-    name: weekly-archive
-    cron_expression: "0 4 * * 0"
-    repositories:
-      - archive-01
-    run_prune_after: true
-    run_compact_after: true
-    prune_keep_weekly: 4
-    prune_keep_monthly: 12
-    prune_keep_yearly: 3
-    state: present
-
-- name: Remove a schedule
-  borgui.borg_ui.borg_ui_schedule:
-    base_url: https://nas:8081
-    token: "{{ borg_ui_token }}"
+    base_url: https://borgui.example.com
+    secret_key: "{{ borg_ui_secret_key }}"
     name: old-schedule
     state: absent
 """

@@ -13,103 +13,147 @@ module: borg_ui_notification
 short_description: Manage borg-ui notification channels
 version_added: "1.0.0"
 description:
-  - Create, update, or delete notification channels in a borg-ui instance.
-  - Each channel has a unique name and a single Apprise service URL.
-  - Uses the borg-ui REST API.
-  - Supports check mode for dry-run operations.
+  - Create, update, or delete notification channels in a borg-ui instance via
+    the REST API.
+  - A B(notification channel) sends alerts via an Apprise-compatible service
+    URL (Slack, email, PagerDuty, Telegram, etc.) when backup events occur.
+  - Each channel has a unique I(name) (display label shown in the borg-ui UI)
+    and a single I(service_url). Multiple channels can co-exist.
+  - The I(name) is the B(identity key) — the module uses it to look up whether
+    the channel already exists.
+  - Supports C(--check) (dry-run) and C(--diff) mode.
 options:
   base_url:
-    description: Base URL of the borg-ui instance.
+    description:
+      - Base URL of the borg-ui instance, including scheme and port.
+      - "Examples: C(https://nas.example.com:8081), C(http://192.168.0.23:8081)."
     type: str
     required: true
   token:
-    description: Pre-existing JWT Bearer token for authentication.
+    description:
+      - Pre-existing JWT Bearer token obtained from C(POST /api/auth/login).
+      - Mutually exclusive with I(secret_key) and I(secret_key_file).
     type: str
     no_log: true
   secret_key:
-    description: borg-ui SECRET_KEY used to mint a JWT on the fly.
+    description:
+      - borg-ui C(SECRET_KEY) value. The module mints a short-lived JWT —
+        no separate login step required.
+      - Mutually exclusive with I(token) and I(secret_key_file).
     type: str
     no_log: true
   secret_key_file:
-    description: Path to a file containing the borg-ui SECRET_KEY.
+    description:
+      - Path to a file containing the borg-ui C(SECRET_KEY).
+      - Mutually exclusive with I(token) and I(secret_key).
     type: path
   api_username:
-    description: Username to embed in the minted JWT.
+    description:
+      - borg-ui username to embed in the minted JWT. Must match an active
+        user in borg-ui (default account is C(admin)).
     type: str
     default: admin
   insecure:
-    description: Skip TLS certificate verification.
+    description:
+      - Skip TLS certificate verification. Set C(true) for self-signed certs.
     type: bool
     default: false
   state:
-    description: Desired state of the notification channel.
+    description:
+      - C(present) — create the channel if it does not exist, or update it
+        if any managed field has changed.
+      - C(absent) — delete the channel.
     type: str
     default: present
     choices: [present, absent]
   name:
     description:
-      - Name of the notification channel.
-      - Used as the identity key for lookup.
+      - Display label for the notification channel as shown in the borg-ui
+        web UI.
+      - This is the B(identity key) used to look up whether the channel
+        already exists. Choose a short, descriptive label such as
+        C(slack-ops-alerts) or C(email-on-call). Cannot be changed after
+        creation.
     type: str
     required: true
   service_url:
     description:
-      - Apprise service URL for the notification channel.
+      - Apprise service URL that defines the notification destination and
+        credentials.
+      - "Slack: C(slack://TokenA/TokenB/TokenC/)"
+      - "Email: C(mailto://user:password@smtp.example.com)"
+      - "PagerDuty: C(pagerduty://APIToken@IntegrationKey/)"
+      - "Telegram: C(tgram://BotToken/ChatID/)"
+      - See U(https://github.com/caronc/apprise/wiki) for the full list.
       - Required when I(state=present).
-      - May contain credentials so it is marked no_log.
+      - Marked C(no_log) because URLs typically contain API tokens or
+        passwords.
     type: str
     no_log: true
   enabled:
-    description: Whether the notification channel is enabled.
+    description:
+      - C(true) — the channel is active and sends notifications.
+      - C(false) — the channel is paused; definition kept but no
+        notifications sent.
     type: bool
     default: true
   title_prefix:
-    description: Optional prefix prepended to notification titles.
+    description:
+      - Optional string prepended to every notification title.
+      - Useful to distinguish environments, e.g. C([PROD]) or C([DR]).
     type: str
+    default: ""
   include_job_name_in_title:
-    description: Whether to include the job name in notification titles.
+    description:
+      - C(true) — append the backup job name to each notification title for
+        easier identification in shared alert channels.
     type: bool
     default: false
   notify_on_backup_start:
-    description: Send notification when a backup starts.
+    description: Send a notification when a backup job B(starts).
     type: bool
     default: false
   notify_on_backup_success:
-    description: Send notification when a backup succeeds.
+    description: Send a notification when a backup job B(completes successfully).
     type: bool
     default: false
   notify_on_backup_failure:
-    description: Send notification when a backup fails.
+    description: Send a notification when a backup job B(fails).
     type: bool
     default: true
   notify_on_restore_success:
-    description: Send notification when a restore succeeds.
+    description: Send a notification when a restore operation B(completes successfully).
     type: bool
     default: false
   notify_on_restore_failure:
-    description: Send notification when a restore fails.
+    description: Send a notification when a restore operation B(fails).
     type: bool
     default: true
   notify_on_check_success:
-    description: Send notification when a check succeeds.
+    description: Send a notification when a repository integrity check B(passes).
     type: bool
     default: false
   notify_on_check_failure:
-    description: Send notification when a check fails.
+    description: Send a notification when a repository integrity check B(fails).
     type: bool
     default: true
   notify_on_schedule_failure:
-    description: Send notification when a schedule fails.
+    description: Send a notification when a scheduled job B(fails to trigger).
     type: bool
     default: true
   monitor_all_repositories:
-    description: Whether to monitor all repositories.
+    description:
+      - C(true) — the channel receives events from B(all) repositories.
+      - C(false) — the channel only receives events from the repositories
+        listed in I(repository_ids).
     type: bool
     default: true
   repository_ids:
     description:
-      - List of repository IDs to monitor.
-      - Only used when I(monitor_all_repositories=false).
+      - List of integer repository IDs to monitor when
+        I(monitor_all_repositories=false).
+      - Repository IDs are visible in C(GET /api/repositories/) or in the
+        return value of M(borgui.borg_ui.borg_ui_repository).
     type: list
     elements: int
 author:
@@ -119,46 +163,68 @@ seealso:
 """
 
 EXAMPLES = r"""
-- name: Create a Slack notification channel for failures
+# ---------------------------------------------------------------------------
+# service_url uses Apprise URL syntax — see https://github.com/caronc/apprise/wiki
+# ---------------------------------------------------------------------------
+
+- name: Slack channel — alert on failures only
   borgui.borg_ui.borg_ui_notification:
-    base_url: https://nas:8081
-    token: "{{ borg_ui_token }}"
-    name: Slack Alerts
-    service_url: "slack://token@channel"
+    base_url: https://borgui.example.com
+    secret_key: "{{ lookup('community.hashi_vault.hashi_vault', 'secret/borgui:secret_key') }}"
+    name: slack-ops-alerts          # display label; identity key for this channel
+    service_url: "{{ vault_slack_apprise_url }}"   # e.g. slack://TokenA/TokenB/TokenC/
+    title_prefix: "[PROD]"
+    include_job_name_in_title: true
+    notify_on_backup_start: false
+    notify_on_backup_success: false
     notify_on_backup_failure: true
-    notify_on_restore_failure: true
     notify_on_check_failure: true
     notify_on_schedule_failure: true
     state: present
 
-- name: Create a notification channel with a title prefix
+- name: Email channel — alert on all events with job name in subject
   borgui.borg_ui.borg_ui_notification:
-    base_url: https://nas:8081
+    base_url: https://borgui.example.com
     secret_key: "{{ borg_ui_secret_key }}"
-    api_username: admin
-    name: Email Alerts
-    service_url: "mailto://user:pass@gmail.com"
-    enabled: true
-    title_prefix: "[Prod]"
+    name: email-on-call
+    service_url: "{{ vault_email_apprise_url }}"   # e.g. mailto://user:pass@smtp.example.com
+    title_prefix: "[Backup]"
     include_job_name_in_title: true
+    notify_on_backup_start: true
     notify_on_backup_success: true
     notify_on_backup_failure: true
+    notify_on_check_failure: true
+    notify_on_schedule_failure: true
     state: present
 
-- name: Disable a notification channel
+- name: Scoped channel — only watch specific repositories
   borgui.borg_ui.borg_ui_notification:
-    base_url: https://nas:8081
-    token: "{{ borg_ui_token }}"
-    name: Slack Alerts
-    service_url: "slack://token@channel"
+    base_url: https://borgui.example.com
+    secret_key: "{{ borg_ui_secret_key }}"
+    name: db-critical-alerts
+    service_url: "{{ vault_pagerduty_apprise_url }}"
+    monitor_all_repositories: false
+    repository_ids:
+      - 5    # db-primary  (integer ID from GET /api/repositories/)
+      - 6    # db-replica
+    notify_on_backup_failure: true
+    notify_on_check_failure: true
+    state: present
+
+- name: Pause notifications during maintenance window
+  borgui.borg_ui.borg_ui_notification:
+    base_url: https://borgui.example.com
+    secret_key: "{{ borg_ui_secret_key }}"
+    name: slack-ops-alerts
+    service_url: "{{ vault_slack_apprise_url }}"
     enabled: false
     state: present
 
 - name: Remove a notification channel
   borgui.borg_ui.borg_ui_notification:
-    base_url: https://nas:8081
-    token: "{{ borg_ui_token }}"
-    name: Slack Alerts
+    base_url: https://borgui.example.com
+    secret_key: "{{ borg_ui_secret_key }}"
+    name: slack-ops-alerts
     state: absent
 """
 

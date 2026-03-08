@@ -13,77 +13,148 @@ module: borg_ui_repository
 short_description: Manage borg-ui backup repositories
 version_added: "1.0.0"
 description:
-  - Create, update, or delete backup repositories in a borg-ui instance.
-  - Uses the borg-ui REST API.
-  - Supports check mode for dry-run operations.
+  - Create, update, or delete backup repositories in a borg-ui instance via
+    the REST API.
+  - A B(repository) is the Borg storage location on the borg-ui host where
+    backup archives are written. Its B(label) (I(name)) is a free-form display
+    name shown in the borg-ui web UI — it is B(not) a hostname or IP address.
+    Convention is to use the hostname of the source machine as the label so
+    repositories are easy to identify.
+  - The actual source of data to back up is defined by I(source_directories).
+    For remote sources accessed over SSH, link the repository to an existing
+    SSH connection via I(source_connection_id).
+  - Supports C(--check) (dry-run) and C(--diff) mode.
 options:
   base_url:
-    description: Base URL of the borg-ui instance.
+    description:
+      - Base URL of the borg-ui instance, including scheme and port.
+      - "Examples: C(https://nas.example.com:8081), C(http://192.168.0.23:8081)."
     type: str
     required: true
   token:
-    description: Pre-existing JWT Bearer token for authentication.
+    description:
+      - Pre-existing JWT Bearer token obtained from C(POST /api/auth/login).
+      - Mutually exclusive with I(secret_key) and I(secret_key_file).
     type: str
     no_log: true
   secret_key:
-    description: borg-ui SECRET_KEY used to mint a JWT on the fly.
+    description:
+      - borg-ui C(SECRET_KEY) value. The module mints a short-lived JWT using
+        HMAC-SHA256 — no separate login step required.
+      - Store in Ansible Vault or HashiCorp Vault; never in plain text.
+      - Mutually exclusive with I(token) and I(secret_key_file).
     type: str
     no_log: true
   secret_key_file:
-    description: Path to a file containing the borg-ui SECRET_KEY.
+    description:
+      - Path to a file containing the borg-ui C(SECRET_KEY), one value per
+        file (no trailing newline required).
+      - Mutually exclusive with I(token) and I(secret_key).
     type: path
   username:
-    description: Username to embed in the minted JWT.
+    description:
+      - borg-ui username to embed in the minted JWT when using I(secret_key)
+        or I(secret_key_file).
+      - Must match an active user in borg-ui (default account is C(admin)).
     type: str
     default: admin
   insecure:
-    description: Skip TLS certificate verification.
+    description:
+      - Skip TLS certificate verification.
+      - Set to C(true) when borg-ui uses a self-signed certificate.
     type: bool
     default: false
   state:
-    description: Desired state of the repository.
+    description:
+      - C(present) — create the repository if it does not exist, or update it
+        if any managed field has changed.
+      - C(absent) — delete the repository. Fails if any schedule references
+        it unless I(cascade=true).
     type: str
     default: present
     choices: [present, absent]
   name:
     description:
-      - Name of the repository.
-      - Used as the identity key for lookup.
+      - Display label for the repository as shown in the borg-ui web UI.
+      - This is the B(identity key) — the module uses this label to look up
+        whether the repository already exists. It is B(not) a hostname or IP.
+      - Choose a short, unique, human-readable label. Convention is to use the
+        hostname of the source machine (for example C(web-01) or
+        C(db-primary)), but any unique string is valid.
+      - "Cannot be changed after creation (it is the lookup key)."
     type: str
     required: true
   path:
     description:
-      - Filesystem path where the repository is stored.
+      - Filesystem path on the borg-ui host where Borg will initialise and
+        store the repository.
+      - "Examples: C(/local/web-01), C(/mnt/backup/db-primary)."
       - Required when I(state=present).
     type: str
   encryption:
-    description: Encryption mode for the repository.
+    description:
+      - Borg encryption mode for the repository.
+      - C(repokey) — passphrase stored inside the repository (most common).
+      - C(repokey-blake2) — same as C(repokey) with BLAKE2b MAC (faster on
+        modern CPUs).
+      - C(keyfile) — passphrase key stored in C(~/.config/borg/keys/) on the
+        borg-ui host (portable, key must be backed up separately).
+      - C(keyfile-blake2) — same as C(keyfile) with BLAKE2b MAC.
+      - C(authenticated) — no encryption, HMAC authentication only.
+      - C(authenticated-blake2) — no encryption, BLAKE2b authentication only.
+      - C(none) — no encryption and no authentication (not recommended).
     type: str
     default: repokey
+    choices:
+      - repokey
+      - repokey-blake2
+      - keyfile
+      - keyfile-blake2
+      - authenticated
+      - authenticated-blake2
+      - none
   compression:
-    description: Compression algorithm specification.
+    description:
+      - Borg compression algorithm. Format is C(<algo>) or C(<algo>,<level>)
+        or C(auto,<algo>) (skip compression for already-compressed data).
+      - "C(auto,lz4) — fast, moderate ratio; good default."
+      - "C(lz4) — very fast, low ratio."
+      - "C(zstd) or C(zstd,N) — excellent ratio, levels 1–22."
+      - "C(lzma) or C(lzma,N) — maximum ratio, very slow, levels 0–9."
+      - "C(none) — no compression."
     type: str
     default: "auto,lz4"
   source_directories:
-    description: List of directories to back up.
+    description:
+      - List of absolute paths on the source host to include in the backup.
+      - "Example: C([/opt, /etc, /home])."
     type: list
     elements: str
     default: []
   exclude_patterns:
-    description: List of glob patterns to exclude from backups.
+    description:
+      - List of glob or shell patterns to exclude from the backup.
+      - Patterns are matched against paths relative to each source directory.
+      - "Examples: C(*.log), C(*.tmp), C(__pycache__), C(node_modules)."
     type: list
     elements: str
     default: []
   pre_backup_script:
-    description: Script to run before backup starts.
+    description:
+      - Shell script to run on the borg-ui host B(before) the backup starts.
+      - Use C({{ lookup('template', 'scripts/pre-backup.sh.j2') }}) to render
+        a Jinja2 template on the control node and pass the result as a string.
+      - Leave empty to run no pre-backup script.
     type: str
     default: ""
   post_backup_script:
-    description: Script to run after backup completes.
+    description:
+      - Shell script to run on the borg-ui host B(after) the backup completes.
+      - Leave empty to run no post-backup script.
     type: str
     default: ""
   hook_timeout:
-    description: Timeout in seconds for hook scripts.
+    description: Global fallback timeout in seconds for hook scripts.
     type: int
     default: 300
   pre_hook_timeout:
@@ -95,80 +166,225 @@ options:
     type: int
     default: 300
   continue_on_hook_failure:
-    description: Whether to continue the backup if a hook script fails.
+    description:
+      - C(false) — abort the backup if a hook script returns a non-zero exit
+        code (safe default).
+      - C(true) — log the hook failure and continue with the backup anyway.
     type: bool
     default: false
   mode:
-    description: Backup mode.
+    description:
+      - C(full) — borg-ui actively runs backups and tracks observability data
+        (archive count, size, last run). This is the standard mode.
+      - C(observe) — borg-ui monitors an existing Borg repository (tracks
+        observability data) but does B(not) trigger new backups. Use this for
+        repos managed externally that you want visible in the borg-ui UI.
     type: str
     default: full
-    choices: [full, partial]
+    choices: [full, observe]
   bypass_lock:
-    description: Whether to bypass the repository lock.
+    description:
+      - Pass C(--bypass-lock) to Borg during backup operations.
+      - Only applicable when I(mode=observe). Allows read access to a
+        repository locked by another Borg process.
     type: bool
     default: false
   custom_flags:
-    description: Additional borg flags to pass during backup.
+    description:
+      - Additional raw flags appended to the C(borg create) command line.
+      - "Example: C(--stats --list --filter AME)."
     type: str
     default: ""
   source_connection_id:
-    description: SSH connection ID for remote source directories.
+    description:
+      - Integer ID of the SSH connection in borg-ui that provides access to
+        the source host (visible in C(GET /api/ssh-keys/connections)).
+      - Required when backing up data from a remote host over SSH.
+      - Omit for local repositories where source directories are on the
+        borg-ui host itself.
+      - Use M(borgui.borg_ui.borg_ui_connection) to inspect existing
+        connections.
     type: int
   passphrase:
     description:
-      - Repository encryption passphrase.
-      - Only used during repository creation; ignored on updates.
+      - Borg repository passphrase.
+      - Only sent during initial C(borg init) (repository creation). Ignored
+        on subsequent updates — Borg stores the passphrase inside the repo.
+      - Required when I(encryption) is any mode other than C(none),
+        C(authenticated), or C(authenticated-blake2).
+      - Store in Ansible Vault or HashiCorp Vault; never in plain text.
     type: str
     no_log: true
   cascade:
     description:
-      - When I(state=absent), cascade-delete schedules that reference this repository.
-      - If C(false) and schedules reference this repository, the module will fail.
+      - Controls behaviour when I(state=absent) and the repository is
+        referenced by one or more schedules.
+      - C(false) — fail with an error listing which schedules must be updated
+        first (safe default, prevents accidental orphan schedules).
+      - C(true) — automatically remove this repository from all referencing
+        schedules before deleting the repository.
     type: bool
     default: false
 author:
   - borg-ui contributors
 seealso:
   - module: borgui.borg_ui.borg_ui_schedule
+  - module: borgui.borg_ui.borg_ui_connection
 """
 
 EXAMPLES = r"""
-- name: Create a local backup repository
+# ---------------------------------------------------------------------------
+# Authentication — choose ONE of: token, secret_key, or secret_key_file
+# ---------------------------------------------------------------------------
+
+# Option A: SECRET_KEY (recommended for automation — no login step needed)
+- name: Ensure repository for web-01 (SECRET_KEY auth)
   borgui.borg_ui.borg_ui_repository:
-    base_url: https://nas:8081
-    token: "{{ borg_ui_token }}"
-    name: vault-01
-    path: /backups/vault-01
+    base_url: https://borgui.example.com
+    secret_key: "{{ lookup('community.hashi_vault.hashi_vault', 'secret/borgui:secret_key') }}"
+    insecure: false
+    name: web-01           # display label shown in borg-ui UI (not a hostname)
+    path: /local/web-01    # where Borg stores archives on the borg-ui host
     encryption: repokey
     compression: "auto,lz4"
     source_directories:
       - /opt
+      - /etc
     exclude_patterns:
       - "*.log"
-    passphrase: "{{ borg_passphrase }}"
+      - "*.tmp"
+      - "__pycache__"
+    passphrase: "{{ vault_borg_passphrase }}"
     state: present
 
-- name: Update repository compression
+# Option B: pre-obtained JWT token
+- name: Ensure repository (JWT token auth)
   borgui.borg_ui.borg_ui_repository:
-    base_url: https://nas:8081
+    base_url: https://borgui.example.com
+    token: "{{ borg_ui_jwt_token }}"
+    name: web-01
+    path: /local/web-01
+    state: present
+
+# ---------------------------------------------------------------------------
+# Encryption examples
+# ---------------------------------------------------------------------------
+
+- name: Repository with repokey-blake2 (faster on modern CPUs)
+  borgui.borg_ui.borg_ui_repository:
+    base_url: https://borgui.example.com
     secret_key: "{{ borg_ui_secret_key }}"
-    name: vault-01
-    path: /backups/vault-01
-    compression: "auto,zstd,3"
+    name: db-primary
+    path: /local/db-primary
+    encryption: repokey-blake2
+    compression: "zstd,3"
+    source_directories:
+      - /var/lib/postgresql
+    passphrase: "{{ vault_borg_passphrase }}"
     state: present
 
-- name: Remove a repository (fail if schedules reference it)
+- name: Repository without encryption (internal network, performance-critical)
   borgui.borg_ui.borg_ui_repository:
-    base_url: https://nas:8081
-    token: "{{ borg_ui_token }}"
-    name: vault-01
-    state: absent
+    base_url: https://borgui.example.com
+    secret_key: "{{ borg_ui_secret_key }}"
+    name: scratch-host
+    path: /local/scratch-host
+    encryption: none
+    compression: lz4
+    source_directories:
+      - /tmp/scratch
+    state: present
 
-- name: Remove a repository and cascade-delete referencing schedules
+# ---------------------------------------------------------------------------
+# Remote source over SSH (source_connection_id)
+# ---------------------------------------------------------------------------
+
+- name: Repository backed up via SSH (source_connection_id links to SSH connection)
   borgui.borg_ui.borg_ui_repository:
-    base_url: https://nas:8081
-    token: "{{ borg_ui_token }}"
-    name: vault-01
+    base_url: https://borgui.example.com
+    secret_key: "{{ borg_ui_secret_key }}"
+    name: app-server-01
+    path: /local/app-server-01
+    encryption: repokey
+    compression: "auto,lz4"
+    source_directories:
+      - /opt/myapp
+      - /etc
+    source_connection_id: 12    # integer ID from GET /api/ssh-keys/connections
+    passphrase: "{{ vault_borg_passphrase }}"
+    state: present
+
+# ---------------------------------------------------------------------------
+# Pre/post backup hooks
+# ---------------------------------------------------------------------------
+
+- name: Repository with pre-backup script (inline)
+  borgui.borg_ui.borg_ui_repository:
+    base_url: https://borgui.example.com
+    secret_key: "{{ borg_ui_secret_key }}"
+    name: gitlab-01
+    path: /local/gitlab-01
+    encryption: repokey
+    compression: "auto,lz4"
+    source_directories:
+      - /opt/gitlab
+    pre_backup_script: |
+      #!/bin/bash
+      set -euo pipefail
+      gitlab-backup create STRATEGY=copy
+    pre_hook_timeout: 3600
+    continue_on_hook_failure: false
+    passphrase: "{{ vault_borg_passphrase }}"
+    state: present
+
+- name: Repository with Jinja2-templated pre-backup script
+  borgui.borg_ui.borg_ui_repository:
+    base_url: https://borgui.example.com
+    secret_key: "{{ borg_ui_secret_key }}"
+    name: vault-leader
+    path: /local/vault-leader
+    encryption: repokey
+    compression: "auto,lz4"
+    source_directories:
+      - /opt/vault
+    pre_backup_script: "{{ lookup('template', 'templates/borg/vault-pre-backup.sh.j2') }}"
+    pre_hook_timeout: 300
+    passphrase: "{{ vault_borg_passphrase }}"
+    state: present
+
+# ---------------------------------------------------------------------------
+# Observe mode (monitor an externally-managed Borg repo)
+# ---------------------------------------------------------------------------
+
+- name: Register a read-only observability-only repository
+  borgui.borg_ui.borg_ui_repository:
+    base_url: https://borgui.example.com
+    secret_key: "{{ borg_ui_secret_key }}"
+    name: legacy-nas-repo
+    path: /mnt/nas/legacy-borg
+    encryption: repokey
+    compression: none
+    mode: observe
+    bypass_lock: true
+    state: present
+
+# ---------------------------------------------------------------------------
+# Deletion
+# ---------------------------------------------------------------------------
+
+- name: Remove repository (fails if a schedule still references it)
+  borgui.borg_ui.borg_ui_repository:
+    base_url: https://borgui.example.com
+    secret_key: "{{ borg_ui_secret_key }}"
+    name: web-01
+    state: absent
+    cascade: false    # default — safe, explicit
+
+- name: Remove repository and automatically drop it from all schedules
+  borgui.borg_ui.borg_ui_repository:
+    base_url: https://borgui.example.com
+    secret_key: "{{ borg_ui_secret_key }}"
+    name: web-01
     state: absent
     cascade: true
 """
@@ -267,7 +483,7 @@ def _build_arg_spec():
         pre_hook_timeout=dict(type="int", default=300),
         post_hook_timeout=dict(type="int", default=300),
         continue_on_hook_failure=dict(type="bool", default=False),
-        mode=dict(type="str", default="full", choices=["full", "partial"]),
+        mode=dict(type="str", default="full", choices=["full", "observe"]),
         bypass_lock=dict(type="bool", default=False),
         custom_flags=dict(type="str", default=""),
         source_connection_id=dict(type="int"),
