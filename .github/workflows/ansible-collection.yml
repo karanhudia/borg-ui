@@ -81,13 +81,15 @@ jobs:
 
       - name: Install collection to expected path
         run: |
-          mkdir -p ~/.ansible/collections/ansible_collections/borgui/borg_ui
-          cp -r ansible/plugins ~/.ansible/collections/ansible_collections/borgui/borg_ui/
-          cp ansible/galaxy.yml ~/.ansible/collections/ansible_collections/borgui/borg_ui/
+          COLLECTION_PATH="$HOME/.ansible/collections/ansible_collections/borgui/borg_ui"
+          mkdir -p "$COLLECTION_PATH"
+          cp -r ansible/plugins "$COLLECTION_PATH/"
+          cp ansible/galaxy.yml "$COLLECTION_PATH/"
+          echo "COLLECTION_PATH=$COLLECTION_PATH" >> "$GITHUB_ENV"
 
       - name: Run sanity check (ignore-file optional)
-        working-directory: ~/.ansible/collections/ansible_collections/borgui/borg_ui
         run: |
+          cd "$COLLECTION_PATH"
           ansible-test sanity \
             --python 3.11 \
             --skip-test pep8 \
