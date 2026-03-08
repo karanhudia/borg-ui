@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Dialog,
@@ -36,6 +36,46 @@ export default function LogViewerDialog<T extends JobWithLogs>({
   const jobType = job?.type || 'backup'
   const jobId = job?.id
 
+  // Track current status — polled live so the badge and viewer update when job completes
+  const [currentStatus, setCurrentStatus] = useState(job?.status || 'unknown')
+
+  // Sync status whenever a new job is opened
+  useEffect(() => {
+    setCurrentStatus(job?.status || 'unknown')
+  }, [job?.id, job?.status])
+
+  // Poll job status while the dialog is open and the job is still running
+  useEffect(() => {
+    if (!open || !jobId || currentStatus !== 'running') return
+
+    const poll = async () => {
+      try {
+        const response = await fetch(
+          `/api/activity/recent?job_type=${jobType}&limit=100`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
+            },
+          }
+        )
+        if (!response.ok) return
+        const items: Array<{ id: number | string; type: string; status: string }> =
+          await response.json()
+        const item = items.find(
+          (i) => String(i.id) === String(jobId) && i.type === jobType
+        )
+        if (item && item.status !== 'running') {
+          setCurrentStatus(item.status)
+        }
+      } catch {
+        // ignore transient errors
+      }
+    }
+
+    const interval = setInterval(poll, 3000)
+    return () => clearInterval(interval)
+  }, [open, jobId, jobType, currentStatus])
+
   // Determine display label
   const displayLabel =
     jobTypeLabel || (job?.type ? getTypeLabel(job.type, t) : t('logViewer.typeBackup'))
@@ -70,13 +110,13 @@ export default function LogViewerDialog<T extends JobWithLogs>({
           <Typography variant="h6">
             {t('logViewer.title', { label: displayLabel, jobId: job.id })}
           </Typography>
-          <StatusBadge status={job.status} />
+          <StatusBadge status={currentStatus} />
         </Box>
       </DialogTitle>
       <DialogContent dividers>
         <TerminalLogViewer
           jobId={String(job.id)}
-          status={job.status}
+          status={currentStatus}
           jobType={jobType}
           showHeader={false}
           onFetchLogs={handleFetchLogs}

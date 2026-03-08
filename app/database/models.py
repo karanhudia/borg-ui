@@ -136,6 +136,7 @@ class SSHConnection(Base):
 
     # SSH key deployment options
     use_sftp_mode = Column(Boolean, default=True, nullable=False)  # Use SFTP mode (-s flag) for ssh-copy-id (required by Hetzner, breaks Synology)
+    use_sudo = Column(Boolean, default=False)  # Prepend sudo when running borg on remote host
 
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)

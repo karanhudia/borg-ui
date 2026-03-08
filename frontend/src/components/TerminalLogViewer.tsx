@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, memo } from 'react'
 import { Box, Button, Typography, Paper, Chip } from '@mui/material'
 import { ContentCopy, Download } from '@mui/icons-material'
 import { PlayCircle } from 'lucide-react'
@@ -21,6 +21,72 @@ interface TerminalLogViewerProps {
     has_more: boolean
   }>
 }
+
+// VS Code-style JSON syntax token colors
+const JSON_COLORS = {
+  key: '#9cdcfe',     // light blue  — property names
+  string: '#ce9178',  // orange-red  — string values
+  number: '#b5cea8',  // light green — numbers
+  keyword: '#569cd6', // blue        — true / false / null
+  punct: '#d4d4d4',   // grey-white  — { } [ ] : ,
+}
+
+// Colorize a JSON string by tokenizing it with a single-pass regex.
+// Falls back to plain text if content is not valid JSON.
+function colorizeJsonLine(text: string): React.ReactNode {
+  const trimmed = text.trim()
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return text
+  try {
+    JSON.parse(trimmed)
+  } catch {
+    return text // not valid JSON — render as-is
+  }
+
+  // Tokenize: key strings (followed by :), value strings, numbers, keywords, punctuation
+  const TOKEN_RE =
+    /("(?:[^"\\]|\\.)*")(?=\s*:)|("(?:[^"\\]|\\.)*")|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|(true|false|null)|([{}[\],:])/g
+
+  const parts: React.ReactNode[] = []
+  let last = 0
+  let m: RegExpExecArray | null
+
+  while ((m = TOKEN_RE.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index))
+    if (m[1])      parts.push(<span key={m.index} style={{ color: JSON_COLORS.key }}>{m[1]}</span>)
+    else if (m[2]) parts.push(<span key={m.index} style={{ color: JSON_COLORS.string }}>{m[2]}</span>)
+    else if (m[3]) parts.push(<span key={m.index} style={{ color: JSON_COLORS.number }}>{m[3]}</span>)
+    else if (m[4]) parts.push(<span key={m.index} style={{ color: JSON_COLORS.keyword }}>{m[4]}</span>)
+    else if (m[5]) parts.push(<span key={m.index} style={{ color: JSON_COLORS.punct }}>{m[5]}</span>)
+    last = m.index + m[0].length
+  }
+  if (last < text.length) parts.push(text.slice(last))
+  return <>{parts}</>
+}
+
+// Memoized log line to avoid re-rendering all lines on every new append
+const LogLine = memo(function LogLine({
+  lineNumber,
+  content,
+  jobId,
+}: {
+  lineNumber: number
+  content: string
+  jobId: string
+}) {
+  return (
+    <Box sx={{ mb: 0.5 }}>
+      <Typography
+        component="span"
+        sx={{ color: '#858585', fontSize: '0.8rem', mr: 2, userSelect: 'none' }}
+      >
+        {lineNumber}
+      </Typography>
+      <Typography component="span" sx={{ color: '#d4d4d4' }}>
+        {colorizeJsonLine(content)}
+      </Typography>
+    </Box>
+  )
+})
 
 export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
   jobId,
@@ -45,9 +111,10 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
 
       isLoadingRef.current = true
       try {
-        // For running jobs, always fetch from offset 0 (backend returns tail)
-        // For completed jobs, fetch next chunk based on current logs length
-        const offset = status === 'running' ? 0 : logsRef.current.length
+        // Always fetch from the current end of our accumulated log so we only
+        // receive NEW lines.  This preserves pre-script output when borg output
+        // starts arriving, and lets the user scroll back to read earlier lines.
+        const offset = logsRef.current.length
         const result = await onFetchLogs(offset)
 
         // For completed/failed jobs on initial load: if there are many lines, fetch the tail instead
@@ -60,20 +127,13 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
           setTotalLines(tailResult.total_lines)
           setShowingTail(true)
         } else {
-          // Normal behavior
+          // Always append new lines (both running and completed)
           if (result.lines.length > 0) {
-            if (status === 'running') {
-              // For running jobs, replace logs entirely (backend sends tail)
-              setLogs(result.lines)
-              logsRef.current = result.lines
-            } else {
-              // For completed jobs, append new lines
-              setLogs((prev) => {
-                const newLogs = [...prev, ...result.lines]
-                logsRef.current = newLogs
-                return newLogs
-              })
-            }
+            setLogs((prev) => {
+              const newLogs = [...prev, ...result.lines]
+              logsRef.current = newLogs
+              return newLogs
+            })
           }
           setTotalLines(result.total_lines)
         }
@@ -255,22 +315,12 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
           </Typography>
         ) : (
           logs.map((log) => (
-            <Box key={`${jobId}-${log.line_number}`} sx={{ mb: 0.5 }}>
-              <Typography
-                component="span"
-                sx={{
-                  color: '#858585',
-                  fontSize: '0.8rem',
-                  mr: 2,
-                  userSelect: 'none',
-                }}
-              >
-                {log.line_number}
-              </Typography>
-              <Typography component="span" sx={{ color: '#d4d4d4' }}>
-                {log.content}
-              </Typography>
-            </Box>
+            <LogLine
+              key={`${jobId}-${log.line_number}`}
+              lineNumber={log.line_number}
+              content={log.content}
+              jobId={jobId}
+            />
           ))
         )}
 

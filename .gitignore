@@ -136,3 +136,7 @@ trivy-*.json
 trivy-*.txt
 trivy-*.sarif
 .planning/
+frontend-dist/
+.claude/worktrees/
+docs/02_coordination/
+frontend/frontend/

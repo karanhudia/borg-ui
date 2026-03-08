@@ -1,0 +1,31 @@
+# Dev test image: patches applied on top of the upstream ainullcode/borg-ui:latest image.
+# Rebuilds only the frontend and copies patched Python files — no full reinstall.
+
+# Stage 1: rebuild the frontend with our patched TypeScript
+FROM node:22-alpine AS frontend-builder
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm install --legacy-peer-deps
+COPY frontend/ .
+RUN npx vite build
+
+# Stage 2: patch the upstream image
+FROM ainullcode/borg-ui:latest
+
+# Patched Python backend files
+COPY app/api/ssh_keys.py         /app/app/api/ssh_keys.py
+COPY app/api/schedule.py         /app/app/api/schedule.py
+COPY app/database/models.py      /app/app/database/models.py
+COPY app/database/migrations/074_add_use_sudo_to_ssh_connections.py \
+                                 /app/app/database/migrations/074_add_use_sudo_to_ssh_connections.py
+COPY app/services/remote_backup_service.py \
+                                 /app/app/services/remote_backup_service.py
+COPY app/services/mount_service.py \
+                                 /app/app/services/mount_service.py
+COPY app/services/backup_service.py \
+                                 /app/app/services/backup_service.py
+COPY app/utils/archive_names.py  /app/app/utils/archive_names.py
+COPY app/api/activity.py         /app/app/api/activity.py
+
+# Rebuilt frontend (vite outputs to frontend/build/, served from /app/app/static/)
+COPY --from=frontend-builder /app/frontend/build/ /app/app/static/

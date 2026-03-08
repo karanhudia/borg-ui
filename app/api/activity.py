@@ -363,11 +363,15 @@ async def get_job_logs(
             # Empty buffer means backup started but no logs output yet
             if buffer_exists:
                 if len(log_buffer) > 0:
-                    # Return last 500 lines from in-memory buffer
+                    # Return lines from the requested offset so the frontend can accumulate
+                    # incrementally without replacing earlier output (e.g. pre-script lines)
+                    total = len(log_buffer)
+                    start = min(offset, total)
+                    chunk = log_buffer[start:]
                     response = {
-                        'lines': [{'line_number': i + 1, 'content': line} for i, line in enumerate(log_buffer)],
-                        'total_lines': len(log_buffer),
-                        'has_more': False  # Always show tail for running jobs
+                        'lines': [{'line_number': start + i + 1, 'content': line} for i, line in enumerate(chunk)],
+                        'total_lines': total,
+                        'has_more': False
                     }
                     logger.info(
                         "Returning log buffer data",
@@ -378,6 +382,10 @@ async def get_job_logs(
                     return response
                 else:
                     # Buffer exists but empty - backup command started, waiting for first output
+                    # Only send the placeholder on the very first request (offset=0) to avoid
+                    # duplicating these lines on every poll
+                    if offset > 0:
+                        return {'lines': [], 'total_lines': 0, 'has_more': False}
                     logger.info("Buffer exists but empty, returning processing message", job_id=job_id)
                     lines = [
                         "Backup is running...",
@@ -388,6 +396,10 @@ async def get_job_logs(
                     ]
             else:
                 # Buffer not created yet - backup job hasn't started borg command
+                # Only send the placeholder on the very first request (offset=0) to avoid
+                # duplicating these lines on every poll
+                if offset > 0:
+                    return {'lines': [], 'total_lines': 0, 'has_more': False}
                 logger.info("Buffer not created yet, returning waiting message", job_id=job_id)
                 lines = [
                     "Backup is currently running...",

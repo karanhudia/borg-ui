@@ -1130,6 +1130,25 @@ class BackupService:
                 if scheduled_job:
                     job_name = scheduled_job.name
 
+            # Log execution mode decision with source connection details
+            _src_conn_info = None
+            if job.source_ssh_connection_id:
+                from app.database.models import SSHConnection as _SC
+                _sc = db.query(_SC).filter(_SC.id == job.source_ssh_connection_id).first()
+                if _sc:
+                    _src_conn_info = {
+                        "host": _sc.host,
+                        "user": _sc.username,
+                        "use_sudo": getattr(_sc, 'use_sudo', False),
+                    }
+            logger.info(
+                "Backup execution mode decision",
+                job_id=job_id,
+                execution_mode=job.execution_mode,
+                source_ssh_connection_id=job.source_ssh_connection_id,
+                source_connection=_src_conn_info,
+            )
+
             # Check if this is a remote backup
             if job.execution_mode == "remote_ssh":
                 logger.info("Delegating to remote backup service", job_id=job_id)
@@ -1567,9 +1586,16 @@ class BackupService:
             log_buffer = []
             MAX_BUFFER_SIZE = 1000  # Keep last 1000 lines (~100KB RAM)
 
+            # Track how many hook_logs existed before borg starts (pre-backup hooks only)
+            pre_hook_count = len(hook_logs)
+
             # Store buffer reference for external access (Activity page)
             self.log_buffers[job_id] = log_buffer
             logger.info("Created log buffer for job", job_id=job_id, buffer_id=id(log_buffer))
+
+            # Prepend pre-backup hook output so it's visible during the running state
+            if hook_logs:
+                log_buffer.extend(hook_logs)
 
             # Create temporary log file to capture ALL logs (not just buffer)
             temp_log_file = self.log_dir / f"backup_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
@@ -1577,6 +1603,10 @@ class BackupService:
             try:
                 # 64KB buffer - optimal for log files, reduces disk I/O without excessive memory use
                 log_file_handle = open(temp_log_file, 'w', buffering=65536)
+                # Write pre-backup hook output at the top of the log file
+                if hook_logs:
+                    for line in hook_logs:
+                        log_file_handle.write(line + '\n')
             except Exception as e:
                 logger.warning("Failed to create log file, logs will only be in memory", job_id=job_id, error=str(e))
                 temp_log_file = None
@@ -2105,11 +2135,13 @@ class BackupService:
             # Handle log file based on policy
             if should_save_logs:
                 try:
-                    # Append hook logs to the full log file if we have them
-                    if hook_logs and temp_log_file and temp_log_file.exists():
+                    # Append post-backup hook logs to the log file
+                    # (pre-backup hooks were already written at the top when the file was created)
+                    post_hook_logs = hook_logs[pre_hook_count:]
+                    if post_hook_logs and temp_log_file and temp_log_file.exists():
                         with open(temp_log_file, 'a') as f:
-                            f.write('\n=== Hook Logs ===\n')
-                            f.write('\n'.join(hook_logs))
+                            f.write('\n=== Post-backup Hook Logs ===\n')
+                            f.write('\n'.join(post_hook_logs))
                             f.write('\n')
 
                     # Use the temp log file as the permanent log file (contains ALL logs)
@@ -2153,10 +2185,13 @@ class BackupService:
                     except Exception as e:
                         logger.warning("Failed to delete temp log file", job_id=job_id, error=str(e))
 
-                # Save hook logs in database for reference if we have them
-                if hook_logs:
-                    job.logs = "\n".join(hook_logs)
-                    logger.info("Backup completed, only hook logs saved", job_id=job_id, policy=log_save_policy)
+                # Save combined logs (pre-hook + borg output + post-hook) to job.logs for the UI.
+                # log_buffer already contains pre-backup hooks prepended before borg ran.
+                post_hook_logs_nosave = hook_logs[pre_hook_count:]
+                combined = list(log_buffer) + list(post_hook_logs_nosave)
+                if combined:
+                    job.logs = "\n".join(combined)
+                    logger.info("Backup completed, buffer+hooks saved to job.logs per policy", job_id=job_id, policy=log_save_policy, lines=len(combined))
                 else:
                     job.logs = None
                     logger.info("Backup completed, no logs saved per policy", job_id=job_id, policy=log_save_policy)

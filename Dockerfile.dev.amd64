@@ -1,0 +1,23 @@
+# amd64 deployment image: patches applied on top of ainullcode/borg-ui:latest.
+# Frontend is pre-built on the host (arm64, platform-independent JS output).
+# No Node required — only Python patches and pre-built static files.
+
+FROM --platform=linux/amd64 ainullcode/borg-ui:latest
+
+# Patched Python backend files
+COPY app/api/ssh_keys.py         /app/app/api/ssh_keys.py
+COPY app/api/schedule.py         /app/app/api/schedule.py
+COPY app/database/models.py      /app/app/database/models.py
+COPY app/database/migrations/074_add_use_sudo_to_ssh_connections.py \
+                                 /app/app/database/migrations/074_add_use_sudo_to_ssh_connections.py
+COPY app/services/remote_backup_service.py \
+                                 /app/app/services/remote_backup_service.py
+COPY app/services/mount_service.py \
+                                 /app/app/services/mount_service.py
+COPY app/services/backup_service.py \
+                                 /app/app/services/backup_service.py
+COPY app/utils/archive_names.py  /app/app/utils/archive_names.py
+COPY app/api/activity.py         /app/app/api/activity.py
+
+# Pre-built frontend (built natively on host, JS output is platform-independent)
+COPY frontend-dist/              /app/app/static/
