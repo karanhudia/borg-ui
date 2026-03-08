@@ -1,0 +1,59 @@
+---
+# conf_borg_ui_backups role defaults
+# Alternative to the playbook approach: run this role against Ansible
+# inventory hosts instead of looping over a vars list.
+
+# borg-ui instance
+borg_ui_base_url: https://borgui.example.com
+borg_ui_insecure: false
+borg_ui_secret_key: ""     # set via vars or secrets manager; no_log
+borg_ui_repo_key: ""       # borg repository passphrase; no_log
+
+# SSH connection — which connection in borg-ui to use for this host.
+# The role looks up the connection ID from the borg-ui API using these three
+# fields. They must match exactly what was recorded at SSH key setup time.
+borg_ui_ssh_host: "{{ inventory_hostname }}"   # hostname/IP borg-ui SSHes to
+borg_ui_ssh_user: ansible                       # SSH login user on the remote host
+borg_ui_ssh_port: 22                            # SSH port on the remote host
+# Set directly to skip the API lookup (faster for large inventories):
+borg_ui_source_connection_id: ~                 # null = look up automatically
+
+# Repository identity
+borg_ui_repo_name: "{{ inventory_hostname }}"
+borg_ui_repo_path: "/local/{{ borg_ui_repo_name }}"
+
+# Repository settings
+borg_ui_encryption: repokey
+borg_ui_compression: "auto,lz4"
+borg_ui_mode: full
+borg_ui_source_directories:
+  - /opt
+borg_ui_exclude_patterns:
+  - "*.log"
+  - "*.tmp"
+borg_ui_pre_backup_script: ""
+borg_ui_post_backup_script: ""
+borg_ui_pre_hook_timeout: 300
+borg_ui_post_hook_timeout: 300
+borg_ui_continue_on_hook_failure: false
+
+# Resource state — set to absent to remove
+borg_ui_state: present
+
+# Schedule management
+# Set borg_ui_manage_schedule: true and provide the full desired list of
+# repo names in borg_ui_schedule_repositories to manage the schedule.
+borg_ui_manage_schedule: false
+borg_ui_schedule_name: "nightly-prod"
+borg_ui_schedule_cron: "0 2 * * *"
+borg_ui_schedule_enabled: true
+borg_ui_schedule_description: ""
+borg_ui_schedule_repositories: []   # full list — set at play level
+
+# Prune settings (used when borg_ui_manage_schedule: true)
+borg_ui_prune_keep_hourly: 0
+borg_ui_prune_keep_daily: 7
+borg_ui_prune_keep_weekly: 4
+borg_ui_prune_keep_monthly: 6
+borg_ui_prune_keep_quarterly: 0
+borg_ui_prune_keep_yearly: 1

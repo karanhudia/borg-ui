@@ -1,0 +1,95 @@
+---
+# examples/playbooks/ssh_setup.yml
+#
+# One-time SSH key deployment for every server in borg_ui_servers.
+#
+# For each server not yet connected in borg-ui this playbook:
+#   - generates an SSH key pair inside borg-ui
+#   - copies the public key to the remote server using its SSH password
+#   - records the connection in borg-ui
+#
+# Servers that already have a connection in borg-ui are skipped automatically.
+# After this runs, borg-ui can SSH to each server without a password — the
+# SSH password is only needed for this initial setup and is never stored.
+#
+# Usage
+# -----
+# Pass each server's current SSH password via borg_ui_ssh_passwords (a dict
+# keyed by server name):
+#
+#   ansible-playbook ssh_setup.yml \
+#     -e '{"borg_ui_ssh_passwords": {
+#           "web-01": "initial-root-password",
+#           "web-02": "initial-root-password",
+#           "db-primary": "db-root-password"}}'
+#
+# Or store passwords in a vault-encrypted file:
+#   ansible-playbook ssh_setup.yml -e @secrets.yml --ask-vault-pass
+#
+# Servers omitted from borg_ui_ssh_passwords are skipped (safe to re-run
+# for just newly added servers).
+
+- name: Deploy borg-ui SSH keys to all servers in borg_ui_servers
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - ../vars/borg_ui_servers.yml
+
+  vars:
+    borgui_url: https://borgui.example.com
+    borgui_insecure: false
+    borgui_secret_key: >-
+      {{ lookup('community.hashi_vault.hashi_vault',
+                'secret=kv/data/secret/borgui:secret_key
+                 url=https://vault.example.com:8200') }}
+
+    # SSH passwords for initial key deployment — one entry per server name.
+    # Only needed for servers not yet set up. Pass via -e or a vault file.
+    borg_ui_ssh_passwords: {}
+
+  tasks:
+
+    - name: Fetch existing borg-ui SSH connections
+      ansible.builtin.uri:
+        url: "{{ borgui_url }}/api/ssh-keys/connections"
+        method: GET
+        headers:
+          Authorization: >-
+            Bearer {{ lookup('borgui.borg_ui.borg_ui_jwt', borgui_secret_key) }}
+        validate_certs: "{{ not borgui_insecure }}"
+        return_content: true
+      register: _existing_connections
+      no_log: true
+
+    - name: Deploy SSH key — {{ item.name }} ({{ item.host }})
+      ansible.builtin.uri:
+        url: "{{ borgui_url }}/api/ssh-keys/quick-setup"
+        method: POST
+        body_format: json
+        body:
+          name: "{{ item.name }} key"
+          host: "{{ item.host }}"
+          username: "{{ item.ssh_user | default('ansible') }}"
+          password: "{{ borg_ui_ssh_passwords[item.name] }}"
+          port: "{{ item.ssh_port | default(22) }}"
+          use_sftp_mode: "{{ item.use_sftp_mode | default(false) }}"
+        headers:
+          Authorization: >-
+            Bearer {{ lookup('borgui.borg_ui.borg_ui_jwt', borgui_secret_key) }}
+        validate_certs: "{{ not borgui_insecure }}"
+        status_code: [200, 201]
+      loop: "{{ borg_ui_servers }}"
+      loop_control:
+        label: "{{ item.name }}"
+      no_log: true
+      # Skip: server already connected in borg-ui, or no password provided
+      when: >-
+        (_existing_connections.json.connections
+         | selectattr('host', 'equalto', item.host)
+         | selectattr('username', 'equalto', (item.ssh_user | default('ansible')))
+         | selectattr('port', 'equalto', (item.ssh_port | default(22)) | int)
+         | list | length) == 0
+        and item.name in borg_ui_ssh_passwords

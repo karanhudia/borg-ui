@@ -1,0 +1,110 @@
+---
+# vars/borg_ui_servers.yml
+# Defines which remote servers borg-ui backs up.
+#
+# Add a server: add an entry, run backup_servers.yml
+# Remove a server: delete the entry (or set state: absent), re-run
+#
+# SSH key note
+# ------------
+# borg-ui generates and manages its own SSH keypairs internally.
+# Each connection (host + ssh_user + ssh_port) gets its own keypair —
+# you don't specify a key path here.  To set up a new server's key for
+# the first time, run ssh_setup.yml with the server's SSH password
+# (needed once only, never stored afterwards).
+#
+# Per-server fields
+# -----------------
+# Required:
+#   name          string   Display label in borg-ui web UI; used as the
+#                          repository identity key and in schedule lists.
+#                          Convention: short hostname. Cannot contain spaces.
+#   host          string   Hostname or IP that borg-ui SSHes to.
+#   source_dirs   list     Directories to back up on the remote host.
+#
+# SSH connection (must match what was recorded at ssh_setup time):
+#   ssh_user      string   SSH login user on the remote host.        default: ansible
+#   ssh_port      int      SSH port on the remote host.              default: 22
+#   use_sftp_mode bool     Use SFTP instead of native SSH mount.     default: false
+#                          Required for Hetzner Storage Boxes, some NAS appliances,
+#                          and any SSH server that restricts shell access.
+#
+# Repository settings (optional, override global defaults):
+#   exclude       list     Extra glob patterns, appended to the global
+#                          _default_exclude list in the playbook.
+#   encryption    string   repokey | repokey-blake2 | keyfile |
+#                          keyfile-blake2 | authenticated | none
+#                                                                    default: repokey
+#   compression   string   none | lz4 | zstd | zstd,N | zlib | zlib,N
+#                          Prefix with auto, to skip already-compressed files.
+#                                                                    default: auto,lz4
+#   mode          string   full     — active backup source
+#                          observe  — monitor only, no backup runs   default: full
+#   repo_path     string   Local path on the borg-ui host.           default: /local/<name>
+#   state         string   present | absent                          default: present
+
+borg_ui_servers:
+
+  # -------------------------------------------------------------------------
+  # Simple case — multiple servers sharing the same user/port/source
+  # -------------------------------------------------------------------------
+  - name: web-01
+    host: 192.168.1.11
+    ssh_user: ansible
+    ssh_port: 22
+    source_dirs:
+      - /opt
+      - /etc
+
+  - name: web-02
+    host: 192.168.1.12
+    ssh_user: ansible
+    ssh_port: 22
+    source_dirs:
+      - /opt
+      - /etc
+
+  # -------------------------------------------------------------------------
+  # Server that needs root login and backs up multiple directories
+  # -------------------------------------------------------------------------
+  - name: db-primary
+    host: 192.168.1.61
+    ssh_user: root
+    ssh_port: 22
+    source_dirs:
+      - /var/lib/pgsql
+      - /etc/postgresql
+    exclude:
+      - "*.pid"
+      - "pg_wal"
+
+  # -------------------------------------------------------------------------
+  # Non-standard SSH port, different login user
+  # -------------------------------------------------------------------------
+  - name: offsite-nas
+    host: nas.example.com
+    ssh_user: backup
+    ssh_port: 2222
+    source_dirs:
+      - /mnt/data
+
+  # -------------------------------------------------------------------------
+  # Hetzner Storage Box — SFTP-only SSH (restricted shell)
+  # -------------------------------------------------------------------------
+  # - name: hetzner-storagebox
+  #   host: uXXXXXX.your-storagebox.de
+  #   ssh_user: uXXXXXX
+  #   ssh_port: 23
+  #   use_sftp_mode: true
+  #   source_dirs:
+  #     - /home
+
+  # -------------------------------------------------------------------------
+  # Remove a server that was previously backed up
+  # -------------------------------------------------------------------------
+  # - name: old-server
+  #   host: 192.168.1.99
+  #   ssh_user: ansible
+  #   ssh_port: 22
+  #   source_dirs: [/opt]
+  #   state: absent

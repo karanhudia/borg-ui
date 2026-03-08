@@ -1,0 +1,103 @@
+---
+# conf_borg_ui_backups/tasks/main.yml
+# Manages borg-ui backup resources via the borgui.borg_ui collection.
+# Runs against backup target hosts; all API calls are delegated to localhost.
+#
+# SSH connection lookup
+# ---------------------
+# borg_ui_ssh_host, borg_ui_ssh_user, borg_ui_ssh_port must match the
+# connection recorded in borg-ui at key setup time.
+# Set borg_ui_source_connection_id directly to skip the API lookup.
+
+- name: Look up SSH connection ID for {{ inventory_hostname }}
+  ansible.builtin.uri:
+    url: "{{ borg_ui_base_url }}/api/ssh-keys/connections"
+    method: GET
+    headers:
+      Authorization: >-
+        Bearer {{ lookup('borgui.borg_ui.borg_ui_jwt', borg_ui_secret_key) }}
+    validate_certs: "{{ not borg_ui_insecure }}"
+    return_content: true
+  delegate_to: localhost
+  become: false
+  register: _borg_ui_connections_resp
+  no_log: true
+  when: borg_ui_source_connection_id is none
+
+- name: Set source_connection_id fact for {{ inventory_hostname }}
+  ansible.builtin.set_fact:
+    _borg_ui_conn_id: >-
+      {{ (_borg_ui_connections_resp.json.connections
+          | selectattr('host', 'equalto', borg_ui_ssh_host)
+          | selectattr('username', 'equalto', borg_ui_ssh_user)
+          | selectattr('port', 'equalto', borg_ui_ssh_port | int)
+          | map(attribute='id')
+          | list | last | default(none)) }}
+  when: borg_ui_source_connection_id is none
+
+- name: Assert SSH connection was found for {{ borg_ui_ssh_user }}@{{ borg_ui_ssh_host }}:{{ borg_ui_ssh_port }}
+  ansible.builtin.assert:
+    that:
+      - _borg_ui_conn_id | default(none) is not none
+      - _borg_ui_conn_id | int > 0
+    fail_msg: >-
+      No borg-ui SSH connection found for
+      {{ borg_ui_ssh_user }}@{{ borg_ui_ssh_host }}:{{ borg_ui_ssh_port }}.
+      Create it first via the borg-ui web UI (SSH Keys → Quick Setup)
+      or examples/playbooks/ssh_setup.yml, then re-run.
+  when: borg_ui_source_connection_id is none
+
+- name: Ensure borg-ui repository for {{ inventory_hostname }}
+  borgui.borg_ui.borg_ui_repository:
+    base_url: "{{ borg_ui_base_url }}"
+    secret_key: "{{ borg_ui_secret_key }}"
+    insecure: "{{ borg_ui_insecure }}"
+    name: "{{ borg_ui_repo_name }}"
+    path: "{{ borg_ui_repo_path }}"
+    encryption: "{{ borg_ui_encryption }}"
+    compression: "{{ borg_ui_compression }}"
+    mode: "{{ borg_ui_mode }}"
+    source_connection_id: >-
+      {{ borg_ui_source_connection_id
+         if borg_ui_source_connection_id is not none
+         else _borg_ui_conn_id | int }}
+    source_directories: "{{ borg_ui_source_directories }}"
+    exclude_patterns: "{{ borg_ui_exclude_patterns }}"
+    pre_backup_script: "{{ borg_ui_pre_backup_script }}"
+    post_backup_script: "{{ borg_ui_post_backup_script }}"
+    pre_hook_timeout: "{{ borg_ui_pre_hook_timeout }}"
+    post_hook_timeout: "{{ borg_ui_post_hook_timeout }}"
+    continue_on_hook_failure: "{{ borg_ui_continue_on_hook_failure }}"
+    passphrase: "{{ borg_ui_repo_key }}"
+    state: "{{ borg_ui_state }}"
+  delegate_to: localhost
+  become: false
+  register: borg_ui_repo_result
+  no_log: "{{ borg_ui_state == 'present' }}"
+
+- name: Show repository result for {{ inventory_hostname }}
+  ansible.builtin.debug:
+    var: borg_ui_repo_result
+  when: borg_ui_repo_result.changed or ansible_check_mode
+
+- name: Ensure schedule {{ borg_ui_schedule_name }} contains managed repositories
+  borgui.borg_ui.borg_ui_schedule:
+    base_url: "{{ borg_ui_base_url }}"
+    secret_key: "{{ borg_ui_secret_key }}"
+    insecure: "{{ borg_ui_insecure }}"
+    name: "{{ borg_ui_schedule_name }}"
+    cron_expression: "{{ borg_ui_schedule_cron }}"
+    enabled: "{{ borg_ui_schedule_enabled }}"
+    description: "{{ borg_ui_schedule_description }}"
+    repositories: "{{ borg_ui_schedule_repositories }}"
+    prune_keep_hourly: "{{ borg_ui_prune_keep_hourly }}"
+    prune_keep_daily: "{{ borg_ui_prune_keep_daily }}"
+    prune_keep_weekly: "{{ borg_ui_prune_keep_weekly }}"
+    prune_keep_monthly: "{{ borg_ui_prune_keep_monthly }}"
+    prune_keep_quarterly: "{{ borg_ui_prune_keep_quarterly }}"
+    prune_keep_yearly: "{{ borg_ui_prune_keep_yearly }}"
+    state: present
+  delegate_to: localhost
+  become: false
+  run_once: true
+  when: borg_ui_manage_schedule | bool

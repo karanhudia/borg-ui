@@ -1,0 +1,188 @@
+---
+# examples/playbooks/backup_servers.yml
+#
+# Ensures borg-ui repositories exist for every server in borg_ui_servers
+# (vars/borg_ui_servers.yml), then updates the backup schedule.
+#
+# Runs entirely on localhost — no SSH to the backup targets needed.
+# The borg-ui API handles all communication with remote servers.
+#
+# Prerequisites
+# -------------
+# 1. The borgui.borg_ui collection is installed:
+#      ansible-galaxy collection install borgui.borg_ui
+#    or from this repo:
+#      ansible-galaxy collection install ansible/
+#
+# 2. The SSH connection for each host exists in borg-ui.
+#    Create it once via the borg-ui web UI (SSH Keys → Quick Setup) or:
+#      ansible-playbook ssh_setup.yml
+#
+# Usage
+# -----
+#   ansible-playbook backup_servers.yml
+#
+#   # Dry-run (see what would change):
+#   ansible-playbook backup_servers.yml --check --diff
+#
+#   # Remove a server's repository:
+#   # Set state: absent on the entry in borg_ui_servers.yml and re-run,
+#   # or pass it inline:
+#   ansible-playbook backup_servers.yml \
+#     -e '{"borg_ui_servers": [{"name": "web-01", "host": "192.168.1.11",
+#           "ssh_user": "ansible", "ssh_port": 22,
+#           "source_dirs": ["/opt"], "state": "absent"}]}'
+
+- name: Ensure borg-ui backup repositories and schedule
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - ../vars/borg_ui_servers.yml
+
+  vars:
+    # -----------------------------------------------------------------------
+    # borg-ui instance — set these for your environment
+    # -----------------------------------------------------------------------
+    borgui_url: https://borgui.example.com     # your borg-ui address
+    borgui_insecure: false                     # true for self-signed TLS certs
+
+    # Credentials — recommended: pull from a secrets manager
+    # Option A: HashiCorp Vault (community.hashi_vault collection)
+    borgui_secret_key: >-
+      {{ lookup('community.hashi_vault.hashi_vault',
+                'secret=kv/data/secret/borgui:secret_key
+                 url=https://vault.example.com:8200') }}
+    borgui_repo_passphrase: >-
+      {{ lookup('community.hashi_vault.hashi_vault',
+                'secret=kv/data/secret/borgui:repo_passphrase
+                 url=https://vault.example.com:8200') }}
+
+    # Option B: plain vars (use ansible-vault encrypt_string or -e @secrets.yml)
+    # borgui_secret_key: "{{ vault_borgui_secret_key }}"
+    # borgui_repo_passphrase: "{{ vault_borgui_repo_passphrase }}"
+
+    # -----------------------------------------------------------------------
+    # Global repository defaults — override per-server in borg_ui_servers
+    # -----------------------------------------------------------------------
+    _default_encryption: repokey
+    _default_compression: "auto,lz4"
+    _default_mode: full
+    _default_exclude:
+      - "*.log"
+      - "*.tmp"
+      - "__pycache__"
+      - "node_modules"
+
+    # -----------------------------------------------------------------------
+    # Schedule settings
+    # -----------------------------------------------------------------------
+    borg_ui_manage_schedule: true
+    borg_ui_schedule_name: "nightly-prod"
+    borg_ui_schedule_cron: "0 2 * * *"        # every day at 02:00
+    borg_ui_schedule_enabled: true
+    borg_ui_schedule_description: "Nightly backup for all production servers"
+    borg_ui_run_prune_after: true
+    borg_ui_prune_keep_hourly: 0
+    borg_ui_prune_keep_daily: 7
+    borg_ui_prune_keep_weekly: 4
+    borg_ui_prune_keep_monthly: 6
+    borg_ui_prune_keep_quarterly: 0
+    borg_ui_prune_keep_yearly: 1
+
+    # Default state for all servers — override per-entry with state: absent
+    borg_ui_state: present
+
+  tasks:
+
+    # -----------------------------------------------------------------------
+    # Fetch all SSH connections once — reused for every server in the loop
+    # -----------------------------------------------------------------------
+    - name: Fetch all borg-ui SSH connections
+      ansible.builtin.uri:
+        url: "{{ borgui_url }}/api/ssh-keys/connections"
+        method: GET
+        headers:
+          Authorization: >-
+            Bearer {{ lookup('borgui.borg_ui.borg_ui_jwt', borgui_secret_key) }}
+        validate_certs: "{{ not borgui_insecure }}"
+        return_content: true
+      register: _all_connections
+      no_log: true
+
+    # -----------------------------------------------------------------------
+    # Ensure one repository per server defined in borg_ui_servers
+    # -----------------------------------------------------------------------
+    - name: Ensure repository — {{ item.name }} ({{ item.host }})
+      borgui.borg_ui.borg_ui_repository:
+        base_url: "{{ borgui_url }}"
+        secret_key: "{{ borgui_secret_key }}"
+        insecure: "{{ borgui_insecure }}"
+
+        name: "{{ item.name }}"
+        path: "{{ item.repo_path | default('/local/' + item.name) }}"
+        source_connection_id: >-
+          {{ (_all_connections.json.connections
+              | selectattr('host', 'equalto', item.host)
+              | selectattr('username', 'equalto', (item.ssh_user | default('ansible')))
+              | selectattr('port', 'equalto', (item.ssh_port | default(22)) | int)
+              | map(attribute='id')
+              | list | last) }}
+        source_directories: "{{ item.source_dirs }}"
+        encryption: "{{ item.encryption | default(_default_encryption) }}"
+        compression: "{{ item.compression | default(_default_compression) }}"
+        mode: "{{ item.mode | default(_default_mode) }}"
+        exclude_patterns: "{{ _default_exclude + (item.exclude | default([])) }}"
+        passphrase: "{{ borgui_repo_passphrase }}"
+        state: "{{ item.state | default(borg_ui_state) }}"
+
+      loop: "{{ borg_ui_servers }}"
+      loop_control:
+        label: "{{ item.name }}"
+      no_log: true
+      register: _repo_results
+
+    - name: Show changed repositories
+      ansible.builtin.debug:
+        msg: "{{ item.item.name }}: {{ 'changed' if item.changed else 'ok' }}"
+      loop: "{{ _repo_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: item.changed or ansible_check_mode
+
+    # -----------------------------------------------------------------------
+    # Update the schedule to include all present servers
+    # -----------------------------------------------------------------------
+    - name: Ensure schedule — {{ borg_ui_schedule_name }}
+      borgui.borg_ui.borg_ui_schedule:
+        base_url: "{{ borgui_url }}"
+        secret_key: "{{ borgui_secret_key }}"
+        insecure: "{{ borgui_insecure }}"
+
+        name: "{{ borg_ui_schedule_name }}"
+        cron_expression: "{{ borg_ui_schedule_cron }}"
+        enabled: "{{ borg_ui_schedule_enabled }}"
+        description: "{{ borg_ui_schedule_description }}"
+        repositories: >-
+          {{ borg_ui_servers
+             | selectattr('state', 'undefined')
+             | list
+             | map(attribute='name')
+             | list
+             + borg_ui_servers
+             | selectattr('state', 'defined')
+             | selectattr('state', 'equalto', 'present')
+             | map(attribute='name')
+             | list }}
+        run_prune_after: "{{ borg_ui_run_prune_after }}"
+        prune_keep_hourly: "{{ borg_ui_prune_keep_hourly }}"
+        prune_keep_daily: "{{ borg_ui_prune_keep_daily }}"
+        prune_keep_weekly: "{{ borg_ui_prune_keep_weekly }}"
+        prune_keep_monthly: "{{ borg_ui_prune_keep_monthly }}"
+        prune_keep_quarterly: "{{ borg_ui_prune_keep_quarterly }}"
+        prune_keep_yearly: "{{ borg_ui_prune_keep_yearly }}"
+        state: present
+
+      when: borg_ui_manage_schedule | bool
