@@ -1,0 +1,55 @@
+---
+name: Upstream Sync
+
+on:
+  schedule:
+    - cron: "0 3 * * *"   # 03:00 UTC nightly
+  workflow_dispatch:        # allow manual trigger
+
+jobs:
+  sync:
+    name: Merge upstream into main
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: git remote add upstream https://github.com/karanhudia/borg-ui.git
+
+      - name: Fetch upstream
+        run: git fetch upstream main --no-tags
+
+      - name: Check if upstream has new commits
+        id: diff
+        run: |
+          BEHIND=$(git rev-list --count HEAD..upstream/main)
+          echo "behind=${BEHIND}" >> "$GITHUB_OUTPUT"
+          echo "Upstream is ${BEHIND} commit(s) ahead of fork"
+
+      - name: Merge upstream (fast-forward preferred, merge commit fallback)
+        if: steps.diff.outputs.behind != '0'
+        run: |
+          git merge upstream/main \
+            --no-edit \
+            -m "chore: merge upstream karanhudia/borg-ui into fork [skip ci]"
+
+      - name: Push to fork
+        if: steps.diff.outputs.behind != '0'
+        run: git push origin main
+
+      - name: No-op summary when already up to date
+        if: steps.diff.outputs.behind == '0'
+        run: echo "Fork is already up to date with upstream — nothing to do."
