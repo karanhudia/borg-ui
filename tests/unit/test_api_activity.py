@@ -463,3 +463,153 @@ class TestDeleteJobEndpoint:
         # Verify job is NOT deleted
         job_still_exists = test_db.query(BackupJob).filter(BackupJob.id == job.id).first()
         assert job_still_exists is not None
+
+
+class TestGetJobLogsPlaceholderOffset:
+    """Test that placeholder lines are only returned when offset=0 for running backup jobs."""
+
+    def _make_running_backup_job(self):
+        """Create a minimal fake job object with status='running'."""
+        class FakeJob:
+            id = 42
+            status = 'running'
+            log_file_path = None
+            logs = None
+
+        return FakeJob()
+
+    def test_a_no_buffer_offset_0_returns_placeholder(self, test_client, auth_headers, test_db):
+        """Test A: buffer_exists=False, offset=0 -> returns 5-line placeholder."""
+        from unittest.mock import patch
+        from app.database.models import BackupJob
+        from datetime import datetime
+
+        job = BackupJob(
+            repository="/test/repo",
+            status="running",
+            started_at=datetime.now()
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        with patch('app.api.activity.backup_service.get_log_buffer', return_value=([], False)):
+            response = test_client.get(
+                f"/api/activity/backup/{job.id}/logs?offset=0",
+                headers=auth_headers
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data['total_lines'] == 5
+        assert len(data['lines']) == 5
+
+    def test_b_no_buffer_offset_5_returns_empty(self, test_client, auth_headers, test_db):
+        """Test B: buffer_exists=False, offset=5 -> returns empty response."""
+        from unittest.mock import patch
+        from app.database.models import BackupJob
+        from datetime import datetime
+
+        job = BackupJob(
+            repository="/test/repo",
+            status="running",
+            started_at=datetime.now()
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        with patch('app.api.activity.backup_service.get_log_buffer', return_value=([], False)):
+            response = test_client.get(
+                f"/api/activity/backup/{job.id}/logs?offset=5",
+                headers=auth_headers
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data['lines'] == []
+        assert data['total_lines'] == 0
+        assert data['has_more'] is False
+
+    def test_c_empty_buffer_offset_0_returns_placeholder(self, test_client, auth_headers, test_db):
+        """Test C: buffer_exists=True but empty, offset=0 -> returns 5-line placeholder."""
+        from unittest.mock import patch
+        from app.database.models import BackupJob
+        from datetime import datetime
+
+        job = BackupJob(
+            repository="/test/repo",
+            status="running",
+            started_at=datetime.now()
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        with patch('app.api.activity.backup_service.get_log_buffer', return_value=([], True)):
+            response = test_client.get(
+                f"/api/activity/backup/{job.id}/logs?offset=0",
+                headers=auth_headers
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data['total_lines'] == 5
+        assert len(data['lines']) == 5
+
+    def test_d_empty_buffer_offset_5_returns_empty(self, test_client, auth_headers, test_db):
+        """Test D: buffer_exists=True but empty, offset=5 -> returns empty response."""
+        from unittest.mock import patch
+        from app.database.models import BackupJob
+        from datetime import datetime
+
+        job = BackupJob(
+            repository="/test/repo",
+            status="running",
+            started_at=datetime.now()
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        with patch('app.api.activity.backup_service.get_log_buffer', return_value=([], True)):
+            response = test_client.get(
+                f"/api/activity/backup/{job.id}/logs?offset=5",
+                headers=auth_headers
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data['lines'] == []
+        assert data['total_lines'] == 0
+        assert data['has_more'] is False
+
+    def test_e_buffer_with_lines_offset_0_returns_lines(self, test_client, auth_headers, test_db):
+        """Test E: buffer_exists=True, buffer has lines, offset=0 -> returns those lines."""
+        from unittest.mock import patch
+        from app.database.models import BackupJob
+        from datetime import datetime
+
+        job = BackupJob(
+            repository="/test/repo",
+            status="running",
+            started_at=datetime.now()
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        real_lines = ["Creating archive...", "Files: 100 new, 0 changed", "Duration: 2.34 seconds"]
+        with patch('app.api.activity.backup_service.get_log_buffer', return_value=(real_lines, True)):
+            response = test_client.get(
+                f"/api/activity/backup/{job.id}/logs?offset=0",
+                headers=auth_headers
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data['total_lines'] == 3
+        assert len(data['lines']) == 3
+        assert data['lines'][0]['content'] == "Creating archive..."
+        assert data['lines'][1]['content'] == "Files: 100 new, 0 changed"
+        assert data['lines'][2]['content'] == "Duration: 2.34 seconds"
