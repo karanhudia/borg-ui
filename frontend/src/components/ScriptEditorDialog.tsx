@@ -32,6 +32,7 @@ interface ScriptEditorDialogProps {
   continueOnFailure?: boolean
   onContinueOnFailureChange?: (value: boolean) => void
   showContinueOnFailure?: boolean
+  repositoryId?: number | null  // When provided, injects BORG_UI_ context into test runs
 }
 
 export default function ScriptEditorDialog({
@@ -46,6 +47,7 @@ export default function ScriptEditorDialog({
   continueOnFailure = false,
   onContinueOnFailureChange,
   showContinueOnFailure = false,
+  repositoryId,
 }: ScriptEditorDialogProps) {
   const { t } = useTranslation()
   const [testRunning, setTestRunning] = useState(false)
@@ -68,6 +70,7 @@ export default function ScriptEditorDialog({
     try {
       const response = await api.post('/scripts/test', {
         script: value,
+        ...(repositoryId != null ? { repository_id: repositoryId } : {}),
       })
       setTestResult(response.data)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
