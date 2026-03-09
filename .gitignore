@@ -139,4 +139,6 @@ trivy-*.sarif
 frontend-dist/
 .claude/worktrees/
 docs/02_coordination/
+docs/issues/
+.playwright-mcp/
 frontend/frontend/
