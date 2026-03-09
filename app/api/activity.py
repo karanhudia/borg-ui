@@ -378,6 +378,8 @@ async def get_job_logs(
                     return response
                 else:
                     # Buffer exists but empty - backup command started, waiting for first output
+                    if offset > 0:
+                        return {'lines': [], 'total_lines': 0, 'has_more': False}
                     logger.info("Buffer exists but empty, returning processing message", job_id=job_id)
                     lines = [
                         "Backup is running...",
@@ -388,6 +390,8 @@ async def get_job_logs(
                     ]
             else:
                 # Buffer not created yet - backup job hasn't started borg command
+                if offset > 0:
+                    return {'lines': [], 'total_lines': 0, 'has_more': False}
                 logger.info("Buffer not created yet, returning waiting message", job_id=job_id)
                 lines = [
                     "Backup is currently running...",
