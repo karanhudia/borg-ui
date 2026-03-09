@@ -158,6 +158,8 @@ export default function Scripts() {
     const paramsMap = new Map<string, ScriptParameter>()
 
     matches.forEach(([, name, defaultValue]) => {
+      // Skip system-injected variables — BORG_UI_* are provided automatically at runtime
+      if (name.startsWith('BORG_UI_')) return
       if (!paramsMap.has(name)) {
         paramsMap.set(name, {
           name,

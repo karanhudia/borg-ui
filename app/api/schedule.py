@@ -1146,7 +1146,7 @@ async def run_script_from_library(
     """
     from app.services.script_executor import execute_script
     from app.services.template_service import get_system_variables
-    from app.utils.script_params import SYSTEM_VARIABLES
+    from app.utils.script_params import SYSTEM_VARIABLE_PREFIX
     from app.core.security import decrypt_secret
     from pathlib import Path
     import os
@@ -1188,7 +1188,7 @@ async def run_script_from_library(
                     param_name = param_def['name']
 
                     # Skip system variables - they're already set above
-                    if param_name in SYSTEM_VARIABLES:
+                    if param_name.startswith(SYSTEM_VARIABLE_PREFIX):
                         continue
 
                     param_type = param_def.get('type', 'text')

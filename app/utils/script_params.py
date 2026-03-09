@@ -25,17 +25,10 @@ PASSWORD_SUFFIXES = [
     '_CREDENTIALS'
 ]
 
-# System-provided variables that should NOT be treated as user parameters
-# These are automatically injected at runtime and don't need user input
-# All Borg UI variables use BORG_UI_ prefix
-SYSTEM_VARIABLES = {
-    'BORG_UI_BACKUP_STATUS',
-    'BORG_UI_REPOSITORY_NAME',
-    'BORG_UI_REPOSITORY_PATH',
-    'BORG_UI_REPOSITORY_ID',
-    'BORG_UI_HOOK_TYPE',
-    'BORG_UI_JOB_ID',
-}
+# System-provided variables that should NOT be treated as user parameters.
+# All variables with the BORG_UI_ prefix are automatically injected at runtime
+# and must never appear as required user inputs in the parameter UI.
+SYSTEM_VARIABLE_PREFIX = 'BORG_UI_'
 
 
 def parse_script_parameters(script_content: str) -> List[Dict[str, Any]]:
@@ -84,8 +77,8 @@ def parse_script_parameters(script_content: str) -> List[Dict[str, Any]]:
             )
             continue
 
-        # Skip system-provided variables (automatically injected at runtime)
-        if param_name in SYSTEM_VARIABLES:
+        # Skip system-provided variables (all BORG_UI_ vars are auto-injected at runtime)
+        if param_name.startswith(SYSTEM_VARIABLE_PREFIX):
             logger.debug(
                 "Skipping system variable (auto-provided)",
                 param_name=param_name
@@ -117,7 +110,7 @@ def parse_script_parameters(script_content: str) -> List[Dict[str, Any]]:
         "Parsed script parameters (system variables excluded)",
         param_count=len(parameters),
         password_params=[p['name'] for p in parameters if p['type'] == 'password'],
-        system_vars_skipped=len([name for name, _ in matches if name in SYSTEM_VARIABLES])
+        system_vars_skipped=len([name for name, _ in matches if name.startswith(SYSTEM_VARIABLE_PREFIX)])
     )
     
     return parameters
@@ -233,7 +226,7 @@ def filter_system_variables_from_params(
 
     return [
         param for param in parameters
-        if param.get('name') not in SYSTEM_VARIABLES
+        if not param.get('name', '').startswith(SYSTEM_VARIABLE_PREFIX)
     ]
 
 

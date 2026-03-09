@@ -71,9 +71,9 @@ def build_script_env(
     - BORG_UI_REPOSITORY_ID: Repository ID
     - BORG_UI_HOOK_TYPE: 'pre-backup' or 'post-backup'
     - BORG_UI_JOB_ID: Backup job ID (if available)
-    - BORG_UI_SOURCE_HOST: Hostname/IP of the remote host being backed up (if SSH source)
-    - BORG_UI_SOURCE_PORT: SSH port of the remote host (if SSH source)
-    - BORG_UI_SOURCE_USERNAME: SSH username for the remote host (if SSH source)
+    - BORG_UI_REMOTE_HOST: Hostname/IP of the remote host being backed up (if SSH source)
+    - BORG_UI_REMOTE_PORT: SSH port of the remote host (if SSH source)
+    - BORG_UI_REMOTE_USERNAME: SSH username for the remote host (if SSH source)
 
     Args:
         repository: Repository model instance
@@ -102,9 +102,9 @@ def build_script_env(
         env['BORG_UI_JOB_ID'] = str(backup_job_id)
 
     if source_connection:
-        env['BORG_UI_SOURCE_HOST'] = source_connection.host or ''
-        env['BORG_UI_SOURCE_PORT'] = str(source_connection.port or 22)
-        env['BORG_UI_SOURCE_USERNAME'] = source_connection.username or ''
+        env['BORG_UI_REMOTE_HOST'] = source_connection.host or ''
+        env['BORG_UI_REMOTE_PORT'] = str(source_connection.port or 22)
+        env['BORG_UI_REMOTE_USERNAME'] = source_connection.username or ''
 
     return env
 
@@ -219,10 +219,27 @@ class ScriptLibraryExecutor:
             execution_logs.extend(result['logs'])
 
             if not result['success']:
-                # Check if we should continue despite error
+                skip_on_failure = rs.skip_on_failure if rs.skip_on_failure is not None else False
                 continue_on_error = rs.continue_on_error if rs.continue_on_error is not None else True
-                
-                if not continue_on_error:
+
+                if skip_on_failure:
+                    # Script intentionally signalled skip — propagate immediately, stop further scripts
+                    logger.info("Script signalled graceful skip",
+                                script_id=script.id,
+                                script_name=script.name,
+                                exit_code=result['exit_code'])
+                    execution_logs.append(f"INFO: Script '{script.name}' signalled graceful skip (exit {result['exit_code']}) — backup will be skipped.")
+                    return {
+                        'success': False,
+                        'should_skip': True,
+                        'skip_script_name': script.name,
+                        'scripts_executed': len(executions) + 1,
+                        'scripts_failed': 0,
+                        'execution_logs': execution_logs,
+                        'executions': executions,
+                        'using_library': True,
+                    }
+                elif not continue_on_error:
                     scripts_failed += 1
                     logger.warning("Script execution failed",
                                  script_id=script.id,
@@ -233,7 +250,6 @@ class ScriptLibraryExecutor:
                                  script_id=script.id,
                                  script_name=script.name,
                                  exit_code=result['exit_code'])
-                    # Add a log entry for clarity
                     execution_logs.append(f"WARNING: Script '{script.name}' failed but 'Continue on Failure' is enabled. Backup will proceed.")
 
         overall_success = scripts_failed == 0
@@ -247,10 +263,12 @@ class ScriptLibraryExecutor:
 
         return {
             'success': overall_success,
+            'should_skip': False,
             'scripts_executed': len(scripts_to_run),
             'scripts_failed': scripts_failed,
             'execution_logs': execution_logs,
-            'executions': executions
+            'executions': executions,
+            'using_library': True,
         }
 
     def _should_run_script(self, run_on: str, backup_result: BackupResult) -> bool:
@@ -302,7 +320,7 @@ class ScriptLibraryExecutor:
             # Prepare environment variables with parameters
             script_env = os.environ.copy()
 
-            # Resolve source SSH connection so scripts can use BORG_UI_SOURCE_HOST etc.
+            # Resolve source SSH connection so scripts can use BORG_UI_REMOTE_HOST etc.
             source_connection = _resolve_source_connection(self.db, repository, backup_job_id)
 
             # Add system variables
@@ -325,7 +343,7 @@ class ScriptLibraryExecutor:
             # Add script parameters as environment variables
             if script.parameters:
                 try:
-                    from app.utils.script_params import SYSTEM_VARIABLES
+                    from app.utils.script_params import SYSTEM_VARIABLE_PREFIX
 
                     # Parse parameter definitions
                     parameters = json.loads(script.parameters)
@@ -338,7 +356,7 @@ class ScriptLibraryExecutor:
                         param_name = param_def['name']
 
                         # Skip system variables - they're already set above
-                        if param_name in SYSTEM_VARIABLES:
+                        if param_name.startswith(SYSTEM_VARIABLE_PREFIX):
                             logger.debug("Skipping system variable (already set)", param_name=param_name)
                             continue
 
@@ -500,7 +518,7 @@ class ScriptLibraryExecutor:
 
         start_time = time.time()
 
-        # Resolve source SSH connection so scripts can use BORG_UI_SOURCE_HOST etc.
+        # Resolve source SSH connection so scripts can use BORG_UI_REMOTE_HOST etc.
         source_connection = _resolve_source_connection(self.db, repository, backup_job_id)
 
         # Build environment with backup context
