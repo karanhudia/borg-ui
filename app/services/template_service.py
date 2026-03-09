@@ -59,12 +59,12 @@ def get_system_variables(
         system_vars['BORG_UI_JOB_ID'] = str(job_id)
 
     if source_host:
-        system_vars['BORG_UI_SOURCE_HOST'] = source_host
+        system_vars['BORG_UI_REMOTE_HOST'] = source_host
 
     if source_port is not None:
-        system_vars['BORG_UI_SOURCE_PORT'] = str(source_port)
+        system_vars['BORG_UI_REMOTE_PORT'] = str(source_port)
 
     if source_username:
-        system_vars['BORG_UI_SOURCE_USERNAME'] = source_username
+        system_vars['BORG_UI_REMOTE_USERNAME'] = source_username
 
     return system_vars
