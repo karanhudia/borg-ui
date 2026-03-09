@@ -20,6 +20,30 @@ import json
 import os
 
 from app.database.models import Script, RepositoryScript, ScriptExecution, Repository, BackupJob, SSHConnection
+
+
+def _resolve_source_connection(db: Session, repository: Repository, backup_job_id: Optional[int]) -> Optional[SSHConnection]:
+    """
+    Resolve the SSH connection for the host being backed up.
+
+    Checks two places because the connection is stored differently by mode:
+    - SSHFS pull mode:      repository.source_ssh_connection_id
+    - Remote SSH push mode: BackupJob.source_ssh_connection_id
+
+    Returns the SSHConnection or None if the backup is local.
+    """
+    conn_id = repository.source_ssh_connection_id
+
+    # For remote SSH push mode the connection is on the job, not the repository
+    if not conn_id and backup_job_id:
+        job = db.query(BackupJob).filter(BackupJob.id == backup_job_id).first()
+        if job:
+            conn_id = job.source_ssh_connection_id
+
+    if not conn_id:
+        return None
+
+    return db.query(SSHConnection).filter(SSHConnection.id == conn_id).first()
 from app.services.script_executor import execute_script
 from app.services.template_service import get_system_variables
 from app.utils.script_params import SYSTEM_VARIABLE_PREFIX
@@ -280,11 +304,7 @@ class ScriptLibraryExecutor:
             script_env = os.environ.copy()
 
             # Resolve source SSH connection so scripts can use BORG_UI_SOURCE_HOST etc.
-            source_connection = None
-            if repository.source_ssh_connection_id:
-                source_connection = self.db.query(SSHConnection).filter(
-                    SSHConnection.id == repository.source_ssh_connection_id
-                ).first()
+            source_connection = _resolve_source_connection(self.db, repository, backup_job_id)
 
             # Add system variables
             system_vars = get_system_variables(
@@ -480,11 +500,7 @@ class ScriptLibraryExecutor:
         start_time = time.time()
 
         # Resolve source SSH connection so scripts can use BORG_UI_SOURCE_HOST etc.
-        source_connection = None
-        if repository.source_ssh_connection_id:
-            source_connection = self.db.query(SSHConnection).filter(
-                SSHConnection.id == repository.source_ssh_connection_id
-            ).first()
+        source_connection = _resolve_source_connection(self.db, repository, backup_job_id)
 
         # Build environment with backup context
         script_env = build_script_env(
