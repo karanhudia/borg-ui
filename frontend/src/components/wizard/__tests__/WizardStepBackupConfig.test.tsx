@@ -68,7 +68,7 @@ const defaultData: BackupConfigStepData = {
   postBackupScript: '',
   preHookTimeout: 300,
   postHookTimeout: 300,
-  continueOnHookFailure: false,
+  hookFailureMode: 'fail',
 }
 
 describe('WizardStepBackupConfig', () => {
