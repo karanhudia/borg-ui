@@ -119,6 +119,7 @@ export default function AdvancedRepositoryOptions({
         continueOnFailure={continueOnHookFailure}
         onContinueOnFailureChange={onContinueOnHookFailureChange}
         showContinueOnFailure={true}
+        repositoryId={repositoryId}
       />
 
       <ScriptEditorDialog
@@ -131,6 +132,7 @@ export default function AdvancedRepositoryOptions({
         timeout={postHookTimeout}
         onTimeoutChange={onPostHookTimeoutChange}
         showContinueOnFailure={false}
+        repositoryId={repositoryId}
       />
     </>
   )
