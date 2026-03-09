@@ -67,11 +67,9 @@ function colorizeJsonLine(text: string): React.ReactNode {
 const LogLine = memo(function LogLine({
   lineNumber,
   content,
-  jobId,
 }: {
   lineNumber: number
   content: string
-  jobId: string
 }) {
   return (
     <Box sx={{ mb: 0.5 }}>
@@ -319,7 +317,6 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
               key={`${jobId}-${log.line_number}`}
               lineNumber={log.line_number}
               content={log.content}
-              jobId={jobId}
             />
           ))
         )}
