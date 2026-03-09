@@ -10,6 +10,8 @@ COPY app/api/schedule.py         /app/app/api/schedule.py
 COPY app/database/models.py      /app/app/database/models.py
 COPY app/database/migrations/074_add_use_sudo_to_ssh_connections.py \
                                  /app/app/database/migrations/074_add_use_sudo_to_ssh_connections.py
+COPY app/database/migrations/075_add_skip_on_failure.py \
+                                 /app/app/database/migrations/075_add_skip_on_failure.py
 COPY app/services/remote_backup_service.py \
                                  /app/app/services/remote_backup_service.py
 COPY app/services/mount_service.py \
@@ -18,6 +20,14 @@ COPY app/services/backup_service.py \
                                  /app/app/services/backup_service.py
 COPY app/utils/archive_names.py  /app/app/utils/archive_names.py
 COPY app/api/activity.py         /app/app/api/activity.py
+COPY app/api/scripts.py          /app/app/api/scripts.py
+COPY app/services/script_library_executor.py \
+                                 /app/app/services/script_library_executor.py
+COPY app/services/template_service.py \
+                                 /app/app/services/template_service.py
+COPY app/api/scripts_library.py  /app/app/api/scripts_library.py
+COPY app/api/repositories.py     /app/app/api/repositories.py
+COPY app/utils/script_params.py  /app/app/utils/script_params.py
 
 # Pre-built frontend (built natively on host, JS output is platform-independent)
 COPY frontend-dist/              /app/app/static/
