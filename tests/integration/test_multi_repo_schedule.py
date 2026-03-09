@@ -1,5 +1,6 @@
 
 import pytest
+import re
 import shutil
 import subprocess
 import os
@@ -95,7 +96,9 @@ async def test_multi_repo_schedule_execution_real(
             [borg_binary, "list", "--json", str(repo_path)],
             capture_output=True, text=True
         )
-        return job.name in result.stdout
+        # build_archive_name sanitizes spaces/slashes to hyphens, so match the sanitized form
+        safe_job_name = re.sub(r'[\s/\\]+', '-', job.name)
+        return safe_job_name in result.stdout
 
     repo1_has_backup = check_archive_exists(repo1.path)
     repo2_has_backup = check_archive_exists(repo2.path)

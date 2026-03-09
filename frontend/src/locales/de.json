@@ -2036,7 +2036,11 @@
     "stdout": "Standardausgabe:",
     "stderr": "Fehlerausgabe:",
     "save": "Speichern",
-    "exitCode": "Exit-Code: {{code}}"
+    "exitCode": "Exit-Code: {{code}}",
+    "onFailureLabel": "Wenn das Vor-Backup-Skript fehlschlägt:",
+    "onFailureContinue": "Sicherung fortsetzen",
+    "onFailureSkip": "Sicherung überspringen",
+    "onFailureFail": "Sicherung abbrechen"
   },
   "scriptParameters": {
     "title": "Skriptparameter",
@@ -2267,7 +2271,8 @@
     },
     "chips": {
       "outOfSync": "Nicht synchronisiert",
-      "continuesOnError": "Weiter bei Fehler"
+      "continuesOnError": "Weiter bei Fehler",
+      "skipsGracefully": "Wird übersprungen"
     },
     "dialog": {
       "assignTitle": "Skript dem Repository zuweisen",
@@ -2275,7 +2280,8 @@
       "continueOnErrorLabel": "Sicherung fortsetzen, wenn Skript fehlschlägt",
       "continueOnErrorHelperText": "Standard überschreiben: Wenn aktiviert, wird die Sicherung auch bei Skriptfehler fortgesetzt.",
       "cancel": "Abbrechen",
-      "assignScript": "Skript zuweisen"
+      "assignScript": "Skript zuweisen",
+      "onFailureLabel": "Wenn dieses Skript fehlschlägt:"
     },
     "parametersDialog": {
       "title": "Skriptparameter konfigurieren: {{scriptName}}",

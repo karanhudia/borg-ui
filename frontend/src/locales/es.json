@@ -2036,7 +2036,11 @@
     "stdout": "Salida estándar:",
     "stderr": "Error estándar:",
     "save": "Guardar",
-    "exitCode": "Código de salida: {{code}}"
+    "exitCode": "Código de salida: {{code}}",
+    "onFailureLabel": "Si el script previo a la copia falla:",
+    "onFailureContinue": "Continuar copia de seguridad",
+    "onFailureSkip": "Saltar copia de seguridad",
+    "onFailureFail": "Detener copia de seguridad"
   },
   "scriptParameters": {
     "title": "Parámetros del script",
@@ -2267,7 +2271,8 @@
     },
     "chips": {
       "outOfSync": "Desincronizado",
-      "continuesOnError": "Continúa en caso de error"
+      "continuesOnError": "Continúa en caso de error",
+      "skipsGracefully": "Salta correctamente"
     },
     "dialog": {
       "assignTitle": "Asignar script al repositorio",
@@ -2275,7 +2280,8 @@
       "continueOnErrorLabel": "Continuar copia de seguridad si el script falla",
       "continueOnErrorHelperText": "Anular predeterminado: Si está marcado, la copia de seguridad continuará aunque falle este script.",
       "cancel": "Cancelar",
-      "assignScript": "Asignar script"
+      "assignScript": "Asignar script",
+      "onFailureLabel": "Si este script falla:"
     },
     "parametersDialog": {
       "title": "Configurar parámetros del script: {{scriptName}}",
