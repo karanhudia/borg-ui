@@ -64,6 +64,7 @@ class Repository(Base):
     pre_hook_timeout = Column(Integer, default=300)  # Pre-backup hook timeout in seconds
     post_hook_timeout = Column(Integer, default=300)  # Post-backup hook timeout in seconds
     continue_on_hook_failure = Column(Boolean, default=False)  # Whether to continue backup if pre-hook fails
+    skip_on_hook_failure = Column(Boolean, default=False)  # Whether to skip backup gracefully if pre-hook fails (not a failure)
 
     # Repository mode (for observability-only repos)
     mode = Column(String, default="full")  # full: backups + observability, observe: observability-only
@@ -580,6 +581,7 @@ class RepositoryScript(Base):
     custom_timeout = Column(Integer, nullable=True)  # Override script's default timeout
     custom_run_on = Column(String(50), nullable=True)  # Override script's run_on condition
     continue_on_error = Column(Boolean, default=True)  # Override script's continue_on_error
+    skip_on_failure = Column(Boolean, default=False)  # Skip backup gracefully if this script fails (not a failure)
 
     # Script parameter values
     parameter_values = Column(Text, nullable=True)  # JSON dict of parameter values: {'PARAM': 'value'}. Password-type values are encrypted.
