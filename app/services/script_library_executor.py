@@ -19,7 +19,7 @@ import structlog
 import json
 import os
 
-from app.database.models import Script, RepositoryScript, ScriptExecution, Repository, BackupJob
+from app.database.models import Script, RepositoryScript, ScriptExecution, Repository, BackupJob, SSHConnection
 from app.services.script_executor import execute_script
 from app.services.template_service import get_system_variables
 from app.utils.script_params import SYSTEM_VARIABLE_PREFIX
@@ -35,7 +35,8 @@ def build_script_env(
     repository: Optional[Repository] = None,
     hook_type: Optional[HookType] = None,
     backup_result: Optional[BackupResult] = None,
-    backup_job_id: Optional[int] = None
+    backup_job_id: Optional[int] = None,
+    source_connection: Optional[SSHConnection] = None,
 ) -> Dict[str, str]:
     """
     Build environment variables for script execution.
@@ -47,12 +48,16 @@ def build_script_env(
     - BORG_UI_REPOSITORY_ID: Repository ID
     - BORG_UI_HOOK_TYPE: 'pre-backup' or 'post-backup'
     - BORG_UI_JOB_ID: Backup job ID (if available)
+    - BORG_UI_SOURCE_HOST: Hostname/IP of the remote host being backed up (if SSH source)
+    - BORG_UI_SOURCE_PORT: SSH port of the remote host (if SSH source)
+    - BORG_UI_SOURCE_USERNAME: SSH username for the remote host (if SSH source)
 
     Args:
         repository: Repository model instance
         hook_type: 'pre-backup' or 'post-backup'
         backup_result: 'success', 'failure', or 'warning'
         backup_job_id: Backup job ID
+        source_connection: SSHConnection for the remote source host (if any)
 
     Returns:
         Dict of environment variables
@@ -72,6 +77,11 @@ def build_script_env(
 
     if backup_job_id:
         env['BORG_UI_JOB_ID'] = str(backup_job_id)
+
+    if source_connection:
+        env['BORG_UI_SOURCE_HOST'] = source_connection.host or ''
+        env['BORG_UI_SOURCE_PORT'] = str(source_connection.port or 22)
+        env['BORG_UI_SOURCE_USERNAME'] = source_connection.username or ''
 
     return env
 
@@ -269,6 +279,13 @@ class ScriptLibraryExecutor:
             # Prepare environment variables with parameters
             script_env = os.environ.copy()
 
+            # Resolve source SSH connection so scripts can use BORG_UI_SOURCE_HOST etc.
+            source_connection = None
+            if repository.source_ssh_connection_id:
+                source_connection = self.db.query(SSHConnection).filter(
+                    SSHConnection.id == repository.source_ssh_connection_id
+                ).first()
+
             # Add system variables
             system_vars = get_system_variables(
                 repository_id=repository.id,
@@ -276,7 +293,10 @@ class ScriptLibraryExecutor:
                 repository_path=repository.path,
                 backup_status=backup_result,
                 hook_type=hook_type,
-                job_id=backup_job_id
+                job_id=backup_job_id,
+                source_host=source_connection.host if source_connection else None,
+                source_port=source_connection.port if source_connection else None,
+                source_username=source_connection.username if source_connection else None,
             )
             logger.info("Setting system variables in script environment",
                        script_id=script.id,
@@ -459,12 +479,20 @@ class ScriptLibraryExecutor:
 
         start_time = time.time()
 
+        # Resolve source SSH connection so scripts can use BORG_UI_SOURCE_HOST etc.
+        source_connection = None
+        if repository.source_ssh_connection_id:
+            source_connection = self.db.query(SSHConnection).filter(
+                SSHConnection.id == repository.source_ssh_connection_id
+            ).first()
+
         # Build environment with backup context
         script_env = build_script_env(
             repository=repository,
             hook_type=script_type,
             backup_result=backup_result,
-            backup_job_id=backup_job_id
+            backup_job_id=backup_job_id,
+            source_connection=source_connection,
         )
 
         try:
