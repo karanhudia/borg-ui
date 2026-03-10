@@ -90,7 +90,7 @@ REPOSITORY_SENSOR_DEFINITIONS = [
         "suffix": "backup_eta",
         "topic_suffix": "backup/progress",
         "name": "Backup ETA",
-        "value_template": "{{ value_json.eta_timestamp }}",
+        "value_template": "{{ value_json.eta_timestamp | default(None, true) }}",
         "device_class": "timestamp",
         "icon": "mdi:timer-outline",
     },
@@ -604,6 +604,7 @@ class ServerStatePublisher:
             progress_payload = {
                 "status": "idle",
                 "timestamp": idle_timestamp,
+                "eta_timestamp": None,
             }
 
         if latest_terminal_job:
@@ -1311,10 +1312,8 @@ class MQTTService:
             "status": status,
             "percent": int_percent,
             "timestamp": timestamp,
+            "eta_timestamp": eta_timestamp,
         }
-        # Only include eta_timestamp when it's present (i.e., job is running)
-        if eta_timestamp is not None:
-            payload["eta_timestamp"] = eta_timestamp
 
         if repository:
             payload["repository"] = repository
