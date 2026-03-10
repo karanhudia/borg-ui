@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 
 from app.database.database import Base
-import app.database.models  # noqa: F401 — ensures all models register with Base.metadata
+from app.database.models import Repository, User  # noqa: F401 — ensures all models register with Base.metadata
 
 @pytest.fixture(scope="function")
 def db_engine():
