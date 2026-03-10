@@ -22,6 +22,7 @@ import os
 from app.database.models import Script, RepositoryScript, ScriptExecution, Repository, BackupJob
 from app.services.script_executor import execute_script
 from app.services.template_service import get_system_variables
+from app.utils.script_params import SYSTEM_VARIABLE_PREFIX
 from app.config import settings
 
 logger = structlog.get_logger()
@@ -296,7 +297,7 @@ class ScriptLibraryExecutor:
                         param_name = param_def['name']
 
                         # Skip system variables - they're already set above
-                        if param_name.startswith('BORG_UI_'):
+                        if param_name.startswith(SYSTEM_VARIABLE_PREFIX):
                             logger.debug("Skipping system variable (already set)", param_name=param_name)
                             continue
 
