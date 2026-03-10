@@ -53,19 +53,14 @@ export default function LogViewerDialog<T extends JobWithLogs>({
     if (!open || !jobId || currentStatus !== 'running') return
     const poll = async () => {
       try {
-        const res = await fetch(
-          `/api/activity/recent?job_type=${jobType}&limit=100`,
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
-            },
-          }
-        )
+        const res = await fetch(`/api/activity/recent?job_type=${jobType}&limit=100`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
+          },
+        })
         if (!res.ok) return
         const items: Array<{ id: number; type: string; status: string }> = await res.json()
-        const item = items.find(
-          (i) => String(i.id) === String(jobId) && i.type === jobType
-        )
+        const item = items.find((i) => String(i.id) === String(jobId) && i.type === jobType)
         if (item && item.status !== 'running') setCurrentStatus(item.status)
       } catch {
         // Ignore network errors — next poll will retry

@@ -360,9 +360,7 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
               : t('terminalLogViewer.noLogsAvailable')}
           </Typography>
         ) : (
-          logs.map((log) => (
-            <MemoizedLogLine key={`${jobId}-${log.line_number}`} log={log} />
-          ))
+          logs.map((log) => <MemoizedLogLine key={`${jobId}-${log.line_number}`} log={log} />)
         )}
 
         {/* Running indicator */}
