@@ -105,7 +105,7 @@ function colorizeJsonLine(content: string): React.ReactNode {
 // Memoised single-line renderer — prevents re-rendering already-visible lines
 // when new lines are appended to the log.
 // ---------------------------------------------------------------------------
-const MemoizedLogLine = React.memo(({ log, jobId }: { log: LogLine; jobId: string }) => (
+const MemoizedLogLine = React.memo(({ log }: { log: LogLine }) => (
   <Box sx={{ mb: 0.5 }}>
     <Typography
       component="span"
@@ -361,7 +361,7 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
           </Typography>
         ) : (
           logs.map((log) => (
-            <MemoizedLogLine key={`${jobId}-${log.line_number}`} log={log} jobId={jobId} />
+            <MemoizedLogLine key={`${jobId}-${log.line_number}`} log={log} />
           ))
         )}
 
