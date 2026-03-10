@@ -285,8 +285,6 @@ class ScriptLibraryExecutor:
             # Add script parameters as environment variables
             if script.parameters:
                 try:
-                    from app.utils.script_params import SYSTEM_VARIABLES
-
                     # Parse parameter definitions
                     parameters = json.loads(script.parameters)
 
@@ -298,7 +296,7 @@ class ScriptLibraryExecutor:
                         param_name = param_def['name']
 
                         # Skip system variables - they're already set above
-                        if param_name in SYSTEM_VARIABLES:
+                        if param_name.startswith('BORG_UI_'):
                             logger.debug("Skipping system variable (already set)", param_name=param_name)
                             continue
 
