@@ -1566,6 +1566,9 @@ class BackupService:
             # In-memory circular log buffer (for UI streaming)
             log_buffer = []
             MAX_BUFFER_SIZE = 1000  # Keep last 1000 lines (~100KB RAM)
+            # Snapshot the count of pre-backup hook lines collected so far.
+            # Used later to distinguish pre-hook lines from post-hook lines.
+            pre_hook_count = len(hook_logs)
 
             # Store buffer reference for external access (Activity page)
             self.log_buffers[job_id] = log_buffer
@@ -1580,6 +1583,14 @@ class BackupService:
             except Exception as e:
                 logger.warning("Failed to create log file, logs will only be in memory", job_id=job_id, error=str(e))
                 temp_log_file = None
+
+            # Prepend pre-backup hook output so it appears at the top of the running
+            # log view (the buffer is what get_job_logs reads for in-progress jobs).
+            if hook_logs:
+                log_buffer.extend(hook_logs)
+                if log_file_handle:
+                    for line in hook_logs:
+                        log_file_handle.write(line + '\n')
 
             # Smart current_file tracking: Only show files taking >3 seconds
             file_start_times = {}  # Track when each file started processing
@@ -2080,9 +2091,13 @@ class BackupService:
                 # Save logs for all jobs
                 should_save_logs = True
             elif log_save_policy == "failed_and_warnings":
-                # Save if job failed/cancelled OR has warnings
-                combined_logs = hook_logs + log_buffer if hook_logs else log_buffer
-                has_warnings = any('WARNING' in line or 'ERROR' in line for line in combined_logs)
+                # Save if job failed/cancelled OR has warnings.
+                # log_buffer already contains pre-hook lines; check it plus post-hook lines.
+                post_hook_logs = hook_logs[pre_hook_count:]
+                has_warnings = any(
+                    'WARNING' in line or 'ERROR' in line
+                    for line in list(log_buffer) + list(post_hook_logs)
+                )
                 should_save_logs = (
                     job.status in ['failed', 'cancelled'] or
                     actual_returncode not in [0, None] or
@@ -2105,11 +2120,14 @@ class BackupService:
             # Handle log file based on policy
             if should_save_logs:
                 try:
-                    # Append hook logs to the full log file if we have them
-                    if hook_logs and temp_log_file and temp_log_file.exists():
+                    # Append post-backup hook logs to the log file.
+                    # Pre-backup hook lines were already written at buffer-creation time;
+                    # only append the lines added after borg ran to avoid duplication.
+                    post_hook_logs = hook_logs[pre_hook_count:]
+                    if post_hook_logs and temp_log_file and temp_log_file.exists():
                         with open(temp_log_file, 'a') as f:
-                            f.write('\n=== Hook Logs ===\n')
-                            f.write('\n'.join(hook_logs))
+                            f.write('\n=== Post-backup Hook Logs ===\n')
+                            f.write('\n'.join(post_hook_logs))
                             f.write('\n')
 
                     # Use the temp log file as the permanent log file (contains ALL logs)
@@ -2132,9 +2150,11 @@ class BackupService:
                                     log_file=str(temp_log_file),
                                     log_lines=line_count)
                     else:
-                        # Fallback: save buffer if no temp file
+                        # Fallback: save buffer if no temp file.
+                        # log_buffer already contains pre-hook lines; only append post-hook.
                         fallback_log_file = self.log_dir / f"backup_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-                        combined_logs = hook_logs + log_buffer if hook_logs else log_buffer
+                        post_hook_logs = hook_logs[pre_hook_count:]
+                        combined_logs = list(log_buffer) + list(post_hook_logs)
                         fallback_log_file.write_text('\n'.join(combined_logs))
                         job.log_file_path = str(fallback_log_file)
                         job.has_logs = True
@@ -2153,10 +2173,16 @@ class BackupService:
                     except Exception as e:
                         logger.warning("Failed to delete temp log file", job_id=job_id, error=str(e))
 
-                # Save hook logs in database for reference if we have them
-                if hook_logs:
-                    job.logs = "\n".join(hook_logs)
-                    logger.info("Backup completed, only hook logs saved", job_id=job_id, policy=log_save_policy)
+                # Save full transcript to job.logs so the completed-job view always
+                # shows pre-hook + borg output + post-hook regardless of save policy.
+                # log_buffer already contains pre-hook lines (prepended at creation);
+                # append only post-hook lines to avoid duplication.
+                post_hook_logs = hook_logs[pre_hook_count:]
+                combined = list(log_buffer) + list(post_hook_logs)
+                if combined:
+                    job.logs = "\n".join(combined)
+                    logger.info("Backup completed, full transcript stored in DB (no file per policy)",
+                                job_id=job_id, policy=log_save_policy, lines=len(combined))
                 else:
                     job.logs = None
                     logger.info("Backup completed, no logs saved per policy", job_id=job_id, policy=log_save_policy)
