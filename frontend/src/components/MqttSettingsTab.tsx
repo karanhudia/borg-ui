@@ -147,17 +147,12 @@ const MqttSettingsTab: React.FC = () => {
       } else if (data?.detail) {
         errorMsg = translateBackendKey(data.detail)
       }
-      throw new Error(errorMsg)
+      toast.error(errorMsg)
     },
   })
 
-  const handleSaveSettings = async () => {
-    try {
-      await saveMqttSettingsMutation.mutateAsync()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      toast.error(error.message || t('mqtt.failedToSaveMqttSettings'))
-    }
+  const handleSaveSettings = () => {
+    saveMqttSettingsMutation.mutate()
   }
 
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
