@@ -9,6 +9,7 @@ Handles execution of scripts from the script library, including:
 - Rendering script templates with parameters
 - Passing backup context via environment variables
 """
+
 from typing import List, Dict, Optional, Literal
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime
@@ -19,10 +20,19 @@ import structlog
 import json
 import os
 
-from app.database.models import Script, RepositoryScript, ScriptExecution, Repository, BackupJob, SSHConnection
+from app.database.models import (
+    Script,
+    RepositoryScript,
+    ScriptExecution,
+    Repository,
+    BackupJob,
+    SSHConnection,
+)
 
 
-def _resolve_source_connection(db: Session, repository: Repository, backup_job_id: Optional[int]) -> Optional[SSHConnection]:
+def _resolve_source_connection(
+    db: Session, repository: Repository, backup_job_id: Optional[int]
+) -> Optional[SSHConnection]:
     """
     Resolve the SSH connection for the host being backed up.
 
@@ -44,8 +54,11 @@ def _resolve_source_connection(db: Session, repository: Repository, backup_job_i
         return None
 
     return db.query(SSHConnection).filter(SSHConnection.id == conn_id).first()
+
+
 from app.services.script_executor import execute_script
 from app.services.template_service import get_system_variables
+from app.utils.script_params import SYSTEM_VARIABLE_PREFIX
 from app.config import settings
 
 logger = structlog.get_logger()
@@ -88,25 +101,26 @@ def build_script_env(
     env = os.environ.copy()
 
     if hook_type:
-        env['BORG_UI_HOOK_TYPE'] = hook_type
+        env["BORG_UI_HOOK_TYPE"] = hook_type
 
     if backup_result:
-        env['BORG_UI_BACKUP_STATUS'] = backup_result
+        env["BORG_UI_BACKUP_STATUS"] = backup_result
 
     if repository:
-        env['BORG_UI_REPOSITORY_ID'] = str(repository.id)
-        env['BORG_UI_REPOSITORY_NAME'] = repository.name or ''
-        env['BORG_UI_REPOSITORY_PATH'] = repository.path or ''
+        env["BORG_UI_REPOSITORY_ID"] = str(repository.id)
+        env["BORG_UI_REPOSITORY_NAME"] = repository.name or ""
+        env["BORG_UI_REPOSITORY_PATH"] = repository.path or ""
 
     if backup_job_id:
-        env['BORG_UI_JOB_ID'] = str(backup_job_id)
+        env["BORG_UI_JOB_ID"] = str(backup_job_id)
 
     if source_connection:
-        env['BORG_UI_REMOTE_HOST'] = source_connection.host or ''
-        env['BORG_UI_REMOTE_PORT'] = str(source_connection.port or 22)
-        env['BORG_UI_REMOTE_USERNAME'] = source_connection.username or ''
+        env["BORG_UI_REMOTE_HOST"] = source_connection.host or ""
+        env["BORG_UI_REMOTE_PORT"] = str(source_connection.port or 22)
+        env["BORG_UI_REMOTE_USERNAME"] = source_connection.username or ""
 
     return env
+
 
 class ScriptLibraryExecutor:
     """Manages script library execution for backup hooks"""
@@ -119,7 +133,7 @@ class ScriptLibraryExecutor:
         repository_id: int,
         hook_type: HookType,
         backup_result: Optional[BackupResult] = None,
-        backup_job_id: Optional[int] = None
+        backup_job_id: Optional[int] = None,
     ) -> Dict:
         """
         Execute all scripts for a repository hook
@@ -140,33 +154,43 @@ class ScriptLibraryExecutor:
                 'executions': List[Dict]  # Execution records
             }
         """
-        logger.info("Executing script library hooks",
-                   repository_id=repository_id,
-                   hook_type=hook_type,
-                   backup_result=backup_result)
+        logger.info(
+            "Executing script library hooks",
+            repository_id=repository_id,
+            hook_type=hook_type,
+            backup_result=backup_result,
+        )
 
         # Get repository for environment variables
-        repository = self.db.query(Repository).filter(Repository.id == repository_id).first()
+        repository = (
+            self.db.query(Repository).filter(Repository.id == repository_id).first()
+        )
 
         # Load scripts for this repository and hook type
-        repo_scripts = self.db.query(RepositoryScript).filter(
-            RepositoryScript.repository_id == repository_id,
-            RepositoryScript.hook_type == hook_type,
-            RepositoryScript.enabled == True
-        ).options(
-            joinedload(RepositoryScript.script)
-        ).order_by(RepositoryScript.execution_order).all()
+        repo_scripts = (
+            self.db.query(RepositoryScript)
+            .filter(
+                RepositoryScript.repository_id == repository_id,
+                RepositoryScript.hook_type == hook_type,
+                RepositoryScript.enabled == True,
+            )
+            .options(joinedload(RepositoryScript.script))
+            .order_by(RepositoryScript.execution_order)
+            .all()
+        )
 
         if not repo_scripts:
-            logger.debug("No scripts configured for hook",
-                        repository_id=repository_id,
-                        hook_type=hook_type)
+            logger.debug(
+                "No scripts configured for hook",
+                repository_id=repository_id,
+                hook_type=hook_type,
+            )
             return {
-                'success': True,
-                'scripts_executed': 0,
-                'scripts_failed': 0,
-                'execution_logs': [],
-                'executions': []
+                "success": True,
+                "scripts_executed": 0,
+                "scripts_failed": 0,
+                "execution_logs": [],
+                "executions": [],
             }
 
         # Filter scripts based on run_on condition (post-backup only)
@@ -180,19 +204,23 @@ class ScriptLibraryExecutor:
                 if should_run:
                     scripts_to_run.append(rs)
                 else:
-                    logger.debug("Skipping script due to run_on condition",
-                               script_id=rs.script_id,
-                               script_name=rs.script.name,
-                               run_on=run_on,
-                               backup_result=backup_result)
+                    logger.debug(
+                        "Skipping script due to run_on condition",
+                        script_id=rs.script_id,
+                        script_name=rs.script.name,
+                        run_on=run_on,
+                        backup_result=backup_result,
+                    )
         else:
             # Pre-backup: run all enabled scripts
             scripts_to_run = repo_scripts
 
-        logger.info("Scripts to execute",
-                   total_configured=len(repo_scripts),
-                   will_execute=len(scripts_to_run),
-                   hook_type=hook_type)
+        logger.info(
+            "Scripts to execute",
+            total_configured=len(repo_scripts),
+            will_execute=len(scripts_to_run),
+            hook_type=hook_type,
+        )
 
         # Execute scripts in order
         execution_logs = []
@@ -201,10 +229,12 @@ class ScriptLibraryExecutor:
 
         for rs in scripts_to_run:
             script = rs.script
-            logger.info("Executing script",
-                       script_id=script.id,
-                       script_name=script.name,
-                       execution_order=rs.execution_order)
+            logger.info(
+                "Executing script",
+                script_id=script.id,
+                script_name=script.name,
+                execution_order=rs.execution_order,
+            )
 
             # Execute script and record results
             result = await self._execute_script_and_record(
@@ -212,63 +242,79 @@ class ScriptLibraryExecutor:
                 repository=repository,
                 backup_job_id=backup_job_id,
                 hook_type=hook_type,
-                backup_result=backup_result
+                backup_result=backup_result,
             )
 
             executions.append(result)
-            execution_logs.extend(result['logs'])
+            execution_logs.extend(result["logs"])
 
-            if not result['success']:
-                skip_on_failure = rs.skip_on_failure if rs.skip_on_failure is not None else False
-                continue_on_error = rs.continue_on_error if rs.continue_on_error is not None else True
+            if not result["success"]:
+                skip_on_failure = (
+                    rs.skip_on_failure if rs.skip_on_failure is not None else False
+                )
+                continue_on_error = (
+                    rs.continue_on_error if rs.continue_on_error is not None else True
+                )
 
                 if skip_on_failure:
                     # Script intentionally signalled skip — propagate immediately, stop further scripts
-                    logger.info("Script signalled graceful skip",
-                                script_id=script.id,
-                                script_name=script.name,
-                                exit_code=result['exit_code'])
-                    execution_logs.append(f"INFO: Script '{script.name}' signalled graceful skip (exit {result['exit_code']}) — backup will be skipped.")
+                    logger.info(
+                        "Script signalled graceful skip",
+                        script_id=script.id,
+                        script_name=script.name,
+                        exit_code=result["exit_code"],
+                    )
+                    execution_logs.append(
+                        f"INFO: Script '{script.name}' signalled graceful skip (exit {result['exit_code']}) — backup will be skipped."
+                    )
                     return {
-                        'success': False,
-                        'should_skip': True,
-                        'skip_script_name': script.name,
-                        'scripts_executed': len(executions) + 1,
-                        'scripts_failed': 0,
-                        'execution_logs': execution_logs,
-                        'executions': executions,
-                        'using_library': True,
+                        "success": False,
+                        "should_skip": True,
+                        "skip_script_name": script.name,
+                        "scripts_executed": len(executions) + 1,
+                        "scripts_failed": 0,
+                        "execution_logs": execution_logs,
+                        "executions": executions,
+                        "using_library": True,
                     }
                 elif not continue_on_error:
                     scripts_failed += 1
-                    logger.warning("Script execution failed",
-                                 script_id=script.id,
-                                 script_name=script.name,
-                                 exit_code=result['exit_code'])
+                    logger.warning(
+                        "Script execution failed",
+                        script_id=script.id,
+                        script_name=script.name,
+                        exit_code=result["exit_code"],
+                    )
                 else:
-                    logger.warning("Script execution failed but continuing (continue_on_error=True)",
-                                 script_id=script.id,
-                                 script_name=script.name,
-                                 exit_code=result['exit_code'])
-                    execution_logs.append(f"WARNING: Script '{script.name}' failed but 'Continue on Failure' is enabled. Backup will proceed.")
+                    logger.warning(
+                        "Script execution failed but continuing (continue_on_error=True)",
+                        script_id=script.id,
+                        script_name=script.name,
+                        exit_code=result["exit_code"],
+                    )
+                    execution_logs.append(
+                        f"WARNING: Script '{script.name}' failed but 'Continue on Failure' is enabled. Backup will proceed."
+                    )
 
         overall_success = scripts_failed == 0
 
-        logger.info("Hook execution completed",
-                   repository_id=repository_id,
-                   hook_type=hook_type,
-                   scripts_executed=len(scripts_to_run),
-                   scripts_failed=scripts_failed,
-                   overall_success=overall_success)
+        logger.info(
+            "Hook execution completed",
+            repository_id=repository_id,
+            hook_type=hook_type,
+            scripts_executed=len(scripts_to_run),
+            scripts_failed=scripts_failed,
+            overall_success=overall_success,
+        )
 
         return {
-            'success': overall_success,
-            'should_skip': False,
-            'scripts_executed': len(scripts_to_run),
-            'scripts_failed': scripts_failed,
-            'execution_logs': execution_logs,
-            'executions': executions,
-            'using_library': True,
+            "success": overall_success,
+            "should_skip": False,
+            "scripts_executed": len(scripts_to_run),
+            "scripts_failed": scripts_failed,
+            "execution_logs": execution_logs,
+            "executions": executions,
+            "using_library": True,
         }
 
     def _should_run_script(self, run_on: str, backup_result: BackupResult) -> bool:
@@ -289,7 +335,7 @@ class ScriptLibraryExecutor:
         repository: Repository,
         backup_job_id: Optional[int],
         hook_type: HookType,
-        backup_result: Optional[BackupResult] = None
+        backup_result: Optional[BackupResult] = None,
     ) -> Dict:
         """Execute a single script and record execution in database"""
         script = repo_script.script
@@ -303,7 +349,7 @@ class ScriptLibraryExecutor:
             hook_type=hook_type,
             status="running",
             started_at=datetime.utcnow(),
-            triggered_by="backup"
+            triggered_by="backup",
         )
         self.db.add(execution)
         self.db.commit()
@@ -321,7 +367,9 @@ class ScriptLibraryExecutor:
             script_env = os.environ.copy()
 
             # Resolve source SSH connection so scripts can use BORG_UI_REMOTE_HOST etc.
-            source_connection = _resolve_source_connection(self.db, repository, backup_job_id)
+            source_connection = _resolve_source_connection(
+                self.db, repository, backup_job_id
+            )
 
             # Add system variables
             system_vars = get_system_variables(
@@ -333,76 +381,106 @@ class ScriptLibraryExecutor:
                 job_id=backup_job_id,
                 source_host=source_connection.host if source_connection else None,
                 source_port=source_connection.port if source_connection else None,
-                source_username=source_connection.username if source_connection else None,
+                source_username=source_connection.username
+                if source_connection
+                else None,
             )
-            logger.info("Setting system variables in script environment",
-                       script_id=script.id,
-                       system_vars=system_vars)
+            logger.info(
+                "Setting system variables in script environment",
+                script_id=script.id,
+                system_vars=system_vars,
+            )
             script_env.update(system_vars)
-            
+
             # Add script parameters as environment variables
             if script.parameters:
                 try:
-                    from app.utils.script_params import SYSTEM_VARIABLE_PREFIX
-
                     # Parse parameter definitions
                     parameters = json.loads(script.parameters)
 
                     # Get parameter values (may be encrypted)
-                    parameter_values = json.loads(repo_script.parameter_values) if repo_script.parameter_values else {}
+                    parameter_values = (
+                        json.loads(repo_script.parameter_values)
+                        if repo_script.parameter_values
+                        else {}
+                    )
 
                     # Decrypt password-type parameters and add to environment
                     for param_def in parameters:
-                        param_name = param_def['name']
+                        param_name = param_def["name"]
 
                         # Skip system variables - they're already set above
                         if param_name.startswith(SYSTEM_VARIABLE_PREFIX):
-                            logger.debug("Skipping system variable (already set)", param_name=param_name)
+                            logger.debug(
+                                "Skipping system variable (already set)",
+                                param_name=param_name,
+                            )
                             continue
 
-                        param_type = param_def.get('type', 'text')
-                        default_value = param_def.get('default', '')
+                        param_type = param_def.get("type", "text")
+                        default_value = param_def.get("default", "")
 
                         # Get value from parameter_values or use default
-                        value = parameter_values.get(param_name, default_value) if parameter_values else default_value
+                        value = (
+                            parameter_values.get(param_name, default_value)
+                            if parameter_values
+                            else default_value
+                        )
 
                         # Decrypt password-type parameters
-                        if param_type == 'password' and value:
+                        if param_type == "password" and value:
                             try:
                                 from app.core.security import decrypt_secret
+
                                 value = decrypt_secret(value)
-                                logger.debug("Decrypted password parameter for env", param_name=param_name)
+                                logger.debug(
+                                    "Decrypted password parameter for env",
+                                    param_name=param_name,
+                                )
                             except Exception as e:
-                                logger.error("Failed to decrypt password parameter",
-                                           param_name=param_name, error=str(e))
+                                logger.error(
+                                    "Failed to decrypt password parameter",
+                                    param_name=param_name,
+                                    error=str(e),
+                                )
                                 raise
 
                         # Add to environment (bash will handle ${VAR:-default} syntax)
-                        script_env[param_name] = value or ''
-                    
-                    logger.info("Prepared script environment with parameters",
-                               script_id=script.id,
-                               param_count=len(parameters),
-                               password_params=[p['name'] for p in parameters if p.get('type') == 'password'])
+                        script_env[param_name] = value or ""
+
+                    logger.info(
+                        "Prepared script environment with parameters",
+                        script_id=script.id,
+                        param_count=len(parameters),
+                        password_params=[
+                            p["name"] for p in parameters if p.get("type") == "password"
+                        ],
+                    )
                 except Exception as e:
-                    logger.error("Failed to prepare script parameters", script_id=script.id, error=str(e))
+                    logger.error(
+                        "Failed to prepare script parameters",
+                        script_id=script.id,
+                        error=str(e),
+                    )
                     raise
 
             # Get timeout (custom or default)
             timeout = repo_script.custom_timeout or script.timeout
 
             # Execute script with parameters in environment
-            logger.info("Executing script file",
-                       script_id=script.id,
-                       file_path=str(file_path),
-                       timeout=timeout,
-                       backup_status=backup_result)
+            logger.info(
+                "Executing script file",
+                script_id=script.id,
+                file_path=str(file_path),
+                timeout=timeout,
+                backup_status=backup_result,
+            )
 
             exec_result = await execute_script(
                 script=script_content,
                 timeout=float(timeout),
                 env=script_env,  # Pass environment with parameters
-                context=f"repo:{repository.id}:script:{script.id}"
+                context=f"repo:{repository.id}:script:{script.id}",
             )
 
             execution_time = time.time() - start_time
@@ -416,7 +494,9 @@ class ScriptLibraryExecutor:
             execution.stderr = exec_result["stderr"]
 
             if not exec_result["success"]:
-                execution.error_message = f"Script exited with code {exec_result['exit_code']}"
+                execution.error_message = (
+                    f"Script exited with code {exec_result['exit_code']}"
+                )
 
             self.db.commit()
 
@@ -428,15 +508,15 @@ class ScriptLibraryExecutor:
             logs = self._format_execution_logs(script, exec_result, execution_time)
 
             return {
-                'success': exec_result["success"],
-                'script_id': script.id,
-                'script_name': script.name,
-                'exit_code': exec_result["exit_code"],
-                'execution_time': execution_time,
-                'stdout': exec_result["stdout"],
-                'stderr': exec_result["stderr"],
-                'logs': logs,
-                'execution_id': execution.id
+                "success": exec_result["success"],
+                "script_id": script.id,
+                "script_name": script.name,
+                "exit_code": exec_result["exit_code"],
+                "execution_time": execution_time,
+                "stdout": exec_result["stdout"],
+                "stderr": exec_result["stderr"],
+                "logs": logs,
+                "execution_id": execution.id,
             }
 
         except Exception as e:
@@ -447,9 +527,9 @@ class ScriptLibraryExecutor:
             execution.error_message = str(e)
             self.db.commit()
 
-            logger.error("Script execution exception",
-                        script_id=script.id,
-                        error=str(e))
+            logger.error(
+                "Script execution exception", script_id=script.id, error=str(e)
+            )
 
             logs = [
                 "=" * 80,
@@ -458,22 +538,24 @@ class ScriptLibraryExecutor:
                 f"STATUS: FAILED (Exception)",
                 f"ERROR: {str(e)}",
                 "=" * 80,
-                ""
+                "",
             ]
 
             return {
-                'success': False,
-                'script_id': script.id,
-                'script_name': script.name,
-                'exit_code': None,
-                'execution_time': time.time() - start_time,
-                'stdout': "",
-                'stderr': str(e),
-                'logs': logs,
-                'execution_id': execution.id
+                "success": False,
+                "script_id": script.id,
+                "script_name": script.name,
+                "exit_code": None,
+                "execution_time": time.time() - start_time,
+                "stdout": "",
+                "stderr": str(e),
+                "logs": logs,
+                "execution_id": execution.id,
             }
 
-    def _format_execution_logs(self, script: Script, exec_result: Dict, execution_time: float) -> List[str]:
+    def _format_execution_logs(
+        self, script: Script, exec_result: Dict, execution_time: float
+    ) -> List[str]:
         """Format execution logs for display"""
         status = "SUCCESS" if exec_result["success"] else "FAILED"
 
@@ -486,12 +568,12 @@ class ScriptLibraryExecutor:
             f"Execution Time: {execution_time:.2f}s",
             "",
             "STDOUT:",
-            exec_result['stdout'] if exec_result['stdout'] else "(empty)",
+            exec_result["stdout"] if exec_result["stdout"] else "(empty)",
             "",
             "STDERR:",
-            exec_result['stderr'] if exec_result['stderr'] else "(empty)",
+            exec_result["stderr"] if exec_result["stderr"] else "(empty)",
             "=" * 80,
-            ""
+            "",
         ]
 
         return logs
@@ -503,7 +585,7 @@ class ScriptLibraryExecutor:
         timeout: int,
         repository: Repository,
         backup_job_id: Optional[int] = None,
-        backup_result: Optional[BackupResult] = None
+        backup_result: Optional[BackupResult] = None,
     ) -> Dict:
         """
         Execute an inline script (backward compatibility)
@@ -511,15 +593,19 @@ class ScriptLibraryExecutor:
         This is for repositories still using the old pre_backup_script/post_backup_script fields.
         Environment variables are passed to provide backup context.
         """
-        logger.info("Executing inline script (legacy)",
-                   repository_id=repository.id,
-                   script_type=script_type,
-                   backup_status=backup_result)
+        logger.info(
+            "Executing inline script (legacy)",
+            repository_id=repository.id,
+            script_type=script_type,
+            backup_status=backup_result,
+        )
 
         start_time = time.time()
 
         # Resolve source SSH connection so scripts can use BORG_UI_REMOTE_HOST etc.
-        source_connection = _resolve_source_connection(self.db, repository, backup_job_id)
+        source_connection = _resolve_source_connection(
+            self.db, repository, backup_job_id
+        )
 
         # Build environment with backup context
         script_env = build_script_env(
@@ -535,7 +621,7 @@ class ScriptLibraryExecutor:
                 script=script_content,
                 timeout=float(timeout),
                 env=script_env,
-                context=f"repo:{repository.id}:inline:{script_type}"
+                context=f"repo:{repository.id}:inline:{script_type}",
             )
 
             execution_time = time.time() - start_time
@@ -549,27 +635,29 @@ class ScriptLibraryExecutor:
                 f"Execution Time: {execution_time:.2f}s",
                 "",
                 "STDOUT:",
-                exec_result['stdout'] if exec_result['stdout'] else "(empty)",
+                exec_result["stdout"] if exec_result["stdout"] else "(empty)",
                 "",
                 "STDERR:",
-                exec_result['stderr'] if exec_result['stderr'] else "(empty)",
+                exec_result["stderr"] if exec_result["stderr"] else "(empty)",
                 "=" * 80,
-                ""
+                "",
             ]
 
             return {
-                'success': exec_result["success"],
-                'exit_code': exec_result["exit_code"],
-                'execution_time': execution_time,
-                'stdout': exec_result["stdout"],
-                'stderr': exec_result["stderr"],
-                'logs': logs
+                "success": exec_result["success"],
+                "exit_code": exec_result["exit_code"],
+                "execution_time": execution_time,
+                "stdout": exec_result["stdout"],
+                "stderr": exec_result["stderr"],
+                "logs": logs,
             }
 
         except Exception as e:
-            logger.error("Inline script execution exception",
-                        repository_id=repository_id,
-                        error=str(e))
+            logger.error(
+                "Inline script execution exception",
+                repository_id=repository_id,
+                error=str(e),
+            )
 
             logs = [
                 "=" * 80,
@@ -578,14 +666,14 @@ class ScriptLibraryExecutor:
                 f"STATUS: FAILED (Exception)",
                 f"ERROR: {str(e)}",
                 "=" * 80,
-                ""
+                "",
             ]
 
             return {
-                'success': False,
-                'exit_code': None,
-                'execution_time': time.time() - start_time,
-                'stdout': "",
-                'stderr': str(e),
-                'logs': logs
+                "success": False,
+                "exit_code": None,
+                "execution_time": time.time() - start_time,
+                "stdout": "",
+                "stderr": str(e),
+                "logs": logs,
             }

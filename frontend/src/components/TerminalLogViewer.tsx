@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, memo } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Box, Button, Typography, Paper, Chip } from '@mui/material'
 import { ContentCopy, Download } from '@mui/icons-material'
 import { PlayCircle } from 'lucide-react'
@@ -22,70 +22,112 @@ interface TerminalLogViewerProps {
   }>
 }
 
-// VS Code-style JSON syntax token colors
-const JSON_COLORS = {
-  key: '#9cdcfe',     // light blue  — property names
-  string: '#ce9178',  // orange-red  — string values
-  number: '#b5cea8',  // light green — numbers
-  keyword: '#569cd6', // blue        — true / false / null
-  punct: '#d4d4d4',   // grey-white  — { } [ ] : ,
-}
+// ---------------------------------------------------------------------------
+// JSON syntax highlighting (VS Code Dark+ colour scheme)
+// Applied only to lines that start with { or [ and are valid JSON.
+// Non-JSON lines (plain borg output, hook script output) are returned as-is.
+// ---------------------------------------------------------------------------
 
-// Colorize a JSON string by tokenizing it with a single-pass regex.
-// Falls back to plain text if content is not valid JSON.
-function colorizeJsonLine(text: string): React.ReactNode {
-  const trimmed = text.trim()
-  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return text
+// Group 1: object key  (quoted string immediately before ":")
+// Group 2: string value
+// Group 3: number (integer or float, optional exponent)
+// Group 4: keyword (true / false / null)
+// Group 5: punctuation
+const JSON_TOKEN_REGEX =
+  /("(?:[^"\\]|\\.)*")\s*(?=:)|("(?:[^"\\]|\\.)*")|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|\b(true|false|null)\b|([{}[\],:])/g
+
+function colorizeJsonLine(content: string): React.ReactNode {
+  const trimmed = content.trim()
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return content
   try {
     JSON.parse(trimmed)
   } catch {
-    return text // not valid JSON — render as-is
+    return content
   }
-
-  // Tokenize: key strings (followed by :), value strings, numbers, keywords, punctuation
-  const TOKEN_RE =
-    /("(?:[^"\\]|\\.)*")(?=\s*:)|("(?:[^"\\]|\\.)*")|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|(true|false|null)|([{}[\],:])/g
 
   const parts: React.ReactNode[] = []
-  let last = 0
-  let m: RegExpExecArray | null
+  let lastIndex = 0
+  JSON_TOKEN_REGEX.lastIndex = 0
 
-  while ((m = TOKEN_RE.exec(text)) !== null) {
-    if (m.index > last) parts.push(text.slice(last, m.index))
-    if (m[1])      parts.push(<span key={m.index} style={{ color: JSON_COLORS.key }}>{m[1]}</span>)
-    else if (m[2]) parts.push(<span key={m.index} style={{ color: JSON_COLORS.string }}>{m[2]}</span>)
-    else if (m[3]) parts.push(<span key={m.index} style={{ color: JSON_COLORS.number }}>{m[3]}</span>)
-    else if (m[4]) parts.push(<span key={m.index} style={{ color: JSON_COLORS.keyword }}>{m[4]}</span>)
-    else if (m[5]) parts.push(<span key={m.index} style={{ color: JSON_COLORS.punct }}>{m[5]}</span>)
-    last = m.index + m[0].length
+  let match: RegExpExecArray | null
+  while ((match = JSON_TOKEN_REGEX.exec(content)) !== null) {
+    // Emit any unmatched text before this token
+    if (match.index > lastIndex) {
+      parts.push(content.slice(lastIndex, match.index))
+    }
+
+    const [fullMatch, key, stringVal, num, keyword, punct] = match
+
+    if (key) {
+      // Colourize only the quoted key; emit trailing whitespace (before the
+      // lookahead colon) without colour so spacing is preserved exactly.
+      parts.push(
+        <span key={match.index} style={{ color: '#9cdcfe' }}>
+          {key}
+        </span>
+      )
+      const trailingSpace = fullMatch.slice(key.length)
+      if (trailingSpace) parts.push(trailingSpace)
+    } else if (stringVal) {
+      parts.push(
+        <span key={match.index} style={{ color: '#ce9178' }}>
+          {stringVal}
+        </span>
+      )
+    } else if (num) {
+      parts.push(
+        <span key={match.index} style={{ color: '#b5cea8' }}>
+          {num}
+        </span>
+      )
+    } else if (keyword) {
+      parts.push(
+        <span key={match.index} style={{ color: '#569cd6' }}>
+          {keyword}
+        </span>
+      )
+    } else if (punct) {
+      // Punctuation uses the terminal's default text colour — no span needed.
+      parts.push(punct)
+    }
+
+    lastIndex = match.index + fullMatch.length
   }
-  if (last < text.length) parts.push(text.slice(last))
+
+  if (lastIndex < content.length) {
+    parts.push(content.slice(lastIndex))
+  }
+
   return <>{parts}</>
 }
 
-// Memoized log line to avoid re-rendering all lines on every new append
-const LogLine = memo(function LogLine({
-  lineNumber,
-  content,
-}: {
-  lineNumber: number
-  content: string
-}) {
-  return (
-    <Box sx={{ mb: 0.5 }}>
-      <Typography
-        component="span"
-        sx={{ color: '#858585', fontSize: '0.8rem', mr: 2, userSelect: 'none' }}
-      >
-        {lineNumber}
-      </Typography>
-      <Typography component="span" sx={{ color: '#d4d4d4' }}>
-        {colorizeJsonLine(content)}
-      </Typography>
-    </Box>
-  )
-})
+// ---------------------------------------------------------------------------
+// Memoised single-line renderer — prevents re-rendering already-visible lines
+// when new lines are appended to the log.
+// ---------------------------------------------------------------------------
+const MemoizedLogLine = React.memo(({ log }: { log: LogLine }) => (
+  <Box sx={{ mb: 0.5 }}>
+    <Typography
+      component="span"
+      sx={{
+        color: '#858585',
+        fontSize: '0.8rem',
+        mr: 2,
+        userSelect: 'none',
+      }}
+    >
+      {log.line_number}
+    </Typography>
+    <Typography component="span" sx={{ color: '#d4d4d4' }}>
+      {colorizeJsonLine(log.content)}
+    </Typography>
+  </Box>
+))
+MemoizedLogLine.displayName = 'MemoizedLogLine'
 
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
 export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
   jobId,
   status,
@@ -312,13 +354,7 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
               : t('terminalLogViewer.noLogsAvailable')}
           </Typography>
         ) : (
-          logs.map((log) => (
-            <LogLine
-              key={`${jobId}-${log.line_number}`}
-              lineNumber={log.line_number}
-              content={log.content}
-            />
-          ))
+          logs.map((log) => <MemoizedLogLine key={`${jobId}-${log.line_number}`} log={log} />)
         )}
 
         {/* Running indicator */}

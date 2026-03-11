@@ -13,31 +13,31 @@ logger = structlog.get_logger()
 
 # Parameter naming patterns that indicate password/secret type
 PASSWORD_SUFFIXES = [
-    '_PASSWORD',
-    '_TOKEN',
-    '_SECRET',
-    '_KEY',
-    '_API_KEY',
-    '_PASSPHRASE',
-    '_APIKEY',
-    '_AUTH',
-    '_CREDENTIAL',
-    '_CREDENTIALS'
+    "_PASSWORD",
+    "_TOKEN",
+    "_SECRET",
+    "_KEY",
+    "_API_KEY",
+    "_PASSPHRASE",
+    "_APIKEY",
+    "_AUTH",
+    "_CREDENTIAL",
+    "_CREDENTIALS",
 ]
 
-# System-provided variables that should NOT be treated as user parameters.
-# All variables with the BORG_UI_ prefix are automatically injected at runtime
-# and must never appear as required user inputs in the parameter UI.
-SYSTEM_VARIABLE_PREFIX = 'BORG_UI_'
+# Prefix for all runtime-injected variables that should NOT be treated as user
+# parameters. Any variable starting with this prefix is owned by the runtime and
+# is automatically excluded from required user input handling.
+SYSTEM_VARIABLE_PREFIX = "BORG_UI_"
 
 
 def parse_script_parameters(script_content: str) -> List[Dict[str, Any]]:
     """
     Parse script content for parameter placeholders in ${PARAM} or ${PARAM:-default} syntax.
-    
+
     Args:
         script_content: The script content to parse
-        
+
     Returns:
         List of parameter definitions with schema:
         [
@@ -52,87 +52,88 @@ def parse_script_parameters(script_content: str) -> List[Dict[str, Any]]:
     """
     if not script_content:
         return []
-    
+
     # Find all ${PARAM} and ${PARAM:-default} patterns
     # Pattern matches: ${WORD} or ${WORD:-anything}
-    pattern = r'\$\{([A-Z_][A-Z0-9_]*)(?::-([^}]*))?\}'
+    pattern = r"\$\{([A-Z_][A-Z0-9_]*)(?::-([^}]*))?\}"
     matches = re.findall(pattern, script_content)
-    
+
     logger.debug(
         "Searching for parameters in script",
         content_length=len(script_content),
         pattern=pattern,
-        raw_matches=matches
+        raw_matches=matches,
     )
-    
+
     # Use dict to deduplicate and merge defaults
     params_dict = {}
-    
+
     for param_name, default_value in matches:
         # Validate parameter name (UPPER_SNAKE_CASE)
-        if not re.match(r'^[A-Z_][A-Z0-9_]*$', param_name):
+        if not re.match(r"^[A-Z_][A-Z0-9_]*$", param_name):
             logger.warning(
                 "Invalid parameter name - should be UPPER_SNAKE_CASE",
-                param_name=param_name
+                param_name=param_name,
             )
             continue
 
-        # Skip system-provided variables (all BORG_UI_ vars are auto-injected at runtime)
+        # Skip system-provided variables (automatically injected at runtime)
         if param_name.startswith(SYSTEM_VARIABLE_PREFIX):
             logger.debug(
-                "Skipping system variable (auto-provided)",
-                param_name=param_name
+                "Skipping system variable (auto-provided)", param_name=param_name
             )
             continue
 
         # Detect parameter type from naming convention
         param_type = detect_parameter_type(param_name)
-        
+
         # Create or update parameter definition
         if param_name not in params_dict:
             params_dict[param_name] = {
-                'name': param_name,
-                'type': param_type,
-                'default': default_value.strip() if default_value else '',
-                'description': generate_description(param_name, param_type),
-                'required': not bool(default_value)  # Required if no default provided
+                "name": param_name,
+                "type": param_type,
+                "default": default_value.strip() if default_value else "",
+                "description": generate_description(param_name, param_type),
+                "required": not bool(default_value),  # Required if no default provided
             }
         else:
             # If we find the same param with a default, update it
-            if default_value and not params_dict[param_name]['default']:
-                params_dict[param_name]['default'] = default_value.strip()
-                params_dict[param_name]['required'] = False
-    
+            if default_value and not params_dict[param_name]["default"]:
+                params_dict[param_name]["default"] = default_value.strip()
+                params_dict[param_name]["required"] = False
+
     # Convert to sorted list (by name)
-    parameters = sorted(params_dict.values(), key=lambda x: x['name'])
-    
+    parameters = sorted(params_dict.values(), key=lambda x: x["name"])
+
     logger.info(
         "Parsed script parameters (system variables excluded)",
         param_count=len(parameters),
-        password_params=[p['name'] for p in parameters if p['type'] == 'password'],
-        system_vars_skipped=len([name for name, _ in matches if name.startswith(SYSTEM_VARIABLE_PREFIX)])
+        password_params=[p["name"] for p in parameters if p["type"] == "password"],
+        system_vars_skipped=len(
+            [name for name, _ in matches if name.startswith(SYSTEM_VARIABLE_PREFIX)]
+        ),
     )
-    
+
     return parameters
 
 
 def detect_parameter_type(param_name: str) -> str:
     """
     Detect if a parameter is a password/secret type based on naming convention.
-    
+
     Args:
         param_name: The parameter name (e.g., 'DB_PASSWORD', 'API_KEY')
-        
+
     Returns:
         'password' if name matches secret patterns, otherwise 'text'
     """
     param_upper = param_name.upper()
-    
+
     for suffix in PASSWORD_SUFFIXES:
         if param_upper.endswith(suffix):
-            return 'password'
-    
-    return 'text'
+            return "password"
+
+    return "text"
 
 
 def generate_description(param_name: str, param_type: str) -> str:
@@ -154,25 +155,24 @@ def generate_description(param_name: str, param_type: str) -> str:
 def validate_parameter_name(param_name: str) -> bool:
     """
     Validate that a parameter name follows UPPER_SNAKE_CASE convention.
-    
+
     Args:
         param_name: The parameter name to validate
-        
+
     Returns:
         True if valid, False otherwise
     """
     if not param_name:
         return False
-    
+
     # Must be UPPER_SNAKE_CASE: starts with letter or underscore,
     # contains only uppercase letters, numbers, and underscores
-    pattern = r'^[A-Z_][A-Z0-9_]*$'
+    pattern = r"^[A-Z_][A-Z0-9_]*$"
     return bool(re.match(pattern, param_name))
 
 
 def validate_parameter_value(
-    param_def: Dict[str, Any],
-    value: Optional[str]
+    param_def: Dict[str, Any], value: Optional[str]
 ) -> tuple[bool, Optional[str]]:
     """
     Validate a parameter value against its definition.
@@ -184,8 +184,8 @@ def validate_parameter_value(
     Returns:
         Tuple of (is_valid, error_message)
     """
-    param_name = param_def.get('name')
-    required = param_def.get('required', False)
+    param_name = param_def.get("name")
+    required = param_def.get("required", False)
 
     # Check required fields
     if required and not value:
@@ -193,7 +193,10 @@ def validate_parameter_value(
 
     # Basic length validation to prevent extremely large values
     if value and len(value) > 10000:
-        return False, f"Parameter '{param_name}' value exceeds maximum length of 10000 characters"
+        return (
+            False,
+            f"Parameter '{param_name}' value exceeds maximum length of 10000 characters",
+        )
 
     # Note: We don't validate for shell metacharacters here because:
     # 1. Bash properly handles ${VAR} expansion from environment variables
@@ -206,13 +209,13 @@ def validate_parameter_value(
 
 
 def filter_system_variables_from_params(
-    parameters: List[Dict[str, Any]]
+    parameters: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
     """
     Filter out system variables from a parameter list.
 
     This is used when returning parameters to the frontend to ensure
-    that scripts created before the SYSTEM_VARIABLES filter was added
+    that scripts created before the SYSTEM_VARIABLE_PREFIX filter was added
     don't show system variables as required parameters.
 
     Args:
@@ -225,14 +228,14 @@ def filter_system_variables_from_params(
         return []
 
     return [
-        param for param in parameters
-        if not param.get('name', '').startswith(SYSTEM_VARIABLE_PREFIX)
+        param
+        for param in parameters
+        if not param.get("name", "").startswith(SYSTEM_VARIABLE_PREFIX)
     ]
 
 
 def mask_password_values(
-    parameters: List[Dict[str, Any]],
-    parameter_values: Dict[str, str]
+    parameters: List[Dict[str, Any]], parameter_values: Dict[str, str]
 ) -> Dict[str, str]:
     """
     Mask password-type parameter values for API responses.
@@ -250,11 +253,11 @@ def mask_password_values(
     masked_values = parameter_values.copy()
 
     # Create lookup of password-type parameters
-    password_params = {p['name'] for p in parameters if p.get('type') == 'password'}
+    password_params = {p["name"] for p in parameters if p.get("type") == "password"}
 
     # Mask password values
     for param_name in password_params:
         if param_name in masked_values and masked_values[param_name]:
-            masked_values[param_name] = '***'
+            masked_values[param_name] = "***"
 
     return masked_values

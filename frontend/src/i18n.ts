@@ -4,6 +4,7 @@ import { initReactI18next } from 'react-i18next'
 import en from './locales/en.json'
 import es from './locales/es.json'
 import de from './locales/de.json'
+import it from './locales/it.json'
 
 i18n.use(initReactI18next).init({
   lng: localStorage.getItem('i18nextLng') || navigator.language || 'en',
@@ -18,6 +19,9 @@ i18n.use(initReactI18next).init({
     },
     de: {
       translation: de,
+    },
+    it: {
+      translation: it,
     },
   },
   interpolation: {

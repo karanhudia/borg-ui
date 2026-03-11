@@ -1,4 +1,3 @@
-
 import pytest
 import re
 import shutil
@@ -10,45 +9,46 @@ from datetime import datetime, timezone
 
 from app.database.models import ScheduledJob, Repository, ScheduledJobRepository
 from app.api.schedule import execute_multi_repo_schedule
+from app.utils.archive_names import sanitize_archive_component
+
 
 @pytest.mark.integration
 @pytest.mark.requires_borg
 @pytest.mark.asyncio
 async def test_multi_repo_schedule_execution_real(
-    db_session: Session,
-    tmp_path,
-    borg_binary
+    db_session: Session, tmp_path, borg_binary
 ):
     """
     Test execute_multi_repo_schedule with REAL borg repositories.
     This ensures that the session handling is correct throughout the entire lifecycle.
     """
-    
+
     # --- Helper to create a repo ---
     def create_repo(name, index):
         repo_path = tmp_path / f"repo-{index}"
         data_path = tmp_path / f"data-{index}"
         repo_path.mkdir()
         data_path.mkdir()
-        
+
         # Create a test file
         (data_path / "test.txt").write_text(f"Content for repo {index}")
 
         # Init borg repo
         subprocess.run(
             [borg_binary, "init", "--encryption=none", str(repo_path)],
-            check=True, capture_output=True
+            check=True,
+            capture_output=True,
         )
-        
+
         # Add to DB
         repo = Repository(
             name=name,
             path=str(repo_path),
             repository_type="local",
             source_directories=f'["{str(data_path)}"]',
-            encryption="none", # Important for skipping password prompt
+            encryption="none",  # Important for skipping password prompt
             mode="full",
-            created_at=datetime.now(timezone.utc)
+            created_at=datetime.now(timezone.utc),
         )
         db_session.add(repo)
         db_session.commit()
@@ -64,15 +64,19 @@ async def test_multi_repo_schedule_execution_real(
         name="Real Multi Repo Job",
         cron_expression="* * * * *",
         enabled=True,
-        created_at=datetime.now(timezone.utc)
+        created_at=datetime.now(timezone.utc),
     )
     db_session.add(job)
     db_session.commit()
     db_session.refresh(job)
 
     # 3. Setup: Link repositories
-    link1 = ScheduledJobRepository(scheduled_job_id=job.id, repository_id=repo1.id, execution_order=0)
-    link2 = ScheduledJobRepository(scheduled_job_id=job.id, repository_id=repo2.id, execution_order=1)
+    link1 = ScheduledJobRepository(
+        scheduled_job_id=job.id, repository_id=repo1.id, execution_order=0
+    )
+    link2 = ScheduledJobRepository(
+        scheduled_job_id=job.id, repository_id=repo2.id, execution_order=1
+    )
     db_session.add(link1)
     db_session.add(link2)
     db_session.commit()
@@ -90,15 +94,16 @@ async def test_multi_repo_schedule_execution_real(
 
     # 5. Verification: Check if archives exist in BOTH repos
     print("\n[TEST] Verifying archives...")
-    
+
     def check_archive_exists(repo_path):
         result = subprocess.run(
             [borg_binary, "list", "--json", str(repo_path)],
-            capture_output=True, text=True
+            capture_output=True,
+            text=True,
         )
-        # build_archive_name sanitizes spaces/slashes to hyphens, so match the sanitized form
-        safe_job_name = re.sub(r'[\s/\\]+', '-', job.name)
-        return safe_job_name in result.stdout
+        # Archive names are sanitized (spaces/slashes → hyphens) by build_archive_name
+        sanitized_job_name = sanitize_archive_component(job.name)
+        return sanitized_job_name in result.stdout
 
     repo1_has_backup = check_archive_exists(repo1.path)
     repo2_has_backup = check_archive_exists(repo2.path)
@@ -107,7 +112,9 @@ async def test_multi_repo_schedule_execution_real(
     print(f"[TEST] Repo 2 has backup: {repo2_has_backup}")
 
     assert repo1_has_backup, "Repository 1 should have a backup"
-    assert repo2_has_backup, "Repository 2 should have a backup (failed due to session closure bug?)"
+    assert repo2_has_backup, (
+        "Repository 2 should have a backup (failed due to session closure bug?)"
+    )
 
     # 6. Verify session usage after execution
     try:
