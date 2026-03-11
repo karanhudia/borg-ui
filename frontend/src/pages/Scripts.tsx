@@ -158,6 +158,7 @@ export default function Scripts() {
     const paramsMap = new Map<string, ScriptParameter>()
 
     matches.forEach(([, name, defaultValue]) => {
+      if (name.startsWith('BORG_UI_')) return
       if (!paramsMap.has(name)) {
         paramsMap.set(name, {
           name,

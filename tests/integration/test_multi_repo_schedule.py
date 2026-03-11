@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 
 from app.database.models import ScheduledJob, Repository, ScheduledJobRepository
 from app.api.schedule import execute_multi_repo_schedule
+from app.utils.archive_names import sanitize_archive_component
 
 @pytest.mark.integration
 @pytest.mark.requires_borg
@@ -95,7 +96,9 @@ async def test_multi_repo_schedule_execution_real(
             [borg_binary, "list", "--json", str(repo_path)],
             capture_output=True, text=True
         )
-        return job.name in result.stdout
+        # Archive names are sanitized (spaces/slashes → hyphens) by build_archive_name
+        sanitized_job_name = sanitize_archive_component(job.name)
+        return sanitized_job_name in result.stdout
 
     repo1_has_backup = check_archive_exists(repo1.path)
     repo2_has_backup = check_archive_exists(repo2.path)
