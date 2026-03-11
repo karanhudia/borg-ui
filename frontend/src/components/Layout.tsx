@@ -510,8 +510,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 // Regular items without sub-items
                 const isActive = Boolean(
                   item.href &&
-                    (location.pathname === item.href ||
-                      location.pathname.startsWith(item.href + '/'))
+                  (location.pathname === item.href || location.pathname.startsWith(item.href + '/'))
                 )
 
                 const listItemButton = (
