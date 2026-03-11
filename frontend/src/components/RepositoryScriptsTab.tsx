@@ -25,7 +25,16 @@ import {
 } from '@mui/material'
 
 type OnFailureMode = 'fail' | 'continue' | 'skip'
-import { Trash2, FileCode, Clock, AlertTriangle, Settings, Play, CheckCircle, XCircle } from 'lucide-react'
+import {
+  Trash2,
+  FileCode,
+  Clock,
+  AlertTriangle,
+  Settings,
+  Play,
+  CheckCircle,
+  XCircle,
+} from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import api from '../services/api'
 import { translateBackendKey } from '../utils/translateBackendKey'
@@ -90,7 +99,13 @@ export default function RepositoryScriptsTab({
     open: boolean
     script: RepositoryScript | null
     running: boolean
-    result: { success: boolean; stdout: string; stderr: string; exit_code: number; execution_time: number } | null
+    result: {
+      success: boolean
+      stdout: string
+      stderr: string
+      exit_code: number
+      execution_time: number
+    } | null
   }>({ open: false, script: null, running: false, result: null })
 
   const fetchAssignedScripts = React.useCallback(async () => {
@@ -289,7 +304,8 @@ export default function RepositoryScriptsTab({
           const effectiveSkipOnFailure = script.skip_on_failure === true
           // Default to true if not set (migration fallback / new default)
           const effectiveContinueOnError =
-            !effectiveSkipOnFailure && (script.continue_on_error !== null ? script.continue_on_error : true)
+            !effectiveSkipOnFailure &&
+            (script.continue_on_error !== null ? script.continue_on_error : true)
 
           const isPreBackup = hookType === 'pre-backup'
 
@@ -603,14 +619,28 @@ function RepositoryScriptDialog({
 
           {isPreBackup && (
             <FormControl sx={{ ml: 1 }}>
-              <FormLabel sx={{ fontSize: '0.875rem' }}>{t('repositoryScripts.dialog.onFailureLabel')}</FormLabel>
+              <FormLabel sx={{ fontSize: '0.875rem' }}>
+                {t('repositoryScripts.dialog.onFailureLabel')}
+              </FormLabel>
               <RadioGroup
                 value={onFailureMode}
                 onChange={(e) => setOnFailureMode(e.target.value as OnFailureMode)}
               >
-                <FormControlLabel value="fail" control={<Radio size="small" />} label={t('scriptEditor.onFailureFail')} />
-                <FormControlLabel value="continue" control={<Radio size="small" />} label={t('scriptEditor.onFailureContinue')} />
-                <FormControlLabel value="skip" control={<Radio size="small" />} label={t('scriptEditor.onFailureSkip')} />
+                <FormControlLabel
+                  value="fail"
+                  control={<Radio size="small" />}
+                  label={t('scriptEditor.onFailureFail')}
+                />
+                <FormControlLabel
+                  value="continue"
+                  control={<Radio size="small" />}
+                  label={t('scriptEditor.onFailureContinue')}
+                />
+                <FormControlLabel
+                  value="skip"
+                  control={<Radio size="small" />}
+                  label={t('scriptEditor.onFailureSkip')}
+                />
               </RadioGroup>
             </FormControl>
           )}
@@ -634,7 +664,13 @@ interface EditParametersDialogProps {
   onSubmit: (paramValues: Record<string, string>, onFailureMode: OnFailureMode) => void
 }
 
-function EditParametersDialog({ open, onClose, script, isPreBackup, onSubmit }: EditParametersDialogProps) {
+function EditParametersDialog({
+  open,
+  onClose,
+  script,
+  isPreBackup,
+  onSubmit,
+}: EditParametersDialogProps) {
   const { t } = useTranslation()
   const [parameterValues, setParameterValues] = useState<Record<string, string>>({})
   const [onFailureMode, setOnFailureMode] = useState<OnFailureMode>('fail')
@@ -671,14 +707,28 @@ function EditParametersDialog({ open, onClose, script, isPreBackup, onSubmit }: 
           )}
           {isPreBackup && (
             <FormControl>
-              <FormLabel sx={{ fontSize: '0.875rem' }}>{t('repositoryScripts.dialog.onFailureLabel')}</FormLabel>
+              <FormLabel sx={{ fontSize: '0.875rem' }}>
+                {t('repositoryScripts.dialog.onFailureLabel')}
+              </FormLabel>
               <RadioGroup
                 value={onFailureMode}
                 onChange={(e) => setOnFailureMode(e.target.value as OnFailureMode)}
               >
-                <FormControlLabel value="fail" control={<Radio size="small" />} label={t('scriptEditor.onFailureFail')} />
-                <FormControlLabel value="continue" control={<Radio size="small" />} label={t('scriptEditor.onFailureContinue')} />
-                <FormControlLabel value="skip" control={<Radio size="small" />} label={t('scriptEditor.onFailureSkip')} />
+                <FormControlLabel
+                  value="fail"
+                  control={<Radio size="small" />}
+                  label={t('scriptEditor.onFailureFail')}
+                />
+                <FormControlLabel
+                  value="continue"
+                  control={<Radio size="small" />}
+                  label={t('scriptEditor.onFailureContinue')}
+                />
+                <FormControlLabel
+                  value="skip"
+                  control={<Radio size="small" />}
+                  label={t('scriptEditor.onFailureSkip')}
+                />
               </RadioGroup>
             </FormControl>
           )}
@@ -699,7 +749,13 @@ interface ScriptTestDialogProps {
   onClose: () => void
   scriptName: string
   running: boolean
-  result: { success: boolean; stdout: string; stderr: string; exit_code: number; execution_time: number } | null
+  result: {
+    success: boolean
+    stdout: string
+    stderr: string
+    exit_code: number
+    execution_time: number
+  } | null
 }
 
 function ScriptTestDialog({ open, onClose, scriptName, running, result }: ScriptTestDialogProps) {
@@ -723,7 +779,11 @@ function ScriptTestDialog({ open, onClose, scriptName, running, result }: Script
                 size="small"
                 color={result.exit_code === 0 ? 'success' : 'error'}
               />
-              <Chip label={`${result.execution_time.toFixed(2)}s`} size="small" variant="outlined" />
+              <Chip
+                label={`${result.execution_time.toFixed(2)}s`}
+                size="small"
+                variant="outlined"
+              />
             </Box>
           )}
         </Box>
@@ -738,11 +798,26 @@ function ScriptTestDialog({ open, onClose, scriptName, running, result }: Script
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {result.stdout && (
               <Box>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  display="block"
+                  sx={{ mb: 0.5 }}
+                >
                   {t('scriptEditor.stdout')}
                 </Typography>
                 <Paper sx={{ p: 2, bgcolor: '#1e1e1e', maxHeight: 300, overflow: 'auto' }}>
-                  <Typography component="pre" sx={{ m: 0, color: '#d4d4d4', fontFamily: 'monospace', fontSize: '0.875rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  <Typography
+                    component="pre"
+                    sx={{
+                      m: 0,
+                      color: '#d4d4d4',
+                      fontFamily: 'monospace',
+                      fontSize: '0.875rem',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                    }}
+                  >
                     {result.stdout}
                   </Typography>
                 </Paper>
@@ -750,11 +825,26 @@ function ScriptTestDialog({ open, onClose, scriptName, running, result }: Script
             )}
             {result.stderr && (
               <Box>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  display="block"
+                  sx={{ mb: 0.5 }}
+                >
                   {t('scriptEditor.stderr')}
                 </Typography>
                 <Paper sx={{ p: 2, bgcolor: '#1e1e1e', maxHeight: 200, overflow: 'auto' }}>
-                  <Typography component="pre" sx={{ m: 0, color: '#f48771', fontFamily: 'monospace', fontSize: '0.875rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  <Typography
+                    component="pre"
+                    sx={{
+                      m: 0,
+                      color: '#f48771',
+                      fontFamily: 'monospace',
+                      fontSize: '0.875rem',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                    }}
+                  >
                     {result.stderr}
                   </Typography>
                 </Paper>

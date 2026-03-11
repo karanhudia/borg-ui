@@ -221,7 +221,11 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       postBackupScript: repository.post_backup_script || '',
       preHookTimeout: repository.pre_hook_timeout || 300,
       postHookTimeout: repository.post_hook_timeout || 300,
-      hookFailureMode: repository.skip_on_hook_failure ? 'skip' : (repository.continue_on_hook_failure ? 'continue' : 'fail'),
+      hookFailureMode: repository.skip_on_hook_failure
+        ? 'skip'
+        : repository.continue_on_hook_failure
+          ? 'continue'
+          : 'fail',
     })
   }, [repository])
 

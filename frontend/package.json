@@ -89,5 +89,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "overrides": {
+    "dompurify": "3.3.2"
   }
 }
