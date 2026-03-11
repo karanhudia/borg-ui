@@ -235,6 +235,7 @@ class SSHConnectionUpdate(BaseModel):
     ssh_path_prefix: Optional[str] = None  # Path prefix for SSH commands
     mount_point: Optional[str] = None  # Logical mount point
     use_sftp_mode: Optional[bool] = None
+    use_sudo: Optional[bool] = None
 
 class SSHConnectionStorage(BaseModel):
     total: int
@@ -872,6 +873,7 @@ async def get_ssh_connections(
                 "username": conn.username,
                 "port": conn.port,
                 "use_sftp_mode": conn.use_sftp_mode,
+                "use_sudo": conn.use_sudo,
                 "default_path": conn.default_path,
                 "ssh_path_prefix": conn.ssh_path_prefix,
                 "mount_point": conn.mount_point,
@@ -989,6 +991,8 @@ async def update_ssh_connection(
             connection.mount_point = connection_data.mount_point
         if connection_data.use_sftp_mode is not None:
             connection.use_sftp_mode = connection_data.use_sftp_mode
+        if connection_data.use_sudo is not None:
+            connection.use_sudo = connection_data.use_sudo
         connection.updated_at = datetime.utcnow()
 
         db.commit()

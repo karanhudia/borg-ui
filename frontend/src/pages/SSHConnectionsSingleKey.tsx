@@ -62,6 +62,7 @@ interface SSHConnection {
   username: string
   port: number
   use_sftp_mode: boolean
+  use_sudo: boolean
   default_path?: string
   ssh_path_prefix?: string
   mount_point?: string
@@ -116,6 +117,7 @@ export default function SSHConnectionsSingleKey() {
     username: '',
     port: 22,
     use_sftp_mode: true,
+    use_sudo: false,
     default_path: '',
     ssh_path_prefix: '',
     mount_point: '',
@@ -446,6 +448,7 @@ export default function SSHConnectionsSingleKey() {
       username: connection.username,
       port: connection.port,
       use_sftp_mode: connection.use_sftp_mode,
+      use_sudo: connection.use_sudo,
       default_path: connection.default_path || '',
       ssh_path_prefix: connection.ssh_path_prefix || '',
       mount_point: connection.mount_point || '',
@@ -1229,6 +1232,29 @@ export default function SSHConnectionsSingleKey() {
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     Required by Hetzner Storage Box. Disable for Synology NAS or older SSH servers.
+                  </Typography>
+                </Box>
+              }
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={editConnectionForm.use_sudo}
+                  onChange={(e) =>
+                    setEditConnectionForm({
+                      ...editConnectionForm,
+                      use_sudo: e.target.checked,
+                    })
+                  }
+                />
+              }
+              label={
+                <Box>
+                  <Typography variant="body2">
+                    Use sudo for backups
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Prefix borg with sudo on the remote host. Requires passwordless sudo for the SSH user. Only applies to remote SSH backup mode.
                   </Typography>
                 </Box>
               }
