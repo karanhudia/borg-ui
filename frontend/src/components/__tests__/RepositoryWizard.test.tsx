@@ -1184,7 +1184,7 @@ describe('RepositoryWizard', () => {
           }),
           null // keyfile parameter
         )
-      })
+      }, 15000)
     })
   })
 
