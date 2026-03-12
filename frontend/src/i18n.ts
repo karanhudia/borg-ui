@@ -7,7 +7,10 @@ import de from './locales/de.json'
 import it from './locales/it.json'
 
 i18n.use(initReactI18next).init({
-  lng: localStorage.getItem('i18nextLng') || navigator.language || 'en',
+  lng:
+    (typeof localStorage !== 'undefined' ? localStorage.getItem('i18nextLng') : null) ||
+    (typeof navigator !== 'undefined' ? navigator.language : null) ||
+    'en',
   fallbackLng: 'en',
   defaultNS: 'translation',
   resources: {
