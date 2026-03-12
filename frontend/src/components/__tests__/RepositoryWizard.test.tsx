@@ -1184,7 +1184,7 @@ describe('RepositoryWizard', () => {
           }),
           null // keyfile parameter
         )
-      })
+      }, 15000)
     })
   })
 
@@ -1721,7 +1721,7 @@ describe('RepositoryWizard', () => {
         }),
         null // keyfile parameter (null for create mode)
       )
-    })
+    }, 15000)
   })
 
   // ============================================================
