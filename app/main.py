@@ -15,6 +15,36 @@ from app.core.security import create_first_user
 # Load environment variables
 load_dotenv()
 
+# Base path for sub-directory reverse proxy deployment (e.g., /borg-ui)
+_base_path_raw = os.getenv("BASE_PATH", "").strip().rstrip("/")
+BASE_PATH = "" if _base_path_raw in ("", "/") else _base_path_raw
+
+
+def _prepare_index_html() -> str | None:
+    """Read index.html and optionally rewrite asset paths for BASE_PATH. Cached at module load."""
+    try:
+        with open("app/static/index.html", "r") as f:
+            html = f.read()
+    except FileNotFoundError:
+        return None
+    if BASE_PATH:
+        html = html.replace('href="/assets/', f'href="{BASE_PATH}/assets/')
+        html = html.replace('src="/assets/', f'src="{BASE_PATH}/assets/')
+        html = html.replace('href="/favicon', f'href="{BASE_PATH}/favicon')
+        html = html.replace('href="/logo', f'href="{BASE_PATH}/logo')
+        html = html.replace(
+            "</head>",
+            f'<script>'
+            f'window.__BASE_PATH__="{BASE_PATH}";'
+            f'if(!window.location.pathname.startsWith(window.__BASE_PATH__))'
+            f'{{window.location.replace(window.__BASE_PATH__+window.location.pathname+window.location.search+window.location.hash);}}'
+            f'</script></head>'
+        )
+    return html
+
+
+_cached_index_html = _prepare_index_html()
+
 # Configure structured logging
 import logging
 
@@ -52,7 +82,8 @@ app = FastAPI(
     description="A lightweight web interface for Borg backup management",
     version="1.64.1",
     docs_url="/api/docs",
-    redoc_url="/api/redoc"
+    redoc_url="/api/redoc",
+    root_path=BASE_PATH if BASE_PATH else None,
 )
 
 # Configure CORS
@@ -276,11 +307,9 @@ async def shutdown_event():
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """Serve the main application"""
-    try:
-        with open("app/static/index.html", "r") as f:
-            return HTMLResponse(content=f.read())
-    except FileNotFoundError:
-        return HTMLResponse(content="<h1>Borg Web UI</h1><p>Frontend not built yet. Please run the build process.</p>")
+    if _cached_index_html is not None:
+        return HTMLResponse(content=_cached_index_html)
+    return HTMLResponse(content="<h1>Borg Web UI</h1><p>Frontend not built yet. Please run the build process.</p>")
 
 @app.get("/{full_path:path}", response_class=HTMLResponse)
 async def catch_all(full_path: str):
@@ -303,11 +332,9 @@ async def catch_all(full_path: str):
         raise HTTPException(status_code=404, detail="Not Found")
 
     # Serve index.html for all other routes (frontend routes)
-    try:
-        with open("app/static/index.html", "r") as f:
-            return HTMLResponse(content=f.read())
-    except FileNotFoundError:
-        return HTMLResponse(content="<h1>Borg Web UI</h1><p>Frontend not built yet. Please run the build process.</p>")
+    if _cached_index_html is not None:
+        return HTMLResponse(content=_cached_index_html)
+    return HTMLResponse(content="<h1>Borg Web UI</h1><p>Frontend not built yet. Please run the build process.</p>")
 
 @app.get("/health")
 async def health_check():

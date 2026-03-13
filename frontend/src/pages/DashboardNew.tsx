@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { BASE_PATH } from '@/utils/basePath'
 import {
   Box,
   Card,
@@ -125,7 +126,7 @@ export default function DashboardNew() {
   } = useQuery<DashboardOverview>({
     queryKey: ['dashboard-overview'],
     queryFn: async () => {
-      const response = await fetch('/api/dashboard/overview', {
+      const response = await fetch(`${BASE_PATH}/api/dashboard/overview`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('access_token')}`,
         },
