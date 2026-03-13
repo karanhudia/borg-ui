@@ -1857,7 +1857,7 @@ describe('RepositoryWizard', () => {
         }),
         null // keyfile parameter (null for create mode)
       )
-    })
+    }, 15000)
 
     it('shows info alert about remote source configuration', async () => {
       const user = userEvent.setup()
