@@ -149,6 +149,136 @@ async def test_list_mounts(mount_service_fixture):
     assert len(mounts) == 1
     assert mounts[0].mount_id == mount_id
 
+def _make_sshfs_connection(use_sudo: bool) -> SSHConnection:
+    """Build a minimal SSHConnection for SSHFS tests."""
+    return SSHConnection(
+        id=1,
+        host="backup-host.example.com",
+        username="backupuser",
+        port=22,
+        ssh_key_id=1,
+        status="connected",
+        use_sudo=use_sudo,
+    )
+
+
+def _make_subprocess_mocks(sftp_server_line: str = "sftp_server=/usr/lib/openssh/sftp-server"):
+    """
+    Return (diag_proc, sshfs_proc, captured_commands).
+
+    diag_proc  – mock for the diagnostic SSH call that reports the sftp-server path.
+    sshfs_proc – mock for the actual SSHFS mount call (returns None returncode so
+                 no error is raised, simulating SSHFS forking to background).
+    captured_commands – list that is filled by the side_effect with every
+                        positional-args tuple passed to create_subprocess_exec.
+    """
+    diag_out = (
+        f"user=backupuser\nuid=1001\ngroups=backupuser\nsudo=yes\n{sftp_server_line}"
+    ).encode()
+
+    diag_proc = AsyncMock()
+    diag_proc.communicate = AsyncMock(return_value=(diag_out, b""))
+
+    sshfs_proc = AsyncMock()
+    sshfs_proc.returncode = None  # SSHFS forks; returncode=None means no error
+    sshfs_proc.communicate = AsyncMock(return_value=(b"", b""))
+
+    captured_commands: list = []
+
+    async def capture_exec(*args, **kwargs):
+        captured_commands.append(list(args))
+        return diag_proc if args[0] == "ssh" else sshfs_proc
+
+    return diag_proc, sshfs_proc, captured_commands, capture_exec
+
+
+@pytest.mark.asyncio
+async def test_sshfs_includes_sudo_sftp_server_option_when_use_sudo_true(mount_service_fixture):
+    """
+    When the SSH connection has use_sudo=True the SSHFS command must include
+    '-o sftp_server=sudo <path>' so the remote sftp-server runs with elevated
+    privileges and can read root-owned files.
+    """
+    connection = _make_sshfs_connection(use_sudo=True)
+    _, _, captured_commands, capture_exec = _make_subprocess_mocks(
+        sftp_server_line="sftp_server=/usr/lib/openssh/sftp-server"
+    )
+
+    with patch("app.services.mount_service.asyncio.create_subprocess_exec", side_effect=capture_exec):
+        with patch("app.services.mount_service.asyncio.sleep", return_value=None):
+            await mount_service_fixture._execute_sshfs_mount(
+                connection=connection,
+                remote_path="/remote/data",
+                mount_point="/tmp/mounts/test",
+                temp_key_file="/tmp/test_key",
+            )
+
+    sshfs_cmd = next((cmd for cmd in captured_commands if cmd[0] == "sshfs"), None)
+    assert sshfs_cmd is not None, "sshfs command was not called"
+    cmd_flat = " ".join(sshfs_cmd)
+    assert "sftp_server=sudo /usr/lib/openssh/sftp-server" in cmd_flat, (
+        f"expected sudo sftp-server option in sshfs command, got:\n{cmd_flat}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_sshfs_omits_sudo_sftp_server_option_when_use_sudo_false(mount_service_fixture):
+    """
+    When use_sudo=False the SSHFS command must NOT include a sftp_server override –
+    the remote sftp-server runs as the authenticated user with no privilege elevation.
+    """
+    connection = _make_sshfs_connection(use_sudo=False)
+    _, _, captured_commands, capture_exec = _make_subprocess_mocks()
+
+    with patch("app.services.mount_service.asyncio.create_subprocess_exec", side_effect=capture_exec):
+        with patch("app.services.mount_service.asyncio.sleep", return_value=None):
+            await mount_service_fixture._execute_sshfs_mount(
+                connection=connection,
+                remote_path="/remote/data",
+                mount_point="/tmp/mounts/test",
+                temp_key_file="/tmp/test_key",
+            )
+
+    sshfs_cmd = next((cmd for cmd in captured_commands if cmd[0] == "sshfs"), None)
+    assert sshfs_cmd is not None, "sshfs command was not called"
+    cmd_flat = " ".join(sshfs_cmd)
+    assert "sftp_server=" not in cmd_flat, (
+        f"sftp_server option must be absent when use_sudo=False, got:\n{cmd_flat}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_sshfs_sudo_falls_back_to_default_sftp_server_when_diagnostic_fails(
+    mount_service_fixture,
+):
+    """
+    When use_sudo=True but the SSH diagnostic cannot determine the sftp-server path
+    (empty line), the SSHFS command must fall back to '/usr/lib/openssh/sftp-server'
+    so the mount still succeeds rather than silently dropping the sudo option.
+    """
+    connection = _make_sshfs_connection(use_sudo=True)
+    # Diagnostic returns an empty sftp_server value
+    _, _, captured_commands, capture_exec = _make_subprocess_mocks(
+        sftp_server_line="sftp_server="
+    )
+
+    with patch("app.services.mount_service.asyncio.create_subprocess_exec", side_effect=capture_exec):
+        with patch("app.services.mount_service.asyncio.sleep", return_value=None):
+            await mount_service_fixture._execute_sshfs_mount(
+                connection=connection,
+                remote_path="/remote/data",
+                mount_point="/tmp/mounts/test",
+                temp_key_file="/tmp/test_key",
+            )
+
+    sshfs_cmd = next((cmd for cmd in captured_commands if cmd[0] == "sshfs"), None)
+    assert sshfs_cmd is not None, "sshfs command was not called"
+    cmd_flat = " ".join(sshfs_cmd)
+    assert "sftp_server=sudo /usr/lib/openssh/sftp-server" in cmd_flat, (
+        f"expected fallback sftp-server path in sshfs command, got:\n{cmd_flat}"
+    )
+
+
 @pytest.mark.asyncio
 async def test_cleanup_stale_mounts(mount_service_fixture):
     """Test cleanup of stale mounts on init"""

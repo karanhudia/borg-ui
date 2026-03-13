@@ -201,6 +201,152 @@ async def test_calculate_source_size_ssh(backup_service_fixture):
         assert "user@host" in args
         assert "du -sb" in args[len(args)-1] # Command is last arg
 
+def _make_skip_query_side_effect(job, repo):
+    """Shared DB query mock used by skip-on-failure tests."""
+    def query_side_effect(model):
+        m = MagicMock()
+        if model == BackupJob:
+            m.filter.return_value.first.return_value = job
+        elif model == Repository:
+            m.filter.return_value.first.return_value = repo
+        elif model == SystemSettings:
+            m.first.return_value = SystemSettings()
+        elif model == RepositoryScript:
+            m.filter.return_value.count.return_value = 0
+        return m
+    return query_side_effect
+
+
+@pytest.mark.asyncio
+async def test_pre_backup_inline_script_failure_skips_when_flag_set(
+    backup_service_fixture, mock_db_session
+):
+    """
+    When skip_on_hook_failure=True and an inline pre-backup script fails,
+    the job must be marked 'skipped' – not 'failed' – and borg must not run.
+    """
+    job_id = 42
+    repo = Repository(
+        id=1,
+        path="/backups/repo",
+        source_directories='["/data"]',
+        pre_backup_script="exit 1",
+        skip_on_hook_failure=True,
+    )
+    job = BackupJob(id=job_id, status="pending")
+    mock_db_session.query.side_effect = _make_skip_query_side_effect(job, repo)
+
+    inline_failure = {
+        "success": False,
+        "execution_logs": ["pre-backup script exited with code 1"],
+        "scripts_executed": 1,
+        "scripts_failed": 1,
+        "using_library": False,
+    }
+
+    with patch.object(backup_service_fixture, "_execute_hooks", return_value=inline_failure):
+        with patch("app.services.backup_service.SessionLocal", return_value=mock_db_session):
+            with patch("app.services.backup_service.notification_service"):
+                with patch(
+                    "app.services.backup_service.asyncio.create_subprocess_exec"
+                ) as mock_exec:
+                    await backup_service_fixture.execute_backup(
+                        job_id, repo.path, db=mock_db_session
+                    )
+
+    assert job.status == "skipped", f"expected 'skipped', got '{job.status}'"
+    assert "Skipped by pre-backup script" in job.error_message
+    # borg create must never be called when the backup is skipped
+    borg_calls = [
+        c for c in mock_exec.call_args_list if c[0] and c[0][0] == "borg"
+    ]
+    assert borg_calls == [], "borg must not run when backup is skipped"
+
+
+@pytest.mark.asyncio
+async def test_pre_backup_inline_script_failure_fails_job_when_skip_flag_off(
+    backup_service_fixture, mock_db_session
+):
+    """
+    When skip_on_hook_failure=False (the default) and a pre-backup script fails,
+    the job must be marked 'failed', not silently skipped.
+    """
+    job_id = 43
+    repo = Repository(
+        id=1,
+        path="/backups/repo",
+        source_directories='["/data"]',
+        pre_backup_script="exit 1",
+        skip_on_hook_failure=False,
+        continue_on_hook_failure=False,
+    )
+    job = BackupJob(id=job_id, status="pending")
+    mock_db_session.query.side_effect = _make_skip_query_side_effect(job, repo)
+
+    inline_failure = {
+        "success": False,
+        "execution_logs": ["pre-backup script exited with code 1"],
+        "scripts_executed": 1,
+        "scripts_failed": 1,
+        "using_library": False,
+    }
+
+    with patch.object(backup_service_fixture, "_execute_hooks", return_value=inline_failure):
+        with patch("app.services.backup_service.SessionLocal", return_value=mock_db_session):
+            with patch("app.services.backup_service.notification_service"):
+                await backup_service_fixture.execute_backup(
+                    job_id, repo.path, db=mock_db_session
+                )
+
+    assert job.status == "failed", f"expected 'failed', got '{job.status}'"
+
+
+@pytest.mark.asyncio
+async def test_pre_backup_library_should_skip_signal_skips_job(
+    backup_service_fixture, mock_db_session
+):
+    """
+    When a script-library hook returns should_skip=True (e.g. a maintenance-guard
+    script that intentionally declines the run), the job must be marked 'skipped'
+    with the script name included in the error message.
+    """
+    job_id = 44
+    repo = Repository(
+        id=1,
+        path="/backups/repo",
+        source_directories='["/data"]',
+    )
+    job = BackupJob(id=job_id, status="pending")
+    mock_db_session.query.side_effect = _make_skip_query_side_effect(job, repo)
+
+    library_skip = {
+        "success": False,
+        "should_skip": True,
+        "skip_script_name": "maintenance-guard",
+        "execution_logs": ["maintenance window active – skipping backup"],
+        "scripts_executed": 1,
+        "scripts_failed": 1,
+        "using_library": True,
+    }
+
+    with patch.object(backup_service_fixture, "_execute_hooks", return_value=library_skip):
+        with patch("app.services.backup_service.SessionLocal", return_value=mock_db_session):
+            with patch("app.services.backup_service.notification_service"):
+                with patch(
+                    "app.services.backup_service.asyncio.create_subprocess_exec"
+                ) as mock_exec:
+                    await backup_service_fixture.execute_backup(
+                        job_id, repo.path, db=mock_db_session
+                    )
+
+    assert job.status == "skipped", f"expected 'skipped', got '{job.status}'"
+    assert "maintenance-guard" in job.error_message
+    borg_calls = [
+        c for c in mock_exec.call_args_list if c[0] and c[0][0] == "borg"
+    ]
+    assert borg_calls == [], "borg must not run when backup is skipped by library script"
+
+
 @pytest.mark.asyncio
 async def test_log_rotation(backup_service_fixture, mock_db_session):
     """Test log rotation calls log_manager"""

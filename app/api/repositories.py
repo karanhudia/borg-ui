@@ -315,6 +315,7 @@ class RepositoryCreate(BaseModel):
     pre_hook_timeout: Optional[int] = 300  # Pre-backup hook timeout in seconds
     post_hook_timeout: Optional[int] = 300  # Post-backup hook timeout in seconds
     continue_on_hook_failure: Optional[bool] = False  # Continue backup if pre-hook fails
+    skip_on_hook_failure: Optional[bool] = False  # Skip backup gracefully if pre-hook fails
     mode: str = "full"  # full: backups + observability, observe: observability-only
     bypass_lock: bool = False  # Use --bypass-lock for read-only storage access (observe-only repos)
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create (e.g., "--stats --list")
@@ -335,6 +336,7 @@ class RepositoryImport(BaseModel):
     pre_hook_timeout: Optional[int] = 300  # Pre-backup hook timeout in seconds
     post_hook_timeout: Optional[int] = 300  # Post-backup hook timeout in seconds
     continue_on_hook_failure: Optional[bool] = False  # Continue backup if pre-hook fails
+    skip_on_hook_failure: Optional[bool] = False  # Skip backup gracefully if pre-hook fails
     mode: str = "full"  # full: backups + observability, observe: observability-only
     bypass_lock: bool = False  # Use --bypass-lock for read-only storage access (observe-only repos)
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create (e.g., "--stats --list")
@@ -355,6 +357,7 @@ class RepositoryUpdate(BaseModel):
     pre_hook_timeout: Optional[int] = None
     post_hook_timeout: Optional[int] = None
     continue_on_hook_failure: Optional[bool] = None
+    skip_on_hook_failure: Optional[bool] = None  # Skip backup gracefully if pre-hook fails
     mode: Optional[str] = None  # full: backups + observability, observe: observability-only
     bypass_lock: Optional[bool] = None  # Use --bypass-lock for read-only storage access
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create
@@ -429,6 +432,7 @@ async def get_repositories(
                 "pre_hook_timeout": repo.pre_hook_timeout,
                 "post_hook_timeout": repo.post_hook_timeout,
                 "continue_on_hook_failure": repo.continue_on_hook_failure,
+                "skip_on_hook_failure": repo.skip_on_hook_failure,
                 "mode": repo.mode or "full",  # Default to "full" for backward compatibility
                 "bypass_lock": repo.bypass_lock or False,
                 "custom_flags": repo.custom_flags,
@@ -647,6 +651,7 @@ async def create_repository(
             pre_hook_timeout=repo_data.pre_hook_timeout,
             post_hook_timeout=repo_data.post_hook_timeout,
             continue_on_hook_failure=repo_data.continue_on_hook_failure,
+            skip_on_hook_failure=repo_data.skip_on_hook_failure,
             mode=repo_data.mode,
             bypass_lock=repo_data.bypass_lock,
             custom_flags=repo_data.custom_flags,
@@ -889,6 +894,7 @@ async def import_repository(
             pre_hook_timeout=repo_data.pre_hook_timeout,
             post_hook_timeout=repo_data.post_hook_timeout,
             continue_on_hook_failure=repo_data.continue_on_hook_failure,
+            skip_on_hook_failure=repo_data.skip_on_hook_failure,
             mode=repo_data.mode,
             bypass_lock=repo_data.bypass_lock,
             custom_flags=repo_data.custom_flags,
@@ -1334,6 +1340,9 @@ async def update_repository(
 
         if repo_data.continue_on_hook_failure is not None:
             repository.continue_on_hook_failure = repo_data.continue_on_hook_failure
+
+        if repo_data.skip_on_hook_failure is not None:
+            repository.skip_on_hook_failure = repo_data.skip_on_hook_failure
 
         if repo_data.mode is not None:
             # Validate source directories when switching to full mode

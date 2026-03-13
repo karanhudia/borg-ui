@@ -31,6 +31,8 @@ export default defineConfig({
     },
     // Test isolation
     isolate: true,
+    // Increase timeout for complex UI workflow tests which are slower in CI
+    testTimeout: 15000,
     // Show test execution time
     slowTestThreshold: 300,
     // Fail tests on console errors
