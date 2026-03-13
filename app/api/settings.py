@@ -111,7 +111,6 @@ class SystemSettingsUpdate(BaseModel):
     mqtt_username: Optional[str] = None
     mqtt_password: Optional[str] = None
     mqtt_client_id: Optional[str] = None
-    mqtt_base_topic: Optional[str] = None
     mqtt_qos: Optional[int] = None
     mqtt_retain: Optional[bool] = None
     mqtt_tls_enabled: Optional[bool] = None
@@ -249,7 +248,6 @@ async def get_system_settings(
                 "mqtt_broker_port": settings.mqtt_broker_port,
                 "mqtt_username": settings.mqtt_username,
                 "mqtt_client_id": settings.mqtt_client_id,
-                "mqtt_base_topic": settings.mqtt_base_topic,
                 "mqtt_qos": settings.mqtt_qos,
                 "mqtt_retain": settings.mqtt_retain,
                 "mqtt_tls_enabled": settings.mqtt_tls_enabled,
@@ -392,8 +390,6 @@ async def update_system_settings(
                 settings.mqtt_password = settings_update.mqtt_password
         if settings_update.mqtt_client_id is not None:
             settings.mqtt_client_id = settings_update.mqtt_client_id
-        if settings_update.mqtt_base_topic is not None:
-            settings.mqtt_base_topic = settings_update.mqtt_base_topic
         if settings_update.mqtt_qos is not None:
             settings.mqtt_qos = settings_update.mqtt_qos
         if settings_update.mqtt_retain is not None:

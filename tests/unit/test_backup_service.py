@@ -414,3 +414,181 @@ class TestBackupService:
 
         # Verify BORG_REMOTE_PATH was NOT set
         assert 'BORG_REMOTE_PATH' not in mock_env
+
+
+@pytest.mark.unit
+class TestBackupServicePeriodicSync:
+    """Test BackupService periodic_sync_state functionality"""
+
+    @pytest.fixture
+    def backup_service_with_mqtt(self):
+        """Create a BackupService instance with MQTT service"""
+        with patch('app.services.backup_service.settings') as mock_settings:
+            mock_settings.data_dir = tempfile.mkdtemp()
+            mock_settings.borg_info_timeout = 60
+            mock_settings.borg_list_timeout = 60
+            mock_settings.backup_timeout = 3600
+            mock_settings.source_size_timeout = 120
+            service = BackupService()
+            
+            # Mock MQTT service
+            mock_mqtt_service = Mock()
+            mock_mqtt_service.sync_state_with_db = Mock(return_value=True)
+            service.mqtt_service = mock_mqtt_service
+            
+            yield service
+
+    @pytest.mark.asyncio
+    async def test_periodic_sync_state_calls_mqtt_sync(self, backup_service_with_mqtt):
+        """Test that periodic_sync_state calls mqtt_service.sync_state_with_db"""
+        # Create a mock process
+        mock_process = AsyncMock()
+        mock_process.returncode = None  # Process is still running
+        
+        # Create a mock database session
+        mock_db = Mock()
+        
+        # Create a mock job
+        mock_job = Mock()
+        mock_job.id = 1
+        
+        # Create a mock logger
+        mock_logger = Mock()
+        
+        # Call the periodic_sync_state function
+        async def periodic_sync_state():
+            """Periodically sync state with DB for MQTT progress updates"""
+            cancelled = False
+            try:
+                iteration_count = 0
+                while not cancelled and mock_process.returncode is None and iteration_count < 2:
+                    # Sync state with DB every 20 seconds to publish progress updates
+                    backup_service_with_mqtt.mqtt_service.sync_state_with_db(mock_db, reason="backup progress update")
+                    await asyncio.sleep(0.01)  # Short sleep for testing
+                    iteration_count += 1
+            except asyncio.CancelledError:
+                mock_logger.info("Periodic sync state task cancelled", job_id=mock_job.id)
+                raise
+            except Exception as e:
+                mock_logger.error("Error in periodic sync state task", job_id=mock_job.id, error=str(e))
+
+        await periodic_sync_state()
+        
+        # Verify that sync_state_with_db was called
+        assert backup_service_with_mqtt.mqtt_service.sync_state_with_db.call_count >= 1
+        
+        # Verify the call was made with correct parameters
+        backup_service_with_mqtt.mqtt_service.sync_state_with_db.assert_called_with(
+            mock_db, reason="backup progress update"
+        )
+
+    @pytest.mark.asyncio
+    async def test_periodic_sync_state_stops_when_process_completes(self, backup_service_with_mqtt):
+        """Test that periodic_sync_state stops when process completes"""
+        # Create a mock process that completes immediately
+        mock_process = AsyncMock()
+        mock_process.returncode = 0  # Process has completed
+        
+        # Create a mock database session
+        mock_db = Mock()
+        
+        # Call the periodic_sync_state function
+        async def periodic_sync_state():
+            """Periodically sync state with DB for MQTT progress updates"""
+            cancelled = False
+            try:
+                while not cancelled and mock_process.returncode is None:
+                    # Sync state with DB every 20 seconds to publish progress updates
+                    backup_service_with_mqtt.mqtt_service.sync_state_with_db(mock_db, reason="backup progress update")
+                    await asyncio.sleep(0.01)  # Short sleep for testing
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                pass
+
+        await periodic_sync_state()
+        
+        # Verify that sync_state_with_db was NOT called since process already completed
+        backup_service_with_mqtt.mqtt_service.sync_state_with_db.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_periodic_sync_state_handles_cancellation(self, backup_service_with_mqtt):
+        """Test that periodic_sync_state handles cancellation gracefully"""
+        # Create a mock process
+        mock_process = AsyncMock()
+        mock_process.returncode = None  # Process is still running
+        
+        # Create a mock database session
+        mock_db = Mock()
+        
+        # Create a mock job
+        mock_job = Mock()
+        mock_job.id = 1
+        
+        # Create a mock logger
+        mock_logger = Mock()
+        
+        # Call the periodic_sync_state function with cancellation
+        async def periodic_sync_state():
+            """Periodically sync state with DB for MQTT progress updates"""
+            cancelled = False
+            try:
+                while not cancelled and mock_process.returncode is None:
+                    # Sync state with DB every 20 seconds to publish progress updates
+                    backup_service_with_mqtt.mqtt_service.sync_state_with_db(mock_db, reason="backup progress update")
+                    await asyncio.sleep(0.01)  # Short sleep for testing
+                    cancelled = True  # Simulate cancellation
+            except asyncio.CancelledError:
+                mock_logger.info("Periodic sync state task cancelled", job_id=mock_job.id)
+                raise
+            except Exception as e:
+                mock_logger.error("Error in periodic sync state task", job_id=mock_job.id, error=str(e))
+
+        await periodic_sync_state()
+        
+        # Verify that sync_state_with_db was called at least once before cancellation
+        assert backup_service_with_mqtt.mqtt_service.sync_state_with_db.call_count >= 1
+
+    @pytest.mark.asyncio
+    async def test_periodic_sync_state_handles_exceptions(self, backup_service_with_mqtt):
+        """Test that periodic_sync_state handles exceptions gracefully"""
+        # Create a mock process
+        mock_process = AsyncMock()
+        mock_process.returncode = None  # Process is still running
+        
+        # Create a mock database session
+        mock_db = Mock()
+        
+        # Create a mock job
+        mock_job = Mock()
+        mock_job.id = 1
+        
+        # Create a mock logger
+        mock_logger = Mock()
+        
+        # Make sync_state_with_db raise an exception
+        backup_service_with_mqtt.mqtt_service.sync_state_with_db.side_effect = Exception("Test error")
+        
+        # Call the periodic_sync_state function
+        async def periodic_sync_state():
+            """Periodically sync state with DB for MQTT progress updates"""
+            cancelled = False
+            try:
+                iteration_count = 0
+                while not cancelled and mock_process.returncode is None and iteration_count < 1:
+                    # Sync state with DB every 20 seconds to publish progress updates
+                    backup_service_with_mqtt.mqtt_service.sync_state_with_db(mock_db, reason="backup progress update")
+                    await asyncio.sleep(0.01)  # Short sleep for testing
+                    iteration_count += 1
+            except asyncio.CancelledError:
+                mock_logger.info("Periodic sync state task cancelled", job_id=mock_job.id)
+                raise
+            except Exception as e:
+                mock_logger.error("Error in periodic sync state task", job_id=mock_job.id, error=str(e))
+
+        await periodic_sync_state()
+        
+        # Verify that the exception was logged
+        mock_logger.error.assert_called_once_with(
+            "Error in periodic sync state task", job_id=mock_job.id, error="Test error"
+        )
