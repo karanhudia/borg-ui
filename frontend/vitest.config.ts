@@ -31,7 +31,7 @@ export default defineConfig({
     },
     // Test isolation
     isolate: true,
-    // Increase timeout for complex UI workflow tests which are slower in CI
+    // Multi-step wizard tests take 1-2s in isolation; give headroom under full suite load
     testTimeout: 15000,
     // Show test execution time
     slowTestThreshold: 300,
