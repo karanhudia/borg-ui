@@ -2212,8 +2212,6 @@
     "passwordHelper": "Contraseña MQTT opcional",
     "clientIdLabel": "ID de cliente",
     "clientIdHelper": "Identificador de cliente MQTT",
-    "baseTopicLabel": "Tema base",
-    "baseTopicHelper": "Prefijo de tema raíz para todos los mensajes MQTT",
     "qosLevelLabel": "Nivel de QoS",
     "qosLevelHelper": "0 = como máximo una vez, 1 = al menos una vez, 2 = exactamente una vez",
     "retainMessages": "Retener mensajes",

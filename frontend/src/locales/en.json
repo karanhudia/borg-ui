@@ -2212,8 +2212,6 @@
     "passwordHelper": "Optional MQTT password",
     "clientIdLabel": "Client ID",
     "clientIdHelper": "MQTT client identifier",
-    "baseTopicLabel": "Base Topic",
-    "baseTopicHelper": "Root topic prefix for all MQTT messages",
     "qosLevelLabel": "QoS Level",
     "qosLevelHelper": "0 = at most once, 1 = at least once, 2 = exactly once",
     "retainMessages": "Retain messages",
