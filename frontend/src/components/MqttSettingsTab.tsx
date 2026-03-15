@@ -33,7 +33,6 @@ const MqttSettingsTab: React.FC = () => {
   const [mqttUsername, setMqttUsername] = useState('')
   const [mqttPassword, setMqttPassword] = useState('')
   const [mqttClientId, setMqttClientId] = useState('borg-ui')
-  const [mqttBaseTopic, setMqttBaseTopic] = useState('borg-ui')
   const [mqttQos, setMqttQos] = useState(1)
   const [mqttRetain, setMqttRetain] = useState(false)
   const [mqttTlsEnabled, setMqttTlsEnabled] = useState(false)
@@ -63,7 +62,6 @@ const MqttSettingsTab: React.FC = () => {
       setMqttBrokerPort(systemSettings.mqtt_broker_port || 1883)
       setMqttUsername(systemSettings.mqtt_username || '')
       setMqttClientId(systemSettings.mqtt_client_id || 'borg-ui')
-      setMqttBaseTopic(systemSettings.mqtt_base_topic || 'borg-ui')
       setMqttQos(systemSettings.mqtt_qos || 1)
       setMqttRetain(systemSettings.mqtt_retain || false)
       setMqttTlsEnabled(systemSettings.mqtt_tls_enabled || false)
@@ -84,7 +82,6 @@ const MqttSettingsTab: React.FC = () => {
         mqttBrokerPort !== (systemSettings.mqtt_broker_port || 1883) ||
         mqttUsername !== (systemSettings.mqtt_username || '') ||
         mqttClientId !== (systemSettings.mqtt_client_id || 'borg-ui') ||
-        mqttBaseTopic !== (systemSettings.mqtt_base_topic || 'borg-ui') ||
         mqttQos !== (systemSettings.mqtt_qos || 1) ||
         mqttRetain !== (systemSettings.mqtt_retain || false) ||
         mqttTlsEnabled !== (systemSettings.mqtt_tls_enabled || false) ||
@@ -101,7 +98,6 @@ const MqttSettingsTab: React.FC = () => {
     mqttBrokerPort,
     mqttUsername,
     mqttClientId,
-    mqttBaseTopic,
     mqttQos,
     mqttRetain,
     mqttTlsEnabled,
@@ -122,7 +118,6 @@ const MqttSettingsTab: React.FC = () => {
         mqtt_username: mqttUsername || null,
         mqtt_password: passwordChanged ? mqttPassword : undefined,
         mqtt_client_id: mqttClientId,
-        mqtt_base_topic: mqttBaseTopic,
         mqtt_qos: mqttQos,
         mqtt_retain: mqttRetain,
         mqtt_tls_enabled: mqttTlsEnabled,
@@ -300,14 +295,6 @@ const MqttSettingsTab: React.FC = () => {
                       onChange={(e) => setMqttClientId(e.target.value)}
                       fullWidth
                       helperText={t('mqtt.clientIdHelper')}
-                    />
-
-                    <TextField
-                      label={t('mqtt.baseTopicLabel')}
-                      value={mqttBaseTopic}
-                      onChange={(e) => setMqttBaseTopic(e.target.value)}
-                      fullWidth
-                      helperText={t('mqtt.baseTopicHelper')}
                     />
 
                     <TextField

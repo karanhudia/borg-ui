@@ -22,22 +22,22 @@ Beta features allow gradual rollout of new functionality while maintaining stabi
 - Server-wide sensors for overall backup state
 - TLS support for secure MQTT connections
 - Authentication support (username/password)
-- Configurable QoS and base topic
+- Configurable QoS (Quality of Service)
 
 **Home Assistant Sensors:**
 
 **Server Sensors:**
-- `sensor.borg_last_backup` - Timestamp of last completed backup
-- `binary_sensor.borg_backup_success` - Success/failure state of last backup
+- `sensor.borg_ui_last_backup` - Timestamp of last completed backup
+- `binary_sensor.borg_ui_backup_success` - Success/failure state of last backup
 
 **Per-Repository Sensors:**
-- `sensor.borg_repo_{id}_status` - Repository health status (healthy, warning, stale, failed, no_backup)
-- `sensor.borg_repo_{id}_size` - Repository size in bytes
-- `sensor.borg_repo_{id}_archives` - Number of archives
-- `sensor.borg_repo_{id}_last_backup` - Timestamp of last backup
-- `sensor.borg_repo_{id}_backup_status` - Current backup status (idle, initializing, processing files, finalizing)
-- `sensor.borg_repo_{id}_backup_progress` - Backup progress percentage (0-100)
-- `sensor.borg_repo_{id}_backup_eta` - Estimated time of arrival for current backup
+- `sensor.borg_ui_repo_{id}_status` - Repository health status (healthy, warning, stale, failed, no_backup)
+- `sensor.borg_ui_repo_{id}_size` - Repository size in bytes
+- `sensor.borg_ui_repo_{id}_archives` - Number of archives
+- `sensor.borg_ui_repo_{id}_last_backup` - Timestamp of last backup
+- `sensor.borg_ui_repo_{id}_backup_status` - Current backup status (idle, initializing, processing files, finalizing)
+- `sensor.borg_ui_repo_{id}_backup_progress` - Backup progress percentage (0-100)
+- `sensor.borg_ui_repo_{id}_backup_eta` - Estimated time of arrival for current backup
 
 **Setup Instructions:**
 
@@ -65,19 +65,19 @@ Beta features allow gradual rollout of new functionality while maintaining stabi
 
 **MQTT Topics:**
 
-All MQTT messages are published under the base topic (default: `borg-ui`):
+All MQTT messages are published under the fixed base topic `borg-ui`:
 
-- `{base_topic}/status` - Server connection status (online/offline)
-- `{base_topic}/backup/status` - Current backup status
-- `{base_topic}/backup/progress` - Backup progress and ETA
-- `{base_topic}/backup/last` - Last backup information
-- `{base_topic}/backup/success` - Success/failure state
-- `{base_topic}/repositories/{id}/status` - Repository health status
-- `{base_topic}/repositories/{id}/size` - Repository size metrics
-- `{base_topic}/repositories/{id}/archives` - Archive count
-- `{base_topic}/repositories/{id}/last_backup` - Last backup timestamp
-- `{base_topic}/repositories/{id}/backup/status` - Backup status
-- `{base_topic}/repositories/{id}/backup/progress` - Backup progress
+- `borg-ui/status` - Server connection status (online/offline)
+- `borg-ui/backup/status` - Current backup status
+- `borg-ui/backup/progress` - Backup progress and ETA
+- `borg-ui/backup/last` - Last backup information
+- `borg-ui/backup/success` - Success/failure state
+- `borg-ui/repositories/{id}/status` - Repository health status
+- `borg-ui/repositories/{id}/size` - Repository size metrics
+- `borg-ui/repositories/{id}/archives` - Archive count
+- `borg-ui/repositories/{id}/last_backup` - Last backup timestamp
+- `borg-ui/repositories/{id}/backup/status` - Backup status
+- `borg-ui/repositories/{id}/backup/progress` - Backup progress
 
 **TLS Configuration:**
 
