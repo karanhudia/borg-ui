@@ -31,6 +31,8 @@ export default defineConfig({
     },
     // Test isolation
     isolate: true,
+    // Multi-step wizard tests take 1-2s in isolation; give headroom under full suite load
+    testTimeout: 15000,
     // Show test execution time
     slowTestThreshold: 300,
     // Fail tests on console errors
