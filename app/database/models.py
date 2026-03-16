@@ -409,7 +409,6 @@ class SystemSettings(Base):
     mqtt_username = Column(String, nullable=True)  # MQTT username
     mqtt_password = Column(String, nullable=True)  # MQTT password
     mqtt_client_id = Column(String, default='borg-ui', nullable=False)  # MQTT client ID
-    mqtt_base_topic = Column(String, default='borg-ui', nullable=False)  # Base topic for all MQTT messages
     mqtt_qos = Column(Integer, default=1, nullable=False)  # Quality of Service (0, 1, or 2)
     mqtt_retain = Column(Boolean, default=False, nullable=False)  # Retain messages
     mqtt_tls_enabled = Column(Boolean, default=False, nullable=False)  # Enable TLS

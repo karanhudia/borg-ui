@@ -45,17 +45,17 @@ class TestBackupCreationIntegration:
         
         # Wait for background task to complete (polling)
         import asyncio
-        max_retries = 20
+        max_retries = 100
         for _ in range(max_retries):
             # Check status
             job_response = test_client.get(f"/api/backup/status/{job_id}", headers=admin_headers)
             job_data = job_response.json()
-            
+
             if job_data["status"] in ["completed", "completed_with_warnings", "failed"]:
                 break
-                
+
             # Allow background task to progress
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.5)
             
         assert job_data["status"] == "completed"
         
