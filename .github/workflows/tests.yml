@@ -5,8 +5,9 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
-  workflow_dispatch:
+  workflow_dispatch:  # Allow manual trigger
 
+# Cancel in-progress runs for same workflow on same branch/PR
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -74,15 +75,14 @@ jobs:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
 
-      - name: Upload backend coverage to Codecov
-        uses: codecov/codecov-action@v5
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4
         with:
-          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./coverage.xml
           flags: backend
           name: backend-coverage
           fail_ci_if_error: false
-          token: ${{ github.event_name == 'push' && secrets.CODECOV_TOKEN || '' }}
-          verbose: true
 
       - name: Upload coverage HTML report
         uses: actions/upload-artifact@v4
@@ -110,6 +110,7 @@ jobs:
   test-integration:
     name: Integration Tests
     runs-on: ubuntu-latest
+    # Run in parallel with backend tests (no dependency)
 
     services:
       redis:
@@ -163,6 +164,7 @@ jobs:
         run: |
           mkdir -p app/static
           cp -r frontend/build/* app/static/
+          # Rename build assets to assets directory if needed
           if [ -d "app/static/assets" ]; then
             echo "✅ Frontend assets directory found"
             ls -la app/static/assets/ | head -10
@@ -207,7 +209,7 @@ jobs:
         run: |
           python3 tests/integration/test_archive_contents.py --url http://localhost:8082
         env:
-          BORG_UI_CONTAINER: false
+          BORG_UI_CONTAINER: false  # Backend runs directly in CI, not in Docker
 
       - name: Run multiple source directories test
         run: |
@@ -288,15 +290,14 @@ jobs:
           cd frontend
           npm run test:coverage
 
-      - name: Upload frontend coverage to Codecov
-        uses: codecov/codecov-action@v5
+      - name: Upload frontend coverage
+        uses: codecov/codecov-action@v4
         with:
-          files: ./frontend/coverage/coverage-final.json
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./frontend/coverage/coverage-final.json
           flags: frontend
           name: frontend-coverage
           fail_ci_if_error: false
-          token: ${{ github.event_name == 'push' && secrets.CODECOV_TOKEN || '' }}
-          verbose: true
 
       - name: Build frontend
         run: |
