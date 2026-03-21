@@ -1,10 +1,12 @@
 import asyncio
 import os
+import base64
+import tempfile
 from datetime import datetime
 from pathlib import Path
 import structlog
 from sqlalchemy.orm import Session
-from app.database.models import PruneJob, Repository
+from app.database.models import PruneJob, Repository, SSHConnection, SSHKey
 from app.database.database import SessionLocal
 from app.config import settings
 
@@ -36,6 +38,7 @@ class PruneService:
 
         # Create a new database session for this background task
         db = SessionLocal()
+        temp_key_file = None
 
         try:
             # Get job
@@ -88,6 +91,36 @@ class PruneService:
                 "-o", "PermitLocalCommand=no"
             ]
             env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+
+            # Inject SSH identity file if repository uses key-based auth
+            ssh_key = None
+            if repository.connection_id:
+                connection = db.query(SSHConnection).filter(
+                    SSHConnection.id == repository.connection_id
+                ).first()
+                if connection and connection.ssh_key_id:
+                    ssh_key = db.query(SSHKey).filter(SSHKey.id == connection.ssh_key_id).first()
+            elif repository.repository_type == "ssh" and repository.ssh_key_id:
+                ssh_key = db.query(SSHKey).filter(SSHKey.id == repository.ssh_key_id).first()
+
+            if ssh_key:
+                from cryptography.fernet import Fernet
+                encryption_key = settings.secret_key.encode()[:32]
+                cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
+                private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+                if not private_key.endswith('\n'):
+                    private_key += '\n'
+                fd, temp_key_file = tempfile.mkstemp(suffix='.key', text=True)
+                try:
+                    os.chmod(temp_key_file, 0o600)
+                    with os.fdopen(fd, 'w') as f:
+                        f.write(private_key)
+                except Exception:
+                    os.close(fd)
+                    raise
+                ssh_opts = ["-i", temp_key_file] + ssh_opts
+                env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+                logger.info("Using SSH key for prune", job_id=job_id, ssh_key_id=ssh_key.id)
 
             # Build prune command
             # Note: --stats is not supported with --dry-run in Borg 1.4.x
@@ -283,6 +316,13 @@ class PruneService:
             # Remove from running processes
             if job_id in self.running_processes:
                 del self.running_processes[job_id]
+
+            # Clean up temporary SSH key file
+            if temp_key_file and os.path.exists(temp_key_file):
+                try:
+                    os.unlink(temp_key_file)
+                except Exception:
+                    pass
 
             # Close the database session
             db.close()
