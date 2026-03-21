@@ -165,5 +165,6 @@ exec gosu borg gunicorn app.main:app \
     --worker-class uvicorn.workers.UvicornWorker \
     --timeout 0 \
     --graceful-timeout 30 \
+    --worker-tmp-dir /dev/shm \
     --access-logfile /dev/null \
     --error-logfile -

@@ -1,6 +1,6 @@
 # Project State
 
-Last activity: 2026-03-21 - Completed quick task 17: Add CLI password reset script for issue #350
+Last activity: 2026-03-21 - Completed quick task 18: add documentation for CLI password reset script
 
 ### Blockers/Concerns
 
@@ -27,3 +27,4 @@ None.
 | 15 | Bump version to 1.74.0 and create release | 2026-03-11 | ac0ec1e | [15-bump-version-to-1.74.0-and-create-releas](./quick/15-bump-version-to-1.74.0-and-create-releas/) |
 | 16 | Remove orphaned mqtt baseTopicLabel and baseTopicHelper locale keys | 2026-03-15 | ea408a2 | [16-remove-orphaned-mqtt-basetopic-locale-keys](./quick/16-remove-orphaned-mqtt-basetopic-locale-keys/) |
 | 17 | Add CLI password reset script for issue #350 | 2026-03-21 | 8b2ca45 | [17-add-cli-password-reset-script-for-issue-350](./quick/17-add-cli-password-reset-script-for-issue-350/) |
+| 18 | add documentation for CLI password reset script | 2026-03-21 | 1999bbc | [18-add-documentation-for-cli-password-reset-script](./quick/18-add-documentation-for-cli-password-reset-script/) |
