@@ -2142,6 +2142,7 @@
     "folderNamePlaceholder": "Enter folder name",
     "creating": "Creating...",
     "create": "Create",
+    "failedToLoad": "Failed to load directory",
     "chips": {
       "remote": "Remote",
       "host": "Host",

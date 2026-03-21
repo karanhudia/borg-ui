@@ -2142,6 +2142,7 @@
     "folderNamePlaceholder": "Ordnername eingeben",
     "creating": "Erstellt...",
     "create": "Erstellen",
+    "failedToLoad": "Verzeichnis konnte nicht geladen werden",
     "chips": {
       "remote": "Remote",
       "host": "Host",

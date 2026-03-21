@@ -163,7 +163,12 @@ export default function FileExplorerDialog({
         setIsInsideLocalMount(response.data.is_inside_local_mount || false)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
-        setError(err.response?.data?.detail || 'Failed to load directory')
+        const detail = err.response?.data?.detail
+        if (detail && typeof detail === 'object' && detail.key) {
+          setError(t(detail.key, detail.params))
+        } else {
+          setError(typeof detail === 'string' ? detail : t('fileExplorer.failedToLoad'))
+        }
         setItems([])
       } finally {
         setLoading(false)

@@ -2142,6 +2142,7 @@
     "folderNamePlaceholder": "Inserisci nome cartella",
     "creating": "Creazione in corso...",
     "create": "Crea",
+    "failedToLoad": "Impossibile caricare la directory",
     "chips": {
       "remote": "Remoto",
       "host": "Host",
