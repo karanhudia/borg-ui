@@ -178,7 +178,7 @@ describe('FileExplorerDialog', () => {
       })
     })
 
-    it('displays error message on API failure', async () => {
+    it('displays error message on API failure with plain string detail', async () => {
       vi.mocked(api.get).mockRejectedValue({
         response: { data: { detail: 'Permission denied' } },
       })
@@ -189,6 +189,48 @@ describe('FileExplorerDialog', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Permission denied')).toBeInTheDocument()
+      })
+    })
+
+    it('translates i18n object detail without crashing (regression: #353 white screen on 403)', async () => {
+      // Backend returns {key, params} object for 403 permission denied on mounted dirs
+      vi.mocked(api.get).mockRejectedValue({
+        response: {
+          status: 403,
+          data: {
+            detail: {
+              key: 'backend.errors.filesystem.permissionDenied',
+              params: { path: '/local/docker-volumes' },
+            },
+          },
+        },
+      })
+
+      renderWithProviders(
+        <FileExplorerDialog open={true} onClose={mockOnClose} onSelect={mockOnSelect} />
+      )
+
+      await waitFor(() => {
+        // Should show translated string, not crash with "objects are not valid as React children"
+        expect(screen.getByText('Permission denied: /local/docker-volumes')).toBeInTheDocument()
+      })
+    })
+
+    it('translates i18n object detail without params without crashing', async () => {
+      vi.mocked(api.get).mockRejectedValue({
+        response: {
+          data: {
+            detail: { key: 'backend.errors.filesystem.permissionDenied', params: { path: '/some/path' } },
+          },
+        },
+      })
+
+      renderWithProviders(
+        <FileExplorerDialog open={true} onClose={mockOnClose} onSelect={mockOnSelect} />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Permission denied: /some/path')).toBeInTheDocument()
       })
     })
 
