@@ -4,7 +4,6 @@
  * After deleting an archive, the UI was showing stale repository statistics
  * because `repository-info` was not being invalidated alongside `repository-archives`.
  */
-import React from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -117,7 +116,9 @@ describe('Archives page — delete cache invalidation (regression #352)', () => 
           setTimeoutCallback = fn as () => void
           return 999 as unknown as ReturnType<typeof setTimeout>
         }
-        return realSetTimeout(fn as TimerHandler, delay, ...args)
+        return realSetTimeout(fn as TimerHandler, delay, ...args) as unknown as ReturnType<
+          typeof setTimeout
+        >
       }
     )
   })

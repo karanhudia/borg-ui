@@ -165,7 +165,7 @@ export default function FileExplorerDialog({
       } catch (err: any) {
         const detail = err.response?.data?.detail
         if (detail && typeof detail === 'object' && detail.key) {
-          setError(t(detail.key, detail.params))
+          setError(t(detail.key, detail.params) as string)
         } else {
           setError(typeof detail === 'string' ? detail : t('fileExplorer.failedToLoad'))
         }
