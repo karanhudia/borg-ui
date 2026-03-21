@@ -19,6 +19,7 @@ export default defineConfig({
         '**/mockData',
         'src/vite-env.d.ts',
         'src/services/api.ts', // API wrappers - low value to unit test
+        'src/locales/**', // Locale JSON files - no logic to test
       ],
       // Enforce minimum coverage thresholds
       // Philosophy: Focus on critical business logic, not arbitrary percentages
