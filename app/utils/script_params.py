@@ -95,7 +95,7 @@ def parse_script_parameters(script_content: str) -> List[Dict[str, Any]]:
                 'type': param_type,
                 'default': default_value.strip() if default_value else '',
                 'description': generate_description(param_name, param_type),
-                'required': not bool(default_value)  # Required if no default provided
+                'required': False  # Never auto-require; users fill dynamically or explicitly mark required
             }
         else:
             # If we find the same param with a default, update it
