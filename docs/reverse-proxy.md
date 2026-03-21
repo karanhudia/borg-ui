@@ -7,9 +7,7 @@ description: "Configure Nginx, Traefik, Caddy, or Apache as a reverse proxy for 
 
 # Reverse Proxy Setup Guide
 
-Complete guide for running Borg Web UI behind a reverse proxy with Nginx, Traefik, Caddy, or Apache.
-
-Borg Web UI must be served from a **dedicated (sub)domain** (e.g., `backups.example.com`). Subfolder deployments (e.g., `example.com/borg/`) are not supported.
+Complete guide for running Borg Web UI behind a reverse proxy with Nginx, Traefik, Caddy, or Apache. You can serve the app at the root of a (sub)domain (e.g., `backups.example.com`) or under a subfolder (e.g., `example.com/borg-ui`).
 
 ---
 
@@ -64,6 +62,48 @@ server {
     }
 }
 ```
+
+### Subfolder Deployment (e.g., /borg-ui)
+
+To serve Borg Web UI under a sub-path such as `https://example.com/borg-ui`:
+
+1. **Set the `BASE_PATH` environment variable** to the sub-path (no trailing slash), e.g. `/borg-ui`.
+
+2. **Configure NGINX** to strip the path prefix when proxying. Use a trailing slash on `proxy_pass` so that `/borg-ui` is removed before the request reaches the backend:
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name example.com;
+
+    # SSL configuration...
+
+    location /borg-ui/ {
+        proxy_pass http://localhost:8081/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket/SSE support
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 86400;
+    }
+}
+```
+
+3. **Docker Compose** — pass the base path into the container:
+
+```yaml
+environment:
+  - BASE_PATH=/borg-ui
+```
+
+The app will then serve at `https://example.com/borg-ui` and use `/borg-ui` for all client-side routes and API calls.
+
+**Direct access:** With `BASE_PATH` set, you can also open the app at the same path on the container without a reverse proxy, e.g. `http://localhost:8081/borg-ui` (use the port you expose). Use this for local access or when the container port is exposed directly. Accessing the root URL (e.g. `http://localhost:8081/`) automatically redirects to the base path (e.g. `/borg-ui`).
 
 ### With SSL/HTTPS (Let's Encrypt)
 
