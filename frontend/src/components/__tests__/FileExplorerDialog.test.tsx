@@ -220,7 +220,10 @@ describe('FileExplorerDialog', () => {
       vi.mocked(api.get).mockRejectedValue({
         response: {
           data: {
-            detail: { key: 'backend.errors.filesystem.permissionDenied', params: { path: '/some/path' } },
+            detail: {
+              key: 'backend.errors.filesystem.permissionDenied',
+              params: { path: '/some/path' },
+            },
           },
         },
       })
