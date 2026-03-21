@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  getArchiveType,
-  getTimeGroup,
-  sortArchives,
-} from '../archiveGrouping'
+import { getArchiveType, getTimeGroup, sortArchives } from '../archiveGrouping'
 import type { Archive } from '../../types'
 
 const makeArchive = (name: string, start: string): Archive => ({
