@@ -111,7 +111,7 @@ describe('Archives page — delete cache invalidation (regression #352)', () => 
     // letting all other setTimeout calls (react-query internals etc.) pass through
     const realSetTimeout = global.setTimeout
     vi.spyOn(global, 'setTimeout').mockImplementation(
-      (fn: TimerHandler, delay?: number, ...args: unknown[]) => {
+      (fn: Parameters<typeof setTimeout>[0], delay?: number, ...args: unknown[]) => {
         if (delay === 2000) {
           setTimeoutCallback = fn as () => void
           return 999 as unknown as ReturnType<typeof setTimeout>

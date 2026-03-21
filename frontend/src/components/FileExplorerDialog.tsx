@@ -174,7 +174,7 @@ export default function FileExplorerDialog({
         setLoading(false)
       }
     },
-    [activeConnectionType, activeSshConfig]
+    [activeConnectionType, activeSshConfig, t]
   )
 
   // Initial load - only runs once when dialog opens
