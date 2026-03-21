@@ -85,7 +85,7 @@ RUN pip install --no-cache-dir pyfuse3
 # Install Borg via pip (auto-update patch versions within 1.4.x)
 # This allows automatic security/bug fixes while preventing breaking changes
 # Install with FUSE support for borg mount functionality
-RUN pip install --no-cache-dir 'borgbackup[fuse]>=1.4.3,<1.5.0'
+RUN pip install --no-cache-dir 'borgbackup[fuse]>=1.4.4,<1.5.0'
 
 # Install additional useful tools
 RUN apt-get update && apt-get install -y \
