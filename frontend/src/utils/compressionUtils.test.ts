@@ -239,6 +239,13 @@ describe('compressionUtils - Error Prevention', () => {
     expect(result2).toBe('unknown-algo,999') // Passes through unusual values
   })
 
+  it('parses obfuscate with no value following it', () => {
+    // 'obfuscate' alone — no level token after it; obfuscate stays '' and algorithm stays default
+    const result = parseCompressionString('obfuscate')
+    expect(result.obfuscate).toBe('')
+    expect(result.algorithm).toBe('lz4') // default, no further tokens consumed
+  })
+
   it('parses strings with extra commas gracefully', () => {
     // Shouldn't crash on malformed input
     const result = parseCompressionString('lz4,')

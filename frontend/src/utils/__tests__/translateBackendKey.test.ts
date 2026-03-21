@@ -66,4 +66,10 @@ describe('translateBackendKey', () => {
   it('custom fallback key overrides default', () => {
     expect(translateBackendKey(null, 'custom.error.key')).toBe('custom.error.key')
   })
+
+  it('object with non-string key — falls through to fallback', () => {
+    // detail is an object but .key is not a string, so Shape 1 is skipped
+    // typeof detail === 'string' is also false → falls through to fallback return
+    expect(translateBackendKey({ key: 123 } as never)).toBe('common.errors.unexpectedError')
+  })
 })
