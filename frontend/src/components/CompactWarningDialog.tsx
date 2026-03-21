@@ -86,7 +86,7 @@ export default function CompactWarningDialog({
           disabled={isLoading}
           startIcon={isLoading ? <Compress className="animate-spin" /> : <Compress />}
         >
-          {isLoading ? t('common.status.starting') : t('dialogs.compactWarning.confirm')}
+          {isLoading ? t('status.running') : t('dialogs.compactWarning.confirm')}
         </Button>
       </DialogActions>
     </Dialog>

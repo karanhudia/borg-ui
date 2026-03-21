@@ -102,7 +102,7 @@ export default function CheckWarningDialog({
           disabled={isLoading}
           startIcon={isLoading ? <CheckCircle className="animate-spin" /> : <CheckCircle />}
         >
-          {isLoading ? t('common.status.starting') : t('dialogs.checkWarning.confirm')}
+          {isLoading ? t('status.running') : t('dialogs.checkWarning.confirm')}
         </Button>
       </DialogActions>
     </Dialog>
