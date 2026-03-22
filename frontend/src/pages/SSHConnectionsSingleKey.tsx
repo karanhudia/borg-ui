@@ -1250,7 +1250,9 @@ export default function SSHConnectionsSingleKey() {
               }
               label={
                 <Box>
-                  <Typography variant="body2">{t('sshConnections.deployDialog.useSudo')}</Typography>
+                  <Typography variant="body2">
+                    {t('sshConnections.deployDialog.useSudo')}
+                  </Typography>
                   <Typography variant="caption" color="text.secondary">
                     {t('sshConnections.deployDialog.useSudoHint')}
                   </Typography>
