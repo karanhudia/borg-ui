@@ -12,6 +12,7 @@ import {
   Alert,
   Card,
   CardContent,
+  CircularProgress,
 } from '@mui/material'
 import { Delete, Info } from '@mui/icons-material'
 
@@ -304,7 +305,7 @@ export default function PruneRepositoryDialog({
           variant="contained"
           color="error"
           disabled={isLoading}
-          startIcon={isLoading ? <Delete className="animate-spin" /> : <Delete />}
+          startIcon={isLoading ? <CircularProgress size={16} color="inherit" /> : <Delete />}
         >
           {isLoading ? t('status.running') : t('dialogs.pruneRepository.confirm')}
         </Button>
