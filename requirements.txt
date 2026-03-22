@@ -15,8 +15,7 @@ pytest-asyncio==0.21.1
 pytest-cov==7.0.0
 pytest==7.4.3
 python-dotenv==1.0.0
-python-jose[cryptography]==3.4.0
-pyasn1>=0.6.3
+PyJWT==2.10.1
 python-multipart==0.0.20
 pyyaml==6.0.1
 redis==7.1.1
