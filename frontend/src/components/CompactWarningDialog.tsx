@@ -10,6 +10,7 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
+  CircularProgress,
 } from '@mui/material'
 import { Warning, Compress, Lock } from '@mui/icons-material'
 import { useTranslation } from 'react-i18next'
@@ -84,7 +85,7 @@ export default function CompactWarningDialog({
           variant="contained"
           color="warning"
           disabled={isLoading}
-          startIcon={isLoading ? <Compress className="animate-spin" /> : <Compress />}
+          startIcon={isLoading ? <CircularProgress size={16} color="inherit" /> : <Compress />}
         >
           {isLoading ? t('status.running') : t('dialogs.compactWarning.confirm')}
         </Button>
