@@ -306,7 +306,7 @@ export default function PruneRepositoryDialog({
           disabled={isLoading}
           startIcon={isLoading ? <Delete className="animate-spin" /> : <Delete />}
         >
-          {isLoading ? t('common.status.running') : t('dialogs.pruneRepository.confirm')}
+          {isLoading ? t('status.running') : t('dialogs.pruneRepository.confirm')}
         </Button>
       </DialogActions>
     </Dialog>

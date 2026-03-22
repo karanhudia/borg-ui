@@ -11,6 +11,7 @@ import {
 } from '@mui/material'
 import StatusBadge from './StatusBadge'
 import { TerminalLogViewer } from './TerminalLogViewer'
+import { BASE_PATH } from '@/utils/basePath'
 
 interface JobWithLogs {
   id: string | number
@@ -53,7 +54,7 @@ export default function LogViewerDialog<T extends JobWithLogs>({
     if (!open || !jobId || currentStatus !== 'running') return
     const poll = async () => {
       try {
-        const res = await fetch(`/api/activity/recent?job_type=${jobType}&limit=100`, {
+        const res = await fetch(`${BASE_PATH}/api/activity/recent?job_type=${jobType}&limit=100`, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
           },
@@ -76,7 +77,7 @@ export default function LogViewerDialog<T extends JobWithLogs>({
       if (!jobId) return { lines: [], total_lines: 0, has_more: false }
 
       const response = await fetch(
-        `/api/activity/${jobType}/${jobId}/logs?offset=${offset}&limit=500`,
+        `${BASE_PATH}/api/activity/${jobType}/${jobId}/logs?offset=${offset}&limit=500`,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,

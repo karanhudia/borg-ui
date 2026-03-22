@@ -2148,6 +2148,7 @@
     "folderNamePlaceholder": "Ordnername eingeben",
     "creating": "Erstellt...",
     "create": "Erstellen",
+    "failedToLoad": "Verzeichnis konnte nicht geladen werden",
     "chips": {
       "remote": "Remote",
       "host": "Host",
@@ -2218,8 +2219,6 @@
     "passwordHelper": "Optionales MQTT-Passwort",
     "clientIdLabel": "Client-ID",
     "clientIdHelper": "MQTT-Client-Kennung",
-    "baseTopicLabel": "Basis-Topic",
-    "baseTopicHelper": "Root-Topic-Präfix für alle MQTT-Nachrichten",
     "qosLevelLabel": "QoS-Stufe",
     "qosLevelHelper": "0 = höchstens einmal, 1 = mindestens einmal, 2 = genau einmal",
     "retainMessages": "Nachrichten beibehalten",

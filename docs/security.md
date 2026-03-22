@@ -60,6 +60,35 @@ Use passwords with:
 3. Disable or delete inactive accounts
 4. Review user access regularly
 
+#### Emergency Password Reset (CLI)
+
+Use this procedure when a user (including the admin) is locked out of the web UI and cannot change their password through **Settings > Profile**.
+
+{: .warning }
+> **Security warning:** This tool requires shell access to the container or host. Treat shell access as equivalent to full admin access — anyone who can run `docker exec` can reset any password.
+
+**Docker (primary method):**
+
+```bash
+docker exec -it borg-ui python -m app.scripts.reset_password <username> <new_password>
+```
+
+Concrete example:
+
+```bash
+docker exec -it borg-ui python -m app.scripts.reset_password admin newpassword123
+```
+
+**Non-Docker / custom database path:**
+
+Set the `BORG_DB_PATH` environment variable to override the default `/data/borg.db`:
+
+```bash
+BORG_DB_PATH=/custom/path/borg.db python -m app.scripts.reset_password admin newpassword123
+```
+
+**Behaviour:** The script sets `must_change_password = 0`, so the user is not forced to change the password again immediately after logging in.
+
 ---
 
 ### Proxy/OIDC Authentication

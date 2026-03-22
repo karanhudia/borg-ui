@@ -7,6 +7,8 @@
  * - VITE_MATOMO_SITE_ID: Your site ID in Matomo (usually 1)
  */
 
+import { BASE_PATH } from './basePath'
+
 interface MatomoWindow extends Window {
   _paq?: (string | number | boolean | undefined)[][]
 }
@@ -109,7 +111,7 @@ let preferenceLoaded = false
 export const loadUserPreference = async (): Promise<void> => {
   try {
     // Check if proxy auth is enabled
-    const authConfigResponse = await fetch('/api/auth/config')
+    const authConfigResponse = await fetch(`${BASE_PATH}/api/auth/config`)
     const authConfig = await authConfigResponse.json()
     const proxyAuthEnabled = authConfig.proxy_auth_enabled
 
@@ -133,7 +135,7 @@ export const loadUserPreference = async (): Promise<void> => {
     }
     // In proxy auth mode without token, the backend will use proxy headers
 
-    const response = await fetch('/api/settings/preferences', {
+    const response = await fetch(`${BASE_PATH}/api/settings/preferences`, {
       headers,
     })
 

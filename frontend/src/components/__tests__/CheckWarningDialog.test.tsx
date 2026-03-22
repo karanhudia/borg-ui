@@ -245,7 +245,7 @@ describe('CheckWarningDialog', () => {
           isLoading={true}
         />
       )
-      expect(screen.getByRole('button', { name: /common.status.starting/ })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Running/i })).toBeInTheDocument()
     })
 
     it('disables Cancel button when isLoading is true', () => {
@@ -271,7 +271,7 @@ describe('CheckWarningDialog', () => {
           isLoading={true}
         />
       )
-      expect(screen.getByRole('button', { name: /common.status.starting/ })).toBeDisabled()
+      expect(screen.getByRole('button', { name: /Running/i })).toBeDisabled()
     })
 
     it('enables buttons when isLoading is false', () => {
