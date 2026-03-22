@@ -1250,10 +1250,9 @@ export default function SSHConnectionsSingleKey() {
               }
               label={
                 <Box>
-                  <Typography variant="body2">Use sudo for backups</Typography>
+                  <Typography variant="body2">{t('sshConnections.deployDialog.useSudo')}</Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Prefix borg with sudo on the remote host. Requires passwordless sudo for the SSH
-                    user. Only applies to remote SSH backup mode.
+                    {t('sshConnections.deployDialog.useSudoHint')}
                   </Typography>
                 </Box>
               }

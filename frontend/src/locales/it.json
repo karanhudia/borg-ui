@@ -587,6 +587,8 @@
       "port": "Porta",
       "password": "Password",
       "sftpMode": "Usa modalità SFTP per la distribuzione della chiave",
+      "useSudo": "Usa sudo per i backup",
+      "useSudoHint": "Antepone sudo a borg sull'host remoto. Richiede sudo senza password per l'utente SSH. Si applica solo alla modalità di backup SSH remoto.",
       "defaultPath": "Percorso Predefinito (Opzionale)",
       "mountPoint": "Punto di Mount (Opzionale)",
       "deploying": "Distribuzione in corso...",

@@ -587,6 +587,8 @@
       "port": "Port",
       "password": "Passwort",
       "sftpMode": "SFTP-Modus für die Schlüsselbereitstellung verwenden",
+      "useSudo": "Sudo für Backups verwenden",
+      "useSudoHint": "Stellt borg auf dem entfernten Host sudo voran. Erfordert passwortloses sudo für den SSH-Benutzer. Gilt nur für den Remote-SSH-Backup-Modus.",
       "defaultPath": "Standardpfad (Optional)",
       "mountPoint": "Einhängepunkt (Optional)",
       "deploying": "Stellt bereit...",

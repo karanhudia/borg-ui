@@ -587,6 +587,8 @@
       "port": "Port",
       "password": "Password",
       "sftpMode": "Use SFTP mode for key deployment",
+      "useSudo": "Use sudo for backups",
+      "useSudoHint": "Prefix borg with sudo on the remote host. Requires passwordless sudo for the SSH user. Only applies to remote SSH backup mode.",
       "defaultPath": "Default Path (Optional)",
       "mountPoint": "Mount Point (Optional)",
       "deploying": "Deploying...",
