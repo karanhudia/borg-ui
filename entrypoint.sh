@@ -144,6 +144,35 @@ chmod 700 /data/borg_keys
 chmod 600 /data/borg_keys/* 2>/dev/null || true
 echo "[$(date)] Borg keyfiles directory setup complete"
 
+# Preserve supplementary groups added via --group-add
+# gosu reinitializes the process's supplementary groups from /etc/group when
+# switching to borg — it does NOT inherit the current (root) process's groups.
+# Any GID passed via `docker run --group-add` is available to root here but
+# will be silently dropped by gosu unless borg is a member of that group in
+# /etc/group. We fix this by iterating over all current supplementary GIDs,
+# creating a group entry for any that are missing, and adding borg to them.
+BORG_GIDS_CURRENT=$(id -G borg)
+for GID in $(id -G); do
+    # Skip if borg is already a member of this GID
+    if echo "$BORG_GIDS_CURRENT" | tr ' ' '\n' | grep -q "^${GID}$"; then
+        continue
+    fi
+
+    GROUP_NAME=$(getent group "$GID" | cut -d: -f1)
+    if [ -z "$GROUP_NAME" ]; then
+        # GID not in /etc/group (e.g. a host group like www-data, postgres).
+        # Create a placeholder group so gosu can pass it through.
+        GROUP_NAME="extgroup${GID}"
+        groupadd -o -g "$GID" "$GROUP_NAME" 2>/dev/null || true
+        GROUP_NAME=$(getent group "$GID" | cut -d: -f1)
+    fi
+
+    if [ -n "$GROUP_NAME" ]; then
+        usermod -a -G "$GROUP_NAME" borg 2>/dev/null || true
+        echo "[$(date)] Preserved supplementary group '${GROUP_NAME}' (GID: ${GID}) for borg (--group-add)"
+    fi
+done
+
 # Switch to borg user and start the application
 echo "[$(date)] Starting Borg Web UI as user borg (${PUID}:${PGID})..."
 cd /app
