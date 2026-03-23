@@ -1424,9 +1424,10 @@
     "autoDetect": "Auto-detect compressibility (auto,C[,L])",
     "autoDetectDesc": "Uses lz4 to test if data is compressible. For incompressible data (e.g., media files), uses \"none\". For compressible data, uses your selected algorithm.",
     "obfuscateLabel": "Obfuscate Spec (Optional)",
-    "obfuscatePlaceholder": "e.g., 110, 250",
-    "obfuscateHelper": "Obfuscate compressed chunk sizes to make fingerprinting attacks harder. Must be used with encryption. Repo will be bigger.",
-    "finalSpec": "Final compression spec:"
+    "obfuscatePlaceholder": "e.g., 3, 110, or 250",
+    "obfuscateHelper": "Level 1-6 (small overhead), 110-123 (up to 8MB additive), or 250 (Padmé, ≤12% overhead). Requires encryption.",
+    "finalSpec": "Final compression spec:",
+    "obfuscateErrorInvalid": "Invalid obfuscation level. Must be 1-6, 110-123, or 250 (Padmé)."
   },
   "archiveNameTemplate": {
     "label": "Archive Name Template",

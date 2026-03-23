@@ -1424,9 +1424,10 @@
     "autoDetect": "Detectar compresibilidad automáticamente (auto,C[,L])",
     "autoDetectDesc": "Usa lz4 para probar si los datos son compresibles. Para datos incompresibles (ej., archivos multimedia), usa \"none\". Para datos compresibles, usa el algoritmo seleccionado.",
     "obfuscateLabel": "Especificación de ofuscación (Opcional)",
-    "obfuscatePlaceholder": "ej., 110, 250",
-    "obfuscateHelper": "Ofusca los tamaños de fragmentos comprimidos para dificultar los ataques de identificación de huellas. Debe usarse con cifrado. El repositorio será más grande.",
-    "finalSpec": "Especificación de compresión final:"
+    "obfuscatePlaceholder": "ej. 3, 110 o 250",
+    "obfuscateHelper": "Nivel 1-6 (overhead pequeño), 110-123 (hasta 8MB aditivo) o 250 (Padmé, ≤12% overhead). Requiere cifrado.",
+    "finalSpec": "Especificación de compresión final:",
+    "obfuscateErrorInvalid": "Nivel de ofuscación no válido. Debe ser 1-6, 110-123 o 250 (Padmé)."
   },
   "archiveNameTemplate": {
     "label": "Plantilla de nombre de archivo",

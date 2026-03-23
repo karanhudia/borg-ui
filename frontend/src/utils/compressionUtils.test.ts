@@ -217,8 +217,9 @@ describe('compressionUtils - Production Scenarios', () => {
     })
   })
 
-  it('validates obfuscate spec formats', () => {
-    const obfuscateSpecs = ['110', '256', '512']
+  it('round-trips valid obfuscate spec values', () => {
+    // Valid borg obfuscation levels: 1-6, 110-123, and 250 (Padmé, added in borg 1.4.1)
+    const obfuscateSpecs = ['1', '3', '6', '110', '115', '123', '250']
 
     obfuscateSpecs.forEach((spec) => {
       const built = buildCompressionString('lz4', '', false, spec)

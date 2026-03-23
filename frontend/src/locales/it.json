@@ -1424,9 +1424,10 @@
     "autoDetect": "Rilevamento automatico comprimibilità (auto,C[,L])",
     "autoDetectDesc": "Usa lz4 per testare se i dati sono comprimibili. Per dati non comprimibili (es., file multimediali), usa \"none\". Per dati comprimibili, usa l'algoritmo selezionato.",
     "obfuscateLabel": "Specifica Offuscamento (Opzionale)",
-    "obfuscatePlaceholder": "es., 110, 250",
-    "obfuscateHelper": "Offusca le dimensioni dei chunk compressi per rendere più difficili gli attacchi di fingerprinting. Deve essere usato con crittografia. Il repository sarà più grande.",
-    "finalSpec": "Specifica compressione finale:"
+    "obfuscatePlaceholder": "es. 3, 110 o 250",
+    "obfuscateHelper": "Livello 1-6 (overhead ridotto), 110-123 (fino a 8MB additivo) o 250 (Padmé, ≤12% overhead). Richiede crittografia.",
+    "finalSpec": "Specifica compressione finale:",
+    "obfuscateErrorInvalid": "Livello di offuscamento non valido. Deve essere 1-6, 110-123 o 250 (Padmé)."
   },
   "archiveNameTemplate": {
     "label": "Template Nome Archivio",
