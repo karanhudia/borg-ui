@@ -188,12 +188,29 @@ PORT=${PORT:-8081}
 
 # Note: Access logs disabled (/dev/null) because FastAPI middleware already logs all requests
 # with structured logging. This prevents duplicate log entries.
-exec gosu borg gunicorn app.main:app \
-    --bind 0.0.0.0:${PORT} \
-    --workers 1 \
-    --worker-class uvicorn.workers.UvicornWorker \
-    --timeout 0 \
-    --graceful-timeout 30 \
-    --worker-tmp-dir /dev/shm \
-    --access-logfile /dev/null \
-    --error-logfile -
+#
+# When PUID=0, the borg user's UID has been changed to 0 (root). gosu is a privilege-reduction
+# tool designed to DROP root privileges — using it to switch to a user that is also UID=0 causes
+# gunicorn workers to fail intermittently. Bypass gosu and run gunicorn directly as root instead.
+if [ "$PUID" = "0" ]; then
+    echo "[$(date)] Running as root (PUID=0), starting gunicorn directly without gosu..."
+    exec gunicorn app.main:app \
+        --bind 0.0.0.0:${PORT} \
+        --workers 1 \
+        --worker-class uvicorn.workers.UvicornWorker \
+        --timeout 0 \
+        --graceful-timeout 30 \
+        --worker-tmp-dir /dev/shm \
+        --access-logfile /dev/null \
+        --error-logfile -
+else
+    exec gosu borg gunicorn app.main:app \
+        --bind 0.0.0.0:${PORT} \
+        --workers 1 \
+        --worker-class uvicorn.workers.UvicornWorker \
+        --timeout 0 \
+        --graceful-timeout 30 \
+        --worker-tmp-dir /dev/shm \
+        --access-logfile /dev/null \
+        --error-logfile -
+fi
