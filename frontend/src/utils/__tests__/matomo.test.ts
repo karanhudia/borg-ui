@@ -371,12 +371,16 @@ describe('matomo', () => {
   describe('getOrCreateInstallId', () => {
     it('creates and stores a new UUID when none exists', () => {
       localStorage.clear()
-      vi.spyOn(window.crypto, 'randomUUID').mockReturnValue('test-uuid-1234-5678-abcd-ef0123456789' as `${string}-${string}-${string}-${string}-${string}`)
+      vi.spyOn(window.crypto, 'randomUUID').mockReturnValue(
+        'test-uuid-1234-5678-abcd-ef0123456789' as `${string}-${string}-${string}-${string}-${string}`
+      )
 
       const id = getOrCreateInstallId()
 
       expect(id).toBe('test-uuid-1234-5678-abcd-ef0123456789')
-      expect(localStorage.getItem('borg_ui_install_id')).toBe('test-uuid-1234-5678-abcd-ef0123456789')
+      expect(localStorage.getItem('borg_ui_install_id')).toBe(
+        'test-uuid-1234-5678-abcd-ef0123456789'
+      )
     })
 
     it('returns existing UUID from localStorage without creating a new one', () => {
