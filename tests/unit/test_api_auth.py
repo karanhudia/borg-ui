@@ -455,7 +455,7 @@ class TestProtectedEndpoints:
         """Test getting current user with invalid token"""
         response = test_client.get(
             "/api/auth/me",
-            headers={"Authorization": "Bearer invalid_token"}
+            headers={"X-Borg-Authorization": "Bearer invalid_token"}
         )
 
         assert response.status_code == 401
@@ -482,7 +482,7 @@ class TestProtectedEndpoints:
         """Test accessing protected endpoint with malformed token"""
         response = test_client.get(
             "/api/auth/me",
-            headers={"Authorization": "Bearer malformed_token"}
+            headers={"X-Borg-Authorization": "Bearer malformed_token"}
         )
 
         assert response.status_code in [401, 403]
@@ -494,7 +494,7 @@ class TestProtectedEndpoints:
         """Should return 401 for invalid JWT token"""
         response = test_client.get(
             "/api/repositories/",
-            headers={"Authorization": "Bearer invalid_token_here"}
+            headers={"X-Borg-Authorization": "Bearer invalid_token_here"}
         )
 
         assert response.status_code == 401
@@ -509,7 +509,7 @@ class TestProtectedEndpoints:
 
         response = test_client.get(
             "/api/auth/me",
-            headers={"Authorization": f"Bearer {expired_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {expired_token}"}
         )
 
         assert response.status_code in [401, 403]
@@ -518,7 +518,7 @@ class TestProtectedEndpoints:
         """Test accessing protected endpoint without Bearer prefix"""
         response = test_client.get(
             "/api/auth/me",
-            headers={"Authorization": auth_token}  # Missing "Bearer" prefix
+            headers={"X-Borg-Authorization": auth_token}  # Missing "Bearer" prefix
         )
 
         assert response.status_code in [401, 403]
@@ -549,7 +549,7 @@ class TestTokenValidation:
 
         response = test_client.get(
             "/api/repositories/",
-            headers={"Authorization": f"Bearer {expired_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {expired_token}"}
         )
 
         assert response.status_code == 401
@@ -558,7 +558,7 @@ class TestTokenValidation:
         """Should return 401 for malformed token"""
         response = test_client.get(
             "/api/repositories/",
-            headers={"Authorization": "Bearer not.a.valid.jwt"}
+            headers={"X-Borg-Authorization": "Bearer not.a.valid.jwt"}
         )
 
         assert response.status_code == 401
@@ -570,7 +570,7 @@ class TestTokenValidation:
         """
         response = test_client.get(
             "/api/repositories/",
-            headers={"Authorization": "InvalidPrefix token_here"}
+            headers={"X-Borg-Authorization": "InvalidPrefix token_here"}
         )
 
         assert response.status_code == 401

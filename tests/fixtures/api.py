@@ -147,10 +147,10 @@ def admin_token(admin_user):
 @pytest.fixture
 def auth_headers(auth_token):
     """Create authorization headers with test user token"""
-    return {"Authorization": f"Bearer {auth_token}"}
+    return {"X-Borg-Authorization": f"Bearer {auth_token}"}
 
 
 @pytest.fixture
 def admin_headers(admin_token):
     """Create authorization headers with admin token"""
-    return {"Authorization": f"Bearer {admin_token}"}
+    return {"X-Borg-Authorization": f"Bearer {admin_token}"}

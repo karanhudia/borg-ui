@@ -6,11 +6,21 @@
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"auth": {
-		"type": "bearer",
-		"bearer": [
+		"type": "apikey",
+		"apikey": [
 			{
-				"key": "token",
-				"value": "{{access_token}}",
+				"key": "key",
+				"value": "X-Borg-Authorization",
+				"type": "string"
+			},
+			{
+				"key": "value",
+				"value": "Bearer {{access_token}}",
+				"type": "string"
+			},
+			{
+				"key": "in",
+				"value": "header",
 				"type": "string"
 			}
 		]

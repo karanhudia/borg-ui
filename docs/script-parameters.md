@@ -259,7 +259,7 @@ TIMEOUT="${TIMEOUT:-10}"
 
 response=$(curl -s -w "%{http_code}" -o /dev/null \
   --max-time "$TIMEOUT" \
-  -H "Authorization: Bearer $API_TOKEN" \
+  -H "X-Borg-Authorization: Bearer $API_TOKEN" \
   "$API_URL/health")
 
 if [ "$response" = "200" ]; then
