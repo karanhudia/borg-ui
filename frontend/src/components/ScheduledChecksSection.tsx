@@ -208,14 +208,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
           ? convertCronToLocal(check.check_cron_expression)
           : t('scheduledChecks.notConfigured')
         const label = check.check_cron_expression ? formatCronHuman(localCron) : localCron
-        return (
-          <Chip
-            label={label}
-            size="small"
-            color="info"
-            variant="outlined"
-          />
-        )
+        return <Chip label={label} size="small" color="info" variant="outlined" />
       },
     },
     {
