@@ -12,6 +12,7 @@ import {
   formatDurationSeconds,
   formatDateTimeFull,
   formatDateCompact,
+  formatCronHuman,
 } from './dateUtils'
 
 describe('convertCronToUTC - Critical Edge Cases', () => {
@@ -544,5 +545,66 @@ describe('formatDateCompact', () => {
   it('includes year', () => {
     const result = formatDateCompact('2025-08-25T15:00:00Z')
     expect(result).toContain('2025')
+  })
+})
+
+describe('formatCronHuman', () => {
+  it('returns original expression when not 5 parts', () => {
+    expect(formatCronHuman('0 2 * *')).toBe('0 2 * *')
+    expect(formatCronHuman('invalid')).toBe('invalid')
+    expect(formatCronHuman('0 0 12 * * *')).toBe('0 0 12 * * *')
+  })
+
+  it('formats every-minute pattern', () => {
+    expect(formatCronHuman('*/1 * * * *')).toBe('Every minute')
+  })
+
+  it('formats every-N-minutes pattern', () => {
+    expect(formatCronHuman('*/15 * * * *')).toBe('Every 15 min')
+    expect(formatCronHuman('*/5 * * * *')).toBe('Every 5 min')
+  })
+
+  it('formats every-hour pattern', () => {
+    expect(formatCronHuman('0 */1 * * *')).toBe('Every hour')
+  })
+
+  it('formats every-N-hours pattern', () => {
+    expect(formatCronHuman('0 */4 * * *')).toBe('Every 4h')
+    expect(formatCronHuman('30 */6 * * *')).toBe('Every 6h')
+  })
+
+  it('formats daily pattern', () => {
+    expect(formatCronHuman('0 2 * * *')).toBe('Daily · 02:00')
+    expect(formatCronHuman('30 14 * * *')).toBe('Daily · 14:30')
+    expect(formatCronHuman('0 0 * * *')).toBe('Daily · 00:00')
+  })
+
+  it('formats weekly pattern with single day', () => {
+    expect(formatCronHuman('0 9 * * 1')).toBe('Mon · 09:00')
+    expect(formatCronHuman('0 9 * * 0')).toBe('Sun · 09:00')
+    expect(formatCronHuman('0 9 * * 6')).toBe('Sat · 09:00')
+  })
+
+  it('formats weekly pattern with multiple days', () => {
+    expect(formatCronHuman('40 1 * * 1,3,5')).toBe('Mon Wed Fri · 01:40')
+    expect(formatCronHuman('0 8 * * 1,2,3,4,5')).toBe('Mon Tue Wed Thu Fri · 08:00')
+  })
+
+  it('formats weekly pattern with all 7 days as Daily', () => {
+    expect(formatCronHuman('0 9 * * 0,1,2,3,4,5,6')).toBe('Daily · 09:00')
+  })
+
+  it('formats monthly pattern with ordinal suffixes', () => {
+    expect(formatCronHuman('0 3 1 * *')).toBe('1st · 03:00')
+    expect(formatCronHuman('0 3 2 * *')).toBe('2nd · 03:00')
+    expect(formatCronHuman('0 3 3 * *')).toBe('3rd · 03:00')
+    expect(formatCronHuman('0 3 4 * *')).toBe('4th · 03:00')
+    expect(formatCronHuman('0 3 15 * *')).toBe('15th · 03:00')
+    expect(formatCronHuman('0 3 31 * *')).toBe('31th · 03:00')
+  })
+
+  it('falls back to raw expression for unrecognized patterns', () => {
+    expect(formatCronHuman('0 9-17 * * 1-5')).toBe('0 9-17 * * 1-5')
+    expect(formatCronHuman('0 9 1 3 *')).toBe('0 9 1 3 *') // specific month
   })
 })
