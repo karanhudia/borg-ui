@@ -1422,9 +1422,10 @@
     "autoDetect": "Komprimierbarkeit automatisch erkennen (auto,C[,L])",
     "autoDetectDesc": "Verwendet lz4, um zu testen, ob Daten komprimierbar sind. Für unkomprimierbare Daten (z.B. Mediendateien) wird \"none\" verwendet. Für komprimierbare Daten wird der ausgewählte Algorithmus verwendet.",
     "obfuscateLabel": "Verschleierungsspezifikation (Optional)",
-    "obfuscatePlaceholder": "z.B. 110, 250",
-    "obfuscateHelper": "Verschleiert komprimierte Block-Größen, um Fingerabdruck-Angriffe zu erschweren. Muss mit Verschlüsselung verwendet werden. Repository wird größer.",
-    "finalSpec": "Endgültige Komprimierungsspezifikation:"
+    "obfuscatePlaceholder": "z.B. 3, 110 oder 250",
+    "obfuscateHelper": "Level 1-6 (geringer Overhead), 110-123 (bis zu 8MB additiv) oder 250 (Padmé, ≤12% Overhead). Erfordert Verschlüsselung.",
+    "finalSpec": "Endgültige Komprimierungsspezifikation:",
+    "obfuscateErrorInvalid": "Ungültige Obfuskierungsstufe. Muss 1-6, 110-123 oder 250 (Padmé) sein."
   },
   "archiveNameTemplate": {
     "label": "Archivnamen-Vorlage",
