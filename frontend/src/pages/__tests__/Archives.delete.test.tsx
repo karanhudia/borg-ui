@@ -116,9 +116,7 @@ describe('Archives page — delete cache invalidation (regression #352)', () => 
           setTimeoutCallback = fn as () => void
           return 999 as unknown as ReturnType<typeof setTimeout>
         }
-        return realSetTimeout(fn as TimerHandler, delay, ...args) as unknown as ReturnType<
-          typeof setTimeout
-        >
+        return realSetTimeout(fn, delay, ...args) as unknown as ReturnType<typeof setTimeout>
       }
     )
   })
