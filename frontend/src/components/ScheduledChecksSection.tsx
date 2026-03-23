@@ -30,6 +30,7 @@ import {
   formatRelativeTime,
   convertCronToUTC,
   convertCronToLocal,
+  formatCronHuman,
 } from '../utils/dateUtils'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
 import CronBuilderDialog from './CronBuilderDialog'
@@ -206,13 +207,13 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
         const localCron = check.check_cron_expression
           ? convertCronToLocal(check.check_cron_expression)
           : t('scheduledChecks.notConfigured')
+        const label = check.check_cron_expression ? formatCronHuman(localCron) : localCron
         return (
           <Chip
-            label={localCron}
+            label={label}
             size="small"
             color="info"
             variant="outlined"
-            sx={{ fontFamily: 'monospace' }}
           />
         )
       },
