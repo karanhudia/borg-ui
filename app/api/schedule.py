@@ -716,10 +716,10 @@ async def update_scheduled_job(
         if job_data.run_repository_scripts is not None:
             job.run_repository_scripts = job_data.run_repository_scripts
 
-        if job_data.pre_backup_script_id is not None:
+        if 'pre_backup_script_id' in job_data.model_fields_set:
             job.pre_backup_script_id = job_data.pre_backup_script_id
 
-        if job_data.post_backup_script_id is not None:
+        if 'post_backup_script_id' in job_data.model_fields_set:
             job.post_backup_script_id = job_data.post_backup_script_id
 
         if job_data.pre_backup_script_parameters is not None:
