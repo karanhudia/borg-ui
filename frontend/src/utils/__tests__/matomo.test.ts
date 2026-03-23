@@ -13,6 +13,9 @@ import {
   resetUserId,
   trackOptOut,
   trackConsentResponse,
+  trackLanguageChange,
+  getOrCreateInstallId,
+  resetOptOutCache,
   anonymizeEntityName,
   EventCategory,
   EventAction,
@@ -349,6 +352,53 @@ describe('matomo', () => {
       expect(EventCategory.SETTINGS).toBe('Settings')
       expect(EventCategory.AUTH).toBe('Authentication')
       expect(EventCategory.NAVIGATION).toBe('Navigation')
+    })
+  })
+
+  describe('trackLanguageChange', () => {
+    it('does not track when _paq is undefined', () => {
+      window._paq = undefined
+      trackLanguageChange('de')
+      expect(window._paq).toBeUndefined()
+    })
+
+    it('does not throw when called', () => {
+      window._paq = []
+      expect(() => trackLanguageChange('es')).not.toThrow()
+    })
+  })
+
+  describe('getOrCreateInstallId', () => {
+    it('creates and stores a new UUID when none exists', () => {
+      localStorage.clear()
+      vi.spyOn(window.crypto, 'randomUUID').mockReturnValue('test-uuid-1234-5678-abcd-ef0123456789' as `${string}-${string}-${string}-${string}-${string}`)
+
+      const id = getOrCreateInstallId()
+
+      expect(id).toBe('test-uuid-1234-5678-abcd-ef0123456789')
+      expect(localStorage.getItem('borg_ui_install_id')).toBe('test-uuid-1234-5678-abcd-ef0123456789')
+    })
+
+    it('returns existing UUID from localStorage without creating a new one', () => {
+      localStorage.clear()
+      const existingId = 'existing-uuid-1234-5678-abcd-ef0123456789'
+      localStorage.setItem('borg_ui_install_id', existingId)
+
+      const id = getOrCreateInstallId()
+
+      expect(id).toBe(existingId)
+    })
+  })
+
+  describe('resetOptOutCache', () => {
+    it('calls loadUserPreference and completes without error', async () => {
+      Storage.prototype.getItem = vi.fn().mockReturnValue(null)
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ proxy_auth_enabled: false }),
+      } as Response)
+
+      await expect(resetOptOutCache()).resolves.toBeUndefined()
     })
   })
 
