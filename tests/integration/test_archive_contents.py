@@ -85,7 +85,7 @@ class ArchiveContentsTester:
     def get_existing_repositories(self) -> list:
         """Get list of existing repositories"""
         try:
-            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            headers = {"X-Borg-Authorization": f"Bearer {self.auth_token}"}
             response = self.session.get(
                 f"{self.base_url}/api/repositories/",
                 headers=headers,
@@ -103,7 +103,7 @@ class ArchiveContentsTester:
     def delete_repository(self, repo_id: int) -> bool:
         """Delete a repository by ID"""
         try:
-            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            headers = {"X-Borg-Authorization": f"Bearer {self.auth_token}"}
             response = self.session.delete(
                 f"{self.base_url}/api/repositories/{repo_id}",
                 headers=headers,
@@ -203,7 +203,7 @@ class ArchiveContentsTester:
         Returns set of immediate children at the given path
         """
         try:
-            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            headers = {"X-Borg-Authorization": f"Bearer {self.auth_token}"}
             params = {"path": path}
 
             response = self.session.get(
@@ -229,7 +229,7 @@ class ArchiveContentsTester:
         """Add a repository to Borg UI, returns repository ID"""
         try:
             headers = {
-                "Authorization": f"Bearer {self.auth_token}",
+                "X-Borg-Authorization": f"Bearer {self.auth_token}",
                 "Content-Type": "application/json"
             }
 
