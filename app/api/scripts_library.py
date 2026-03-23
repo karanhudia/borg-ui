@@ -14,7 +14,7 @@ import os
 import hashlib
 
 from app.database.database import get_db
-from app.database.models import Script, RepositoryScript, ScriptExecution, Repository, User
+from app.database.models import Script, RepositoryScript, ScriptExecution, Repository, ScheduledJob, User
 from app.core.security import get_current_user, encrypt_secret
 from app.config import settings
 from app.services.script_executor import execute_script
@@ -511,6 +511,20 @@ async def delete_script(
             status_code=400,
             detail={"key": "backend.errors.scripts.scriptInUse", "params": {"count": len(valid_repo_scripts), "places": places_text, "repos": ', '.join(repo_details)}}
         )
+
+    # Clear schedule-level script references (ScheduledJob.pre/post_backup_script_id have no DB cascade)
+    schedules_using_script = db.query(ScheduledJob).filter(
+        (ScheduledJob.pre_backup_script_id == script_id) |
+        (ScheduledJob.post_backup_script_id == script_id)
+    ).all()
+    for schedule in schedules_using_script:
+        if schedule.pre_backup_script_id == script_id:
+            schedule.pre_backup_script_id = None
+        if schedule.post_backup_script_id == script_id:
+            schedule.post_backup_script_id = None
+    if schedules_using_script:
+        db.flush()
+        logger.info("Cleared script reference from schedules", script_id=script_id, count=len(schedules_using_script))
 
     # Delete script file
     file_path = Path(settings.data_dir) / "scripts" / script.file_path
