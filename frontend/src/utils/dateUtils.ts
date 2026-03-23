@@ -57,26 +57,50 @@ export const formatCronHuman = (cronExpression: string): string => {
   const [minute, hour, day, month, dayOfWeek] = parts
 
   // Every N minutes: */5 * * * *
-  if (minute.startsWith('*/') && hour === '*' && day === '*' && month === '*' && dayOfWeek === '*') {
+  if (
+    minute.startsWith('*/') &&
+    hour === '*' &&
+    day === '*' &&
+    month === '*' &&
+    dayOfWeek === '*'
+  ) {
     const n = parseInt(minute.replace('*/', ''))
     return n === 1 ? 'Every minute' : `Every ${n} min`
   }
 
   // Every N hours: 30 */6 * * *
-  if (/^\d+$/.test(minute) && hour.startsWith('*/') && day === '*' && month === '*' && dayOfWeek === '*') {
+  if (
+    /^\d+$/.test(minute) &&
+    hour.startsWith('*/') &&
+    day === '*' &&
+    month === '*' &&
+    dayOfWeek === '*'
+  ) {
     const n = parseInt(hour.replace('*/', ''))
     return n === 1 ? 'Every hour' : `Every ${n}h`
   }
 
   // Daily: 40 1 * * *
-  if (/^\d+$/.test(minute) && /^\d+$/.test(hour) && day === '*' && month === '*' && dayOfWeek === '*') {
+  if (
+    /^\d+$/.test(minute) &&
+    /^\d+$/.test(hour) &&
+    day === '*' &&
+    month === '*' &&
+    dayOfWeek === '*'
+  ) {
     const h = parseInt(hour).toString().padStart(2, '0')
     const m = parseInt(minute).toString().padStart(2, '0')
     return `Daily · ${h}:${m}`
   }
 
   // Weekly (specific days): 40 1 * * 1,3,5
-  if (/^\d+$/.test(minute) && /^\d+$/.test(hour) && day === '*' && month === '*' && /^[\d,]+$/.test(dayOfWeek)) {
+  if (
+    /^\d+$/.test(minute) &&
+    /^\d+$/.test(hour) &&
+    day === '*' &&
+    month === '*' &&
+    /^[\d,]+$/.test(dayOfWeek)
+  ) {
     const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
     const selectedDays = dayOfWeek.split(',').map((d) => DAY_LABELS[parseInt(d)] ?? d)
     const h = parseInt(hour).toString().padStart(2, '0')
@@ -86,7 +110,13 @@ export const formatCronHuman = (cronExpression: string): string => {
   }
 
   // Monthly: 0 3 15 * *
-  if (/^\d+$/.test(minute) && /^\d+$/.test(hour) && /^\d+$/.test(day) && month === '*' && dayOfWeek === '*') {
+  if (
+    /^\d+$/.test(minute) &&
+    /^\d+$/.test(hour) &&
+    /^\d+$/.test(day) &&
+    month === '*' &&
+    dayOfWeek === '*'
+  ) {
     const d = parseInt(day)
     const suffix = d === 1 ? 'st' : d === 2 ? 'nd' : d === 3 ? 'rd' : 'th'
     const h = parseInt(hour).toString().padStart(2, '0')
