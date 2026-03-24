@@ -104,7 +104,8 @@ class RemoteBackupService:
                 exclude_patterns=exclude_patterns or [],
                 compression=compression,
                 custom_flags=custom_flags,
-                borg_binary_path=ssh_connection.borg_binary_path
+                borg_binary_path=ssh_connection.borg_binary_path,
+                use_sudo=ssh_connection.use_sudo
             )
 
             logger.info("Built borg command for remote execution",
@@ -172,7 +173,8 @@ class RemoteBackupService:
         exclude_patterns: List[str],
         compression: str = "lz4",
         custom_flags: str = None,
-        borg_binary_path: str = "/usr/bin/borg"
+        borg_binary_path: str = "/usr/bin/borg",
+        use_sudo: bool = False
     ) -> str:
         """
         Build the borg create command for remote execution
@@ -204,7 +206,9 @@ class RemoteBackupService:
         if repository.remote_path:
             cmd_parts.append(f"BORG_REMOTE_PATH={shlex.quote(repository.remote_path)}")
 
-        # Borg binary path
+        # Borg binary path (optionally prefixed with sudo)
+        if use_sudo:
+            cmd_parts.append("sudo")
         cmd_parts.append(shlex.quote(borg_binary_path))
 
         # Create command

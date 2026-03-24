@@ -59,6 +59,7 @@ interface Repository extends RepositoryData {
   pre_hook_timeout?: number
   post_hook_timeout?: number
   continue_on_hook_failure?: boolean
+  skip_on_hook_failure?: boolean
   bypass_lock?: boolean
   source_ssh_connection_id?: number | null
   repository_type?: 'local' | 'ssh' | 'sftp'
