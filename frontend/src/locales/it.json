@@ -2033,6 +2033,10 @@
     "timeoutLabel": "Timeout (secondi)",
     "timeoutHint": "Tempo massimo di attesa per l'esecuzione dello script",
     "continueOnFailure": "Continua il backup se lo script fallisce",
+    "onFailureLabel": "Se lo script pre-backup fallisce:",
+    "onFailureFail": "Interrompi backup",
+    "onFailureContinue": "Continua backup",
+    "onFailureSkip": "Salta backup",
     "testPassed": "Test Superato",
     "testWarnings": "Test Completato con Avvisi",
     "testFailed": "Test Fallito",
@@ -2269,13 +2273,15 @@
     },
     "chips": {
       "outOfSync": "Non Sincronizzato",
-      "continuesOnError": "Continua su Errore"
+      "continuesOnError": "Continua su Errore",
+      "skipsGracefully": "Salta"
     },
     "dialog": {
       "assignTitle": "Assegna Script al Repository",
       "selectScriptLabel": "Seleziona Script",
       "continueOnErrorLabel": "Continua backup se lo script fallisce",
       "continueOnErrorHelperText": "Sovrascrivi predefinito: Se selezionato, il backup procederà anche se questo script fallisce.",
+      "onFailureLabel": "Se questo script fallisce:",
       "cancel": "Annulla",
       "assignScript": "Assegna Script"
     },
