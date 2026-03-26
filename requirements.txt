@@ -19,7 +19,7 @@ PyJWT==2.12.0
 python-multipart==0.0.22
 pyyaml==6.0.1
 redis==7.1.1
-requests==2.32.4
+requests==2.33.0
 sqlalchemy==2.0.46
 structlog==25.5.0
 uvicorn[standard]==0.24.0
