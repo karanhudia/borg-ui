@@ -12,9 +12,14 @@ import {
   Chip,
   Paper,
   TextField,
-  Checkbox,
+  FormControl,
   FormControlLabel,
+  FormLabel,
+  Radio,
+  RadioGroup,
 } from '@mui/material'
+
+type OnFailureMode = 'fail' | 'continue' | 'skip'
 import { Play, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 import CodeEditor from './CodeEditor'
 import api from '../services/api'
@@ -29,9 +34,10 @@ interface ScriptEditorDialogProps {
   placeholder?: string
   timeout?: number
   onTimeoutChange?: (timeout: number) => void
-  continueOnFailure?: boolean
-  onContinueOnFailureChange?: (value: boolean) => void
+  onFailureMode?: OnFailureMode
+  onFailureModeChange?: (value: OnFailureMode) => void
   showContinueOnFailure?: boolean
+  repositoryId?: number | null // When provided, injects BORG_UI_ context into test runs
 }
 
 export default function ScriptEditorDialog({
@@ -43,9 +49,10 @@ export default function ScriptEditorDialog({
   placeholder,
   timeout = 300,
   onTimeoutChange,
-  continueOnFailure = false,
-  onContinueOnFailureChange,
+  onFailureMode = 'fail',
+  onFailureModeChange,
   showContinueOnFailure = false,
+  repositoryId,
 }: ScriptEditorDialogProps) {
   const { t } = useTranslation()
   const [testRunning, setTestRunning] = useState(false)
@@ -68,6 +75,7 @@ export default function ScriptEditorDialog({
     try {
       const response = await api.post('/scripts/test', {
         script: value,
+        ...(repositoryId != null ? { repository_id: repositoryId } : {}),
       })
       setTestResult(response.data)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -125,16 +133,32 @@ export default function ScriptEditorDialog({
               sx={{ flex: 1 }}
             />
             {showContinueOnFailure && (
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={continueOnFailure}
-                    onChange={(e) => onContinueOnFailureChange?.(e.target.checked)}
+              <FormControl sx={{ mt: 1 }}>
+                <FormLabel sx={{ fontSize: '0.875rem' }}>
+                  {t('scriptEditor.onFailureLabel')}
+                </FormLabel>
+                <RadioGroup
+                  row
+                  value={onFailureMode}
+                  onChange={(e) => onFailureModeChange?.(e.target.value as OnFailureMode)}
+                >
+                  <FormControlLabel
+                    value="fail"
+                    control={<Radio size="small" />}
+                    label={t('scriptEditor.onFailureFail')}
                   />
-                }
-                label={t('scriptEditor.continueOnFailure')}
-                sx={{ mt: 1 }}
-              />
+                  <FormControlLabel
+                    value="continue"
+                    control={<Radio size="small" />}
+                    label={t('scriptEditor.onFailureContinue')}
+                  />
+                  <FormControlLabel
+                    value="skip"
+                    control={<Radio size="small" />}
+                    label={t('scriptEditor.onFailureSkip')}
+                  />
+                </RadioGroup>
+              </FormControl>
             )}
           </Box>
 

@@ -11,6 +11,7 @@ import {
   ListItemIcon,
   ListItemText,
   TextField,
+  CircularProgress,
 } from '@mui/material'
 import { Warning, CheckCircle, Lock } from '@mui/icons-material'
 import { useState } from 'react'
@@ -100,9 +101,9 @@ export default function CheckWarningDialog({
           variant="contained"
           color="warning"
           disabled={isLoading}
-          startIcon={isLoading ? <CheckCircle className="animate-spin" /> : <CheckCircle />}
+          startIcon={isLoading ? <CircularProgress size={16} color="inherit" /> : <CheckCircle />}
         >
-          {isLoading ? t('common.status.starting') : t('dialogs.checkWarning.confirm')}
+          {isLoading ? t('status.running') : t('dialogs.checkWarning.confirm')}
         </Button>
       </DialogActions>
     </Dialog>

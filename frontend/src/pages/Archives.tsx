@@ -106,9 +106,10 @@ const Archives: React.FC = () => {
     onSuccess: (data) => {
       // Backend now returns job_id for background deletion
       toast.success(t('archives.deletionStarted', { id: data.data.job_id }))
-      // Refresh archives list after a delay to allow deletion to complete
+      // Refresh archives list and repository stats after a delay to allow deletion to complete
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ['repository-archives', selectedRepositoryId] })
+        queryClient.invalidateQueries({ queryKey: ['repository-info', selectedRepositoryId] })
       }, 2000)
       setShowDeleteConfirm(null)
       trackArchive(EventAction.DELETE, selectedRepository?.name)

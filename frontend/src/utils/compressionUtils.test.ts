@@ -217,8 +217,9 @@ describe('compressionUtils - Production Scenarios', () => {
     })
   })
 
-  it('validates obfuscate spec formats', () => {
-    const obfuscateSpecs = ['110', '256', '512']
+  it('round-trips valid obfuscate spec values', () => {
+    // Valid borg obfuscation levels: 1-6, 110-123, and 250 (Padmé, added in borg 1.4.1)
+    const obfuscateSpecs = ['1', '3', '6', '110', '115', '123', '250']
 
     obfuscateSpecs.forEach((spec) => {
       const built = buildCompressionString('lz4', '', false, spec)
@@ -237,6 +238,13 @@ describe('compressionUtils - Error Prevention', () => {
 
     const result2 = buildCompressionString('unknown-algo', '999', false, '')
     expect(result2).toBe('unknown-algo,999') // Passes through unusual values
+  })
+
+  it('parses obfuscate with no value following it', () => {
+    // 'obfuscate' alone — no level token after it; obfuscate stays '' and algorithm stays default
+    const result = parseCompressionString('obfuscate')
+    expect(result.obfuscate).toBe('')
+    expect(result.algorithm).toBe('lz4') // default, no further tokens consumed
   })
 
   it('parses strings with extra commas gracefully', () => {

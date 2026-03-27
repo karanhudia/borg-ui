@@ -28,7 +28,7 @@ describe('CompressionSettings', () => {
 
     it('renders obfuscate input', () => {
       render(<CompressionSettings value="lz4" onChange={mockOnChange} />)
-      expect(screen.getByPlaceholderText('e.g., 110, 250')).toBeInTheDocument()
+      expect(screen.getByPlaceholderText('e.g., 3, 110, or 250')).toBeInTheDocument()
     })
 
     it('renders auto-detect checkbox for lz4', () => {
@@ -78,7 +78,7 @@ describe('CompressionSettings', () => {
     it('hides level and other inputs when algorithm is none', () => {
       render(<CompressionSettings value="none" onChange={mockOnChange} />)
       expect(screen.queryByPlaceholderText('Leave empty for default')).not.toBeInTheDocument()
-      expect(screen.queryByPlaceholderText('e.g., 110, 250')).not.toBeInTheDocument()
+      expect(screen.queryByPlaceholderText('e.g., 3, 110, or 250')).not.toBeInTheDocument()
     })
 
     it('shows level input when algorithm is zstd', () => {
@@ -145,7 +145,7 @@ describe('CompressionSettings', () => {
     it('calls onChange when obfuscate changes', () => {
       render(<CompressionSettings value="lz4" onChange={mockOnChange} />)
 
-      const obfuscateInput = screen.getByPlaceholderText('e.g., 110, 250')
+      const obfuscateInput = screen.getByPlaceholderText('e.g., 3, 110, or 250')
       fireEvent.change(obfuscateInput, { target: { value: '110' } })
 
       expect(mockOnChange).toHaveBeenCalled()
@@ -179,7 +179,7 @@ describe('CompressionSettings', () => {
 
     it('disables obfuscate input when disabled=true', () => {
       render(<CompressionSettings value="lz4" onChange={mockOnChange} disabled={true} />)
-      const obfuscateInput = screen.getByPlaceholderText('e.g., 110, 250')
+      const obfuscateInput = screen.getByPlaceholderText('e.g., 3, 110, or 250')
       expect(obfuscateInput).toBeDisabled()
     })
 
@@ -219,7 +219,7 @@ describe('CompressionSettings', () => {
 
     it('shows obfuscate helper text', () => {
       render(<CompressionSettings value="lz4" onChange={mockOnChange} />)
-      expect(screen.getByText(/Obfuscate compressed chunk sizes/)).toBeInTheDocument()
+      expect(screen.getByText(/Requires encryption/)).toBeInTheDocument()
     })
   })
 

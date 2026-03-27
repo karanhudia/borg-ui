@@ -80,6 +80,10 @@ services:
       # - INITIAL_ADMIN_PASSWORD=your-secure-password
       # - SECRET_KEY=your-custom-secret-key
 
+      # Sub-path for reverse proxy deployment (e.g., /borg-ui)
+      # Leave empty or unset for root deployment. See docs/reverse-proxy.md for NGINX config.
+      # - BASE_PATH=/borg-ui
+
       # Borg operation timeouts in seconds (uncomment to customize for large repos)
       # Increase these for very large repositories with long cache build times
       # - BORG_INFO_TIMEOUT=600      # borg info operations (default: 10 min)

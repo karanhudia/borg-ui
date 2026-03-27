@@ -4,6 +4,8 @@ import CompressionSettings from '../CompressionSettings'
 import ExcludePatternInput from '../ExcludePatternInput'
 import AdvancedRepositoryOptions from '../AdvancedRepositoryOptions'
 
+type OnFailureMode = 'fail' | 'continue' | 'skip'
+
 export interface BackupConfigStepData {
   compression: string
   excludePatterns: string[]
@@ -13,7 +15,7 @@ export interface BackupConfigStepData {
   postBackupScript: string
   preHookTimeout: number
   postHookTimeout: number
-  continueOnHookFailure: boolean
+  hookFailureMode: OnFailureMode
 }
 
 interface WizardStepBackupConfigProps {
@@ -66,14 +68,14 @@ export default function WizardStepBackupConfig({
         postBackupScript={data.postBackupScript}
         preHookTimeout={data.preHookTimeout}
         postHookTimeout={data.postHookTimeout}
-        continueOnHookFailure={data.continueOnHookFailure}
+        hookFailureMode={data.hookFailureMode}
         customFlags={data.customFlags}
         onRemotePathChange={(value) => onChange({ remotePath: value })}
         onPreBackupScriptChange={(value) => onChange({ preBackupScript: value })}
         onPostBackupScriptChange={(value) => onChange({ postBackupScript: value })}
         onPreHookTimeoutChange={(value) => onChange({ preHookTimeout: value })}
         onPostHookTimeoutChange={(value) => onChange({ postHookTimeout: value })}
-        onContinueOnHookFailureChange={(value) => onChange({ continueOnHookFailure: value })}
+        onHookFailureModeChange={(value) => onChange({ hookFailureMode: value })}
         onCustomFlagsChange={(value) => onChange({ customFlags: value })}
       />
     </Box>

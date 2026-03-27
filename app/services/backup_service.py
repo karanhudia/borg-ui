@@ -1396,6 +1396,36 @@ class BackupService:
                            using_library=hook_result["using_library"])
 
                 if not hook_result["success"]:
+                    # There are two independent skip mechanisms, but only one can be active per backup
+                    # because _run_hook always uses *either* library scripts *or* the inline script —
+                    # never both.  Priority within the library path is first-fail-wins: the first
+                    # script marked skip_on_failure that fails triggers the skip and the remaining
+                    # assignments are not evaluated.
+
+                    # Library-script path: RepositoryScript.skip_on_failure on the assignment
+                    # signals a graceful skip (e.g. "not the leader node, stand down").
+                    if hook_result.get('should_skip'):
+                        skip_script = hook_result.get('skip_script_name', 'pre-backup script')
+                        logger.info("Backup skipped gracefully by pre-backup script",
+                                   job_id=job_id, script=skip_script)
+                        job.status = "skipped"
+                        job.error_message = f"Skipped by '{skip_script}'"
+                        job.logs = "\n".join(hook_logs)
+                        job.completed_at = datetime.utcnow()
+                        db.commit()
+                        return
+
+                    # Inline-script path: Repository.skip_on_hook_failure on the repo itself.
+                    # Only reached when no library scripts are assigned (using_library=False).
+                    if not hook_result.get('using_library') and getattr(repo_record, 'skip_on_hook_failure', False):
+                        logger.info("Backup skipped gracefully by inline pre-backup script", job_id=job_id)
+                        job.status = "skipped"
+                        job.error_message = "Skipped by pre-backup script"
+                        job.logs = "\n".join(hook_logs)
+                        job.completed_at = datetime.utcnow()
+                        db.commit()
+                        return
+
                     error_msg = json.dumps({"key": "backend.errors.service.preBackupHooksFailed", "params": {"failed": hook_result['scripts_failed'], "total": hook_result['scripts_executed']}})
                     logger.error("Pre-backup hooks failed", job_id=job_id, scripts_failed=hook_result['scripts_failed'], scripts_executed=hook_result['scripts_executed'])
 

@@ -21,6 +21,17 @@ interface CompressionSettingsProps {
   disabled?: boolean
 }
 
+// Valid borg obfuscation levels:
+//   1-6: relative random reciprocal (small overhead)
+//   110-123: random additive padding (up to 8MB)
+//   250: Padmé deterministic padding (≤12% overhead, added in borg 1.4.1)
+const isValidObfuscateLevel = (val: string): boolean => {
+  if (val === '') return true
+  const n = parseInt(val, 10)
+  if (isNaN(n) || String(n) !== val) return false
+  return (n >= 1 && n <= 6) || (n >= 110 && n <= 123) || n === 250
+}
+
 export default function CompressionSettings({
   value,
   onChange,
@@ -32,6 +43,7 @@ export default function CompressionSettings({
   const [level, setLevel] = useState(parsed.level)
   const [autoDetect, setAutoDetect] = useState(parsed.autoDetect)
   const [obfuscate, setObfuscate] = useState(parsed.obfuscate)
+  const obfuscateError = !isValidObfuscateLevel(obfuscate)
 
   // Update parent when any value changes
   useEffect(() => {
@@ -68,7 +80,6 @@ export default function CompressionSettings({
             <MenuItem value="zlib">{t('compressionSettings.algorithmZlib')}</MenuItem>
             <MenuItem value="lzma">{t('compressionSettings.algorithmLzma')}</MenuItem>
             <MenuItem value="auto">{t('compressionSettings.algorithmAuto')}</MenuItem>
-            <MenuItem value="obfuscate">{t('compressionSettings.algorithmObfuscate')}</MenuItem>
           </Select>
         </FormControl>
 
@@ -131,7 +142,12 @@ export default function CompressionSettings({
               value={obfuscate}
               onChange={(e) => setObfuscate(e.target.value)}
               placeholder={t('compressionSettings.obfuscatePlaceholder')}
-              helperText={t('compressionSettings.obfuscateHelper')}
+              helperText={
+                obfuscateError
+                  ? t('compressionSettings.obfuscateErrorInvalid')
+                  : t('compressionSettings.obfuscateHelper')
+              }
+              error={obfuscateError}
               fullWidth
               disabled={disabled}
             />

@@ -1,40 +1,24 @@
 import { format, formatDistance, intervalToDuration } from 'date-fns'
 
 /**
- * Format a date string to a human-readable format
- * Example: "16th October 2025, 2:40:55 PM"
+ * Format a date string to a compact, locale-aware format.
+ * Respects the browser/OS 12h vs 24h preference.
+ * Example (24h locale): "3 Mar 2026, 02:00:00"
+ * Example (12h locale): "Mar 3, 2026, 2:00:00 AM"
  */
 export const formatDate = (dateString: string | null | undefined): string => {
   if (!dateString) return 'Never'
 
   try {
     const date = new Date(dateString)
-    const day = date.getDate()
-
-    const getOrdinalSuffix = (d: number) => {
-      if (d > 3 && d < 21) return 'th'
-      switch (d % 10) {
-        case 1:
-          return 'st'
-        case 2:
-          return 'nd'
-        case 3:
-          return 'rd'
-        default:
-          return 'th'
-      }
-    }
-
-    const month = date.toLocaleString('en-US', { month: 'long' })
-    const year = date.getFullYear()
-    const time = date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
+    return date.toLocaleString(undefined, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
-      hour12: true,
     })
-
-    return `${day}${getOrdinalSuffix(day)} ${month} ${year}, ${time}`
   } catch (error) {
     console.error('Error formatting date:', error)
     return dateString
@@ -55,6 +39,92 @@ export const formatDateShort = (dateString: string | null | undefined): string =
     console.error('Error formatting date:', error)
     return dateString
   }
+}
+
+/**
+ * Convert a cron expression (already in local time) to a compact human-readable label.
+ * Falls back to the raw cron string for complex/unrecognized patterns.
+ *
+ * Examples:
+ *   "40 1 * * 1,3,5" -> "Mon Wed Fri · 01:40"
+ *   "0 2 * * *"       -> "Daily · 02:00"
+ *   "0 3 15 * *"      -> "15th · 03:00"
+ */
+export const formatCronHuman = (cronExpression: string): string => {
+  const parts = cronExpression.trim().split(/\s+/)
+  if (parts.length !== 5) return cronExpression
+
+  const [minute, hour, day, month, dayOfWeek] = parts
+
+  // Every N minutes: */5 * * * *
+  if (
+    minute.startsWith('*/') &&
+    hour === '*' &&
+    day === '*' &&
+    month === '*' &&
+    dayOfWeek === '*'
+  ) {
+    const n = parseInt(minute.replace('*/', ''))
+    return n === 1 ? 'Every minute' : `Every ${n} min`
+  }
+
+  // Every N hours: 30 */6 * * *
+  if (
+    /^\d+$/.test(minute) &&
+    hour.startsWith('*/') &&
+    day === '*' &&
+    month === '*' &&
+    dayOfWeek === '*'
+  ) {
+    const n = parseInt(hour.replace('*/', ''))
+    return n === 1 ? 'Every hour' : `Every ${n}h`
+  }
+
+  // Daily: 40 1 * * *
+  if (
+    /^\d+$/.test(minute) &&
+    /^\d+$/.test(hour) &&
+    day === '*' &&
+    month === '*' &&
+    dayOfWeek === '*'
+  ) {
+    const h = parseInt(hour).toString().padStart(2, '0')
+    const m = parseInt(minute).toString().padStart(2, '0')
+    return `Daily · ${h}:${m}`
+  }
+
+  // Weekly (specific days): 40 1 * * 1,3,5
+  if (
+    /^\d+$/.test(minute) &&
+    /^\d+$/.test(hour) &&
+    day === '*' &&
+    month === '*' &&
+    /^[\d,]+$/.test(dayOfWeek)
+  ) {
+    const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    const selectedDays = dayOfWeek.split(',').map((d) => DAY_LABELS[parseInt(d)] ?? d)
+    const h = parseInt(hour).toString().padStart(2, '0')
+    const m = parseInt(minute).toString().padStart(2, '0')
+    const daysStr = selectedDays.length === 7 ? 'Daily' : selectedDays.join(' ')
+    return `${daysStr} · ${h}:${m}`
+  }
+
+  // Monthly: 0 3 15 * *
+  if (
+    /^\d+$/.test(minute) &&
+    /^\d+$/.test(hour) &&
+    /^\d+$/.test(day) &&
+    month === '*' &&
+    dayOfWeek === '*'
+  ) {
+    const d = parseInt(day)
+    const suffix = d === 1 ? 'st' : d === 2 ? 'nd' : d === 3 ? 'rd' : 'th'
+    const h = parseInt(hour).toString().padStart(2, '0')
+    const m = parseInt(minute).toString().padStart(2, '0')
+    return `${d}${suffix} · ${h}:${m}`
+  }
+
+  return cronExpression
 }
 
 /**

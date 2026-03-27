@@ -7,7 +7,7 @@ Key test focus:
 """
 
 import pytest
-from app.database.models import Repository, Script, RepositoryScript
+from app.database.models import Repository, ScheduledJob, Script, RepositoryScript
 
 
 @pytest.mark.unit
@@ -523,3 +523,103 @@ class TestScriptDeleteErrorMessages:
         assert "Documents" in detail["params"]["repos"]
         assert "pre-backup" in detail["params"]["repos"]
         assert "post-backup" in detail["params"]["repos"]
+
+
+@pytest.mark.unit
+class TestScriptDeleteScheduleReference:
+    """Test that deleting a script clears schedule-level script references"""
+
+    def test_delete_script_clears_schedule_pre_backup_reference(self, test_client, admin_headers, test_db):
+        """Deleting a script used as a schedule pre-backup script succeeds and clears the reference"""
+        script = Script(
+            name="pre-backup-script",
+            description="Schedule pre-backup script",
+            file_path="library/pre-backup-script.sh",
+            category="custom",
+            timeout=300,
+            run_on="always",
+            usage_count=0
+        )
+        test_db.add(script)
+        test_db.commit()
+
+        schedule = ScheduledJob(
+            name="nightly-backup",
+            cron_expression="0 2 * * *",
+            enabled=True,
+            pre_backup_script_id=script.id,
+        )
+        test_db.add(schedule)
+        test_db.commit()
+
+        response = test_client.delete(f"/api/scripts/{script.id}", headers=admin_headers)
+        assert response.status_code == 204
+
+        test_db.refresh(schedule)
+        assert schedule.pre_backup_script_id is None
+
+    def test_delete_script_clears_schedule_post_backup_reference(self, test_client, admin_headers, test_db):
+        """Deleting a script used as a schedule post-backup script succeeds and clears the reference"""
+        script = Script(
+            name="post-backup-script",
+            description="Schedule post-backup script",
+            file_path="library/post-backup-script.sh",
+            category="custom",
+            timeout=300,
+            run_on="always",
+            usage_count=0
+        )
+        test_db.add(script)
+        test_db.commit()
+
+        schedule = ScheduledJob(
+            name="weekly-backup",
+            cron_expression="0 3 * * 0",
+            enabled=True,
+            post_backup_script_id=script.id,
+        )
+        test_db.add(schedule)
+        test_db.commit()
+
+        response = test_client.delete(f"/api/scripts/{script.id}", headers=admin_headers)
+        assert response.status_code == 204
+
+        test_db.refresh(schedule)
+        assert schedule.post_backup_script_id is None
+
+    def test_delete_script_clears_both_schedule_references(self, test_client, admin_headers, test_db):
+        """Deleting a script used as both pre and post backup in different schedules clears all references"""
+        script = Script(
+            name="shared-script",
+            description="Used in multiple schedules",
+            file_path="library/shared-script.sh",
+            category="custom",
+            timeout=300,
+            run_on="always",
+            usage_count=0
+        )
+        test_db.add(script)
+        test_db.commit()
+
+        schedule1 = ScheduledJob(
+            name="schedule-pre",
+            cron_expression="0 1 * * *",
+            enabled=True,
+            pre_backup_script_id=script.id,
+        )
+        schedule2 = ScheduledJob(
+            name="schedule-post",
+            cron_expression="0 4 * * *",
+            enabled=True,
+            post_backup_script_id=script.id,
+        )
+        test_db.add_all([schedule1, schedule2])
+        test_db.commit()
+
+        response = test_client.delete(f"/api/scripts/{script.id}", headers=admin_headers)
+        assert response.status_code == 204
+
+        test_db.refresh(schedule1)
+        test_db.refresh(schedule2)
+        assert schedule1.pre_backup_script_id is None
+        assert schedule2.post_backup_script_id is None
