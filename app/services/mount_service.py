@@ -1365,55 +1365,58 @@ class MountService:
         temp_key_file: str
     ):
         """Execute SSHFS mount command with SSH key authentication"""
-        # Diagnostic: confirm SSH identity, sudo availability, and sftp-server path
         sftp_server_path = None
         use_sudo = getattr(connection, 'use_sudo', False)
-        try:
-            diag_ssh = [
-                "ssh",
-                "-i", temp_key_file,
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "ConnectTimeout=10",
-                "-p", str(connection.port),
-                f"{connection.username}@{connection.host}",
-                # Emit key=value lines for parsing; also locate sftp-server binary
-                "printf 'user=%s\\n' \"$(whoami)\"; "
-                "printf 'uid=%s\\n' \"$(id -u)\"; "
-                "printf 'groups=%s\\n' \"$(id -Gn)\"; "
-                "sudo -n true 2>/dev/null && printf 'sudo=yes\\n' || printf 'sudo=no\\n'; "
-                "printf 'sftp_server=%s\\n' \"$(command -v sftp-server 2>/dev/null || "
-                "ls /usr/libexec/openssh/sftp-server /usr/lib/openssh/sftp-server "
-                "/usr/lib/misc/sftp-server 2>/dev/null | head -1)\""
-            ]
-            diag_proc = await asyncio.create_subprocess_exec(
-                *diag_ssh,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            diag_out, diag_err = await asyncio.wait_for(diag_proc.communicate(), timeout=15)
-            diag_text = diag_out.decode().strip()
 
-            # Parse sftp_server path from output
-            for line in diag_text.splitlines():
-                if line.startswith("sftp_server="):
-                    sftp_server_path = line.split("=", 1)[1].strip() or None
+        # Only run the diagnostic when sudo is needed — it resolves the remote sftp-server
+        # path required to build the '-o sftp_server=sudo <path>' SSHFS option.
+        if use_sudo:
+            try:
+                diag_ssh = [
+                    "ssh",
+                    "-i", temp_key_file,
+                    "-o", "StrictHostKeyChecking=no",
+                    "-o", "UserKnownHostsFile=/dev/null",
+                    "-o", "ConnectTimeout=10",
+                    "-p", str(connection.port),
+                    f"{connection.username}@{connection.host}",
+                    # Emit key=value lines for parsing; also locate sftp-server binary
+                    "printf 'user=%s\\n' \"$(whoami)\"; "
+                    "printf 'uid=%s\\n' \"$(id -u)\"; "
+                    "printf 'groups=%s\\n' \"$(id -Gn)\"; "
+                    "sudo -n true 2>/dev/null && printf 'sudo=yes\\n' || printf 'sudo=no\\n'; "
+                    "printf 'sftp_server=%s\\n' \"$(command -v sftp-server 2>/dev/null || "
+                    "ls /usr/libexec/openssh/sftp-server /usr/lib/openssh/sftp-server "
+                    "/usr/lib/misc/sftp-server 2>/dev/null | head -1)\""
+                ]
+                diag_proc = await asyncio.create_subprocess_exec(
+                    *diag_ssh,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                diag_out, diag_err = await asyncio.wait_for(diag_proc.communicate(), timeout=15)
+                diag_text = diag_out.decode().strip()
 
-            logger.info(
-                "SSH identity check (SSHFS pre-mount)",
-                host=connection.host,
-                configured_user=connection.username,
-                use_sudo=use_sudo,
-                identity=diag_text,
-                sftp_server_found=sftp_server_path,
-                ssh_stderr=diag_err.decode().strip() or None,
-            )
-        except Exception as _diag_err:
-            logger.warning(
-                "SSH identity diagnostic failed (non-fatal, mount will still proceed)",
-                host=connection.host,
-                error=str(_diag_err),
-            )
+                # Parse sftp_server path from output
+                for line in diag_text.splitlines():
+                    if line.startswith("sftp_server="):
+                        sftp_server_path = line.split("=", 1)[1].strip() or None
+
+                logger.info(
+                    "SSH identity check (SSHFS pre-mount)",
+                    host=connection.host,
+                    configured_user=connection.username,
+                    use_sudo=use_sudo,
+                    identity=diag_text,
+                    sftp_server_found=sftp_server_path,
+                    ssh_stderr=diag_err.decode().strip() or None,
+                )
+            except Exception as _diag_err:
+                logger.warning(
+                    "SSH identity diagnostic failed (non-fatal, mount will still proceed)",
+                    host=connection.host,
+                    error=str(_diag_err),
+                )
 
         # Get current user's UID and GID for mount options
         current_uid = os.getuid()
