@@ -68,6 +68,7 @@ export interface RepositoryData {
   pre_hook_timeout?: number
   post_hook_timeout?: number
   continue_on_hook_failure?: boolean
+  skip_on_hook_failure?: boolean
   passphrase?: string
   mode?: 'full' | 'observe'
   custom_flags?: string | null

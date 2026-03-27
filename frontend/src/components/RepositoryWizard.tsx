@@ -35,6 +35,7 @@ interface Repository extends RepositoryData {
   pre_hook_timeout?: number
   post_hook_timeout?: number
   continue_on_hook_failure?: boolean
+  skip_on_hook_failure?: boolean
   bypass_lock?: boolean
 }
 
@@ -82,7 +83,7 @@ interface WizardState {
   postBackupScript: string
   preHookTimeout: number
   postHookTimeout: number
-  continueOnHookFailure: boolean
+  hookFailureMode: 'fail' | 'continue' | 'skip'
 }
 
 const initialState: WizardState = {
@@ -106,7 +107,7 @@ const initialState: WizardState = {
   postBackupScript: '',
   preHookTimeout: 300,
   postHookTimeout: 300,
-  continueOnHookFailure: false,
+  hookFailureMode: 'fail',
 }
 
 const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: RepositoryWizardProps) => {
@@ -220,7 +221,11 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       postBackupScript: repository.post_backup_script || '',
       preHookTimeout: repository.pre_hook_timeout || 300,
       postHookTimeout: repository.post_hook_timeout || 300,
-      continueOnHookFailure: repository.continue_on_hook_failure || false,
+      hookFailureMode: repository.skip_on_hook_failure
+        ? 'skip'
+        : repository.continue_on_hook_failure
+          ? 'continue'
+          : 'fail',
     })
   }, [repository])
 
@@ -445,7 +450,8 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       post_backup_script: wizardState.postBackupScript,
       pre_hook_timeout: wizardState.preHookTimeout,
       post_hook_timeout: wizardState.postHookTimeout,
-      continue_on_hook_failure: wizardState.continueOnHookFailure,
+      continue_on_hook_failure: wizardState.hookFailureMode === 'continue',
+      skip_on_hook_failure: wizardState.hookFailureMode === 'skip',
       bypass_lock: wizardState.bypassLock,
       // Connection IDs - single source of truth for SSH
       connection_id: wizardState.repoSshConnectionId || null,
@@ -551,7 +557,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               postBackupScript: wizardState.postBackupScript,
               preHookTimeout: wizardState.preHookTimeout,
               postHookTimeout: wizardState.postHookTimeout,
-              continueOnHookFailure: wizardState.continueOnHookFailure,
+              hookFailureMode: wizardState.hookFailureMode,
             }}
             onChange={handleStateChange}
             onBrowseExclude={() => setShowExcludeExplorer(true)}
