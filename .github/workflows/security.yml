@@ -15,7 +15,8 @@ permissions:
   contents: read
   security-events: write
   actions: read
-  pull-requests: write  # Required for commenting on PRs
+  pull-requests: write
+  issues: write  # Required for posting PR comments (GitHub uses the issues API)
 
 jobs:
   npm-audit:
