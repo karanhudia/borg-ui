@@ -14,7 +14,7 @@ import os
 import hashlib
 
 from app.database.database import get_db
-from app.database.models import Script, RepositoryScript, ScriptExecution, Repository, User
+from app.database.models import Script, RepositoryScript, ScriptExecution, Repository, ScheduledJob, User
 from app.core.security import get_current_user, encrypt_secret
 from app.config import settings
 from app.services.script_executor import execute_script
@@ -70,11 +70,13 @@ class RepositoryScriptAssignment(BaseModel):
     custom_timeout: Optional[int] = None
     custom_run_on: Optional[str] = None
     continue_on_error: Optional[bool] = True
+    skip_on_failure: Optional[bool] = False
     parameter_values: Optional[dict] = None  # Parameter values (passwords will be encrypted)
 
 class ScriptTestRequest(BaseModel):
     parameter_values: Optional[dict] = None  # Optional parameter values for testing
     timeout: Optional[int] = None
+    repository_id: Optional[int] = None  # When set, inject real BORG_UI_ context for that repo
 
 class RepositoryScriptUpdate(BaseModel):
     execution_order: Optional[float] = None
@@ -82,6 +84,7 @@ class RepositoryScriptUpdate(BaseModel):
     custom_timeout: Optional[int] = None
     custom_run_on: Optional[str] = None
     continue_on_error: Optional[bool] = None
+    skip_on_failure: Optional[bool] = None
     parameter_values: Optional[dict] = None  # Parameter values (passwords will be encrypted)
 
 def ensure_scripts_directory():
@@ -512,6 +515,20 @@ async def delete_script(
             detail={"key": "backend.errors.scripts.scriptInUse", "params": {"count": len(valid_repo_scripts), "places": places_text, "repos": ', '.join(repo_details)}}
         )
 
+    # Clear schedule-level script references (ScheduledJob.pre/post_backup_script_id have no DB cascade)
+    schedules_using_script = db.query(ScheduledJob).filter(
+        (ScheduledJob.pre_backup_script_id == script_id) |
+        (ScheduledJob.post_backup_script_id == script_id)
+    ).all()
+    for schedule in schedules_using_script:
+        if schedule.pre_backup_script_id == script_id:
+            schedule.pre_backup_script_id = None
+        if schedule.post_backup_script_id == script_id:
+            schedule.post_backup_script_id = None
+    if schedules_using_script:
+        db.flush()
+        logger.info("Cleared script reference from schedules", script_id=script_id, count=len(schedules_using_script))
+
     # Delete script file
     file_path = Path(settings.data_dir) / "scripts" / script.file_path
     try:
@@ -547,20 +564,43 @@ async def test_script(
         raise HTTPException(status_code=500, detail=f"Failed to read script file: {str(e)}")
 
     # Prepare environment variables with parameters and system vars
-    import os
     from app.services.template_service import get_system_variables
+    from app.database.models import SSHConnection
 
     script_env = os.environ.copy()
 
-    # ALWAYS add system variables (not just when there are parameters)
-    system_vars = get_system_variables(
-        repository_id=1,
-        repository_name="[TEST] My Repository",
-        repository_path="/test/repository/path",
-        backup_status="success",  # Test with success status
-        hook_type="post-backup",  # Test as post-backup to include status
-        job_id=12345
-    )
+    # Inject BORG_UI_ system variables. Use real repository context when available.
+    if test_data.repository_id:
+        repo = db.query(Repository).filter(Repository.id == test_data.repository_id).first()
+    else:
+        repo = None
+
+    if repo:
+        source_connection = None
+        if repo.source_ssh_connection_id:
+            source_connection = db.query(SSHConnection).filter(
+                SSHConnection.id == repo.source_ssh_connection_id
+            ).first()
+
+        system_vars = get_system_variables(
+            repository_id=repo.id,
+            repository_name=repo.name,
+            repository_path=repo.path,
+            backup_status="success",
+            hook_type="pre-backup",
+            source_host=source_connection.host if source_connection else None,
+            source_port=source_connection.port if source_connection else None,
+            source_username=source_connection.username if source_connection else None,
+        )
+    else:
+        # Fallback: generic dummy context so scripts can run without a real repo
+        system_vars = get_system_variables(
+            repository_id=1,
+            repository_name="[TEST] My Repository",
+            repository_path="/test/repository/path",
+            backup_status="success",
+            hook_type="pre-backup",
+        )
     script_env.update(system_vars)
 
     # Add user-provided test parameter values if script has parameters
@@ -656,6 +696,7 @@ async def get_repository_scripts(
             "custom_timeout": rs.custom_timeout,
             "custom_run_on": rs.custom_run_on,
             "continue_on_error": rs.continue_on_error,
+            "skip_on_failure": rs.skip_on_failure,
             "default_timeout": rs.script.timeout,
             "default_run_on": rs.script.run_on,
             "parameters": script_params,
@@ -754,6 +795,7 @@ async def assign_script_to_repository(
         custom_timeout=assignment.custom_timeout,
         custom_run_on=assignment.custom_run_on,
         continue_on_error=assignment.continue_on_error if assignment.continue_on_error is not None else True,
+        skip_on_failure=assignment.skip_on_failure if assignment.skip_on_failure is not None else False,
         parameter_values=parameter_values_json,
         created_at=datetime.utcnow()
     )
@@ -811,6 +853,9 @@ async def update_repository_script_assignment(
 
     if update_data.continue_on_error is not None:
         repo_script.continue_on_error = update_data.continue_on_error
+
+    if update_data.skip_on_failure is not None:
+        repo_script.skip_on_failure = update_data.skip_on_failure
 
     # Update parameter values with validation and encryption
     if update_data.parameter_values is not None:

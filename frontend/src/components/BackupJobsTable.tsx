@@ -15,6 +15,7 @@ import CancelJobDialog from './CancelJobDialog'
 import DeleteJobDialog from './DeleteJobDialog'
 import LockErrorDialog from './LockErrorDialog'
 import { repositoriesAPI } from '../services/api'
+import { BASE_PATH } from '@/utils/basePath'
 
 interface EmptyState {
   icon?: React.ReactNode
@@ -187,7 +188,7 @@ export const BackupJobsTable = <T extends Job = Job>({
         return
       }
 
-      const url = `/api/activity/${jobType}/${job.id}/logs/download?token=${token}`
+      const url = `${BASE_PATH}/api/activity/${jobType}/${job.id}/logs/download?token=${token}`
       const a = document.createElement('a')
       a.href = url
       a.download = `${jobType}-${job.id}-logs.txt`
@@ -213,7 +214,7 @@ export const BackupJobsTable = <T extends Job = Job>({
     try {
       // Call cancel API
       const jobType = cancelJob.type || 'backup'
-      const response = await fetch(`/api/activity/${jobType}/${cancelJob.id}/cancel`, {
+      const response = await fetch(`${BASE_PATH}/api/activity/${jobType}/${cancelJob.id}/cancel`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
@@ -287,7 +288,7 @@ export const BackupJobsTable = <T extends Job = Job>({
 
     try {
       // Call delete API
-      const response = await fetch(`/api/activity/${jobType}/${jobToDelete.id}`, {
+      const response = await fetch(`${BASE_PATH}/api/activity/${jobType}/${jobToDelete.id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,

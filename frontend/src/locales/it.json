@@ -587,6 +587,8 @@
       "port": "Porta",
       "password": "Password",
       "sftpMode": "Usa modalità SFTP per la distribuzione della chiave",
+      "useSudo": "Usa sudo per i backup",
+      "useSudoHint": "Antepone sudo a borg sull'host remoto. Richiede sudo senza password per l'utente SSH. Si applica solo alla modalità di backup SSH remoto.",
       "defaultPath": "Percorso Predefinito (Opzionale)",
       "mountPoint": "Punto di Mount (Opzionale)",
       "deploying": "Distribuzione in corso...",
@@ -1422,9 +1424,10 @@
     "autoDetect": "Rilevamento automatico comprimibilità (auto,C[,L])",
     "autoDetectDesc": "Usa lz4 per testare se i dati sono comprimibili. Per dati non comprimibili (es., file multimediali), usa \"none\". Per dati comprimibili, usa l'algoritmo selezionato.",
     "obfuscateLabel": "Specifica Offuscamento (Opzionale)",
-    "obfuscatePlaceholder": "es., 110, 250",
-    "obfuscateHelper": "Offusca le dimensioni dei chunk compressi per rendere più difficili gli attacchi di fingerprinting. Deve essere usato con crittografia. Il repository sarà più grande.",
-    "finalSpec": "Specifica compressione finale:"
+    "obfuscatePlaceholder": "es. 3, 110 o 250",
+    "obfuscateHelper": "Livello 1-6 (overhead ridotto), 110-123 (fino a 8MB additivo) o 250 (Padmé, ≤12% overhead). Richiede crittografia.",
+    "finalSpec": "Specifica compressione finale:",
+    "obfuscateErrorInvalid": "Livello di offuscamento non valido. Deve essere 1-6, 110-123 o 250 (Padmé)."
   },
   "archiveNameTemplate": {
     "label": "Template Nome Archivio",
@@ -2030,6 +2033,10 @@
     "timeoutLabel": "Timeout (secondi)",
     "timeoutHint": "Tempo massimo di attesa per l'esecuzione dello script",
     "continueOnFailure": "Continua il backup se lo script fallisce",
+    "onFailureLabel": "Se lo script pre-backup fallisce:",
+    "onFailureFail": "Interrompi backup",
+    "onFailureContinue": "Continua backup",
+    "onFailureSkip": "Salta backup",
     "testPassed": "Test Superato",
     "testWarnings": "Test Completato con Avvisi",
     "testFailed": "Test Fallito",
@@ -2142,6 +2149,7 @@
     "folderNamePlaceholder": "Inserisci nome cartella",
     "creating": "Creazione in corso...",
     "create": "Crea",
+    "failedToLoad": "Impossibile caricare la directory",
     "chips": {
       "remote": "Remoto",
       "host": "Host",
@@ -2212,8 +2220,6 @@
     "passwordHelper": "Password MQTT opzionale",
     "clientIdLabel": "ID Client",
     "clientIdHelper": "Identificativo client MQTT",
-    "baseTopicLabel": "Argomento Base",
-    "baseTopicHelper": "Prefisso argomento radice per tutti i messaggi MQTT",
     "qosLevelLabel": "Livello QoS",
     "qosLevelHelper": "0 = al massimo una volta, 1 = almeno una volta, 2 = esattamente una volta",
     "retainMessages": "Mantieni messaggi",
@@ -2267,13 +2273,15 @@
     },
     "chips": {
       "outOfSync": "Non Sincronizzato",
-      "continuesOnError": "Continua su Errore"
+      "continuesOnError": "Continua su Errore",
+      "skipsGracefully": "Salta"
     },
     "dialog": {
       "assignTitle": "Assegna Script al Repository",
       "selectScriptLabel": "Seleziona Script",
       "continueOnErrorLabel": "Continua backup se lo script fallisce",
       "continueOnErrorHelperText": "Sovrascrivi predefinito: Se selezionato, il backup procederà anche se questo script fallisce.",
+      "onFailureLabel": "Se questo script fallisce:",
       "cancel": "Annulla",
       "assignScript": "Assegna Script"
     },

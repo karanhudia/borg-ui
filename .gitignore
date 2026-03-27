@@ -136,3 +136,4 @@ trivy-*.json
 trivy-*.txt
 trivy-*.sarif
 .planning/
+

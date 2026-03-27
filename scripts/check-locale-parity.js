@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 /**
- * CI script: validate that en.json, es.json, and de.json have identical key sets.
+ * CI script: validate that all locale JSON files have identical key sets.
+ * New locale files are picked up automatically — no changes needed here.
  *
  * Usage:
  *   node scripts/check-locale-parity.js
  *
  * Exit codes:
- *   0 — all three locale files have identical key sets
+ *   0 — all locale files have identical key sets
  *   1 — key sets differ (prints which keys are missing from which files)
  */
 
@@ -14,7 +15,7 @@ const fs = require('fs')
 const path = require('path')
 
 const LOCALE_DIR = path.join(__dirname, '..', 'frontend', 'src', 'locales')
-const FILES = ['en.json', 'es.json', 'de.json']
+const FILES = fs.readdirSync(LOCALE_DIR).filter(f => f.endsWith('.json')).sort()
 
 /**
  * Recursively collect all dot-separated key paths from a nested object.
@@ -86,6 +87,6 @@ if (hasErrors) {
   process.exit(1)
 } else {
   const keyCount = referenceKeys.size
-  console.log(`Locale parity check PASSED. All 3 locale files share the same ${keyCount} keys.`)
+  console.log(`Locale parity check PASSED. All ${FILES.length} locale files share the same ${keyCount} keys.`)
   process.exit(0)
 }

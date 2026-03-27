@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../hooks/useAuth.tsx'
 import { useTabEnablement } from '../context/AppContext'
 import { setAppVersion, hasConsentBeenGiven, loadUserPreference } from '../utils/matomo'
+import { BASE_PATH } from '@/utils/basePath'
 import AnalyticsConsentBanner from './AnalyticsConsentBanner'
 import {
   Box,
@@ -347,7 +348,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             >
               <Box
                 component="img"
-                src="/logo.png"
+                src={`${BASE_PATH}/logo.png`}
                 alt={t('layout.logoAlt')}
                 sx={{
                   width: '100%',

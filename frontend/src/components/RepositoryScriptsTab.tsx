@@ -5,22 +5,36 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   FormControl,
+  FormControlLabel,
+  FormLabel,
   IconButton,
   InputLabel,
   MenuItem,
+  Paper,
+  Radio,
+  RadioGroup,
   Select,
   Typography,
   Tooltip,
-  Checkbox,
-  FormControlLabel,
-  FormHelperText,
 } from '@mui/material'
-import { Trash2, FileCode, Clock, AlertTriangle, Settings } from 'lucide-react'
+
+type OnFailureMode = 'fail' | 'continue' | 'skip'
+import {
+  Trash2,
+  FileCode,
+  Clock,
+  AlertTriangle,
+  Settings,
+  Play,
+  CheckCircle,
+  XCircle,
+} from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import api from '../services/api'
 import { translateBackendKey } from '../utils/translateBackendKey'
@@ -46,6 +60,7 @@ interface RepositoryScript {
   custom_timeout: number | null
   custom_run_on: string | null
   continue_on_error: boolean | null
+  skip_on_failure: boolean | null
   default_timeout: number
   default_run_on: string
   parameters?: ScriptParameter[] | null
@@ -79,6 +94,19 @@ export default function RepositoryScriptsTab({
     open: boolean
     script: RepositoryScript | null
   }>({ open: false, script: null })
+
+  const [testDialog, setTestDialog] = useState<{
+    open: boolean
+    script: RepositoryScript | null
+    running: boolean
+    result: {
+      success: boolean
+      stdout: string
+      stderr: string
+      exit_code: number
+      execution_time: number
+    } | null
+  }>({ open: false, script: null, running: false, result: null })
 
   const fetchAssignedScripts = React.useCallback(async () => {
     try {
@@ -133,7 +161,8 @@ export default function RepositoryScriptsTab({
         hook_type: hookType,
         execution_order: nextOrder,
         enabled: true,
-        continue_on_error: assignmentData.continue_on_error,
+        continue_on_error: assignmentData.on_failure_mode === 'continue',
+        skip_on_failure: assignmentData.on_failure_mode === 'skip',
         parameter_values: assignmentData.parameter_values,
       })
 
@@ -173,11 +202,14 @@ export default function RepositoryScriptsTab({
 
   const handleUpdateParameters = async (
     scriptAssignmentId: number,
-    parameterValues: Record<string, string>
+    parameterValues: Record<string, string>,
+    onFailureMode: OnFailureMode
   ) => {
     try {
       await api.put(`/repositories/${repositoryId}/scripts/${scriptAssignmentId}`, {
         parameter_values: parameterValues,
+        continue_on_error: onFailureMode === 'continue',
+        skip_on_failure: onFailureMode === 'skip',
       })
       toast.success(t('repositoryScriptsTab.parametersUpdatedSuccessfully'))
       fetchAssignedScripts()
@@ -190,6 +222,29 @@ export default function RepositoryScriptsTab({
         translateBackendKey(error.response?.data?.detail) ||
           t('repositoryScripts.errors.failedToUpdateParameters')
       )
+    }
+  }
+
+  const handleTestScript = async (script: RepositoryScript) => {
+    setTestDialog({ open: true, script, running: true, result: null })
+    try {
+      const response = await api.post(`/scripts/${script.script_id}/test`, {
+        repository_id: repositoryId,
+      })
+      setTestDialog((prev) => ({ ...prev, running: false, result: response.data }))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (error: any) {
+      setTestDialog((prev) => ({
+        ...prev,
+        running: false,
+        result: {
+          success: false,
+          stdout: '',
+          stderr: translateBackendKey(error.response?.data?.detail) || error.message,
+          exit_code: -1,
+          execution_time: 0,
+        },
+      }))
     }
   }
 
@@ -246,9 +301,11 @@ export default function RepositoryScriptsTab({
         {scripts.map((script) => {
           const effectiveTimeout = script.custom_timeout || script.default_timeout
           const effectiveRunOn = script.custom_run_on || script.default_run_on
+          const effectiveSkipOnFailure = script.skip_on_failure === true
           // Default to true if not set (migration fallback / new default)
           const effectiveContinueOnError =
-            script.continue_on_error !== null ? script.continue_on_error : true
+            !effectiveSkipOnFailure &&
+            (script.continue_on_error !== null ? script.continue_on_error : true)
 
           const isPreBackup = hookType === 'pre-backup'
 
@@ -322,6 +379,15 @@ export default function RepositoryScriptsTab({
                   sx={{ height: 20, fontSize: '0.7rem' }}
                 />
               )}
+              {isPreBackup && effectiveSkipOnFailure && (
+                <Chip
+                  label={t('repositoryScripts.chips.skipsGracefully')}
+                  size="small"
+                  color="info"
+                  variant="outlined"
+                  sx={{ height: 20, fontSize: '0.7rem' }}
+                />
+              )}
               {isPreBackup && effectiveContinueOnError && (
                 <Chip
                   label={t('repositoryScripts.chips.continuesOnError')}
@@ -342,6 +408,16 @@ export default function RepositoryScriptsTab({
 
               {/* Actions */}
               <Box sx={{ display: 'flex', gap: 0.25, ml: 'auto' }}>
+                <Tooltip title={t('repositoryScripts.tooltips.testScript', 'Test run this script')}>
+                  <IconButton
+                    size="small"
+                    onClick={() => handleTestScript(script)}
+                    color="success"
+                    sx={{ p: 0.5 }}
+                  >
+                    <Play size={16} />
+                  </IconButton>
+                </Tooltip>
                 {script.parameters && script.parameters.length > 0 && (
                   <Tooltip title={t('repositoryScripts.tooltips.configureParameters')}>
                     <IconButton
@@ -402,18 +478,28 @@ export default function RepositoryScriptsTab({
           open={editParametersDialog.open}
           onClose={() => setEditParametersDialog({ open: false, script: null })}
           script={editParametersDialog.script}
-          onSubmit={(paramValues) =>
-            handleUpdateParameters(editParametersDialog.script!.id, paramValues)
+          isPreBackup={hookType === 'pre-backup'}
+          onSubmit={(paramValues, mode) =>
+            handleUpdateParameters(editParametersDialog.script!.id, paramValues, mode)
           }
         />
       )}
+
+      {/* Test Run Dialog */}
+      <ScriptTestDialog
+        open={testDialog.open}
+        onClose={() => setTestDialog({ open: false, script: null, running: false, result: null })}
+        scriptName={testDialog.script?.script_name ?? ''}
+        running={testDialog.running}
+        result={testDialog.result}
+      />
     </Box>
   )
 }
 
 interface AssignmentData {
   script_id: number | ''
-  continue_on_error: boolean
+  on_failure_mode: OnFailureMode
   parameter_values?: Record<string, string>
 }
 
@@ -441,7 +527,7 @@ function RepositoryScriptDialog({
   hasInlineScript,
 }: RepositoryScriptDialogProps) {
   const { t } = useTranslation()
-  const [continueOnError, setContinueOnError] = useState(true)
+  const [onFailureMode, setOnFailureMode] = useState<OnFailureMode>('fail')
   const [parameterValues, setParameterValues] = useState<Record<string, string>>({})
   const isPreBackup = hookType === 'pre-backup'
 
@@ -457,7 +543,7 @@ function RepositoryScriptDialog({
   // Reset local state when dialog opens/closes
   useEffect(() => {
     if (open) {
-      setContinueOnError(true)
+      setOnFailureMode('fail')
       setParameterValues({})
     }
   }, [open])
@@ -472,7 +558,7 @@ function RepositoryScriptDialog({
   const handleSubmit = () => {
     onSubmit({
       script_id: selectedScriptId,
-      continue_on_error: continueOnError,
+      on_failure_mode: onFailureMode,
       parameter_values: parameterValues,
     })
   }
@@ -493,7 +579,10 @@ function RepositoryScriptDialog({
               value={selectedScriptId}
               label={t('repositoryScripts.dialog.selectScriptLabel')}
               onChange={(e) => onScriptSelect(e.target.value as number)}
-              sx={{ height: { xs: 48, sm: 56 } }}
+              renderValue={(value) => {
+                const s = availableScripts.find((sc) => sc.id === value)
+                return s ? s.name : ''
+              }}
               MenuProps={{
                 PaperProps: {
                   style: {
@@ -507,7 +596,7 @@ function RepositoryScriptDialog({
                   <Box>
                     <Typography variant="body2">{script.name}</Typography>
                     {script.description && (
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" color="text.secondary" display="block">
                         {script.description}
                       </Typography>
                     )}
@@ -529,20 +618,31 @@ function RepositoryScriptDialog({
           )}
 
           {isPreBackup && (
-            <Box sx={{ ml: 1 }}>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={continueOnError}
-                    onChange={(e) => setContinueOnError(e.target.checked)}
-                  />
-                }
-                label={t('repositoryScripts.dialog.continueOnErrorLabel')}
-              />
-              <FormHelperText sx={{ mt: -1, ml: 4 }}>
-                {t('repositoryScripts.dialog.continueOnErrorHelperText')}
-              </FormHelperText>
-            </Box>
+            <FormControl sx={{ ml: 1 }}>
+              <FormLabel sx={{ fontSize: '0.875rem' }}>
+                {t('repositoryScripts.dialog.onFailureLabel')}
+              </FormLabel>
+              <RadioGroup
+                value={onFailureMode}
+                onChange={(e) => setOnFailureMode(e.target.value as OnFailureMode)}
+              >
+                <FormControlLabel
+                  value="fail"
+                  control={<Radio size="small" />}
+                  label={t('scriptEditor.onFailureFail')}
+                />
+                <FormControlLabel
+                  value="continue"
+                  control={<Radio size="small" />}
+                  label={t('scriptEditor.onFailureContinue')}
+                />
+                <FormControlLabel
+                  value="skip"
+                  control={<Radio size="small" />}
+                  label={t('scriptEditor.onFailureSkip')}
+                />
+              </RadioGroup>
+            </FormControl>
           )}
         </Box>
       </DialogContent>
@@ -560,24 +660,33 @@ interface EditParametersDialogProps {
   open: boolean
   onClose: () => void
   script: RepositoryScript
-  onSubmit: (paramValues: Record<string, string>) => void
+  isPreBackup: boolean
+  onSubmit: (paramValues: Record<string, string>, onFailureMode: OnFailureMode) => void
 }
 
-function EditParametersDialog({ open, onClose, script, onSubmit }: EditParametersDialogProps) {
+function EditParametersDialog({
+  open,
+  onClose,
+  script,
+  isPreBackup,
+  onSubmit,
+}: EditParametersDialogProps) {
   const { t } = useTranslation()
   const [parameterValues, setParameterValues] = useState<Record<string, string>>({})
+  const [onFailureMode, setOnFailureMode] = useState<OnFailureMode>('fail')
 
-  // Initialize parameter values when dialog opens
+  // Initialize values when dialog opens
   useEffect(() => {
-    if (open && script.parameter_values) {
-      setParameterValues({ ...script.parameter_values })
-    } else if (open) {
-      setParameterValues({})
+    if (open) {
+      setParameterValues(script.parameter_values ? { ...script.parameter_values } : {})
+      setOnFailureMode(
+        script.skip_on_failure ? 'skip' : script.continue_on_error ? 'continue' : 'fail'
+      )
     }
   }, [open, script])
 
   const handleSubmit = () => {
-    onSubmit(parameterValues)
+    onSubmit(parameterValues, onFailureMode)
   }
 
   return (
@@ -586,7 +695,7 @@ function EditParametersDialog({ open, onClose, script, onSubmit }: EditParameter
         {t('repositoryScripts.parametersDialog.title', { scriptName: script.script_name })}
       </DialogTitle>
       <DialogContent>
-        <Box sx={{ pt: 2 }}>
+        <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
           {script.parameters && script.parameters.length > 0 ? (
             <ScriptParameterInputs
               parameters={script.parameters}
@@ -596,6 +705,33 @@ function EditParametersDialog({ open, onClose, script, onSubmit }: EditParameter
           ) : (
             <Alert severity="info">{t('repositoryScripts.parametersDialog.noParameters')}</Alert>
           )}
+          {isPreBackup && (
+            <FormControl>
+              <FormLabel sx={{ fontSize: '0.875rem' }}>
+                {t('repositoryScripts.dialog.onFailureLabel')}
+              </FormLabel>
+              <RadioGroup
+                value={onFailureMode}
+                onChange={(e) => setOnFailureMode(e.target.value as OnFailureMode)}
+              >
+                <FormControlLabel
+                  value="fail"
+                  control={<Radio size="small" />}
+                  label={t('scriptEditor.onFailureFail')}
+                />
+                <FormControlLabel
+                  value="continue"
+                  control={<Radio size="small" />}
+                  label={t('scriptEditor.onFailureContinue')}
+                />
+                <FormControlLabel
+                  value="skip"
+                  control={<Radio size="small" />}
+                  label={t('scriptEditor.onFailureSkip')}
+                />
+              </RadioGroup>
+            </FormControl>
+          )}
         </Box>
       </DialogContent>
       <DialogActions>
@@ -603,6 +739,127 @@ function EditParametersDialog({ open, onClose, script, onSubmit }: EditParameter
         <Button onClick={handleSubmit} variant="contained">
           {t('repositoryScripts.parametersDialog.saveParameters')}
         </Button>
+      </DialogActions>
+    </Dialog>
+  )
+}
+
+interface ScriptTestDialogProps {
+  open: boolean
+  onClose: () => void
+  scriptName: string
+  running: boolean
+  result: {
+    success: boolean
+    stdout: string
+    stderr: string
+    exit_code: number
+    execution_time: number
+  } | null
+}
+
+function ScriptTestDialog({ open, onClose, scriptName, running, result }: ScriptTestDialogProps) {
+  const { t } = useTranslation()
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle>
+        <Box display="flex" alignItems="center" justifyContent="space-between">
+          <Typography variant="h6">Test: {scriptName}</Typography>
+          {running && <CircularProgress size={20} />}
+          {result && (
+            <Box display="flex" alignItems="center" gap={1}>
+              {result.success ? (
+                <CheckCircle size={20} color="#4caf50" />
+              ) : (
+                <XCircle size={20} color="#f44336" />
+              )}
+              <Chip
+                label={`Exit: ${result.exit_code}`}
+                size="small"
+                color={result.exit_code === 0 ? 'success' : 'error'}
+              />
+              <Chip
+                label={`${result.execution_time.toFixed(2)}s`}
+                size="small"
+                variant="outlined"
+              />
+            </Box>
+          )}
+        </Box>
+      </DialogTitle>
+      <DialogContent dividers>
+        {running && (
+          <Box display="flex" justifyContent="center" py={4}>
+            <CircularProgress />
+          </Box>
+        )}
+        {result && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {result.stdout && (
+              <Box>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  display="block"
+                  sx={{ mb: 0.5 }}
+                >
+                  {t('scriptEditor.stdout')}
+                </Typography>
+                <Paper sx={{ p: 2, bgcolor: '#1e1e1e', maxHeight: 300, overflow: 'auto' }}>
+                  <Typography
+                    component="pre"
+                    sx={{
+                      m: 0,
+                      color: '#d4d4d4',
+                      fontFamily: 'monospace',
+                      fontSize: '0.875rem',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                    }}
+                  >
+                    {result.stdout}
+                  </Typography>
+                </Paper>
+              </Box>
+            )}
+            {result.stderr && (
+              <Box>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  display="block"
+                  sx={{ mb: 0.5 }}
+                >
+                  {t('scriptEditor.stderr')}
+                </Typography>
+                <Paper sx={{ p: 2, bgcolor: '#1e1e1e', maxHeight: 200, overflow: 'auto' }}>
+                  <Typography
+                    component="pre"
+                    sx={{
+                      m: 0,
+                      color: '#f48771',
+                      fontFamily: 'monospace',
+                      fontSize: '0.875rem',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                    }}
+                  >
+                    {result.stderr}
+                  </Typography>
+                </Paper>
+              </Box>
+            )}
+            {!result.stdout && !result.stderr && (
+              <Alert severity={result.success ? 'success' : 'error'}>
+                {result.success ? t('scriptEditor.testPassed') : t('scriptEditor.testFailed')}
+              </Alert>
+            )}
+          </Box>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
       </DialogActions>
     </Dialog>
   )

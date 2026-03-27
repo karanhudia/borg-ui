@@ -165,7 +165,7 @@ export default function Scripts() {
           type: 'text', // Default to text, user can mark as secret with checkbox
           default: defaultValue?.trim() || '',
           description: name.toLowerCase().replace(/_/g, ' '),
-          required: !defaultValue,
+          required: false, // Never auto-require; users may fill params dynamically at runtime
         })
       }
     })

@@ -25,6 +25,7 @@ import {
   formatRelativeTime,
   formatDurationSeconds,
   convertCronToLocal,
+  formatCronHuman,
 } from '../utils/dateUtils'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import ScheduledChecksSection, {
@@ -541,11 +542,10 @@ const Schedule: React.FC = () => {
         const localCron = convertCronToLocal(job.cron_expression)
         return (
           <Chip
-            label={localCron}
+            label={formatCronHuman(localCron)}
             size="small"
             variant="outlined"
             color="primary"
-            sx={{ fontFamily: 'monospace' }}
           />
         )
       },
