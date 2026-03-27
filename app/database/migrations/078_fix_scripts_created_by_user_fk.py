@@ -75,28 +75,36 @@ def upgrade(connection):
             ))
             print(f"  Nulled {orphan_users} orphaned created_by_user_id reference(s) in scripts")
 
-        # ── Guard against stale temp table ────────────────────────────────────
-        connection.execute(text("DROP TABLE IF EXISTS scripts_new"))
-        connection.execute(text(new_ddl))
+        # ── Disable FK enforcement for the drop/rename swap ──────────────────
+        # Required because scheduled_jobs and repository_scripts reference
+        # scripts; SQLite blocks DROP TABLE when child rows exist.
+        connection.execute(text("PRAGMA foreign_keys = OFF"))
 
-        # ── Copy using explicit column names ──────────────────────────────────
-        col_names = ", ".join(row[1] for row in col_rows)
-        connection.execute(text(
-            f"INSERT INTO scripts_new ({col_names})"
-            f" SELECT {col_names} FROM scripts"
-        ))
+        try:
+            # ── Guard against stale temp table ────────────────────────────────
+            connection.execute(text("DROP TABLE IF EXISTS scripts_new"))
+            connection.execute(text(new_ddl))
 
-        # ── Swap tables ───────────────────────────────────────────────────────
-        connection.execute(text("DROP TABLE scripts"))
-        connection.execute(text("ALTER TABLE scripts_new RENAME TO scripts"))
+            # ── Copy using explicit column names ──────────────────────────────
+            col_names = ", ".join(row[1] for row in col_rows)
+            connection.execute(text(
+                f"INSERT INTO scripts_new ({col_names})"
+                f" SELECT {col_names} FROM scripts"
+            ))
 
-        # ── Recreate indexes ──────────────────────────────────────────────────
-        connection.execute(text(
-            "CREATE UNIQUE INDEX IF NOT EXISTS ix_scripts_name ON scripts (name)"
-        ))
-        connection.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_scripts_id ON scripts (id)"
-        ))
+            # ── Swap tables ───────────────────────────────────────────────────
+            connection.execute(text("DROP TABLE scripts"))
+            connection.execute(text("ALTER TABLE scripts_new RENAME TO scripts"))
+
+            # ── Recreate indexes ──────────────────────────────────────────────
+            connection.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_scripts_name ON scripts (name)"
+            ))
+            connection.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_scripts_id ON scripts (id)"
+            ))
+        finally:
+            connection.execute(text("PRAGMA foreign_keys = ON"))
 
         print("✓ scripts.created_by_user_id FK now has ON DELETE SET NULL")
         print("✓ Users can now be deleted without IntegrityError from scripts table")
