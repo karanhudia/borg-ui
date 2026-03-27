@@ -38,8 +38,10 @@ jobs:
       - name: Run npm audit
         working-directory: frontend
         run: |
-          # Audit and fail on moderate or higher vulnerabilities
-          npm audit --audit-level=moderate
+          # Audit production dependencies only (omit dev) — devDependencies like eslint
+          # and their transitive deps (brace-expansion, minimatch) never ship to production
+          # and are not part of the runtime attack surface.
+          npm audit --omit=dev --audit-level=moderate
         continue-on-error: false
 
       - name: Generate npm audit report
@@ -76,12 +78,14 @@ jobs:
       - name: Run pip-audit
         run: |
           # Scan requirements.txt for vulnerabilities
-          # Ignore known Python 3.9 limitation vulnerabilities:
+          # Ignore known vulnerabilities with no available fix:
           # - GHSA-wp53-j4wj-2cfg: python-multipart (fix requires Python 3.10+)
-          # - GHSA-wj6h-64fc-37mp: ecdsa (no fix for Python 3.9)
+          # - GHSA-wj6h-64fc-37mp: ecdsa (no fix available)
+          # - CVE-2026-4539: pygments (transitive via structlog, no fix released yet)
           pip-audit -r requirements.txt \
             --ignore-vuln GHSA-wp53-j4wj-2cfg \
-            --ignore-vuln GHSA-wj6h-64fc-37mp
+            --ignore-vuln GHSA-wj6h-64fc-37mp \
+            --ignore-vuln CVE-2026-4539
 
       - name: Generate pip-audit report
         if: always()
