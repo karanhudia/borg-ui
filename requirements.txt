@@ -23,4 +23,4 @@ requests==2.33.0
 sqlalchemy==2.0.48
 structlog==25.5.0
 uvicorn[standard]==0.42.0
-paho-mqtt==1.6.1
+paho-mqtt==2.1.0
