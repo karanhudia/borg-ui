@@ -4,6 +4,8 @@ import { TextField, Divider, Typography } from '@mui/material'
 import ScriptEditorDialog from './ScriptEditorDialog'
 import RepositoryScriptsSection from './RepositoryScriptsSection'
 
+type OnFailureMode = 'fail' | 'continue' | 'skip'
+
 interface AdvancedRepositoryOptionsProps {
   repositoryId?: number | null
   mode: 'full' | 'observe'
@@ -12,14 +14,14 @@ interface AdvancedRepositoryOptionsProps {
   postBackupScript: string
   preHookTimeout: number
   postHookTimeout: number
-  continueOnHookFailure: boolean
+  hookFailureMode: OnFailureMode
   customFlags: string
   onRemotePathChange: (value: string) => void
   onPreBackupScriptChange: (value: string) => void
   onPostBackupScriptChange: (value: string) => void
   onPreHookTimeoutChange: (value: number) => void
   onPostHookTimeoutChange: (value: number) => void
-  onContinueOnHookFailureChange: (value: boolean) => void
+  onHookFailureModeChange: (value: OnFailureMode) => void
   onCustomFlagsChange: (value: string) => void
 }
 
@@ -31,14 +33,14 @@ export default function AdvancedRepositoryOptions({
   postBackupScript,
   preHookTimeout,
   postHookTimeout,
-  continueOnHookFailure,
+  hookFailureMode,
   customFlags,
   onRemotePathChange,
   onPreBackupScriptChange,
   onPostBackupScriptChange,
   onPreHookTimeoutChange,
   onPostHookTimeoutChange,
-  onContinueOnHookFailureChange,
+  onHookFailureModeChange,
   onCustomFlagsChange,
 }: AdvancedRepositoryOptionsProps) {
   const { t } = useTranslation()
@@ -116,9 +118,10 @@ export default function AdvancedRepositoryOptions({
         placeholder="#!/bin/bash&#10;echo 'Pre-backup hook started'&#10;wakeonlan AA:BB:CC:DD:EE:FF&#10;sleep 60"
         timeout={preHookTimeout}
         onTimeoutChange={onPreHookTimeoutChange}
-        continueOnFailure={continueOnHookFailure}
-        onContinueOnFailureChange={onContinueOnHookFailureChange}
+        onFailureMode={hookFailureMode}
+        onFailureModeChange={onHookFailureModeChange}
         showContinueOnFailure={true}
+        repositoryId={repositoryId}
       />
 
       <ScriptEditorDialog
@@ -131,6 +134,7 @@ export default function AdvancedRepositoryOptions({
         timeout={postHookTimeout}
         onTimeoutChange={onPostHookTimeoutChange}
         showContinueOnFailure={false}
+        repositoryId={repositoryId}
       />
     </>
   )

@@ -274,7 +274,7 @@ describe('PruneRepositoryDialog', () => {
       )
 
       expect(screen.getByRole('button', { name: /Dry Run/i })).toBeDisabled()
-      expect(screen.getByRole('button', { name: /common.status.running/i })).toBeDisabled()
+      expect(screen.getByRole('button', { name: /Running/i })).toBeDisabled()
     })
 
     it('shows Pruning text when loading', () => {
@@ -290,7 +290,7 @@ describe('PruneRepositoryDialog', () => {
         />
       )
 
-      expect(screen.getByRole('button', { name: /common.status.running/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Running/i })).toBeInTheDocument()
     })
   })
 

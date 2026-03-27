@@ -315,6 +315,7 @@ class RepositoryCreate(BaseModel):
     pre_hook_timeout: Optional[int] = 300  # Pre-backup hook timeout in seconds
     post_hook_timeout: Optional[int] = 300  # Post-backup hook timeout in seconds
     continue_on_hook_failure: Optional[bool] = False  # Continue backup if pre-hook fails
+    skip_on_hook_failure: Optional[bool] = False  # Skip backup gracefully if pre-hook fails
     mode: str = "full"  # full: backups + observability, observe: observability-only
     bypass_lock: bool = False  # Use --bypass-lock for read-only storage access (observe-only repos)
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create (e.g., "--stats --list")
@@ -335,6 +336,7 @@ class RepositoryImport(BaseModel):
     pre_hook_timeout: Optional[int] = 300  # Pre-backup hook timeout in seconds
     post_hook_timeout: Optional[int] = 300  # Post-backup hook timeout in seconds
     continue_on_hook_failure: Optional[bool] = False  # Continue backup if pre-hook fails
+    skip_on_hook_failure: Optional[bool] = False  # Skip backup gracefully if pre-hook fails
     mode: str = "full"  # full: backups + observability, observe: observability-only
     bypass_lock: bool = False  # Use --bypass-lock for read-only storage access (observe-only repos)
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create (e.g., "--stats --list")
@@ -355,6 +357,7 @@ class RepositoryUpdate(BaseModel):
     pre_hook_timeout: Optional[int] = None
     post_hook_timeout: Optional[int] = None
     continue_on_hook_failure: Optional[bool] = None
+    skip_on_hook_failure: Optional[bool] = None  # Skip backup gracefully if pre-hook fails
     mode: Optional[str] = None  # full: backups + observability, observe: observability-only
     bypass_lock: Optional[bool] = None  # Use --bypass-lock for read-only storage access
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create
@@ -429,6 +432,7 @@ async def get_repositories(
                 "pre_hook_timeout": repo.pre_hook_timeout,
                 "post_hook_timeout": repo.post_hook_timeout,
                 "continue_on_hook_failure": repo.continue_on_hook_failure,
+                "skip_on_hook_failure": repo.skip_on_hook_failure,
                 "mode": repo.mode or "full",  # Default to "full" for backward compatibility
                 "bypass_lock": repo.bypass_lock or False,
                 "custom_flags": repo.custom_flags,
@@ -647,6 +651,7 @@ async def create_repository(
             pre_hook_timeout=repo_data.pre_hook_timeout,
             post_hook_timeout=repo_data.post_hook_timeout,
             continue_on_hook_failure=repo_data.continue_on_hook_failure,
+            skip_on_hook_failure=repo_data.skip_on_hook_failure,
             mode=repo_data.mode,
             bypass_lock=repo_data.bypass_lock,
             custom_flags=repo_data.custom_flags,
@@ -889,6 +894,7 @@ async def import_repository(
             pre_hook_timeout=repo_data.pre_hook_timeout,
             post_hook_timeout=repo_data.post_hook_timeout,
             continue_on_hook_failure=repo_data.continue_on_hook_failure,
+            skip_on_hook_failure=repo_data.skip_on_hook_failure,
             mode=repo_data.mode,
             bypass_lock=repo_data.bypass_lock,
             custom_flags=repo_data.custom_flags,
@@ -1334,6 +1340,9 @@ async def update_repository(
 
         if repo_data.continue_on_hook_failure is not None:
             repository.continue_on_hook_failure = repo_data.continue_on_hook_failure
+
+        if repo_data.skip_on_hook_failure is not None:
+            repository.skip_on_hook_failure = repo_data.skip_on_hook_failure
 
         if repo_data.mode is not None:
             # Validate source directories when switching to full mode
@@ -2139,6 +2148,48 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
                              path=temp_key_file,
                              error=str(e))
 
+def _resolve_repo_ssh_key_file(repository, db) -> Optional[str]:
+    """Decrypt and write the SSH key for a repository to a temp file.
+
+    Returns the temp file path (caller must delete it), or None if no key is configured.
+    Supports both connection_id (new) and direct ssh_key_id (legacy) repository setups.
+    """
+    from app.database.models import SSHConnection, SSHKey
+    from cryptography.fernet import Fernet
+    import base64
+    import tempfile
+
+    ssh_key = None
+    if repository.connection_id:
+        connection = db.query(SSHConnection).filter(
+            SSHConnection.id == repository.connection_id
+        ).first()
+        if connection and connection.ssh_key_id:
+            ssh_key = db.query(SSHKey).filter(SSHKey.id == connection.ssh_key_id).first()
+    elif getattr(repository, 'repository_type', None) == "ssh" and getattr(repository, 'ssh_key_id', None):
+        ssh_key = db.query(SSHKey).filter(SSHKey.id == repository.ssh_key_id).first()
+
+    if not ssh_key:
+        return None
+
+    encryption_key = settings.secret_key.encode()[:32]
+    cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
+    private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+    if not private_key.endswith('\n'):
+        private_key += '\n'
+
+    fd, temp_key_file = tempfile.mkstemp(suffix='.key', text=True)
+    try:
+        os.chmod(temp_key_file, 0o600)
+        with os.fdopen(fd, 'w') as f:
+            f.write(private_key)
+    except Exception:
+        os.close(fd)
+        raise
+
+    return temp_key_file
+
+
 @router.get("/{repo_id}/archives")
 async def list_repository_archives(
     repo_id: int,
@@ -2148,6 +2199,7 @@ async def list_repository_archives(
     """List all archives in a repository using borg list"""
     max_retries = 3
     retry_delay = 1  # seconds - quick retry after breaking lock
+    temp_key_file = None
 
     for attempt in range(max_retries):
         try:
@@ -2173,8 +2225,11 @@ async def list_repository_archives(
 
             cmd.extend(["--json", repository.path])
 
-            # Set up environment with proper lock configuration
-            ssh_opts = get_standard_ssh_opts()
+            # Set up environment — inject SSH key if repository uses key-based auth
+            temp_key_file = _resolve_repo_ssh_key_file(repository, db)
+            if temp_key_file:
+                logger.info("Using SSH key for archive list", repo_id=repo_id)
+            ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
             env = setup_borg_env(
                 passphrase=repository.passphrase,
                 ssh_opts=ssh_opts
@@ -2249,6 +2304,12 @@ async def list_repository_archives(
                 continue
             logger.error("Failed to list archives after retries", error=error_msg, repo_id=repo_id)
             raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToListArchives"})
+        finally:
+            if temp_key_file and os.path.exists(temp_key_file):
+                try:
+                    os.unlink(temp_key_file)
+                except Exception:
+                    pass
 
     # Parse JSON output
     try:
@@ -2279,6 +2340,7 @@ async def get_repository_info(
     """Get detailed repository information using borg info"""
     max_retries = 3
     retry_delay = 1  # seconds - quick retry after breaking lock
+    temp_key_file = None
 
     for attempt in range(max_retries):
         try:
@@ -2304,8 +2366,11 @@ async def get_repository_info(
 
             cmd.extend(["--json", repository.path])
 
-            # Set up environment with proper lock configuration
-            ssh_opts = get_standard_ssh_opts()
+            # Set up environment — inject SSH key if repository uses key-based auth
+            temp_key_file = _resolve_repo_ssh_key_file(repository, db)
+            if temp_key_file:
+                logger.info("Using SSH key for repository info", repo_id=repo_id)
+            ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
             env = setup_borg_env(
                 passphrase=repository.passphrase,
                 ssh_opts=ssh_opts
@@ -2380,6 +2445,12 @@ async def get_repository_info(
                 continue
             logger.error("Failed to get repository info after retries", error=error_msg, repo_id=repo_id)
             raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetRepositoryInfo"})
+        finally:
+            if temp_key_file and os.path.exists(temp_key_file):
+                try:
+                    os.unlink(temp_key_file)
+                except Exception:
+                    pass
 
     # Parse JSON output
     try:
@@ -2477,12 +2548,11 @@ async def get_archive_info(
 
         cmd.extend(["--json", archive_path])
 
-        # Set up environment with proper lock configuration
-        ssh_opts = [
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "LogLevel=ERROR"
-        ]
+        # Set up environment — inject SSH key if repository uses key-based auth
+        temp_key_file = _resolve_repo_ssh_key_file(repository, db)
+        if temp_key_file:
+            logger.info("Using SSH key for archive info", repo_id=repo_id, archive_name=archive_name)
+        ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
         env = setup_borg_env(
             passphrase=repository.passphrase,
             ssh_opts=ssh_opts
@@ -2539,9 +2609,9 @@ async def get_archive_info(
             list_env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
             list_env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
 
-            # Add SSH options
-            ssh_opts = get_standard_ssh_opts()
-            list_env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+            # Add SSH options — reuse the same key file already resolved above
+            list_ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
+            list_env['BORG_RSH'] = f"ssh {' '.join(list_ssh_opts)}"
 
             try:
                 list_process = await asyncio.create_subprocess_exec(
@@ -2610,6 +2680,12 @@ async def get_archive_info(
     except Exception as e:
         logger.error("Failed to get archive info", error=str(e))
         raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetArchiveInfo"})
+    finally:
+        if temp_key_file and os.path.exists(temp_key_file):
+            try:
+                os.unlink(temp_key_file)
+            except Exception:
+                pass
 
 @router.get("/{repo_id}/archives/{archive_name}/files")
 async def list_archive_files(

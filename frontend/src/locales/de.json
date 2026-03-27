@@ -587,6 +587,8 @@
       "port": "Port",
       "password": "Passwort",
       "sftpMode": "SFTP-Modus für die Schlüsselbereitstellung verwenden",
+      "useSudo": "Sudo für Backups verwenden",
+      "useSudoHint": "Stellt borg auf dem entfernten Host sudo voran. Erfordert passwortloses sudo für den SSH-Benutzer. Gilt nur für den Remote-SSH-Backup-Modus.",
       "defaultPath": "Standardpfad (Optional)",
       "mountPoint": "Einhängepunkt (Optional)",
       "deploying": "Stellt bereit...",
@@ -1422,9 +1424,10 @@
     "autoDetect": "Komprimierbarkeit automatisch erkennen (auto,C[,L])",
     "autoDetectDesc": "Verwendet lz4, um zu testen, ob Daten komprimierbar sind. Für unkomprimierbare Daten (z.B. Mediendateien) wird \"none\" verwendet. Für komprimierbare Daten wird der ausgewählte Algorithmus verwendet.",
     "obfuscateLabel": "Verschleierungsspezifikation (Optional)",
-    "obfuscatePlaceholder": "z.B. 110, 250",
-    "obfuscateHelper": "Verschleiert komprimierte Block-Größen, um Fingerabdruck-Angriffe zu erschweren. Muss mit Verschlüsselung verwendet werden. Repository wird größer.",
-    "finalSpec": "Endgültige Komprimierungsspezifikation:"
+    "obfuscatePlaceholder": "z.B. 3, 110 oder 250",
+    "obfuscateHelper": "Level 1-6 (geringer Overhead), 110-123 (bis zu 8MB additiv) oder 250 (Padmé, ≤12% Overhead). Erfordert Verschlüsselung.",
+    "finalSpec": "Endgültige Komprimierungsspezifikation:",
+    "obfuscateErrorInvalid": "Ungültige Obfuskierungsstufe. Muss 1-6, 110-123 oder 250 (Padmé) sein."
   },
   "archiveNameTemplate": {
     "label": "Archivnamen-Vorlage",
@@ -2036,7 +2039,11 @@
     "stdout": "Standardausgabe:",
     "stderr": "Fehlerausgabe:",
     "save": "Speichern",
-    "exitCode": "Exit-Code: {{code}}"
+    "exitCode": "Exit-Code: {{code}}",
+    "onFailureLabel": "Wenn das Vor-Backup-Skript fehlschlägt:",
+    "onFailureContinue": "Sicherung fortsetzen",
+    "onFailureSkip": "Sicherung überspringen",
+    "onFailureFail": "Sicherung abbrechen"
   },
   "scriptParameters": {
     "title": "Skriptparameter",
@@ -2142,6 +2149,7 @@
     "folderNamePlaceholder": "Ordnername eingeben",
     "creating": "Erstellt...",
     "create": "Erstellen",
+    "failedToLoad": "Verzeichnis konnte nicht geladen werden",
     "chips": {
       "remote": "Remote",
       "host": "Host",
@@ -2212,8 +2220,6 @@
     "passwordHelper": "Optionales MQTT-Passwort",
     "clientIdLabel": "Client-ID",
     "clientIdHelper": "MQTT-Client-Kennung",
-    "baseTopicLabel": "Basis-Topic",
-    "baseTopicHelper": "Root-Topic-Präfix für alle MQTT-Nachrichten",
     "qosLevelLabel": "QoS-Stufe",
     "qosLevelHelper": "0 = höchstens einmal, 1 = mindestens einmal, 2 = genau einmal",
     "retainMessages": "Nachrichten beibehalten",
@@ -2267,7 +2273,8 @@
     },
     "chips": {
       "outOfSync": "Nicht synchronisiert",
-      "continuesOnError": "Weiter bei Fehler"
+      "continuesOnError": "Weiter bei Fehler",
+      "skipsGracefully": "Wird übersprungen"
     },
     "dialog": {
       "assignTitle": "Skript dem Repository zuweisen",
@@ -2275,7 +2282,8 @@
       "continueOnErrorLabel": "Sicherung fortsetzen, wenn Skript fehlschlägt",
       "continueOnErrorHelperText": "Standard überschreiben: Wenn aktiviert, wird die Sicherung auch bei Skriptfehler fortgesetzt.",
       "cancel": "Abbrechen",
-      "assignScript": "Skript zuweisen"
+      "assignScript": "Skript zuweisen",
+      "onFailureLabel": "Wenn dieses Skript fehlschlägt:"
     },
     "parametersDialog": {
       "title": "Skriptparameter konfigurieren: {{scriptName}}",

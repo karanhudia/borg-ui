@@ -587,6 +587,8 @@
       "port": "Port",
       "password": "Password",
       "sftpMode": "Use SFTP mode for key deployment",
+      "useSudo": "Use sudo for backups",
+      "useSudoHint": "Prefix borg with sudo on the remote host. Requires passwordless sudo for the SSH user. Only applies to remote SSH backup mode.",
       "defaultPath": "Default Path (Optional)",
       "mountPoint": "Mount Point (Optional)",
       "deploying": "Deploying...",
@@ -1422,9 +1424,10 @@
     "autoDetect": "Auto-detect compressibility (auto,C[,L])",
     "autoDetectDesc": "Uses lz4 to test if data is compressible. For incompressible data (e.g., media files), uses \"none\". For compressible data, uses your selected algorithm.",
     "obfuscateLabel": "Obfuscate Spec (Optional)",
-    "obfuscatePlaceholder": "e.g., 110, 250",
-    "obfuscateHelper": "Obfuscate compressed chunk sizes to make fingerprinting attacks harder. Must be used with encryption. Repo will be bigger.",
-    "finalSpec": "Final compression spec:"
+    "obfuscatePlaceholder": "e.g., 3, 110, or 250",
+    "obfuscateHelper": "Level 1-6 (small overhead), 110-123 (up to 8MB additive), or 250 (Padmé, ≤12% overhead). Requires encryption.",
+    "finalSpec": "Final compression spec:",
+    "obfuscateErrorInvalid": "Invalid obfuscation level. Must be 1-6, 110-123, or 250 (Padmé)."
   },
   "archiveNameTemplate": {
     "label": "Archive Name Template",
@@ -2030,6 +2033,10 @@
     "timeoutLabel": "Timeout (seconds)",
     "timeoutHint": "Maximum time to wait for script execution",
     "continueOnFailure": "Continue backup if script fails",
+    "onFailureLabel": "If pre-backup script fails:",
+    "onFailureFail": "Fail backup",
+    "onFailureContinue": "Continue backup",
+    "onFailureSkip": "Skip backup gracefully",
     "testPassed": "Test Passed",
     "testWarnings": "Test Completed with Warnings",
     "testFailed": "Test Failed",
@@ -2142,6 +2149,7 @@
     "folderNamePlaceholder": "Enter folder name",
     "creating": "Creating...",
     "create": "Create",
+    "failedToLoad": "Failed to load directory",
     "chips": {
       "remote": "Remote",
       "host": "Host",
@@ -2212,8 +2220,6 @@
     "passwordHelper": "Optional MQTT password",
     "clientIdLabel": "Client ID",
     "clientIdHelper": "MQTT client identifier",
-    "baseTopicLabel": "Base Topic",
-    "baseTopicHelper": "Root topic prefix for all MQTT messages",
     "qosLevelLabel": "QoS Level",
     "qosLevelHelper": "0 = at most once, 1 = at least once, 2 = exactly once",
     "retainMessages": "Retain messages",
@@ -2267,13 +2273,15 @@
     },
     "chips": {
       "outOfSync": "Out of Sync",
-      "continuesOnError": "Continues on Error"
+      "continuesOnError": "Continues on Error",
+      "skipsGracefully": "Skips Gracefully"
     },
     "dialog": {
       "assignTitle": "Assign Script to Repository",
       "selectScriptLabel": "Select Script",
       "continueOnErrorLabel": "Continue backup if script fails",
       "continueOnErrorHelperText": "Override default: If checked, the backup will proceed even if this script fails.",
+      "onFailureLabel": "If this script fails:",
       "cancel": "Cancel",
       "assignScript": "Assign Script"
     },

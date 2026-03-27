@@ -587,6 +587,8 @@
       "port": "Puerto",
       "password": "Contraseña",
       "sftpMode": "Usar modo SFTP para el despliegue de claves",
+      "useSudo": "Usar sudo para copias de seguridad",
+      "useSudoHint": "Antepone sudo a borg en el host remoto. Requiere sudo sin contraseña para el usuario SSH. Solo aplica al modo de copia de seguridad SSH remoto.",
       "defaultPath": "Ruta predeterminada (Opcional)",
       "mountPoint": "Punto de montaje (Opcional)",
       "deploying": "Desplegando...",
@@ -1422,9 +1424,10 @@
     "autoDetect": "Detectar compresibilidad automáticamente (auto,C[,L])",
     "autoDetectDesc": "Usa lz4 para probar si los datos son compresibles. Para datos incompresibles (ej., archivos multimedia), usa \"none\". Para datos compresibles, usa el algoritmo seleccionado.",
     "obfuscateLabel": "Especificación de ofuscación (Opcional)",
-    "obfuscatePlaceholder": "ej., 110, 250",
-    "obfuscateHelper": "Ofusca los tamaños de fragmentos comprimidos para dificultar los ataques de identificación de huellas. Debe usarse con cifrado. El repositorio será más grande.",
-    "finalSpec": "Especificación de compresión final:"
+    "obfuscatePlaceholder": "ej. 3, 110 o 250",
+    "obfuscateHelper": "Nivel 1-6 (overhead pequeño), 110-123 (hasta 8MB aditivo) o 250 (Padmé, ≤12% overhead). Requiere cifrado.",
+    "finalSpec": "Especificación de compresión final:",
+    "obfuscateErrorInvalid": "Nivel de ofuscación no válido. Debe ser 1-6, 110-123 o 250 (Padmé)."
   },
   "archiveNameTemplate": {
     "label": "Plantilla de nombre de archivo",
@@ -2036,7 +2039,11 @@
     "stdout": "Salida estándar:",
     "stderr": "Error estándar:",
     "save": "Guardar",
-    "exitCode": "Código de salida: {{code}}"
+    "exitCode": "Código de salida: {{code}}",
+    "onFailureLabel": "Si el script previo a la copia falla:",
+    "onFailureContinue": "Continuar copia de seguridad",
+    "onFailureSkip": "Saltar copia de seguridad",
+    "onFailureFail": "Detener copia de seguridad"
   },
   "scriptParameters": {
     "title": "Parámetros del script",
@@ -2142,6 +2149,7 @@
     "folderNamePlaceholder": "Introduce el nombre de la carpeta",
     "creating": "Creando...",
     "create": "Crear",
+    "failedToLoad": "Error al cargar el directorio",
     "chips": {
       "remote": "Remoto",
       "host": "Host",
@@ -2212,8 +2220,6 @@
     "passwordHelper": "Contraseña MQTT opcional",
     "clientIdLabel": "ID de cliente",
     "clientIdHelper": "Identificador de cliente MQTT",
-    "baseTopicLabel": "Tema base",
-    "baseTopicHelper": "Prefijo de tema raíz para todos los mensajes MQTT",
     "qosLevelLabel": "Nivel de QoS",
     "qosLevelHelper": "0 = como máximo una vez, 1 = al menos una vez, 2 = exactamente una vez",
     "retainMessages": "Retener mensajes",
@@ -2267,7 +2273,8 @@
     },
     "chips": {
       "outOfSync": "Desincronizado",
-      "continuesOnError": "Continúa en caso de error"
+      "continuesOnError": "Continúa en caso de error",
+      "skipsGracefully": "Salta correctamente"
     },
     "dialog": {
       "assignTitle": "Asignar script al repositorio",
@@ -2275,7 +2282,8 @@
       "continueOnErrorLabel": "Continuar copia de seguridad si el script falla",
       "continueOnErrorHelperText": "Anular predeterminado: Si está marcado, la copia de seguridad continuará aunque falle este script.",
       "cancel": "Cancelar",
-      "assignScript": "Asignar script"
+      "assignScript": "Asignar script",
+      "onFailureLabel": "Si este script falla:"
     },
     "parametersDialog": {
       "title": "Configurar parámetros del script: {{scriptName}}",

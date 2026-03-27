@@ -1,6 +1,7 @@
 import axios from 'axios'
+import { BASE_PATH } from '@/utils/basePath'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
+const API_BASE_URL = import.meta.env.VITE_API_URL || `${BASE_PATH}/api`
 
 // Track if proxy auth is enabled (set during auth config check)
 let proxyAuthMode = false
@@ -41,7 +42,7 @@ api.interceptors.response.use(
       !proxyAuthMode // Don't redirect in proxy auth mode
     ) {
       localStorage.removeItem('access_token')
-      window.location.href = '/login'
+      window.location.href = `${BASE_PATH}/login`
     }
     return Promise.reject(error)
   }
@@ -67,6 +68,7 @@ export interface RepositoryData {
   pre_hook_timeout?: number
   post_hook_timeout?: number
   continue_on_hook_failure?: boolean
+  skip_on_hook_failure?: boolean
   passphrase?: string
   mode?: 'full' | 'observe'
   custom_flags?: string | null
@@ -291,7 +293,7 @@ export const settingsAPI = {
 export const eventsAPI = {
   streamEvents: () => {
     const token = localStorage.getItem('access_token')
-    const url = `/api/events/stream${token ? `?token=${token}` : ''}`
+    const url = `${BASE_PATH}/api/events/stream${token ? `?token=${token}` : ''}`
     return new EventSource(url)
   },
 }
