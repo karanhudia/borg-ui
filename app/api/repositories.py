@@ -1431,7 +1431,7 @@ async def delete_repository(
 
         from app.database.models import (
             RepositoryScript, RestoreJob, CheckJob, PruneJob, CompactJob,
-            ScheduledJob, ScheduledJobRepository, BackupJob
+            ScheduledJob, ScheduledJobRepository, BackupJob, ScriptExecution
         )
 
         # 1. Delete job records (these don't have CASCADE)
@@ -1494,7 +1494,14 @@ async def delete_repository(
         if script_associations:
             logger.info("Deleted script associations", repo_id=repo_id, count=len(script_associations))
 
-        # 5. Finally, delete the repository itself
+        # 5. Null out script execution references (repository_id is nullable, preserve history)
+        script_exec_count = db.query(ScriptExecution).filter(
+            ScriptExecution.repository_id == repo_id
+        ).update({"repository_id": None}, synchronize_session=False)
+        if script_exec_count:
+            logger.info("Unlinked script executions", repo_id=repo_id, count=script_exec_count)
+
+        # 6. Finally, delete the repository itself
         db.delete(repository)
         db.commit()
 
@@ -2680,12 +2687,11 @@ async def list_archive_files(
         # Use --json-lines for file listing
         cmd.extend(["--json-lines", archive_path])
 
-        # Set up environment with proper lock configuration
-        ssh_opts = [
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "LogLevel=ERROR"
-        ]
+        # Set up environment — inject SSH key if repository uses key-based auth
+        temp_key_file = resolve_repo_ssh_key_file(repository, db)
+        if temp_key_file:
+            logger.info("Using SSH key for archive file list", repo_id=repo_id, archive_name=archive_name)
+        ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
         env = setup_borg_env(
             passphrase=repository.passphrase,
             ssh_opts=ssh_opts
@@ -2748,6 +2754,12 @@ async def list_archive_files(
     except Exception as e:
         logger.error("Failed to list archive files", error=str(e))
         raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToListArchiveFiles"})
+    finally:
+        if temp_key_file and os.path.exists(temp_key_file):
+            try:
+                os.unlink(temp_key_file)
+            except Exception:
+                pass
 
 async def get_repository_stats(path: str, bypass_lock: bool = False) -> Dict[str, Any]:
     """Get repository statistics"""
@@ -2818,33 +2830,35 @@ async def break_repository_lock(
                    user=current_user.username,
                    repository_id=repository_id)
 
-        # Set up environment with SSH options and passphrase
-        env = os.environ.copy()
-
-        # Add SSH options
-        ssh_opts = get_standard_ssh_opts()
-        env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
-
-        # Add passphrase if available
-        if repository.passphrase:
-            env['BORG_PASSPHRASE'] = repository.passphrase
-
-        # Skip prompts
-        env['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes'
-        env['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes'
+        # Set up environment — inject SSH key if repository uses key-based auth
+        temp_key_file = resolve_repo_ssh_key_file(repository, db)
+        if temp_key_file:
+            logger.info("Using SSH key for break-lock", repository_id=repository_id)
+        ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
+        env = setup_borg_env(
+            passphrase=repository.passphrase,
+            ssh_opts=ssh_opts
+        )
 
         # Build borg break-lock command
         cmd = ["borg", "break-lock", repository.path]
 
-        # Execute command
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env
-        )
+        try:
+            # Execute command
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env
+            )
 
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+        finally:
+            if temp_key_file and os.path.exists(temp_key_file):
+                try:
+                    os.unlink(temp_key_file)
+                except Exception:
+                    pass
 
         stdout_str = stdout.decode('utf-8', errors='replace') if stdout else ""
         stderr_str = stderr.decode('utf-8', errors='replace') if stderr else ""
