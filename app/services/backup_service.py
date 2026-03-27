@@ -15,6 +15,7 @@ from app.services.notification_service import notification_service
 from app.services.script_executor import execute_script
 from app.services.script_library_executor import ScriptLibraryExecutor
 from app.services.mqtt_service import mqtt_service
+from app.utils.ssh_utils import resolve_repo_ssh_key_file
 
 logger = structlog.get_logger()
 
@@ -1297,74 +1298,19 @@ class BackupService:
             actual_repository_path = repository
 
             # Setup SSH-specific configuration if this is an SSH repository
-            from app.database.models import SSHConnection, SSHKey
-
-            ssh_key = None
-            ssh_key_source = None
-
-            if repo_record and repo_record.connection_id:
-                # NEW: Use connection_id to get SSH connection (preferred method)
-                connection = db.query(SSHConnection).filter(
-                    SSHConnection.id == repo_record.connection_id
-                ).first()
-
-                if connection and connection.ssh_key_id:
-                    ssh_key = db.query(SSHKey).filter(SSHKey.id == connection.ssh_key_id).first()
-                    ssh_key_source = f"connection_id={repo_record.connection_id}"
-
-            elif repo_record and repo_record.repository_type == "ssh" and repo_record.ssh_key_id:
-                # FALLBACK: Legacy repos without connection_id (backward compatibility)
-                ssh_key = db.query(SSHKey).filter(SSHKey.id == repo_record.ssh_key_id).first()
-                ssh_key_source = f"legacy ssh_key_id={repo_record.ssh_key_id}"
-
-                logger.warning(
-                    "Using legacy SSH key lookup for repository without connection_id",
-                    repository=actual_repository_path,
-                    ssh_key_id=repo_record.ssh_key_id,
-                    suggestion="Edit this repository in the UI to select an SSH connection"
-                )
-
-            if ssh_key:
-                from cryptography.fernet import Fernet
-                import base64
-                from app.config import settings
-                import tempfile
-
-                # Decrypt private key
-                encryption_key = settings.secret_key.encode()[:32]
-                cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-                private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
-
-                # Ensure private key ends with newline
-                if not private_key.endswith('\n'):
-                    private_key += '\n'
-
-                # Create temporary key file with proper permissions
-                fd, temp_key_file = tempfile.mkstemp(suffix='.key', text=True)
-                try:
-                    os.chmod(temp_key_file, 0o600)
-                    with os.fdopen(fd, 'w') as f:
-                        f.write(private_key)
-                        if not private_key.endswith('\n'):
-                            f.write('\n')
-                except Exception:
-                    os.close(fd)
-                    raise
-
-                # Update SSH command to use the key
+            temp_key_file = resolve_repo_ssh_key_file(repo_record, db)
+            if temp_key_file:
                 ssh_opts = [
                     "-i", temp_key_file,
                     "-o", "StrictHostKeyChecking=no",
                     "-o", "UserKnownHostsFile=/dev/null",
                     "-o", "LogLevel=ERROR",
-                    "-o", "RequestTTY=no",  # Disable TTY allocation to prevent shell initialization output
-                    "-o", "PermitLocalCommand=no"  # Prevent local command execution
+                    "-o", "RequestTTY=no",
+                    "-o", "PermitLocalCommand=no"
                 ]
                 env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
                 logger.info("Using SSH key for remote repository",
-                          source=ssh_key_source,
-                          ssh_key_id=ssh_key.id,
-                          repository=actual_repository_path)
+                            repository=actual_repository_path)
 
                 # Set BORG_REMOTE_PATH if specified (path to borg binary on remote)
                 if repo_record.remote_path:

@@ -19,6 +19,7 @@ from app.services.check_service import check_service
 from app.services.compact_service import compact_service
 from app.services.mqtt_service import mqtt_service
 from app.utils.datetime_utils import serialize_datetime
+from app.utils.ssh_utils import resolve_repo_ssh_key_file
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["repositories"])
@@ -2148,48 +2149,6 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
                              path=temp_key_file,
                              error=str(e))
 
-def _resolve_repo_ssh_key_file(repository, db) -> Optional[str]:
-    """Decrypt and write the SSH key for a repository to a temp file.
-
-    Returns the temp file path (caller must delete it), or None if no key is configured.
-    Supports both connection_id (new) and direct ssh_key_id (legacy) repository setups.
-    """
-    from app.database.models import SSHConnection, SSHKey
-    from cryptography.fernet import Fernet
-    import base64
-    import tempfile
-
-    ssh_key = None
-    if repository.connection_id:
-        connection = db.query(SSHConnection).filter(
-            SSHConnection.id == repository.connection_id
-        ).first()
-        if connection and connection.ssh_key_id:
-            ssh_key = db.query(SSHKey).filter(SSHKey.id == connection.ssh_key_id).first()
-    elif getattr(repository, 'repository_type', None) == "ssh" and getattr(repository, 'ssh_key_id', None):
-        ssh_key = db.query(SSHKey).filter(SSHKey.id == repository.ssh_key_id).first()
-
-    if not ssh_key:
-        return None
-
-    encryption_key = settings.secret_key.encode()[:32]
-    cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-    private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
-    if not private_key.endswith('\n'):
-        private_key += '\n'
-
-    fd, temp_key_file = tempfile.mkstemp(suffix='.key', text=True)
-    try:
-        os.chmod(temp_key_file, 0o600)
-        with os.fdopen(fd, 'w') as f:
-            f.write(private_key)
-    except Exception:
-        os.close(fd)
-        raise
-
-    return temp_key_file
-
-
 @router.get("/{repo_id}/archives")
 async def list_repository_archives(
     repo_id: int,
@@ -2226,7 +2185,7 @@ async def list_repository_archives(
             cmd.extend(["--json", repository.path])
 
             # Set up environment — inject SSH key if repository uses key-based auth
-            temp_key_file = _resolve_repo_ssh_key_file(repository, db)
+            temp_key_file = resolve_repo_ssh_key_file(repository, db)
             if temp_key_file:
                 logger.info("Using SSH key for archive list", repo_id=repo_id)
             ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
@@ -2367,7 +2326,7 @@ async def get_repository_info(
             cmd.extend(["--json", repository.path])
 
             # Set up environment — inject SSH key if repository uses key-based auth
-            temp_key_file = _resolve_repo_ssh_key_file(repository, db)
+            temp_key_file = resolve_repo_ssh_key_file(repository, db)
             if temp_key_file:
                 logger.info("Using SSH key for repository info", repo_id=repo_id)
             ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
@@ -2549,7 +2508,7 @@ async def get_archive_info(
         cmd.extend(["--json", archive_path])
 
         # Set up environment — inject SSH key if repository uses key-based auth
-        temp_key_file = _resolve_repo_ssh_key_file(repository, db)
+        temp_key_file = resolve_repo_ssh_key_file(repository, db)
         if temp_key_file:
             logger.info("Using SSH key for archive info", repo_id=repo_id, archive_name=archive_name)
         ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)

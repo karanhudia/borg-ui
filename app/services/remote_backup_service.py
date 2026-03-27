@@ -21,6 +21,7 @@ from app.database.models import BackupJob, Repository, SSHConnection, SSHKey
 from app.database.database import SessionLocal
 from app.config import settings
 from app.services.notification_service import notification_service
+from app.utils.ssh_utils import write_ssh_key_to_tempfile
 
 logger = structlog.get_logger()
 
@@ -277,17 +278,8 @@ class RemoteBackupService:
             if not ssh_key:
                 raise Exception(f"SSH key {ssh_connection.ssh_key_id} not found")
 
-            # Create temporary SSH key file with proper permissions
-            fd, key_file_path = tempfile.mkstemp(suffix='.key', text=True)
-            try:
-                os.chmod(key_file_path, 0o600)
-                with os.fdopen(fd, 'w') as key_file:
-                    key_file.write(ssh_key.private_key)
-                    if not ssh_key.private_key.endswith('\n'):
-                        key_file.write('\n')
-            except Exception:
-                os.close(fd)
-                raise
+            # Decrypt and write SSH key to temp file
+            key_file_path = write_ssh_key_to_tempfile(ssh_key)
 
             try:
                 # Build SSH command
@@ -443,17 +435,8 @@ class RemoteBackupService:
             if not ssh_key:
                 raise Exception(f"SSH key {ssh_connection.ssh_key_id} not found")
 
-            # Create temporary SSH key file with proper permissions
-            fd, key_file_path = tempfile.mkstemp(suffix='.key', text=True)
-            try:
-                os.chmod(key_file_path, 0o600)
-                with os.fdopen(fd, 'w') as key_file:
-                    key_file.write(ssh_key.private_key)
-                    if not ssh_key.private_key.endswith('\n'):
-                        key_file.write('\n')
-            except Exception:
-                os.close(fd)
-                raise
+            # Decrypt and write SSH key to temp file
+            key_file_path = write_ssh_key_to_tempfile(ssh_key)
 
             try:
                 # Try to find borg binary
