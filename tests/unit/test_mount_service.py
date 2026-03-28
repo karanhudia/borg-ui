@@ -215,11 +215,12 @@ class TestMountService:
 
     @pytest.mark.asyncio
     async def test_mount_borg_archive_sets_remote_path(self, mount_service):
-        """Test that mount_borg_archive sets BORG_REMOTE_PATH when repository has remote_path"""
+        """Test that mount_borg_archive passes --remote-path flag when repository has remote_path"""
         with patch('app.services.mount_service.SessionLocal') as mock_session, \
              patch('app.services.mount_service.asyncio.create_subprocess_exec') as mock_exec, \
              patch('app.services.mount_service.os.makedirs'), \
-             patch('app.services.mount_service.os.path.exists', return_value=False):
+             patch('app.services.mount_service.os.path.exists', return_value=False), \
+             patch.dict('os.environ', {}, clear=True):
 
             mock_db = Mock()
             mock_session.return_value = mock_db
@@ -238,58 +239,10 @@ class TestMountService:
             mock_db.query.return_value.filter.return_value.first.side_effect = [mock_repo, None]
             mock_db.query.return_value.first.return_value = None
 
-            captured_env = {}
+            captured_args = []
 
             async def fake_exec(*args, **kwargs):
-                captured_env.update(kwargs.get('env', {}))
-                proc = AsyncMock()
-                proc.pid = 12345
-                proc.stdout = AsyncMock()
-                proc.stdout.readline = AsyncMock(return_value=b"")
-                proc.stderr = AsyncMock()
-                proc.stderr.read = AsyncMock(return_value=b"")
-                proc.wait = AsyncMock(return_value=0)
-                return proc
-
-            mock_exec.side_effect = fake_exec
-
-            try:
-                await mount_service.mount_borg_archive(
-                    repository_id=1,
-                    archive_name="test-archive"
-                )
-            except Exception:
-                pass  # May fail due to incomplete mock, but env should be captured
-
-            assert captured_env.get("BORG_REMOTE_PATH") == "borg14"
-
-    @pytest.mark.asyncio
-    async def test_mount_borg_archive_no_remote_path(self, mount_service):
-        """Test that mount_borg_archive does not set BORG_REMOTE_PATH when repository has no remote_path"""
-        with patch('app.services.mount_service.SessionLocal') as mock_session, \
-             patch('app.services.mount_service.asyncio.create_subprocess_exec') as mock_exec, \
-             patch('app.services.mount_service.os.makedirs'), \
-             patch('app.services.mount_service.os.path.exists', return_value=False):
-
-            mock_db = Mock()
-            mock_session.return_value = mock_db
-
-            mock_repo = Mock(spec=Repository)
-            mock_repo.id = 1
-            mock_repo.name = "test-repo"
-            mock_repo.path = "/backup/repo"
-            mock_repo.passphrase = None
-            mock_repo.connection_id = None
-            mock_repo.bypass_lock = False
-            mock_repo.remote_path = None
-
-            mock_db.query.return_value.filter.return_value.first.side_effect = [mock_repo, None]
-            mock_db.query.return_value.first.return_value = None
-
-            captured_env = {}
-
-            async def fake_exec(*args, **kwargs):
-                captured_env.update(kwargs.get('env', {}))
+                captured_args.extend(args)
                 proc = AsyncMock()
                 proc.pid = 12345
                 proc.stdout = AsyncMock()
@@ -309,7 +262,59 @@ class TestMountService:
             except Exception:
                 pass
 
-            assert "BORG_REMOTE_PATH" not in captured_env
+            assert mock_exec.called, "create_subprocess_exec was not called"
+            assert "--remote-path" in captured_args
+            assert "borg14" in captured_args
+
+    @pytest.mark.asyncio
+    async def test_mount_borg_archive_no_remote_path(self, mount_service):
+        """Test that mount_borg_archive omits --remote-path when repository has no remote_path"""
+        with patch('app.services.mount_service.SessionLocal') as mock_session, \
+             patch('app.services.mount_service.asyncio.create_subprocess_exec') as mock_exec, \
+             patch('app.services.mount_service.os.makedirs'), \
+             patch('app.services.mount_service.os.path.exists', return_value=False), \
+             patch.dict('os.environ', {}, clear=True):
+
+            mock_db = Mock()
+            mock_session.return_value = mock_db
+
+            mock_repo = Mock(spec=Repository)
+            mock_repo.id = 1
+            mock_repo.name = "test-repo"
+            mock_repo.path = "/backup/repo"
+            mock_repo.passphrase = None
+            mock_repo.connection_id = None
+            mock_repo.bypass_lock = False
+            mock_repo.remote_path = None
+
+            mock_db.query.return_value.filter.return_value.first.side_effect = [mock_repo, None]
+            mock_db.query.return_value.first.return_value = None
+
+            captured_args = []
+
+            async def fake_exec(*args, **kwargs):
+                captured_args.extend(args)
+                proc = AsyncMock()
+                proc.pid = 12345
+                proc.stdout = AsyncMock()
+                proc.stdout.readline = AsyncMock(return_value=b"")
+                proc.stderr = AsyncMock()
+                proc.stderr.read = AsyncMock(return_value=b"")
+                proc.wait = AsyncMock(return_value=0)
+                return proc
+
+            mock_exec.side_effect = fake_exec
+
+            try:
+                await mount_service.mount_borg_archive(
+                    repository_id=1,
+                    archive_name="test-archive"
+                )
+            except Exception:
+                pass
+
+            assert mock_exec.called, "create_subprocess_exec was not called"
+            assert "--remote-path" not in captured_args
 
     @pytest.mark.asyncio
     async def test_unmount_not_found(self, mount_service):

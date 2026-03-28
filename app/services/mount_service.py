@@ -839,17 +839,12 @@ class MountService:
                 if repository.passphrase:
                     env["BORG_PASSPHRASE"] = repository.passphrase
 
-                # Set BORG_REMOTE_PATH if specified (path to borg binary on remote)
-                if repository.remote_path:
-                    env["BORG_REMOTE_PATH"] = repository.remote_path
-                    logger.info(
-                        "Using custom remote borg path for mount",
-                        mount_id=mount_id,
-                        remote_path=repository.remote_path
-                    )
-
                 # Build mount command
                 cmd = ["borg", "mount"]
+
+                # Add remote path if specified (path to borg binary on remote)
+                if repository.remote_path:
+                    cmd.extend(["--remote-path", repository.remote_path])
 
                 # Add archive-specific mount if specified
                 if archive_name:
