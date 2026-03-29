@@ -128,7 +128,7 @@ export default function DashboardNew() {
     queryFn: async () => {
       const response = await fetch(`${BASE_PATH}/api/dashboard/overview`, {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('access_token')}`,
+          'X-Borg-Authorization': `Bearer ${localStorage.getItem('access_token')}`,
         },
       })
       if (!response.ok) throw new Error('Failed to fetch dashboard data')

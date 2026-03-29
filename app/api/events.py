@@ -132,8 +132,8 @@ async def stream_events(
             # Token from query parameter
             token_str = token
         else:
-            # Try to get from Authorization header
-            auth_header = request.headers.get("Authorization")
+            # Try to get from X-Borg-Authorization header
+            auth_header = request.headers.get("X-Borg-Authorization")
             if auth_header and auth_header.startswith("Bearer "):
                 token_str = auth_header.split(" ")[1]
 

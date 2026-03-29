@@ -56,7 +56,7 @@ export default function LogViewerDialog<T extends JobWithLogs>({
       try {
         const res = await fetch(`${BASE_PATH}/api/activity/recent?job_type=${jobType}&limit=100`, {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
+            'X-Borg-Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`,
           },
         })
         if (!res.ok) return
@@ -80,7 +80,7 @@ export default function LogViewerDialog<T extends JobWithLogs>({
         `${BASE_PATH}/api/activity/${jobType}/${jobId}/logs?offset=${offset}&limit=500`,
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
+            'X-Borg-Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`,
           },
         }
       )

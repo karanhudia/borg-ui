@@ -33,13 +33,13 @@ describe('API Request Interceptor', () => {
     })
   })
 
-  it('attaches Authorization header when token exists', async () => {
+  it('attaches X-Borg-Authorization header when token exists', async () => {
     const mock = new MockAdapter(api)
     localStorageMock['access_token'] = 'test-token-123'
 
     mock.onGet('/test').reply((config) => {
       // Verify the Authorization header was added
-      expect(config.headers?.Authorization).toBe('Bearer test-token-123')
+      expect(config.headers?.['X-Borg-Authorization']).toBe('Bearer test-token-123')
       return [200, { success: true }]
     })
 
@@ -47,13 +47,13 @@ describe('API Request Interceptor', () => {
     mock.restore()
   })
 
-  it('does not add Authorization header when no token exists', async () => {
+  it('does not add X-Borg-Authorization header when no token exists', async () => {
     const mock = new MockAdapter(api)
     // No token in localStorage
 
     mock.onGet('/test').reply((config) => {
       // Authorization header should not be present
-      expect(config.headers?.Authorization).toBeUndefined()
+      expect(config.headers?.['X-Borg-Authorization']).toBeUndefined()
       return [200, { success: true }]
     })
 
@@ -61,13 +61,13 @@ describe('API Request Interceptor', () => {
     mock.restore()
   })
 
-  it('preserves other headers while adding Authorization', async () => {
+  it('preserves other headers while adding X-Borg-Authorization', async () => {
     const mock = new MockAdapter(api)
     localStorageMock['access_token'] = 'test-token'
 
     mock.onGet('/test').reply((config) => {
       // Check both headers are present
-      expect(config.headers?.Authorization).toBe('Bearer test-token')
+      expect(config.headers?.['X-Borg-Authorization']).toBe('Bearer test-token')
       expect(config.headers?.['Content-Type']).toBe('application/json')
       return [200, { success: true }]
     })

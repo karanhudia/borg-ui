@@ -131,7 +131,7 @@ export const loadUserPreference = async (): Promise<void> => {
 
     const headers: Record<string, string> = {}
     if (token) {
-      headers.Authorization = `Bearer ${token}`
+      headers['X-Borg-Authorization'] = `Bearer ${token}`
     }
     // In proxy auth mode without token, the backend will use proxy headers
 

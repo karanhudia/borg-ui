@@ -217,7 +217,7 @@ export const BackupJobsTable = <T extends Job = Job>({
       const response = await fetch(`${BASE_PATH}/api/activity/${jobType}/${cancelJob.id}/cancel`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
+          'X-Borg-Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`,
         },
       })
 
@@ -291,7 +291,7 @@ export const BackupJobsTable = <T extends Job = Job>({
       const response = await fetch(`${BASE_PATH}/api/activity/${jobType}/${jobToDelete.id}`, {
         method: 'DELETE',
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
+          'X-Borg-Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`,
         },
       })
 
