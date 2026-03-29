@@ -1185,8 +1185,8 @@ async def run_script_from_library(
                        script_id=script.id,
                        system_vars=list(system_vars.keys()))
 
-        # Add script parameters if provided
-        if script.parameters and script_parameters:
+        # Add script parameters if provided (always apply defaults even when script_parameters is None)
+        if script.parameters:
             try:
                 parameters = json.loads(script.parameters)
 
@@ -1201,7 +1201,7 @@ async def run_script_from_library(
                     default_value = param_def.get('default', '')
 
                     # Get value from script_parameters or use default
-                    value = script_parameters.get(param_name, default_value)
+                    value = (script_parameters or {}).get(param_name, default_value)
 
                     # Decrypt password-type parameters
                     if param_type == 'password' and value:
@@ -1409,8 +1409,12 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                     logger.error("Repository pre-script failed", repo_name=repo.name, error=str(e))
                     # Continue with backup even if repo pre-script fails
 
-            # Execute backup
-            await backup_service.execute_backup(backup_job.id, repo.path, db, archive_name=archive_name)
+            # Execute backup.
+            # When run_repository_scripts=True the schedule already ran pre-backup scripts
+            # explicitly above, so tell execute_backup to skip its own hook execution to
+            # avoid running the same scripts a second time.
+            await backup_service.execute_backup(backup_job.id, repo.path, db, archive_name=archive_name,
+                                                skip_hooks=scheduled_job.run_repository_scripts)
 
             # Run repository-level post-scripts if enabled
             if scheduled_job.run_repository_scripts:

@@ -1099,7 +1099,7 @@ class BackupService:
         # Remove from tracking
         del self.ssh_mounts[job_id]
 
-    async def execute_backup(self, job_id: int, repository: str, db: Session = None, archive_name: str = None):
+    async def execute_backup(self, job_id: int, repository: str, db: Session = None, archive_name: str = None, skip_hooks: bool = False):
         """Execute backup using borg directly for better control
 
         Args:
@@ -1107,6 +1107,8 @@ class BackupService:
             repository: Repository path
             db: Database session (optional, will create new if not provided)
             archive_name: Optional custom archive name (if None, will use default manual-backup naming)
+            skip_hooks: If True, skip pre/post-backup hook execution (used by multi-repo schedules that
+                        manage hook execution explicitly to avoid running scripts twice)
         """
 
         # Use provided session or create a new one
@@ -1323,7 +1325,7 @@ class BackupService:
             hook_logs = []
 
             # Run pre-backup hooks (script library or inline)
-            if repo_record:
+            if repo_record and not skip_hooks:
                 logger.info("Executing pre-backup hooks", job_id=job_id, repository=repository)
                 hook_result = await self._execute_hooks(
                     db=db,
@@ -1871,7 +1873,7 @@ class BackupService:
 
                 # Run post-backup hooks (script library or inline)
                 post_hook_failed = False
-                if repo_record:
+                if repo_record and not skip_hooks:
                     logger.info("Executing post-backup hooks", job_id=job_id, repository=repository)
                     hook_result = await self._execute_hooks(
                         db=db,
@@ -1936,7 +1938,7 @@ class BackupService:
 
                 # Run post-backup hooks even with warnings (script library or inline)
                 post_hook_failed = False
-                if repo_record:
+                if repo_record and not skip_hooks:
                     logger.info("Executing post-backup hooks (warning case)", job_id=job_id, repository=repository)
                     hook_result = await self._execute_hooks(
                         db=db,
@@ -2035,7 +2037,7 @@ class BackupService:
 
                 # Run post-backup hooks on FAILURE (solves #85!)
                 # Scripts with run_on='failure' or run_on='always' will execute
-                if repo_record:
+                if repo_record and not skip_hooks:
                     logger.info("Executing post-backup hooks (failure case)", job_id=job_id, repository=repository)
                     hook_result = await self._execute_hooks(
                         db=db,
