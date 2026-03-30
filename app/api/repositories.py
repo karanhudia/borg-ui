@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import structlog
 import os
 import subprocess
@@ -202,11 +202,13 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
                         if archive_time:
                             # Parse ISO format timestamp (e.g., "2024-01-15T10:30:00.000000")
                             try:
-                                # Handle various timestamp formats from borg
-                                if "." in archive_time:
-                                    last_backup_time = datetime.fromisoformat(archive_time.replace("Z", "+00:00").split("+")[0])
-                                else:
-                                    last_backup_time = datetime.fromisoformat(archive_time.replace("Z", ""))
+                                # Borg list returns timestamps as naive local-time ISO strings.
+                                # Replace Z→+00:00 so explicit UTC is preserved; otherwise
+                                # fromisoformat returns a naive datetime (= local time).
+                                # astimezone(utc) treats naive as local and converts to UTC.
+                                # replace(tzinfo=None) gives naive UTC for SQLite storage.
+                                dt = datetime.fromisoformat(archive_time.replace("Z", "+00:00"))
+                                last_backup_time = dt.astimezone(timezone.utc).replace(tzinfo=None)
                             except ValueError as te:
                                 logger.warning("Failed to parse archive timestamp",
                                              repository=repository.name,
