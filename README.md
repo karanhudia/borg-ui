@@ -163,6 +163,14 @@ Quick links:
 
 ---
 
+## Star History
+
+<div align="center">
+
+[![Star History Chart](https://api.star-history.com/svg?repos=karanhudia/borg-ui&type=Date)](https://star-history.com/#karanhudia/borg-ui&Date)
+
+</div>
+
 ## Contributing
 
 Want to help improve Borg Web UI? See our [Contributing Guide](.github/CONTRIBUTING.md) and [Development Guide](https://karanhudia.github.io/borg-ui/development) to get started.
