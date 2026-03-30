@@ -21,7 +21,7 @@
     "cron-parser": "^5.5.0",
     "date-fns": "^4.1.0",
     "i18next": "^25.10.9",
-    "lucide-react": "^0.577.0",
+    "lucide-react": "^1.7.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.72.0",
