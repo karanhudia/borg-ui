@@ -10,6 +10,7 @@ import {
   FolderOpen,
 } from '@mui/icons-material'
 import { useMaintenanceJobs } from '../hooks/useMaintenanceJobs'
+import { getRepoCapabilities } from '../utils/repoCapabilities'
 import {
   formatDateShort,
   formatDateTimeFull,
@@ -36,6 +37,7 @@ interface Repository {
   updated_at: string | null
   mode: 'full' | 'observe'
   has_running_maintenance?: boolean
+  borg_version?: number
 }
 
 interface RepositoryCardProps {
@@ -74,6 +76,8 @@ export default function RepositoryCard({
   const { trackRepository, trackBackup, trackMaintenance, trackArchive, EventAction } = useMatomo()
 
   // Use maintenance jobs hook - always poll to handle page refreshes
+  const capabilities = getRepoCapabilities(repository)
+
   const { hasRunningJobs, checkJob, compactJob, pruneJob } = useMaintenanceJobs(
     repository.id,
     true // Always enabled to handle page refreshes while jobs are running
@@ -145,6 +149,23 @@ export default function RepositoryCard({
                   size="small"
                   color="info"
                   sx={{ height: '20px', fontSize: '0.7rem' }}
+                />
+              )}
+              {repository.borg_version === 2 && (
+                <Chip
+                  label="v2"
+                  size="small"
+                  sx={{
+                    height: '18px',
+                    fontSize: '0.65rem',
+                    fontWeight: 700,
+                    fontFamily: 'monospace',
+                    bgcolor: '#6366f1',
+                    color: '#fff',
+                    border: 'none',
+                    letterSpacing: 0.5,
+                    '& .MuiChip-label': { px: 0.75 },
+                  }}
                 />
               )}
             </Box>
@@ -316,34 +337,38 @@ export default function RepositoryCard({
               >
                 {t('repositoryCard.buttons.check')}
               </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={compactJob ? <Refresh className="animate-spin" /> : <Refresh />}
-                onClick={() => {
-                  trackMaintenance(EventAction.START, 'Compact', repository.name)
-                  onCompact()
-                }}
-                disabled={isMaintenanceRunning}
-                color={compactJob ? 'primary' : 'warning'}
-                sx={{ textTransform: 'none' }}
-              >
-                {t('repositoryCard.buttons.compact')}
-              </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={pruneJob ? <Refresh className="animate-spin" /> : <Delete />}
-                onClick={() => {
-                  trackMaintenance(EventAction.START, 'Prune', repository.name)
-                  onPrune()
-                }}
-                disabled={isMaintenanceRunning}
-                color={pruneJob ? 'primary' : 'secondary'}
-                sx={{ textTransform: 'none' }}
-              >
-                {t('repositoryCard.buttons.prune')}
-              </Button>
+              {capabilities.canCompact && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={compactJob ? <Refresh className="animate-spin" /> : <Refresh />}
+                  onClick={() => {
+                    trackMaintenance(EventAction.START, 'Compact', repository.name)
+                    onCompact()
+                  }}
+                  disabled={isMaintenanceRunning}
+                  color={compactJob ? 'primary' : 'warning'}
+                  sx={{ textTransform: 'none' }}
+                >
+                  {t('repositoryCard.buttons.compact')}
+                </Button>
+              )}
+              {capabilities.canPrune && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={pruneJob ? <Refresh className="animate-spin" /> : <Delete />}
+                  onClick={() => {
+                    trackMaintenance(EventAction.START, 'Prune', repository.name)
+                    onPrune()
+                  }}
+                  disabled={isMaintenanceRunning}
+                  color={pruneJob ? 'primary' : 'secondary'}
+                  sx={{ textTransform: 'none' }}
+                >
+                  {t('repositoryCard.buttons.prune')}
+                </Button>
+              )}
               {repository.mode === 'full' && (
                 <Button
                   variant="outlined"
@@ -378,23 +403,25 @@ export default function RepositoryCard({
               >
                 {t('repositoryCard.buttons.viewArchives')}
               </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<Delete />}
-                onClick={() => {
-                  trackRepository(
-                    EventAction.DELETE,
-                    repository.name,
-                    parseBytes(repository.total_size)
-                  )
-                  onDelete()
-                }}
-                color="error"
-                sx={{ textTransform: 'none' }}
-              >
-                {t('repositoryCard.buttons.delete')}
-              </Button>
+              {capabilities.canDelete && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<Delete />}
+                  onClick={() => {
+                    trackRepository(
+                      EventAction.DELETE,
+                      repository.name,
+                      parseBytes(repository.total_size)
+                    )
+                    onDelete()
+                  }}
+                  color="error"
+                  sx={{ textTransform: 'none' }}
+                >
+                  {t('repositoryCard.buttons.delete')}
+                </Button>
+              )}
             </Box>
             {/* Progress message and elapsed time */}
             {(checkJob?.progress_message || compactJob?.progress_message || elapsedTime) && (

@@ -11,6 +11,7 @@ interface ArchiveCardProps {
   onMount: (archive: Archive) => void
   onDelete: (archiveName: string) => void
   mountDisabled?: boolean
+  canDelete?: boolean
 }
 
 export default function ArchiveCard({
@@ -20,6 +21,7 @@ export default function ArchiveCard({
   onMount,
   onDelete,
   mountDisabled = false,
+  canDelete = true,
 }: ArchiveCardProps) {
   const { t } = useTranslation()
   return (
@@ -81,9 +83,11 @@ export default function ArchiveCard({
             >
               {t('archiveCard.mount')}
             </Button>
-            <IconButton color="error" size="small" onClick={() => onDelete(archive.archive)}>
-              <Trash2 size={18} />
-            </IconButton>
+            {canDelete && (
+              <IconButton color="error" size="small" onClick={() => onDelete(archive.name)}>
+                <Trash2 size={18} />
+              </IconButton>
+            )}
           </Stack>
         </Stack>
       </CardContent>

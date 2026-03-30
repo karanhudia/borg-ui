@@ -316,6 +316,56 @@ describe('RepositoryCard', () => {
 
       expect(screen.getByRole('button', { name: /Backup Now/i })).toBeInTheDocument()
     })
+
+    it('hides Compact, Prune, and Delete buttons for observe mode', () => {
+      const observeRepo = { ...mockRepository, mode: 'observe' as const }
+      renderWithProviders(
+        <RepositoryCard
+          repository={observeRepo}
+          isInJobsSet={false}
+          isAdmin={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.queryByRole('button', { name: /Compact/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Prune/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Delete/i })).not.toBeInTheDocument()
+    })
+
+    it('shows Compact, Prune, and Delete buttons for full mode', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={mockRepository}
+          isInJobsSet={false}
+          isAdmin={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getByRole('button', { name: /Compact/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Prune/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Delete/i })).toBeInTheDocument()
+    })
+
+    it('shows Info, Check, and View Archives buttons for observe mode', () => {
+      const observeRepo = { ...mockRepository, mode: 'observe' as const }
+      renderWithProviders(
+        <RepositoryCard
+          repository={observeRepo}
+          isInJobsSet={false}
+          isAdmin={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getByRole('button', { name: /Info/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Check/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /View Archives/i })).toBeInTheDocument()
+    })
   })
 
   describe('Admin Features', () => {
