@@ -422,7 +422,9 @@ describe('RepositoryInfoDialog', () => {
 
     it('calls repositoriesAPI.downloadKeyfile with correct repo id on click', async () => {
       const blob = new Blob(['keydata'], { type: 'application/octet-stream' })
-      vi.mocked(repositoriesAPI.downloadKeyfile).mockResolvedValue({ data: blob } as Awaited<ReturnType<typeof repositoriesAPI.downloadKeyfile>>)
+      vi.mocked(repositoriesAPI.downloadKeyfile).mockResolvedValue({ data: blob } as Awaited<
+        ReturnType<typeof repositoriesAPI.downloadKeyfile>
+      >)
       URL.createObjectURL = vi.fn().mockReturnValue('blob:test')
       URL.revokeObjectURL = vi.fn()
 
