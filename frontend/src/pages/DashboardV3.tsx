@@ -1071,7 +1071,6 @@ export default function DashboardV3() {
             display: 'grid',
             gridTemplateColumns: { xs: '1fr', md: '220px 1fr' },
             gap: 2.5,
-            mb: 2.5,
             alignItems: 'start',
           }}
         >
@@ -1166,10 +1165,56 @@ export default function DashboardV3() {
                 />
               </Stack>
             </Box>
+
+            {/* Storage donut */}
+            <Box sx={{ ...glass, p: 2.5 }}>
+              <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 1.75 }}>
+                <HardDrive size={13} color={T.textMuted} />
+                <Typography
+                  sx={{
+                    fontSize: '0.58rem',
+                    color: T.textMuted,
+                    letterSpacing: 2,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Storage
+                </Typography>
+              </Stack>
+              <StorageDonut
+                breakdown={storage.breakdown}
+                totalSize={storage.total_size}
+                totalArchives={storage.total_archives}
+              />
+              {storage.average_dedup_ratio != null && (
+                <Box
+                  sx={{
+                    mt: 1.5,
+                    px: 1.25,
+                    py: 0.6,
+                    bgcolor: T.indigoDim,
+                    border: `1px solid ${T.indigo}25`,
+                    borderRadius: '8px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <Typography sx={{ fontSize: '0.62rem', color: T.textMuted }}>
+                    Dedup ratio
+                  </Typography>
+                  <Typography
+                    sx={{ fontFamily: T.mono, fontSize: '0.72rem', fontWeight: 700, color: T.indigo }}
+                  >
+                    {storage.average_dedup_ratio.toFixed(2)}×
+                  </Typography>
+                </Box>
+              )}
+            </Box>
           </Box>
 
-          {/* Center: repo mini-cards */}
-          <Box sx={{ ...glass, p: 2.5 }}>
+          {/* Right: repo mini-cards + activity */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+            <Box sx={{ ...glass, p: 2.5 }}>
             <Stack
               direction="row"
               alignItems="center"
@@ -1363,56 +1408,6 @@ export default function DashboardV3() {
               </Typography>
             )}
           </Box>
-        </Box>
-
-        {/* ── Bottom row: storage donut + activity timeline ─────────────────── */}
-        <Box
-          sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '300px 1fr' }, gap: 2.5 }}
-        >
-          {/* Storage donut */}
-          <Box sx={{ ...glass, p: 2.5 }}>
-            <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 1.75 }}>
-              <HardDrive size={13} color={T.textMuted} />
-              <Typography
-                sx={{
-                  fontSize: '0.58rem',
-                  color: T.textMuted,
-                  letterSpacing: 2,
-                  textTransform: 'uppercase',
-                }}
-              >
-                Storage
-              </Typography>
-            </Stack>
-            <StorageDonut
-              breakdown={storage.breakdown}
-              totalSize={storage.total_size}
-              totalArchives={storage.total_archives}
-            />
-            {storage.average_dedup_ratio != null && (
-              <Box
-                sx={{
-                  mt: 1.5,
-                  px: 1.25,
-                  py: 0.6,
-                  bgcolor: T.indigoDim,
-                  border: `1px solid ${T.indigo}25`,
-                  borderRadius: '8px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <Typography sx={{ fontSize: '0.62rem', color: T.textMuted }}>
-                  Dedup ratio
-                </Typography>
-                <Typography
-                  sx={{ fontFamily: T.mono, fontSize: '0.72rem', fontWeight: 700, color: T.indigo }}
-                >
-                  {storage.average_dedup_ratio.toFixed(2)}×
-                </Typography>
-              </Box>
-            )}
-          </Box>
 
           {/* Activity timeline */}
           <Box sx={{ ...glass, p: 2.5 }}>
@@ -1520,6 +1515,7 @@ export default function DashboardV3() {
                 </Stack>
               </Box>
             )}
+          </Box>
           </Box>
         </Box>
       </Box>
