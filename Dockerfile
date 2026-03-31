@@ -82,10 +82,15 @@ RUN apt-get update && apt-get install -y \
 # Install FUSE Python bindings first (required for borg mount)
 RUN pip install --no-cache-dir pyfuse3
 
-# Install Borg via pip (auto-update patch versions within 1.4.x)
-# This allows automatic security/bug fixes while preventing breaking changes
-# Install with FUSE support for borg mount functionality
+# Install Borg 1.x via pip — available as `borg` at the system default path
+# Auto-update patch versions within 1.4.x for security/bug fixes
 RUN pip install --no-cache-dir 'borgbackup[fuse]>=1.4.4,<1.5.0'
+
+# Install Borg 2.x into an isolated prefix so it does not conflict with Borg 1
+# Available as `borg2` via the symlink created below
+RUN python3 -m venv /opt/borg2-venv && \
+    /opt/borg2-venv/bin/pip install --no-cache-dir 'borgbackup[fuse]>=2.0.0b1,<3.0.0' && \
+    ln -sf /opt/borg2-venv/bin/borg /usr/local/bin/borg2
 
 # Install additional useful tools
 RUN apt-get update && apt-get install -y \

@@ -70,6 +70,10 @@ class Repository(Base):
     mode = Column(String, default="full")  # full: backups + observability, observe: observability-only
     bypass_lock = Column(Boolean, default=False)  # Use --bypass-lock for read-only storage access (observe-only repos)
 
+    # Borg version this repository was created with (1 or 2)
+    # Controls which binary and /api/v2/ routes are used for all operations
+    borg_version = Column(Integer, default=1, nullable=False)
+
     # Custom flags for borg create command (advanced users)
     custom_flags = Column(Text, nullable=True)  # Custom command-line flags for borg create (e.g., "--stats --progress")
 
@@ -394,6 +398,10 @@ class SystemSettings(Base):
     webhook_url = Column(String, nullable=True)
     auto_cleanup = Column(Boolean, default=False)
     cleanup_retention_days = Column(Integer, default=90)
+
+    # Borg binary paths — both versions can coexist in the Docker image
+    borg1_binary_path = Column(String, default="borg", nullable=False)
+    borg2_binary_path = Column(String, default="borg2", nullable=False)
 
     # Beta features
     use_new_wizard = Column(Boolean, default=False, nullable=False)  # Enable new repository wizard (beta)

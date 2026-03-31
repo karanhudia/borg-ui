@@ -441,7 +441,8 @@ async def get_repositories(
                 "custom_flags": repo.custom_flags,
                 "has_running_maintenance": has_check or has_compact or has_prune,
                 "has_keyfile": repo.has_keyfile or False,
-                "source_ssh_connection_id": repo.source_ssh_connection_id
+                "source_ssh_connection_id": repo.source_ssh_connection_id,
+                "borg_version": repo.borg_version or 1,
             })
 
         return {
