@@ -5,7 +5,7 @@ import structlog
 
 from app.core.borg import BorgInterface
 from app.core.borg2 import borg2
-from app.core.features import get_current_plan
+from app.core.features import get_current_plan, FEATURES
 from app.database.database import get_db
 
 logger = structlog.get_logger()
@@ -55,6 +55,7 @@ async def get_system_info(db: Session = Depends(get_db)):
             "borg_version": borg_version,
             "borg2_version": borg2_version,
             "plan": plan.value,
+            "features": {k: v.value for k, v in FEATURES.items()},
         }
     except Exception as e:
         logger.error("Failed to get system info", error=str(e))
@@ -63,4 +64,5 @@ async def get_system_info(db: Session = Depends(get_db)):
             "borg_version": None,
             "borg2_version": None,
             "plan": "community",
+            "features": {},
         }

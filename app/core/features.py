@@ -21,6 +21,7 @@ FEATURES: dict[str, Plan] = {
     "borg_v2":    Plan.PRO,
     "multi_user": Plan.PRO,        # >1 user (up to 5)
     "extra_users": Plan.ENTERPRISE, # >5 users
+    "rbac":        Plan.ENTERPRISE, # role-based access control
 }
 
 # User limits per plan (None = unlimited)

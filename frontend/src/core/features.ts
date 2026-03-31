@@ -6,11 +6,12 @@ const PLAN_RANK: Record<Plan, number> = {
   enterprise: 2,
 }
 
-// Mirror of app/core/features.py — keep in sync when adding features
+// Mirror of app/core/features.py - keep in sync when adding features
 export const FEATURES = {
   borg_v2: 'pro',
   multi_user: 'pro',
   extra_users: 'enterprise',
+  rbac: 'enterprise',
 } as const satisfies Record<string, Plan>
 
 export type Feature = keyof typeof FEATURES

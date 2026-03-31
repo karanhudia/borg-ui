@@ -1,6 +1,7 @@
 import { ReactNode } from 'react'
 import { Box, Tooltip } from '@mui/material'
-import { Feature, FEATURES } from '../core/features'
+import { useTranslation } from 'react-i18next'
+import { Feature, FEATURES, PLAN_LABEL } from '../core/features'
 import { usePlan } from '../hooks/usePlan'
 import UpgradePrompt from './UpgradePrompt'
 
@@ -21,12 +22,17 @@ export default function PlanGate({
   when = true,
   disabled,
 }: PlanGateProps) {
+  const { t } = useTranslation()
   const { can, isLoading } = usePlan()
   if (isLoading) return null
   if (!when || can(feature)) return <>{children}</>
   if (disabled) {
     return (
-      <Tooltip title={`Requires ${FEATURES[feature]} plan`} arrow placement="right">
+      <Tooltip
+        title={t('upgradePrompt.requiresPlan', { plan: PLAN_LABEL[FEATURES[feature]] })}
+        arrow
+        placement="right"
+      >
         <Box sx={{ cursor: 'not-allowed', width: 'fit-content' }}>
           <Box sx={{ opacity: 0.45, pointerEvents: 'none', userSelect: 'none' }}>{children}</Box>
         </Box>

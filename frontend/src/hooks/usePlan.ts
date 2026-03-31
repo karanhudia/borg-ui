@@ -7,6 +7,7 @@ interface SystemInfo {
   borg_version: string | null
   borg2_version: string | null
   plan: Plan
+  features: Record<string, Plan>
 }
 
 async function fetchSystemInfo(): Promise<SystemInfo> {
@@ -22,9 +23,11 @@ export function usePlan() {
   })
 
   const plan: Plan = data?.plan ?? 'community'
+  const features: Record<string, Plan> = data?.features ?? {}
 
   return {
     plan,
+    features,
     isLoading,
     can: (feature: Feature) => canAccess(plan, feature),
   }

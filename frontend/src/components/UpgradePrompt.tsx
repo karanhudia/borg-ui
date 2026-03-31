@@ -1,6 +1,7 @@
 import { Box, Typography, Chip } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 import { Lock } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Plan, PLAN_LABEL, PLAN_COLOR } from '../core/features'
 
 interface UpgradePromptProps {
@@ -9,7 +10,9 @@ interface UpgradePromptProps {
 }
 
 export default function UpgradePrompt({ requiredPlan, message }: UpgradePromptProps) {
+  const { t } = useTranslation()
   const color = PLAN_COLOR[requiredPlan]
+  const planLabel = PLAN_LABEL[requiredPlan]
   return (
     <Box
       sx={{
@@ -28,7 +31,7 @@ export default function UpgradePrompt({ requiredPlan, message }: UpgradePromptPr
     >
       <Lock size={24} color={color} />
       <Chip
-        label={`${PLAN_LABEL[requiredPlan]} feature`}
+        label={t('upgradePrompt.featureLabel', { plan: planLabel })}
         size="small"
         sx={{
           bgcolor: alpha(color, 0.12),
@@ -39,7 +42,7 @@ export default function UpgradePrompt({ requiredPlan, message }: UpgradePromptPr
         }}
       />
       <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 280 }}>
-        {message ?? `This feature requires the ${PLAN_LABEL[requiredPlan]} plan.`}
+        {message ?? t('upgradePrompt.defaultMessage', { plan: planLabel })}
       </Typography>
     </Box>
   )
