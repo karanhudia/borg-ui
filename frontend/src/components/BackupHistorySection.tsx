@@ -12,6 +12,7 @@ import {
 import { Clock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import BackupJobsTable from './BackupJobsTable'
+import RepoSelect from './RepoSelect'
 
 interface ScheduledJob {
   id: number
@@ -42,11 +43,7 @@ interface ScheduledJob {
   last_compact: string | null
 }
 
-interface Repository {
-  id: number
-  name: string
-  path: string
-}
+import { Repository } from '../types'
 
 interface BackupJob {
   id: string
@@ -151,21 +148,18 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
             </Select>
           </FormControl>
 
-          <FormControl size="small" sx={{ minWidth: 200 }}>
-            <InputLabel>Repository</InputLabel>
-            <Select
-              value={filterRepository}
-              label="Repository"
-              onChange={(e) => onFilterRepositoryChange(e.target.value)}
-            >
-              <MenuItem value="all">{t('backupHistory.allRepositories')}</MenuItem>
-              {repositories.map((repo: Repository) => (
-                <MenuItem key={repo.id} value={repo.path}>
-                  {repo.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <RepoSelect
+            repositories={repositories}
+            value={filterRepository}
+            onChange={(v) => onFilterRepositoryChange(v as string)}
+            valueKey="path"
+            size="small"
+            label="Repository"
+            hidePath
+            prefixItems={<MenuItem value="all">{t('backupHistory.allRepositories')}</MenuItem>}
+            sx={{ minWidth: 200 }}
+            fullWidth={false}
+          />
 
           <FormControl size="small" sx={{ minWidth: 150 }}>
             <InputLabel>Status</InputLabel>

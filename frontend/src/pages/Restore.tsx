@@ -15,14 +15,9 @@ import {
   DialogActions,
   Stack,
   Alert,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
   Chip,
 } from '@mui/material'
 import {
-  Database,
   Archive as ArchiveIcon,
   RefreshCw,
   CheckCircle,
@@ -40,7 +35,9 @@ import RepositoryInfo from '../components/RepositoryInfo'
 import PathSelectorField from '../components/PathSelectorField'
 import LockErrorDialog from '../components/LockErrorDialog'
 import { Archive, Repository } from '../types'
+import { getBorgVersion } from '../utils/repoCapabilities'
 import ArchiveBrowserDialog from '../components/ArchiveBrowserDialog'
+import RepositorySelectorCard from '../components/RepositorySelectorCard'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
 import RestoreJobCard from '../components/RestoreJobCard'
 
@@ -107,7 +104,7 @@ const Restore: React.FC = () => {
       setLockError({
         repositoryId: selectedRepoData.id,
         repositoryName: selectedRepoData.name,
-        borgVersion: selectedRepoData.borg_version as 1 | 2 | undefined,
+        borgVersion: getBorgVersion(selectedRepoData),
       })
     }
   }, [archivesError, selectedRepoData])
@@ -127,7 +124,7 @@ const Restore: React.FC = () => {
       setLockError({
         repositoryId: selectedRepoData.id,
         repositoryName: selectedRepoData.name,
-        borgVersion: selectedRepoData.borg_version as 1 | 2 | undefined,
+        borgVersion: getBorgVersion(selectedRepoData),
       })
     }
   }, [repoInfoError, selectedRepoData])
@@ -155,7 +152,7 @@ const Restore: React.FC = () => {
       setLockError({
         repositoryId: selectedRepoData.id,
         repositoryName: selectedRepoData.name,
-        borgVersion: selectedRepoData.borg_version as 1 | 2 | undefined,
+        borgVersion: getBorgVersion(selectedRepoData),
       })
     }
   }, [archiveInfoError, selectedRepoData])
@@ -458,63 +455,14 @@ const Restore: React.FC = () => {
       </Box>
 
       {/* Repository Selector */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
-            <Database size={20} color="#2e7d32" />
-            <Typography variant="h6" fontWeight={600}>
-              {t('restore.selectRepository')}
-            </Typography>
-          </Stack>
-          <FormControl fullWidth sx={{ minWidth: { xs: '100%', sm: 300 } }}>
-            <InputLabel id="repository-select-label">Repository</InputLabel>
-            <Select
-              labelId="repository-select-label"
-              id="repository-select"
-              value={selectedRepository}
-              onChange={(e) => handleRepositoryChange(e.target.value)}
-              label="Repository"
-              disabled={loadingRepositories}
-              sx={{ height: { xs: 48, sm: 56 } }}
-            >
-              <MenuItem value="" disabled>
-                {loadingRepositories
-                  ? t('restore.loadingRepositories')
-                  : t('restore.selectRepositoryPlaceholder')}
-              </MenuItem>
-              {repositories.map((repo: Repository) => (
-                <MenuItem key={repo.id} value={repo.path} disabled={repo.has_running_maintenance}>
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Database size={16} />
-                    <Box>
-                      <Typography variant="body2" fontWeight={500}>
-                        {repo.name}
-                        {repo.has_running_maintenance && (
-                          <Typography
-                            component="span"
-                            variant="caption"
-                            color="warning.main"
-                            sx={{ ml: 1 }}
-                          >
-                            {t('restore.maintenanceRunningParens')}
-                          </Typography>
-                        )}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ fontFamily: 'monospace' }}
-                      >
-                        {repo.path}
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </CardContent>
-      </Card>
+      <RepositorySelectorCard
+        title={t('restore.selectRepository')}
+        repositories={repositories}
+        value={selectedRepository}
+        onChange={(v) => handleRepositoryChange(v as string)}
+        loading={loadingRepositories}
+        valueKey="path"
+      />
 
       {/* Repository Info */}
       {selectedRepoData && repoInfo?.data?.info && (
