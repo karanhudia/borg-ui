@@ -271,6 +271,8 @@ else
 fi
 ```
 
+> **Note:** The `X-Borg-Authorization` header is recommended for API requests because it avoids conflicts with reverse proxies that use HTTP Basic Auth. The legacy `Authorization` header is still accepted for backward compatibility, but `X-Borg-Authorization` takes precedence when both are present.
+
 ### File Sync to S3
 
 ```bash
