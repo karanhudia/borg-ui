@@ -68,8 +68,8 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    # Extract token from X-Borg-Authorization header
-    auth_header = request.headers.get("X-Borg-Authorization")
+    # Extract token from X-Borg-Authorization header, falling back to Authorization
+    auth_header = request.headers.get("X-Borg-Authorization") or request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise credentials_exception
 
