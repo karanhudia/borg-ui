@@ -13,10 +13,7 @@ const v1Info = {
 }
 
 const v2Info = {
-  archives: [
-    { stats: { original_size: 3_000_000 } },
-    { stats: { original_size: 5_000_000 } },
-  ],
+  archives: [{ stats: { original_size: 3_000_000 } }, { stats: { original_size: 5_000_000 } }],
   rinfo_stats: {
     unique_csize: 2_000_000,
     unique_size: 3_500_000,

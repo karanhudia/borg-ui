@@ -12,13 +12,7 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material'
-import {
-  Storage,
-  Info,
-  Lock,
-  CalendarMonth,
-  FileDownload,
-} from '@mui/icons-material'
+import { Storage, Info, Lock, CalendarMonth, FileDownload } from '@mui/icons-material'
 import { useTranslation } from 'react-i18next'
 import { formatDateShort } from '../utils/dateUtils'
 import { repositoriesAPI } from '../services/api'
@@ -109,124 +103,130 @@ export default function RepositoryInfoDialog({
         <PlanGate
           feature="borg_v2"
           when={isV2Repo(repository)}
-          fallback={<UpgradePrompt requiredPlan="pro" message={t('dialogs.repositoryInfo.v2PlanRequired')} />}
+          fallback={
+            <UpgradePrompt
+              requiredPlan="pro"
+              message={t('dialogs.repositoryInfo.v2PlanRequired')}
+            />
+          }
         >
-        {isLoading ? (
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
-            <Typography variant="body2" color="text.secondary">
-              {t('dialogs.repositoryInfo.loadingInfo')}
-            </Typography>
-          </Box>
-        ) : repositoryInfo ? (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 1 }}>
-            {/* Repository Details Cards */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
-              {/* Encryption */}
-              <Card sx={{ backgroundColor: '#f3e5f5' }}>
-                <CardContent sx={{ py: 2 }}>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      mb: 1,
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <Lock sx={{ color: '#7b1fa2', fontSize: 28 }} />
+          {isLoading ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
+              <Typography variant="body2" color="text.secondary">
+                {t('dialogs.repositoryInfo.loadingInfo')}
+              </Typography>
+            </Box>
+          ) : repositoryInfo ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 1 }}>
+              {/* Repository Details Cards */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+                {/* Encryption */}
+                <Card sx={{ backgroundColor: '#f3e5f5' }}>
+                  <CardContent sx={{ py: 2 }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        mb: 1,
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Lock sx={{ color: '#7b1fa2', fontSize: 28 }} />
+                        <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                          {t('dialogs.repositoryInfo.encryption')}
+                        </Typography>
+                      </Box>
+                      {repository?.has_keyfile && (
+                        <Tooltip
+                          title={t('dialogs.repositoryInfo.exportKeyfileTooltip')}
+                          arrow
+                          placement="top"
+                        >
+                          <IconButton
+                            onClick={handleDownloadKeyfile}
+                            size="small"
+                            sx={{
+                              backgroundColor: '#7b1fa2',
+                              color: 'white',
+                              width: 30,
+                              height: 30,
+                              '&:hover': {
+                                backgroundColor: '#4a148c',
+                                transform: 'scale(1.1)',
+                              },
+                              transition: 'all 0.15s ease',
+                            }}
+                          >
+                            <FileDownload sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Box>
+                    <Typography variant="h6" fontWeight={700} sx={{ color: '#7b1fa2', ml: 5 }}>
+                      {repositoryInfo.encryption?.mode || 'N/A'}
+                    </Typography>
+                  </CardContent>
+                </Card>
+
+                {/* Last Modified */}
+                <Card sx={{ backgroundColor: '#e1f5fe' }}>
+                  <CardContent sx={{ py: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+                      <CalendarMonth sx={{ color: '#0277bd', fontSize: 28 }} />
                       <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                        {t('dialogs.repositoryInfo.encryption')}
+                        {t('dialogs.repositoryInfo.lastModified')}
                       </Typography>
                     </Box>
-                    {repository?.has_keyfile && (
-                      <Tooltip
-                        title={t('dialogs.repositoryInfo.exportKeyfileTooltip')}
-                        arrow
-                        placement="top"
-                      >
-                        <IconButton
-                          onClick={handleDownloadKeyfile}
-                          size="small"
-                          sx={{
-                            backgroundColor: '#7b1fa2',
-                            color: 'white',
-                            width: 30,
-                            height: 30,
-                            '&:hover': {
-                              backgroundColor: '#4a148c',
-                              transform: 'scale(1.1)',
-                            },
-                            transition: 'all 0.15s ease',
-                          }}
-                        >
-                          <FileDownload sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                  </Box>
-                  <Typography variant="h6" fontWeight={700} sx={{ color: '#7b1fa2', ml: 5 }}>
-                    {repositoryInfo.encryption?.mode || 'N/A'}
-                  </Typography>
-                </CardContent>
-              </Card>
-
-              {/* Last Modified */}
-              <Card sx={{ backgroundColor: '#e1f5fe' }}>
-                <CardContent sx={{ py: 2 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
-                    <CalendarMonth sx={{ color: '#0277bd', fontSize: 28 }} />
-                    <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                      {t('dialogs.repositoryInfo.lastModified')}
+                    <Typography variant="body2" fontWeight={600} sx={{ color: '#0277bd', ml: 5 }}>
+                      {repositoryInfo.repository?.last_modified
+                        ? formatDateShort(repositoryInfo.repository.last_modified)
+                        : 'N/A'}
                     </Typography>
-                  </Box>
-                  <Typography variant="body2" fontWeight={600} sx={{ color: '#0277bd', ml: 5 }}>
-                    {repositoryInfo.repository?.last_modified
-                      ? formatDateShort(repositoryInfo.repository.last_modified)
-                      : 'N/A'}
+                  </CardContent>
+                </Card>
+              </Box>
+
+              {/* Location */}
+              <Card variant="outlined">
+                <CardContent sx={{ py: 2 }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    display="block"
+                    sx={{ mb: 0.5 }}
+                  >
+                    {t('dialogs.repositoryInfo.repositoryLocation')}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}
+                  >
+                    {repositoryInfo.repository?.location || 'N/A'}
                   </Typography>
                 </CardContent>
               </Card>
+
+              {/* Storage Statistics */}
+              {isV2Repo(repository) ? (
+                <RepositoryStatsV2 archives={repositoryInfo.archives || []} />
+              ) : repositoryInfo.cache?.stats &&
+                (repositoryInfo.cache.stats.total_size ?? 0) > 0 ? (
+                <RepositoryStatsV1 stats={repositoryInfo.cache.stats} />
+              ) : (
+                <Alert severity="info" icon={<Info />}>
+                  <Typography variant="body2" fontWeight={600} gutterBottom>
+                    {t('dialogs.repositoryInfo.noBackupsYet')}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('repositoryInfoDialog.noArchivesDescription')}
+                  </Typography>
+                </Alert>
+              )}
             </Box>
-
-            {/* Location */}
-            <Card variant="outlined">
-              <CardContent sx={{ py: 2 }}>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  display="block"
-                  sx={{ mb: 0.5 }}
-                >
-                  {t('dialogs.repositoryInfo.repositoryLocation')}
-                </Typography>
-                <Typography
-                  variant="body2"
-                  sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}
-                >
-                  {repositoryInfo.repository?.location || 'N/A'}
-                </Typography>
-              </CardContent>
-            </Card>
-
-            {/* Storage Statistics */}
-            {isV2Repo(repository) ? (
-              <RepositoryStatsV2 archives={repositoryInfo.archives || []} />
-            ) : repositoryInfo.cache?.stats && (repositoryInfo.cache.stats.total_size ?? 0) > 0 ? (
-              <RepositoryStatsV1 stats={repositoryInfo.cache.stats} />
-            ) : (
-              <Alert severity="info" icon={<Info />}>
-                <Typography variant="body2" fontWeight={600} gutterBottom>
-                  {t('dialogs.repositoryInfo.noBackupsYet')}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {t('repositoryInfoDialog.noArchivesDescription')}
-                </Typography>
-              </Alert>
-            )}
-          </Box>
-        ) : (
-          <Alert severity="error">{t('repositoryInfoDialog.failedToLoad')}</Alert>
-        )}
+          ) : (
+            <Alert severity="error">{t('repositoryInfoDialog.failedToLoad')}</Alert>
+          )}
         </PlanGate>
       </DialogContent>
       <DialogActions>

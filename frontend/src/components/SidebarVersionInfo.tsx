@@ -39,10 +39,7 @@ export default function SidebarVersionInfo({ systemInfo }: SidebarVersionInfoPro
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
           <VersionChip label="UI" version={systemInfo.app_version} />
           {systemInfo.borg_version && (
-            <VersionChip
-              label="B1"
-              version={systemInfo.borg_version.replace(/^borg\s*/i, '')}
-            />
+            <VersionChip label="B1" version={systemInfo.borg_version.replace(/^borg\s*/i, '')} />
           )}
           {systemInfo.borg2_version && (
             <VersionChip

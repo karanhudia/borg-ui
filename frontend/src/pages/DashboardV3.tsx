@@ -1203,7 +1203,12 @@ export default function DashboardV3() {
                     Dedup ratio
                   </Typography>
                   <Typography
-                    sx={{ fontFamily: T.mono, fontSize: '0.72rem', fontWeight: 700, color: T.indigo }}
+                    sx={{
+                      fontFamily: T.mono,
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      color: T.indigo,
+                    }}
                   >
                     {storage.average_dedup_ratio.toFixed(2)}×
                   </Typography>
@@ -1215,306 +1220,312 @@ export default function DashboardV3() {
           {/* Right: repo mini-cards + activity */}
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
             <Box sx={{ ...glass, p: 2.5 }}>
-            <Stack
-              direction="row"
-              alignItems="center"
-              justifyContent="space-between"
-              sx={{ mb: 2 }}
-            >
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Server size={13} color={T.textMuted} />
-                <Typography
-                  sx={{
-                    fontSize: '0.58rem',
-                    color: T.textMuted,
-                    letterSpacing: 2,
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  Repository Health
-                </Typography>
-              </Stack>
-              <Stack direction="row" spacing={0.75}>
-                {criticalCount > 0 && (
-                  <Chip
-                    label={`${criticalCount} critical`}
-                    size="small"
+              <Stack
+                direction="row"
+                alignItems="center"
+                justifyContent="space-between"
+                sx={{ mb: 2 }}
+              >
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Server size={13} color={T.textMuted} />
+                  <Typography
                     sx={{
-                      height: 19,
-                      fontSize: '0.6rem',
-                      bgcolor: T.redDim,
-                      color: T.red,
-                      border: `1px solid ${T.red}30`,
-                      fontFamily: T.mono,
-                    }}
-                  />
-                )}
-                {warningCount > 0 && (
-                  <Chip
-                    label={`${warningCount} warn`}
-                    size="small"
-                    sx={{
-                      height: 19,
-                      fontSize: '0.6rem',
-                      bgcolor: T.amberDim,
-                      color: T.amber,
-                      border: `1px solid ${T.amber}30`,
-                      fontFamily: T.mono,
-                    }}
-                  />
-                )}
-                {healthyCount > 0 && (
-                  <Chip
-                    label={`${healthyCount} ok`}
-                    size="small"
-                    sx={{
-                      height: 19,
-                      fontSize: '0.6rem',
-                      bgcolor: T.greenDim,
-                      color: T.green,
-                      border: `1px solid ${T.green}30`,
-                      fontFamily: T.mono,
-                    }}
-                  />
-                )}
-              </Stack>
-            </Stack>
-
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2,1fr)', lg: 'repeat(3,1fr)' },
-                gap: 1.5,
-              }}
-            >
-              {repos.map((repo) => {
-                // Card color rules — backup EXCLUSIVELY owns red:
-                //   critical (red)  → backup is overdue/never
-                //   warning (amber) → backup slightly stale OR check/compact need attention
-                //   healthy (green) → everything fine
-                const { backup, check, compact } = repo.dimension_health ?? {
-                  backup: 'unknown',
-                  check: 'unknown',
-                  compact: 'unknown',
-                }
-                const backupCritical = backup === 'critical'
-                const hasWarning =
-                  backup === 'warning' ||
-                  check === 'critical' || check === 'warning' ||
-                  compact === 'critical' || compact === 'warning'
-                const cardStatus: keyof typeof STATUS = backupCritical
-                  ? 'critical'
-                  : hasWarning
-                    ? 'warning'
-                    : 'healthy'
-                const cs = STATUS[cardStatus]
-
-                return (
-                  <Box
-                    key={repo.id}
-                    onClick={() => navigate('/repositories')}
-                    sx={{
-                      bgcolor: cs.dim,
-                      border: `1px solid ${cs.color}30`,
-                      borderRadius: '10px',
-                      p: 1.5,
-                      cursor: 'pointer',
-                      transition: 'all 0.18s',
-                      '&:hover': {
-                        borderColor: cs.color + '60',
-                        transform: 'translateY(-1px)',
-                        boxShadow: `0 4px 20px ${cs.glow}`,
-                      },
+                      fontSize: '0.58rem',
+                      color: T.textMuted,
+                      letterSpacing: 2,
+                      textTransform: 'uppercase',
                     }}
                   >
-                    {/* ── Top row: status dot + type chip | next-run pill ── */}
-                    <Stack
-                      direction="row"
-                      alignItems="center"
-                      justifyContent="space-between"
-                      sx={{ mb: 0.75 }}
-                    >
-                      <Stack direction="row" spacing={0.75} alignItems="center">
-                        <PulseDot color={cs.color} glow={cs.glow} />
-                        <Chip
-                          label={repo.type.toUpperCase()}
-                          size="small"
-                          sx={{
-                            height: 15,
-                            fontSize: '0.52rem',
-                            bgcolor: T.repoBadgeBg,
-                            color: T.textMuted,
-                            border: `1px solid ${T.border}`,
-                            fontFamily: T.mono,
-                            px: 0,
-                          }}
-                        />
-                      </Stack>
-                      <ScheduleBadge
-                        nextRun={repo.next_run}
-                        hasSchedule={repo.has_schedule}
-                        scheduleEnabled={repo.schedule_enabled}
-                        scheduleName={repo.schedule_name}
-                      />
-                    </Stack>
-
-                    {/* ── Name + stats ── */}
-                    <Typography
+                    Repository Health
+                  </Typography>
+                </Stack>
+                <Stack direction="row" spacing={0.75}>
+                  {criticalCount > 0 && (
+                    <Chip
+                      label={`${criticalCount} critical`}
+                      size="small"
                       sx={{
-                        fontSize: '0.78rem',
-                        fontWeight: 600,
-                        color: T.textPrimary,
-                        mb: 0.3,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
+                        height: 19,
+                        fontSize: '0.6rem',
+                        bgcolor: T.redDim,
+                        color: T.red,
+                        border: `1px solid ${T.red}30`,
+                        fontFamily: T.mono,
                       }}
-                    >
-                      {repo.name}
-                    </Typography>
-                    <Stack direction="row" spacing={1.5} sx={{ mb: 0.9 }}>
-                      <Typography
-                        sx={{ fontFamily: T.mono, fontSize: '0.6rem', color: T.textMuted }}
-                      >
-                        {repo.archive_count} arx
-                      </Typography>
-                      <Typography
-                        sx={{ fontFamily: T.mono, fontSize: '0.6rem', color: T.textMuted }}
-                      >
-                        {repo.total_size}
-                      </Typography>
-                    </Stack>
-
-                    {/* ── Divider ── */}
-                    <Box sx={{ height: '1px', bgcolor: T.border, mb: 0.9 }} />
-
-                    {/* ── Dimension status grid: BACKUP · CHECK · COMPACT ── */}
-                    <DimStatusGrid
-                      dim={repo.dimension_health}
-                      lastBackup={repo.last_backup}
-                      lastCheck={repo.last_check}
-                      lastCompact={repo.last_compact}
                     />
-                  </Box>
-                )
-              })}
-            </Box>
-            {repos.length === 0 && (
-              <Typography
-                sx={{ color: T.textMuted, textAlign: 'center', py: 4, fontSize: '0.85rem' }}
-              >
-                No repositories
-              </Typography>
-            )}
-          </Box>
-
-          {/* Activity timeline */}
-          <Box sx={{ ...glass, p: 2.5 }}>
-            <Stack
-              direction="row"
-              alignItems="center"
-              justifyContent="space-between"
-              sx={{ mb: 1.75 }}
-            >
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Activity size={13} color={T.textMuted} />
-                <Typography
-                  sx={{
-                    fontSize: '0.58rem',
-                    color: T.textMuted,
-                    letterSpacing: 2,
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  Activity — last 14 days
-                </Typography>
+                  )}
+                  {warningCount > 0 && (
+                    <Chip
+                      label={`${warningCount} warn`}
+                      size="small"
+                      sx={{
+                        height: 19,
+                        fontSize: '0.6rem',
+                        bgcolor: T.amberDim,
+                        color: T.amber,
+                        border: `1px solid ${T.amber}30`,
+                        fontFamily: T.mono,
+                      }}
+                    />
+                  )}
+                  {healthyCount > 0 && (
+                    <Chip
+                      label={`${healthyCount} ok`}
+                      size="small"
+                      sx={{
+                        height: 19,
+                        fontSize: '0.6rem',
+                        bgcolor: T.greenDim,
+                        color: T.green,
+                        border: `1px solid ${T.green}30`,
+                        fontFamily: T.mono,
+                      }}
+                    />
+                  )}
+                </Stack>
               </Stack>
-              <Button
-                size="small"
-                variant="text"
-                endIcon={<ArrowRight size={12} />}
-                onClick={() => navigate('/activity')}
+
+              <Box
                 sx={{
-                  fontSize: '0.65rem',
-                  color: T.textMuted,
-                  '&:hover': { color: T.textPrimary, bgcolor: T.hoverBg },
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', sm: 'repeat(2,1fr)', lg: 'repeat(3,1fr)' },
+                  gap: 1.5,
                 }}
               >
-                Full log
-              </Button>
-            </Stack>
+                {repos.map((repo) => {
+                  // Card color rules — backup EXCLUSIVELY owns red:
+                  //   critical (red)  → backup is overdue/never
+                  //   warning (amber) → backup slightly stale OR check/compact need attention
+                  //   healthy (green) → everything fine
+                  const { backup, check, compact } = repo.dimension_health ?? {
+                    backup: 'unknown',
+                    check: 'unknown',
+                    compact: 'unknown',
+                  }
+                  const backupCritical = backup === 'critical'
+                  const hasWarning =
+                    backup === 'warning' ||
+                    check === 'critical' ||
+                    check === 'warning' ||
+                    compact === 'critical' ||
+                    compact === 'warning'
+                  const cardStatus: keyof typeof STATUS = backupCritical
+                    ? 'critical'
+                    : hasWarning
+                      ? 'warning'
+                      : 'healthy'
+                  const cs = STATUS[cardStatus]
 
-            {ov.activity_feed.length === 0 ? (
-              <Typography
-                sx={{ color: T.textMuted, textAlign: 'center', py: 3, fontSize: '0.8rem' }}
-              >
-                No activity recorded yet
-              </Typography>
-            ) : (
-              <ActivityTimeline activities={ov.activity_feed} />
-            )}
+                  return (
+                    <Box
+                      key={repo.id}
+                      onClick={() => navigate('/repositories')}
+                      sx={{
+                        bgcolor: cs.dim,
+                        border: `1px solid ${cs.color}30`,
+                        borderRadius: '10px',
+                        p: 1.5,
+                        cursor: 'pointer',
+                        transition: 'all 0.18s',
+                        '&:hover': {
+                          borderColor: cs.color + '60',
+                          transform: 'translateY(-1px)',
+                          boxShadow: `0 4px 20px ${cs.glow}`,
+                        },
+                      }}
+                    >
+                      {/* ── Top row: status dot + type chip | next-run pill ── */}
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        justifyContent="space-between"
+                        sx={{ mb: 0.75 }}
+                      >
+                        <Stack direction="row" spacing={0.75} alignItems="center">
+                          <PulseDot color={cs.color} glow={cs.glow} />
+                          <Chip
+                            label={repo.type.toUpperCase()}
+                            size="small"
+                            sx={{
+                              height: 15,
+                              fontSize: '0.52rem',
+                              bgcolor: T.repoBadgeBg,
+                              color: T.textMuted,
+                              border: `1px solid ${T.border}`,
+                              fontFamily: T.mono,
+                              px: 0,
+                            }}
+                          />
+                        </Stack>
+                        <ScheduleBadge
+                          nextRun={repo.next_run}
+                          hasSchedule={repo.has_schedule}
+                          scheduleEnabled={repo.schedule_enabled}
+                          scheduleName={repo.schedule_name}
+                        />
+                      </Stack>
 
-            {ov.activity_feed.some((a) => a.status === 'failed') && (
-              <Box sx={{ mt: 2, borderTop: `1px solid ${T.border}`, pt: 1.5 }}>
+                      {/* ── Name + stats ── */}
+                      <Typography
+                        sx={{
+                          fontSize: '0.78rem',
+                          fontWeight: 600,
+                          color: T.textPrimary,
+                          mb: 0.3,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {repo.name}
+                      </Typography>
+                      <Stack direction="row" spacing={1.5} sx={{ mb: 0.9 }}>
+                        <Typography
+                          sx={{ fontFamily: T.mono, fontSize: '0.6rem', color: T.textMuted }}
+                        >
+                          {repo.archive_count} arx
+                        </Typography>
+                        <Typography
+                          sx={{ fontFamily: T.mono, fontSize: '0.6rem', color: T.textMuted }}
+                        >
+                          {repo.total_size}
+                        </Typography>
+                      </Stack>
+
+                      {/* ── Divider ── */}
+                      <Box sx={{ height: '1px', bgcolor: T.border, mb: 0.9 }} />
+
+                      {/* ── Dimension status grid: BACKUP · CHECK · COMPACT ── */}
+                      <DimStatusGrid
+                        dim={repo.dimension_health}
+                        lastBackup={repo.last_backup}
+                        lastCheck={repo.last_check}
+                        lastCompact={repo.last_compact}
+                      />
+                    </Box>
+                  )
+                })}
+              </Box>
+              {repos.length === 0 && (
                 <Typography
+                  sx={{ color: T.textMuted, textAlign: 'center', py: 4, fontSize: '0.85rem' }}
+                >
+                  No repositories
+                </Typography>
+              )}
+            </Box>
+
+            {/* Activity timeline */}
+            <Box sx={{ ...glass, p: 2.5 }}>
+              <Stack
+                direction="row"
+                alignItems="center"
+                justifyContent="space-between"
+                sx={{ mb: 1.75 }}
+              >
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Activity size={13} color={T.textMuted} />
+                  <Typography
+                    sx={{
+                      fontSize: '0.58rem',
+                      color: T.textMuted,
+                      letterSpacing: 2,
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    Activity — last 14 days
+                  </Typography>
+                </Stack>
+                <Button
+                  size="small"
+                  variant="text"
+                  endIcon={<ArrowRight size={12} />}
+                  onClick={() => navigate('/activity')}
                   sx={{
-                    fontSize: '0.58rem',
-                    color: T.red,
-                    letterSpacing: 1.5,
-                    textTransform: 'uppercase',
-                    mb: 1,
+                    fontSize: '0.65rem',
+                    color: T.textMuted,
+                    '&:hover': { color: T.textPrimary, bgcolor: T.hoverBg },
                   }}
                 >
-                  Recent failures
+                  Full log
+                </Button>
+              </Stack>
+
+              {ov.activity_feed.length === 0 ? (
+                <Typography
+                  sx={{ color: T.textMuted, textAlign: 'center', py: 3, fontSize: '0.8rem' }}
+                >
+                  No activity recorded yet
                 </Typography>
-                <Stack spacing={0.6}>
-                  {ov.activity_feed
-                    .filter((a) => a.status === 'failed')
-                    .slice(0, 3)
-                    .map((a) => (
-                      <Box
-                        key={`${a.type}-${a.id}`}
-                        sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}
-                      >
-                        <XCircle size={13} color={T.red} style={{ marginTop: 2, flexShrink: 0 }} />
-                        <Box sx={{ minWidth: 0 }}>
-                          <Stack direction="row" spacing={1.5}>
-                            <Typography
-                              sx={{
-                                fontFamily: T.mono,
-                                fontSize: '0.68rem',
-                                fontWeight: 600,
-                                color: T.textPrimary,
-                              }}
-                            >
-                              {a.repository}
-                            </Typography>
-                            <Typography
-                              sx={{ fontFamily: T.mono, fontSize: '0.62rem', color: T.textMuted }}
-                            >
-                              {formatDistanceToNow(new Date(a.timestamp), { addSuffix: true })}
-                            </Typography>
-                          </Stack>
-                          {a.error && (
-                            <Typography
-                              sx={{
-                                fontFamily: T.mono,
-                                fontSize: '0.6rem',
-                                color: T.red + 'cc',
-                                mt: 0.25,
-                                wordBreak: 'break-all',
-                              }}
-                            >
-                              {a.error}
-                            </Typography>
-                          )}
+              ) : (
+                <ActivityTimeline activities={ov.activity_feed} />
+              )}
+
+              {ov.activity_feed.some((a) => a.status === 'failed') && (
+                <Box sx={{ mt: 2, borderTop: `1px solid ${T.border}`, pt: 1.5 }}>
+                  <Typography
+                    sx={{
+                      fontSize: '0.58rem',
+                      color: T.red,
+                      letterSpacing: 1.5,
+                      textTransform: 'uppercase',
+                      mb: 1,
+                    }}
+                  >
+                    Recent failures
+                  </Typography>
+                  <Stack spacing={0.6}>
+                    {ov.activity_feed
+                      .filter((a) => a.status === 'failed')
+                      .slice(0, 3)
+                      .map((a) => (
+                        <Box
+                          key={`${a.type}-${a.id}`}
+                          sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}
+                        >
+                          <XCircle
+                            size={13}
+                            color={T.red}
+                            style={{ marginTop: 2, flexShrink: 0 }}
+                          />
+                          <Box sx={{ minWidth: 0 }}>
+                            <Stack direction="row" spacing={1.5}>
+                              <Typography
+                                sx={{
+                                  fontFamily: T.mono,
+                                  fontSize: '0.68rem',
+                                  fontWeight: 600,
+                                  color: T.textPrimary,
+                                }}
+                              >
+                                {a.repository}
+                              </Typography>
+                              <Typography
+                                sx={{ fontFamily: T.mono, fontSize: '0.62rem', color: T.textMuted }}
+                              >
+                                {formatDistanceToNow(new Date(a.timestamp), { addSuffix: true })}
+                              </Typography>
+                            </Stack>
+                            {a.error && (
+                              <Typography
+                                sx={{
+                                  fontFamily: T.mono,
+                                  fontSize: '0.6rem',
+                                  color: T.red + 'cc',
+                                  mt: 0.25,
+                                  wordBreak: 'break-all',
+                                }}
+                              >
+                                {a.error}
+                              </Typography>
+                            )}
+                          </Box>
                         </Box>
-                      </Box>
-                    ))}
-                </Stack>
-              </Box>
-            )}
-          </Box>
+                      ))}
+                  </Stack>
+                </Box>
+              )}
+            </Box>
           </Box>
         </Box>
       </Box>

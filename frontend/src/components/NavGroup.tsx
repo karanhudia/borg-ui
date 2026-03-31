@@ -1,13 +1,6 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
-import {
-  Collapse,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-} from '@mui/material'
+import { Collapse, List, ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 
 interface SubItem {
@@ -117,9 +110,7 @@ export default function NavGroup({
                     },
                   }}
                 >
-                  <ListItemIcon
-                    sx={{ color: isActive ? 'white' : 'text.secondary', minWidth: 28 }}
-                  >
+                  <ListItemIcon sx={{ color: isActive ? 'white' : 'text.secondary', minWidth: 28 }}>
                     <SubIcon size={16} />
                   </ListItemIcon>
                   <ListItemText

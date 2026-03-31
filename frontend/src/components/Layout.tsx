@@ -4,15 +4,7 @@ import { useAuth } from '../hooks/useAuth.tsx'
 import { hasConsentBeenGiven, loadUserPreference } from '../utils/matomo'
 import AnalyticsConsentBanner from './AnalyticsConsentBanner'
 import AppSidebar from './AppSidebar'
-import {
-  Box,
-  AppBar,
-  Toolbar,
-  Typography,
-  IconButton,
-  Container,
-  Button,
-} from '@mui/material'
+import { Box, AppBar, Toolbar, Typography, IconButton, Container, Button } from '@mui/material'
 import { Menu, LogOut } from 'lucide-react'
 
 const drawerWidth = 240

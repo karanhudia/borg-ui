@@ -32,7 +32,10 @@ describe('AppSidebar', () => {
 
   it('renders a link to the dashboard', () => {
     renderWithProviders(<AppSidebar mobileOpen={false} onClose={vi.fn()} />)
-    expect(screen.getAllByRole('link', { name: /borg ui/i })[0]).toHaveAttribute('href', '/dashboard')
+    expect(screen.getAllByRole('link', { name: /borg ui/i })[0]).toHaveAttribute(
+      'href',
+      '/dashboard'
+    )
   })
 
   it('renders primary nav items', () => {

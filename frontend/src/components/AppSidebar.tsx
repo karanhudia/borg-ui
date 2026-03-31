@@ -5,14 +5,7 @@ import { useTabEnablement } from '../context/AppContext'
 import { setAppVersion } from '../utils/matomo'
 import { BASE_PATH } from '@/utils/basePath'
 import { useQuery } from '@tanstack/react-query'
-import {
-  Box,
-  Drawer,
-  Toolbar,
-  List,
-  Typography,
-  Divider,
-} from '@mui/material'
+import { Box, Drawer, Toolbar, List, Typography, Divider } from '@mui/material'
 import {
   Home,
   FileText,
@@ -131,14 +124,24 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       icon: React.ComponentType<any>
       key: 'connections' | 'repositories' | 'backups' | 'archives' | 'schedule'
     }> = [
-      { name: 'Remote Machines', href: '/ssh-connections', icon: Computer, key: 'connections' as const },
+      {
+        name: 'Remote Machines',
+        href: '/ssh-connections',
+        icon: Computer,
+        key: 'connections' as const,
+      },
       { name: 'Repositories', href: '/repositories', icon: Database, key: 'repositories' as const },
       { name: 'Backup', href: '/backup', icon: FileText, key: 'backups' as const },
       { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },
     ]
 
     if (showRestoreTab) {
-      backupItems.push({ name: 'Restore', href: '/restore', icon: RotateCcw, key: 'archives' as const })
+      backupItems.push({
+        name: 'Restore',
+        href: '/restore',
+        icon: RotateCcw,
+        key: 'archives' as const,
+      })
     }
 
     backupItems.push({ name: 'Schedule', href: '/schedule', icon: Clock, key: 'schedule' as const })
@@ -207,11 +210,27 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
   useEffect(() => {
     if (location.pathname.startsWith('/settings')) {
       const path = location.pathname
-      if (path.includes('/account') || path.includes('/appearance') || path.includes('/notifications') || path.includes('/preferences')) {
+      if (
+        path.includes('/account') ||
+        path.includes('/appearance') ||
+        path.includes('/notifications') ||
+        path.includes('/preferences')
+      ) {
         setExpandedMenus((prev) => ({ ...prev, Personal: true }))
-      } else if (path.includes('/system') || path.includes('/mqtt') || path.includes('/cache') || path.includes('/logs') || path.includes('/packages')) {
+      } else if (
+        path.includes('/system') ||
+        path.includes('/mqtt') ||
+        path.includes('/cache') ||
+        path.includes('/logs') ||
+        path.includes('/packages')
+      ) {
         setExpandedMenus((prev) => ({ ...prev, System: true }))
-      } else if (path.includes('/mounts') || path.includes('/scripts') || path.includes('/users') || path.includes('/export')) {
+      } else if (
+        path.includes('/mounts') ||
+        path.includes('/scripts') ||
+        path.includes('/users') ||
+        path.includes('/export')
+      ) {
         setExpandedMenus((prev) => ({ ...prev, Management: true }))
       } else if (path.includes('/beta')) {
         setExpandedMenus((prev) => ({ ...prev, Advanced: true }))

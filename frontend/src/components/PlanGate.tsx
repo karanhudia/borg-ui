@@ -14,7 +14,13 @@ interface PlanGateProps {
   disabled?: boolean
 }
 
-export default function PlanGate({ feature, children, fallback, when = true, disabled }: PlanGateProps) {
+export default function PlanGate({
+  feature,
+  children,
+  fallback,
+  when = true,
+  disabled,
+}: PlanGateProps) {
   const { can, isLoading } = usePlan()
   if (isLoading) return null
   if (!when || can(feature)) return <>{children}</>

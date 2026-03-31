@@ -324,28 +324,54 @@ describe('RepositoryInfoDialog', () => {
       encryption: { mode: 'repokey-aes-ocb' },
       repository: { location: '/backups/v2' },
       archives: [
-        { name: 'arch-1', time: '2024-01-01T10:00:00Z', stats: { original_size: 2 * 1024 * 1024 * 1024, nfiles: 1000 } },
-        { name: 'arch-2', time: '2024-06-01T10:00:00Z', stats: { original_size: 4 * 1024 * 1024 * 1024, nfiles: 2500 } },
+        {
+          name: 'arch-1',
+          time: '2024-01-01T10:00:00Z',
+          stats: { original_size: 2 * 1024 * 1024 * 1024, nfiles: 1000 },
+        },
+        {
+          name: 'arch-2',
+          time: '2024-06-01T10:00:00Z',
+          stats: { original_size: 4 * 1024 * 1024 * 1024, nfiles: 2500 },
+        },
       ],
     }
 
     it('renders archive count for v2 repo', () => {
       render(
-        <RepositoryInfoDialog open={true} repository={v2Repo} repositoryInfo={v2Info} isLoading={false} onClose={vi.fn()} />
+        <RepositoryInfoDialog
+          open={true}
+          repository={v2Repo}
+          repositoryInfo={v2Info}
+          isLoading={false}
+          onClose={vi.fn()}
+        />
       )
       expect(screen.getByText('2')).toBeInTheDocument()
     })
 
     it('renders file count from latest archive for v2 repo', () => {
       render(
-        <RepositoryInfoDialog open={true} repository={v2Repo} repositoryInfo={v2Info} isLoading={false} onClose={vi.fn()} />
+        <RepositoryInfoDialog
+          open={true}
+          repository={v2Repo}
+          repositoryInfo={v2Info}
+          isLoading={false}
+          onClose={vi.fn()}
+        />
       )
       expect(screen.getByText('2,500')).toBeInTheDocument()
     })
 
     it('does not render v1 chunk count labels for v2 repo', () => {
       render(
-        <RepositoryInfoDialog open={true} repository={v2Repo} repositoryInfo={v2Info} isLoading={false} onClose={vi.fn()} />
+        <RepositoryInfoDialog
+          open={true}
+          repository={v2Repo}
+          repositoryInfo={v2Info}
+          isLoading={false}
+          onClose={vi.fn()}
+        />
       )
       expect(screen.queryByText('Total Chunks')).not.toBeInTheDocument()
       expect(screen.queryByText('Unique Chunks')).not.toBeInTheDocument()
@@ -353,7 +379,13 @@ describe('RepositoryInfoDialog', () => {
 
     it('shows no backups alert for v2 repo with empty archives', () => {
       render(
-        <RepositoryInfoDialog open={true} repository={v2Repo} repositoryInfo={{ ...v2Info, archives: [] }} isLoading={false} onClose={vi.fn()} />
+        <RepositoryInfoDialog
+          open={true}
+          repository={v2Repo}
+          repositoryInfo={{ ...v2Info, archives: [] }}
+          isLoading={false}
+          onClose={vi.fn()}
+        />
       )
       expect(screen.getByText('No backups yet')).toBeInTheDocument()
     })
@@ -364,14 +396,26 @@ describe('RepositoryInfoDialog', () => {
 
     it('shows export keyfile button when has_keyfile is true', () => {
       render(
-        <RepositoryInfoDialog open={true} repository={keyfileRepo} repositoryInfo={mockRepositoryInfo} isLoading={false} onClose={vi.fn()} />
+        <RepositoryInfoDialog
+          open={true}
+          repository={keyfileRepo}
+          repositoryInfo={mockRepositoryInfo}
+          isLoading={false}
+          onClose={vi.fn()}
+        />
       )
       expect(screen.getByRole('button', { name: /export keyfile/i })).toBeInTheDocument()
     })
 
     it('does not show export button when has_keyfile is false', () => {
       render(
-        <RepositoryInfoDialog open={true} repository={mockRepository} repositoryInfo={mockRepositoryInfo} isLoading={false} onClose={vi.fn()} />
+        <RepositoryInfoDialog
+          open={true}
+          repository={mockRepository}
+          repositoryInfo={mockRepositoryInfo}
+          isLoading={false}
+          onClose={vi.fn()}
+        />
       )
       expect(screen.queryByRole('button', { name: /export keyfile/i })).not.toBeInTheDocument()
     })
@@ -383,7 +427,13 @@ describe('RepositoryInfoDialog', () => {
       URL.revokeObjectURL = vi.fn()
 
       render(
-        <RepositoryInfoDialog open={true} repository={keyfileRepo} repositoryInfo={mockRepositoryInfo} isLoading={false} onClose={vi.fn()} />
+        <RepositoryInfoDialog
+          open={true}
+          repository={keyfileRepo}
+          repositoryInfo={mockRepositoryInfo}
+          isLoading={false}
+          onClose={vi.fn()}
+        />
       )
 
       fireEvent.click(screen.getByRole('button', { name: /export keyfile/i }))

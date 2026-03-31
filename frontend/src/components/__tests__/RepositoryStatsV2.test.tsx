@@ -4,8 +4,16 @@ import { renderWithProviders } from '../../test/test-utils'
 import RepositoryStatsV2 from '../RepositoryStatsV2'
 
 const archives = [
-  { name: 'backup-2024-01-01', time: '2024-01-01T10:00:00Z', stats: { original_size: 2 * 1024 * 1024 * 1024, nfiles: 1500 } },
-  { name: 'backup-2024-02-01', time: '2024-02-01T10:00:00Z', stats: { original_size: 3 * 1024 * 1024 * 1024, nfiles: 2000 } },
+  {
+    name: 'backup-2024-01-01',
+    time: '2024-01-01T10:00:00Z',
+    stats: { original_size: 2 * 1024 * 1024 * 1024, nfiles: 1500 },
+  },
+  {
+    name: 'backup-2024-02-01',
+    time: '2024-02-01T10:00:00Z',
+    stats: { original_size: 3 * 1024 * 1024 * 1024, nfiles: 2000 },
+  },
 ]
 
 describe('RepositoryStatsV2', () => {
@@ -42,7 +50,9 @@ describe('RepositoryStatsV2', () => {
   })
 
   it('shows N/A when archive has no time field', () => {
-    renderWithProviders(<RepositoryStatsV2 archives={[{ stats: { original_size: 1024, nfiles: 1 } }]} />)
+    renderWithProviders(
+      <RepositoryStatsV2 archives={[{ stats: { original_size: 1024, nfiles: 1 } }]} />
+    )
     expect(screen.getAllByText('N/A').length).toBeGreaterThanOrEqual(1)
   })
 })
