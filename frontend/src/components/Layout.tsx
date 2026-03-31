@@ -6,6 +6,9 @@ import { useTabEnablement } from '../context/AppContext'
 import { setAppVersion, hasConsentBeenGiven, loadUserPreference } from '../utils/matomo'
 import { BASE_PATH } from '@/utils/basePath'
 import AnalyticsConsentBanner from './AnalyticsConsentBanner'
+import NavItem from './NavItem'
+import NavGroup from './NavGroup'
+import SidebarVersionInfo from './SidebarVersionInfo'
 import {
   Box,
   Drawer,
@@ -15,13 +18,7 @@ import {
   Typography,
   Divider,
   IconButton,
-  ListItem,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
   Container,
-  Tooltip,
-  Collapse,
   Button,
 } from '@mui/material'
 import {
@@ -34,13 +31,9 @@ import {
   Computer,
   LogOut,
   User,
-  Lock,
-  Info,
   History,
   FileCode,
   Settings as SettingsIcon,
-  ChevronDown,
-  ChevronRight,
   Bell,
   Package,
   Palette,
@@ -78,6 +71,7 @@ interface NavigationItem {
 interface SystemInfo {
   app_version: string
   borg_version: string | null
+  borg2_version: string | null
 }
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -307,13 +301,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     setMobileOpen(!mobileOpen)
   }
 
-  const handleNavClick = (e: React.MouseEvent<HTMLDivElement>, item: NavigationItem) => {
-    const isEnabled = tabEnablement[item.key]
-    if (!isEnabled) {
-      e.preventDefault()
-      return false
-    }
-  }
 
   const drawer = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -389,185 +376,38 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               {section.items.map((item: NavigationItem) => {
                 const isEnabled = tabEnablement[item.key]
                 const disabledReason = getTabDisabledReason(item.key)
-                const Icon = item.icon
 
-                // Handle items with sub-items (dropdowns)
                 if (item.subItems) {
-                  const isAnySubItemActive = item.subItems.some((subItem) =>
-                    location.pathname.startsWith(subItem.href)
-                  )
-                  const isExpanded = expandedMenus[item.name] || false
-
                   return (
-                    <React.Fragment key={item.name}>
-                      <ListItem disablePadding>
-                        <ListItemButton
-                          onClick={() => toggleMenu(item.name)}
-                          sx={{
-                            pl: 2,
-                            pr: 1.5,
-                            py: 0.625,
-                            minHeight: 36,
-                            '&:hover': {
-                              backgroundColor: 'action.hover',
-                            },
-                          }}
-                        >
-                          <ListItemIcon
-                            sx={{
-                              color: isAnySubItemActive ? 'primary.main' : 'text.secondary',
-                              minWidth: 32,
-                            }}
-                          >
-                            <Icon size={18} />
-                          </ListItemIcon>
-                          <ListItemText
-                            primary={navLabel(item.name)}
-                            primaryTypographyProps={{
-                              fontSize: '0.8125rem',
-                              fontWeight: isAnySubItemActive ? 600 : 400,
-                              color: isAnySubItemActive ? 'primary.main' : 'inherit',
-                            }}
-                          />
-                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                        </ListItemButton>
-                      </ListItem>
-
-                      {/* Sub-items with smooth animation and vertical line */}
-                      <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                        <List
-                          component="div"
-                          disablePadding
-                          sx={{
-                            position: 'relative',
-                            '&::before': {
-                              content: '""',
-                              position: 'absolute',
-                              left: '24px',
-                              top: 0,
-                              bottom: 0,
-                              width: '1px',
-                              backgroundColor: 'divider',
-                              opacity: 0.5,
-                            },
-                          }}
-                        >
-                          {item.subItems.map((subItem) => {
-                            const isActive = location.pathname.startsWith(subItem.href)
-                            const SubIcon = subItem.icon
-
-                            return (
-                              <ListItem key={subItem.name} disablePadding>
-                                <ListItemButton
-                                  component={Link}
-                                  to={subItem.href}
-                                  selected={isActive}
-                                  sx={{
-                                    pl: 6,
-                                    pr: 1.5,
-                                    py: 0.5,
-                                    minHeight: 32,
-                                    '&.Mui-selected': {
-                                      backgroundColor: 'primary.main',
-                                      color: 'white',
-                                      '&:hover': {
-                                        backgroundColor: 'primary.dark',
-                                      },
-                                      '& .MuiListItemIcon-root': {
-                                        color: 'white',
-                                      },
-                                    },
-                                    '&:hover': {
-                                      backgroundColor: isActive ? 'primary.main' : 'action.hover',
-                                    },
-                                  }}
-                                >
-                                  <ListItemIcon
-                                    sx={{
-                                      color: isActive ? 'white' : 'text.secondary',
-                                      minWidth: 28,
-                                    }}
-                                  >
-                                    <SubIcon size={16} />
-                                  </ListItemIcon>
-                                  <ListItemText
-                                    primary={navLabel(subItem.name)}
-                                    primaryTypographyProps={{
-                                      fontSize: '0.8125rem',
-                                      fontWeight: isActive ? 500 : 400,
-                                      color: isActive ? 'white' : 'inherit',
-                                    }}
-                                  />
-                                </ListItemButton>
-                              </ListItem>
-                            )
-                          })}
-                        </List>
-                      </Collapse>
-                    </React.Fragment>
+                    <NavGroup
+                      key={item.name}
+                      name={item.name}
+                      icon={item.icon}
+                      subItems={item.subItems}
+                      isExpanded={expandedMenus[item.name] || false}
+                      onToggle={() => toggleMenu(item.name)}
+                      currentPath={location.pathname}
+                      navLabel={navLabel}
+                    />
                   )
                 }
 
-                // Regular items without sub-items
                 const isActive = Boolean(
                   item.href &&
                   (location.pathname === item.href || location.pathname.startsWith(item.href + '/'))
                 )
 
-                const listItemButton = (
-                  <ListItemButton
-                    component={isEnabled && item.href ? Link : 'div'}
-                    to={isEnabled && item.href ? item.href : undefined}
-                    selected={isActive}
-                    disabled={!isEnabled}
-                    onClick={(e: React.MouseEvent<HTMLDivElement>) => handleNavClick(e, item)}
-                    sx={{
-                      pl: 2,
-                      pr: 1.5,
-                      py: 0.625,
-                      minHeight: 36,
-                      '&.Mui-selected': {
-                        backgroundColor: 'primary.main',
-                        color: 'white',
-                        '&:hover': {
-                          backgroundColor: 'primary.dark',
-                        },
-                        '& .MuiListItemIcon-root': {
-                          color: 'white',
-                        },
-                      },
-                      '&.Mui-disabled': {
-                        opacity: 0.5,
-                        cursor: 'not-allowed',
-                      },
-                    }}
-                  >
-                    <ListItemIcon
-                      sx={{ color: isActive ? 'white' : 'text.secondary', minWidth: 32 }}
-                    >
-                      {isEnabled ? <Icon size={18} /> : <Lock size={18} />}
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={navLabel(item.name)}
-                      primaryTypographyProps={{
-                        fontSize: '0.8125rem',
-                        fontWeight: isActive ? 600 : 400,
-                        color: isActive ? 'white' : isEnabled ? 'inherit' : 'text.disabled',
-                      }}
-                    />
-                  </ListItemButton>
-                )
-
                 return (
-                  <ListItem key={item.name} disablePadding>
-                    {!isEnabled && disabledReason ? (
-                      <Tooltip title={disabledReason} arrow placement="right">
-                        <Box sx={{ width: '100%' }}>{listItemButton}</Box>
-                      </Tooltip>
-                    ) : (
-                      listItemButton
-                    )}
-                  </ListItem>
+                  <NavItem
+                    key={item.name}
+                    name={item.name}
+                    href={item.href!}
+                    icon={item.icon}
+                    isActive={isActive}
+                    isEnabled={isEnabled}
+                    disabledReason={disabledReason ?? undefined}
+                    navLabel={navLabel}
+                  />
                 )
               })}
             </List>
@@ -575,43 +415,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         ))}
       </Box>
 
-      {/* System Info at bottom */}
-      <Box sx={{ mt: 'auto', p: 2, borderTop: 1, borderColor: 'divider' }}>
-        <Tooltip title={t('layout.systemInformation')} arrow placement="right">
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-            <Info size={16} style={{ marginRight: 8, color: '#666' }} />
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-              {t('navigation.versionInfo')}
-            </Typography>
-          </Box>
-        </Tooltip>
-        {systemInfo ? (
-          <Box sx={{ ml: 3 }}>
-            <Typography
-              variant="caption"
-              display="block"
-              color="text.secondary"
-              sx={{ lineHeight: 1.5 }}
-            >
-              {t('navigation.app')} {systemInfo.app_version}
-            </Typography>
-            {systemInfo.borg_version && (
-              <Typography
-                variant="caption"
-                display="block"
-                color="text.secondary"
-                sx={{ lineHeight: 1.5 }}
-              >
-                {systemInfo.borg_version}
-              </Typography>
-            )}
-          </Box>
-        ) : (
-          <Typography variant="caption" display="block" color="text.secondary" sx={{ ml: 3 }}>
-            {t('navigation.loading')}
-          </Typography>
-        )}
-      </Box>
+      <SidebarVersionInfo systemInfo={systemInfo} />
     </Box>
   )
 
