@@ -17,10 +17,12 @@ import { Save, AlertTriangle, Settings, Clock, RefreshCw } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { settingsAPI } from '../services/api'
 import { translateBackendKey } from '../utils/translateBackendKey'
+import { useAnalytics } from '../hooks/useAnalytics'
 
 const SystemSettingsTab: React.FC = () => {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const { trackSystem, EventAction } = useAnalytics()
 
   // Local state for browse limits
   const [browseMaxItems, setBrowseMaxItems] = useState(1_000_000)
@@ -265,6 +267,18 @@ const SystemSettingsTab: React.FC = () => {
       ])
       toast.success(t('systemSettings.savedSuccessfully'))
       setHasChanges(false)
+      trackSystem(EventAction.EDIT, {
+        section: 'system_settings',
+        browse_max_items: browseMaxItems,
+        browse_max_memory_mb: browseMaxMemoryMb,
+        mount_timeout: mountTimeout,
+        info_timeout: infoTimeout,
+        list_timeout: listTimeout,
+        init_timeout: initTimeout,
+        backup_timeout: backupTimeout,
+        source_size_timeout: sourceSizeTimeout,
+        stats_refresh_interval_minutes: statsRefreshInterval,
+      })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       toast.error(error.message || t('systemSettings.failedToSaveSettings'))
@@ -289,6 +303,7 @@ const SystemSettingsTab: React.FC = () => {
       const response = await settingsAPI.refreshAllStats()
       const data = response.data
       toast.success(translateBackendKey(data.message) || t('systemSettings.statsRefreshStarted'))
+      trackSystem(EventAction.START, { section: 'system_settings', operation: 'refresh_stats' })
 
       // Poll for completion by checking last_stats_refresh
       const startTime = Date.now()

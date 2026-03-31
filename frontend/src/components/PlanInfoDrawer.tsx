@@ -3,7 +3,7 @@ import { Box, Drawer, Typography, Divider, IconButton, Chip } from '@mui/materia
 import { X, Check, Sparkles, Clock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Plan, PLAN_COLOR, PLAN_LABEL } from '../core/features'
-import { useMatomo } from '../hooks/useMatomo'
+import { useAnalytics } from '../hooks/useAnalytics'
 
 interface PlanInfoDrawerProps {
   open: boolean
@@ -16,7 +16,7 @@ const UPGRADE_PLANS: Plan[] = ['pro', 'enterprise']
 
 export default function PlanInfoDrawer({ open, onClose, plan, features }: PlanInfoDrawerProps) {
   const { t } = useTranslation()
-  const { track, EventCategory } = useMatomo()
+  const { track, EventCategory } = useAnalytics()
   const [selectedPlan, setSelectedPlan] = useState<Plan>(
     UPGRADE_PLANS.includes(plan) ? plan : UPGRADE_PLANS[0]
   )
@@ -112,7 +112,7 @@ export default function PlanInfoDrawer({ open, onClose, plan, features }: PlanIn
                 key={p}
                 onClick={() => {
                   setSelectedPlan(p)
-                  track(EventCategory.PLAN, 'ViewPlan', p)
+                  track(EventCategory.PLAN, 'ViewPlan', { plan: p })
                 }}
                 sx={{
                   p: 1,

@@ -18,7 +18,7 @@ import {
 } from './wizard'
 import FileExplorerDialog from './FileExplorerDialog'
 import { sshKeysAPI } from '../services/api'
-import { useMatomo } from '../hooks/useMatomo'
+import { useAnalytics } from '../hooks/useAnalytics'
 
 interface SSHConnection {
   id: number
@@ -87,7 +87,7 @@ const RestoreWizard = ({
   repositoryType,
   onRestore,
 }: RestoreWizardProps) => {
-  const { track, EventCategory, EventAction } = useMatomo()
+  const { track, EventCategory, EventAction } = useAnalytics()
   const { t } = useTranslation()
   const [activeStep, setActiveStep] = useState(0)
   const [wizardState, setWizardState] = useState<WizardState>(initialState)
@@ -216,7 +216,7 @@ const RestoreWizard = ({
       custom_path: wizardState.restoreStrategy === 'custom' ? wizardState.customPath : null,
     }
 
-    track(EventCategory.ARCHIVE, EventAction.DOWNLOAD, 'restore-wizard')
+    track(EventCategory.ARCHIVE, EventAction.DOWNLOAD, { source: 'restore_wizard' })
 
     onRestore(data)
   }

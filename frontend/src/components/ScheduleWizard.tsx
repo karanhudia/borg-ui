@@ -19,7 +19,7 @@ import {
   WizardStepScheduleReview,
 } from './wizard/schedule'
 import { convertCronToUTC, convertCronToLocal } from '../utils/dateUtils'
-import { useMatomo } from '../hooks/useMatomo'
+import { useAnalytics } from '../hooks/useAnalytics'
 import { ScriptParameter } from './ScriptParameterInputs'
 import { Repository } from '../types'
 
@@ -145,7 +145,7 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
   scripts,
   onSubmit,
 }) => {
-  const { track, EventCategory, EventAction } = useMatomo()
+  const { track, EventCategory, EventAction } = useAnalytics()
   const { t } = useTranslation()
   const [activeStep, setActiveStep] = useState(0)
   const [wizardState, setWizardState] = useState<WizardState>(initialState)
@@ -290,11 +290,12 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
       prune_keep_yearly: wizardState.pruneKeepYearly,
     }
 
-    track(
-      EventCategory.BACKUP,
-      mode === 'create' ? EventAction.CREATE : EventAction.EDIT,
-      `schedule-wizard-${mode}`
-    )
+    track(EventCategory.BACKUP, mode === 'create' ? EventAction.CREATE : EventAction.EDIT, {
+      entity: 'schedule',
+      source: 'wizard',
+      mode,
+      repository_count: wizardState.repositoryIds.length,
+    })
 
     onSubmit(data)
     onClose()

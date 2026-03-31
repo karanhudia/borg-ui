@@ -18,7 +18,7 @@ import { Plus, Edit, Trash2, Play, CheckCircle, XCircle, Copy } from 'lucide-rea
 import { scheduleAPI, repositoriesAPI, backupAPI, scriptsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import RepositoryCell from '../components/RepositoryCell'
-import { useMatomo } from '../hooks/useMatomo'
+import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
 import {
   formatDate,
@@ -97,7 +97,7 @@ const Schedule: React.FC = () => {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const location = useLocation()
-  const { track, EventCategory, EventAction } = useMatomo()
+  const { track, EventCategory, EventAction } = useAnalytics()
   const { user } = useAuth()
 
   // Determine current tab from URL
@@ -203,7 +203,7 @@ const Schedule: React.FC = () => {
       toast.success(t('schedule.toasts.jobCreated'))
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
-      track(EventCategory.BACKUP, EventAction.CREATE, 'schedule')
+      track(EventCategory.BACKUP, EventAction.CREATE, { entity: 'schedule' })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -222,7 +222,7 @@ const Schedule: React.FC = () => {
       toast.success(t('schedule.toasts.jobUpdated'))
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
-      track(EventCategory.BACKUP, EventAction.EDIT, 'schedule')
+      track(EventCategory.BACKUP, EventAction.EDIT, { entity: 'schedule' })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -240,7 +240,7 @@ const Schedule: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
       setDeleteConfirmJob(null)
-      track(EventCategory.BACKUP, EventAction.DELETE, 'schedule')
+      track(EventCategory.BACKUP, EventAction.DELETE, { entity: 'schedule' })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -252,12 +252,16 @@ const Schedule: React.FC = () => {
 
   // Toggle job mutation
   const toggleJobMutation = useMutation({
-    mutationFn: scheduleAPI.toggleScheduledJob,
-    onSuccess: () => {
+    mutationFn: (job: ScheduledJob) => scheduleAPI.toggleScheduledJob(job.id),
+    onSuccess: (_response, job) => {
       toast.success(t('schedule.toasts.jobStatusUpdated'))
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
-      track(EventCategory.BACKUP, EventAction.EDIT, 'schedule-toggle')
+      track(EventCategory.BACKUP, EventAction.EDIT, {
+        entity: 'schedule',
+        operation: 'toggle',
+        enabled: !job.enabled,
+      })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -269,13 +273,17 @@ const Schedule: React.FC = () => {
 
   // Run job now mutation
   const runJobNowMutation = useMutation({
-    mutationFn: scheduleAPI.runScheduledJobNow,
-    onSuccess: () => {
+    mutationFn: (job: ScheduledJob) => scheduleAPI.runScheduledJobNow(job.id),
+    onSuccess: (_response, job) => {
       toast.success(t('schedule.toasts.jobStarted'))
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['backup-status'] })
       queryClient.invalidateQueries({ queryKey: ['backup-jobs-scheduled'] })
-      track(EventCategory.BACKUP, EventAction.START, 'schedule-manual-run')
+      track(EventCategory.BACKUP, EventAction.START, {
+        entity: 'schedule',
+        trigger: 'manual',
+        repository_count: job.repository_ids?.length || (job.repository_id ? 1 : 0),
+      })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -287,12 +295,16 @@ const Schedule: React.FC = () => {
 
   // Duplicate job mutation
   const duplicateJobMutation = useMutation({
-    mutationFn: scheduleAPI.duplicateScheduledJob,
-    onSuccess: () => {
+    mutationFn: (job: ScheduledJob) => scheduleAPI.duplicateScheduledJob(job.id),
+    onSuccess: (_response, job) => {
       toast.success(t('schedule.toasts.jobDuplicated'))
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
-      track(EventCategory.BACKUP, EventAction.CREATE, 'schedule-duplicate')
+      track(EventCategory.BACKUP, EventAction.CREATE, {
+        entity: 'schedule',
+        source: 'duplicate',
+        repository_count: job.repository_ids?.length || (job.repository_id ? 1 : 0),
+      })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -324,17 +336,17 @@ const Schedule: React.FC = () => {
   }
 
   const handleToggleJob = (job: ScheduledJob) => {
-    toggleJobMutation.mutate(job.id)
+    toggleJobMutation.mutate(job)
   }
 
   const handleRunJobNow = (job: ScheduledJob) => {
     if (window.confirm(`Run "${job.name}" now?`)) {
-      runJobNowMutation.mutate(job.id)
+      runJobNowMutation.mutate(job)
     }
   }
 
   const handleDuplicateJob = (job: ScheduledJob) => {
-    duplicateJobMutation.mutate(job.id)
+    duplicateJobMutation.mutate(job)
   }
 
   // Wizard handlers

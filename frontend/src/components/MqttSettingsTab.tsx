@@ -21,10 +21,12 @@ import { Save, Wifi, Lock, Key, Shield, AlertTriangle, Eye, EyeOff } from 'lucid
 import { toast } from 'react-hot-toast'
 import { settingsAPI } from '../services/api'
 import { translateBackendKey } from '../utils/translateBackendKey'
+import { useAnalytics } from '../hooks/useAnalytics'
 
 const MqttSettingsTab: React.FC = () => {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const { trackSystem, EventAction } = useAnalytics()
 
   // MQTT form state
   const [mqttEnabled, setMqttEnabled] = useState(false)
@@ -131,6 +133,13 @@ const MqttSettingsTab: React.FC = () => {
       toast.success(t('mqttSettings.savedSuccessfully'))
       setHasChanges(false)
       setPasswordChanged(false)
+      trackSystem(EventAction.EDIT, {
+        section: 'mqtt',
+        enabled: mqttEnabled,
+        tls_enabled: mqttTlsEnabled,
+        qos: mqttQos,
+        retain: mqttRetain,
+      })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {

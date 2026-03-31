@@ -33,6 +33,7 @@ import {
 } from 'lucide-react'
 import { formatDistanceToNow, differenceInDays, startOfDay, addDays, format } from 'date-fns'
 import { useTheme } from '../context/ThemeContext'
+import { useAnalytics } from '../hooks/useAnalytics'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -921,6 +922,7 @@ export default function DashboardV3() {
   const navigate = useNavigate()
   const { mode } = useTheme()
   const { t } = useTranslation()
+  const { trackNavigation, EventAction } = useAnalytics()
   const T = makeT(mode === 'dark')
 
   const glass = {
@@ -960,7 +962,16 @@ export default function DashboardV3() {
       <Alert
         severity="error"
         action={
-          <Button size="small" onClick={() => refetch()}>
+          <Button
+            size="small"
+            onClick={() => {
+              trackNavigation(EventAction.VIEW, {
+                section: 'dashboard',
+                operation: 'retry_refresh',
+              })
+              refetch()
+            }}
+          >
             {t('dashboard.error.retry')}
           </Button>
         }
@@ -1089,7 +1100,13 @@ export default function DashboardV3() {
           <Button
             size="small"
             variant="text"
-            onClick={() => refetch()}
+            onClick={() => {
+              trackNavigation(EventAction.VIEW, {
+                section: 'dashboard',
+                operation: 'refresh',
+              })
+              refetch()
+            }}
             sx={{
               color: T.textMuted,
               fontSize: '0.68rem',
@@ -1356,7 +1373,14 @@ export default function DashboardV3() {
                   return (
                     <Box
                       key={repo.id}
-                      onClick={() => navigate('/repositories')}
+                      onClick={() => {
+                        trackNavigation(EventAction.VIEW, {
+                          section: 'dashboard',
+                          destination: 'repositories',
+                          source: 'repository_health',
+                        })
+                        navigate('/repositories')
+                      }}
                       sx={{
                         bgcolor: cs.dim,
                         border: `1px solid ${cs.color}30`,
@@ -1479,7 +1503,14 @@ export default function DashboardV3() {
                   size="small"
                   variant="text"
                   endIcon={<ArrowRight size={12} />}
-                  onClick={() => navigate('/activity')}
+                  onClick={() => {
+                    trackNavigation(EventAction.VIEW, {
+                      section: 'dashboard',
+                      destination: 'activity',
+                      source: 'recent_activity',
+                    })
+                    navigate('/activity')
+                  }}
                   sx={{
                     fontSize: '0.65rem',
                     color: T.textMuted,

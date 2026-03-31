@@ -13,6 +13,7 @@ import { Clock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import BackupJobsTable from './BackupJobsTable'
 import RepoSelect from './RepoSelect'
+import { useAnalytics } from '../hooks/useAnalytics'
 
 interface ScheduledJob {
   id: number
@@ -95,6 +96,7 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
   onFilterRepositoryChange,
   onFilterStatusChange,
 }) => {
+  const { trackNavigation, EventAction } = useAnalytics()
   // Apply filters
   const filteredBackupJobs = backupJobs.filter((job: BackupJob) => {
     if (filterSchedule !== 'all' && job.scheduled_job_id !== filterSchedule) return false
@@ -137,7 +139,15 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
             <Select
               value={filterSchedule}
               label="Schedule"
-              onChange={(e) => onFilterScheduleChange(e.target.value as number | 'all')}
+              onChange={(e) => {
+                const value = e.target.value as number | 'all'
+                onFilterScheduleChange(value)
+                trackNavigation(EventAction.FILTER, {
+                  section: 'backup_history',
+                  filter_kind: 'schedule',
+                  filter_value: value,
+                })
+              }}
             >
               <MenuItem value="all">{t('backupHistory.allSchedules')}</MenuItem>
               {scheduledJobs.map((job: ScheduledJob) => (
@@ -151,7 +161,14 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
           <RepoSelect
             repositories={repositories}
             value={filterRepository}
-            onChange={(v) => onFilterRepositoryChange(v as string)}
+            onChange={(v) => {
+              onFilterRepositoryChange(v as string)
+              trackNavigation(EventAction.FILTER, {
+                section: 'backup_history',
+                filter_kind: 'repository',
+                filter_value: v as string,
+              })
+            }}
             valueKey="path"
             size="small"
             label="Repository"
@@ -166,7 +183,15 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
             <Select
               value={filterStatus}
               label="Status"
-              onChange={(e) => onFilterStatusChange(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value
+                onFilterStatusChange(value)
+                trackNavigation(EventAction.FILTER, {
+                  section: 'backup_history',
+                  filter_kind: 'status',
+                  filter_value: value,
+                })
+              }}
             >
               <MenuItem value="all">{t('backupHistory.allStatus')}</MenuItem>
               <MenuItem value="completed">{t('backupHistory.completed')}</MenuItem>

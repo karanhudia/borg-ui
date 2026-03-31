@@ -6,7 +6,7 @@ import VersionChip from './VersionChip'
 import PlanBadge from './PlanBadge'
 import PlanInfoDrawer from './PlanInfoDrawer'
 import { usePlan } from '../hooks/usePlan'
-import { useMatomo } from '../hooks/useMatomo'
+import { useAnalytics } from '../hooks/useAnalytics'
 
 interface SystemInfo {
   app_version: string
@@ -21,11 +21,11 @@ interface SidebarVersionInfoProps {
 export default function SidebarVersionInfo({ systemInfo }: SidebarVersionInfoProps) {
   const { t } = useTranslation()
   const { plan, features, isLoading: isPlanLoading } = usePlan()
-  const { track, EventCategory } = useMatomo()
+  const { track, EventCategory } = useAnalytics()
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   const handleBadgeClick = () => {
-    track(EventCategory.PLAN, 'OpenDrawer', plan)
+    track(EventCategory.PLAN, 'OpenDrawer', { plan })
     setDrawerOpen(true)
   }
 

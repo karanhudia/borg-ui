@@ -24,6 +24,7 @@ import { Save, Trash2, AlertTriangle, Server, Zap, Database } from 'lucide-react
 import { toast } from 'react-hot-toast'
 import { settingsAPI } from '../services/api'
 import { translateBackendKey } from '../utils/translateBackendKey'
+import { useAnalytics } from '../hooks/useAnalytics'
 
 interface CacheStats {
   backend: string
@@ -45,6 +46,7 @@ interface CacheStats {
 const CacheManagementTab: React.FC = () => {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const { trackSystem, EventAction } = useAnalytics()
 
   // Local state for form values
   const [ttlMinutes, setTtlMinutes] = useState(120)
@@ -97,6 +99,12 @@ const CacheManagementTab: React.FC = () => {
       const message = response.data?.message || 'Cache settings saved successfully'
       toast.success(message, { duration: 5000 })
       setHasChanges(false)
+      trackSystem(EventAction.EDIT, {
+        section: 'cache',
+        ttl_minutes: ttlMinutes,
+        max_size_mb: maxSizeMb,
+        backend: redisUrl ? 'redis' : 'memory',
+      })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -116,6 +124,7 @@ const CacheManagementTab: React.FC = () => {
       const clearedCount = response.data?.cleared_count || 0
       toast.success(t('cache.clearSuccess', { count: clearedCount }))
       setClearDialogOpen(false)
+      trackSystem(EventAction.DELETE, { section: 'cache', operation: 'clear_cache' })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -154,6 +163,12 @@ const CacheManagementTab: React.FC = () => {
         toast.success(t('cache.redisConnected', { info: data.connection_info }), { duration: 5000 })
         queryClient.invalidateQueries({ queryKey: ['cache-stats'] })
         setHasChanges(false)
+        trackSystem(EventAction.TEST, {
+          section: 'cache',
+          operation: 'test_connection',
+          backend: 'redis',
+          success: true,
+        })
       } else {
         toast.error(
           t('cache.redisConnectFailed', {
@@ -163,12 +178,24 @@ const CacheManagementTab: React.FC = () => {
             duration: 5000,
           }
         )
+        trackSystem(EventAction.TEST, {
+          section: 'cache',
+          operation: 'test_connection',
+          backend: 'redis',
+          success: false,
+        })
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       const errorMsg =
         translateBackendKey(error.response?.data?.detail) || t('cache.connectionTestFailed')
       toast.error(errorMsg, { duration: 5000 })
+      trackSystem(EventAction.TEST, {
+        section: 'cache',
+        operation: 'test_connection',
+        backend: 'redis',
+        success: false,
+      })
     } finally {
       setTestingConnection(false)
     }
