@@ -15,9 +15,9 @@ This guide covers setting up a development environment for Borg Web UI with hot 
 ## Prerequisites
 
 - **Git** - Version control
-- **Docker & Docker Compose** - For Redis and optional full-stack development
-- **Python 3.11+** - Backend development
+- **Docker & Docker Compose** - Required (backend runs in Docker to access borg/borg2 binaries)
 - **Node.js 20.19+** - Frontend development (Vite requires this version)
+- **Python 3.10+** - Optional, only needed for running tests locally
 
 ---
 
@@ -30,50 +30,66 @@ git clone https://github.com/karanhudia/borg-ui.git
 cd borg-ui
 ```
 
+### Configure Ports (Optional)
+
+Copy `.env.example` to `.env` if it exists, or create a `.env` file:
+
+```bash
+# .env
+PUID=501          # your user ID (id -u)
+PGID=20           # your group ID (id -g)
+PORT=8082         # production backend port
+DEV_PORT=8083     # dev backend port (must differ from PORT)
+TZ=Asia/Kolkata   # your timezone
+```
+
+If `.env` is absent, defaults are `PORT=8082` and `DEV_PORT=8083`.
+
 ---
 
-## Development Setup
+## Development Mode
 
-### Option 1: All-in-One Script (Recommended)
-
-Run everything with one command:
+### Start the Dev Environment
 
 ```bash
 ./scripts/dev.sh
 ```
 
 This script:
-1. Starts Redis in Docker
-2. Creates local data directories (`.local-data/`)
-3. Starts the backend with `uvicorn --reload`
-4. Starts the frontend with `vite` dev server
+1. Reads `DEV_PORT` from `.env` (default `8083`)
+2. Starts the backend and Redis in Docker (`borg-web-ui-dev`, `borg-redis-dev`) — isolated from any running production containers
+3. Mounts your local `./app` source into the container for hot reload — no image rebuild needed on code changes
+4. Starts the Vite frontend dev server locally
 
 **Access:**
-- Frontend: [http://localhost:7879](http://localhost:7879)
-- Backend API: [http://localhost:8081](http://localhost:8081)
-- Redis: localhost:6379
+- Frontend (hot reload): [http://localhost:7879](http://localhost:7879)
+- Dev backend API: `http://localhost:DEV_PORT` (default `8083`)
+- Dev Redis: `localhost:6380`
 
-**Stop:** Press `Ctrl+C`
+**Stop:** Press `Ctrl+C` — containers are torn down automatically.
 
 ---
 
-### Option 2: Run Frontend and Backend Separately
+## Production Testing
 
-For more control, run each service in a separate terminal:
-
-**Terminal 1 - Backend:**
+To build and test the full production image locally (frontend bundled, gunicorn, no hot reload):
 
 ```bash
-./scripts/backend-dev.sh
+docker-compose up -d --build
 ```
 
-**Terminal 2 - Frontend:**
+**Access:** [http://localhost:PORT](http://localhost:PORT) (default `8082`)
 
-```bash
-cd frontend
-npm install  # First time only
-npm run dev
-```
+Production and dev environments use different container names and ports, so they can run simultaneously:
+
+| | Production | Development |
+|---|---|---|
+| Backend container | `borg-web-ui` | `borg-web-ui-dev` |
+| Redis container | `borg-redis` | `borg-redis-dev` |
+| Backend port | `PORT` (default `8082`) | `DEV_PORT` (default `8083`) |
+| Redis port | `6379` | `6380` |
+| Frontend | built into image | Vite dev server on `7879` |
+| Data | `borg_data` Docker volume | `.local-data/` folder |
 
 ---
 
@@ -81,25 +97,26 @@ npm run dev
 
 ```
 borg-ui/
-├── app/                    # Python backend (FastAPI)
-│   ├── main.py            # Application entry point
-│   ├── routers/           # API endpoints
-│   ├── services/          # Business logic
-│   └── models/            # Database models
-├── frontend/              # React frontend
+├── app/                      # Python backend (FastAPI)
+│   ├── main.py               # Application entry point
+│   ├── api/                  # API route handlers
+│   ├── core/                 # Borg wrappers (borg.py, borg2.py)
+│   ├── services/             # Business logic
+│   └── database/             # Models and migrations
+├── frontend/                 # React frontend
 │   ├── src/
-│   │   ├── components/    # Reusable components
-│   │   ├── pages/         # Page components
-│   │   ├── hooks/         # Custom React hooks
-│   │   ├── services/      # API client
-│   │   └── utils/         # Utility functions
+│   │   ├── components/       # Reusable components
+│   │   ├── pages/            # Page components
+│   │   ├── hooks/            # Custom React hooks
+│   │   ├── services/         # API client
+│   │   └── utils/            # Utility functions
 │   ├── package.json
 │   └── vite.config.ts
 ├── scripts/
-│   ├── dev.sh             # Full dev environment script
-│   ├── backend-dev.sh     # Backend-only dev script
-│   └── release.sh         # Release automation
-├── docker-compose.yml     # Production compose
+│   ├── dev.sh                # Full dev environment (recommended)
+│   └── backend-dev.sh        # Backend-only helper
+├── docker-compose.yml        # Production compose
+├── docker-compose.dev.yml    # Dev compose (standalone, not an override)
 └── Dockerfile
 ```
 
@@ -107,32 +124,25 @@ borg-ui/
 
 ## Environment Variables
 
-The development scripts automatically set these environment variables:
+The dev environment sets these automatically via `docker-compose.dev.yml`:
 
 | Variable | Dev Value | Description |
 |----------|-----------|-------------|
-| `DATA_DIR` | `.local-data` | Local data directory |
-| `DATABASE_URL` | `sqlite:///.local-data/borg.db` | SQLite database path |
+| `DATA_DIR` | `/data` (→ `.local-data/`) | Data directory inside container |
+| `DATABASE_URL` | `sqlite:////data/borg.db` | SQLite database path |
 | `SECRET_KEY` | `dev-secret-key-not-for-production` | JWT signing key |
-| `ENVIRONMENT` | `development` | App environment |
-| `PORT` | `8081` | Backend port |
-| `REDIS_HOST` | `localhost` | Redis host |
-| `REDIS_PORT` | `6379` | Redis port |
+| `PORT` | value of `DEV_PORT` from `.env` | Backend port inside container |
+
+The Vite dev server proxies `/api/*` requests to the backend — `dev.sh` configures this automatically via `VITE_PROXY_TARGET`.
 
 ---
 
 ## Frontend Development
 
-### Install Dependencies
-
-```bash
-cd frontend
-npm install
-```
-
 ### Available Scripts
 
 ```bash
+cd frontend
 npm run dev          # Start dev server with HMR
 npm run build        # Production build
 npm run typecheck    # TypeScript type checking
@@ -141,47 +151,27 @@ npm run format       # Prettier formatting
 npm run format:check # Check formatting
 ```
 
-### Proxy Configuration
-
-The Vite dev server proxies API requests to the backend. See `frontend/vite.config.ts`:
-
-```typescript
-proxy: {
-  '/api': {
-    target: 'http://localhost:8081',
-    changeOrigin: true,
-  },
-}
-```
-
 ---
 
 ## Backend Development
 
-### Virtual Environment (Optional but Recommended)
-
-```bash
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-### Run Backend Manually
-
-```bash
-export DATA_DIR=".local-data"
-export DATABASE_URL="sqlite:///.local-data/borg.db"
-export SECRET_KEY="dev-secret-key"
-export ENVIRONMENT="development"
-
-python3 -m uvicorn app.main:app --reload --port 8081
-```
-
 ### API Documentation
 
-With the backend running, access:
-- Swagger UI: [http://localhost:8081/api/docs](http://localhost:8081/api/docs)
-- ReDoc: [http://localhost:8081/api/redoc](http://localhost:8081/api/redoc)
+With the dev backend running, access:
+- Swagger UI: `http://localhost:DEV_PORT/api/docs`
+- ReDoc: `http://localhost:DEV_PORT/api/redoc`
+
+### Exec into the dev container
+
+```bash
+docker exec -it borg-web-ui-dev bash
+```
+
+Both borg binaries are available inside:
+```bash
+borg --version    # Borg 1.x
+borg2 --version   # Borg 2.x
+```
 
 ---
 
@@ -197,36 +187,6 @@ pytest
 pytest --cov=app --cov-report=html
 ```
 
-### Frontend Type Checking
-
-```bash
-cd frontend
-npm run typecheck
-```
-
----
-
-## Making a Release
-
-Use the release script:
-
-```bash
-./scripts/release.sh v1.2.3
-```
-
-This script:
-1. Validates the version format (vX.Y.Z)
-2. Updates the VERSION file
-3. Runs tests and type checking
-4. Commits and tags the release
-5. Pushes to GitHub (triggers Docker build)
-
-Or from the frontend directory:
-
-```bash
-npm run release
-```
-
 ---
 
 ## Troubleshooting
@@ -236,47 +196,25 @@ npm run release
 If you see `Vite requires Node.js version 20.19+`:
 
 ```bash
-# Check your version
-node --version
-
-# Update Node.js (using nvm)
-nvm install 20
+node --version      # check current version
+nvm install 20      # install via nvm
 nvm use 20
 ```
 
 ### Port Already in Use
 
 ```bash
-# Find process using port 8081
-lsof -i :8081
+# Check what is on the dev port
+lsof -i :8083
 
-# Kill it
-kill -9 <PID>
+# Or change DEV_PORT in .env
+DEV_PORT=8084
 ```
 
-### Redis Connection Failed
+### Backend changes not reloading
 
-Make sure Redis is running:
+Uvicorn watches `/app/app` inside the container, which is your local `./app` directory. If reload isn't triggering, check that the file was saved and the dev container is running:
 
 ```bash
-# Start Redis via Docker
-docker run -d --name redis -p 6379:6379 redis:7-alpine
-
-# Or via the dev script (starts automatically)
-./scripts/dev.sh
+docker logs -f borg-web-ui-dev
 ```
-
-### Backend Can't Find Borg
-
-The backend requires Borg Backup installed. For local development without Borg:
-- Use Docker Compose dev mode (Option 3) which has Borg pre-installed
-- Or install Borg locally: `brew install borgbackup` (macOS) or `apt install borgbackup` (Ubuntu)
-
----
-
-## Contributing
-
-See [CONTRIBUTING.md](https://github.com/karanhudia/borg-ui/blob/main/.github/CONTRIBUTING.md) for:
-- Code style guidelines
-- Pull request process
-- Issue reporting

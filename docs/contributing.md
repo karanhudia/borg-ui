@@ -38,13 +38,16 @@ git checkout -b feature/your-feature-name
 
 ```bash
 # Backend tests
-python3 -m pytest tests/
+pytest
 
-# Frontend build
-cd frontend && npm run build
+# Frontend type checking
+cd frontend && npm run typecheck
 
-# Start the application
-docker compose up -d --build
+# Start dev environment (hot reload)
+./scripts/dev.sh
+
+# Or test the full production build
+docker-compose up -d --build
 ```
 
 ### Submit a Pull Request
@@ -101,43 +104,24 @@ Documentation files are in the `docs/` directory.
 
 ## Development Setup
 
-### Backend Development
+See the full [Development Guide](development.md) for detailed instructions. Quick summary:
 
 ```bash
-# Install dependencies
-pip3 install -r requirements.txt
-
-# Run development server
-python3 -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8081
+# Start dev environment (backend in Docker, frontend local, both hot-reload)
+./scripts/dev.sh
 ```
 
-### Frontend Development
+- Frontend: [http://localhost:7879](http://localhost:7879)
+- Dev backend: `http://localhost:DEV_PORT` (default `8083`, set in `.env`)
 
 ```bash
-cd frontend
-
-# Install dependencies
-npm install
-
-# Run development server
-npm start
-
-# Build for production
-npm run build
+# Test the production build
+docker-compose up -d --build
 ```
 
-### Docker Development
+- Production: `http://localhost:PORT` (default `8082`, set in `.env`)
 
-```bash
-# Build and run
-docker compose up -d --build
-
-# View logs
-docker compose logs -f
-
-# Stop
-docker compose down
-```
+Both can run simultaneously — they use separate container names and ports.
 
 ## Reporting Issues
 
