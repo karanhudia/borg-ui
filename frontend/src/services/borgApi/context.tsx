@@ -38,6 +38,7 @@ export function BorgApiProvider({ repo, children }: BorgApiProviderProps) {
  * useBorgApi — consume the versioned API client for the current repo.
  * Must be called inside a <BorgApiProvider>.
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function useBorgApi(): BorgApiClient {
   const client = useContext(BorgApiContext)
   if (!client) {

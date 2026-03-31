@@ -72,7 +72,7 @@ const Archives: React.FC = () => {
         borgVersion: getBorgVersion(selectedRepository),
       })
     }
-  }, [archivesError, selectedRepositoryId, selectedRepository?.name])
+  }, [archivesError, selectedRepositoryId, selectedRepository])
 
   // Get repository info for statistics
   const {
@@ -103,7 +103,7 @@ const Archives: React.FC = () => {
         borgVersion: getBorgVersion(selectedRepository),
       })
     }
-  }, [repoInfoError, selectedRepositoryId, selectedRepository?.name])
+  }, [repoInfoError, selectedRepositoryId, selectedRepository])
 
   // Delete archive mutation
   const deleteArchiveMutation = useMutation({

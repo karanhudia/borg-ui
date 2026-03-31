@@ -50,7 +50,7 @@ describe('ArchiveContentsDialog', () => {
     vi.clearAllMocks()
     mockGetArchiveContents = vi.fn()
     vi.mocked(BorgApiClient).mockImplementation(function () {
-      return { getArchiveContents: mockGetArchiveContents } as any
+      return { getArchiveContents: mockGetArchiveContents } as unknown as BorgApiClient
     })
   })
 
