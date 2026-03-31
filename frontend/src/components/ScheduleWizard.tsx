@@ -47,14 +47,6 @@ export interface ScheduledJob {
   prune_keep_yearly: number
 }
 
-export interface Repository {
-  id: number
-  name: string
-  path: string
-  mode?: string
-  [key: string]: unknown
-}
-
 export interface Script {
   id: number
   name: string

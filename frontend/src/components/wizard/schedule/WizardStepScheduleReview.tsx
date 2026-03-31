@@ -2,7 +2,8 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Stack, Card, CardContent, Typography, Box, Chip, Alert, Divider } from '@mui/material'
 import { CheckCircle, Calendar, Code, Wrench } from 'lucide-react'
-import { Repository, Script } from '../../ScheduleWizard'
+import { Repository } from '../../../types'
+import { Script } from '../../ScheduleWizard'
 
 interface WizardStepScheduleReviewProps {
   data: {
