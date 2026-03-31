@@ -142,3 +142,4 @@ trivy-*.txt
 trivy-*.sarif
 .planning/
 
+.worktrees/
