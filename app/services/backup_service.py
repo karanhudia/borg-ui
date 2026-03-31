@@ -15,6 +15,7 @@ from app.services.notification_service import notification_service
 from app.services.script_executor import execute_script
 from app.services.script_library_executor import ScriptLibraryExecutor
 from app.services.mqtt_service import mqtt_service
+from app.utils.ssh_utils import resolve_repo_ssh_key_file
 
 logger = structlog.get_logger()
 
@@ -431,140 +432,14 @@ class BackupService:
         return f"{bytes_value:.2f} PB"
 
     async def _calculate_source_size(self, source_paths: list[str], exclude_patterns: list[str] = None) -> int:
+        """Calculate total size of source directories in bytes.
+
+        Delegates to calculate_path_size_bytes with the configured timeout.
+        Supports local paths and SSH URLs; applies Borg-compatible exclude patterns.
         """
-        Calculate total size of source directories in bytes using du
-        Supports both local paths and SSH URLs (ssh://user@host:port/path)
-        Applies exclude patterns to match Borg's exclusion logic
-
-        Args:
-            source_paths: List of source directory paths
-            exclude_patterns: List of patterns to exclude (same format as Borg excludes)
-
-        Returns:
-            Total size in bytes, or 0 if calculation fails
-        """
-        try:
-            if exclude_patterns is None:
-                exclude_patterns = []
-
-            # Resolve effective timeout (DB setting > env var > config default)
-            source_size_timeout = self._get_operation_timeouts()["source_size_timeout"]
-
-            logger.info("Starting source size calculation",
-                       paths=source_paths,
-                       path_count=len(source_paths),
-                       exclude_patterns=exclude_patterns)
-            total_size = 0
-
-            for path in source_paths:
-                try:
-                    # Check if this is an SSH URL
-                    if path.startswith('ssh://'):
-                        # Parse SSH URL: ssh://user@host:port/path
-                        import re
-                        match = re.match(r'ssh://([^@]+)@([^:]+):(\d+)(/.*)', path)
-                        if match:
-                            username, host, port, remote_path = match.groups()
-
-                            # Build du command with exclude patterns
-                            # -s: summarize, -b: bytes (portable across systems)
-                            du_excludes = ""
-                            for pattern in exclude_patterns:
-                                # Escape single quotes in pattern for shell safety
-                                safe_pattern = pattern.replace("'", "'\\''")
-                                du_excludes += f" --exclude='{safe_pattern}'"
-
-                            # Use SSH to run du on the remote host
-                            cmd = [
-                                "ssh",
-                                "-o", "StrictHostKeyChecking=no",
-                                "-o", "UserKnownHostsFile=/dev/null",
-                                "-o", "LogLevel=ERROR",
-                                "-o", "ConnectTimeout=10",
-                                "-p", port,
-                                f"{username}@{host}",
-                                f"du -sb{du_excludes} {remote_path} 2>/dev/null | cut -f1"
-                            ]
-
-                            process = await asyncio.create_subprocess_exec(
-                                *cmd,
-                                stdout=asyncio.subprocess.PIPE,
-                                stderr=asyncio.subprocess.PIPE
-                            )
-
-                            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=source_size_timeout)
-
-                            if process.returncode == 0:
-                                output = stdout.decode().strip()
-                                if output and output.isdigit():
-                                    path_size = int(output)
-                                    total_size += path_size
-                                    logger.info("Calculated remote directory size", path=path, size=path_size, size_formatted=self._format_bytes(path_size))
-                                else:
-                                    logger.warning("Failed to parse remote directory size", path=path, output=output)
-                            else:
-                                logger.warning("Failed to calculate remote directory size", path=path, stderr=stderr.decode())
-                        else:
-                            logger.warning("Invalid SSH URL format", path=path)
-                    else:
-                        # Local path - use local du
-                        # -s: summarize (total for directory)
-                        # -B1: block size of 1 byte (for precise byte count)
-                        # --exclude: exclude patterns (same as Borg patterns)
-                        cmd = ["du", "-s", "-B1"]
-
-                        # Add exclude patterns
-                        for pattern in exclude_patterns:
-                            cmd.extend(["--exclude", pattern])
-
-                        cmd.append(path)
-
-                        process = await asyncio.create_subprocess_exec(
-                            *cmd,
-                            stdout=asyncio.subprocess.PIPE,
-                            stderr=asyncio.subprocess.PIPE
-                        )
-
-                        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=source_size_timeout)
-
-                        if process.returncode == 0:
-                            # Parse output: "1234567\t/path/to/dir"
-                            output = stdout.decode().strip()
-                            if output:
-                                size_str = output.split('\t')[0]
-                                path_size = int(size_str)
-                                total_size += path_size
-                                logger.info("Calculated directory size", path=path, size=path_size, size_formatted=self._format_bytes(path_size))
-                        else:
-                            logger.warning("Failed to calculate directory size", path=path, stderr=stderr.decode())
-
-                except asyncio.TimeoutError:
-                    logger.warning("Timeout while calculating directory size",
-                                 path=path,
-                                 timeout_seconds=source_size_timeout)
-                except Exception as e:
-                    logger.warning("Error calculating directory size",
-                                 path=path,
-                                 error=str(e),
-                                 error_type=type(e).__name__)
-
-            if total_size > 0:
-                logger.info("Total source size calculated successfully",
-                          total_size=total_size,
-                          total_formatted=self._format_bytes(total_size),
-                          paths_processed=len(source_paths))
-            else:
-                logger.warning("Source size calculation returned 0 - all paths failed or were empty",
-                             paths=source_paths,
-                             paths_count=len(source_paths))
-            return total_size
-
-        except Exception as e:
-            logger.error("Failed to calculate total source size",
-                       error=str(e),
-                       error_type=type(e).__name__,
-                       paths=source_paths)
-            return 0
+        from app.utils.fs import calculate_path_size_bytes
+        timeout = self._get_operation_timeouts()["source_size_timeout"]
+        return await calculate_path_size_bytes(source_paths, exclude_patterns, timeout)
 
     async def _calculate_and_update_size_background(self, job_id: int, source_paths: list[str], exclude_patterns: list[str] = None):
         """
@@ -1098,7 +973,7 @@ class BackupService:
         # Remove from tracking
         del self.ssh_mounts[job_id]
 
-    async def execute_backup(self, job_id: int, repository: str, db: Session = None, archive_name: str = None):
+    async def execute_backup(self, job_id: int, repository: str, db: Session = None, archive_name: str = None, skip_hooks: bool = False):
         """Execute backup using borg directly for better control
 
         Args:
@@ -1106,6 +981,8 @@ class BackupService:
             repository: Repository path
             db: Database session (optional, will create new if not provided)
             archive_name: Optional custom archive name (if None, will use default manual-backup naming)
+            skip_hooks: If True, skip pre/post-backup hook execution (used by multi-repo schedules that
+                        manage hook execution explicitly to avoid running scripts twice)
         """
 
         # Use provided session or create a new one
@@ -1297,74 +1174,19 @@ class BackupService:
             actual_repository_path = repository
 
             # Setup SSH-specific configuration if this is an SSH repository
-            from app.database.models import SSHConnection, SSHKey
-
-            ssh_key = None
-            ssh_key_source = None
-
-            if repo_record and repo_record.connection_id:
-                # NEW: Use connection_id to get SSH connection (preferred method)
-                connection = db.query(SSHConnection).filter(
-                    SSHConnection.id == repo_record.connection_id
-                ).first()
-
-                if connection and connection.ssh_key_id:
-                    ssh_key = db.query(SSHKey).filter(SSHKey.id == connection.ssh_key_id).first()
-                    ssh_key_source = f"connection_id={repo_record.connection_id}"
-
-            elif repo_record and repo_record.repository_type == "ssh" and repo_record.ssh_key_id:
-                # FALLBACK: Legacy repos without connection_id (backward compatibility)
-                ssh_key = db.query(SSHKey).filter(SSHKey.id == repo_record.ssh_key_id).first()
-                ssh_key_source = f"legacy ssh_key_id={repo_record.ssh_key_id}"
-
-                logger.warning(
-                    "Using legacy SSH key lookup for repository without connection_id",
-                    repository=actual_repository_path,
-                    ssh_key_id=repo_record.ssh_key_id,
-                    suggestion="Edit this repository in the UI to select an SSH connection"
-                )
-
-            if ssh_key:
-                from cryptography.fernet import Fernet
-                import base64
-                from app.config import settings
-                import tempfile
-
-                # Decrypt private key
-                encryption_key = settings.secret_key.encode()[:32]
-                cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-                private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
-
-                # Ensure private key ends with newline
-                if not private_key.endswith('\n'):
-                    private_key += '\n'
-
-                # Create temporary key file with proper permissions
-                fd, temp_key_file = tempfile.mkstemp(suffix='.key', text=True)
-                try:
-                    os.chmod(temp_key_file, 0o600)
-                    with os.fdopen(fd, 'w') as f:
-                        f.write(private_key)
-                        if not private_key.endswith('\n'):
-                            f.write('\n')
-                except Exception:
-                    os.close(fd)
-                    raise
-
-                # Update SSH command to use the key
+            temp_key_file = resolve_repo_ssh_key_file(repo_record, db)
+            if temp_key_file:
                 ssh_opts = [
                     "-i", temp_key_file,
                     "-o", "StrictHostKeyChecking=no",
                     "-o", "UserKnownHostsFile=/dev/null",
                     "-o", "LogLevel=ERROR",
-                    "-o", "RequestTTY=no",  # Disable TTY allocation to prevent shell initialization output
-                    "-o", "PermitLocalCommand=no"  # Prevent local command execution
+                    "-o", "RequestTTY=no",
+                    "-o", "PermitLocalCommand=no"
                 ]
                 env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
                 logger.info("Using SSH key for remote repository",
-                          source=ssh_key_source,
-                          ssh_key_id=ssh_key.id,
-                          repository=actual_repository_path)
+                            repository=actual_repository_path)
 
                 # Set BORG_REMOTE_PATH if specified (path to borg binary on remote)
                 if repo_record.remote_path:
@@ -1377,7 +1199,7 @@ class BackupService:
             hook_logs = []
 
             # Run pre-backup hooks (script library or inline)
-            if repo_record:
+            if repo_record and not skip_hooks:
                 logger.info("Executing pre-backup hooks", job_id=job_id, repository=repository)
                 hook_result = await self._execute_hooks(
                     db=db,
@@ -1925,7 +1747,7 @@ class BackupService:
 
                 # Run post-backup hooks (script library or inline)
                 post_hook_failed = False
-                if repo_record:
+                if repo_record and not skip_hooks:
                     logger.info("Executing post-backup hooks", job_id=job_id, repository=repository)
                     hook_result = await self._execute_hooks(
                         db=db,
@@ -1990,7 +1812,7 @@ class BackupService:
 
                 # Run post-backup hooks even with warnings (script library or inline)
                 post_hook_failed = False
-                if repo_record:
+                if repo_record and not skip_hooks:
                     logger.info("Executing post-backup hooks (warning case)", job_id=job_id, repository=repository)
                     hook_result = await self._execute_hooks(
                         db=db,
@@ -2089,7 +1911,7 @@ class BackupService:
 
                 # Run post-backup hooks on FAILURE (solves #85!)
                 # Scripts with run_on='failure' or run_on='always' will execute
-                if repo_record:
+                if repo_record and not skip_hooks:
                     logger.info("Executing post-backup hooks (failure case)", job_id=job_id, repository=repository)
                     hook_result = await self._execute_hooks(
                         db=db,

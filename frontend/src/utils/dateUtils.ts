@@ -189,7 +189,7 @@ export const formatTimeRange = (
     if (status === 'running') {
       // Calculate duration from start to now
       const durationMs = Date.now() - start.getTime()
-      const durationSec = Math.floor(durationMs / 1000)
+      const durationSec = Math.max(0, Math.floor(durationMs / 1000))
       return `Running for ${formatDurationSeconds(durationSec)}`
     }
 
@@ -216,7 +216,7 @@ export const formatElapsedTime = (startTime: string | null | undefined): string 
   try {
     const start = new Date(startTime)
     const durationMs = Date.now() - start.getTime()
-    const durationSec = Math.floor(durationMs / 1000)
+    const durationSec = Math.max(0, Math.floor(durationMs / 1000))
 
     return `Running for ${formatDurationSeconds(durationSec)}`
   } catch (error) {

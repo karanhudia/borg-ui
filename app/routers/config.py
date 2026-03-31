@@ -181,7 +181,7 @@ async def import_borgmatic_config(
             # Update repository stats for newly created repositories (non-blocking - don't fail import)
             if not dry_run and combined_result['repositories_created'] > 0:
                 from app.database.models import Repository
-                from app.api.repositories import update_repository_stats
+                from app.core.borg_router import BorgRouter
                 import structlog
                 logger = structlog.get_logger()
 
@@ -189,7 +189,7 @@ async def import_borgmatic_config(
                 repositories = db.query(Repository).order_by(Repository.id.desc()).limit(combined_result['repositories_created']).all()
                 for repo in repositories:
                     try:
-                        await update_repository_stats(repo, db)
+                        await BorgRouter(repo).update_stats(db)
                     except Exception as e:
                         # Log but don't fail the import - stats can be updated later
                         logger.warning("Failed to update repository stats after import",
@@ -210,7 +210,7 @@ async def import_borgmatic_config(
             # Update repository stats for newly created repositories (non-blocking - don't fail import)
             if not dry_run and result.get('repositories_created', 0) > 0:
                 from app.database.models import Repository
-                from app.api.repositories import update_repository_stats
+                from app.core.borg_router import BorgRouter
                 import structlog
                 logger = structlog.get_logger()
 
@@ -218,7 +218,7 @@ async def import_borgmatic_config(
                 repositories = db.query(Repository).order_by(Repository.id.desc()).limit(result['repositories_created']).all()
                 for repo in repositories:
                     try:
-                        await update_repository_stats(repo, db)
+                        await BorgRouter(repo).update_stats(db)
                     except Exception as e:
                         # Log but don't fail the import - stats can be updated later
                         logger.warning("Failed to update repository stats after import",

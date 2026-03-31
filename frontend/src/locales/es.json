@@ -150,16 +150,82 @@
       "neverBackedUp": "Nunca respaldado",
       "archives": "archivos",
       "neverChecked": "Nunca comprobado",
-      "neverCompacted": "Nunca compactado"
+      "neverCompacted": "Nunca compactado",
+      "dimensionLabels": {
+        "backup": "BACKUP",
+        "check": "CHECK",
+        "compact": "COMPACT"
+      },
+      "archiveCountShort": "{{count}} arx"
     },
     "noRepositories": "No hay repositorios configurados. ¡Crea tu primer repositorio para empezar a hacer copias de seguridad!",
+    "noRepositoriesShort": "Sin repositorios",
     "moreRepositories": "+{{count}} más repositorios",
     "moreAlerts": "+{{count}} más alertas",
     "moreScheduled": "+{{count}} más programados",
+    "resources": "Recursos",
+    "memAbbr": "MEM",
+    "diskAbbr": "DISCO",
     "recentActivity": {
       "title": "Actividad reciente",
       "empty": "Sin actividad reciente",
-      "viewAll": "Ver toda la actividad"
+      "emptyRecorded": "Aún no se ha registrado actividad",
+      "viewAll": "Ver toda la actividad",
+      "fullLog": "Registro completo",
+      "last14Days": "Actividad — últimos 14 días"
+    },
+    "storageDonut": {
+      "archivesCount": "{{count}} archivos",
+      "noData": "Sin datos",
+      "dedupRatio": "Ratio de dedup."
+    },
+    "successDonut": {
+      "label": "Éxito en 30 días",
+      "passed": "correctos",
+      "failed": "fallidos"
+    },
+    "scheduleBadge": {
+      "noSchedule": "Sin programación automática",
+      "manual": "manual",
+      "paused": "pausado",
+      "scheduled": "prog.",
+      "now": "ahora",
+      "pausedTitle": "Pausado: {{name}}",
+      "pausedTitleGeneric": "Programación pausada",
+      "nextRunTitle": "{{name}} — próxima ejecución {{label}}",
+      "nextRunTitleGeneric": "Próxima ejecución en {{label}}"
+    },
+    "activityTimeline": {
+      "ariaLabel": "Actividad de backup en los últimos 14 días",
+      "today": "hoy",
+      "legendFailed": "fallido",
+      "jobType": {
+        "backup": "backup",
+        "check": "check",
+        "compact": "compact",
+        "restore": "restore",
+        "prune": "prune"
+      }
+    },
+    "banner": {
+      "systemStatus": "Estado del sistema",
+      "allNominal": "Todos los sistemas nominales",
+      "warnings": "{{count}} advertencia{{s}}",
+      "critical": "{{count}} crítico{{s}}",
+      "warnChip": "{{count}} adv.",
+      "okChip": "{{count}} ok",
+      "stats": {
+        "lastBackup": "Último backup",
+        "schedules": "Programaciones",
+        "storage": "Almacenamiento"
+      }
+    },
+    "recentFailures": {
+      "title": "Fallos recientes"
+    },
+    "error": {
+      "unavailable": "Panel no disponible",
+      "retry": "Reintentar"
     },
     "upcomingAndMaintenance": "Próximos & Mantenimiento",
     "activityMessages": {
@@ -519,7 +585,8 @@
       "emptyState": {
         "title": "No se encontraron usuarios",
         "description": "Crea tu primer usuario para empezar"
-      }
+      },
+      "planCaption": "Agregar usuarios requiere el plan Pro."
     },
     "toasts": {
       "passwordChanged": "Contraseña cambiada correctamente",
@@ -850,10 +917,16 @@
       "uniqueData": "Datos únicos",
       "totalChunks": "Total de fragmentos",
       "uniqueChunks": "Fragmentos únicos",
+      "files": "Archivos",
+      "archiveCount": "Archivos de copia",
+      "latestBackupSize": "Tamaño de la última copia",
+      "firstBackup": "Primera copia",
+      "latestBackup": "Última copia",
       "noBackupsYet": "Sin copias de seguridad aún",
       "noBackupsDesc": "Este repositorio ha sido inicializado pero no contiene archivos. Las estadísticas de almacenamiento aparecerán aquí después de crear tu primera copia de seguridad.",
       "loadFailed": "Error al cargar la información del repositorio. Asegúrate de que el repositorio sea accesible y esté correctamente inicializado.",
-      "exportKeyfileTooltip": "Exportar archivo de clave — ¡mantenlo seguro!"
+      "v2PlanRequired": "This repository uses Borg 2. Your data is safe. Upgrade to Pro to view its details.",
+      "exportKeyfileTooltip": "Exportar archivo de clave. ¡mantenlo seguro!"
     },
     "mountArchive": {
       "title": "Montar archivo",
@@ -1643,7 +1716,10 @@
       "remoteDisabledInfo": "Este repositorio está configurado para respaldar datos de una máquina remota. Las copias de seguridad remotas a remotas (respaldar de una máquina remota a otra) no son compatibles. Por favor mantén el repositorio en el Servidor Borg UI.",
       "selectSshConnection": "Seleccionar conexión SSH",
       "repositoryPathLabel": "Ruta del repositorio",
-      "repositoryPathHelper": "Ruta donde se almacenará el repositorio"
+      "repositoryPathHelper": "Ruta donde se almacenará el repositorio",
+      "borgV2Warning": "Los repositorios Borg 2 no son compatibles con Borg 1. Requiere el binario borg2 en este sistema y en cualquier host remoto.",
+      "connected": "Conectado",
+      "browseFilesystem": "Explorar sistema de archivos"
     },
     "restoreDestination": {
       "title": "¿Dónde deben restaurarse los archivos?",
@@ -2547,7 +2623,7 @@
         "repositoryAlreadyExists": "Ya existe un repositorio en esta ubicación",
         "notValidBorgRepository": "No es un repositorio BorgBackup válido",
         "repositoryCheckNeeded": "Se necesita verificar el repositorio antes de continuar con las operaciones",
-        "lockTimeout": "No se pudo adquirir el bloqueo del repositorio — el repositorio está bloqueado por otro proceso o tiene un bloqueo obsoleto",
+        "lockTimeout": "No se pudo adquirir el bloqueo del repositorio. el repositorio está bloqueado por otro proceso o tiene un bloqueo obsoleto",
         "lockError": "Error de bloqueo del repositorio",
         "passphraseWrong": "Contraseña del repositorio incorrecta",
         "archiveDoesNotExist": "El archivo no existe",
@@ -2734,5 +2810,36 @@
         "repositoryLocked": "El repositorio está bloqueado por otro proceso o tiene un bloqueo obsoleto"
       }
     }
+  },
+  "plan": {
+    "currentPlan": "Plan actual",
+    "proFeatures": "Funciones Pro",
+    "plans": "Planes",
+    "earlyAccessNotice": "Todos los planes son gratuitos mientras Borg UI está en acceso anticipado. Como desarrollador independiente, introduciré niveles de pago en el futuro para sostener el desarrollo. Las funciones que utilices hoy seguirán estando disponibles para ti.",
+    "features": {
+      "borg_v2": {
+        "label": "Copias de seguridad Borg v2",
+        "description": "Formato Borg de nueva generación con deduplicación y rendimiento mejorados"
+      },
+      "multi_user": {
+        "label": "Varias cuentas de usuario",
+        "description": "Invita a usuarios adicionales a gestionar copias de seguridad con su propio acceso"
+      },
+      "extra_users": {
+        "label": "Puestos de usuario ilimitados",
+        "description": "Añade más de 5 usuarios para implementaciones de equipos grandes"
+      },
+      "rbac": {
+        "label": "Control de acceso basado en roles",
+        "description": "Asigna roles y permisos granulares a cada cuenta de usuario"
+      }
+    },
+    "comingSoon": "Próximamente",
+    "planFeatures": "Funciones de {{plan}}"
+  },
+  "upgradePrompt": {
+    "featureLabel": "Función de {{plan}}",
+    "defaultMessage": "Esta función requiere el plan {{plan}}.",
+    "requiresPlan": "Requiere el plan {{plan}}"
   }
 }

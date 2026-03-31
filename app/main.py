@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -7,6 +9,7 @@ import os
 from dotenv import load_dotenv
 
 from app.api import auth, dashboard, backup, archives, restore, schedule, settings as settings_api, events, repositories, ssh_keys, system, filesystem, browse, notifications, scripts, packages, activity, scripts_library, mounts, metrics
+from app.api.v2 import router as v2_router
 from app.routers import config
 from app.database.database import engine
 from app.database.models import Base
@@ -124,6 +127,8 @@ app.include_router(notifications.router)
 app.include_router(activity.router)
 app.include_router(config.router, prefix="/api")
 app.include_router(mounts.router)  # Mount management API
+
+app.include_router(v2_router, prefix="/api/v2")  # Borg 2 versioned API
 
 @app.on_event("startup")
 async def startup_event():

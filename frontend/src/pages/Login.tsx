@@ -5,7 +5,7 @@ import { toast } from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../hooks/useAuth.tsx'
 import { Shield } from 'lucide-react'
-import { useMatomo } from '../hooks/useMatomo'
+import { useAnalytics } from '../hooks/useAnalytics'
 import { translateBackendKey } from '../utils/translateBackendKey'
 
 interface LoginForm {
@@ -18,7 +18,7 @@ export default function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
   const { t } = useTranslation()
-  const { trackAuth, EventAction } = useMatomo()
+  const { trackAuth, EventAction } = useAnalytics()
 
   const {
     register,

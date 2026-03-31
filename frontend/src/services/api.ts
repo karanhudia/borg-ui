@@ -50,6 +50,7 @@ api.interceptors.response.use(
 
 export interface RepositoryData {
   name?: string
+  borg_version?: 1 | 2
   path?: string
   encryption?: string
   compression?: string
@@ -194,11 +195,6 @@ export const archivesAPI = {
   },
 }
 
-export const browseAPI = {
-  getContents: (repositoryId: number, archiveName: string, path: string = '') =>
-    api.get(`/browse/${repositoryId}/${archiveName}`, { params: { path } }),
-}
-
 export const restoreAPI = {
   getRepositories: () => api.get('/restore/repositories'),
   getArchives: (repositoryId: number) => api.get(`/restore/archives/${repositoryId}`),
@@ -286,15 +282,6 @@ export const settingsAPI = {
       params.browse_max_memory_mb = browseMaxMemoryMb
     }
     return api.put('/settings/cache/settings', null, { params })
-  },
-}
-
-// Events API (Server-Sent Events)
-export const eventsAPI = {
-  streamEvents: () => {
-    const token = localStorage.getItem('access_token')
-    const url = `${BASE_PATH}/api/events/stream${token ? `?token=${token}` : ''}`
-    return new EventSource(url)
   },
 }
 

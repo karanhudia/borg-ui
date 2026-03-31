@@ -47,6 +47,7 @@ interface ArchivesListProps {
   onMountArchive: (archive: Archive) => void
   onDeleteArchive: (archiveName: string) => void
   mountDisabled?: boolean
+  canDelete?: boolean
   defaultRowsPerPage?: number
   rowsPerPageOptions?: number[]
 }
@@ -60,6 +61,7 @@ export default function ArchivesList({
   onMountArchive,
   onDeleteArchive,
   mountDisabled = false,
+  canDelete = true,
   defaultRowsPerPage = 10,
   rowsPerPageOptions = [5, 10, 25, 50, 100],
 }: ArchivesListProps) {
@@ -353,6 +355,7 @@ export default function ArchivesList({
                       onMount={onMountArchive}
                       onDelete={onDeleteArchive}
                       mountDisabled={mountDisabled}
+                      canDelete={canDelete}
                     />
                   ))}
                 </Stack>
@@ -375,6 +378,7 @@ export default function ArchivesList({
                   onMount={onMountArchive}
                   onDelete={onDeleteArchive}
                   mountDisabled={mountDisabled}
+                  canDelete={canDelete}
                 />
               ))}
           </Stack>

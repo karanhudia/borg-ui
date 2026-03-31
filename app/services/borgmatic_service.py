@@ -85,6 +85,13 @@ class BorgmaticExportService:
         if repository.post_backup_script:
             config['after_backup'] = [repository.post_backup_script]
 
+        # Borg UI metadata fields (ignored by standard borgmatic — forward compatible)
+        # borg_ui_name: preserves the custom display name for round-trip imports
+        config['borg_ui_name'] = repository.name
+        # borg_ui_type: preserves observability-only mode (omit for 'full' which is the default)
+        if repository.mode == 'observe':
+            config['borg_ui_type'] = 'observability'
+
         return config
 
     def export_all_repositories(
@@ -494,6 +501,11 @@ class BorgmaticImportService:
                 'error': 'No repositories found in configuration'
             }
 
+        # Borg UI metadata fields — only meaningful for single-repo YAMLs
+        # (ambiguous when multiple repositories share one config file)
+        borg_ui_name = data.get('borg_ui_name') if len(repo_paths) == 1 else None
+        borg_ui_type = data.get('borg_ui_type') if len(repo_paths) == 1 else None
+
         # Import each repository
         for repo_path in repo_paths:
             try:
@@ -577,6 +589,12 @@ class BorgmaticImportService:
                 if hooks:
                     single_config['hooks'] = hooks
 
+                # Pass borg_ui metadata fields for round-trip fidelity
+                if borg_ui_name:
+                    single_config['borg_ui_name'] = borg_ui_name
+                if borg_ui_type:
+                    single_config['borg_ui_type'] = borg_ui_type
+
                 result = self._import_single_repository(single_config, merge_strategy, dry_run)
                 summary['repositories_created'] += result.get('repository_created', 0)
                 summary['repositories_updated'] += result.get('repository_updated', 0)
@@ -618,9 +636,17 @@ class BorgmaticImportService:
             raise ValueError("No repository path found in configuration")
 
         repo_path_str = repo_paths[0]
+
+        # Build metadata: borg_ui_name overrides the name derived from the path
+        path_metadata = {}
+        borg_ui_name = config.get('borg_ui_name')
+        borg_ui_type = config.get('borg_ui_type')
+        if borg_ui_name:
+            path_metadata['name'] = borg_ui_name
+
         repo_name, repo_path, repo_type, ssh_info = self._parse_repository_path(
             repo_path_str,
-            {}  # No metadata
+            path_metadata
         )
 
         # Check for existing repository
@@ -648,7 +674,8 @@ class BorgmaticImportService:
         repository.path = repo_path
         repository.encryption = 'repokey'  # Default encryption
         repository.compression = storage.get('compression', 'lz4')
-        repository.mode = 'full'  # Default mode
+        # borg_ui_type: 'observability' → observe mode; anything else (or absent) → full
+        repository.mode = 'observe' if borg_ui_type == 'observability' else 'full'
 
         # Passphrase from storage section
         if storage.get('encryption_passphrase'):

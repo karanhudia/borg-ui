@@ -11,10 +11,6 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
   Chip,
   Stack,
   Alert,
@@ -23,6 +19,8 @@ import {
 } from '@mui/material'
 import { Edit, Trash2, Play, Shield } from 'lucide-react'
 import { repositoriesAPI } from '../services/api'
+import { BorgApiClient } from '../services/borgApi'
+import RepoSelect from './RepoSelect'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import {
@@ -117,7 +115,10 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
   // Run check now mutation
   const runCheckMutation = useMutation({
     mutationFn: async (repoId: number) => {
-      return await repositoriesAPI.startCheck(repoId, {})
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const repo = repositories.find((r: any) => r.id === repoId)
+      if (!repo) throw new Error('Repository not found')
+      return new BorgApiClient(repo).checkRepository()
     },
     onSuccess: () => {
       toast.success(t('scheduledChecks.toasts.checkStarted'))
@@ -297,49 +298,15 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
         </DialogTitle>
         <DialogContent>
           <Stack spacing={3} sx={{ mt: 1 }}>
-            <FormControl fullWidth required size="medium">
-              <InputLabel sx={{ fontSize: '1.1rem' }}>{t('scheduledChecks.repository')}</InputLabel>
-              <Select
-                value={selectedRepositoryId || ''}
-                onChange={(e) => setSelectedRepositoryId(Number(e.target.value))}
-                label={t('scheduledChecks.repository')}
-                disabled={loadingRepositories || repositories.length === 0}
-                sx={{ fontSize: '1.1rem', height: { xs: 48, sm: 56 } }}
-                MenuProps={{
-                  PaperProps: {
-                    style: {
-                      maxHeight: 400,
-                    },
-                  },
-                }}
-              >
-                {repositories.length === 0 ? (
-                  <MenuItem disabled>
-                    <Typography variant="body2" color="text.secondary">
-                      {t('scheduledChecks.noRepositoriesAvailable')}
-                    </Typography>
-                  </MenuItem>
-                ) : (
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  repositories.map((repo: any) => (
-                    <MenuItem key={repo.id} value={repo.id} sx={{ fontSize: '1rem' }}>
-                      <Box>
-                        <Typography variant="body2" sx={{ fontSize: '1rem' }}>
-                          {repo.name}
-                        </Typography>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ fontSize: '0.85rem' }}
-                        >
-                          {repo.path}
-                        </Typography>
-                      </Box>
-                    </MenuItem>
-                  ))
-                )}
-              </Select>
-            </FormControl>
+            <RepoSelect
+              repositories={repositories}
+              value={selectedRepositoryId || ''}
+              onChange={(v) => setSelectedRepositoryId(v ? Number(v) : null)}
+              loading={loadingRepositories}
+              valueKey="id"
+              label={t('scheduledChecks.repository')}
+              disabled={repositories.length === 0}
+            />
 
             <TextField
               label={t('scheduledChecks.checkScheduleLabel')}

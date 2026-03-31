@@ -64,7 +64,7 @@ We use analytics data to:
 
 ## How to Opt-Out
 
-Analytics is **enabled by default** but you can disable it anytime:
+Analytics stays disabled until you respond to the consent banner. After opting in, you can disable it anytime:
 
 1. Open Borg UI
 2. Navigate to **Settings → Preferences**
@@ -75,7 +75,7 @@ Your preference is stored in the database and respected across all sessions.
 
 ## Technical Implementation
 
-**Analytics Platform:** [Matomo](https://matomo.org/) (open-source, self-hosted)
+**Analytics Platform:** [Umami Cloud](https://umami.is/) (privacy-focused, cookieless analytics)
 - **Instance:** `https://analytics.nullcodeai.dev`
 - **No third-party services** (no Google Analytics, no Mixpanel)
 - **Data stays under our control**
@@ -89,15 +89,15 @@ Your preference is stored in the database and respected across all sessions.
 - **Respect Do Not Track** - Browser DNT setting is honored
 
 **Tracking Method:**
-- JavaScript tracking code loaded from our server
-- Events sent via HTTP POST to our Matomo instance
+- JavaScript tracking code loaded from Umami Cloud only after analytics is enabled
+- Consent and opt-out events are sent directly so accept and decline are both measurable
 - All data is completely anonymous and cannot be tied to individuals
 - User preference checked before every tracking call
 
 **Data Flow:**
 1. User performs action (e.g., clicks "Backup Now")
 2. Frontend checks if analytics is enabled (from database)
-3. If enabled, sends anonymous event to Matomo (no IP, no user ID, no cookies)
+3. If enabled, sends anonymous events to Umami (no IP, no user ID, no cookies)
 4. If disabled, event is discarded client-side (never sent)
 
 ## Data Retention
@@ -119,7 +119,7 @@ You have the right to:
 ## Centralized Analytics Model
 
 **Important:** Borg UI uses a **centralized analytics model**:
-- ALL Borg UI installations worldwide send data to ONE Matomo instance
+- ALL Borg UI installations worldwide send data to ONE Umami instance
 - This allows us to understand global usage patterns
 - Individual installations are not identifiable
 - No tracking between instances (each install is anonymous)
@@ -128,7 +128,7 @@ This is different from self-hosted alternatives where each user runs their own a
 
 ## Open Source & Transparency
 
-- All tracking code is open source (inspect `frontend/src/utils/matomo.ts`)
+- All tracking code is open source (inspect `frontend/src/utils/analytics.ts`)
 - Public analytics dashboard (no secrets, no hiding data)
 - Privacy policy available in repository (`PRIVACY.md`)
 - Opt-out mechanism built into the product

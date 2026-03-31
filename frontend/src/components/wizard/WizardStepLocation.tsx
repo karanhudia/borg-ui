@@ -15,10 +15,14 @@ import {
   InputAdornment,
   IconButton,
   alpha,
+  ButtonBase,
+  Tooltip,
 } from '@mui/material'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import { Server, Cloud } from 'lucide-react'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { useTranslation } from 'react-i18next'
+import PlanGate from '../PlanGate'
 
 interface SSHConnection {
   id: number
@@ -33,6 +37,7 @@ interface SSHConnection {
 
 export interface LocationStepData {
   name: string
+  borgVersion?: 1 | 2
   repositoryMode: 'full' | 'observe'
   repositoryLocation: 'local' | 'ssh'
   path: string
@@ -87,6 +92,56 @@ export default function WizardStepLocation({
         fullWidth
         helperText={t('wizard.location.repositoryNameHelper')}
       />
+
+      {/* Borg Version Selector — only shown on create/import, not edit */}
+      {mode !== 'edit' && (
+        <PlanGate feature="borg_v2" disabled>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0 }}>
+              Borg Version
+            </Typography>
+            <Box
+              sx={{
+                display: 'flex',
+                p: '3px',
+                bgcolor: 'action.hover',
+                borderRadius: '10px',
+                gap: '2px',
+              }}
+            >
+              {([1, 2] as const).map((v) => {
+                const selected = (data.borgVersion ?? 1) === v
+                return (
+                  <ButtonBase
+                    key={v}
+                    onClick={() => onChange({ borgVersion: v })}
+                    sx={{
+                      px: 1.75,
+                      py: 0.5,
+                      borderRadius: '8px',
+                      bgcolor: selected ? 'background.paper' : 'transparent',
+                      boxShadow: selected ? 1 : 0,
+                      fontWeight: selected ? 700 : 400,
+                      fontSize: '0.8rem',
+                      color: selected ? 'text.primary' : 'text.secondary',
+                      transition: 'all 0.15s ease',
+                      fontFamily: 'monospace',
+                      letterSpacing: 0.3,
+                    }}
+                  >
+                    v{v}
+                  </ButtonBase>
+                )
+              })}
+            </Box>
+            {(data.borgVersion ?? 1) === 2 && (
+              <Tooltip title={t('wizard.location.borgV2Warning')} arrow placement="right">
+                <InfoOutlinedIcon sx={{ fontSize: 16, color: 'info.main', cursor: 'default' }} />
+              </Tooltip>
+            )}
+          </Box>
+        </PlanGate>
+      )}
 
       {/* Repository Mode for Import */}
       {mode === 'import' && (
@@ -342,7 +397,7 @@ export default function WizardStepLocation({
                             borderRadius: '50%',
                             bgcolor: 'success.main',
                           }}
-                          title="Connected"
+                          title={t('wizard.location.connected')}
                         />
                       )}
                     </Box>
@@ -372,7 +427,7 @@ export default function WizardStepLocation({
                 onClick={onBrowsePath}
                 edge="end"
                 size="small"
-                title="Browse filesystem"
+                title={t('wizard.location.browseFilesystem')}
                 disabled={data.repositoryLocation === 'ssh' && !data.repoSshConnectionId}
               >
                 <FolderOpenIcon fontSize="small" />

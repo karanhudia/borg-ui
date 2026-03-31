@@ -20,7 +20,12 @@ import { BarChart3, Info, Globe } from 'lucide-react'
 import { settingsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
-import { resetOptOutCache, trackOptOut, trackLanguageChange } from '../utils/matomo'
+import {
+  PUBLIC_ANALYTICS_DASHBOARD_URL,
+  resetOptOutCache,
+  trackOptOut,
+  trackLanguageChange,
+} from '../utils/analytics'
 import i18n from '../i18n'
 
 const LANGUAGES = [
@@ -66,10 +71,10 @@ export default function PreferencesTab() {
       toast.success(t('preferences.updatedSuccessfully'))
       queryClient.invalidateQueries({ queryKey: ['preferences'] })
 
-      // Reset Matomo opt-out cache so new preference takes effect immediately
+      // Reset analytics cache so the new preference takes effect immediately
       await resetOptOutCache()
 
-      // Reload the page to reinitialize Matomo with new preferences
+      // Reload the page to reinitialize Umami with the new preferences
       setTimeout(() => {
         window.location.reload()
       }, 500)
@@ -178,7 +183,7 @@ export default function PreferencesTab() {
                   <Typography variant="body2">
                     <strong>{t('preferences.analyticsTransparencyBold')}</strong>{' '}
                     <a
-                      href="https://analytics.nullcodeai.dev/"
+                      href={PUBLIC_ANALYTICS_DASHBOARD_URL}
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{ color: 'inherit', textDecoration: 'underline' }}

@@ -26,15 +26,8 @@ import { Download, Upload, FileText, CheckCircle, AlertCircle } from 'lucide-rea
 import { toast } from 'react-hot-toast'
 import { configExportImportAPI } from '../services/api'
 import { translateBackendKey } from '../utils/translateBackendKey'
-
-interface Repository {
-  id: number
-  name: string
-  path: string
-  repository_type: string
-  has_schedule: boolean
-  has_checks: boolean
-}
+import { Repository } from '../types'
+import { useAnalytics } from '../hooks/useAnalytics'
 
 interface ImportResult {
   success: boolean
@@ -49,6 +42,7 @@ interface ImportResult {
 
 const ExportImportTab: React.FC = () => {
   const { t } = useTranslation()
+  const { trackSystem, EventAction } = useAnalytics()
   // Export state
   const [selectedRepos, setSelectedRepos] = useState<number[]>([])
   const [includeSchedules, setIncludeSchedules] = useState(true)
@@ -101,6 +95,12 @@ const ExportImportTab: React.FC = () => {
       window.URL.revokeObjectURL(url)
 
       toast.success(t('exportImport.export.success'))
+      trackSystem(EventAction.EXPORT, {
+        section: 'export_import',
+        exporting_all: exportingAll,
+        repository_count: exportingAll ? repositories.length : selectedRepos.length,
+        include_schedules: includeSchedules,
+      })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -125,6 +125,16 @@ const ExportImportTab: React.FC = () => {
       } else {
         toast.success(t('exportImport.importSuccess'))
       }
+      trackSystem(EventAction.UPLOAD, {
+        section: 'export_import',
+        merge_strategy: mergeStrategy,
+        dry_run: false,
+        success: !!result.success,
+        repositories_created: result.repositories_created || 0,
+        repositories_updated: result.repositories_updated || 0,
+        schedules_created: result.schedules_created || 0,
+        schedules_updated: result.schedules_updated || 0,
+      })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {

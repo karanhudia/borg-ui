@@ -39,6 +39,7 @@ import { toast } from 'react-hot-toast'
 import api from '../services/api'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import ScriptParameterInputs, { ScriptParameter } from './ScriptParameterInputs'
+import { useAnalytics } from '../hooks/useAnalytics'
 
 interface Script {
   id: number
@@ -85,6 +86,7 @@ export default function RepositoryScriptsTab({
   onClearInlineScript,
 }: RepositoryScriptsTabProps) {
   const { t } = useTranslation()
+  const { trackScripts, EventAction } = useAnalytics()
   const [scripts, setScripts] = useState<RepositoryScript[]>([])
   const [availableScripts, setAvailableScripts] = useState<Script[]>([])
   const [loading, setLoading] = useState(true)
@@ -172,6 +174,13 @@ export default function RepositoryScriptsTab({
       setSelectedScriptId('')
       if (onUpdate) onUpdate()
       if (onUpdate) onUpdate()
+      const addedScript = availableScripts.find((s) => s.id === selectedScriptId)
+      trackScripts(EventAction.CREATE, addedScript?.name, {
+        source: 'repository_assignment',
+        hook_type: hookType,
+        parameter_count: Object.keys(assignmentData.parameter_values || {}).length,
+        on_failure_mode: assignmentData.on_failure_mode,
+      })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Failed to assign script:', error)
@@ -184,12 +193,17 @@ export default function RepositoryScriptsTab({
 
   const handleRemoveScript = async (scriptAssignmentId: number) => {
     if (!confirm(t('repositoryScripts.confirmRemove'))) return
+    const removedScript = scripts.find((s) => s.id === scriptAssignmentId)
 
     try {
       await api.delete(`/repositories/${repositoryId}/scripts/${scriptAssignmentId}`)
       toast.success(t('repositoryScriptsTab.removedSuccessfully'))
       fetchAssignedScripts()
       if (onUpdate) onUpdate()
+      trackScripts(EventAction.DELETE, removedScript?.script_name, {
+        source: 'repository_assignment',
+        hook_type: hookType,
+      })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Failed to remove script:', error)
@@ -215,6 +229,12 @@ export default function RepositoryScriptsTab({
       fetchAssignedScripts()
       setEditParametersDialog({ open: false, script: null })
       if (onUpdate) onUpdate()
+      trackScripts(EventAction.EDIT, editParametersDialog.script?.script_name, {
+        source: 'repository_assignment',
+        hook_type: hookType,
+        parameter_count: Object.keys(parameterValues || {}).length,
+        on_failure_mode: onFailureMode,
+      })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Failed to update parameters:', error)
@@ -232,6 +252,11 @@ export default function RepositoryScriptsTab({
         repository_id: repositoryId,
       })
       setTestDialog((prev) => ({ ...prev, running: false, result: response.data }))
+      trackScripts(EventAction.TEST, script.script_name, {
+        source: 'repository_assignment',
+        hook_type: hookType,
+        success: !!response.data?.success,
+      })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       setTestDialog((prev) => ({
@@ -245,6 +270,11 @@ export default function RepositoryScriptsTab({
           execution_time: 0,
         },
       }))
+      trackScripts(EventAction.TEST, script.script_name, {
+        source: 'repository_assignment',
+        hook_type: hookType,
+        success: false,
+      })
     }
   }
 

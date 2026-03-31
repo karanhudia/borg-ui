@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import structlog
 import os
 import subprocess
@@ -19,6 +19,7 @@ from app.services.check_service import check_service
 from app.services.compact_service import compact_service
 from app.services.mqtt_service import mqtt_service
 from app.utils.datetime_utils import serialize_datetime
+from app.utils.ssh_utils import resolve_repo_ssh_key_file
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["repositories"])
@@ -201,11 +202,13 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
                         if archive_time:
                             # Parse ISO format timestamp (e.g., "2024-01-15T10:30:00.000000")
                             try:
-                                # Handle various timestamp formats from borg
-                                if "." in archive_time:
-                                    last_backup_time = datetime.fromisoformat(archive_time.replace("Z", "+00:00").split("+")[0])
-                                else:
-                                    last_backup_time = datetime.fromisoformat(archive_time.replace("Z", ""))
+                                # Borg list returns timestamps as naive local-time ISO strings.
+                                # Replace Z→+00:00 so explicit UTC is preserved; otherwise
+                                # fromisoformat returns a naive datetime (= local time).
+                                # astimezone(utc) treats naive as local and converts to UTC.
+                                # replace(tzinfo=None) gives naive UTC for SQLite storage.
+                                dt = datetime.fromisoformat(archive_time.replace("Z", "+00:00"))
+                                last_backup_time = dt.astimezone(timezone.utc).replace(tzinfo=None)
                             except ValueError as te:
                                 logger.warning("Failed to parse archive timestamp",
                                              repository=repository.name,
@@ -438,7 +441,8 @@ async def get_repositories(
                 "custom_flags": repo.custom_flags,
                 "has_running_maintenance": has_check or has_compact or has_prune,
                 "has_keyfile": repo.has_keyfile or False,
-                "source_ssh_connection_id": repo.source_ssh_connection_id
+                "source_ssh_connection_id": repo.source_ssh_connection_id,
+                "borg_version": repo.borg_version or 1,
             })
 
         return {
@@ -911,7 +915,8 @@ async def import_repository(
 
         # Update archive count by listing archives (non-blocking - don't fail import)
         try:
-            await update_repository_stats(repository, db)
+            from app.core.borg_router import BorgRouter
+            await BorgRouter(repository).update_stats(db)
         except Exception as e:
             # Log but don't fail the import - stats can be updated later
             logger.warning("Failed to update repository stats after import",
@@ -1407,30 +1412,12 @@ async def delete_repository(
         if not repository:
             raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
 
-        # Check system-wide bypass_lock_on_list setting
-        from app.database.models import SystemSettings
-        system_settings = db.query(SystemSettings).first()
-        use_bypass_lock = repository.bypass_lock or (system_settings and system_settings.bypass_lock_on_list)
-
-        # Check if repository has archives
-        archives_result = await borg.list_archives(repository.path, remote_path=repository.remote_path, bypass_lock=use_bypass_lock)
-        if archives_result["success"]:
-            try:
-                archives_data = archives_result["stdout"]
-                if archives_data and len(archives_data) > 0:
-                    raise HTTPException(
-                        status_code=400,
-                        detail={"key": "backend.errors.repo.cannotDeleteRepoWithArchives"}
-                    )
-            except:
-                pass
-
         # CRITICAL: Clean up all foreign key references before deleting repository
         # Some tables don't have CASCADE delete, so we must manually handle them
 
         from app.database.models import (
             RepositoryScript, RestoreJob, CheckJob, PruneJob, CompactJob,
-            ScheduledJob, ScheduledJobRepository, BackupJob
+            ScheduledJob, ScheduledJobRepository, BackupJob, ScriptExecution
         )
 
         # 1. Delete job records (these don't have CASCADE)
@@ -1493,7 +1480,14 @@ async def delete_repository(
         if script_associations:
             logger.info("Deleted script associations", repo_id=repo_id, count=len(script_associations))
 
-        # 5. Finally, delete the repository itself
+        # 5. Null out script execution references (repository_id is nullable, preserve history)
+        script_exec_count = db.query(ScriptExecution).filter(
+            ScriptExecution.repository_id == repo_id
+        ).update({"repository_id": None}, synchronize_session=False)
+        if script_exec_count:
+            logger.info("Unlinked script executions", repo_id=repo_id, count=script_exec_count)
+
+        # 6. Finally, delete the repository itself
         db.delete(repository)
         db.commit()
 
@@ -2148,48 +2142,6 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
                              path=temp_key_file,
                              error=str(e))
 
-def _resolve_repo_ssh_key_file(repository, db) -> Optional[str]:
-    """Decrypt and write the SSH key for a repository to a temp file.
-
-    Returns the temp file path (caller must delete it), or None if no key is configured.
-    Supports both connection_id (new) and direct ssh_key_id (legacy) repository setups.
-    """
-    from app.database.models import SSHConnection, SSHKey
-    from cryptography.fernet import Fernet
-    import base64
-    import tempfile
-
-    ssh_key = None
-    if repository.connection_id:
-        connection = db.query(SSHConnection).filter(
-            SSHConnection.id == repository.connection_id
-        ).first()
-        if connection and connection.ssh_key_id:
-            ssh_key = db.query(SSHKey).filter(SSHKey.id == connection.ssh_key_id).first()
-    elif getattr(repository, 'repository_type', None) == "ssh" and getattr(repository, 'ssh_key_id', None):
-        ssh_key = db.query(SSHKey).filter(SSHKey.id == repository.ssh_key_id).first()
-
-    if not ssh_key:
-        return None
-
-    encryption_key = settings.secret_key.encode()[:32]
-    cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-    private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
-    if not private_key.endswith('\n'):
-        private_key += '\n'
-
-    fd, temp_key_file = tempfile.mkstemp(suffix='.key', text=True)
-    try:
-        os.chmod(temp_key_file, 0o600)
-        with os.fdopen(fd, 'w') as f:
-            f.write(private_key)
-    except Exception:
-        os.close(fd)
-        raise
-
-    return temp_key_file
-
-
 @router.get("/{repo_id}/archives")
 async def list_repository_archives(
     repo_id: int,
@@ -2226,7 +2178,7 @@ async def list_repository_archives(
             cmd.extend(["--json", repository.path])
 
             # Set up environment — inject SSH key if repository uses key-based auth
-            temp_key_file = _resolve_repo_ssh_key_file(repository, db)
+            temp_key_file = resolve_repo_ssh_key_file(repository, db)
             if temp_key_file:
                 logger.info("Using SSH key for archive list", repo_id=repo_id)
             ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
@@ -2367,7 +2319,7 @@ async def get_repository_info(
             cmd.extend(["--json", repository.path])
 
             # Set up environment — inject SSH key if repository uses key-based auth
-            temp_key_file = _resolve_repo_ssh_key_file(repository, db)
+            temp_key_file = resolve_repo_ssh_key_file(repository, db)
             if temp_key_file:
                 logger.info("Using SSH key for repository info", repo_id=repo_id)
             ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
@@ -2549,7 +2501,7 @@ async def get_archive_info(
         cmd.extend(["--json", archive_path])
 
         # Set up environment — inject SSH key if repository uses key-based auth
-        temp_key_file = _resolve_repo_ssh_key_file(repository, db)
+        temp_key_file = resolve_repo_ssh_key_file(repository, db)
         if temp_key_file:
             logger.info("Using SSH key for archive info", repo_id=repo_id, archive_name=archive_name)
         ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
@@ -2721,12 +2673,11 @@ async def list_archive_files(
         # Use --json-lines for file listing
         cmd.extend(["--json-lines", archive_path])
 
-        # Set up environment with proper lock configuration
-        ssh_opts = [
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "LogLevel=ERROR"
-        ]
+        # Set up environment — inject SSH key if repository uses key-based auth
+        temp_key_file = resolve_repo_ssh_key_file(repository, db)
+        if temp_key_file:
+            logger.info("Using SSH key for archive file list", repo_id=repo_id, archive_name=archive_name)
+        ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
         env = setup_borg_env(
             passphrase=repository.passphrase,
             ssh_opts=ssh_opts
@@ -2789,6 +2740,12 @@ async def list_archive_files(
     except Exception as e:
         logger.error("Failed to list archive files", error=str(e))
         raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToListArchiveFiles"})
+    finally:
+        if temp_key_file and os.path.exists(temp_key_file):
+            try:
+                os.unlink(temp_key_file)
+            except Exception:
+                pass
 
 async def get_repository_stats(path: str, bypass_lock: bool = False) -> Dict[str, Any]:
     """Get repository statistics"""
@@ -2859,33 +2816,35 @@ async def break_repository_lock(
                    user=current_user.username,
                    repository_id=repository_id)
 
-        # Set up environment with SSH options and passphrase
-        env = os.environ.copy()
-
-        # Add SSH options
-        ssh_opts = get_standard_ssh_opts()
-        env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
-
-        # Add passphrase if available
-        if repository.passphrase:
-            env['BORG_PASSPHRASE'] = repository.passphrase
-
-        # Skip prompts
-        env['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes'
-        env['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes'
+        # Set up environment — inject SSH key if repository uses key-based auth
+        temp_key_file = resolve_repo_ssh_key_file(repository, db)
+        if temp_key_file:
+            logger.info("Using SSH key for break-lock", repository_id=repository_id)
+        ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
+        env = setup_borg_env(
+            passphrase=repository.passphrase,
+            ssh_opts=ssh_opts
+        )
 
         # Build borg break-lock command
         cmd = ["borg", "break-lock", repository.path]
 
-        # Execute command
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env
-        )
+        try:
+            # Execute command
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env
+            )
 
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+        finally:
+            if temp_key_file and os.path.exists(temp_key_file):
+                try:
+                    os.unlink(temp_key_file)
+                except Exception:
+                    pass
 
         stdout_str = stdout.decode('utf-8', errors='replace') if stdout else ""
         stderr_str = stderr.decode('utf-8', errors='replace') if stderr else ""

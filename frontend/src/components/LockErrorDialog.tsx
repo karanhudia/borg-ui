@@ -21,6 +21,7 @@ interface LockErrorDialogProps {
   onClose: () => void
   repositoryId: number
   repositoryName: string
+  borgVersion?: 1 | 2
   onLockBroken?: () => void
   isAdmin?: boolean
 }
@@ -30,6 +31,7 @@ export default function LockErrorDialog({
   onClose,
   repositoryId,
   repositoryName,
+  borgVersion: _borgVersion,
   onLockBroken,
   isAdmin = false,
 }: LockErrorDialogProps) {
@@ -130,7 +132,7 @@ export default function LockErrorDialog({
           startIcon={breaking ? <CircularProgress size={16} /> : <Unlock size={16} />}
           title={!isAdmin ? 'Admin privileges required to break locks' : ''}
         >
-          {breaking ? t('common.status.running') : t('dialogs.lockError.breakLock')}
+          {breaking ? t('status.running') : t('dialogs.lockError.breakLock')}
         </Button>
       </DialogActions>
     </Dialog>

@@ -10,37 +10,34 @@ import {
   Card,
   CardContent,
   CircularProgress,
-  FormControl,
-  InputLabel,
-  MenuItem,
   Paper,
-  Select,
   Stack,
   Typography,
 } from '@mui/material'
-import { Clock, Database, Eye, Info, Play, RefreshCw, Square } from 'lucide-react'
+import { Clock, Eye, Info, Play, RefreshCw, Square } from 'lucide-react'
 import { backupAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import {
   formatBytes as formatBytesUtil,
   formatDurationSeconds,
   formatTimeRange,
-  parseBytes,
 } from '../utils/dateUtils'
 import { generateBorgCreateCommand } from '../utils/borgUtils'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { BackupJob } from '../types'
 import BackupJobsTable from '../components/BackupJobsTable'
+import RepoSelect from '../components/RepoSelect'
 import LogViewerDialog from '../components/LogViewerDialog'
-import { useMatomo } from '../hooks/useMatomo'
+import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
+import { getRepoCapabilities } from '../utils/repoCapabilities'
 
 const Backup: React.FC = () => {
   const [selectedRepository, setSelectedRepository] = useState<string>('')
   const [logJob, setLogJob] = useState<BackupJob | null>(null)
   const queryClient = useQueryClient()
   const location = useLocation()
-  const { trackBackup, EventAction } = useMatomo()
+  const { trackBackup, EventAction } = useAnalytics()
   const { user } = useAuth()
   const { t } = useTranslation()
 
@@ -82,12 +79,7 @@ const Backup: React.FC = () => {
     onSuccess: () => {
       toast.success(t('backup.toasts.started'))
       queryClient.invalidateQueries({ queryKey: ['backup-status-manual'] })
-      trackBackup(
-        EventAction.START,
-        undefined,
-        selectedRepoData?.name,
-        parseBytes(selectedRepoData?.total_size)
-      )
+      trackBackup(EventAction.START, undefined, selectedRepoData || undefined)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -128,7 +120,7 @@ const Backup: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const repo = repositoriesData?.data?.repositories?.find((r: any) => r.path === repoPath)
     if (repo) {
-      trackBackup(EventAction.FILTER, undefined, repo.name)
+      trackBackup(EventAction.FILTER, undefined, repo)
     }
   }
 
@@ -202,63 +194,20 @@ const Backup: React.FC = () => {
           </Typography>
 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="stretch">
-            <FormControl fullWidth sx={{ minWidth: { xs: '100%', sm: 300 } }}>
-              <InputLabel id="repository-select-label">
-                {t('backup.manualBackup.repository')}
-              </InputLabel>
-              <Select
-                labelId="repository-select-label"
-                id="repository-select"
-                value={selectedRepository}
-                onChange={(e) => handleRepositoryChange(e.target.value)}
-                label={t('backup.manualBackup.repository')}
-                disabled={loadingRepositories}
-                sx={{ height: { xs: 48, sm: 56 } }}
-              >
-                <MenuItem value="" disabled>
-                  {loadingRepositories
-                    ? t('backup.manualBackup.loadingRepositories')
-                    : t('backup.manualBackup.selectRepository')}
-                </MenuItem>
-                {repositoriesData?.data?.repositories
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  ?.filter((repo: any) => repo.mode !== 'observe')
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  .map((repo: any) => (
-                    <MenuItem
-                      key={repo.id}
-                      value={repo.path}
-                      disabled={repo.has_running_maintenance}
-                    >
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <Database size={16} />
-                        <Box>
-                          <Typography variant="body2" fontWeight={500}>
-                            {repo.name}
-                            {repo.has_running_maintenance && (
-                              <Typography
-                                component="span"
-                                variant="caption"
-                                color="warning.main"
-                                sx={{ ml: 1 }}
-                              >
-                                {t('backup.manualBackup.maintenanceRunning')}
-                              </Typography>
-                            )}
-                          </Typography>
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            sx={{ fontFamily: 'monospace' }}
-                          >
-                            {repo.path}
-                          </Typography>
-                        </Box>
-                      </Stack>
-                    </MenuItem>
-                  ))}
-              </Select>
-            </FormControl>
+            <RepoSelect
+              repositories={(repositoriesData?.data?.repositories ?? []).filter(
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (repo: any) => getRepoCapabilities(repo).canBackup
+              )}
+              value={selectedRepository}
+              onChange={(v) => handleRepositoryChange(v as string)}
+              loading={loadingRepositories}
+              valueKey="path"
+              label={t('backup.manualBackup.repository')}
+              loadingLabel={t('backup.manualBackup.loadingRepositories')}
+              placeholderLabel={t('backup.manualBackup.selectRepository')}
+              maintenanceLabel={t('backup.manualBackup.maintenanceRunning')}
+            />
 
             <Button
               variant="contained"
@@ -287,7 +236,9 @@ const Backup: React.FC = () => {
 
           {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            repositoriesData?.data?.repositories?.some((repo: any) => repo.mode === 'observe') &&
+            repositoriesData?.data?.repositories?.some(
+              (repo: any) => !getRepoCapabilities(repo).canBackup
+            ) &&
               !loadingRepositories && (
                 <Alert severity="info" sx={{ mt: 2 }}>
                   <Typography variant="body2">

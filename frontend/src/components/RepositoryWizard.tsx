@@ -20,7 +20,7 @@ import {
 } from './wizard'
 import FileExplorerDialog from './FileExplorerDialog'
 import { sshKeysAPI, RepositoryData } from '../services/api'
-import { useMatomo } from '../hooks/useMatomo'
+import { useAnalytics } from '../hooks/useAnalytics'
 
 interface Repository extends RepositoryData {
   id: number
@@ -61,6 +61,7 @@ interface SSHConnection {
 interface WizardState {
   // Location step
   name: string
+  borgVersion: 1 | 2
   repositoryMode: 'full' | 'observe'
   repositoryLocation: 'local' | 'ssh'
   path: string
@@ -88,6 +89,7 @@ interface WizardState {
 
 const initialState: WizardState = {
   name: '',
+  borgVersion: 1,
   repositoryMode: 'full',
   repositoryLocation: 'local',
   path: '',
@@ -111,7 +113,7 @@ const initialState: WizardState = {
 }
 
 const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: RepositoryWizardProps) => {
-  const { track, trackRepository, EventCategory, EventAction } = useMatomo()
+  const { track, trackRepository, EventCategory, EventAction } = useAnalytics()
   const { t } = useTranslation()
   const [activeStep, setActiveStep] = useState(0)
   const [wizardState, setWizardState] = useState<WizardState>(initialState)
@@ -200,8 +202,10 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         ? !!repository.connection_id // Trust connection_id if it exists
         : repository.repository_type === 'ssh' || (repository.path || '').startsWith('ssh://') // Legacy fallback
 
+    const repoVersion = (repository.borg_version === 2 ? 2 : 1) as 1 | 2
     setWizardState({
       name: repository.name || '',
+      borgVersion: repoVersion,
       repositoryMode: repository.mode || 'full',
       repositoryLocation: isSSH ? 'ssh' : 'local',
       path: repoPath,
@@ -210,7 +214,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       dataSource: repository.source_ssh_connection_id ? 'remote' : 'local',
       sourceSshConnectionId: repository.source_ssh_connection_id || '',
       sourceDirs: repository.source_directories || [],
-      encryption: repository.encryption || 'repokey',
+      encryption: repository.encryption || (repoVersion === 2 ? 'repokey-aes-ocb' : 'repokey'),
       passphrase: repository.passphrase || '',
       remotePath: repository.remote_path || '',
       selectedKeyfile: null,
@@ -237,7 +241,13 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
 
   // Handle state changes
   const handleStateChange = (updates: Partial<WizardState>) => {
-    setWizardState((prev) => ({ ...prev, ...updates }))
+    setWizardState((prev) => {
+      // When borg version changes, reset encryption to a sensible default for that version
+      if (updates.borgVersion !== undefined && updates.borgVersion !== prev.borgVersion) {
+        updates.encryption = updates.borgVersion === 2 ? 'repokey-aes-ocb' : 'repokey'
+      }
+      return { ...prev, ...updates }
+    })
   }
 
   // Handle SSH connection selection for repository
@@ -437,6 +447,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   const handleSubmit = () => {
     const data: RepositoryData = {
       name: wizardState.name,
+      borg_version: wizardState.borgVersion,
       mode: wizardState.repositoryMode,
       path: wizardState.path,
       encryption: wizardState.encryption,
@@ -461,14 +472,22 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
           : null,
     }
 
-    track(EventCategory.REPOSITORY, EventAction.CREATE, `wizard-${mode}`)
+    track(
+      EventCategory.REPOSITORY,
+      mode === 'create'
+        ? EventAction.CREATE
+        : mode === 'import'
+          ? EventAction.UPLOAD
+          : EventAction.EDIT,
+      { source: 'wizard', mode }
+    )
     trackRepository(
       mode === 'create'
         ? EventAction.CREATE
         : mode === 'import'
           ? EventAction.UPLOAD
           : EventAction.EDIT,
-      wizardState.name
+      { name: wizardState.name }
     )
 
     // Pass keyfile for import mode
@@ -486,6 +505,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
             mode={mode}
             data={{
               name: wizardState.name,
+              borgVersion: wizardState.borgVersion,
               repositoryMode: wizardState.repositoryMode,
               repositoryLocation: wizardState.repositoryLocation,
               path: wizardState.path,
@@ -532,6 +552,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         return (
           <WizardStepSecurity
             mode={mode}
+            borgVersion={wizardState.borgVersion}
             data={{
               encryption: wizardState.encryption,
               passphrase: wizardState.passphrase,

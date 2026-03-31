@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next'
 import { Box, Typography, CircularProgress } from '@mui/material'
 import { Folder } from 'lucide-react'
 import { archivesAPI, repositoriesAPI, mountsAPI, restoreAPI } from '../services/api'
+import { useRepositoryStats } from '../hooks/useRepositoryStats'
+import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import RepositorySelectorCard from '../components/RepositorySelectorCard'
 import RepositoryStatsGrid from '../components/RepositoryStatsGrid'
@@ -16,8 +18,9 @@ import ArchiveContentsDialog from '../components/ArchiveContentsDialog'
 import { toast } from 'react-hot-toast'
 import { Archive, Repository } from '@/types'
 import LockErrorDialog from '../components/LockErrorDialog'
-import { useMatomo } from '../hooks/useMatomo'
+import { useAnalytics } from '../hooks/useAnalytics'
 import RestoreWizard, { RestoreData } from '../components/RestoreWizard'
+import { getRepoCapabilities, getBorgVersion } from '../utils/repoCapabilities'
 
 const Archives: React.FC = () => {
   const { t } = useTranslation()
@@ -28,6 +31,7 @@ const Archives: React.FC = () => {
   const [lockError, setLockError] = useState<{
     repositoryId: number
     repositoryName: string
+    borgVersion?: 1 | 2
   } | null>(null)
   const [mountDialogArchive, setMountDialogArchive] = useState<Archive | null>(null)
   const [customMountPoint, setCustomMountPoint] = useState<string>('')
@@ -38,7 +42,7 @@ const Archives: React.FC = () => {
 
   const queryClient = useQueryClient()
   const location = useLocation()
-  const { trackArchive, EventAction } = useMatomo()
+  const { trackArchive, EventAction } = useAnalytics()
 
   // Get repositories list
   const { data: repositoriesData, isLoading: loadingRepositories } = useQuery({
@@ -53,8 +57,8 @@ const Archives: React.FC = () => {
     error: archivesError,
   } = useQuery({
     queryKey: ['repository-archives', selectedRepositoryId],
-    queryFn: () => repositoriesAPI.listRepositoryArchives(selectedRepositoryId!),
-    enabled: !!selectedRepositoryId,
+    queryFn: () => new BorgApiClient(selectedRepository!).listArchives(),
+    enabled: !!selectedRepository,
     retry: false,
   })
 
@@ -65,9 +69,10 @@ const Archives: React.FC = () => {
       setLockError({
         repositoryId: selectedRepositoryId,
         repositoryName: selectedRepository?.name || 'Unknown',
+        borgVersion: getBorgVersion(selectedRepository),
       })
     }
-  }, [archivesError, selectedRepositoryId, selectedRepository?.name])
+  }, [archivesError, selectedRepositoryId, selectedRepository])
 
   // Get repository info for statistics
   const {
@@ -76,8 +81,8 @@ const Archives: React.FC = () => {
     error: repoInfoError,
   } = useQuery({
     queryKey: ['repository-info', selectedRepositoryId],
-    queryFn: () => repositoriesAPI.getRepositoryInfo(selectedRepositoryId!),
-    enabled: !!selectedRepositoryId,
+    queryFn: () => new BorgApiClient(selectedRepository!).getInfo(),
+    enabled: !!selectedRepository,
     retry: false,
   })
 
@@ -95,9 +100,10 @@ const Archives: React.FC = () => {
       setLockError({
         repositoryId: selectedRepositoryId,
         repositoryName: selectedRepository?.name || 'Unknown',
+        borgVersion: getBorgVersion(selectedRepository),
       })
     }
-  }, [repoInfoError, selectedRepositoryId, selectedRepository?.name])
+  }, [repoInfoError, selectedRepositoryId, selectedRepository])
 
   // Delete archive mutation
   const deleteArchiveMutation = useMutation({
@@ -112,7 +118,7 @@ const Archives: React.FC = () => {
         queryClient.invalidateQueries({ queryKey: ['repository-info', selectedRepositoryId] })
       }, 2000)
       setShowDeleteConfirm(null)
-      trackArchive(EventAction.DELETE, selectedRepository?.name)
+      trackArchive(EventAction.DELETE, selectedRepository || undefined)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -147,7 +153,7 @@ const Archives: React.FC = () => {
           fontSize: '13px',
         },
       })
-      trackArchive(EventAction.MOUNT, selectedRepository?.name)
+      trackArchive(EventAction.MOUNT, selectedRepository || undefined)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -199,7 +205,7 @@ const Archives: React.FC = () => {
       toast.success(t('archives.restoreStarted'), {
         duration: 6000, // Show longer so user can read it
       })
-      trackArchive(EventAction.START, selectedRepository?.name)
+      trackArchive(EventAction.START, selectedRepository || undefined)
 
       setRestoreArchive(null)
       setShowRestoreWizard(false)
@@ -221,7 +227,7 @@ const Archives: React.FC = () => {
     setSelectedRepository(repo || null)
     // Track archive listing (selecting a repo to filter/list its archives)
     if (repo) {
-      trackArchive(EventAction.FILTER, repo.name)
+      trackArchive(EventAction.FILTER, repo)
     }
   }
 
@@ -258,7 +264,7 @@ const Archives: React.FC = () => {
     (archive: Archive) => {
       setRestoreArchive(archive)
       setShowRestoreWizard(true)
-      trackArchive(EventAction.VIEW, selectedRepository?.name)
+      trackArchive(EventAction.VIEW, selectedRepository || undefined)
     },
     [selectedRepository, trackArchive, EventAction]
   )
@@ -318,6 +324,8 @@ const Archives: React.FC = () => {
     return new Date(b.start).getTime() - new Date(a.start).getTime()
   })
 
+  const repositoryStats = useRepositoryStats(repoInfo?.data?.info, selectedRepository?.borg_version)
+
   // Get last restore job for selected repository
   const lastRestoreJob = React.useMemo(() => {
     if (!selectedRepository || !restoreJobsData?.data?.jobs) return null
@@ -334,7 +342,7 @@ const Archives: React.FC = () => {
   // Handle viewing archive contents
   const handleViewArchive = (archive: Archive) => {
     setViewArchive(archive)
-    trackArchive(EventAction.VIEW, selectedRepository?.name)
+    trackArchive(EventAction.VIEW, selectedRepository || undefined)
   }
 
   const handleRestoreArchive = (archive: Archive) => {
@@ -357,8 +365,8 @@ const Archives: React.FC = () => {
       {/* Repository Selector */}
       <RepositorySelectorCard
         repositories={repositories}
-        selectedRepositoryId={selectedRepositoryId}
-        onRepositoryChange={handleRepositoryChange}
+        value={selectedRepositoryId}
+        onChange={(v) => handleRepositoryChange(v as number)}
         loading={loadingRepositories}
       />
 
@@ -380,11 +388,8 @@ const Archives: React.FC = () => {
           </Typography>
         </Box>
       )}
-      {selectedRepositoryId && !loadingRepoInfo && repoInfo?.data?.info?.cache?.stats && (
-        <RepositoryStatsGrid
-          stats={repoInfo.data.info.cache.stats}
-          archivesCount={archivesList.length}
-        />
+      {selectedRepositoryId && !loadingRepoInfo && repositoryStats && (
+        <RepositoryStatsGrid stats={repositoryStats} archivesCount={archivesList.length} />
       )}
 
       {/* Last Restore Job for Selected Repository */}
@@ -423,6 +428,7 @@ const Archives: React.FC = () => {
           onMountArchive={openMountDialog}
           onDeleteArchive={(archiveName) => setShowDeleteConfirm(archiveName)}
           mountDisabled={mountArchiveMutation.isPending}
+          canDelete={getRepoCapabilities({ mode: selectedRepository?.mode }).canDelete}
         />
       )}
 
@@ -430,7 +436,7 @@ const Archives: React.FC = () => {
       <ArchiveContentsDialog
         open={!!viewArchive}
         archive={viewArchive}
-        repositoryId={selectedRepositoryId}
+        repository={selectedRepository ?? null}
         onClose={() => setViewArchive(null)}
         onDownloadFile={(archiveName, filePath) => {
           if (selectedRepository) {
@@ -466,6 +472,7 @@ const Archives: React.FC = () => {
           onClose={() => setLockError(null)}
           repositoryId={lockError.repositoryId}
           repositoryName={lockError.repositoryName}
+          borgVersion={lockError.borgVersion}
           onLockBroken={() => {
             // Invalidate queries to retry
             queryClient.invalidateQueries({

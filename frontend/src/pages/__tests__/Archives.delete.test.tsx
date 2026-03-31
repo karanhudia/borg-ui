@@ -14,8 +14,8 @@ import * as apiModule from '../../services/api'
 
 // Mock heavy child components to keep the test focused on deletion logic
 vi.mock('../../components/RepositorySelectorCard', () => ({
-  default: ({ onRepositoryChange }: { onRepositoryChange: (id: number) => void }) => (
-    <button onClick={() => onRepositoryChange(1)}>Select Repo</button>
+  default: ({ onChange }: { onChange: (id: number) => void }) => (
+    <button onClick={() => onChange(1)}>Select Repo</button>
   ),
 }))
 vi.mock('../../components/RepositoryStatsGrid', () => ({
@@ -53,8 +53,11 @@ vi.mock('react-router-dom', async (importOriginal) => {
   }
 })
 
-vi.mock('../../hooks/useMatomo', () => ({
-  useMatomo: () => ({ trackArchive: vi.fn(), EventAction: { DELETE: 'delete', FILTER: 'filter' } }),
+vi.mock('../../hooks/useAnalytics', () => ({
+  useAnalytics: () => ({
+    trackArchive: vi.fn(),
+    EventAction: { DELETE: 'delete', FILTER: 'filter' },
+  }),
 }))
 
 vi.mock('../../hooks/useAuth', () => ({

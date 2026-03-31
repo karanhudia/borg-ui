@@ -3,6 +3,10 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import WizardStepLocation from '../WizardStepLocation'
 
+vi.mock('../../../hooks/usePlan', () => ({
+  usePlan: () => ({ plan: 'community', features: {}, isLoading: false, can: () => true }),
+}))
+
 const mockSshConnections = [
   {
     id: 1,

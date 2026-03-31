@@ -10,7 +10,6 @@ from typing import Optional
 import shutil
 
 from app.database.models import RestoreJob, Repository, SSHConnection, SSHKey
-from app.core.borg import borg
 from app.database.database import SessionLocal
 from app.services.notification_service import notification_service
 

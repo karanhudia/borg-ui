@@ -11,7 +11,7 @@ from datetime import datetime
 import structlog
 from app.database.models import Repository, SystemSettings
 from app.database.database import SessionLocal
-from app.api.repositories import update_repository_stats
+from app.core.borg_router import BorgRouter
 
 logger = structlog.get_logger()
 
@@ -48,8 +48,7 @@ class StatsRefreshScheduler:
 
             for repo in repos:
                 try:
-                    # Refresh stats for this repository
-                    result = await update_repository_stats(repo, db)
+                    result = await BorgRouter(repo).update_stats(db)
                     if result:
                         success_count += 1
                         logger.debug("Refreshed stats for repository",

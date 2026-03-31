@@ -12,7 +12,6 @@ from app.database.database import get_db
 from app.database.models import User, Repository, DeleteArchiveJob
 from app.core.security import get_current_user
 from app.core.borg import borg
-from app.api.repositories import update_repository_stats
 from app.services.delete_archive_service import delete_archive_service
 import asyncio
 
@@ -34,7 +33,6 @@ async def list_archives(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"key": "backend.errors.restore.repositoryNotFound"}
             )
-
         result = await borg.list_archives(
             repository,
             remote_path=repo.remote_path,
@@ -75,7 +73,6 @@ async def get_archive_info(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"key": "backend.errors.restore.repositoryNotFound"}
             )
-
         result = await borg.info_archive(
             repository,
             archive_id,
@@ -196,7 +193,6 @@ async def get_archive_contents(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"key": "backend.errors.restore.repositoryNotFound"}
             )
-
         result = await borg.list_archive_contents(
             repository,
             archive_id,
@@ -240,7 +236,6 @@ async def delete_archive(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"key": "backend.errors.restore.repositoryNotFound"}
             )
-
         # Check if there's already a running delete job for this archive
         running_job = db.query(DeleteArchiveJob).filter(
             DeleteArchiveJob.repository_id == repo.id,
@@ -325,7 +320,6 @@ async def download_file_from_archive(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"key": "backend.errors.archives.repositoryNotFound"}
             )
-
         # Create a temporary directory for extraction
         temp_dir = tempfile.mkdtemp()
 

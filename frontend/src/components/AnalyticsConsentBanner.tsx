@@ -3,7 +3,11 @@ import { useTranslation } from 'react-i18next'
 import { Paper, Typography, Switch, Button, FormControlLabel, Link, Stack } from '@mui/material'
 import { BarChart3 } from 'lucide-react'
 import { settingsAPI } from '../services/api'
-import { resetOptOutCache, trackConsentResponse } from '../utils/matomo'
+import {
+  PUBLIC_ANALYTICS_DASHBOARD_URL,
+  resetOptOutCache,
+  trackConsentResponse,
+} from '../utils/analytics'
 
 interface AnalyticsConsentBannerProps {
   onConsentGiven: () => void
@@ -66,7 +70,7 @@ export default function AnalyticsConsentBanner({ onConsentGiven }: AnalyticsCons
 
         <Typography variant="body2" color="text.secondary">
           <Link
-            href="https://analytics.nullcodeai.dev/"
+            href={PUBLIC_ANALYTICS_DASHBOARD_URL}
             target="_blank"
             rel="noopener noreferrer"
             sx={{ fontWeight: 500 }}

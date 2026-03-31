@@ -24,6 +24,7 @@ import { Save, Trash2, AlertTriangle, HardDrive } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { settingsAPI } from '../services/api'
 import { translateBackendKey } from '../utils/translateBackendKey'
+import { useAnalytics } from '../hooks/useAnalytics'
 
 interface LogStorage {
   total_size_mb: number
@@ -46,6 +47,7 @@ interface SystemSettings {
 const LogManagementTab: React.FC = () => {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const { trackSystem, EventAction } = useAnalytics()
 
   // Local state for form values
   const [logSavePolicy, setLogSavePolicy] = useState('failed_and_warnings')
@@ -120,6 +122,13 @@ const LogManagementTab: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['system-settings'] })
       queryClient.invalidateQueries({ queryKey: ['log-storage-stats'] })
       setHasChanges(false)
+      trackSystem(EventAction.EDIT, {
+        section: 'log_management',
+        log_save_policy: logSavePolicy,
+        retention_days: retentionDays,
+        max_total_size_mb: maxTotalSizeMb,
+        cleanup_on_startup: cleanupOnStartup,
+      })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -139,6 +148,7 @@ const LogManagementTab: React.FC = () => {
       toast.success(translateBackendKey(data.message) || t('logManagement.cleanupCompleted'))
       queryClient.invalidateQueries({ queryKey: ['log-storage-stats'] })
       queryClient.invalidateQueries({ queryKey: ['system-settings'] })
+      trackSystem(EventAction.DELETE, { section: 'log_management', operation: 'manual_cleanup' })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {

@@ -70,6 +70,10 @@ class Repository(Base):
     mode = Column(String, default="full")  # full: backups + observability, observe: observability-only
     bypass_lock = Column(Boolean, default=False)  # Use --bypass-lock for read-only storage access (observe-only repos)
 
+    # Borg version this repository was created with (1 or 2)
+    # Controls which binary and /api/v2/ routes are used for all operations
+    borg_version = Column(Integer, default=1, nullable=False)
+
     # Custom flags for borg create command (advanced users)
     custom_flags = Column(Text, nullable=True)  # Custom command-line flags for borg create (e.g., "--stats --progress")
 
@@ -395,6 +399,10 @@ class SystemSettings(Base):
     auto_cleanup = Column(Boolean, default=False)
     cleanup_retention_days = Column(Integer, default=90)
 
+    # Borg binary paths — both versions can coexist in the Docker image
+    borg1_binary_path = Column(String, default="borg", nullable=False)
+    borg2_binary_path = Column(String, default="borg2", nullable=False)
+
     # Beta features
     use_new_wizard = Column(Boolean, default=False, nullable=False)  # Enable new repository wizard (beta)
     bypass_lock_on_info = Column(Boolean, default=False, nullable=False)  # Use --bypass-lock for all borg info commands (beta fix for SSH lock issues)
@@ -415,6 +423,9 @@ class SystemSettings(Base):
     mqtt_tls_ca_cert = Column(String, nullable=True)  # Path to CA certificate file
     mqtt_tls_client_cert = Column(String, nullable=True)  # Path to client certificate file
     mqtt_tls_client_key = Column(String, nullable=True)  # Path to client key file
+
+    # Plan / feature gating
+    plan = Column(String, default="pro", nullable=False)
 
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
@@ -501,6 +512,9 @@ class InstalledPackage(Base):
     created_at = Column(DateTime, default=utc_now, nullable=False)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
+    # Cascade delete install jobs when package is deleted
+    install_jobs = relationship("PackageInstallJob", cascade="all, delete-orphan", passive_deletes=True)
+
     def __repr__(self):
         return f"<InstalledPackage(id={self.id}, name='{self.name}', status='{self.status}')>"
 
@@ -508,7 +522,7 @@ class PackageInstallJob(Base):
     __tablename__ = "package_install_jobs"
 
     id = Column(Integer, primary_key=True, index=True)
-    package_id = Column(Integer, ForeignKey("installed_packages.id"), nullable=False)
+    package_id = Column(Integer, ForeignKey("installed_packages.id", ondelete="CASCADE"), nullable=False)
     status = Column(String, default="pending", nullable=False)  # pending, installing, completed, failed
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
@@ -543,7 +557,7 @@ class Script(Base):
     # Metadata
     created_at = Column(DateTime, default=utc_now, nullable=False)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
-    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Template info
     is_template = Column(Boolean, default=False, nullable=False)  # Is this a built-in template?
@@ -600,8 +614,8 @@ class ScriptExecution(Base):
     __tablename__ = "script_executions"
 
     id = Column(Integer, primary_key=True, index=True)
-    script_id = Column(Integer, ForeignKey("scripts.id"), nullable=False, index=True)
-    repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=True, index=True)  # NULL for standalone runs
+    script_id = Column(Integer, ForeignKey("scripts.id", ondelete="CASCADE"), nullable=False, index=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id", ondelete="SET NULL"), nullable=True, index=True)  # NULL for standalone runs
     backup_job_id = Column(Integer, ForeignKey("backup_jobs.id", ondelete="CASCADE"), nullable=True, index=True)  # NULL for standalone runs
 
     # Execution details
@@ -619,7 +633,7 @@ class ScriptExecution(Base):
 
     # Context
     triggered_by = Column(String(50), nullable=True)  # 'scheduled', 'manual', 'backup', 'api'
-    triggered_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    triggered_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     script = relationship("Script", back_populates="executions")

@@ -1,0 +1,72 @@
+# Standalone dev compose — NOT an override of docker-compose.yml
+# Run with: docker-compose -f docker-compose.dev.yml up  (no base file)
+# Or via:   ./scripts/dev.sh
+#
+# Separate container names + ports so prod (docker-compose.yml) can run alongside:
+#   Prod backend:  borg-web-ui   on PORT     (default 8082)
+#   Dev backend:   borg-web-ui-dev on DEV_PORT (default 8083)
+#   Prod redis:    borg-redis    on 6379
+#   Dev redis:     borg-redis-dev on 6380
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: borg-web-ui-dev
+    restart: unless-stopped
+    privileged: true
+    ports:
+      - "${DEV_PORT:-8083}:${DEV_PORT:-8083}"
+    volumes:
+      - ./app:/app/app                    # Hot-reload: local source mounted over image
+      - ./.local-data:/data               # Local dev data (db, ssh keys, logs)
+      - ${LOCAL_STORAGE_PATH:-/}:/local:rw
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+    environment:
+      - PUID=0
+      - PORT=${DEV_PORT:-8083}
+      - DATA_DIR=/data
+      - DATABASE_URL=sqlite:////data/borg.db
+      - SECRET_KEY=dev-secret-key-not-for-production
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LOCAL_MOUNT_POINTS=${LOCAL_MOUNT_POINTS:-/local}
+      - CACHE_TTL_SECONDS=7200
+      - CACHE_MAX_SIZE_MB=2048
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["python -m uvicorn app.main:app --reload --host 0.0.0.0 --port ${DEV_PORT:-8083}"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - borg_dev_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: borg-redis-dev
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - borg_dev_network
+
+networks:
+  borg_dev_network:
+    driver: bridge

@@ -95,6 +95,30 @@ describe('ArchiveCard', () => {
     expect(mountButton).not.toBeDisabled()
   })
 
+  describe('canDelete prop', () => {
+    it('hides delete button when canDelete is false', () => {
+      render(<ArchiveCard archive={mockArchive} {...mockHandlers} canDelete={false} />)
+
+      // View, Restore, Mount remain — delete icon button is gone
+      expect(screen.getByRole('button', { name: /view/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /restore/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /mount/i })).toBeInTheDocument()
+      expect(screen.getAllByRole('button')).toHaveLength(3)
+    })
+
+    it('shows delete button when canDelete is true', () => {
+      render(<ArchiveCard archive={mockArchive} {...mockHandlers} canDelete={true} />)
+
+      expect(screen.getAllByRole('button')).toHaveLength(4)
+    })
+
+    it('shows delete button by default', () => {
+      render(<ArchiveCard archive={mockArchive} {...mockHandlers} />)
+
+      expect(screen.getAllByRole('button')).toHaveLength(4)
+    })
+  })
+
   it('has hover effect styling', () => {
     const { container } = render(<ArchiveCard archive={mockArchive} {...mockHandlers} />)
 

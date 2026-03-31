@@ -3,12 +3,7 @@ import { Card, CardContent, Typography, Stack, Box } from '@mui/material'
 import { Calendar } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatDate, formatRelativeTime } from '../utils/dateUtils'
-
-interface Repository {
-  id: number
-  name: string
-  path: string
-}
+import { Repository } from '../types'
 
 interface UpcomingJob {
   id: number

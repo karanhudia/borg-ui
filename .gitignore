@@ -96,6 +96,11 @@ Thumbs.db
 # Docker
 .dockerignore
 
+# Claude Code
+.claude/worktrees/
+.superpowers/
+docs/superpowers/
+
 # Temporary files
 *.tmp
 *.temp
@@ -137,3 +142,4 @@ trivy-*.txt
 trivy-*.sarif
 .planning/
 
+.worktrees/

@@ -15,14 +15,9 @@ import {
   DialogActions,
   Stack,
   Alert,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
   Chip,
 } from '@mui/material'
 import {
-  Database,
   Archive as ArchiveIcon,
   RefreshCw,
   CheckCircle,
@@ -31,15 +26,18 @@ import {
   RotateCcw,
 } from 'lucide-react'
 import { restoreAPI, repositoriesAPI } from '../services/api'
+import { BorgApiClient } from '../services/borgApi'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
-import { useMatomo } from '../hooks/useMatomo'
+import { useAnalytics } from '../hooks/useAnalytics'
 import { formatDate, formatBytes as formatBytesUtil, formatTimeRange } from '../utils/dateUtils'
 import RepositoryInfo from '../components/RepositoryInfo'
 import PathSelectorField from '../components/PathSelectorField'
 import LockErrorDialog from '../components/LockErrorDialog'
 import { Archive, Repository } from '../types'
+import { getBorgVersion } from '../utils/repoCapabilities'
 import ArchiveBrowserDialog from '../components/ArchiveBrowserDialog'
+import RepositorySelectorCard from '../components/RepositorySelectorCard'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
 import RestoreJobCard from '../components/RestoreJobCard'
 
@@ -66,7 +64,7 @@ interface RestoreJob {
 
 const Restore: React.FC = () => {
   const { t } = useTranslation()
-  const { trackArchive, EventAction } = useMatomo()
+  const { trackArchive, EventAction } = useAnalytics()
   const [selectedRepository, setSelectedRepository] = useState<string>('')
   const [selectedRepoData, setSelectedRepoData] = useState<Repository | null>(null)
   const [restoreArchive, setRestoreArchive] = useState<Archive | null>(null)
@@ -76,6 +74,7 @@ const Restore: React.FC = () => {
   const [lockError, setLockError] = useState<{
     repositoryId: number
     repositoryName: string
+    borgVersion?: 1 | 2
   } | null>(null)
   const queryClient = useQueryClient()
   const location = useLocation()
@@ -93,7 +92,7 @@ const Restore: React.FC = () => {
     error: archivesError,
   } = useQuery({
     queryKey: ['repository-archives', selectedRepoData?.id],
-    queryFn: () => repositoriesAPI.listRepositoryArchives(selectedRepoData!.id),
+    queryFn: () => new BorgApiClient(selectedRepoData!).listArchives(),
     enabled: !!selectedRepoData?.id,
     retry: false,
   })
@@ -105,6 +104,7 @@ const Restore: React.FC = () => {
       setLockError({
         repositoryId: selectedRepoData.id,
         repositoryName: selectedRepoData.name,
+        borgVersion: getBorgVersion(selectedRepoData),
       })
     }
   }, [archivesError, selectedRepoData])
@@ -112,7 +112,7 @@ const Restore: React.FC = () => {
   // Get repository info for statistics
   const { data: repoInfo, error: repoInfoError } = useQuery({
     queryKey: ['repository-info', selectedRepoData?.id],
-    queryFn: () => repositoriesAPI.getRepositoryInfo(selectedRepoData!.id),
+    queryFn: () => new BorgApiClient(selectedRepoData!).getInfo(),
     enabled: !!selectedRepoData?.id,
     retry: false,
   })
@@ -124,6 +124,7 @@ const Restore: React.FC = () => {
       setLockError({
         repositoryId: selectedRepoData.id,
         repositoryName: selectedRepoData.name,
+        borgVersion: getBorgVersion(selectedRepoData),
       })
     }
   }, [repoInfoError, selectedRepoData])
@@ -135,7 +136,7 @@ const Restore: React.FC = () => {
     error: archiveInfoError,
   } = useQuery({
     queryKey: ['archive-info', selectedRepoData?.id, restoreArchive?.name],
-    queryFn: () => repositoriesAPI.getArchiveInfo(selectedRepoData!.id, restoreArchive!.name),
+    queryFn: () => new BorgApiClient(selectedRepoData!).getArchiveInfo(restoreArchive!.name),
     enabled: !!selectedRepoData && !!restoreArchive,
     retry: false,
   })
@@ -151,6 +152,7 @@ const Restore: React.FC = () => {
       setLockError({
         repositoryId: selectedRepoData.id,
         repositoryName: selectedRepoData.name,
+        borgVersion: getBorgVersion(selectedRepoData),
       })
     }
   }, [archiveInfoError, selectedRepoData])
@@ -183,7 +185,7 @@ const Restore: React.FC = () => {
     onSuccess: () => {
       toast.success(t('restore.toasts.started'))
       // Track restore started
-      trackArchive(EventAction.START, selectedRepoData?.name)
+      trackArchive(EventAction.START, selectedRepoData || undefined)
 
       setRestoreArchive(null)
       setDestination('')
@@ -207,7 +209,7 @@ const Restore: React.FC = () => {
     setSelectedRepoData(repo || null)
     // Track archive listing (selecting a repo to filter/list its archives for restore)
     if (repo) {
-      trackArchive(EventAction.FILTER, repo.name)
+      trackArchive(EventAction.FILTER, repo)
     }
   }
 
@@ -241,7 +243,7 @@ const Restore: React.FC = () => {
       setSelectedPaths([]) // Reset paths
       setShowBrowser(true)
       // Track viewing archive for restore
-      trackArchive(EventAction.VIEW, selectedRepoData?.name)
+      trackArchive(EventAction.VIEW, selectedRepoData || undefined)
     },
     [
       setRestoreArchive,
@@ -453,63 +455,14 @@ const Restore: React.FC = () => {
       </Box>
 
       {/* Repository Selector */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
-            <Database size={20} color="#2e7d32" />
-            <Typography variant="h6" fontWeight={600}>
-              {t('restore.selectRepository')}
-            </Typography>
-          </Stack>
-          <FormControl fullWidth sx={{ minWidth: { xs: '100%', sm: 300 } }}>
-            <InputLabel id="repository-select-label">Repository</InputLabel>
-            <Select
-              labelId="repository-select-label"
-              id="repository-select"
-              value={selectedRepository}
-              onChange={(e) => handleRepositoryChange(e.target.value)}
-              label="Repository"
-              disabled={loadingRepositories}
-              sx={{ height: { xs: 48, sm: 56 } }}
-            >
-              <MenuItem value="" disabled>
-                {loadingRepositories
-                  ? t('restore.loadingRepositories')
-                  : t('restore.selectRepositoryPlaceholder')}
-              </MenuItem>
-              {repositories.map((repo: Repository) => (
-                <MenuItem key={repo.id} value={repo.path} disabled={repo.has_running_maintenance}>
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Database size={16} />
-                    <Box>
-                      <Typography variant="body2" fontWeight={500}>
-                        {repo.name}
-                        {repo.has_running_maintenance && (
-                          <Typography
-                            component="span"
-                            variant="caption"
-                            color="warning.main"
-                            sx={{ ml: 1 }}
-                          >
-                            {t('restore.maintenanceRunningParens')}
-                          </Typography>
-                        )}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ fontFamily: 'monospace' }}
-                      >
-                        {repo.path}
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </CardContent>
-      </Card>
+      <RepositorySelectorCard
+        title={t('restore.selectRepository')}
+        repositories={repositories}
+        value={selectedRepository}
+        onChange={(v) => handleRepositoryChange(v as string)}
+        loading={loadingRepositories}
+        valueKey="path"
+      />
 
       {/* Repository Info */}
       {selectedRepoData && repoInfo?.data?.info && (
@@ -718,7 +671,7 @@ const Restore: React.FC = () => {
         <DialogActions>
           <Button
             onClick={() => {
-              trackArchive(EventAction.STOP, selectedRepoData?.name)
+              trackArchive(EventAction.STOP, selectedRepoData || undefined)
               setRestoreArchive(null)
             }}
             disabled={restoreMutation.isPending}
@@ -762,6 +715,7 @@ const Restore: React.FC = () => {
           onClose={() => setLockError(null)}
           repositoryId={lockError.repositoryId}
           repositoryName={lockError.repositoryName}
+          borgVersion={lockError.borgVersion}
           onLockBroken={() => {
             queryClient.invalidateQueries({
               queryKey: ['repository-archives', lockError.repositoryId],

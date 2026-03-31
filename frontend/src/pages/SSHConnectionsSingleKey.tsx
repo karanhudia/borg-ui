@@ -41,7 +41,7 @@ import {
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import RemoteMachineCard from '../components/RemoteMachineCard'
-import { useMatomo } from '../hooks/useMatomo'
+import { useAnalytics } from '../hooks/useAnalytics'
 
 interface StorageInfo {
   total: number
@@ -77,7 +77,7 @@ interface SSHConnection {
 export default function SSHConnectionsSingleKey() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const { track, EventCategory, EventAction } = useMatomo()
+  const { track, EventCategory, EventAction } = useAnalytics()
 
   // State
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false)
@@ -155,7 +155,7 @@ export default function SSHConnectionsSingleKey() {
       toast.success(t('sshConnections.toasts.keyGenerated'))
       queryClient.invalidateQueries({ queryKey: ['system-ssh-key'] })
       setGenerateDialogOpen(false)
-      track(EventCategory.SSH, EventAction.CREATE, 'key')
+      track(EventCategory.SSH, EventAction.CREATE, { resource: 'key' })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -180,7 +180,7 @@ export default function SSHConnectionsSingleKey() {
         public_key_path: '',
         description: 'Imported system SSH key for all remote connections',
       })
-      track(EventCategory.SSH, EventAction.UPLOAD, 'key')
+      track(EventCategory.SSH, EventAction.UPLOAD, { resource: 'key' })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -210,7 +210,7 @@ export default function SSHConnectionsSingleKey() {
         ssh_path_prefix: '',
         mount_point: '',
       })
-      track(EventCategory.SSH, EventAction.CREATE, 'connection')
+      track(EventCategory.SSH, EventAction.CREATE, { resource: 'connection' })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -229,7 +229,7 @@ export default function SSHConnectionsSingleKey() {
     onSuccess: (response) => {
       if (response.data.success) {
         toast.success(t('sshConnections.toasts.connectionTestSuccess'))
-        track(EventCategory.SSH, EventAction.CREATE, 'connection')
+        track(EventCategory.SSH, EventAction.TEST, { resource: 'connection' })
       } else {
         toast.error(t('sshConnections.toasts.connectionTestFailed'))
       }
@@ -253,7 +253,7 @@ export default function SSHConnectionsSingleKey() {
       toast.success(t('sshConnections.toasts.connectionUpdated'))
       setEditConnectionDialogOpen(false)
       setSelectedConnection(null)
-      track(EventCategory.SSH, EventAction.EDIT, 'connection')
+      track(EventCategory.SSH, EventAction.EDIT, { resource: 'connection' })
 
       // Automatically test the connection after update
       try {
@@ -283,7 +283,7 @@ export default function SSHConnectionsSingleKey() {
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
       setDeleteConnectionDialogOpen(false)
       setSelectedConnection(null)
-      track(EventCategory.SSH, EventAction.DELETE, 'connection')
+      track(EventCategory.SSH, EventAction.DELETE, { resource: 'connection' })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -300,7 +300,7 @@ export default function SSHConnectionsSingleKey() {
     onSuccess: () => {
       toast.success(t('sshConnections.toasts.storageRefreshed'))
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
-      track(EventCategory.SSH, EventAction.VIEW, 'storage')
+      track(EventCategory.SSH, EventAction.VIEW, { resource: 'storage' })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -324,7 +324,7 @@ export default function SSHConnectionsSingleKey() {
         )
       }
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
-      track(EventCategory.SSH, EventAction.TEST, 'connection')
+      track(EventCategory.SSH, EventAction.TEST, { resource: 'connection' })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -343,7 +343,7 @@ export default function SSHConnectionsSingleKey() {
       queryClient.invalidateQueries({ queryKey: ['system-ssh-key'] })
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
       setDeleteKeyDialogOpen(false)
-      track(EventCategory.SSH, EventAction.DELETE, 'key')
+      track(EventCategory.SSH, EventAction.DELETE, { resource: 'key' })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -364,7 +364,10 @@ export default function SSHConnectionsSingleKey() {
         queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
         setRedeployKeyDialogOpen(false)
         setRedeployPassword('')
-        track(EventCategory.SSH, EventAction.START, 'deploy')
+        track(EventCategory.SSH, EventAction.START, {
+          resource: 'connection',
+          operation: 'deploy_key',
+        })
       } else {
         toast.error(
           translateBackendKey(response.data.error) || t('sshConnections.toasts.keyDeployFailed')

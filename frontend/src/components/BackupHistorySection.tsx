@@ -12,6 +12,8 @@ import {
 import { Clock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import BackupJobsTable from './BackupJobsTable'
+import RepoSelect from './RepoSelect'
+import { useAnalytics } from '../hooks/useAnalytics'
 
 interface ScheduledJob {
   id: number
@@ -42,11 +44,7 @@ interface ScheduledJob {
   last_compact: string | null
 }
 
-interface Repository {
-  id: number
-  name: string
-  path: string
-}
+import { Repository } from '../types'
 
 interface BackupJob {
   id: string
@@ -98,6 +96,7 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
   onFilterRepositoryChange,
   onFilterStatusChange,
 }) => {
+  const { trackNavigation, EventAction } = useAnalytics()
   // Apply filters
   const filteredBackupJobs = backupJobs.filter((job: BackupJob) => {
     if (filterSchedule !== 'all' && job.scheduled_job_id !== filterSchedule) return false
@@ -140,7 +139,15 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
             <Select
               value={filterSchedule}
               label="Schedule"
-              onChange={(e) => onFilterScheduleChange(e.target.value as number | 'all')}
+              onChange={(e) => {
+                const value = e.target.value as number | 'all'
+                onFilterScheduleChange(value)
+                trackNavigation(EventAction.FILTER, {
+                  section: 'backup_history',
+                  filter_kind: 'schedule',
+                  filter_value: value,
+                })
+              }}
             >
               <MenuItem value="all">{t('backupHistory.allSchedules')}</MenuItem>
               {scheduledJobs.map((job: ScheduledJob) => (
@@ -151,28 +158,40 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
             </Select>
           </FormControl>
 
-          <FormControl size="small" sx={{ minWidth: 200 }}>
-            <InputLabel>Repository</InputLabel>
-            <Select
-              value={filterRepository}
-              label="Repository"
-              onChange={(e) => onFilterRepositoryChange(e.target.value)}
-            >
-              <MenuItem value="all">{t('backupHistory.allRepositories')}</MenuItem>
-              {repositories.map((repo: Repository) => (
-                <MenuItem key={repo.id} value={repo.path}>
-                  {repo.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <RepoSelect
+            repositories={repositories}
+            value={filterRepository}
+            onChange={(v) => {
+              onFilterRepositoryChange(v as string)
+              trackNavigation(EventAction.FILTER, {
+                section: 'backup_history',
+                filter_kind: 'repository',
+                filter_value: v as string,
+              })
+            }}
+            valueKey="path"
+            size="small"
+            label="Repository"
+            hidePath
+            prefixItems={<MenuItem value="all">{t('backupHistory.allRepositories')}</MenuItem>}
+            sx={{ minWidth: 200 }}
+            fullWidth={false}
+          />
 
           <FormControl size="small" sx={{ minWidth: 150 }}>
             <InputLabel>Status</InputLabel>
             <Select
               value={filterStatus}
               label="Status"
-              onChange={(e) => onFilterStatusChange(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value
+                onFilterStatusChange(value)
+                trackNavigation(EventAction.FILTER, {
+                  section: 'backup_history',
+                  filter_kind: 'status',
+                  filter_value: value,
+                })
+              }}
             >
               <MenuItem value="all">{t('backupHistory.allStatus')}</MenuItem>
               <MenuItem value="completed">{t('backupHistory.completed')}</MenuItem>

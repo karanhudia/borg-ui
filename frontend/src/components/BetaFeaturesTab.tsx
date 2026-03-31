@@ -13,10 +13,12 @@ import {
 } from '@mui/material'
 import { toast } from 'react-hot-toast'
 import { settingsAPI } from '../services/api'
+import { useAnalytics } from '../hooks/useAnalytics'
 
 const BetaFeaturesTab: React.FC = () => {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const { trackSettings, EventAction } = useAnalytics()
   const [bypassLockOnInfo, setBypassLockOnInfo] = useState(false)
   const [bypassLockOnList, setBypassLockOnList] = useState(false)
   const [showRestoreTab, setShowRestoreTab] = useState(false)
@@ -71,21 +73,41 @@ const BetaFeaturesTab: React.FC = () => {
 
   const handleToggle = (checked: boolean) => {
     setBypassLockOnInfo(checked)
+    trackSettings(EventAction.EDIT, {
+      section: 'beta_features',
+      feature: 'bypass_lock_on_info',
+      enabled: checked,
+    })
     saveSettingsMutation.mutate({ bypass_lock_on_info: checked })
   }
 
   const handleListToggle = (checked: boolean) => {
     setBypassLockOnList(checked)
+    trackSettings(EventAction.EDIT, {
+      section: 'beta_features',
+      feature: 'bypass_lock_on_list',
+      enabled: checked,
+    })
     saveSettingsMutation.mutate({ bypass_lock_on_list: checked })
   }
 
   const handleRestoreTabToggle = (checked: boolean) => {
     setShowRestoreTab(checked)
+    trackSettings(EventAction.EDIT, {
+      section: 'beta_features',
+      feature: 'show_restore_tab',
+      enabled: checked,
+    })
     saveSettingsMutation.mutate({ show_restore_tab: checked })
   }
 
   const handleMQTTBetaToggle = (checked: boolean) => {
     setMqttBetaEnabled(checked)
+    trackSettings(EventAction.EDIT, {
+      section: 'beta_features',
+      feature: 'mqtt_beta_enabled',
+      enabled: checked,
+    })
     saveSettingsMutation.mutate({ mqtt_beta_enabled: checked })
   }
 

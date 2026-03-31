@@ -15,11 +15,7 @@ import {
   CircularProgress,
 } from '@mui/material'
 import { Delete, Info } from '@mui/icons-material'
-
-interface Repository {
-  id: number
-  name: string
-}
+import { Repository } from '../types'
 
 interface PruneForm {
   keep_hourly: number

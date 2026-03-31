@@ -12,9 +12,9 @@ vi.mock('../../services/api', () => ({
   },
 }))
 
-// Mock Matomo hook
-vi.mock('../../hooks/useMatomo', () => ({
-  useMatomo: () => ({
+// Mock analytics hook
+vi.mock('../../hooks/useAnalytics', () => ({
+  useAnalytics: () => ({
     track: vi.fn(),
     trackRepository: vi.fn(),
     EventCategory: { REPOSITORY: 'repository' },
@@ -455,8 +455,8 @@ describe('RepositoryWizard', () => {
 
         await goToStep3(user)
 
-        // Look for the MUI Select element with "Repokey (Recommended)" as the default value
-        expect(screen.getByText('Repokey (Recommended)')).toBeInTheDocument()
+        // Look for the MUI Select element with "Repository Key" as the default value
+        expect(screen.getByText('Repository Key')).toBeInTheDocument()
       })
 
       it('shows Passphrase input', async () => {

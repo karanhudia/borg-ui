@@ -74,28 +74,36 @@ def upgrade(connection):
 
         new_ddl = "CREATE TABLE scheduled_jobs_new (\n" + ",\n".join(col_defs) + "\n)"
 
-        # ── Guard against stale temp table from a previous interrupted run ───
-        connection.execute(text("DROP TABLE IF EXISTS scheduled_jobs_new"))
-        connection.execute(text(new_ddl))
+        # ── Disable FK enforcement for the drop/rename swap ──────────────────
+        # Required because backup_jobs and scheduled_job_repositories reference
+        # scheduled_jobs; SQLite blocks DROP TABLE when child rows exist.
+        connection.execute(text("PRAGMA foreign_keys = OFF"))
 
-        # ── Copy using explicit column names ──────────────────────────────────
-        col_names = ", ".join(row[1] for row in col_rows)
-        connection.execute(text(
-            f"INSERT INTO scheduled_jobs_new ({col_names})"
-            f" SELECT {col_names} FROM scheduled_jobs"
-        ))
+        try:
+            # ── Guard against stale temp table from a previous interrupted run ─
+            connection.execute(text("DROP TABLE IF EXISTS scheduled_jobs_new"))
+            connection.execute(text(new_ddl))
 
-        # ── Swap tables ───────────────────────────────────────────────────────
-        connection.execute(text("DROP TABLE scheduled_jobs"))
-        connection.execute(text("ALTER TABLE scheduled_jobs_new RENAME TO scheduled_jobs"))
+            # ── Copy using explicit column names ──────────────────────────────
+            col_names = ", ".join(row[1] for row in col_rows)
+            connection.execute(text(
+                f"INSERT INTO scheduled_jobs_new ({col_names})"
+                f" SELECT {col_names} FROM scheduled_jobs"
+            ))
 
-        # ── Recreate indexes ──────────────────────────────────────────────────
-        connection.execute(text(
-            "CREATE UNIQUE INDEX IF NOT EXISTS ix_scheduled_jobs_name ON scheduled_jobs (name)"
-        ))
-        connection.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_scheduled_jobs_id ON scheduled_jobs (id)"
-        ))
+            # ── Swap tables ───────────────────────────────────────────────────
+            connection.execute(text("DROP TABLE scheduled_jobs"))
+            connection.execute(text("ALTER TABLE scheduled_jobs_new RENAME TO scheduled_jobs"))
+
+            # ── Recreate indexes ──────────────────────────────────────────────
+            connection.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_scheduled_jobs_name ON scheduled_jobs (name)"
+            ))
+            connection.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_scheduled_jobs_id ON scheduled_jobs (id)"
+            ))
+        finally:
+            connection.execute(text("PRAGMA foreign_keys = ON"))
 
         print("✓ scheduled_jobs.pre_backup_script_id FK now has ON DELETE SET NULL")
         print("✓ scheduled_jobs.post_backup_script_id FK now has ON DELETE SET NULL")

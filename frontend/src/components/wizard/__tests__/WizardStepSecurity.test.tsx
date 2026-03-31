@@ -15,7 +15,7 @@ describe('WizardStepSecurity', () => {
     it('renders encryption method dropdown', () => {
       render(<WizardStepSecurity mode="create" data={defaultData} onChange={vi.fn()} />)
 
-      expect(screen.getByText('Repokey (Recommended)')).toBeInTheDocument()
+      expect(screen.getByText('Repository Key')).toBeInTheDocument()
     })
 
     it('renders passphrase input', () => {
@@ -113,7 +113,8 @@ describe('WizardStepSecurity', () => {
     })
 
     it('renders keyfile upload option', () => {
-      render(<WizardStepSecurity mode="import" data={defaultData} onChange={vi.fn()} />)
+      const keyfileData = { ...defaultData, encryption: 'keyfile' }
+      render(<WizardStepSecurity mode="import" data={keyfileData} onChange={vi.fn()} />)
 
       expect(screen.getByText(/Borg Keyfile \(Optional\)/i)).toBeInTheDocument()
       expect(screen.getByText(/Choose Keyfile/i)).toBeInTheDocument()
@@ -122,6 +123,7 @@ describe('WizardStepSecurity', () => {
     it('shows selected keyfile name', () => {
       const dataWithKeyfile = {
         ...defaultData,
+        encryption: 'keyfile',
         selectedKeyfile: new File([''], 'my-key.key', { type: 'application/octet-stream' }),
       }
 
@@ -133,6 +135,7 @@ describe('WizardStepSecurity', () => {
     it('shows success message when keyfile is selected', () => {
       const dataWithKeyfile = {
         ...defaultData,
+        encryption: 'keyfile',
         selectedKeyfile: new File([''], 'my-key.key', { type: 'application/octet-stream' }),
       }
 
@@ -150,12 +153,12 @@ describe('WizardStepSecurity', () => {
       render(<WizardStepSecurity mode="create" data={defaultData} onChange={onChange} />)
 
       // Click on the select to open dropdown
-      const selectButton = screen.getByText('Repokey (Recommended)')
+      const selectButton = screen.getByText('Repository Key')
       await user.click(selectButton)
 
       // Find and click keyfile option in the listbox
       const listbox = await screen.findByRole('listbox')
-      const keyfileOption = within(listbox).getByText('Keyfile')
+      const keyfileOption = within(listbox).getByText('Key File')
       await user.click(keyfileOption)
 
       expect(onChange).toHaveBeenCalledWith(
@@ -172,12 +175,12 @@ describe('WizardStepSecurity', () => {
       render(<WizardStepSecurity mode="create" data={defaultData} onChange={onChange} />)
 
       // Click on the select to open dropdown
-      const selectButton = screen.getByText('Repokey (Recommended)')
+      const selectButton = screen.getByText('Repository Key')
       await user.click(selectButton)
 
       // Find and click none option in the listbox
       const listbox = await screen.findByRole('listbox')
-      const noneOption = within(listbox).getByText('None (Unencrypted)')
+      const noneOption = within(listbox).getByText('None')
       await user.click(noneOption)
 
       expect(onChange).toHaveBeenCalledWith(

@@ -1,8 +1,10 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Autocomplete, TextField, Box, Typography, Stack, IconButton, Tooltip } from '@mui/material'
-import { HardDrive, ChevronUp, ChevronDown, X } from 'lucide-react'
+import { ChevronUp, ChevronDown, X } from 'lucide-react'
 import { Repository } from '../types'
+import RepoMenuItem from './RepoMenuItem'
+import { getRepoCapabilities } from '../utils/repoCapabilities'
 
 interface MultiRepositorySelectorProps {
   repositories: Repository[]
@@ -47,10 +49,9 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
   // Ensure repositories is always an array
   const safeRepositories = Array.isArray(repositories) ? repositories : []
 
-  // Filter repositories if needed
+  // Filter repositories if needed (filterMode='observe' excludes repos that can't back up)
   const availableRepos = filterMode
-    ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      safeRepositories.filter((repo: any) => repo.mode !== filterMode)
+    ? safeRepositories.filter((repo) => getRepoCapabilities(repo).canBackup)
     : safeRepositories
 
   // Get selected repositories in order
@@ -95,29 +96,14 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
         getOptionLabel={(option) => option.name}
         isOptionEqualToValue={(option, value) => option.id === value.id}
         renderOption={(props, option) => (
-          <Box component="li" {...props}>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ py: 0.5, width: '100%' }}>
-              <HardDrive size={16} style={{ flexShrink: 0 }} />
-              <Box sx={{ minWidth: 0, flex: 1 }}>
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  {option.name}
-                </Typography>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{
-                    fontFamily: 'monospace',
-                    fontSize: '0.75rem',
-                    display: 'block',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {option.path}
-                </Typography>
-              </Box>
-            </Stack>
+          <Box component="li" {...props} sx={{ py: 0.5 }}>
+            <RepoMenuItem
+              name={option.name}
+              path={option.path}
+              borgVersion={option.borg_version}
+              mode={option.mode as 'full' | 'observe' | undefined}
+              hasRunningMaintenance={option.has_running_maintenance}
+            />
           </Box>
         )}
         renderTags={() => null} // We render tags manually below
@@ -188,31 +174,14 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
                   </Typography>
                 )}
 
-                <HardDrive
-                  size={16}
-                  style={{ flexShrink: 0, color: 'var(--mui-palette-text-secondary)' }}
-                />
-
                 <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                  <Typography variant="body2" fontWeight={500}>
-                    {repo.name}
-                  </Typography>
-                  <Tooltip title={repo.path} placement="top">
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{
-                        fontFamily: 'monospace',
-                        fontSize: '0.7rem',
-                        display: 'block',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {repo.path}
-                    </Typography>
-                  </Tooltip>
+                  <RepoMenuItem
+                    name={repo.name}
+                    path={repo.path}
+                    borgVersion={repo.borg_version}
+                    mode={repo.mode as 'full' | 'observe' | undefined}
+                    hasRunningMaintenance={repo.has_running_maintenance}
+                  />
                 </Box>
 
                 <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>

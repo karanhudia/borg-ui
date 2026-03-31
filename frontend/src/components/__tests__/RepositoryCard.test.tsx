@@ -4,11 +4,11 @@ import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../../test/test-utils'
 import RepositoryCard from '../RepositoryCard'
 import * as useMaintenanceJobsModule from '../../hooks/useMaintenanceJobs'
-import * as useMatomoModule from '../../hooks/useMatomo'
+import * as useAnalyticsModule from '../../hooks/useAnalytics'
 
 // Mock the hooks
 vi.mock('../../hooks/useMaintenanceJobs')
-vi.mock('../../hooks/useMatomo')
+vi.mock('../../hooks/useAnalytics')
 
 describe('RepositoryCard', () => {
   const mockRepository = {
@@ -53,7 +53,7 @@ describe('RepositoryCard', () => {
     return labels[compression] || compression
   })
 
-  const mockMatomoTracking = {
+  const mockAnalyticsTracking = {
     trackRepository: vi.fn(),
     trackBackup: vi.fn(),
     trackMaintenance: vi.fn(),
@@ -63,6 +63,12 @@ describe('RepositoryCard', () => {
     trackMount: vi.fn(),
     trackSSH: vi.fn(),
     trackSettings: vi.fn(),
+    trackScripts: vi.fn(),
+    trackNotifications: vi.fn(),
+    trackSystem: vi.fn(),
+    trackPackage: vi.fn(),
+    trackNavigation: vi.fn(),
+    trackPlan: vi.fn(),
     trackAuth: vi.fn(),
     EventCategory: {
       REPOSITORY: 'Repository',
@@ -71,9 +77,14 @@ describe('RepositoryCard', () => {
       MOUNT: 'Mount',
       MAINTENANCE: 'Maintenance',
       SSH: 'SSH Connection',
+      SCRIPT: 'Script',
+      NOTIFICATION: 'Notification',
+      SYSTEM: 'System',
+      PACKAGE: 'Package',
       SETTINGS: 'Settings',
       AUTH: 'Authentication',
       NAVIGATION: 'Navigation',
+      PLAN: 'Plan',
     } as const,
     EventAction: {
       CREATE: 'Create',
@@ -107,7 +118,7 @@ describe('RepositoryCard', () => {
     vi.clearAllMocks()
     // Setup default mocks
     vi.spyOn(useMaintenanceJobsModule, 'useMaintenanceJobs').mockReturnValue(mockMaintenanceJobs)
-    vi.spyOn(useMatomoModule, 'useMatomo').mockReturnValue(mockMatomoTracking)
+    vi.spyOn(useAnalyticsModule, 'useAnalytics').mockReturnValue(mockAnalyticsTracking)
   })
 
   afterEach(() => {
@@ -316,6 +327,56 @@ describe('RepositoryCard', () => {
 
       expect(screen.getByRole('button', { name: /Backup Now/i })).toBeInTheDocument()
     })
+
+    it('hides Compact, Prune, and Delete buttons for observe mode', () => {
+      const observeRepo = { ...mockRepository, mode: 'observe' as const }
+      renderWithProviders(
+        <RepositoryCard
+          repository={observeRepo}
+          isInJobsSet={false}
+          isAdmin={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.queryByRole('button', { name: /Compact/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Prune/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Delete/i })).not.toBeInTheDocument()
+    })
+
+    it('shows Compact, Prune, and Delete buttons for full mode', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={mockRepository}
+          isInJobsSet={false}
+          isAdmin={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getByRole('button', { name: /Compact/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Prune/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Delete/i })).toBeInTheDocument()
+    })
+
+    it('shows Info, Check, and View Archives buttons for observe mode', () => {
+      const observeRepo = { ...mockRepository, mode: 'observe' as const }
+      renderWithProviders(
+        <RepositoryCard
+          repository={observeRepo}
+          isInJobsSet={false}
+          isAdmin={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getByRole('button', { name: /Info/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Check/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /View Archives/i })).toBeInTheDocument()
+    })
   })
 
   describe('Admin Features', () => {
@@ -396,11 +457,7 @@ describe('RepositoryCard', () => {
 
       await user.click(screen.getByRole('button', { name: /Info/i }))
       expect(mockCallbacks.onViewInfo).toHaveBeenCalledTimes(1)
-      expect(mockMatomoTracking.trackRepository).toHaveBeenCalledWith(
-        'View',
-        'Test Repository',
-        expect.any(Number)
-      )
+      expect(mockAnalyticsTracking.trackRepository).toHaveBeenCalledWith('View', mockRepository)
     })
 
     it('calls onCheck and tracks event when Check button is clicked', async () => {
@@ -417,10 +474,10 @@ describe('RepositoryCard', () => {
 
       await user.click(screen.getByRole('button', { name: /Check/i }))
       expect(mockCallbacks.onCheck).toHaveBeenCalledTimes(1)
-      expect(mockMatomoTracking.trackMaintenance).toHaveBeenCalledWith(
+      expect(mockAnalyticsTracking.trackMaintenance).toHaveBeenCalledWith(
         'Start',
         'Check',
-        'Test Repository'
+        mockRepository
       )
     })
 
@@ -438,10 +495,10 @@ describe('RepositoryCard', () => {
 
       await user.click(screen.getByRole('button', { name: /Compact/i }))
       expect(mockCallbacks.onCompact).toHaveBeenCalledTimes(1)
-      expect(mockMatomoTracking.trackMaintenance).toHaveBeenCalledWith(
+      expect(mockAnalyticsTracking.trackMaintenance).toHaveBeenCalledWith(
         'Start',
         'Compact',
-        'Test Repository'
+        mockRepository
       )
     })
 
@@ -459,10 +516,10 @@ describe('RepositoryCard', () => {
 
       await user.click(screen.getByRole('button', { name: /Prune/i }))
       expect(mockCallbacks.onPrune).toHaveBeenCalledTimes(1)
-      expect(mockMatomoTracking.trackMaintenance).toHaveBeenCalledWith(
+      expect(mockAnalyticsTracking.trackMaintenance).toHaveBeenCalledWith(
         'Start',
         'Prune',
-        'Test Repository'
+        mockRepository
       )
     })
 
@@ -480,11 +537,10 @@ describe('RepositoryCard', () => {
 
       await user.click(screen.getByRole('button', { name: /Backup Now/i }))
       expect(mockCallbacks.onBackupNow).toHaveBeenCalledTimes(1)
-      expect(mockMatomoTracking.trackBackup).toHaveBeenCalledWith(
+      expect(mockAnalyticsTracking.trackBackup).toHaveBeenCalledWith(
         'Start',
         undefined,
-        'Test Repository',
-        expect.any(Number)
+        mockRepository
       )
     })
 
@@ -502,11 +558,7 @@ describe('RepositoryCard', () => {
 
       await user.click(screen.getByRole('button', { name: /View Archives/i }))
       expect(mockCallbacks.onViewArchives).toHaveBeenCalledTimes(1)
-      expect(mockMatomoTracking.trackArchive).toHaveBeenCalledWith(
-        'View',
-        'Test Repository',
-        expect.any(Number)
-      )
+      expect(mockAnalyticsTracking.trackArchive).toHaveBeenCalledWith('View', mockRepository)
     })
 
     it('calls onDelete and tracks event when Delete button is clicked', async () => {
@@ -525,11 +577,7 @@ describe('RepositoryCard', () => {
       // The last Delete button is the main delete action (first one is Prune button icon)
       await user.click(deleteButtons[deleteButtons.length - 1])
       expect(mockCallbacks.onDelete).toHaveBeenCalledTimes(1)
-      expect(mockMatomoTracking.trackRepository).toHaveBeenCalledWith(
-        'Delete',
-        'Test Repository',
-        expect.any(Number)
-      )
+      expect(mockAnalyticsTracking.trackRepository).toHaveBeenCalledWith('Delete', mockRepository)
     })
   })
 

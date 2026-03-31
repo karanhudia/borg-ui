@@ -2,11 +2,29 @@ export interface Repository {
   id: number
   name: string
   path: string
-  repository_type?: 'local' | 'ssh'
+  repository_type?: 'local' | 'ssh' | 'sftp'
   has_running_maintenance?: boolean
+  borg_version?: number
   host?: string
   port?: number
   username?: string
+  encryption?: string
+  compression?: string
+  passphrase?: string
+  remote_path?: string
+  connection_id?: number | null
+  source_directories?: string[]
+  exclude_patterns?: string[]
+  mode?: 'full' | 'observe'
+  bypass_lock?: boolean
+  custom_flags?: string | null
+  archive_count?: number
+  total_size?: string | null
+  last_backup?: string | null
+  last_check?: string | null
+  last_compact?: string | null
+  has_keyfile?: boolean
+  source_ssh_connection_id?: number | null
   [key: string]: unknown
 }
 
@@ -47,19 +65,4 @@ export interface BackupJob {
     estimated_time_remaining?: number
     [key: string]: unknown
   }
-}
-
-export interface SystemMetrics {
-  cpu_usage: number
-  memory_total: number
-  memory_available: number
-  memory_usage: number
-  disk_total: number
-  disk_free: number
-  disk_usage: number
-}
-
-export interface DashboardStatus {
-  system_metrics?: SystemMetrics
-  recent_jobs?: BackupJob[]
 }

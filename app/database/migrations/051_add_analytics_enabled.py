@@ -2,7 +2,7 @@
 Migration 051: Add analytics_enabled to users table
 
 This migration adds the analytics_enabled field to the users table
-to allow users to opt-out of Matomo analytics tracking.
+to allow users to opt-out of analytics tracking.
 """
 
 from sqlalchemy import text

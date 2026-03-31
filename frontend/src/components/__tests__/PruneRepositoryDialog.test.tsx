@@ -6,6 +6,7 @@ import PruneRepositoryDialog from '../PruneRepositoryDialog'
 const mockRepository = {
   id: 1,
   name: 'Test Repository',
+  path: '/repo/test',
 }
 
 describe('PruneRepositoryDialog', () => {

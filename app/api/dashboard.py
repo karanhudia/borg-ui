@@ -10,7 +10,6 @@ from typing import List, Dict, Any
 from app.database.database import get_db
 from app.database.models import User, BackupJob, Repository, ScheduledJob, ScheduledJobRepository, CheckJob, CompactJob, PruneJob, SSHConnection
 from app.core.security import get_current_user
-from app.core.borg import borg
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
@@ -24,6 +23,7 @@ def format_datetime(dt):
 # Pydantic models for responses
 class SystemMetrics(BaseModel):
     cpu_usage: float
+    cpu_count: int
     memory_usage: float
     memory_total: int
     memory_available: int
@@ -77,6 +77,7 @@ def get_system_metrics() -> SystemMetrics:
         
         return SystemMetrics(
             cpu_usage=cpu_usage,
+            cpu_count=psutil.cpu_count(logical=True) or 1,
             memory_usage=memory.percent,
             memory_total=memory.total,
             memory_available=memory.available,
@@ -272,38 +273,63 @@ async def get_dashboard_overview(
             health_color = "success"
             warnings = []
 
-            # Check last backup - Repository Health is based solely on backup status
-            # Maintenance items (check, compact) are shown separately in maintenance_alerts
+            # Backup dimension health
             if repo.last_backup:
                 days_since_backup = (now - repo.last_backup).days
                 if days_since_backup > 7:
                     health_status = "critical"
                     health_color = "error"
                     warnings.append(f"No backup in {days_since_backup} days")
+                    backup_dim = "critical"
                 elif days_since_backup > 3:
                     health_status = "warning"
                     health_color = "warning"
                     warnings.append(f"Last backup {days_since_backup} days ago")
+                    backup_dim = "warning"
+                else:
+                    backup_dim = "healthy"
             else:
                 health_status = "critical"
                 health_color = "error"
                 warnings.append("Never backed up")
+                backup_dim = "critical"
 
-            # Get associated schedule (check both single-repo and multi-repo schedules)
+            # Check dimension health
+            if repo.last_check:
+                days_since_check = (now - repo.last_check).days
+                check_dim = "critical" if days_since_check > 30 else "warning" if days_since_check > 7 else "healthy"
+            else:
+                check_dim = "critical"
+
+            # Compact dimension health
+            if repo.last_compact:
+                days_since_compact = (now - repo.last_compact).days
+                compact_dim = "critical" if days_since_compact > 60 else "warning" if days_since_compact > 30 else "healthy"
+            else:
+                compact_dim = "critical"
+
+            # Get associated schedule — prefer enabled over disabled when multiple match
             repo_schedule = None
+            fallback_schedule = None
             for schedule in schedules:
-                # Check single-repo schedule
+                matched = False
                 if schedule.repository_id == repo.id:
-                    repo_schedule = schedule
-                    break
-                # Check multi-repo schedule (via junction table)
-                multi_repos = db.query(ScheduledJobRepository).filter(
-                    ScheduledJobRepository.scheduled_job_id == schedule.id,
-                    ScheduledJobRepository.repository_id == repo.id
-                ).first()
-                if multi_repos:
-                    repo_schedule = schedule
-                    break
+                    matched = True
+                else:
+                    multi_repos = db.query(ScheduledJobRepository).filter(
+                        ScheduledJobRepository.scheduled_job_id == schedule.id,
+                        ScheduledJobRepository.repository_id == repo.id
+                    ).first()
+                    if multi_repos:
+                        matched = True
+                if matched:
+                    if schedule.enabled:
+                        repo_schedule = schedule
+                        break  # enabled match wins immediately
+                    elif fallback_schedule is None:
+                        fallback_schedule = schedule  # keep first disabled as fallback
+            if repo_schedule is None:
+                repo_schedule = fallback_schedule
 
             # Calculate dedup ratio (if we have the data)
             dedup_ratio = None
@@ -328,15 +354,24 @@ async def get_dashboard_overview(
                 "dedup_ratio": dedup_ratio,
                 "has_schedule": repo_schedule is not None,
                 "schedule_enabled": repo_schedule.enabled if repo_schedule else False,
+                "schedule_name": repo_schedule.name if repo_schedule else None,
+                "next_run": serialize_datetime(repo_schedule.next_run) if (repo_schedule and repo_schedule.enabled and repo_schedule.next_run) else None,
+                "dimension_health": {
+                    "backup": backup_dim,
+                    "check": check_dim,
+                    "compact": compact_dim,
+                },
             })
 
         # Calculate backup success rate (last 30 days)
         thirty_days_ago = now - timedelta(days=30)
         recent_jobs = db.query(BackupJob).filter(BackupJob.started_at >= thirty_days_ago).all()
 
-        total_jobs = len(recent_jobs)
-        successful_jobs = len([j for j in recent_jobs if j.status == "completed"])
-        failed_jobs = len([j for j in recent_jobs if j.status == "failed"])
+        # Only count terminal jobs — running/pending skew the rate and don't match passed+failed
+        terminal_jobs = [j for j in recent_jobs if j.status in ("completed", "failed")]
+        total_jobs = len(terminal_jobs)
+        successful_jobs = len([j for j in terminal_jobs if j.status == "completed"])
+        failed_jobs = len([j for j in terminal_jobs if j.status == "failed"])
         success_rate = (successful_jobs / total_jobs * 100) if total_jobs > 0 else 0
 
         # Group jobs by week for trend
@@ -433,10 +468,11 @@ async def get_dashboard_overview(
                     "action": "schedule_compact"
                 })
 
-        # Get recent activity (limited to 5 total across all types)
-        recent_backups = db.query(BackupJob).order_by(BackupJob.started_at.desc()).limit(10).all()
-        recent_checks = db.query(CheckJob).order_by(CheckJob.started_at.desc()).limit(10).all()
-        recent_compacts = db.query(CompactJob).order_by(CompactJob.started_at.desc()).limit(10).all()
+        # Get activity for the last 14 days — matches the timeline window exactly
+        fourteen_days_ago = now - timedelta(days=14)
+        recent_backups = db.query(BackupJob).filter(BackupJob.started_at >= fourteen_days_ago).all()
+        recent_checks = db.query(CheckJob).filter(CheckJob.started_at >= fourteen_days_ago).all()
+        recent_compacts = db.query(CompactJob).filter(CompactJob.started_at >= fourteen_days_ago).all()
 
         # Create a lookup map for repository paths to names (with normalized paths)
         repo_name_map = {}
@@ -519,9 +555,7 @@ async def get_dashboard_overview(
                 "error": job.error_message if job.status == "failed" else None
             })
 
-        # Sort activity by timestamp and limit to 5
         activity_feed.sort(key=lambda x: x["timestamp"] or "", reverse=True)
-        activity_feed = activity_feed[:5]
 
         # Count SSH connections (active = status is "connected")
         ssh_active = len([c for c in ssh_connections if c.status == "connected"])
@@ -564,7 +598,6 @@ async def get_dashboard_overview(
             )),
             "backup_trends": backup_trends,
             "upcoming_tasks": upcoming_tasks,
-            "maintenance_alerts": maintenance_alerts[:10],
             "activity_feed": activity_feed,
             "system_metrics": system_metrics.dict(),
             "last_updated": serialize_datetime(now),

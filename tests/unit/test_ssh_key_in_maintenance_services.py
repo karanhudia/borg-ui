@@ -148,11 +148,13 @@ class TestPruneServiceSSHKey:
                 with patch("app.services.prune_service.settings") as mock_settings:
                     mock_settings.data_dir = tempfile.mkdtemp()
                     mock_settings.secret_key = secret
-                    await service.execute_prune(
-                        job_id=1, repository_id=1,
-                        keep_hourly=0, keep_daily=7, keep_weekly=4,
-                        keep_monthly=6, keep_quarterly=0, keep_yearly=1,
-                    )
+                    with patch("app.utils.ssh_utils.settings") as ssh_utils_settings:
+                        ssh_utils_settings.secret_key = secret
+                        await service.execute_prune(
+                            job_id=1, repository_id=1,
+                            keep_hourly=0, keep_daily=7, keep_weekly=4,
+                            keep_monthly=6, keep_quarterly=0, keep_yearly=1,
+                        )
 
         assert_borg_rsh_has_identity(captured_env)
 
@@ -249,8 +251,10 @@ class TestCompactServiceSSHKey:
                 with patch("app.services.compact_service.settings") as mock_settings:
                     mock_settings.data_dir = tempfile.mkdtemp()
                     mock_settings.secret_key = secret
-                    service = CompactService()
-                    await service.execute_compact(job_id=1, repository_id=1)
+                    with patch("app.utils.ssh_utils.settings") as ssh_utils_settings:
+                        ssh_utils_settings.secret_key = secret
+                        service = CompactService()
+                        await service.execute_compact(job_id=1, repository_id=1)
 
         assert_borg_rsh_has_identity(captured_env)
 
@@ -292,8 +296,10 @@ class TestCompactServiceSSHKey:
                 with patch("app.services.compact_service.settings") as mock_settings:
                     mock_settings.data_dir = tempfile.mkdtemp()
                     mock_settings.secret_key = secret
-                    service = CompactService()
-                    await service.execute_compact(job_id=1, repository_id=1)
+                    with patch("app.utils.ssh_utils.settings") as ssh_utils_settings:
+                        ssh_utils_settings.secret_key = secret
+                        service = CompactService()
+                        await service.execute_compact(job_id=1, repository_id=1)
 
         assert_borg_rsh_has_identity(captured_env)
 
@@ -348,9 +354,11 @@ class TestCheckServiceSSHKey:
                 with patch("app.services.check_service.settings") as mock_settings:
                     mock_settings.data_dir = tempfile.mkdtemp()
                     mock_settings.secret_key = secret
-                    with patch("app.services.check_service.NotificationService"):
-                        service = CheckService()
-                        await service.execute_check(job_id=1, repository_id=1)
+                    with patch("app.utils.ssh_utils.settings") as ssh_utils_settings:
+                        ssh_utils_settings.secret_key = secret
+                        with patch("app.services.check_service.NotificationService"):
+                            service = CheckService()
+                            await service.execute_check(job_id=1, repository_id=1)
 
         assert_borg_rsh_has_identity(captured_env)
 
@@ -393,8 +401,10 @@ class TestCheckServiceSSHKey:
                 with patch("app.services.check_service.settings") as mock_settings:
                     mock_settings.data_dir = tempfile.mkdtemp()
                     mock_settings.secret_key = secret
-                    with patch("app.services.check_service.NotificationService"):
-                        service = CheckService()
-                        await service.execute_check(job_id=1, repository_id=1)
+                    with patch("app.utils.ssh_utils.settings") as ssh_utils_settings:
+                        ssh_utils_settings.secret_key = secret
+                        with patch("app.services.check_service.NotificationService"):
+                            service = CheckService()
+                            await service.execute_check(job_id=1, repository_id=1)
 
         assert_borg_rsh_has_identity(captured_env)

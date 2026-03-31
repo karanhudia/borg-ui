@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.database.models import CompactJob, Repository, SSHConnection, SSHKey
 from app.database.database import SessionLocal
 from app.config import settings
+from app.utils.ssh_utils import resolve_repo_ssh_key_file
 
 logger = structlog.get_logger()
 
@@ -101,34 +102,11 @@ class CompactService:
             env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
 
             # Inject SSH identity file if repository uses key-based auth
-            ssh_key = None
-            if repository.connection_id:
-                connection = db.query(SSHConnection).filter(
-                    SSHConnection.id == repository.connection_id
-                ).first()
-                if connection and connection.ssh_key_id:
-                    ssh_key = db.query(SSHKey).filter(SSHKey.id == connection.ssh_key_id).first()
-            elif repository.repository_type == "ssh" and repository.ssh_key_id:
-                ssh_key = db.query(SSHKey).filter(SSHKey.id == repository.ssh_key_id).first()
-
-            if ssh_key:
-                from cryptography.fernet import Fernet
-                encryption_key = settings.secret_key.encode()[:32]
-                cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-                private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
-                if not private_key.endswith('\n'):
-                    private_key += '\n'
-                fd, temp_key_file = tempfile.mkstemp(suffix='.key', text=True)
-                try:
-                    os.chmod(temp_key_file, 0o600)
-                    with os.fdopen(fd, 'w') as f:
-                        f.write(private_key)
-                except Exception:
-                    os.close(fd)
-                    raise
+            temp_key_file = resolve_repo_ssh_key_file(repository, db)
+            if temp_key_file:
                 ssh_opts = ["-i", temp_key_file] + ssh_opts
                 env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
-                logger.info("Using SSH key for compact", job_id=job_id, ssh_key_id=ssh_key.id)
+                logger.info("Using SSH key for compact", job_id=job_id)
 
             # Build command with --verbose to show freed space summary
             cmd = ["borg", "compact", "--progress", "--verbose", "--log-json"]

@@ -21,7 +21,7 @@
 [![GitHub Actions](https://github.com/karanhudia/borg-ui/workflows/Build%20and%20Publish%20Docker%20Images/badge.svg)](https://github.com/karanhudia/borg-ui/actions)
 [![Tests](https://github.com/karanhudia/borg-ui/workflows/Tests/badge.svg)](https://github.com/karanhudia/borg-ui/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/karanhudia/borg-ui/branch/main/graph/badge.svg)](https://codecov.io/gh/karanhudia/borg-ui)
-[![Discord](https://img.shields.io/discord/1331215029498732686?color=5865F2&logo=discord&logoColor=white&label=Discord)](https://discord.gg/5KfVa5QkdQ)
+[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/5KfVa5QkdQ)
 
 </div>
 
@@ -162,6 +162,20 @@ Quick links:
 - **Discussions**: [GitHub Discussions](https://github.com/karanhudia/borg-ui/discussions)
 
 ---
+
+## Star History
+
+<div align="center">
+
+<a href="https://star-history.com/#karanhudia/borg-ui&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=karanhudia/borg-ui&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=karanhudia/borg-ui&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=karanhudia/borg-ui&type=Date" />
+  </picture>
+</a>
+
+</div>
 
 ## Contributing
 

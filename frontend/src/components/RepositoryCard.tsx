@@ -10,33 +10,12 @@ import {
   FolderOpen,
 } from '@mui/icons-material'
 import { useMaintenanceJobs } from '../hooks/useMaintenanceJobs'
-import {
-  formatDateShort,
-  formatDateTimeFull,
-  formatElapsedTime,
-  parseBytes,
-} from '../utils/dateUtils'
+import BorgVersionChip from './BorgVersionChip'
+import { getRepoCapabilities } from '../utils/repoCapabilities'
+import { formatDateShort, formatDateTimeFull, formatElapsedTime } from '../utils/dateUtils'
 import { useQueryClient } from '@tanstack/react-query'
-import { useMatomo } from '../hooks/useMatomo'
-
-interface Repository {
-  id: number
-  name: string
-  path: string
-  encryption: string
-  compression: string
-  source_directories: string[]
-  exclude_patterns: string[]
-  last_backup: string | null
-  last_check: string | null
-  last_compact: string | null
-  total_size: string | null
-  archive_count: number
-  created_at: string
-  updated_at: string | null
-  mode: 'full' | 'observe'
-  has_running_maintenance?: boolean
-}
+import { useAnalytics } from '../hooks/useAnalytics'
+import { Repository } from '../types'
 
 interface RepositoryCardProps {
   repository: Repository
@@ -71,9 +50,12 @@ export default function RepositoryCard({
 }: RepositoryCardProps) {
   const queryClient = useQueryClient()
   const { t } = useTranslation()
-  const { trackRepository, trackBackup, trackMaintenance, trackArchive, EventAction } = useMatomo()
+  const { trackRepository, trackBackup, trackMaintenance, trackArchive, EventAction } =
+    useAnalytics()
 
   // Use maintenance jobs hook - always poll to handle page refreshes
+  const capabilities = getRepoCapabilities(repository)
+
   const { hasRunningJobs, checkJob, compactJob, pruneJob } = useMaintenanceJobs(
     repository.id,
     true // Always enabled to handle page refreshes while jobs are running
@@ -147,6 +129,7 @@ export default function RepositoryCard({
                   sx={{ height: '20px', fontSize: '0.7rem' }}
                 />
               )}
+              <BorgVersionChip borgVersion={repository.borg_version} />
             </Box>
             <Typography
               variant="body2"
@@ -262,7 +245,7 @@ export default function RepositoryCard({
               {t('repositoryCard.compression')}
             </Typography>
             <Typography variant="body2" fontWeight={500}>
-              {getCompressionLabel(repository.compression)}
+              {getCompressionLabel(repository.compression ?? '')}
             </Typography>
           </Box>
 
@@ -290,11 +273,7 @@ export default function RepositoryCard({
                 size="small"
                 startIcon={<Info />}
                 onClick={() => {
-                  trackRepository(
-                    EventAction.VIEW,
-                    repository.name,
-                    parseBytes(repository.total_size)
-                  )
+                  trackRepository(EventAction.VIEW, repository)
                   onViewInfo()
                 }}
                 disabled={isMaintenanceRunning}
@@ -307,7 +286,7 @@ export default function RepositoryCard({
                 size="small"
                 startIcon={checkJob ? <Refresh className="animate-spin" /> : <CheckCircleIcon />}
                 onClick={() => {
-                  trackMaintenance(EventAction.START, 'Check', repository.name)
+                  trackMaintenance(EventAction.START, 'Check', repository)
                   onCheck()
                 }}
                 disabled={isMaintenanceRunning}
@@ -316,46 +295,45 @@ export default function RepositoryCard({
               >
                 {t('repositoryCard.buttons.check')}
               </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={compactJob ? <Refresh className="animate-spin" /> : <Refresh />}
-                onClick={() => {
-                  trackMaintenance(EventAction.START, 'Compact', repository.name)
-                  onCompact()
-                }}
-                disabled={isMaintenanceRunning}
-                color={compactJob ? 'primary' : 'warning'}
-                sx={{ textTransform: 'none' }}
-              >
-                {t('repositoryCard.buttons.compact')}
-              </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={pruneJob ? <Refresh className="animate-spin" /> : <Delete />}
-                onClick={() => {
-                  trackMaintenance(EventAction.START, 'Prune', repository.name)
-                  onPrune()
-                }}
-                disabled={isMaintenanceRunning}
-                color={pruneJob ? 'primary' : 'secondary'}
-                sx={{ textTransform: 'none' }}
-              >
-                {t('repositoryCard.buttons.prune')}
-              </Button>
+              {capabilities.canCompact && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={compactJob ? <Refresh className="animate-spin" /> : <Refresh />}
+                  onClick={() => {
+                    trackMaintenance(EventAction.START, 'Compact', repository)
+                    onCompact()
+                  }}
+                  disabled={isMaintenanceRunning}
+                  color={compactJob ? 'primary' : 'warning'}
+                  sx={{ textTransform: 'none' }}
+                >
+                  {t('repositoryCard.buttons.compact')}
+                </Button>
+              )}
+              {capabilities.canPrune && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={pruneJob ? <Refresh className="animate-spin" /> : <Delete />}
+                  onClick={() => {
+                    trackMaintenance(EventAction.START, 'Prune', repository)
+                    onPrune()
+                  }}
+                  disabled={isMaintenanceRunning}
+                  color={pruneJob ? 'primary' : 'secondary'}
+                  sx={{ textTransform: 'none' }}
+                >
+                  {t('repositoryCard.buttons.prune')}
+                </Button>
+              )}
               {repository.mode === 'full' && (
                 <Button
                   variant="outlined"
                   size="small"
                   startIcon={<PlayArrow />}
                   onClick={() => {
-                    trackBackup(
-                      EventAction.START,
-                      undefined,
-                      repository.name,
-                      parseBytes(repository.total_size)
-                    )
+                    trackBackup(EventAction.START, undefined, repository)
                     onBackupNow()
                   }}
                   disabled={isMaintenanceRunning}
@@ -370,7 +348,7 @@ export default function RepositoryCard({
                 size="small"
                 startIcon={<FolderOpen />}
                 onClick={() => {
-                  trackArchive(EventAction.VIEW, repository.name, parseBytes(repository.total_size))
+                  trackArchive(EventAction.VIEW, repository)
                   onViewArchives()
                 }}
                 disabled={isMaintenanceRunning}
@@ -378,23 +356,21 @@ export default function RepositoryCard({
               >
                 {t('repositoryCard.buttons.viewArchives')}
               </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<Delete />}
-                onClick={() => {
-                  trackRepository(
-                    EventAction.DELETE,
-                    repository.name,
-                    parseBytes(repository.total_size)
-                  )
-                  onDelete()
-                }}
-                color="error"
-                sx={{ textTransform: 'none' }}
-              >
-                {t('repositoryCard.buttons.delete')}
-              </Button>
+              {capabilities.canDelete && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<Delete />}
+                  onClick={() => {
+                    trackRepository(EventAction.DELETE, repository)
+                    onDelete()
+                  }}
+                  color="error"
+                  sx={{ textTransform: 'none' }}
+                >
+                  {t('repositoryCard.buttons.delete')}
+                </Button>
+              )}
             </Box>
             {/* Progress message and elapsed time */}
             {(checkJob?.progress_message || compactJob?.progress_message || elapsedTime) && (

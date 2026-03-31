@@ -842,6 +842,10 @@ class MountService:
                 # Build mount command
                 cmd = ["borg", "mount"]
 
+                # Add remote path if specified (path to borg binary on remote)
+                if repository.remote_path:
+                    cmd.extend(["--remote-path", repository.remote_path])
+
                 # Add archive-specific mount if specified
                 if archive_name:
                     cmd.append(f"{repository.path}::{archive_name}")

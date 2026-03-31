@@ -16,6 +16,7 @@ import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { formatDate } from '../utils/dateUtils'
 import DataTable, { Column, ActionButton } from './DataTable'
+import { useAnalytics } from '../hooks/useAnalytics'
 
 interface Mount {
   mount_id: string
@@ -31,6 +32,7 @@ interface Mount {
 export default function MountsManagementTab() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const { track, EventCategory, EventAction } = useAnalytics()
 
   // Fetch active mounts
   const { data: mountsData, isLoading } = useQuery({
@@ -61,6 +63,9 @@ export default function MountsManagementTab() {
   const mounts: Mount[] = mountsData || []
 
   const handleUnmount = (mountId: string, force: boolean = false) => {
+    track(EventCategory.MOUNT, force ? EventAction.DELETE : EventAction.UNMOUNT, {
+      operation: force ? 'force_unmount' : 'unmount',
+    })
     unmountMutation.mutate({ mountId, force })
   }
 
@@ -140,6 +145,7 @@ export default function MountsManagementTab() {
         const containerName = 'borg-web-ui'
         const command = `docker exec -it ${containerName} bash -c "cd ${mount.mount_point} && bash"`
         copyToClipboard(command, t('mounts.actions.accessCommand'))
+        track(EventCategory.MOUNT, EventAction.VIEW, { operation: 'copy_access_command' })
       },
       color: 'primary',
       tooltip: t('mounts.actions.copyAccessCommand'),
