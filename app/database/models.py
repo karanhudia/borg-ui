@@ -424,6 +424,9 @@ class SystemSettings(Base):
     mqtt_tls_client_cert = Column(String, nullable=True)  # Path to client certificate file
     mqtt_tls_client_key = Column(String, nullable=True)  # Path to client key file
 
+    # Plan / feature gating
+    plan = Column(String, default="pro", nullable=False)
+
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
