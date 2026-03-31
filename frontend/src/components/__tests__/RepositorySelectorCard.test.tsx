@@ -11,11 +11,7 @@ describe('RepositorySelectorCard', () => {
 
   it('renders with title and icon', () => {
     render(
-      <RepositorySelectorCard
-        repositories={mockRepositories}
-        selectedRepositoryId={null}
-        onRepositoryChange={vi.fn()}
-      />
+      <RepositorySelectorCard repositories={mockRepositories} value={null} onChange={vi.fn()} />
     )
 
     expect(screen.getByText('Select Repository')).toBeInTheDocument()
@@ -24,11 +20,7 @@ describe('RepositorySelectorCard', () => {
 
   it('renders all repositories in dropdown', () => {
     render(
-      <RepositorySelectorCard
-        repositories={mockRepositories}
-        selectedRepositoryId={null}
-        onRepositoryChange={vi.fn()}
-      />
+      <RepositorySelectorCard repositories={mockRepositories} value={null} onChange={vi.fn()} />
     )
 
     // Open dropdown
@@ -42,13 +34,7 @@ describe('RepositorySelectorCard', () => {
   })
 
   it('shows selected repository', () => {
-    render(
-      <RepositorySelectorCard
-        repositories={mockRepositories}
-        selectedRepositoryId={2}
-        onRepositoryChange={vi.fn()}
-      />
-    )
+    render(<RepositorySelectorCard repositories={mockRepositories} value={2} onChange={vi.fn()} />)
 
     // MUI Select renders the value in a native input with class MuiSelect-nativeInput
     const nativeInput = document.querySelector('.MuiSelect-nativeInput') as HTMLInputElement
@@ -58,11 +44,7 @@ describe('RepositorySelectorCard', () => {
   it('calls onRepositoryChange when selection changes', () => {
     const handleChange = vi.fn()
     render(
-      <RepositorySelectorCard
-        repositories={mockRepositories}
-        selectedRepositoryId={1}
-        onRepositoryChange={handleChange}
-      />
+      <RepositorySelectorCard repositories={mockRepositories} value={1} onChange={handleChange} />
     )
 
     // Open dropdown
@@ -79,8 +61,8 @@ describe('RepositorySelectorCard', () => {
     render(
       <RepositorySelectorCard
         repositories={mockRepositories}
-        selectedRepositoryId={null}
-        onRepositoryChange={vi.fn()}
+        value={null}
+        onChange={vi.fn()}
         loading={true}
       />
     )
@@ -92,12 +74,7 @@ describe('RepositorySelectorCard', () => {
 
   it('shows loading message when loading', () => {
     const { container } = render(
-      <RepositorySelectorCard
-        repositories={[]}
-        selectedRepositoryId={null}
-        onRepositoryChange={vi.fn()}
-        loading={true}
-      />
+      <RepositorySelectorCard repositories={[]} value={null} onChange={vi.fn()} loading={true} />
     )
 
     // The loading message is in a MenuItem, but since select is disabled, we can't open it
@@ -107,13 +84,7 @@ describe('RepositorySelectorCard', () => {
   })
 
   it('shows empty message when no repositories', () => {
-    render(
-      <RepositorySelectorCard
-        repositories={[]}
-        selectedRepositoryId={null}
-        onRepositoryChange={vi.fn()}
-      />
-    )
+    render(<RepositorySelectorCard repositories={[]} value={null} onChange={vi.fn()} />)
 
     // Open dropdown
     const select = screen.getByLabelText('Repository')
