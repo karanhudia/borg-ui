@@ -150,16 +150,82 @@
       "neverBackedUp": "Nie gesichert",
       "archives": "Archive",
       "neverChecked": "Nie überprüft",
-      "neverCompacted": "Nie komprimiert"
+      "neverCompacted": "Nie komprimiert",
+      "dimensionLabels": {
+        "backup": "BACKUP",
+        "check": "CHECK",
+        "compact": "COMPACT"
+      },
+      "archiveCountShort": "{{count}} Arx"
     },
     "noRepositories": "Noch keine Repositories konfiguriert. Erstelle dein erstes Repository, um mit der Sicherung zu beginnen!",
+    "noRepositoriesShort": "Keine Repositories",
     "moreRepositories": "+{{count}} weitere Repositories",
     "moreAlerts": "+{{count}} weitere Warnungen",
     "moreScheduled": "+{{count}} weitere geplant",
+    "resources": "Ressourcen",
+    "memAbbr": "ARBSP.",
+    "diskAbbr": "DISK",
     "recentActivity": {
       "title": "Letzte Aktivität",
       "empty": "Keine letzte Aktivität",
-      "viewAll": "Alle Aktivitäten anzeigen"
+      "emptyRecorded": "Noch keine Aktivität aufgezeichnet",
+      "viewAll": "Alle Aktivitäten anzeigen",
+      "fullLog": "Vollständiges Protokoll",
+      "last14Days": "Aktivität — letzte 14 Tage"
+    },
+    "storageDonut": {
+      "archivesCount": "{{count}} Archive",
+      "noData": "Keine Daten",
+      "dedupRatio": "Dedup-Verhältnis"
+    },
+    "successDonut": {
+      "label": "30-Tage-Erfolg",
+      "passed": "bestanden",
+      "failed": "fehlgeschlagen"
+    },
+    "scheduleBadge": {
+      "noSchedule": "Kein automatischer Zeitplan",
+      "manual": "manuell",
+      "paused": "pausiert",
+      "scheduled": "geplant",
+      "now": "jetzt",
+      "pausedTitle": "Pausiert: {{name}}",
+      "pausedTitleGeneric": "Zeitplan pausiert",
+      "nextRunTitle": "{{name}} — nächste Ausführung {{label}}",
+      "nextRunTitleGeneric": "Nächste Ausführung in {{label}}"
+    },
+    "activityTimeline": {
+      "ariaLabel": "Backup-Aktivität der letzten 14 Tage",
+      "today": "heute",
+      "legendFailed": "fehlgeschlagen",
+      "jobType": {
+        "backup": "backup",
+        "check": "check",
+        "compact": "compact",
+        "restore": "restore",
+        "prune": "prune"
+      }
+    },
+    "banner": {
+      "systemStatus": "Systemstatus",
+      "allNominal": "Alle Systeme nominal",
+      "warnings": "{{count}} Warnung{{s}}",
+      "critical": "{{count}} kritisch",
+      "warnChip": "{{count}} Warn.",
+      "okChip": "{{count}} ok",
+      "stats": {
+        "lastBackup": "Letztes Backup",
+        "schedules": "Zeitpläne",
+        "storage": "Speicher"
+      }
+    },
+    "recentFailures": {
+      "title": "Aktuelle Fehler"
+    },
+    "error": {
+      "unavailable": "Dashboard nicht verfügbar",
+      "retry": "Erneut versuchen"
     },
     "upcomingAndMaintenance": "Bevorstehend & Wartung",
     "activityMessages": {
@@ -859,8 +925,8 @@
       "noBackupsYet": "Noch keine Sicherungen",
       "noBackupsDesc": "Dieses Repository wurde initialisiert, enthält aber keine Archive. Speicherstatistiken erscheinen hier, nachdem du deine erste Sicherung erstellt hast.",
       "loadFailed": "Fehler beim Laden der Repository-Informationen. Stelle sicher, dass das Repository zugänglich und ordnungsgemäß initialisiert ist.",
-      "v2PlanRequired": "This repository uses Borg 2. Your data is safe — upgrade to Pro to view its details.",
-      "exportKeyfileTooltip": "Schlüsseldatei exportieren — sicher aufbewahren!"
+      "v2PlanRequired": "This repository uses Borg 2. Your data is safe. Upgrade to Pro to view its details.",
+      "exportKeyfileTooltip": "Schlüsseldatei exportieren. sicher aufbewahren!"
     },
     "mountArchive": {
       "title": "Archiv einhängen",
@@ -1650,7 +1716,10 @@
       "remoteDisabledInfo": "Dieses Repository ist so konfiguriert, dass Daten von einer Remote-Maschine gesichert werden. Remote-zu-Remote-Sicherungen (Sicherung von einer Remote-Maschine auf eine andere) werden nicht unterstützt. Bitte behalte das Repository auf dem Borg-UI-Server.",
       "selectSshConnection": "SSH-Verbindung auswählen",
       "repositoryPathLabel": "Repository-Pfad",
-      "repositoryPathHelper": "Pfad, unter dem das Repository gespeichert wird"
+      "repositoryPathHelper": "Pfad, unter dem das Repository gespeichert wird",
+      "borgV2Warning": "Borg 2-Repositories sind nicht mit Borg 1 kompatibel. Erfordert ein borg2-Binary auf diesem System und allen Remote-Hosts.",
+      "connected": "Verbunden",
+      "browseFilesystem": "Dateisystem durchsuchen"
     },
     "restoreDestination": {
       "title": "Wohin sollen Dateien wiederhergestellt werden?",
@@ -2554,7 +2623,7 @@
         "repositoryAlreadyExists": "An diesem Speicherort existiert bereits ein Repository",
         "notValidBorgRepository": "Kein gültiges BorgBackup-Repository",
         "repositoryCheckNeeded": "Repository-Überprüfung erforderlich, bevor Operationen fortgesetzt werden können",
-        "lockTimeout": "Repository-Sperre konnte nicht erworben werden — das Repository ist durch einen anderen Prozess gesperrt oder hat eine veraltete Sperre",
+        "lockTimeout": "Repository-Sperre konnte nicht erworben werden. das Repository ist durch einen anderen Prozess gesperrt oder hat eine veraltete Sperre",
         "lockError": "Repository-Sperr-Fehler",
         "passphraseWrong": "Falsche Repository-Passphrase",
         "archiveDoesNotExist": "Archiv existiert nicht",
@@ -2741,5 +2810,36 @@
         "repositoryLocked": "Das Repository ist durch einen anderen Prozess gesperrt oder hat eine veraltete Sperre"
       }
     }
+  },
+  "plan": {
+    "currentPlan": "Aktueller Plan",
+    "proFeatures": "Pro-Funktionen",
+    "plans": "Pläne",
+    "earlyAccessNotice": "Alle Pläne sind kostenlos, während Borg UI in der Early-Access-Phase ist. Als Solo-Entwickler werde ich in Zukunft kostenpflichtige Stufen einführen, um die Entwicklung zu finanzieren. Funktionen, die Sie heute nutzen, bleiben Ihnen erhalten.",
+    "features": {
+      "borg_v2": {
+        "label": "Borg v2-Backups",
+        "description": "Borg-Format der nächsten Generation mit verbesserter Deduplizierung und Leistung"
+      },
+      "multi_user": {
+        "label": "Mehrere Benutzerkonten",
+        "description": "Laden Sie weitere Benutzer ein, Backups mit eigenem Login zu verwalten"
+      },
+      "extra_users": {
+        "label": "Unbegrenzte Benutzerplätze",
+        "description": "Fügen Sie mehr als 5 Benutzer für große Team-Deployments hinzu"
+      },
+      "rbac": {
+        "label": "Rollenbasierte Zugriffskontrolle",
+        "description": "Weisen Sie jedem Benutzerkonto Rollen und granulare Berechtigungen zu"
+      }
+    },
+    "comingSoon": "Demnächst",
+    "planFeatures": "{{plan}}-Funktionen"
+  },
+  "upgradePrompt": {
+    "featureLabel": "{{plan}}-Funktion",
+    "defaultMessage": "Diese Funktion erfordert den {{plan}}-Plan.",
+    "requiresPlan": "Erfordert den {{plan}}-Plan"
   }
 }

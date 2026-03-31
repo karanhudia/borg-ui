@@ -150,16 +150,82 @@
       "neverBackedUp": "Never backed up",
       "archives": "archives",
       "neverChecked": "Never checked",
-      "neverCompacted": "Never compacted"
+      "neverCompacted": "Never compacted",
+      "dimensionLabels": {
+        "backup": "BACKUP",
+        "check": "CHECK",
+        "compact": "COMPACT"
+      },
+      "archiveCountShort": "{{count}} arx"
     },
     "noRepositories": "No repositories configured yet. Create your first repository to start backing up!",
+    "noRepositoriesShort": "No repositories",
     "moreRepositories": "+{{count}} more repositories",
     "moreAlerts": "+{{count}} more alerts",
     "moreScheduled": "+{{count}} more scheduled",
+    "resources": "Resources",
+    "memAbbr": "MEM",
+    "diskAbbr": "DISK",
     "recentActivity": {
       "title": "Recent Activity",
       "empty": "No recent activity",
-      "viewAll": "View All Activity"
+      "emptyRecorded": "No activity recorded yet",
+      "viewAll": "View All Activity",
+      "fullLog": "Full log",
+      "last14Days": "Activity — last 14 days"
+    },
+    "storageDonut": {
+      "archivesCount": "{{count}} archives",
+      "noData": "No data",
+      "dedupRatio": "Dedup ratio"
+    },
+    "successDonut": {
+      "label": "30-day success",
+      "passed": "passed",
+      "failed": "failed"
+    },
+    "scheduleBadge": {
+      "noSchedule": "No automated schedule",
+      "manual": "manual",
+      "paused": "paused",
+      "scheduled": "sched",
+      "now": "now",
+      "pausedTitle": "Paused: {{name}}",
+      "pausedTitleGeneric": "Schedule paused",
+      "nextRunTitle": "{{name}} — next run {{label}}",
+      "nextRunTitleGeneric": "Next run in {{label}}"
+    },
+    "activityTimeline": {
+      "ariaLabel": "Backup activity over last 14 days",
+      "today": "today",
+      "legendFailed": "failed",
+      "jobType": {
+        "backup": "backup",
+        "check": "check",
+        "compact": "compact",
+        "restore": "restore",
+        "prune": "prune"
+      }
+    },
+    "banner": {
+      "systemStatus": "System Status",
+      "allNominal": "All systems nominal",
+      "warnings": "{{count}} warning{{s}}",
+      "critical": "{{count}} critical",
+      "warnChip": "{{count}} warn",
+      "okChip": "{{count}} ok",
+      "stats": {
+        "lastBackup": "Last backup",
+        "schedules": "Schedules",
+        "storage": "Storage"
+      }
+    },
+    "recentFailures": {
+      "title": "Recent failures"
+    },
+    "error": {
+      "unavailable": "Dashboard unavailable",
+      "retry": "Retry"
     },
     "upcomingAndMaintenance": "Upcoming & Maintenance",
     "activityMessages": {
@@ -859,8 +925,8 @@
       "noBackupsYet": "No backups yet",
       "noBackupsDesc": "This repository has been initialized but contains no archives. Storage statistics will appear here after you create your first backup.",
       "loadFailed": "Failed to load repository information. Make sure the repository is accessible and properly initialized.",
-      "v2PlanRequired": "This repository uses Borg 2. Your data is safe — upgrade to Pro to view its details.",
-      "exportKeyfileTooltip": "Export keyfile — keep this safe!"
+      "v2PlanRequired": "This repository uses Borg 2. Your data is safe. Upgrade to Pro to view its details.",
+      "exportKeyfileTooltip": "Export keyfile. Keep this safe!"
     },
     "mountArchive": {
       "title": "Mount Archive",
@@ -1207,7 +1273,7 @@
     "saving": "Saving...",
     "updatedSuccessfully": "Preferences updated successfully",
     "analyticsTitle": "Anonymous Usage Analytics",
-    "analyticsDescription": "Help us improve Borg UI by sharing anonymous usage data. We collect page views, feature clicks, and browser type—without tracking IP addresses, hostnames, cookies, or any personally identifiable information.",
+    "analyticsDescription": "Help us improve Borg UI by sharing anonymous usage data. We collect page views, feature clicks, and browser type, without tracking IP addresses, hostnames, cookies, or any personally identifiable information.",
     "enableAnalytics": "Enable analytics",
     "languageTitle": "Language",
     "languageDescription": "Choose the interface language",
@@ -1650,7 +1716,10 @@
       "remoteDisabledInfo": "This repository is configured to back up data from a remote machine. Remote-to-remote backups (backing up from one remote machine to another) are not supported. Please keep the repository on the Borg UI Server.",
       "selectSshConnection": "Select SSH Connection",
       "repositoryPathLabel": "Repository Path",
-      "repositoryPathHelper": "Path where the repository will be stored"
+      "repositoryPathHelper": "Path where the repository will be stored",
+      "borgV2Warning": "Borg 2 repositories are not compatible with Borg 1. Requires borg2 binary on this system and any remote hosts.",
+      "connected": "Connected",
+      "browseFilesystem": "Browse filesystem"
     },
     "restoreDestination": {
       "title": "Where should files be restored?",
@@ -2554,7 +2623,7 @@
         "repositoryAlreadyExists": "Repository already exists at this location",
         "notValidBorgRepository": "Not a valid BorgBackup repository",
         "repositoryCheckNeeded": "Repository check needed before operations can continue",
-        "lockTimeout": "Could not acquire repository lock — the repository is locked by another process or has a stale lock",
+        "lockTimeout": "Could not acquire repository lock. The repository is locked by another process or has a stale lock",
         "lockError": "Repository locking error",
         "passphraseWrong": "Incorrect repository passphrase",
         "archiveDoesNotExist": "Archive does not exist",
@@ -2741,5 +2810,36 @@
         "repositoryLocked": "Repository is locked by another process or has a stale lock"
       }
     }
+  },
+  "plan": {
+    "currentPlan": "Current Plan",
+    "proFeatures": "Pro features",
+    "plans": "Plans",
+    "earlyAccessNotice": "All plans are free while Borg UI is in early access. As a solo developer, I'll introduce paid tiers in the future to sustain development. Features you use today will remain available to you.",
+    "features": {
+      "borg_v2": {
+        "label": "Borg v2 backups",
+        "description": "Next-generation Borg format with improved deduplication and performance"
+      },
+      "multi_user": {
+        "label": "Multiple user accounts",
+        "description": "Invite additional users to manage backups with their own login"
+      },
+      "extra_users": {
+        "label": "Unlimited user seats",
+        "description": "Add more than 5 users for large team deployments"
+      },
+      "rbac": {
+        "label": "Role-based access control",
+        "description": "Assign roles and granular permissions to each user account"
+      }
+    },
+    "comingSoon": "Coming soon",
+    "planFeatures": "{{plan}} features"
+  },
+  "upgradePrompt": {
+    "featureLabel": "{{plan}} feature",
+    "defaultMessage": "This feature requires the {{plan}} plan.",
+    "requiresPlan": "Requires {{plan}} plan"
   }
 }

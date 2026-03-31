@@ -150,16 +150,82 @@
       "neverBackedUp": "Mai eseguito backup",
       "archives": "archivi",
       "neverChecked": "Mai controllato",
-      "neverCompacted": "Mai compattato"
+      "neverCompacted": "Mai compattato",
+      "dimensionLabels": {
+        "backup": "BACKUP",
+        "check": "CHECK",
+        "compact": "COMPACT"
+      },
+      "archiveCountShort": "{{count}} arx"
     },
     "noRepositories": "Nessun repository configurato. Crea il tuo primo repository per iniziare a fare backup!",
+    "noRepositoriesShort": "Nessun repository",
     "moreRepositories": "+{{count}} altri repository",
     "moreAlerts": "+{{count}} altri avvisi",
     "moreScheduled": "+{{count}} altri pianificati",
+    "resources": "Risorse",
+    "memAbbr": "MEM",
+    "diskAbbr": "DISCO",
     "recentActivity": {
       "title": "Attività Recenti",
       "empty": "Nessuna attività recente",
-      "viewAll": "Visualizza Tutte le Attività"
+      "emptyRecorded": "Nessuna attività registrata",
+      "viewAll": "Visualizza Tutte le Attività",
+      "fullLog": "Log completo",
+      "last14Days": "Attività — ultimi 14 giorni"
+    },
+    "storageDonut": {
+      "archivesCount": "{{count}} archivi",
+      "noData": "Nessun dato",
+      "dedupRatio": "Rapporto dedup."
+    },
+    "successDonut": {
+      "label": "Successo 30 giorni",
+      "passed": "riusciti",
+      "failed": "falliti"
+    },
+    "scheduleBadge": {
+      "noSchedule": "Nessuna pianificazione automatica",
+      "manual": "manuale",
+      "paused": "in pausa",
+      "scheduled": "pianif.",
+      "now": "adesso",
+      "pausedTitle": "In pausa: {{name}}",
+      "pausedTitleGeneric": "Pianificazione in pausa",
+      "nextRunTitle": "{{name}} — prossima esecuzione {{label}}",
+      "nextRunTitleGeneric": "Prossima esecuzione in {{label}}"
+    },
+    "activityTimeline": {
+      "ariaLabel": "Attività di backup negli ultimi 14 giorni",
+      "today": "oggi",
+      "legendFailed": "falliti",
+      "jobType": {
+        "backup": "backup",
+        "check": "check",
+        "compact": "compact",
+        "restore": "restore",
+        "prune": "prune"
+      }
+    },
+    "banner": {
+      "systemStatus": "Stato del sistema",
+      "allNominal": "Tutti i sistemi nominali",
+      "warnings": "{{count}} avviso{{s}}",
+      "critical": "{{count}} critico{{s}}",
+      "warnChip": "{{count}} avv.",
+      "okChip": "{{count}} ok",
+      "stats": {
+        "lastBackup": "Ultimo backup",
+        "schedules": "Pianificazioni",
+        "storage": "Archiviazione"
+      }
+    },
+    "recentFailures": {
+      "title": "Errori recenti"
+    },
+    "error": {
+      "unavailable": "Dashboard non disponibile",
+      "retry": "Riprova"
     },
     "upcomingAndMaintenance": "Prossimi e Manutenzione",
     "activityMessages": {
@@ -859,8 +925,8 @@
       "noBackupsYet": "Ancora nessun backup",
       "noBackupsDesc": "Questo repository è stato inizializzato ma non contiene archivi. Le statistiche di archiviazione appariranno qui dopo aver creato il primo backup.",
       "loadFailed": "Impossibile caricare le informazioni del repository. Assicurati che il repository sia accessibile e inizializzato correttamente.",
-      "v2PlanRequired": "This repository uses Borg 2. Your data is safe — upgrade to Pro to view its details.",
-      "exportKeyfileTooltip": "Esporta file chiave — conservalo al sicuro!"
+      "v2PlanRequired": "This repository uses Borg 2. Your data is safe. Upgrade to Pro to view its details.",
+      "exportKeyfileTooltip": "Esporta file chiave. conservalo al sicuro!"
     },
     "mountArchive": {
       "title": "Monta Archivio",
@@ -1650,7 +1716,10 @@
       "remoteDisabledInfo": "Questo repository è configurato per fare backup di dati da una macchina remota. I backup da remoto a remoto (backup da una macchina remota a un'altra) non sono supportati. Mantieni il repository sul Server Borg UI.",
       "selectSshConnection": "Seleziona Connessione SSH",
       "repositoryPathLabel": "Percorso Repository",
-      "repositoryPathHelper": "Percorso dove verrà archiviato il repository"
+      "repositoryPathHelper": "Percorso dove verrà archiviato il repository",
+      "borgV2Warning": "I repository Borg 2 non sono compatibili con Borg 1. Richiede il binario borg2 su questo sistema e su tutti gli host remoti.",
+      "connected": "Connesso",
+      "browseFilesystem": "Sfoglia il filesystem"
     },
     "restoreDestination": {
       "title": "Dove devono essere ripristinati i file?",
@@ -2554,7 +2623,7 @@
         "repositoryAlreadyExists": "Il repository esiste già in questa posizione",
         "notValidBorgRepository": "Non è un repository BorgBackup valido",
         "repositoryCheckNeeded": "È necessario il controllo del repository prima di poter continuare le operazioni",
-        "lockTimeout": "Impossibile acquisire il blocco del repository — il repository è bloccato da un altro processo o ha un blocco obsoleto",
+        "lockTimeout": "Impossibile acquisire il blocco del repository. il repository è bloccato da un altro processo o ha un blocco obsoleto",
         "lockError": "Errore di blocco del repository",
         "passphraseWrong": "Passphrase del repository errata",
         "archiveDoesNotExist": "L'archivio non esiste",
@@ -2741,5 +2810,36 @@
         "repositoryLocked": "Il repository è bloccato da un altro processo o ha un blocco obsoleto"
       }
     }
+  },
+  "plan": {
+    "currentPlan": "Piano attuale",
+    "proFeatures": "Funzionalità Pro",
+    "plans": "Piani",
+    "earlyAccessNotice": "Tutti i piani sono gratuiti mentre Borg UI è in accesso anticipato. Come sviluppatore indipendente, introdurrò livelli a pagamento in futuro per sostenere lo sviluppo. Le funzionalità che utilizzi oggi rimarranno disponibili per te.",
+    "features": {
+      "borg_v2": {
+        "label": "Backup Borg v2",
+        "description": "Formato Borg di nuova generazione con deduplicazione e prestazioni migliorate"
+      },
+      "multi_user": {
+        "label": "Più account utente",
+        "description": "Invita altri utenti a gestire i backup con il proprio accesso"
+      },
+      "extra_users": {
+        "label": "Posti utente illimitati",
+        "description": "Aggiungi più di 5 utenti per implementazioni di team di grandi dimensioni"
+      },
+      "rbac": {
+        "label": "Controllo degli accessi basato sui ruoli",
+        "description": "Assegna ruoli e permessi granulari a ciascun account utente"
+      }
+    },
+    "comingSoon": "Prossimamente",
+    "planFeatures": "Funzionalità {{plan}}"
+  },
+  "upgradePrompt": {
+    "featureLabel": "Funzionalità {{plan}}",
+    "defaultMessage": "Questa funzionalità richiede il piano {{plan}}.",
+    "requiresPlan": "Richiede il piano {{plan}}"
   }
 }
