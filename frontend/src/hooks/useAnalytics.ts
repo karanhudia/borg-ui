@@ -1,5 +1,4 @@
 import { useCallback } from 'react'
-import { useLocation } from 'react-router-dom'
 import {
   trackEvent,
   trackPageView,
@@ -26,8 +25,6 @@ type AnalyticsEntity =
  * Example: "my-backup-repo" → "a3f2b1c8"
  */
 export const useAnalytics = () => {
-  const location = useLocation()
-
   const resolveEntityName = useCallback((entity?: AnalyticsEntity) => {
     if (typeof entity === 'string') return entity
     return entity?.name ?? entity?.repository ?? undefined
@@ -64,12 +61,9 @@ export const useAnalytics = () => {
   )
 
   // Track page view with current location
-  const trackPage = useCallback(
-    (customTitle?: string) => {
-      trackPageView(customTitle || `${location.pathname}${location.search}`)
-    },
-    [location]
-  )
+  const trackPage = useCallback((customTitle?: string) => {
+    trackPageView(customTitle || `${window.location.pathname}${window.location.search}`)
+  }, [])
 
   // Generic event tracking
   const track = useCallback(

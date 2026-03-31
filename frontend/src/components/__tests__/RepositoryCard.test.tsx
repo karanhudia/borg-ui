@@ -457,11 +457,7 @@ describe('RepositoryCard', () => {
 
       await user.click(screen.getByRole('button', { name: /Info/i }))
       expect(mockCallbacks.onViewInfo).toHaveBeenCalledTimes(1)
-      expect(mockAnalyticsTracking.trackRepository).toHaveBeenCalledWith(
-        'View',
-        'Test Repository',
-        expect.any(Number)
-      )
+      expect(mockAnalyticsTracking.trackRepository).toHaveBeenCalledWith('View', mockRepository)
     })
 
     it('calls onCheck and tracks event when Check button is clicked', async () => {
@@ -481,7 +477,7 @@ describe('RepositoryCard', () => {
       expect(mockAnalyticsTracking.trackMaintenance).toHaveBeenCalledWith(
         'Start',
         'Check',
-        'Test Repository'
+        mockRepository
       )
     })
 
@@ -502,7 +498,7 @@ describe('RepositoryCard', () => {
       expect(mockAnalyticsTracking.trackMaintenance).toHaveBeenCalledWith(
         'Start',
         'Compact',
-        'Test Repository'
+        mockRepository
       )
     })
 
@@ -523,7 +519,7 @@ describe('RepositoryCard', () => {
       expect(mockAnalyticsTracking.trackMaintenance).toHaveBeenCalledWith(
         'Start',
         'Prune',
-        'Test Repository'
+        mockRepository
       )
     })
 
@@ -544,8 +540,7 @@ describe('RepositoryCard', () => {
       expect(mockAnalyticsTracking.trackBackup).toHaveBeenCalledWith(
         'Start',
         undefined,
-        'Test Repository',
-        expect.any(Number)
+        mockRepository
       )
     })
 
@@ -563,11 +558,7 @@ describe('RepositoryCard', () => {
 
       await user.click(screen.getByRole('button', { name: /View Archives/i }))
       expect(mockCallbacks.onViewArchives).toHaveBeenCalledTimes(1)
-      expect(mockAnalyticsTracking.trackArchive).toHaveBeenCalledWith(
-        'View',
-        'Test Repository',
-        expect.any(Number)
-      )
+      expect(mockAnalyticsTracking.trackArchive).toHaveBeenCalledWith('View', mockRepository)
     })
 
     it('calls onDelete and tracks event when Delete button is clicked', async () => {
@@ -586,11 +577,7 @@ describe('RepositoryCard', () => {
       // The last Delete button is the main delete action (first one is Prune button icon)
       await user.click(deleteButtons[deleteButtons.length - 1])
       expect(mockCallbacks.onDelete).toHaveBeenCalledTimes(1)
-      expect(mockAnalyticsTracking.trackRepository).toHaveBeenCalledWith(
-        'Delete',
-        'Test Repository',
-        expect.any(Number)
-      )
+      expect(mockAnalyticsTracking.trackRepository).toHaveBeenCalledWith('Delete', mockRepository)
     })
   })
 

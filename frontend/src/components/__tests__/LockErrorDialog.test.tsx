@@ -227,7 +227,7 @@ describe('LockErrorDialog', () => {
       await user.click(screen.getByRole('button', { name: /Break Lock/ }))
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /common.status.running/ })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Running' })).toBeInTheDocument()
       })
     })
 
@@ -253,7 +253,7 @@ describe('LockErrorDialog', () => {
       await user.click(screen.getByRole('button', { name: /Break Lock/ }))
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /common.status.running/ })).toBeDisabled()
+        expect(screen.getByRole('button', { name: 'Running' })).toBeDisabled()
       })
     })
   })

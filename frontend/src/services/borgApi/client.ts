@@ -17,7 +17,7 @@ import { isV2Repo } from '@/utils/repoCapabilities'
 // Re-use the same axios instance (with auth interceptors) from api.ts
 // by importing only the create pattern — auth token injection is handled
 // by the global interceptor already set up in api.ts.
-const httpClient = axios.create({
+export const httpClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || `${BASE_PATH}/api`,
   headers: { 'Content-Type': 'application/json' },
 })

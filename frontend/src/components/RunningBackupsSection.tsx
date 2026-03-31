@@ -100,22 +100,25 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
                     {t('runningBackups.started')} {formatRelativeTime(job.started_at)}
                   </Typography>
                   <Tooltip title={t('runningBackups.cancelBackup')} arrow>
-                    <IconButton
-                      size="small"
-                      color="error"
-                      onClick={() => {
-                        if (
-                          window.confirm(`Are you sure you want to cancel backup job #${job.id}?`)
-                        ) {
-                          trackBackup(EventAction.STOP, 'running_backup_cancel', job.repository)
-                          onCancelBackup(job.id)
-                        }
-                      }}
-                      disabled={isCancelling}
-                      sx={{ ml: 1 }}
-                    >
-                      <X size={16} />
-                    </IconButton>
+                    <span>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        aria-label={t('runningBackups.cancelBackup')}
+                        onClick={() => {
+                          if (
+                            window.confirm(`Are you sure you want to cancel backup job #${job.id}?`)
+                          ) {
+                            trackBackup(EventAction.STOP, 'running_backup_cancel', job.repository)
+                            onCancelBackup(job.id)
+                          }
+                        }}
+                        disabled={isCancelling}
+                        sx={{ ml: 1 }}
+                      >
+                        <X size={16} />
+                      </IconButton>
+                    </span>
                   </Tooltip>
                 </Stack>
               </Stack>

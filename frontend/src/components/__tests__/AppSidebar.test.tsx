@@ -1,12 +1,17 @@
 import { describe, it, expect, vi } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import { renderWithProviders } from '../../test/test-utils'
 import AppSidebar from '../AppSidebar'
 
+const { mockApiGet, mockGetSystemSettings } = vi.hoisted(() => ({
+  mockApiGet: vi.fn().mockResolvedValue({ data: {} }),
+  mockGetSystemSettings: vi.fn().mockResolvedValue({ data: { settings: {} } }),
+}))
+
 vi.mock('../../services/api', () => ({
-  default: { get: vi.fn().mockResolvedValue({ data: {} }) },
+  default: { get: mockApiGet },
   settingsAPI: {
-    getSystemSettings: vi.fn().mockResolvedValue({ data: { settings: {} } }),
+    getSystemSettings: mockGetSystemSettings,
   },
 }))
 
@@ -25,27 +30,31 @@ vi.mock('../../context/AppContext', () => ({
 }))
 
 describe('AppSidebar', () => {
-  it('renders the app name', () => {
+  it('renders the app name', async () => {
     renderWithProviders(<AppSidebar mobileOpen={false} onClose={vi.fn()} />)
-    expect(screen.getAllByText('Borg UI').length).toBeGreaterThan(0)
+    await waitFor(() => expect(screen.getAllByText('Borg UI').length).toBeGreaterThan(0))
   })
 
-  it('renders a link to the dashboard', () => {
+  it('renders a link to the dashboard', async () => {
     renderWithProviders(<AppSidebar mobileOpen={false} onClose={vi.fn()} />)
-    expect(screen.getAllByRole('link', { name: /borg ui/i })[0]).toHaveAttribute(
-      'href',
-      '/dashboard'
+    await waitFor(() =>
+      expect(screen.getAllByRole('link', { name: /borg ui/i })[0]).toHaveAttribute(
+        'href',
+        '/dashboard'
+      )
     )
   })
 
-  it('renders primary nav items', () => {
+  it('renders primary nav items', async () => {
     renderWithProviders(<AppSidebar mobileOpen={false} onClose={vi.fn()} />)
-    expect(screen.getAllByRole('link', { name: /dashboard/i }).length).toBeGreaterThan(0)
-    expect(screen.getAllByRole('link', { name: /repositories/i }).length).toBeGreaterThan(0)
+    await waitFor(() => {
+      expect(screen.getAllByRole('link', { name: /dashboard/i }).length).toBeGreaterThan(0)
+      expect(screen.getAllByRole('link', { name: /repositories/i }).length).toBeGreaterThan(0)
+    })
   })
 
-  it('shows version info loading state when system info not yet loaded', () => {
+  it('shows version info loading state when system info not yet loaded', async () => {
     renderWithProviders(<AppSidebar mobileOpen={false} onClose={vi.fn()} />)
-    expect(screen.getAllByText('Loading...').length).toBeGreaterThan(0)
+    await waitFor(() => expect(screen.getAllByText('Loading...').length).toBeGreaterThan(0))
   })
 })

@@ -1,7 +1,16 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import { renderWithProviders } from '../../test/test-utils'
 import SidebarVersionInfo from '../SidebarVersionInfo'
+
+vi.mock('../../hooks/usePlan', () => ({
+  usePlan: () => ({
+    plan: 'community',
+    features: {},
+    isLoading: false,
+    can: () => true,
+  }),
+}))
 
 const fullSystemInfo = {
   app_version: '1.2.3',

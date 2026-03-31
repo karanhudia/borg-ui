@@ -689,34 +689,39 @@ describe('FileExplorerDialog', () => {
 
     it('shows error when folder creation fails', async () => {
       const user = userEvent.setup()
-      vi.mocked(api.post).mockRejectedValueOnce({
-        response: { data: { detail: 'Folder already exists' } },
-      })
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        vi.mocked(api.post).mockRejectedValueOnce({
+          response: { data: { detail: 'Folder already exists' } },
+        })
 
-      renderWithProviders(
-        <FileExplorerDialog open={true} onClose={mockOnClose} onSelect={mockOnSelect} />
-      )
+        renderWithProviders(
+          <FileExplorerDialog open={true} onClose={mockOnClose} onSelect={mockOnSelect} />
+        )
 
-      await waitFor(() => {
-        expect(screen.getByText('Documents')).toBeInTheDocument()
-      })
+        await waitFor(() => {
+          expect(screen.getByText('Documents')).toBeInTheDocument()
+        })
 
-      await user.click(screen.getByRole('button', { name: /New Folder/i }))
+        await user.click(screen.getByRole('button', { name: /New Folder/i }))
 
-      const input = screen.getByLabelText('Folder Name')
-      await user.type(input, 'ExistingFolder')
+        const input = screen.getByLabelText('Folder Name')
+        await user.type(input, 'ExistingFolder')
 
-      const createButton = screen.getAllByRole('button', { name: /Create/i })[0]
-      await user.click(createButton)
+        const createButton = screen.getAllByRole('button', { name: /Create/i })[0]
+        await user.click(createButton)
 
-      await waitFor(
-        () => {
-          // Error appears in both dialogs (main and create folder), so use getAllByText
-          const errorMessages = screen.getAllByText('Folder already exists')
-          expect(errorMessages.length).toBeGreaterThan(0)
-        },
-        { timeout: 2000 }
-      )
+        await waitFor(
+          () => {
+            // Error appears in both dialogs (main and create folder), so use getAllByText
+            const errorMessages = screen.getAllByText('Folder already exists')
+            expect(errorMessages.length).toBeGreaterThan(0)
+          },
+          { timeout: 2000 }
+        )
+      } finally {
+        consoleErrorSpy.mockRestore()
+      }
     })
 
     it('disables Create button when folder name is empty', async () => {

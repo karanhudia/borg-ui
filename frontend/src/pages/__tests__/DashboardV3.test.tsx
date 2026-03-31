@@ -271,7 +271,7 @@ describe('DashboardV3', () => {
       })
       mockFetchSuccess(data)
       renderDashboard()
-      await waitFor(() => expect(screen.getByText('Never')).toBeInTheDocument())
+      await waitFor(() => expect(screen.getAllByText('Never').length).toBeGreaterThan(0))
     })
   })
 

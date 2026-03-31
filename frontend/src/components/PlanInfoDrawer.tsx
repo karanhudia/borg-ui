@@ -9,7 +9,7 @@ interface PlanInfoDrawerProps {
   open: boolean
   onClose: () => void
   plan: Plan
-  features: Record<string, Plan>
+  features?: Record<string, Plan>
 }
 
 const UPGRADE_PLANS: Plan[] = ['pro', 'enterprise']
@@ -26,7 +26,7 @@ export default function PlanInfoDrawer({ open, onClose, plan, features }: PlanIn
 
   const selectedColor = PLAN_COLOR[selectedPlan]
   const isComingSoon = selectedPlan !== plan
-  const visibleFeatures = Object.entries(features).filter(
+  const visibleFeatures = Object.entries(features ?? {}).filter(
     ([, required]) => required === selectedPlan
   )
 
