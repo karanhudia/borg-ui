@@ -1,5 +1,6 @@
 import { Box, Chip, Stack, Typography } from '@mui/material'
 import { Database } from 'lucide-react'
+import BorgVersionChip from './BorgVersionChip'
 
 interface RepoMenuItemProps {
   name: string
@@ -11,17 +12,6 @@ interface RepoMenuItemProps {
   /** Hide the monospace path line (e.g. compact filter dropdowns) */
   hidePath?: boolean
 }
-
-const v2ChipSx = {
-  height: '16px',
-  fontSize: '0.6rem',
-  fontWeight: 700,
-  fontFamily: 'monospace',
-  bgcolor: '#6366f1',
-  color: '#fff',
-  border: 'none',
-  '& .MuiChip-label': { px: 0.6 },
-} as const
 
 const observeChipSx = {
   height: '16px',
@@ -50,7 +40,7 @@ export default function RepoMenuItem({
           <Typography variant="body2" fontWeight={500}>
             {name}
           </Typography>
-          {borgVersion === 2 && <Chip label="v2" size="small" sx={v2ChipSx} />}
+          <BorgVersionChip borgVersion={borgVersion} compact />
           {mode === 'observe' && <Chip label="Observe Only" size="small" sx={observeChipSx} />}
           {hasRunningMaintenance && (
             <Typography component="span" variant="caption" color="warning.main">
