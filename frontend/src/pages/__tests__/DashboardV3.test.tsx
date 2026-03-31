@@ -319,7 +319,8 @@ describe('DashboardV3', () => {
       mockFetchSuccess(makeOverview())
       renderDashboard()
       await waitFor(() => screen.getAllByText('my-server'))
-      fireEvent.click(screen.getAllByText('my-server')[0])
+      // 'my-server' appears in both the storage legend (index 0) and the health grid card (index 1)
+      fireEvent.click(screen.getAllByText('my-server')[1])
       expect(mockNavigate).toHaveBeenCalledWith('/repositories')
     })
 

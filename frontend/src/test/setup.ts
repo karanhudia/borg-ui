@@ -3,6 +3,18 @@ import { cleanup } from '@testing-library/react'
 import * as matchers from '@testing-library/jest-dom/matchers'
 import '../i18n'
 
+// Mock usePlan globally — plan gating uses useQuery which requires a QueryClientProvider.
+// Unit tests that don't set one up should not fail because of plan feature checks.
+vi.mock('../hooks/usePlan', () => ({
+  usePlan: () => ({
+    plan: 'free',
+    isLoading: false,
+    isPro: false,
+    isFree: true,
+    can: () => true,
+  }),
+}))
+
 // Extend Vitest's expect with jest-dom matchers
 expect.extend(matchers)
 

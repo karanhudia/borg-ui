@@ -15,7 +15,7 @@ describe('RepositorySelectorCard', () => {
     )
 
     expect(screen.getByText('Select Repository')).toBeInTheDocument()
-    expect(screen.getByLabelText('Repository')).toBeInTheDocument()
+    expect(screen.getByRole('combobox')).toBeInTheDocument()
   })
 
   it('renders all repositories in dropdown', () => {
@@ -24,7 +24,7 @@ describe('RepositorySelectorCard', () => {
     )
 
     // Open dropdown
-    const select = screen.getByLabelText('Repository')
+    const select = screen.getByRole('combobox')
     fireEvent.mouseDown(select)
 
     // Check all repositories are present
@@ -48,7 +48,7 @@ describe('RepositorySelectorCard', () => {
     )
 
     // Open dropdown
-    const select = screen.getByLabelText('Repository')
+    const select = screen.getByRole('combobox')
     fireEvent.mouseDown(select)
 
     // Select different repository
@@ -87,7 +87,7 @@ describe('RepositorySelectorCard', () => {
     render(<RepositorySelectorCard repositories={[]} value={null} onChange={vi.fn()} />)
 
     // Open dropdown
-    const select = screen.getByLabelText('Repository')
+    const select = screen.getByRole('combobox')
     fireEvent.mouseDown(select)
 
     expect(screen.getByText('Select a repository...')).toBeInTheDocument()

@@ -455,8 +455,8 @@ describe('RepositoryWizard', () => {
 
         await goToStep3(user)
 
-        // Look for the MUI Select element with "Repokey (Recommended)" as the default value
-        expect(screen.getByText('Repokey (Recommended)')).toBeInTheDocument()
+        // Look for the MUI Select element with "Repository Key" as the default value
+        expect(screen.getByText('Repository Key')).toBeInTheDocument()
       })
 
       it('shows Passphrase input', async () => {

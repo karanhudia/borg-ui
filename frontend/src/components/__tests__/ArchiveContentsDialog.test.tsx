@@ -7,9 +7,9 @@ import ArchiveContentsDialog from '../ArchiveContentsDialog'
 
 // Mock BorgApiClient so tests don't make real HTTP calls
 vi.mock('../../services/borgApi/client', () => ({
-  BorgApiClient: vi.fn().mockImplementation(() => ({
-    getArchiveContents: vi.fn(),
-  })),
+  BorgApiClient: vi.fn(function () {
+    return { getArchiveContents: vi.fn() }
+  }),
 }))
 
 import { BorgApiClient } from '../../services/borgApi/client'
@@ -49,12 +49,9 @@ describe('ArchiveContentsDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetArchiveContents = vi.fn()
-    vi.mocked(BorgApiClient).mockImplementation(
-      () =>
-        ({
-          getArchiveContents: mockGetArchiveContents,
-        }) as any
-    )
+    vi.mocked(BorgApiClient).mockImplementation(function () {
+      return { getArchiveContents: mockGetArchiveContents } as any
+    })
   })
 
   it('renders nothing when closed', () => {
@@ -189,7 +186,11 @@ describe('ArchiveContentsDialog', () => {
 
     // Check that client was called with new path
     await waitFor(() => {
-      expect(mockGetArchiveContents).toHaveBeenCalledWith(mockArchive.name, 'documents')
+      expect(mockGetArchiveContents).toHaveBeenCalledWith(
+        mockArchive.id,
+        mockArchive.name,
+        'documents'
+      )
     })
   })
 
@@ -296,7 +297,7 @@ describe('ArchiveContentsDialog', () => {
 
     // Verify it starts at root path
     await waitFor(() => {
-      expect(mockGetArchiveContents).toHaveBeenCalledWith(mockArchive.name, '')
+      expect(mockGetArchiveContents).toHaveBeenCalledWith(mockArchive.id, mockArchive.name, '')
     })
   })
 
