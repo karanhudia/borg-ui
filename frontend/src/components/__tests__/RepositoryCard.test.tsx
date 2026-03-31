@@ -74,6 +74,7 @@ describe('RepositoryCard', () => {
       SETTINGS: 'Settings',
       AUTH: 'Authentication',
       NAVIGATION: 'Navigation',
+      PLAN: 'Plan',
     } as const,
     EventAction: {
       CREATE: 'Create',

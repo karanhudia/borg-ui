@@ -135,11 +135,7 @@ export default function WizardStepLocation({
               })}
             </Box>
             {(data.borgVersion ?? 1) === 2 && (
-              <Tooltip
-                title="Borg 2 repositories are not compatible with Borg 1. Requires borg2 binary on this system and any remote hosts."
-                arrow
-                placement="right"
-              >
+              <Tooltip title={t('wizard.location.borgV2Warning')} arrow placement="right">
                 <InfoOutlinedIcon sx={{ fontSize: 16, color: 'info.main', cursor: 'default' }} />
               </Tooltip>
             )}
@@ -401,7 +397,7 @@ export default function WizardStepLocation({
                             borderRadius: '50%',
                             bgcolor: 'success.main',
                           }}
-                          title="Connected"
+                          title={t('wizard.location.connected')}
                         />
                       )}
                     </Box>
@@ -431,7 +427,7 @@ export default function WizardStepLocation({
                 onClick={onBrowsePath}
                 edge="end"
                 size="small"
-                title="Browse filesystem"
+                title={t('wizard.location.browseFilesystem')}
                 disabled={data.repositoryLocation === 'ssh' && !data.repoSshConnectionId}
               >
                 <FolderOpenIcon fontSize="small" />

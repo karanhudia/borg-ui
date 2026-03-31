@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import WizardStepLocation from '../WizardStepLocation'
 
 vi.mock('../../../hooks/usePlan', () => ({
-  usePlan: () => ({ plan: 'community', isLoading: false, can: () => true }),
+  usePlan: () => ({ plan: 'community', features: {}, isLoading: false, can: () => true }),
 }))
 
 const mockSshConnections = [

@@ -92,7 +92,7 @@ export default function RepositoryStatsV2({ archives }: RepositoryStatsV2Props) 
               </Typography>
             </Box>
             <Typography variant="body2" fontWeight={600}>
-              {first.time ? formatDateShort(first.time) : 'N/A'}
+              {first.time ? formatDateShort(first.time) : t('common.na')}
             </Typography>
           </CardContent>
         </Card>
@@ -105,7 +105,7 @@ export default function RepositoryStatsV2({ archives }: RepositoryStatsV2Props) 
               </Typography>
             </Box>
             <Typography variant="body2" fontWeight={600}>
-              {latest.time ? formatDateShort(latest.time) : 'N/A'}
+              {latest.time ? formatDateShort(latest.time) : t('common.na')}
             </Typography>
           </CardContent>
         </Card>

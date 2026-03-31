@@ -12,6 +12,7 @@
  */
 
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { BASE_PATH } from '@/utils/basePath'
@@ -224,6 +225,7 @@ function StorageDonut({
   totalArchives: number
 }) {
   const T = useT()
+  const { t } = useTranslation()
   const size = 148,
     sw = 16,
     r = (size - sw) / 2
@@ -299,7 +301,7 @@ function StorageDonut({
               textTransform: 'uppercase',
             }}
           >
-            {totalArchives} archives
+            {t('dashboard.storageDonut.archivesCount', { count: totalArchives })}
           </Typography>
         </Box>
       </Box>
@@ -337,7 +339,7 @@ function StorageDonut({
         ))}
         {slices.length === 0 && (
           <Typography sx={{ fontSize: '0.7rem', color: T.textMuted, textAlign: 'center', py: 1 }}>
-            No data
+            {t('dashboard.storageDonut.noData')}
           </Typography>
         )}
       </Box>
@@ -456,10 +458,10 @@ const DIM_STATUS: Record<string, { color: string }> = {
   unknown: { color: '#475569' },
 }
 
-function dimSince(dt: string | null): string {
-  if (!dt) return 'never'
+function dimSince(dt: string | null, t: (key: string) => string): string {
+  if (!dt) return t('common.never')
   const d = differenceInDays(new Date(), new Date(dt))
-  if (d < 1) return 'today'
+  if (d < 1) return t('dashboard.activityTimeline.today')
   if (d < 7) return `${d}d ago`
   if (d < 30) return `${Math.round(d / 7)}w ago`
   return `${Math.round(d / 30)}mo ago`
@@ -489,11 +491,24 @@ function DimStatusGrid({
   lastCompact: string | null
 }) {
   const T = useT()
+  const { t } = useTranslation()
 
   const items = [
-    { label: 'BACKUP', status: dim?.backup ?? 'unknown', since: lastBackup },
-    { label: 'CHECK', status: dim?.check ?? 'unknown', since: lastCheck },
-    { label: 'COMPACT', status: dim?.compact ?? 'unknown', since: lastCompact },
+    {
+      label: t('dashboard.repositoryHealth.dimensionLabels.backup'),
+      status: dim?.backup ?? 'unknown',
+      since: lastBackup,
+    },
+    {
+      label: t('dashboard.repositoryHealth.dimensionLabels.check'),
+      status: dim?.check ?? 'unknown',
+      since: lastCheck,
+    },
+    {
+      label: t('dashboard.repositoryHealth.dimensionLabels.compact'),
+      status: dim?.compact ?? 'unknown',
+      since: lastCompact,
+    },
   ]
 
   return (
@@ -534,7 +549,7 @@ function DimStatusGrid({
                 lineHeight: 1,
               }}
             >
-              {dimSince(item.since)}
+              {dimSince(item.since, t)}
             </Typography>
           </Box>
         )
@@ -564,12 +579,13 @@ function ScheduleBadge({
   scheduleName: string | null
 }) {
   const T = useT()
+  const { t } = useTranslation()
 
   // ── No schedule at all ─────────────────────────────────────────────
   if (!hasSchedule) {
     return (
       <Typography
-        title="No automated schedule"
+        title={t('dashboard.scheduleBadge.noSchedule')}
         sx={{
           fontFamily: T.mono,
           fontSize: '0.58rem',
@@ -579,7 +595,7 @@ function ScheduleBadge({
           userSelect: 'none',
         }}
       >
-        manual
+        {t('dashboard.scheduleBadge.manual')}
       </Typography>
     )
   }
@@ -591,7 +607,11 @@ function ScheduleBadge({
         direction="row"
         spacing={0.4}
         alignItems="center"
-        title={scheduleName ? `Paused: ${scheduleName}` : 'Schedule paused'}
+        title={
+          scheduleName
+            ? t('dashboard.scheduleBadge.pausedTitle', { name: scheduleName })
+            : t('dashboard.scheduleBadge.pausedTitleGeneric')
+        }
         sx={{
           px: 0.8,
           py: 0.2,
@@ -611,7 +631,7 @@ function ScheduleBadge({
             lineHeight: 1,
           }}
         >
-          paused
+          {t('dashboard.scheduleBadge.paused')}
         </Typography>
       </Stack>
     )
@@ -624,7 +644,7 @@ function ScheduleBadge({
         direction="row"
         spacing={0.4}
         alignItems="center"
-        title={scheduleName ?? 'Scheduled'}
+        title={scheduleName ?? t('dashboard.scheduleBadge.scheduled')}
         sx={{
           px: 0.8,
           py: 0.2,
@@ -644,7 +664,7 @@ function ScheduleBadge({
             lineHeight: 1,
           }}
         >
-          sched
+          {t('dashboard.scheduleBadge.scheduled')}
         </Typography>
       </Stack>
     )
@@ -657,7 +677,7 @@ function ScheduleBadge({
 
   const label =
     msAway <= 0
-      ? 'now'
+      ? t('dashboard.scheduleBadge.now')
       : hoursAway < 1
         ? `${Math.round(hoursAway * 60)}m`
         : hoursAway < 24
@@ -669,7 +689,11 @@ function ScheduleBadge({
       direction="row"
       spacing={0.4}
       alignItems="center"
-      title={scheduleName ? `${scheduleName} — next run ${label}` : `Next run in ${label}`}
+      title={
+        scheduleName
+          ? t('dashboard.scheduleBadge.nextRunTitle', { name: scheduleName, label })
+          : t('dashboard.scheduleBadge.nextRunTitleGeneric', { label })
+      }
       sx={{
         px: 0.8,
         py: 0.2,
@@ -710,6 +734,7 @@ function ScheduleBadge({
  */
 function ActivityTimeline({ activities }: { activities: DashboardOverview['activity_feed'] }) {
   const T = useT()
+  const { t } = useTranslation()
   const DAYS = 14
   const VB_W = 680,
     VB_H = 110
@@ -762,7 +787,7 @@ function ActivityTimeline({ activities }: { activities: DashboardOverview['activ
       <svg
         viewBox={`0 0 ${VB_W} ${VB_H}`}
         style={{ width: '100%', height: 'auto', overflow: 'visible' }}
-        aria-label="Backup activity over last 14 days"
+        aria-label={t('dashboard.activityTimeline.ariaLabel')}
       >
         {/* Alternating column shading */}
         {dayLabels.map(({ x }, i) =>
@@ -841,7 +866,7 @@ function ActivityTimeline({ activities }: { activities: DashboardOverview['activ
           textAnchor="middle"
           fontFamily="ui-monospace,monospace"
         >
-          today
+          {t('dashboard.activityTimeline.today')}
         </text>
       </svg>
 
@@ -859,7 +884,7 @@ function ActivityTimeline({ activities }: { activities: DashboardOverview['activ
               }}
             />
             <Typography sx={{ fontFamily: T.mono, fontSize: '0.6rem', color: T.textMuted }}>
-              {type}
+              {t(`dashboard.activityTimeline.jobType.${type}`, { defaultValue: type })}
             </Typography>
           </Stack>
         ))}
@@ -874,7 +899,7 @@ function ActivityTimeline({ activities }: { activities: DashboardOverview['activ
             }}
           />
           <Typography sx={{ fontFamily: T.mono, fontSize: '0.6rem', color: T.textMuted }}>
-            failed
+            {t('dashboard.activityTimeline.legendFailed')}
           </Typography>
         </Stack>
       </Stack>
@@ -895,6 +920,7 @@ function toGB(b: number) {
 export default function DashboardV3() {
   const navigate = useNavigate()
   const { mode } = useTheme()
+  const { t } = useTranslation()
   const T = makeT(mode === 'dark')
 
   const glass = {
@@ -935,11 +961,11 @@ export default function DashboardV3() {
         severity="error"
         action={
           <Button size="small" onClick={() => refetch()}>
-            Retry
+            {t('dashboard.error.retry')}
           </Button>
         }
       >
-        Dashboard unavailable
+        {t('dashboard.error.unavailable')}
       </Alert>
     )
 
@@ -988,16 +1014,19 @@ export default function DashboardV3() {
                   mb: 0.2,
                 }}
               >
-                System Status
+                {t('dashboard.banner.systemStatus')}
               </Typography>
               <Typography
                 sx={{ fontFamily: T.mono, fontSize: '1rem', fontWeight: 700, color: sc.color }}
               >
                 {sysStatus === 'healthy'
-                  ? 'All systems nominal'
+                  ? t('dashboard.banner.allNominal')
                   : sysStatus === 'warning'
-                    ? `${warningCount} warning${warningCount > 1 ? 's' : ''}`
-                    : `${criticalCount} critical`}
+                    ? t('dashboard.banner.warnings', {
+                        count: warningCount,
+                        s: warningCount > 1 ? 's' : '',
+                      })
+                    : t('dashboard.banner.critical', { count: criticalCount })}
               </Typography>
             </Box>
           </Stack>
@@ -1005,23 +1034,31 @@ export default function DashboardV3() {
           {/* Quick stats */}
           <Stack direction="row" spacing={3} flexWrap="wrap">
             {[
-              { label: 'Repositories', value: summary.total_repositories, color: T.blue },
               {
-                label: 'Last backup',
+                label: t('dashboard.stats.repositories'),
+                value: summary.total_repositories,
+                color: T.blue,
+              },
+              {
+                label: t('dashboard.banner.stats.lastBackup'),
                 value: lastBackupDate
                   ? formatDistanceToNow(lastBackupDate, { addSuffix: true })
-                  : 'Never',
+                  : t('common.never'),
                 color:
                   lastBackupDate && differenceInDays(new Date(), lastBackupDate) > 1
                     ? T.amber
                     : T.green,
               },
               {
-                label: 'Schedules',
+                label: t('dashboard.banner.stats.schedules'),
                 value: `${summary.active_schedules}/${summary.total_schedules}`,
                 color: T.textMuted,
               },
-              { label: 'Storage', value: storage.total_size, color: T.textPrimary },
+              {
+                label: t('dashboard.banner.stats.storage'),
+                value: storage.total_size,
+                color: T.textPrimary,
+              },
             ].map(({ label, value, color }) => (
               <Box key={label}>
                 <Typography
@@ -1061,7 +1098,7 @@ export default function DashboardV3() {
               '&:hover': { color: T.textPrimary, bgcolor: T.hoverBg },
             }}
           >
-            Refresh
+            {t('common.buttons.refresh')}
           </Button>
         </Box>
 
@@ -1086,7 +1123,7 @@ export default function DashboardV3() {
                   mb: 2,
                 }}
               >
-                30-day success
+                {t('dashboard.successDonut.label')}
               </Typography>
               <SuccessDonut
                 rate={summary.success_rate_30d}
@@ -1107,7 +1144,7 @@ export default function DashboardV3() {
                     {summary.successful_jobs_30d}
                   </Typography>
                   <Typography sx={{ fontSize: '0.58rem', color: T.textMuted, mt: 0.25 }}>
-                    passed
+                    {t('dashboard.successDonut.passed')}
                   </Typography>
                 </Box>
                 <Box sx={{ width: '1px', height: 28, bgcolor: T.border, flexShrink: 0 }} />
@@ -1124,7 +1161,7 @@ export default function DashboardV3() {
                     {summary.failed_jobs_30d}
                   </Typography>
                   <Typography sx={{ fontSize: '0.58rem', color: T.textMuted, mt: 0.25 }}>
-                    failed
+                    {t('dashboard.successDonut.failed')}
                   </Typography>
                 </Box>
               </Stack>
@@ -1141,26 +1178,26 @@ export default function DashboardV3() {
                     textTransform: 'uppercase',
                   }}
                 >
-                  Resources
+                  {t('dashboard.resources')}
                 </Typography>
               </Stack>
               <Stack direction="row" justifyContent="space-around">
                 <ArcGauge
                   value={sys.cpu_usage}
                   color={gaugeColor(sys.cpu_usage, T)}
-                  label="CPU"
+                  label={t('dashboard.cpu')}
                   sub={`${sys.cpu_count}c`}
                 />
                 <ArcGauge
                   value={sys.memory_usage}
                   color={gaugeColor(sys.memory_usage, T)}
-                  label="MEM"
+                  label={t('dashboard.memAbbr')}
                   sub={`${toGB(sys.memory_total - sys.memory_available)}/${toGB(sys.memory_total)}G`}
                 />
                 <ArcGauge
                   value={sys.disk_usage}
                   color={gaugeColor(sys.disk_usage, T)}
-                  label="DISK"
+                  label={t('dashboard.diskAbbr')}
                   sub={`${toGB(sys.disk_total - sys.disk_free)}/${toGB(sys.disk_total)}G`}
                 />
               </Stack>
@@ -1178,7 +1215,7 @@ export default function DashboardV3() {
                     textTransform: 'uppercase',
                   }}
                 >
-                  Storage
+                  {t('dashboard.banner.stats.storage')}
                 </Typography>
               </Stack>
               <StorageDonut
@@ -1200,7 +1237,7 @@ export default function DashboardV3() {
                   }}
                 >
                   <Typography sx={{ fontSize: '0.62rem', color: T.textMuted }}>
-                    Dedup ratio
+                    {t('dashboard.storageDonut.dedupRatio')}
                   </Typography>
                   <Typography
                     sx={{
@@ -1236,13 +1273,13 @@ export default function DashboardV3() {
                       textTransform: 'uppercase',
                     }}
                   >
-                    Repository Health
+                    {t('dashboard.repositoryHealth.title')}
                   </Typography>
                 </Stack>
                 <Stack direction="row" spacing={0.75}>
                   {criticalCount > 0 && (
                     <Chip
-                      label={`${criticalCount} critical`}
+                      label={t('dashboard.banner.critical', { count: criticalCount })}
                       size="small"
                       sx={{
                         height: 19,
@@ -1256,7 +1293,7 @@ export default function DashboardV3() {
                   )}
                   {warningCount > 0 && (
                     <Chip
-                      label={`${warningCount} warn`}
+                      label={t('dashboard.banner.warnChip', { count: warningCount })}
                       size="small"
                       sx={{
                         height: 19,
@@ -1270,7 +1307,7 @@ export default function DashboardV3() {
                   )}
                   {healthyCount > 0 && (
                     <Chip
-                      label={`${healthyCount} ok`}
+                      label={t('dashboard.banner.okChip', { count: healthyCount })}
                       size="small"
                       sx={{
                         height: 19,
@@ -1383,7 +1420,9 @@ export default function DashboardV3() {
                         <Typography
                           sx={{ fontFamily: T.mono, fontSize: '0.6rem', color: T.textMuted }}
                         >
-                          {repo.archive_count} arx
+                          {t('dashboard.repositoryHealth.archiveCountShort', {
+                            count: repo.archive_count,
+                          })}
                         </Typography>
                         <Typography
                           sx={{ fontFamily: T.mono, fontSize: '0.6rem', color: T.textMuted }}
@@ -1410,7 +1449,7 @@ export default function DashboardV3() {
                 <Typography
                   sx={{ color: T.textMuted, textAlign: 'center', py: 4, fontSize: '0.85rem' }}
                 >
-                  No repositories
+                  {t('dashboard.noRepositoriesShort')}
                 </Typography>
               )}
             </Box>
@@ -1433,7 +1472,7 @@ export default function DashboardV3() {
                       textTransform: 'uppercase',
                     }}
                   >
-                    Activity — last 14 days
+                    {t('dashboard.recentActivity.last14Days')}
                   </Typography>
                 </Stack>
                 <Button
@@ -1447,7 +1486,7 @@ export default function DashboardV3() {
                     '&:hover': { color: T.textPrimary, bgcolor: T.hoverBg },
                   }}
                 >
-                  Full log
+                  {t('dashboard.recentActivity.fullLog')}
                 </Button>
               </Stack>
 
@@ -1455,7 +1494,7 @@ export default function DashboardV3() {
                 <Typography
                   sx={{ color: T.textMuted, textAlign: 'center', py: 3, fontSize: '0.8rem' }}
                 >
-                  No activity recorded yet
+                  {t('dashboard.recentActivity.emptyRecorded')}
                 </Typography>
               ) : (
                 <ActivityTimeline activities={ov.activity_feed} />
@@ -1472,7 +1511,7 @@ export default function DashboardV3() {
                       mb: 1,
                     }}
                   >
-                    Recent failures
+                    {t('dashboard.recentFailures.title')}
                   </Typography>
                   <Stack spacing={0.6}>
                     {ov.activity_feed

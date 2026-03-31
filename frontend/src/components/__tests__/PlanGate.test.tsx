@@ -8,7 +8,12 @@ import { usePlan } from '../../hooks/usePlan'
 
 describe('PlanGate', () => {
   it('renders children when plan meets requirement', () => {
-    vi.mocked(usePlan).mockReturnValue({ plan: 'pro', isLoading: false, can: () => true })
+    vi.mocked(usePlan).mockReturnValue({
+      plan: 'pro',
+      features: {},
+      isLoading: false,
+      can: () => true,
+    })
     renderWithProviders(
       <PlanGate feature="borg_v2">
         <div>pro content</div>
@@ -18,7 +23,12 @@ describe('PlanGate', () => {
   })
 
   it('renders UpgradePrompt when plan is insufficient', () => {
-    vi.mocked(usePlan).mockReturnValue({ plan: 'community', isLoading: false, can: () => false })
+    vi.mocked(usePlan).mockReturnValue({
+      plan: 'community',
+      features: {},
+      isLoading: false,
+      can: () => false,
+    })
     renderWithProviders(
       <PlanGate feature="borg_v2">
         <div>pro content</div>
@@ -29,7 +39,12 @@ describe('PlanGate', () => {
   })
 
   it('renders custom fallback when provided', () => {
-    vi.mocked(usePlan).mockReturnValue({ plan: 'community', isLoading: false, can: () => false })
+    vi.mocked(usePlan).mockReturnValue({
+      plan: 'community',
+      features: {},
+      isLoading: false,
+      can: () => false,
+    })
     renderWithProviders(
       <PlanGate feature="borg_v2" fallback={<div>custom locked</div>}>
         <div>pro content</div>
