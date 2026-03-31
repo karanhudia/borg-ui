@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../hooks/useAuth.tsx'
-import { hasConsentBeenGiven, loadUserPreference } from '../utils/matomo'
+import { hasConsentBeenGiven, loadUserPreference } from '../utils/analytics'
 import AnalyticsConsentBanner from './AnalyticsConsentBanner'
 import AppSidebar from './AppSidebar'
 import { Box, AppBar, Toolbar, Typography, IconButton, Container, Button } from '@mui/material'
