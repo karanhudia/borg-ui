@@ -20,11 +20,13 @@ import {
   MenuItem,
   Select,
   FormControl,
+  Tooltip,
 } from '@mui/material'
 import { Users, Trash2, Plus, Edit, Key, AlertCircle, Moon, Sun } from 'lucide-react'
 import { settingsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
+import { usePlan } from '../hooks/usePlan'
 import { useTheme } from '../context/ThemeContext'
 import { availableThemes } from '../theme'
 import NotificationsTab from '../components/NotificationsTab'
@@ -56,6 +58,7 @@ interface UserType {
 const Settings: React.FC = () => {
   const { t } = useTranslation()
   const { user } = useAuth()
+  const { can } = usePlan()
   const { mode, setTheme } = useTheme()
   const queryClient = useQueryClient()
   const { tab } = useParams<{ tab?: string }>()
@@ -557,9 +560,18 @@ const Settings: React.FC = () => {
             <Typography variant="h6" fontWeight={600}>
               {t('settings.users.title')}
             </Typography>
-            <Button variant="contained" startIcon={<Plus size={18} />} onClick={openCreateUser}>
-              {t('settings.users.addUser')}
-            </Button>
+            <Tooltip title={!can('multi_user') ? t('settings.users.planCaption') : ''} arrow>
+              <span>
+                <Button
+                  variant="contained"
+                  startIcon={<Plus size={18} />}
+                  onClick={openCreateUser}
+                  disabled={!can('multi_user')}
+                >
+                  {t('settings.users.addUser')}
+                </Button>
+              </span>
+            </Tooltip>
           </Box>
 
           <DataTable

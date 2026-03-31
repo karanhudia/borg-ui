@@ -26,7 +26,10 @@ import { toast } from 'react-hot-toast'
 import RepositoryStatsV1 from './RepositoryStatsV1'
 import RepositoryStatsV2, { type ArchiveEntry } from './RepositoryStatsV2'
 import type { CacheStats } from './RepositoryStatsV1'
+import PlanGate from './PlanGate'
+import UpgradePrompt from './UpgradePrompt'
 import { Repository } from '../types'
+import { isV2Repo } from '../utils/repoCapabilities'
 
 interface RepositoryInfo {
   encryption?: {
@@ -103,6 +106,11 @@ export default function RepositoryInfoDialog({
         </Box>
       </DialogTitle>
       <DialogContent>
+        <PlanGate
+          feature="borg_v2"
+          when={isV2Repo(repository)}
+          fallback={<UpgradePrompt requiredPlan="pro" message={t('dialogs.repositoryInfo.v2PlanRequired')} />}
+        >
         {isLoading ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
             <Typography variant="body2" color="text.secondary">
@@ -201,7 +209,7 @@ export default function RepositoryInfoDialog({
             </Card>
 
             {/* Storage Statistics */}
-            {repository?.borg_version === 2 ? (
+            {isV2Repo(repository) ? (
               <RepositoryStatsV2 archives={repositoryInfo.archives || []} />
             ) : repositoryInfo.cache?.stats && (repositoryInfo.cache.stats.total_size ?? 0) > 0 ? (
               <RepositoryStatsV1 stats={repositoryInfo.cache.stats} />
@@ -219,6 +227,7 @@ export default function RepositoryInfoDialog({
         ) : (
           <Alert severity="error">{t('repositoryInfoDialog.failedToLoad')}</Alert>
         )}
+        </PlanGate>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} variant="contained">

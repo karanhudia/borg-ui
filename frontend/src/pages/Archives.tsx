@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { Box, Typography, CircularProgress } from '@mui/material'
 import { Folder } from 'lucide-react'
 import { archivesAPI, repositoriesAPI, mountsAPI, restoreAPI } from '../services/api'
+import { useRepositoryStats } from '../hooks/useRepositoryStats'
 import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import RepositorySelectorCard from '../components/RepositorySelectorCard'
@@ -19,7 +20,7 @@ import { Archive, Repository } from '@/types'
 import LockErrorDialog from '../components/LockErrorDialog'
 import { useMatomo } from '../hooks/useMatomo'
 import RestoreWizard, { RestoreData } from '../components/RestoreWizard'
-import { getRepoCapabilities } from '../utils/repoCapabilities'
+import { getRepoCapabilities, getBorgVersion } from '../utils/repoCapabilities'
 
 const Archives: React.FC = () => {
   const { t } = useTranslation()
@@ -68,7 +69,7 @@ const Archives: React.FC = () => {
       setLockError({
         repositoryId: selectedRepositoryId,
         repositoryName: selectedRepository?.name || 'Unknown',
-        borgVersion: selectedRepository?.borg_version as 1 | 2 | undefined,
+        borgVersion: getBorgVersion(selectedRepository),
       })
     }
   }, [archivesError, selectedRepositoryId, selectedRepository?.name])
@@ -99,7 +100,7 @@ const Archives: React.FC = () => {
       setLockError({
         repositoryId: selectedRepositoryId,
         repositoryName: selectedRepository?.name || 'Unknown',
-        borgVersion: selectedRepository?.borg_version as 1 | 2 | undefined,
+        borgVersion: getBorgVersion(selectedRepository),
       })
     }
   }, [repoInfoError, selectedRepositoryId, selectedRepository?.name])
@@ -323,32 +324,7 @@ const Archives: React.FC = () => {
     return new Date(b.start).getTime() - new Date(a.start).getTime()
   })
 
-  // Compute stats for RepositoryStatsGrid.
-  // v1: uses cache.stats from `borg info --json` (total_size = original, unique_csize = on disk).
-  // v2: borg2's cache.stats.total_size = compressed total (NOT original), so we blend:
-  //     - total_size = sum of per-archive original_size (logical data backed up)
-  //     - unique_csize = rinfo_stats.unique_csize (actual bytes on disk)
-  //     - unique_size = rinfo_stats.unique_size (unique chunks before compression)
-  const repositoryStats = React.useMemo(() => {
-    const info = repoInfo?.data?.info
-    if (!info) return null
-    if (selectedRepository?.borg_version === 2) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const archives: any[] = info.archives || []
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rinfo: any = info.rinfo_stats || {}
-      const totalOriginal = archives.reduce(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (s: number, a: any) => s + (a.stats?.original_size || 0),
-        0
-      )
-      const uniqueCsize = rinfo.unique_csize || 0
-      const uniqueSize = rinfo.unique_size || uniqueCsize
-      if (totalOriginal === 0 && uniqueCsize === 0) return null
-      return { total_size: totalOriginal, unique_size: uniqueSize, unique_csize: uniqueCsize }
-    }
-    return info.cache?.stats || null
-  }, [repoInfo, selectedRepository?.borg_version])
+  const repositoryStats = useRepositoryStats(repoInfo?.data?.info, selectedRepository?.borg_version)
 
   // Get last restore job for selected repository
   const lastRestoreJob = React.useMemo(() => {
