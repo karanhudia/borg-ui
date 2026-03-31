@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from enum import Enum
+from typing import Optional
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database.database import get_db
@@ -21,7 +24,7 @@ FEATURES: dict[str, Plan] = {
 }
 
 # User limits per plan (None = unlimited)
-USER_LIMITS: dict[Plan, int | None] = {
+USER_LIMITS: dict[Plan, Optional[int]] = {
     Plan.COMMUNITY:  1,
     Plan.PRO:        5,
     Plan.ENTERPRISE: None,

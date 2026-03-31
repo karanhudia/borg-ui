@@ -99,6 +99,7 @@ Thumbs.db
 # Claude Code
 .claude/worktrees/
 .superpowers/
+docs/superpowers/
 
 # Temporary files
 *.tmp

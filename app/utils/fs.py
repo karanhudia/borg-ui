@@ -1,5 +1,7 @@
 """Filesystem utilities shared across the application."""
 
+from __future__ import annotations
+
 import asyncio
 import re
 import structlog
