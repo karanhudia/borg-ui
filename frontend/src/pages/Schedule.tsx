@@ -38,6 +38,7 @@ import UpcomingJobsTable from '../components/UpcomingJobsTable'
 import BackupHistorySection from '../components/BackupHistorySection'
 import RunningBackupsSection from '../components/RunningBackupsSection'
 import ScheduledJobsTable from '../components/ScheduledJobsTable'
+import { Repository } from '../types'
 
 interface ScheduledJob {
   id: number
@@ -66,12 +67,6 @@ interface ScheduledJob {
   prune_keep_yearly: number
   last_prune: string | null
   last_compact: string | null
-}
-
-interface Repository {
-  id: number
-  name: string
-  path: string
 }
 
 interface BackupJob {

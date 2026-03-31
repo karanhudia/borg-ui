@@ -26,15 +26,7 @@ import { Download, Upload, FileText, CheckCircle, AlertCircle } from 'lucide-rea
 import { toast } from 'react-hot-toast'
 import { configExportImportAPI } from '../services/api'
 import { translateBackendKey } from '../utils/translateBackendKey'
-
-interface Repository {
-  id: number
-  name: string
-  path: string
-  repository_type: string
-  has_schedule: boolean
-  has_checks: boolean
-}
+import { Repository } from '../types'
 
 interface ImportResult {
   success: boolean

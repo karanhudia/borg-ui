@@ -10,6 +10,7 @@ import {
   FolderOpen,
 } from '@mui/icons-material'
 import { useMaintenanceJobs } from '../hooks/useMaintenanceJobs'
+import BorgVersionChip from './BorgVersionChip'
 import { getRepoCapabilities } from '../utils/repoCapabilities'
 import {
   formatDateShort,
@@ -19,26 +20,7 @@ import {
 } from '../utils/dateUtils'
 import { useQueryClient } from '@tanstack/react-query'
 import { useMatomo } from '../hooks/useMatomo'
-
-interface Repository {
-  id: number
-  name: string
-  path: string
-  encryption: string
-  compression: string
-  source_directories: string[]
-  exclude_patterns: string[]
-  last_backup: string | null
-  last_check: string | null
-  last_compact: string | null
-  total_size: string | null
-  archive_count: number
-  created_at: string
-  updated_at: string | null
-  mode: 'full' | 'observe'
-  has_running_maintenance?: boolean
-  borg_version?: number
-}
+import { Repository } from '../types'
 
 interface RepositoryCardProps {
   repository: Repository
@@ -151,23 +133,7 @@ export default function RepositoryCard({
                   sx={{ height: '20px', fontSize: '0.7rem' }}
                 />
               )}
-              {repository.borg_version === 2 && (
-                <Chip
-                  label="v2"
-                  size="small"
-                  sx={{
-                    height: '18px',
-                    fontSize: '0.65rem',
-                    fontWeight: 700,
-                    fontFamily: 'monospace',
-                    bgcolor: '#6366f1',
-                    color: '#fff',
-                    border: 'none',
-                    letterSpacing: 0.5,
-                    '& .MuiChip-label': { px: 0.75 },
-                  }}
-                />
-              )}
+              <BorgVersionChip borgVersion={repository.borg_version} />
             </Box>
             <Typography
               variant="body2"

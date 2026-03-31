@@ -17,21 +17,16 @@ import {
   Info,
   Lock,
   CalendarMonth,
-  DataUsage,
-  Compress,
-  Inventory,
   FileDownload,
 } from '@mui/icons-material'
 import { useTranslation } from 'react-i18next'
-import { formatDateShort, formatBytes } from '../utils/dateUtils'
+import { formatDateShort } from '../utils/dateUtils'
 import { repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
-
-interface Repository {
-  id: number
-  name: string
-  has_keyfile?: boolean
-}
+import RepositoryStatsV1 from './RepositoryStatsV1'
+import RepositoryStatsV2, { type ArchiveEntry } from './RepositoryStatsV2'
+import type { CacheStats } from './RepositoryStatsV1'
+import { Repository } from '../types'
 
 interface RepositoryInfo {
   encryption?: {
@@ -42,14 +37,10 @@ interface RepositoryInfo {
     location?: string
   }
   cache?: {
-    stats?: {
-      total_size?: number
-      unique_size?: number
-      unique_csize?: number
-      total_chunks?: number
-      total_unique_chunks?: number
-    }
+    stats?: CacheStats
   }
+  // Borg 2: per-archive stats (from `borg2 info --json`)
+  archives?: ArchiveEntry[]
 }
 
 interface RepositoryInfoDialogProps {
@@ -210,85 +201,10 @@ export default function RepositoryInfoDialog({
             </Card>
 
             {/* Storage Statistics */}
-            {repositoryInfo.cache?.stats &&
-            repositoryInfo.cache.stats.unique_size &&
-            repositoryInfo.cache.stats.unique_size > 0 ? (
-              <>
-                <Typography variant="h6" fontWeight={600} sx={{ mt: 1 }}>
-                  {t('dialogs.repositoryInfo.storageStatistics')}
-                </Typography>
-                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
-                  {/* Total Data Size */}
-                  <Card sx={{ backgroundColor: '#e8f5e9' }}>
-                    <CardContent sx={{ py: 2 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                        <DataUsage sx={{ color: '#2e7d32', fontSize: 24 }} />
-                        <Typography variant="caption" color="text.secondary" fontWeight={500}>
-                          {t('dialogs.repositoryInfo.totalSize')}
-                        </Typography>
-                      </Box>
-                      <Typography variant="h6" fontWeight={700} sx={{ color: '#2e7d32' }}>
-                        {formatBytes(repositoryInfo.cache.stats.total_size || 0)}
-                      </Typography>
-                    </CardContent>
-                  </Card>
-
-                  {/* Unique Compressed */}
-                  <Card sx={{ backgroundColor: '#e3f2fd' }}>
-                    <CardContent sx={{ py: 2 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                        <Compress sx={{ color: '#1565c0', fontSize: 24 }} />
-                        <Typography variant="caption" color="text.secondary" fontWeight={500}>
-                          {t('dialogs.repositoryInfo.usedOnDisk')}
-                        </Typography>
-                      </Box>
-                      <Typography variant="h6" fontWeight={700} sx={{ color: '#1565c0' }}>
-                        {formatBytes(repositoryInfo.cache.stats.unique_csize || 0)}
-                      </Typography>
-                    </CardContent>
-                  </Card>
-
-                  {/* Deduplicated Size */}
-                  <Card sx={{ backgroundColor: '#fff3e0' }}>
-                    <CardContent sx={{ py: 2 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                        <Inventory sx={{ color: '#e65100', fontSize: 24 }} />
-                        <Typography variant="caption" color="text.secondary" fontWeight={500}>
-                          {t('dialogs.repositoryInfo.uniqueData')}
-                        </Typography>
-                      </Box>
-                      <Typography variant="h6" fontWeight={700} sx={{ color: '#e65100' }}>
-                        {formatBytes(repositoryInfo.cache.stats.unique_size || 0)}
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Box>
-
-                {/* Chunk Statistics */}
-                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
-                  <Card variant="outlined">
-                    <CardContent sx={{ py: 1.5 }}>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        {t('dialogs.repositoryInfo.totalChunks')}
-                      </Typography>
-                      <Typography variant="h6" fontWeight={600}>
-                        {repositoryInfo.cache.stats.total_chunks?.toLocaleString()}
-                      </Typography>
-                    </CardContent>
-                  </Card>
-
-                  <Card variant="outlined">
-                    <CardContent sx={{ py: 1.5 }}>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        {t('dialogs.repositoryInfo.uniqueChunks')}
-                      </Typography>
-                      <Typography variant="h6" fontWeight={600}>
-                        {repositoryInfo.cache.stats.total_unique_chunks?.toLocaleString()}
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Box>
-              </>
+            {repository?.borg_version === 2 ? (
+              <RepositoryStatsV2 archives={repositoryInfo.archives || []} />
+            ) : repositoryInfo.cache?.stats && (repositoryInfo.cache.stats.total_size ?? 0) > 0 ? (
+              <RepositoryStatsV1 stats={repositoryInfo.cache.stats} />
             ) : (
               <Alert severity="info" icon={<Info />}>
                 <Typography variant="body2" fontWeight={600} gutterBottom>
