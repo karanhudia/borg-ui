@@ -31,3 +31,51 @@ class BorgRouter:
             return True
         from app.api.repositories import update_repository_stats
         return await update_repository_stats(self.repo, db)
+
+    async def check(self, job_id: int) -> None:
+        """Run a repository integrity check.
+
+        v2: delegates to the Borg 2 check service.
+        v1: delegates to the existing check service.
+        """
+        if self.is_v2:
+            from app.services.v2.check_service import check_v2_service
+            await check_v2_service.execute_check(job_id, self.repo.id)
+        else:
+            from app.services.check_service import check_service
+            await check_service.execute_check(job_id, self.repo.id)
+
+    async def list_archives(self) -> list:
+        """Return the list of archives for this repository.
+
+        Used as a version-aware guard before repository deletion.
+        v2: calls borg2 list and parses the JSON archives array.
+        v1: calls borg list and returns the archives list.
+        """
+        if self.is_v2:
+            import json
+            from app.core.borg2 import borg2
+            result = await borg2.list_archives(
+                self.repo.path,
+                passphrase=self.repo.passphrase,
+                remote_path=self.repo.remote_path,
+                bypass_lock=self.repo.bypass_lock,
+            )
+            if not result["success"]:
+                return []
+            try:
+                data = json.loads(result.get("stdout", "{}"))
+                return data.get("archives", [])
+            except Exception:
+                return []
+        else:
+            from app.core.borg import borg
+            result = await borg.list_archives(
+                self.repo.path,
+                remote_path=self.repo.remote_path,
+                passphrase=self.repo.passphrase,
+                bypass_lock=self.repo.bypass_lock,
+            )
+            if not result["success"]:
+                return []
+            return result.get("stdout") or []

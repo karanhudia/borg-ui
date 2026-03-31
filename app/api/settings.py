@@ -7,6 +7,7 @@ import structlog
 from app.database.database import get_db, engine
 from app.database.models import User, SSHKey, SSHConnection, Repository, BackupJob, SystemSettings
 from app.core.security import get_current_user, get_password_hash, verify_password
+from app.core.features import get_current_plan, USER_LIMITS
 from sqlalchemy import text
 from app.core.borg import BorgInterface
 from app.config import settings as app_settings
@@ -439,7 +440,7 @@ async def update_system_settings(
 
 async def _run_stats_refresh_background(repo_ids: list, username: str):
     """Background task to refresh stats for all repositories"""
-    from app.api.repositories import update_repository_stats
+    from app.core.borg_router import BorgRouter
     from app.database.database import SessionLocal
 
     db = SessionLocal()
@@ -452,7 +453,7 @@ async def _run_stats_refresh_background(repo_ids: list, username: str):
             if not repo:
                 continue
             try:
-                result = await update_repository_stats(repo, db)
+                result = await BorgRouter(repo).update_stats(db)
                 if result:
                     success_count += 1
                 else:
@@ -562,6 +563,20 @@ async def create_user(
         raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
 
     try:
+        # Check user limit by plan
+        current_plan = get_current_plan(db)
+        user_count = db.query(User).count()
+        limit = USER_LIMITS[current_plan]
+        if limit is not None and user_count >= limit:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "key": "backend.errors.plan.userLimitReached",
+                    "current": current_plan.value,
+                    "limit": limit,
+                }
+            )
+
         # Check if username already exists
         existing_user = db.query(User).filter(User.username == user_data.username).first()
         if existing_user:

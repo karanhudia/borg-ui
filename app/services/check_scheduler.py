@@ -6,7 +6,7 @@ from sqlalchemy import or_
 from croniter import croniter
 from app.database.models import Repository, CheckJob
 from app.database.database import SessionLocal
-from app.services.check_service import check_service
+from app.core.borg_router import BorgRouter
 
 logger = structlog.get_logger()
 
@@ -88,10 +88,7 @@ class CheckScheduler:
 
                     # Execute check asynchronously (don't await - fire and forget)
                     asyncio.create_task(
-                        check_service.execute_check(
-                            job_id=check_job.id,
-                            repository_id=repo.id
-                        )
+                        BorgRouter(repo).check(check_job.id)
                     )
 
                     logger.info("Scheduled check started",

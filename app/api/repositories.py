@@ -915,7 +915,8 @@ async def import_repository(
 
         # Update archive count by listing archives (non-blocking - don't fail import)
         try:
-            await update_repository_stats(repository, db)
+            from app.core.borg_router import BorgRouter
+            await BorgRouter(repository).update_stats(db)
         except Exception as e:
             # Log but don't fail the import - stats can be updated later
             logger.warning("Failed to update repository stats after import",
@@ -1411,23 +1412,14 @@ async def delete_repository(
         if not repository:
             raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
 
-        # Check system-wide bypass_lock_on_list setting
-        from app.database.models import SystemSettings
-        system_settings = db.query(SystemSettings).first()
-        use_bypass_lock = repository.bypass_lock or (system_settings and system_settings.bypass_lock_on_list)
-
-        # Check if repository has archives
-        archives_result = await borg.list_archives(repository.path, remote_path=repository.remote_path, bypass_lock=use_bypass_lock)
-        if archives_result["success"]:
-            try:
-                archives_data = archives_result["stdout"]
-                if archives_data and len(archives_data) > 0:
-                    raise HTTPException(
-                        status_code=400,
-                        detail={"key": "backend.errors.repo.cannotDeleteRepoWithArchives"}
-                    )
-            except:
-                pass
+        # Check if repository has archives (version-aware)
+        from app.core.borg_router import BorgRouter
+        archives = await BorgRouter(repository).list_archives()
+        if archives:
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.repo.cannotDeleteRepoWithArchives"}
+            )
 
         # CRITICAL: Clean up all foreign key references before deleting repository
         # Some tables don't have CASCADE delete, so we must manually handle them
