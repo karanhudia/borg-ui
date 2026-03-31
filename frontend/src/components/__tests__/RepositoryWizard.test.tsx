@@ -12,9 +12,9 @@ vi.mock('../../services/api', () => ({
   },
 }))
 
-// Mock Matomo hook
-vi.mock('../../hooks/useMatomo', () => ({
-  useMatomo: () => ({
+// Mock analytics hook
+vi.mock('../../hooks/useAnalytics', () => ({
+  useAnalytics: () => ({
     track: vi.fn(),
     trackRepository: vi.fn(),
     EventCategory: { REPOSITORY: 'repository' },

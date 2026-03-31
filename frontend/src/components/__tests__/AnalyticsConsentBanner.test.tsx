@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import AnalyticsConsentBanner from '../AnalyticsConsentBanner'
 import { settingsAPI } from '../../services/api'
-import { resetOptOutCache, trackConsentResponse } from '../../utils/matomo'
+import { resetOptOutCache, trackConsentResponse } from '../../utils/analytics'
 import { AxiosResponse } from 'axios'
 
 vi.mock('../../services/api', () => ({
@@ -12,10 +12,16 @@ vi.mock('../../services/api', () => ({
   },
 }))
 
-vi.mock('../../utils/matomo', () => ({
-  resetOptOutCache: vi.fn(),
-  trackConsentResponse: vi.fn(),
-}))
+vi.mock('../../utils/analytics', async () => {
+  const actual =
+    await vi.importActual<typeof import('../../utils/analytics')>('../../utils/analytics')
+
+  return {
+    ...actual,
+    resetOptOutCache: vi.fn(),
+    trackConsentResponse: vi.fn(),
+  }
+})
 
 describe('AnalyticsConsentBanner', () => {
   const mockOnConsentGiven = vi.fn()

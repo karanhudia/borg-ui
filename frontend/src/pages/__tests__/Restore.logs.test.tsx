@@ -25,8 +25,8 @@ vi.mock('../../services/api', () => ({
     startRestore: vi.fn(),
   },
 }))
-vi.mock('../../hooks/useMatomo', () => ({
-  useMatomo: () => ({
+vi.mock('../../hooks/useAnalytics', () => ({
+  useAnalytics: () => ({
     trackArchive: vi.fn(),
     EventAction: {},
   }),
