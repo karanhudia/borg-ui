@@ -10,7 +10,6 @@ from typing import List, Dict, Any
 from app.database.database import get_db
 from app.database.models import User, BackupJob, Repository, ScheduledJob, ScheduledJobRepository, CheckJob, CompactJob, PruneJob, SSHConnection
 from app.core.security import get_current_user
-from app.core.borg import borg
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()

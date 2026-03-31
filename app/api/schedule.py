@@ -11,7 +11,6 @@ import asyncio
 from app.database.database import get_db, SessionLocal
 from app.database.models import User, ScheduledJob, ScheduledJobRepository, CompactJob, PruneJob, Repository, BackupJob, Script, RepositoryScript
 from app.core.security import get_current_user
-from app.core.borg import BorgInterface
 from app.config import settings
 from app.services.notification_service import notification_service
 from app.utils.datetime_utils import serialize_datetime
@@ -19,9 +18,6 @@ from app.utils.archive_names import build_archive_name
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["schedule"])
-
-# Initialize Borg interface
-borg = BorgInterface()
 
 # Pydantic models
 from pydantic import BaseModel

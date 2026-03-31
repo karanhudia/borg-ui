@@ -9,14 +9,10 @@ from sqlalchemy.orm import Session
 from app.core.security import get_current_user
 from app.database.models import User
 from app.database.database import get_db
-from app.core.borg import BorgInterface
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["events"])
-
-# Initialize Borg interface
-borg = BorgInterface()
 
 # Store active connections for broadcasting
 active_connections: Dict[str, asyncio.Queue] = {}
