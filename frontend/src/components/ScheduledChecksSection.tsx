@@ -23,6 +23,7 @@ import {
 } from '@mui/material'
 import { Edit, Trash2, Play, Shield } from 'lucide-react'
 import { repositoriesAPI } from '../services/api'
+import { BorgApiClient } from '../services/borgApi'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import {
@@ -117,7 +118,10 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
   // Run check now mutation
   const runCheckMutation = useMutation({
     mutationFn: async (repoId: number) => {
-      return await repositoriesAPI.startCheck(repoId, {})
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const repo = repositories.find((r: any) => r.id === repoId)
+      if (!repo) throw new Error('Repository not found')
+      return new BorgApiClient(repo).checkRepository()
     },
     onSuccess: () => {
       toast.success(t('scheduledChecks.toasts.checkStarted'))

@@ -15,14 +15,14 @@ import {
 } from '@mui/material'
 import { FolderOpen, Folder, AlertCircle } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import { browseAPI } from '../services/api'
+import { BorgApiClient, type Repository } from '../services/borgApi/client'
 import { Archive } from '../types'
 import { formatDateCompact, formatBytes as formatBytesUtil } from '../utils/dateUtils'
 
 interface ArchiveContentsDialogProps {
   open: boolean
   archive: Archive | null
-  repositoryId: number | null
+  repository: Repository | null
   onClose: () => void
   onDownloadFile?: (archiveName: string, filePath: string) => void
 }
@@ -46,7 +46,7 @@ interface RawFileItem {
 export default function ArchiveContentsDialog({
   open,
   archive,
-  repositoryId,
+  repository,
   onClose,
   onDownloadFile,
 }: ArchiveContentsDialogProps) {
@@ -62,15 +62,15 @@ export default function ArchiveContentsDialog({
 
   // Fetch archive contents
   const { data: archiveContents, isLoading: loadingArchiveContents } = useQuery({
-    queryKey: ['archive-contents', repositoryId, archive?.name, currentPath],
+    queryKey: ['archive-contents', repository?.id, archive?.name, currentPath],
     queryFn: async () => {
-      if (!repositoryId || !archive) {
+      if (!repository || !archive) {
         throw new Error('Repository or archive not selected')
       }
       const path = currentPath === '/' ? '' : currentPath.replace(/^\//, '')
-      return await browseAPI.getContents(repositoryId, archive.name, path)
+      return new BorgApiClient(repository).getArchiveContents(archive.id, archive.name, path)
     },
-    enabled: !!archive && !!repositoryId && open,
+    enabled: !!archive && !!repository && open,
     staleTime: 5 * 60 * 1000,
   })
 

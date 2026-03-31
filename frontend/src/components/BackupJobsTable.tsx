@@ -147,6 +147,7 @@ export const BackupJobsTable = <T extends Job = Job>({
   const [lockError, setLockError] = useState<{
     repositoryId: number
     repositoryName: string
+    borgVersion?: 1 | 2
   } | null>(null)
 
   // Internal error handler (can be overridden by onErrorDetails prop)
@@ -341,6 +342,7 @@ export const BackupJobsTable = <T extends Job = Job>({
       setLockError({
         repositoryId: repo.id,
         repositoryName: repo.name,
+        borgVersion: repo.borg_version as 1 | 2 | undefined,
       })
     }
   }
@@ -643,6 +645,7 @@ export const BackupJobsTable = <T extends Job = Job>({
           onClose={() => setLockError(null)}
           repositoryId={lockError.repositoryId}
           repositoryName={lockError.repositoryName}
+          borgVersion={lockError.borgVersion}
           isAdmin={isAdmin}
           onLockBroken={() => {
             setLockError(null)

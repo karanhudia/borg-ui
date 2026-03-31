@@ -21,6 +21,7 @@ import {
 } from '@mui/material'
 import { Add, Storage, FileUpload, Search, FilterList } from '@mui/icons-material'
 import { repositoriesAPI, RepositoryData } from '../services/api'
+import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { useAuth } from '../hooks/useAuth'
 import { useAppState } from '../context/AppContext'
@@ -63,6 +64,7 @@ interface Repository extends RepositoryData {
   bypass_lock?: boolean
   source_ssh_connection_id?: number | null
   repository_type?: 'local' | 'ssh' | 'sftp'
+  borg_version?: 1 | 2
 }
 
 interface PruneForm {
@@ -98,6 +100,7 @@ export default function Repositories() {
   const [lockError, setLockError] = useState<{
     repositoryId: number
     repositoryName: string
+    borgVersion?: 1 | 2
   } | null>(null)
 
   // Track repositories with running jobs for polling
@@ -127,7 +130,7 @@ export default function Repositories() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } = useQuery<AxiosResponse<{ info: any }>>({
     queryKey: ['repository-info', viewingInfoRepository?.id],
-    queryFn: () => repositoriesAPI.getRepositoryInfo(viewingInfoRepository!.id),
+    queryFn: () => new BorgApiClient(viewingInfoRepository!).getInfo(),
     enabled: !!viewingInfoRepository,
     retry: false,
   })
@@ -139,6 +142,7 @@ export default function Repositories() {
       setLockError({
         repositoryId: viewingInfoRepository.id,
         repositoryName: viewingInfoRepository.name,
+        borgVersion: viewingInfoRepository.borg_version as 1 | 2 | undefined,
       })
     }
   }, [infoError, viewingInfoRepository])
@@ -161,8 +165,11 @@ export default function Repositories() {
   })
 
   const checkRepositoryMutation = useMutation({
-    mutationFn: ({ repositoryId, maxDuration }: { repositoryId: number; maxDuration: number }) =>
-      repositoriesAPI.checkRepository(repositoryId, maxDuration),
+    mutationFn: ({ repositoryId, maxDuration }: { repositoryId: number; maxDuration: number }) => {
+      const repo = repositories.find((r: Repository) => r.id === repositoryId)
+      if (!repo) throw new Error('Repository not found')
+      return new BorgApiClient(repo).checkRepository(maxDuration)
+    },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSuccess: (_response: any, variables: { repositoryId: number; maxDuration: number }) => {
       toast.success(t('repositories.toasts.checkStarted'))
@@ -185,7 +192,11 @@ export default function Repositories() {
   })
 
   const compactRepositoryMutation = useMutation({
-    mutationFn: repositoriesAPI.compactRepository,
+    mutationFn: (repositoryId: number) => {
+      const repo = repositories.find((r: Repository) => r.id === repositoryId)
+      if (!repo) throw new Error('Repository not found')
+      return new BorgApiClient(repo).compact()
+    },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSuccess: (_response: any, repositoryId: number) => {
       toast.success(t('repositories.toasts.compactStarted'))
@@ -209,8 +220,11 @@ export default function Repositories() {
 
   const pruneRepositoryMutation = useMutation({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mutationFn: ({ id, data }: { id: number; data: any }) =>
-      repositoriesAPI.pruneRepository(id, data),
+    mutationFn: ({ id, data }: { id: number; data: any }) => {
+      const repo = repositories.find((r: Repository) => r.id === id)
+      if (!repo) throw new Error('Repository not found')
+      return new BorgApiClient(repo).pruneArchives(data)
+    },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSuccess: (response: any) => {
       setPruneResults(response.data)
@@ -327,12 +341,12 @@ export default function Repositories() {
         if (keyfile) {
           importData.keyfile_content = await keyfile.text()
         }
-        await repositoriesAPI.importRepository(importData)
+        await BorgApiClient.importRepository(importData)
         toast.success(
           keyfile ? t('repositories.toasts.importedWithKeyfile') : t('repositories.toasts.imported')
         )
       } else {
-        await repositoriesAPI.createRepository(data)
+        await BorgApiClient.createRepository(data)
         toast.success(t('repositories.toasts.created'))
       }
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
@@ -733,6 +747,7 @@ export default function Repositories() {
           onClose={() => setLockError(null)}
           repositoryId={lockError.repositoryId}
           repositoryName={lockError.repositoryName}
+          borgVersion={lockError.borgVersion}
           onLockBroken={() => {
             queryClient.invalidateQueries({ queryKey: ['repository-info', lockError.repositoryId] })
           }}

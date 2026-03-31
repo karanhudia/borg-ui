@@ -31,6 +31,7 @@ import {
   RotateCcw,
 } from 'lucide-react'
 import { restoreAPI, repositoriesAPI } from '../services/api'
+import { BorgApiClient } from '../services/borgApi'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { useMatomo } from '../hooks/useMatomo'
@@ -76,6 +77,7 @@ const Restore: React.FC = () => {
   const [lockError, setLockError] = useState<{
     repositoryId: number
     repositoryName: string
+    borgVersion?: 1 | 2
   } | null>(null)
   const queryClient = useQueryClient()
   const location = useLocation()
@@ -93,7 +95,7 @@ const Restore: React.FC = () => {
     error: archivesError,
   } = useQuery({
     queryKey: ['repository-archives', selectedRepoData?.id],
-    queryFn: () => repositoriesAPI.listRepositoryArchives(selectedRepoData!.id),
+    queryFn: () => new BorgApiClient(selectedRepoData!).listArchives(),
     enabled: !!selectedRepoData?.id,
     retry: false,
   })
@@ -105,6 +107,7 @@ const Restore: React.FC = () => {
       setLockError({
         repositoryId: selectedRepoData.id,
         repositoryName: selectedRepoData.name,
+        borgVersion: selectedRepoData.borg_version as 1 | 2 | undefined,
       })
     }
   }, [archivesError, selectedRepoData])
@@ -112,7 +115,7 @@ const Restore: React.FC = () => {
   // Get repository info for statistics
   const { data: repoInfo, error: repoInfoError } = useQuery({
     queryKey: ['repository-info', selectedRepoData?.id],
-    queryFn: () => repositoriesAPI.getRepositoryInfo(selectedRepoData!.id),
+    queryFn: () => new BorgApiClient(selectedRepoData!).getInfo(),
     enabled: !!selectedRepoData?.id,
     retry: false,
   })
@@ -124,6 +127,7 @@ const Restore: React.FC = () => {
       setLockError({
         repositoryId: selectedRepoData.id,
         repositoryName: selectedRepoData.name,
+        borgVersion: selectedRepoData.borg_version as 1 | 2 | undefined,
       })
     }
   }, [repoInfoError, selectedRepoData])
@@ -135,7 +139,7 @@ const Restore: React.FC = () => {
     error: archiveInfoError,
   } = useQuery({
     queryKey: ['archive-info', selectedRepoData?.id, restoreArchive?.name],
-    queryFn: () => repositoriesAPI.getArchiveInfo(selectedRepoData!.id, restoreArchive!.name),
+    queryFn: () => new BorgApiClient(selectedRepoData!).getArchiveInfo(restoreArchive!.name),
     enabled: !!selectedRepoData && !!restoreArchive,
     retry: false,
   })
@@ -151,6 +155,7 @@ const Restore: React.FC = () => {
       setLockError({
         repositoryId: selectedRepoData.id,
         repositoryName: selectedRepoData.name,
+        borgVersion: selectedRepoData.borg_version as 1 | 2 | undefined,
       })
     }
   }, [archiveInfoError, selectedRepoData])
@@ -762,6 +767,7 @@ const Restore: React.FC = () => {
           onClose={() => setLockError(null)}
           repositoryId={lockError.repositoryId}
           repositoryName={lockError.repositoryName}
+          borgVersion={lockError.borgVersion}
           onLockBroken={() => {
             queryClient.invalidateQueries({
               queryKey: ['repository-archives', lockError.repositoryId],

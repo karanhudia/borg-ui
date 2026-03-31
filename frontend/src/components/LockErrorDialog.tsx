@@ -21,6 +21,7 @@ interface LockErrorDialogProps {
   onClose: () => void
   repositoryId: number
   repositoryName: string
+  borgVersion?: 1 | 2
   onLockBroken?: () => void
   isAdmin?: boolean
 }
@@ -30,6 +31,7 @@ export default function LockErrorDialog({
   onClose,
   repositoryId,
   repositoryName,
+  borgVersion: _borgVersion,
   onLockBroken,
   isAdmin = false,
 }: LockErrorDialogProps) {

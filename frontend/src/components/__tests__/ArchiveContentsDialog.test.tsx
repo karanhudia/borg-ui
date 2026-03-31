@@ -4,18 +4,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { AxiosResponse } from 'axios'
 import ArchiveContentsDialog from '../ArchiveContentsDialog'
-import * as browseAPI from '../../services/api'
 
-// Mock the API
-vi.mock('../../services/api', () => ({
-  browseAPI: {
-    getContents: vi.fn(),
-  },
-  archivesAPI: {},
-  repositoriesAPI: {},
-  mountsAPI: {},
-  restoreAPI: {},
+// Mock BorgApiClient so tests don't make real HTTP calls
+vi.mock('../../services/borgApi/client', () => ({
+  BorgApiClient: vi.fn().mockImplementation(() => ({
+    getArchiveContents: vi.fn(),
+  })),
 }))
+
+import { BorgApiClient } from '../../services/borgApi/client'
 
 const createTestQueryClient = () =>
   new QueryClient({
@@ -40,15 +37,24 @@ describe('ArchiveContentsDialog', () => {
     time: '2024-01-15T10:00:00Z',
   }
 
-  const mockRepositoryId = 1
+  const mockRepository = { id: 1, name: 'Test Repo', path: '/test', borg_version: 1 }
 
   const mockHandlers = {
     onClose: vi.fn(),
     onDownloadFile: vi.fn(),
   }
 
+  let mockGetArchiveContents: ReturnType<typeof vi.fn>
+
   beforeEach(() => {
     vi.clearAllMocks()
+    mockGetArchiveContents = vi.fn()
+    vi.mocked(BorgApiClient).mockImplementation(
+      () =>
+        ({
+          getArchiveContents: mockGetArchiveContents,
+        }) as any
+    )
   })
 
   it('renders nothing when closed', () => {
@@ -56,7 +62,7 @@ describe('ArchiveContentsDialog', () => {
       <ArchiveContentsDialog
         open={false}
         archive={mockArchive}
-        repositoryId={mockRepositoryId}
+        repository={mockRepository}
         {...mockHandlers}
       />
     )
@@ -65,7 +71,7 @@ describe('ArchiveContentsDialog', () => {
   })
 
   it('renders dialog when open', () => {
-    vi.mocked(browseAPI.browseAPI.getContents).mockResolvedValue({
+    mockGetArchiveContents.mockResolvedValue({
       data: { items: [] },
     } as AxiosResponse)
 
@@ -73,7 +79,7 @@ describe('ArchiveContentsDialog', () => {
       <ArchiveContentsDialog
         open={true}
         archive={mockArchive}
-        repositoryId={mockRepositoryId}
+        repository={mockRepository}
         {...mockHandlers}
       />
     )
@@ -83,13 +89,13 @@ describe('ArchiveContentsDialog', () => {
   })
 
   it('shows loading state', () => {
-    vi.mocked(browseAPI.browseAPI.getContents).mockImplementation(() => new Promise(() => {}))
+    mockGetArchiveContents.mockImplementation(() => new Promise(() => {}))
 
     renderWithProviders(
       <ArchiveContentsDialog
         open={true}
         archive={mockArchive}
-        repositoryId={mockRepositoryId}
+        repository={mockRepository}
         {...mockHandlers}
       />
     )
@@ -98,7 +104,7 @@ describe('ArchiveContentsDialog', () => {
   })
 
   it('displays empty archive message when no items', async () => {
-    vi.mocked(browseAPI.browseAPI.getContents).mockResolvedValue({
+    mockGetArchiveContents.mockResolvedValue({
       data: { items: [] },
     } as AxiosResponse)
 
@@ -106,7 +112,7 @@ describe('ArchiveContentsDialog', () => {
       <ArchiveContentsDialog
         open={true}
         archive={mockArchive}
-        repositoryId={mockRepositoryId}
+        repository={mockRepository}
         {...mockHandlers}
       />
     )
@@ -117,7 +123,7 @@ describe('ArchiveContentsDialog', () => {
   })
 
   it('displays folders and files', async () => {
-    vi.mocked(browseAPI.browseAPI.getContents).mockResolvedValue({
+    mockGetArchiveContents.mockResolvedValue({
       data: {
         items: [
           {
@@ -141,7 +147,7 @@ describe('ArchiveContentsDialog', () => {
       <ArchiveContentsDialog
         open={true}
         archive={mockArchive}
-        repositoryId={mockRepositoryId}
+        repository={mockRepository}
         {...mockHandlers}
       />
     )
@@ -153,7 +159,7 @@ describe('ArchiveContentsDialog', () => {
   })
 
   it('navigates into folders when clicked', async () => {
-    vi.mocked(browseAPI.browseAPI.getContents).mockResolvedValue({
+    mockGetArchiveContents.mockResolvedValue({
       data: {
         items: [
           {
@@ -170,7 +176,7 @@ describe('ArchiveContentsDialog', () => {
       <ArchiveContentsDialog
         open={true}
         archive={mockArchive}
-        repositoryId={mockRepositoryId}
+        repository={mockRepository}
         {...mockHandlers}
       />
     )
@@ -181,18 +187,14 @@ describe('ArchiveContentsDialog', () => {
 
     fireEvent.click(screen.getByText('documents'))
 
-    // Check that API was called with new path
+    // Check that client was called with new path
     await waitFor(() => {
-      expect(browseAPI.browseAPI.getContents).toHaveBeenCalledWith(
-        mockRepositoryId,
-        mockArchive.name,
-        'documents'
-      )
+      expect(mockGetArchiveContents).toHaveBeenCalledWith(mockArchive.name, 'documents')
     })
   })
 
   it('displays breadcrumb navigation', async () => {
-    vi.mocked(browseAPI.browseAPI.getContents).mockResolvedValue({
+    mockGetArchiveContents.mockResolvedValue({
       data: { items: [] },
     } as AxiosResponse)
 
@@ -200,7 +202,7 @@ describe('ArchiveContentsDialog', () => {
       <ArchiveContentsDialog
         open={true}
         archive={mockArchive}
-        repositoryId={mockRepositoryId}
+        repository={mockRepository}
         {...mockHandlers}
       />
     )
@@ -211,7 +213,7 @@ describe('ArchiveContentsDialog', () => {
   })
 
   it('calls onDownloadFile when download button is clicked', async () => {
-    vi.mocked(browseAPI.browseAPI.getContents).mockResolvedValue({
+    mockGetArchiveContents.mockResolvedValue({
       data: {
         items: [
           {
@@ -229,7 +231,7 @@ describe('ArchiveContentsDialog', () => {
       <ArchiveContentsDialog
         open={true}
         archive={mockArchive}
-        repositoryId={mockRepositoryId}
+        repository={mockRepository}
         {...mockHandlers}
       />
     )
@@ -245,7 +247,7 @@ describe('ArchiveContentsDialog', () => {
   })
 
   it('calls onClose when Close button is clicked', async () => {
-    vi.mocked(browseAPI.browseAPI.getContents).mockResolvedValue({
+    mockGetArchiveContents.mockResolvedValue({
       data: { items: [] },
     } as AxiosResponse)
 
@@ -253,7 +255,7 @@ describe('ArchiveContentsDialog', () => {
       <ArchiveContentsDialog
         open={true}
         archive={mockArchive}
-        repositoryId={mockRepositoryId}
+        repository={mockRepository}
         {...mockHandlers}
       />
     )
@@ -267,7 +269,7 @@ describe('ArchiveContentsDialog', () => {
   })
 
   it('resets path when dialog opens with new archive', async () => {
-    vi.mocked(browseAPI.browseAPI.getContents).mockResolvedValue({
+    mockGetArchiveContents.mockResolvedValue({
       data: { items: [] },
     } as AxiosResponse)
 
@@ -275,7 +277,7 @@ describe('ArchiveContentsDialog', () => {
       <ArchiveContentsDialog
         open={false}
         archive={mockArchive}
-        repositoryId={mockRepositoryId}
+        repository={mockRepository}
         {...mockHandlers}
       />
     )
@@ -286,7 +288,7 @@ describe('ArchiveContentsDialog', () => {
         <ArchiveContentsDialog
           open={true}
           archive={mockArchive}
-          repositoryId={mockRepositoryId}
+          repository={mockRepository}
           {...mockHandlers}
         />
       </QueryClientProvider>
@@ -294,16 +296,12 @@ describe('ArchiveContentsDialog', () => {
 
     // Verify it starts at root path
     await waitFor(() => {
-      expect(browseAPI.browseAPI.getContents).toHaveBeenCalledWith(
-        mockRepositoryId,
-        mockArchive.name,
-        ''
-      )
+      expect(mockGetArchiveContents).toHaveBeenCalledWith(mockArchive.name, '')
     })
   })
 
   it('does not show download button when onDownloadFile is not provided', async () => {
-    vi.mocked(browseAPI.browseAPI.getContents).mockResolvedValue({
+    mockGetArchiveContents.mockResolvedValue({
       data: {
         items: [
           {
@@ -321,7 +319,7 @@ describe('ArchiveContentsDialog', () => {
       <ArchiveContentsDialog
         open={true}
         archive={mockArchive}
-        repositoryId={mockRepositoryId}
+        repository={mockRepository}
         onClose={mockHandlers.onClose}
       />
     )
