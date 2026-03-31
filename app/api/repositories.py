@@ -1412,15 +1412,6 @@ async def delete_repository(
         if not repository:
             raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
 
-        # Check if repository has archives (version-aware)
-        from app.core.borg_router import BorgRouter
-        archives = await BorgRouter(repository).list_archives()
-        if archives:
-            raise HTTPException(
-                status_code=400,
-                detail={"key": "backend.errors.repo.cannotDeleteRepoWithArchives"}
-            )
-
         # CRITICAL: Clean up all foreign key references before deleting repository
         # Some tables don't have CASCADE delete, so we must manually handle them
 

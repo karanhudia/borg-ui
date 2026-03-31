@@ -65,12 +65,11 @@ jobs:
 
       - name: Run unit tests with coverage
         run: |
-          pytest tests/ -v \
+          pytest tests/unit/ -v \
             --cov=app \
             --cov-report=term-missing \
             --cov-report=xml \
-            --cov-report=html \
-            -m "not requires_ui"
+            --cov-report=html
         env:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
