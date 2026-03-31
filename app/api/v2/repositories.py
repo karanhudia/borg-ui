@@ -22,6 +22,7 @@ from app.core.security import get_current_user
 from app.core.features import require_feature
 from app.core.borg2 import borg2, BORG2_ENCRYPTION_MODES
 from app.config import settings
+from app.utils.fs import calculate_path_size_bytes
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["Repositories v2"], dependencies=[require_feature("borg_v2")])
@@ -358,10 +359,9 @@ async def get_repository_info(
     except json.JSONDecodeError:
         info_data = {"raw": result["stdout"]}
 
-    # borg2 info --json has per-archive original_size but not repo-level disk usage.
-    # Fetch repo-info --json to get unique_csize (actual bytes on disk) and inject
-    # it separately so the frontend can combine both without field-semantic confusion.
-    # (borg2 cache.stats.total_size = compressed total, NOT original — different from borg1)
+    # borg2 info --json has per-archive original_size but no repo-level disk usage.
+    # borg2 repo-info --json has cache.path only — no cache.stats like borg1.
+    # Pull repository/encryption metadata from rinfo, then compute disk usage separately.
     rinfo_result = await borg2.rinfo(
         repository=repo.path,
         passphrase=repo.passphrase,
@@ -370,13 +370,22 @@ async def get_repository_info(
     if rinfo_result["success"]:
         try:
             rinfo_data = json.loads(rinfo_result["stdout"])
-            if rinfo_data.get("cache", {}).get("stats"):
-                info_data["rinfo_stats"] = rinfo_data["cache"]["stats"]
             if rinfo_data.get("repository") and not info_data.get("repository"):
                 info_data["repository"] = rinfo_data["repository"]
             if rinfo_data.get("encryption") and not info_data.get("encryption"):
                 info_data["encryption"] = rinfo_data["encryption"]
         except json.JSONDecodeError:
+            pass
+
+    # For local repos compute actual on-disk size via du (borg2 has no JSON equivalent).
+    # Remote repos (SSH/SFTP) get no rinfo_stats — frontend treats missing as unavailable.
+    is_local = repo.path.startswith("/") and not repo.host
+    if is_local:
+        try:
+            disk_bytes = await calculate_path_size_bytes([repo.path], timeout=30)
+            if disk_bytes > 0:
+                info_data["rinfo_stats"] = {"unique_csize": disk_bytes, "unique_size": disk_bytes}
+        except Exception:
             pass
 
     return {"info": info_data, "borg_version": 2}

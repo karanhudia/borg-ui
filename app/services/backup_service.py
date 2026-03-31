@@ -432,140 +432,14 @@ class BackupService:
         return f"{bytes_value:.2f} PB"
 
     async def _calculate_source_size(self, source_paths: list[str], exclude_patterns: list[str] = None) -> int:
+        """Calculate total size of source directories in bytes.
+
+        Delegates to calculate_path_size_bytes with the configured timeout.
+        Supports local paths and SSH URLs; applies Borg-compatible exclude patterns.
         """
-        Calculate total size of source directories in bytes using du
-        Supports both local paths and SSH URLs (ssh://user@host:port/path)
-        Applies exclude patterns to match Borg's exclusion logic
-
-        Args:
-            source_paths: List of source directory paths
-            exclude_patterns: List of patterns to exclude (same format as Borg excludes)
-
-        Returns:
-            Total size in bytes, or 0 if calculation fails
-        """
-        try:
-            if exclude_patterns is None:
-                exclude_patterns = []
-
-            # Resolve effective timeout (DB setting > env var > config default)
-            source_size_timeout = self._get_operation_timeouts()["source_size_timeout"]
-
-            logger.info("Starting source size calculation",
-                       paths=source_paths,
-                       path_count=len(source_paths),
-                       exclude_patterns=exclude_patterns)
-            total_size = 0
-
-            for path in source_paths:
-                try:
-                    # Check if this is an SSH URL
-                    if path.startswith('ssh://'):
-                        # Parse SSH URL: ssh://user@host:port/path
-                        import re
-                        match = re.match(r'ssh://([^@]+)@([^:]+):(\d+)(/.*)', path)
-                        if match:
-                            username, host, port, remote_path = match.groups()
-
-                            # Build du command with exclude patterns
-                            # -s: summarize, -b: bytes (portable across systems)
-                            du_excludes = ""
-                            for pattern in exclude_patterns:
-                                # Escape single quotes in pattern for shell safety
-                                safe_pattern = pattern.replace("'", "'\\''")
-                                du_excludes += f" --exclude='{safe_pattern}'"
-
-                            # Use SSH to run du on the remote host
-                            cmd = [
-                                "ssh",
-                                "-o", "StrictHostKeyChecking=no",
-                                "-o", "UserKnownHostsFile=/dev/null",
-                                "-o", "LogLevel=ERROR",
-                                "-o", "ConnectTimeout=10",
-                                "-p", port,
-                                f"{username}@{host}",
-                                f"du -sb{du_excludes} {remote_path} 2>/dev/null | cut -f1"
-                            ]
-
-                            process = await asyncio.create_subprocess_exec(
-                                *cmd,
-                                stdout=asyncio.subprocess.PIPE,
-                                stderr=asyncio.subprocess.PIPE
-                            )
-
-                            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=source_size_timeout)
-
-                            if process.returncode == 0:
-                                output = stdout.decode().strip()
-                                if output and output.isdigit():
-                                    path_size = int(output)
-                                    total_size += path_size
-                                    logger.info("Calculated remote directory size", path=path, size=path_size, size_formatted=self._format_bytes(path_size))
-                                else:
-                                    logger.warning("Failed to parse remote directory size", path=path, output=output)
-                            else:
-                                logger.warning("Failed to calculate remote directory size", path=path, stderr=stderr.decode())
-                        else:
-                            logger.warning("Invalid SSH URL format", path=path)
-                    else:
-                        # Local path - use local du
-                        # -s: summarize (total for directory)
-                        # -B1: block size of 1 byte (for precise byte count)
-                        # --exclude: exclude patterns (same as Borg patterns)
-                        cmd = ["du", "-s", "-B1"]
-
-                        # Add exclude patterns
-                        for pattern in exclude_patterns:
-                            cmd.extend(["--exclude", pattern])
-
-                        cmd.append(path)
-
-                        process = await asyncio.create_subprocess_exec(
-                            *cmd,
-                            stdout=asyncio.subprocess.PIPE,
-                            stderr=asyncio.subprocess.PIPE
-                        )
-
-                        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=source_size_timeout)
-
-                        if process.returncode == 0:
-                            # Parse output: "1234567\t/path/to/dir"
-                            output = stdout.decode().strip()
-                            if output:
-                                size_str = output.split('\t')[0]
-                                path_size = int(size_str)
-                                total_size += path_size
-                                logger.info("Calculated directory size", path=path, size=path_size, size_formatted=self._format_bytes(path_size))
-                        else:
-                            logger.warning("Failed to calculate directory size", path=path, stderr=stderr.decode())
-
-                except asyncio.TimeoutError:
-                    logger.warning("Timeout while calculating directory size",
-                                 path=path,
-                                 timeout_seconds=source_size_timeout)
-                except Exception as e:
-                    logger.warning("Error calculating directory size",
-                                 path=path,
-                                 error=str(e),
-                                 error_type=type(e).__name__)
-
-            if total_size > 0:
-                logger.info("Total source size calculated successfully",
-                          total_size=total_size,
-                          total_formatted=self._format_bytes(total_size),
-                          paths_processed=len(source_paths))
-            else:
-                logger.warning("Source size calculation returned 0 - all paths failed or were empty",
-                             paths=source_paths,
-                             paths_count=len(source_paths))
-            return total_size
-
-        except Exception as e:
-            logger.error("Failed to calculate total source size",
-                       error=str(e),
-                       error_type=type(e).__name__,
-                       paths=source_paths)
-            return 0
+        from app.utils.fs import calculate_path_size_bytes
+        timeout = self._get_operation_timeouts()["source_size_timeout"]
+        return await calculate_path_size_bytes(source_paths, exclude_patterns, timeout)
 
     async def _calculate_and_update_size_background(self, job_id: int, source_paths: list[str], exclude_patterns: list[str] = None):
         """
