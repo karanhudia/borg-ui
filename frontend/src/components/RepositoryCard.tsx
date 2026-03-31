@@ -249,7 +249,7 @@ export default function RepositoryCard({
               {t('repositoryCard.compression')}
             </Typography>
             <Typography variant="body2" fontWeight={500}>
-              {getCompressionLabel(repository.compression)}
+              {getCompressionLabel(repository.compression ?? '')}
             </Typography>
           </Box>
 

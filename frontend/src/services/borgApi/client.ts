@@ -12,6 +12,7 @@
 import axios from 'axios'
 import { BASE_PATH } from '@/utils/basePath'
 import type { Repository } from '@/types'
+import { isV2Repo } from '@/utils/repoCapabilities'
 
 // Re-use the same axios instance (with auth interceptors) from api.ts
 // by importing only the create pattern — auth token injection is handled
@@ -68,18 +69,18 @@ export class BorgApiClient {
 
   constructor(repo: Repository) {
     this.repoId = repo.id
-    this.v = repo.borg_version === 2 ? '/v2' : ''
+    this.v = isV2Repo(repo) ? '/v2' : ''
   }
 
   // ── Pre-creation (no repo ID yet) ────────────────────────────────────────
 
   static createRepository(data: Omit<Repository, 'id'>) {
-    const v = data.borg_version === 2 ? '/v2' : ''
+    const v = isV2Repo(data) ? '/v2' : ''
     return httpClient.post(`${v}/repositories/`, data)
   }
 
   static importRepository(data: Omit<Repository, 'id'>) {
-    const v = data.borg_version === 2 ? '/v2' : ''
+    const v = isV2Repo(data) ? '/v2' : ''
     return httpClient.post(`${v}/repositories/import`, data)
   }
 
