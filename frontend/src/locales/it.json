@@ -519,7 +519,8 @@
       "emptyState": {
         "title": "Nessun utente trovato",
         "description": "Crea il tuo primo utente per iniziare"
-      }
+      },
+      "planCaption": "L'aggiunta di utenti richiede il piano Pro."
     },
     "toasts": {
       "passwordChanged": "Password cambiata con successo",
@@ -850,9 +851,15 @@
       "uniqueData": "Dati Unici",
       "totalChunks": "Chunk Totali",
       "uniqueChunks": "Chunk Unici",
+      "files": "File",
+      "archiveCount": "Archivi",
+      "latestBackupSize": "Dimensione ultimo backup",
+      "firstBackup": "Primo backup",
+      "latestBackup": "Ultimo backup",
       "noBackupsYet": "Ancora nessun backup",
       "noBackupsDesc": "Questo repository è stato inizializzato ma non contiene archivi. Le statistiche di archiviazione appariranno qui dopo aver creato il primo backup.",
       "loadFailed": "Impossibile caricare le informazioni del repository. Assicurati che il repository sia accessibile e inizializzato correttamente.",
+      "v2PlanRequired": "This repository uses Borg 2. Your data is safe — upgrade to Pro to view its details.",
       "exportKeyfileTooltip": "Esporta file chiave — conservalo al sicuro!"
     },
     "mountArchive": {
