@@ -1297,17 +1297,16 @@ export default function DashboardV3() {
                   check: 'unknown',
                   compact: 'unknown',
                 }
-                const cardStatus: keyof typeof STATUS =
-                  backup === 'critical'
-                    ? 'critical'
-                    : backup === 'warning'
-                      ? 'warning'
-                      : check === 'critical' ||
-                          compact === 'critical' ||
-                          check === 'warning' ||
-                          compact === 'warning'
-                        ? 'warning'
-                        : 'healthy'
+                const backupCritical = backup === 'critical'
+                const hasWarning =
+                  backup === 'warning' ||
+                  check === 'critical' || check === 'warning' ||
+                  compact === 'critical' || compact === 'warning'
+                const cardStatus: keyof typeof STATUS = backupCritical
+                  ? 'critical'
+                  : hasWarning
+                    ? 'warning'
+                    : 'healthy'
                 const cs = STATUS[cardStatus]
 
                 return (

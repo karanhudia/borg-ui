@@ -294,19 +294,19 @@ async def get_dashboard_overview(
                 warnings.append("Never backed up")
                 backup_dim = "critical"
 
-            # Check dimension health (never run = warning, same as compact — not critical)
+            # Check dimension health
             if repo.last_check:
                 days_since_check = (now - repo.last_check).days
                 check_dim = "critical" if days_since_check > 30 else "warning" if days_since_check > 7 else "healthy"
             else:
-                check_dim = "warning"
+                check_dim = "critical"
 
-            # Compact dimension health (never run = warning, not unknown — it's a soft reminder)
+            # Compact dimension health
             if repo.last_compact:
                 days_since_compact = (now - repo.last_compact).days
                 compact_dim = "critical" if days_since_compact > 60 else "warning" if days_since_compact > 30 else "healthy"
             else:
-                compact_dim = "warning"
+                compact_dim = "critical"
 
             # Get associated schedule — prefer enabled over disabled when multiple match
             repo_schedule = None
