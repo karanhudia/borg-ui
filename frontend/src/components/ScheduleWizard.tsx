@@ -21,6 +21,7 @@ import {
 import { convertCronToUTC, convertCronToLocal } from '../utils/dateUtils'
 import { useMatomo } from '../hooks/useMatomo'
 import { ScriptParameter } from './ScriptParameterInputs'
+import { Repository } from '../types'
 
 export interface ScheduledJob {
   id: number
