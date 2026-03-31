@@ -96,6 +96,9 @@ Thumbs.db
 # Docker
 .dockerignore
 
+# Claude Code
+.claude/worktrees/
+
 # Temporary files
 *.tmp
 *.temp
