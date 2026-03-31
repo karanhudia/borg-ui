@@ -12,14 +12,9 @@ import {
 import { useMaintenanceJobs } from '../hooks/useMaintenanceJobs'
 import BorgVersionChip from './BorgVersionChip'
 import { getRepoCapabilities } from '../utils/repoCapabilities'
-import {
-  formatDateShort,
-  formatDateTimeFull,
-  formatElapsedTime,
-  parseBytes,
-} from '../utils/dateUtils'
+import { formatDateShort, formatDateTimeFull, formatElapsedTime } from '../utils/dateUtils'
 import { useQueryClient } from '@tanstack/react-query'
-import { useMatomo } from '../hooks/useMatomo'
+import { useAnalytics } from '../hooks/useAnalytics'
 import { Repository } from '../types'
 
 interface RepositoryCardProps {
@@ -55,7 +50,8 @@ export default function RepositoryCard({
 }: RepositoryCardProps) {
   const queryClient = useQueryClient()
   const { t } = useTranslation()
-  const { trackRepository, trackBackup, trackMaintenance, trackArchive, EventAction } = useMatomo()
+  const { trackRepository, trackBackup, trackMaintenance, trackArchive, EventAction } =
+    useAnalytics()
 
   // Use maintenance jobs hook - always poll to handle page refreshes
   const capabilities = getRepoCapabilities(repository)
@@ -277,11 +273,7 @@ export default function RepositoryCard({
                 size="small"
                 startIcon={<Info />}
                 onClick={() => {
-                  trackRepository(
-                    EventAction.VIEW,
-                    repository.name,
-                    parseBytes(repository.total_size)
-                  )
+                  trackRepository(EventAction.VIEW, repository)
                   onViewInfo()
                 }}
                 disabled={isMaintenanceRunning}
@@ -294,7 +286,7 @@ export default function RepositoryCard({
                 size="small"
                 startIcon={checkJob ? <Refresh className="animate-spin" /> : <CheckCircleIcon />}
                 onClick={() => {
-                  trackMaintenance(EventAction.START, 'Check', repository.name)
+                  trackMaintenance(EventAction.START, 'Check', repository)
                   onCheck()
                 }}
                 disabled={isMaintenanceRunning}
@@ -309,7 +301,7 @@ export default function RepositoryCard({
                   size="small"
                   startIcon={compactJob ? <Refresh className="animate-spin" /> : <Refresh />}
                   onClick={() => {
-                    trackMaintenance(EventAction.START, 'Compact', repository.name)
+                    trackMaintenance(EventAction.START, 'Compact', repository)
                     onCompact()
                   }}
                   disabled={isMaintenanceRunning}
@@ -325,7 +317,7 @@ export default function RepositoryCard({
                   size="small"
                   startIcon={pruneJob ? <Refresh className="animate-spin" /> : <Delete />}
                   onClick={() => {
-                    trackMaintenance(EventAction.START, 'Prune', repository.name)
+                    trackMaintenance(EventAction.START, 'Prune', repository)
                     onPrune()
                   }}
                   disabled={isMaintenanceRunning}
@@ -341,12 +333,7 @@ export default function RepositoryCard({
                   size="small"
                   startIcon={<PlayArrow />}
                   onClick={() => {
-                    trackBackup(
-                      EventAction.START,
-                      undefined,
-                      repository.name,
-                      parseBytes(repository.total_size)
-                    )
+                    trackBackup(EventAction.START, undefined, repository)
                     onBackupNow()
                   }}
                   disabled={isMaintenanceRunning}
@@ -361,7 +348,7 @@ export default function RepositoryCard({
                 size="small"
                 startIcon={<FolderOpen />}
                 onClick={() => {
-                  trackArchive(EventAction.VIEW, repository.name, parseBytes(repository.total_size))
+                  trackArchive(EventAction.VIEW, repository)
                   onViewArchives()
                 }}
                 disabled={isMaintenanceRunning}
@@ -375,11 +362,7 @@ export default function RepositoryCard({
                   size="small"
                   startIcon={<Delete />}
                   onClick={() => {
-                    trackRepository(
-                      EventAction.DELETE,
-                      repository.name,
-                      parseBytes(repository.total_size)
-                    )
+                    trackRepository(EventAction.DELETE, repository)
                     onDelete()
                   }}
                   color="error"

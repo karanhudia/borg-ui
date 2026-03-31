@@ -20,7 +20,7 @@ import {
 } from './wizard'
 import FileExplorerDialog from './FileExplorerDialog'
 import { sshKeysAPI, RepositoryData } from '../services/api'
-import { useMatomo } from '../hooks/useMatomo'
+import { useAnalytics } from '../hooks/useAnalytics'
 
 interface Repository extends RepositoryData {
   id: number
@@ -113,7 +113,7 @@ const initialState: WizardState = {
 }
 
 const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: RepositoryWizardProps) => {
-  const { track, trackRepository, EventCategory, EventAction } = useMatomo()
+  const { track, trackRepository, EventCategory, EventAction } = useAnalytics()
   const { t } = useTranslation()
   const [activeStep, setActiveStep] = useState(0)
   const [wizardState, setWizardState] = useState<WizardState>(initialState)
@@ -472,14 +472,22 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
           : null,
     }
 
-    track(EventCategory.REPOSITORY, EventAction.CREATE, `wizard-${mode}`)
+    track(
+      EventCategory.REPOSITORY,
+      mode === 'create'
+        ? EventAction.CREATE
+        : mode === 'import'
+          ? EventAction.UPLOAD
+          : EventAction.EDIT,
+      { source: 'wizard', mode }
+    )
     trackRepository(
       mode === 'create'
         ? EventAction.CREATE
         : mode === 'import'
           ? EventAction.UPLOAD
           : EventAction.EDIT,
-      wizardState.name
+      { name: wizardState.name }
     )
 
     // Pass keyfile for import mode

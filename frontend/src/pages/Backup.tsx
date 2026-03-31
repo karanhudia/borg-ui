@@ -21,7 +21,6 @@ import {
   formatBytes as formatBytesUtil,
   formatDurationSeconds,
   formatTimeRange,
-  parseBytes,
 } from '../utils/dateUtils'
 import { generateBorgCreateCommand } from '../utils/borgUtils'
 import { translateBackendKey } from '../utils/translateBackendKey'
@@ -29,7 +28,7 @@ import { BackupJob } from '../types'
 import BackupJobsTable from '../components/BackupJobsTable'
 import RepoSelect from '../components/RepoSelect'
 import LogViewerDialog from '../components/LogViewerDialog'
-import { useMatomo } from '../hooks/useMatomo'
+import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
 import { getRepoCapabilities } from '../utils/repoCapabilities'
 
@@ -38,7 +37,7 @@ const Backup: React.FC = () => {
   const [logJob, setLogJob] = useState<BackupJob | null>(null)
   const queryClient = useQueryClient()
   const location = useLocation()
-  const { trackBackup, EventAction } = useMatomo()
+  const { trackBackup, EventAction } = useAnalytics()
   const { user } = useAuth()
   const { t } = useTranslation()
 
@@ -80,12 +79,7 @@ const Backup: React.FC = () => {
     onSuccess: () => {
       toast.success(t('backup.toasts.started'))
       queryClient.invalidateQueries({ queryKey: ['backup-status-manual'] })
-      trackBackup(
-        EventAction.START,
-        undefined,
-        selectedRepoData?.name,
-        parseBytes(selectedRepoData?.total_size)
-      )
+      trackBackup(EventAction.START, undefined, selectedRepoData || undefined)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -126,7 +120,7 @@ const Backup: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const repo = repositoriesData?.data?.repositories?.find((r: any) => r.path === repoPath)
     if (repo) {
-      trackBackup(EventAction.FILTER, undefined, repo.name)
+      trackBackup(EventAction.FILTER, undefined, repo)
     }
   }
 

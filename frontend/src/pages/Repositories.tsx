@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useMatomo } from '../hooks/useMatomo'
+import { useAnalytics } from '../hooks/useAnalytics'
 import {
   Box,
   Card,
@@ -83,7 +83,7 @@ export default function Repositories() {
   const queryClient = useQueryClient()
   const appState = useAppState()
   const navigate = useNavigate()
-  const { trackMaintenance, EventAction } = useMatomo()
+  const { trackMaintenance, EventAction } = useAnalytics()
 
   // Wizard state
   const [showWizard, setShowWizard] = useState(false)
@@ -173,7 +173,7 @@ export default function Repositories() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSuccess: (_response: any, variables: { repositoryId: number; maxDuration: number }) => {
       toast.success(t('repositories.toasts.checkStarted'))
-      trackMaintenance(EventAction.START, 'Check', checkingRepository?.name)
+      trackMaintenance(EventAction.START, 'Check', checkingRepository || undefined)
       setCheckingRepository(null)
       setRepositoriesWithJobs((prev) => new Set(prev).add(variables.repositoryId))
       queryClient.invalidateQueries({ queryKey: ['running-jobs', variables.repositoryId] })
@@ -200,7 +200,7 @@ export default function Repositories() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSuccess: (_response: any, repositoryId: number) => {
       toast.success(t('repositories.toasts.compactStarted'))
-      trackMaintenance(EventAction.START, 'Compact', compactingRepository?.name)
+      trackMaintenance(EventAction.START, 'Compact', compactingRepository || undefined)
       setCompactingRepository(null)
       setRepositoriesWithJobs((prev) => new Set(prev).add(repositoryId))
       queryClient.invalidateQueries({ queryKey: ['running-jobs', repositoryId] })
@@ -232,7 +232,7 @@ export default function Repositories() {
         toast.success(t('repositories.toasts.dryRunCompleted'))
       } else {
         toast.success(t('repositories.toasts.pruned'))
-        trackMaintenance(EventAction.START, 'Prune', pruningRepository?.name)
+        trackMaintenance(EventAction.START, 'Prune', pruningRepository || undefined)
         queryClient.invalidateQueries({ queryKey: ['repositories'] })
         queryClient.invalidateQueries({ queryKey: ['repository-archives', pruningRepository?.id] })
       }

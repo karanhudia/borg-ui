@@ -18,7 +18,7 @@ import ArchiveContentsDialog from '../components/ArchiveContentsDialog'
 import { toast } from 'react-hot-toast'
 import { Archive, Repository } from '@/types'
 import LockErrorDialog from '../components/LockErrorDialog'
-import { useMatomo } from '../hooks/useMatomo'
+import { useAnalytics } from '../hooks/useAnalytics'
 import RestoreWizard, { RestoreData } from '../components/RestoreWizard'
 import { getRepoCapabilities, getBorgVersion } from '../utils/repoCapabilities'
 
@@ -42,7 +42,7 @@ const Archives: React.FC = () => {
 
   const queryClient = useQueryClient()
   const location = useLocation()
-  const { trackArchive, EventAction } = useMatomo()
+  const { trackArchive, EventAction } = useAnalytics()
 
   // Get repositories list
   const { data: repositoriesData, isLoading: loadingRepositories } = useQuery({
@@ -118,7 +118,7 @@ const Archives: React.FC = () => {
         queryClient.invalidateQueries({ queryKey: ['repository-info', selectedRepositoryId] })
       }, 2000)
       setShowDeleteConfirm(null)
-      trackArchive(EventAction.DELETE, selectedRepository?.name)
+      trackArchive(EventAction.DELETE, selectedRepository || undefined)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -153,7 +153,7 @@ const Archives: React.FC = () => {
           fontSize: '13px',
         },
       })
-      trackArchive(EventAction.MOUNT, selectedRepository?.name)
+      trackArchive(EventAction.MOUNT, selectedRepository || undefined)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -205,7 +205,7 @@ const Archives: React.FC = () => {
       toast.success(t('archives.restoreStarted'), {
         duration: 6000, // Show longer so user can read it
       })
-      trackArchive(EventAction.START, selectedRepository?.name)
+      trackArchive(EventAction.START, selectedRepository || undefined)
 
       setRestoreArchive(null)
       setShowRestoreWizard(false)
@@ -227,7 +227,7 @@ const Archives: React.FC = () => {
     setSelectedRepository(repo || null)
     // Track archive listing (selecting a repo to filter/list its archives)
     if (repo) {
-      trackArchive(EventAction.FILTER, repo.name)
+      trackArchive(EventAction.FILTER, repo)
     }
   }
 
@@ -264,7 +264,7 @@ const Archives: React.FC = () => {
     (archive: Archive) => {
       setRestoreArchive(archive)
       setShowRestoreWizard(true)
-      trackArchive(EventAction.VIEW, selectedRepository?.name)
+      trackArchive(EventAction.VIEW, selectedRepository || undefined)
     },
     [selectedRepository, trackArchive, EventAction]
   )
@@ -342,7 +342,7 @@ const Archives: React.FC = () => {
   // Handle viewing archive contents
   const handleViewArchive = (archive: Archive) => {
     setViewArchive(archive)
-    trackArchive(EventAction.VIEW, selectedRepository?.name)
+    trackArchive(EventAction.VIEW, selectedRepository || undefined)
   }
 
   const handleRestoreArchive = (archive: Archive) => {

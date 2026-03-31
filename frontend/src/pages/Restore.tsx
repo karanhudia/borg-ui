@@ -29,7 +29,7 @@ import { restoreAPI, repositoriesAPI } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
-import { useMatomo } from '../hooks/useMatomo'
+import { useAnalytics } from '../hooks/useAnalytics'
 import { formatDate, formatBytes as formatBytesUtil, formatTimeRange } from '../utils/dateUtils'
 import RepositoryInfo from '../components/RepositoryInfo'
 import PathSelectorField from '../components/PathSelectorField'
@@ -64,7 +64,7 @@ interface RestoreJob {
 
 const Restore: React.FC = () => {
   const { t } = useTranslation()
-  const { trackArchive, EventAction } = useMatomo()
+  const { trackArchive, EventAction } = useAnalytics()
   const [selectedRepository, setSelectedRepository] = useState<string>('')
   const [selectedRepoData, setSelectedRepoData] = useState<Repository | null>(null)
   const [restoreArchive, setRestoreArchive] = useState<Archive | null>(null)
@@ -185,7 +185,7 @@ const Restore: React.FC = () => {
     onSuccess: () => {
       toast.success(t('restore.toasts.started'))
       // Track restore started
-      trackArchive(EventAction.START, selectedRepoData?.name)
+      trackArchive(EventAction.START, selectedRepoData || undefined)
 
       setRestoreArchive(null)
       setDestination('')
@@ -209,7 +209,7 @@ const Restore: React.FC = () => {
     setSelectedRepoData(repo || null)
     // Track archive listing (selecting a repo to filter/list its archives for restore)
     if (repo) {
-      trackArchive(EventAction.FILTER, repo.name)
+      trackArchive(EventAction.FILTER, repo)
     }
   }
 
@@ -243,7 +243,7 @@ const Restore: React.FC = () => {
       setSelectedPaths([]) // Reset paths
       setShowBrowser(true)
       // Track viewing archive for restore
-      trackArchive(EventAction.VIEW, selectedRepoData?.name)
+      trackArchive(EventAction.VIEW, selectedRepoData || undefined)
     },
     [
       setRestoreArchive,
@@ -671,7 +671,7 @@ const Restore: React.FC = () => {
         <DialogActions>
           <Button
             onClick={() => {
-              trackArchive(EventAction.STOP, selectedRepoData?.name)
+              trackArchive(EventAction.STOP, selectedRepoData || undefined)
               setRestoreArchive(null)
             }}
             disabled={restoreMutation.isPending}

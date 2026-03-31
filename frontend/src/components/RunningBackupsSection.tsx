@@ -15,6 +15,7 @@ import {
 import { RefreshCw, X } from 'lucide-react'
 import { BackupJob } from '../types'
 import { formatBytes as formatBytesUtil } from '../utils/dateUtils'
+import { useAnalytics } from '../hooks/useAnalytics'
 
 interface RunningBackupsSectionProps {
   runningBackupJobs: BackupJob[]
@@ -38,6 +39,7 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
   isCancelling,
 }) => {
   const { t } = useTranslation()
+  const { trackBackup, EventAction } = useAnalytics()
 
   if (runningBackupJobs.length === 0) {
     return null
@@ -105,6 +107,7 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
                         if (
                           window.confirm(`Are you sure you want to cancel backup job #${job.id}?`)
                         ) {
+                          trackBackup(EventAction.STOP, 'running_backup_cancel', job.repository)
                           onCancelBackup(job.id)
                         }
                       }}
