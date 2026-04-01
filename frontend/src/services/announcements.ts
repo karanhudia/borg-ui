@@ -1,10 +1,14 @@
 import { BASE_PATH } from '../utils/basePath'
 import type { AnnouncementManifest } from '../types/announcements'
 
-const DEFAULT_ANNOUNCEMENTS_URL = `${BASE_PATH}/announcements.json`
+const LOCAL_ANNOUNCEMENTS_URL = `${BASE_PATH}/announcements.json`
+const DEFAULT_REMOTE_ANNOUNCEMENTS_URL = 'https://karanhudia.github.io/borg-ui/announcements.json'
 
 export function getAnnouncementsUrl() {
-  return import.meta.env.VITE_ANNOUNCEMENTS_URL?.trim() || DEFAULT_ANNOUNCEMENTS_URL
+  const configuredUrl = import.meta.env.VITE_ANNOUNCEMENTS_URL?.trim()
+  if (configuredUrl) return configuredUrl
+
+  return import.meta.env.DEV ? LOCAL_ANNOUNCEMENTS_URL : DEFAULT_REMOTE_ANNOUNCEMENTS_URL
 }
 
 export async function fetchAnnouncementsManifest(url = getAnnouncementsUrl()) {
