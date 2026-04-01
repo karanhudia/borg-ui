@@ -1111,7 +1111,7 @@ async def get_repository(
         use_bypass_lock = repository.bypass_lock or (system_settings and system_settings.bypass_lock_on_list)
 
         # Get repository statistics
-        stats = await get_repository_stats(repository.path, bypass_lock=use_bypass_lock)
+        stats = await get_repository_stats(repository.path, bypass_lock=use_bypass_lock, passphrase=repository.passphrase, remote_path=repository.remote_path)
 
         return {
             "success": True,
@@ -1754,7 +1754,7 @@ async def get_repository_statistics(
         use_bypass_lock = repository.bypass_lock or (system_settings and system_settings.bypass_lock_on_list)
 
         # Get detailed statistics
-        stats = await get_repository_stats(repository.path, bypass_lock=use_bypass_lock)
+        stats = await get_repository_stats(repository.path, bypass_lock=use_bypass_lock, passphrase=repository.passphrase, remote_path=repository.remote_path)
 
         return {
             "success": True,
@@ -2747,15 +2747,20 @@ async def list_archive_files(
             except Exception:
                 pass
 
-async def get_repository_stats(path: str, bypass_lock: bool = False) -> Dict[str, Any]:
+async def get_repository_stats(path: str, bypass_lock: bool = False, passphrase: str = None, remote_path: str = None) -> Dict[str, Any]:
     """Get repository statistics"""
     try:
         # Get repository info
         cmd = ["borg", "info"]
         if bypass_lock:
             cmd.append("--bypass-lock")
+        if remote_path:
+            cmd.extend(["--remote-path", remote_path])
         cmd.append(path)
-        info_result = await borg._execute_command(cmd)
+
+        env = setup_borg_env(passphrase=passphrase, ssh_opts=get_standard_ssh_opts())
+
+        info_result = await borg._execute_command(cmd, env=env)
 
         if not info_result["success"]:
             return {
@@ -2775,7 +2780,7 @@ async def get_repository_stats(path: str, bypass_lock: bool = False) -> Dict[str
         }
 
         # Try to get archive count
-        archives_result = await borg.list_archives(path, bypass_lock=bypass_lock)
+        archives_result = await borg.list_archives(path, passphrase=passphrase, remote_path=remote_path, bypass_lock=bypass_lock)
         if archives_result["success"]:
             try:
                 archives_data = archives_result["stdout"]
