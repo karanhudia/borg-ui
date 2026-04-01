@@ -21,6 +21,11 @@ This file is sourced from [docs/announcements.json](/Users/karanhudia/Documents/
 
 ## Local Development
 
-Local frontend development still uses [frontend/public/announcements.json](/Users/karanhudia/Documents/Redundancy/borg-ui/frontend/public/announcements.json) as a dev-only fallback.
+Local frontend development does not use [frontend/public/announcements.json](/Users/karanhudia/Documents/Redundancy/borg-ui/frontend/public/announcements.json) automatically.
 
-If you change one of these files, update the other to keep local testing aligned with production.
+The app defaults to the published GitHub Pages manifest unless `VITE_ANNOUNCEMENTS_URL` is explicitly set.
+
+To turn local announcements on for testing:
+
+1. Start the frontend with `VITE_ANNOUNCEMENTS_URL=/announcements.json`.
+2. Clear any `announcement:*` localStorage keys if the modal was previously acknowledged or snoozed.
