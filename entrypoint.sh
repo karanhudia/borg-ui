@@ -8,6 +8,11 @@ PGID=${PGID:-1001}
 echo "[$(date)] Borg Web UI Entrypoint"
 echo "[$(date)] PUID: $PUID | PGID: $PGID"
 
+fix_runtime_permissions() {
+    echo "[$(date)] Ensuring runtime ownership for persistent directories..."
+    chown -R borg:borg /data /backups /home/borg /var/log/borg /etc/borg 2>/dev/null || true
+}
+
 # Get current borg user UID/GID
 CURRENT_PUID=$(id -u borg)
 CURRENT_PGID=$(id -g borg)
@@ -27,8 +32,7 @@ if [ "$PUID" != "$CURRENT_PUID" ] || [ "$PGID" != "$CURRENT_PGID" ]; then
     fi
 
     # Update ownership of key directories
-    echo "[$(date)] Updating ownership of /data, /backups, /home/borg..."
-    chown -R borg:borg /data /backups /home/borg /var/log/borg /etc/borg 2>/dev/null || true
+    fix_runtime_permissions
 
     # Re-add borg user to fuse group after UID/GID change
     # This is needed for SSHFS mounting in remote-to-remote backups
@@ -40,6 +44,7 @@ if [ "$PUID" != "$CURRENT_PUID" ] || [ "$PGID" != "$CURRENT_PGID" ]; then
     echo "[$(date)] UID/GID update complete"
 else
     echo "[$(date)] UID/GID already correct, skipping update"
+    fix_runtime_permissions
 
     # Ensure borg user is in fuse group (even when UID/GID hasn't changed)
     if getent group fuse > /dev/null 2>&1; then
