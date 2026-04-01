@@ -2878,5 +2878,19 @@
     "featureLabel": "Función de {{plan}}",
     "defaultMessage": "Esta función requiere el plan {{plan}}.",
     "requiresPlan": "Requiere el plan {{plan}}"
+  },
+  "announcements": {
+    "highlights": "What's new",
+    "viewDetails": "View details",
+    "remindLater": "Remind me later",
+    "gotIt": "Got it",
+    "types": {
+      "update_available": "Update available",
+      "release_highlight": "Release highlight",
+      "security_notice": "Security notice",
+      "maintenance_notice": "Maintenance notice",
+      "migration_notice": "Migration notice",
+      "custom_announcement": "Announcement"
+    }
   }
 }

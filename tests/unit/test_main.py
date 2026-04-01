@@ -126,3 +126,23 @@ class TestShutdownEvent:
             app.state.background_tasks = []
             await test_shutdown()
             assert warning_called, "Expected exception to be caught and logged"
+
+
+@pytest.mark.unit
+class TestCatchAll:
+    @pytest.mark.asyncio
+    async def test_serves_announcements_manifest_as_json(self):
+        from app.main import catch_all
+
+        with patch("app.main.os.path.exists", side_effect=lambda path: path == "app/static/announcements.json"):
+            with patch("app.main.FileResponse") as mock_file_response:
+                sentinel_response = Mock()
+                mock_file_response.return_value = sentinel_response
+
+                response = await catch_all("announcements.json")
+
+        mock_file_response.assert_called_once_with(
+            "app/static/announcements.json",
+            media_type="application/json",
+        )
+        assert response is sentinel_response

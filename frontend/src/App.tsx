@@ -14,6 +14,7 @@ import SSHConnectionsSingleKey from './pages/SSHConnectionsSingleKey'
 import Activity from './pages/Activity'
 import Settings from './pages/Settings'
 import { UmamiTracker } from './components/UmamiTracker'
+import AnnouncementManager from './components/AnnouncementManager'
 import { loadUserPreference, initAnalyticsIfEnabled } from './utils/analytics'
 
 function App() {
@@ -61,6 +62,7 @@ function App() {
   return (
     <Layout>
       <UmamiTracker />
+      <AnnouncementManager />
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />

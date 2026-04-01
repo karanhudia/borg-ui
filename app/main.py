@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 import structlog
 import os
 from dotenv import load_dotenv
@@ -21,6 +21,16 @@ load_dotenv()
 # Base path for sub-directory reverse proxy deployment (e.g., /borg-ui)
 _base_path_raw = os.getenv("BASE_PATH", "").strip().rstrip("/")
 BASE_PATH = "" if _base_path_raw in ("", "/") else _base_path_raw
+
+ROOT_STATIC_FILES: dict[str, str | None] = {
+    "logo.png": None,
+    "logo.svg": None,
+    "favicon.svg": None,
+    "favicon.ico": None,
+    "favicon-16x16.png": None,
+    "favicon-32x32.png": None,
+    "announcements.json": "application/json",
+}
 
 
 def _prepare_index_html() -> str | None:
@@ -327,13 +337,11 @@ async def catch_all(full_path: str):
     if full_path.startswith("assets/") or full_path.startswith("static/"):
         raise HTTPException(status_code=404, detail="Not Found")
 
-    # Serve static files from root (logo.png, favicon files, etc.)
-    if full_path in ["logo.png", "logo.svg", "favicon.svg", "favicon.ico", "favicon-16x16.png", "favicon-32x32.png"]:
-        from fastapi.responses import FileResponse
-        import os
+    # Serve static files from root (logo, favicon, announcements manifest, etc.)
+    if full_path in ROOT_STATIC_FILES:
         file_path = f"app/static/{full_path}"
         if os.path.exists(file_path):
-            return FileResponse(file_path)
+            return FileResponse(file_path, media_type=ROOT_STATIC_FILES[full_path])
         raise HTTPException(status_code=404, detail="Not Found")
 
     # Serve index.html for all other routes (frontend routes)
