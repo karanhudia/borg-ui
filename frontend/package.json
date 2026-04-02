@@ -16,7 +16,7 @@
     "@types/node": "^25.5.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
-    "axios": "^1.13.6",
+    "axios": "^1.14.0",
     "clsx": "^2.0.0",
     "cron-parser": "^5.5.0",
     "date-fns": "^4.1.0",
@@ -28,7 +28,7 @@
     "react-hot-toast": "^2.6.0",
     "react-i18next": "^16.6.5",
     "react-router-dom": "^7.13.2",
-    "recharts": "^3.8.0",
+    "recharts": "^3.8.1",
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
@@ -38,7 +38,7 @@
     "@typescript-eslint/eslint-plugin": "^8.57.2",
     "@typescript-eslint/parser": "^8.48.0",
     "@vitejs/plugin-react": "^5.1.4",
-    "@vitest/coverage-v8": "^4.1.1",
+    "@vitest/coverage-v8": "^4.1.2",
     "@vitest/ui": "^4.0.18",
     "autoprefixer": "^10.4.27",
     "axios-mock-adapter": "^2.1.0",
