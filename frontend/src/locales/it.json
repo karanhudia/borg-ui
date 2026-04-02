@@ -530,7 +530,19 @@
       "subtitle": "Personalizza l'aspetto dell'applicazione",
       "theme": "Tema",
       "chooseTheme": "Scegli un tema",
-      "themeAriaLabel": "Modalità tema"
+      "themeAriaLabel": "Modalità tema",
+      "activeTheme": "{{theme}} selezionato",
+      "autoStatus": "Segue l'impostazione del dispositivo: {{theme}}",
+      "themeOptions": {
+        "auto": "Automatico",
+        "light": "Chiaro",
+        "dark": "Scuro"
+      },
+      "themeDescriptions": {
+        "auto": "Si adatta automaticamente al dispositivo",
+        "light": "Area chiara per l'uso diurno",
+        "dark": "Interfaccia meno abbagliante per ambienti scuri"
+      }
     },
     "users": {
       "title": "Gestione Utenti",

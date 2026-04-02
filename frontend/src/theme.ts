@@ -190,16 +190,18 @@ export const darkTheme = createTheme({
   },
 })
 
-export type ThemeMode = 'light' | 'dark'
+export type ResolvedThemeMode = 'light' | 'dark'
+export type ThemeMode = ResolvedThemeMode | 'auto'
 
-export const themes: Record<ThemeMode, typeof theme> = {
+export const themes: Record<ResolvedThemeMode, typeof theme> = {
   light: theme,
   dark: darkTheme,
 }
 
 export const availableThemes = [
-  { id: 'light', label: 'Light', icon: 'Sun' },
-  { id: 'dark', label: 'Dark', icon: 'Moon' },
+  { id: 'auto', labelKey: 'settings.appearance.themeOptions.auto', icon: 'Monitor' },
+  { id: 'light', labelKey: 'settings.appearance.themeOptions.light', icon: 'Sun' },
+  { id: 'dark', labelKey: 'settings.appearance.themeOptions.dark', icon: 'Moon' },
 ]
 
-export const getTheme = (mode: ThemeMode) => themes[mode]
+export const getTheme = (mode: ResolvedThemeMode) => themes[mode]

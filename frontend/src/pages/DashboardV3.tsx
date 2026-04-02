@@ -920,10 +920,10 @@ function toGB(b: number) {
 
 export default function DashboardV3() {
   const navigate = useNavigate()
-  const { mode } = useTheme()
+  const { effectiveMode } = useTheme()
   const { t } = useTranslation()
   const { trackNavigation, EventAction } = useAnalytics()
-  const T = makeT(mode === 'dark')
+  const T = makeT(effectiveMode === 'dark')
 
   const glass = {
     bgcolor: T.bgCard,

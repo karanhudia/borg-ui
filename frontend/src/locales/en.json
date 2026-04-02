@@ -530,7 +530,19 @@
       "subtitle": "Customize the look and feel of the application",
       "theme": "Theme",
       "chooseTheme": "Choose a theme",
-      "themeAriaLabel": "Theme mode"
+      "themeAriaLabel": "Theme mode",
+      "activeTheme": "{{theme}} selected",
+      "autoStatus": "Following device setting: {{theme}}",
+      "themeOptions": {
+        "auto": "Auto",
+        "light": "Light",
+        "dark": "Dark"
+      },
+      "themeDescriptions": {
+        "auto": "Matches your device automatically",
+        "light": "Bright workspace for daytime use",
+        "dark": "Lower-glare interface for darker rooms"
+      }
     },
     "users": {
       "title": "User Management",
