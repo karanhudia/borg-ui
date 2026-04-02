@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import Archives from '../Archives'
 import * as apiModule from '../../services/api'
+import { toast } from 'react-hot-toast'
 
 const trackArchive = vi.fn()
 const borgListArchivesMock = vi.fn()
@@ -23,10 +24,12 @@ vi.mock('../../components/ArchivesList', () => ({
     onViewArchive,
     onRestoreArchive,
     onMountArchive,
+    onDeleteArchive,
   }: {
     onViewArchive: (archive: { name: string; start: string }) => void
     onRestoreArchive: (archive: { name: string; start: string }) => void
     onMountArchive: (archive: { name: string; start: string }) => void
+    onDeleteArchive: (archiveName: string) => void
   }) => {
     const archive = { name: 'archive-1', start: '2026-01-01T00:00:00Z' }
     return (
@@ -34,6 +37,7 @@ vi.mock('../../components/ArchivesList', () => ({
         <button onClick={() => onViewArchive(archive)}>View Archive</button>
         <button onClick={() => onRestoreArchive(archive)}>Restore Archive</button>
         <button onClick={() => onMountArchive(archive)}>Mount Archive</button>
+        <button onClick={() => onDeleteArchive(archive.name)}>Delete Archive</button>
       </div>
     )
   },
@@ -57,7 +61,10 @@ vi.mock('../../components/MountArchiveDialog', () => ({
     open ? <button onClick={onConfirm}>Confirm Mount</button> : null,
 }))
 
-vi.mock('../../components/DeleteArchiveDialog', () => ({ default: () => null }))
+vi.mock('../../components/DeleteArchiveDialog', () => ({
+  default: ({ open, onConfirm }: { open: boolean; onConfirm: (archiveName: string) => void }) =>
+    open ? <button onClick={() => onConfirm('archive-1')}>Confirm Delete Archive</button> : null,
+}))
 
 vi.mock('../../components/RestoreWizard', () => ({
   default: ({
@@ -126,6 +133,7 @@ vi.mock('../../hooks/useAnalytics', () => ({
       VIEW: 'View',
       START: 'Start',
       MOUNT: 'Mount',
+      DELETE: 'Delete',
     },
   }),
 }))
@@ -232,5 +240,48 @@ describe('Archives page actions', () => {
       })
     })
     expect(trackArchive).toHaveBeenCalledWith('Mount', repository)
+  })
+
+  it('shows translated backend errors when restore start fails', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    })
+    const user = userEvent.setup()
+    vi.mocked(apiModule.restoreAPI.startRestore).mockRejectedValue({
+      response: { data: { detail: 'archives.toasts.restoreFailed' } },
+    } as never)
+
+    renderWithProviders(<Archives />, { queryClient })
+
+    await user.click(await screen.findByText('Select Repo'))
+    await user.click(screen.getByText('Restore Archive'))
+    await user.click(await screen.findByText('Confirm Restore'))
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Failed to start restore')
+    })
+    expect(trackArchive).not.toHaveBeenCalledWith('Start', repository)
+  })
+
+  it('shows translated backend errors when archive deletion fails', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    })
+    const user = userEvent.setup()
+    vi.mocked(apiModule.archivesAPI.deleteArchive).mockRejectedValue({
+      response: { data: { detail: 'archives.toasts.deleteFailed' } },
+    } as never)
+
+    renderWithProviders(<Archives />, { queryClient })
+
+    await user.click(await screen.findByText('Select Repo'))
+    await user.click(await screen.findByText('Delete Archive'))
+    await user.click(await screen.findByText('Confirm Delete Archive'))
+
+    await waitFor(() => {
+      expect(apiModule.archivesAPI.deleteArchive).toHaveBeenCalledWith('/repo/one', 'archive-1')
+      expect(toast.error).toHaveBeenCalledWith('Failed to delete archive')
+    })
+    expect(trackArchive).not.toHaveBeenCalledWith('Delete', repository)
   })
 })

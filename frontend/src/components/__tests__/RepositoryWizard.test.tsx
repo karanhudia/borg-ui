@@ -667,7 +667,7 @@ describe('RepositoryWizard', () => {
         // Step 5
         await waitFor(
           () => {
-            expect(screen.getByTestId('command-preview')).toBeInTheDocument()
+            expect(screen.getByRole('button', { name: /Create Repository/i })).toBeInTheDocument()
           },
           { timeout: 5000 }
         )
@@ -683,7 +683,8 @@ describe('RepositoryWizard', () => {
 
         await goToStep5(user)
 
-        expect(screen.getByTestId('command-preview')).toBeInTheDocument()
+        expect(screen.getByText(/Configuration Summary/i)).toBeInTheDocument()
+        expect(screen.getByText('Test Repo')).toBeInTheDocument()
       })
 
       it('shows Create Repository button (not Next)', async () => {
