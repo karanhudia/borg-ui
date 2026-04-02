@@ -37,7 +37,10 @@ describe('analytics (umami)', () => {
     vi.spyOn(Storage.prototype, 'getItem')
     vi.spyOn(Storage.prototype, 'setItem')
     global.fetch = vi.fn()
-    vi.spyOn(navigator, 'sendBeacon').mockReturnValue(true)
+    Object.defineProperty(navigator, 'sendBeacon', {
+      value: vi.fn().mockReturnValue(true),
+      configurable: true,
+    })
   })
 
   afterEach(() => {
@@ -280,6 +283,54 @@ describe('analytics (umami)', () => {
       } as Response)
 
       await expect(resetOptOutCache()).resolves.toBeUndefined()
+    })
+  })
+
+  describe('manual transport fallback', () => {
+    it('falls back to fetch when sendBeacon is unavailable', async () => {
+      vi.resetModules()
+      delete window.umami
+      Object.defineProperty(navigator, 'sendBeacon', {
+        value: undefined,
+        configurable: true,
+      })
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true } as Response)
+      global.fetch = fetchMock
+      window.fetch = fetchMock as typeof window.fetch
+
+      const analytics = await import('../analytics')
+      analytics.trackConsentResponse(false)
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://cloud.umami.is/api/send',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          keepalive: true,
+        })
+      )
+    })
+  })
+
+  describe('direct Umami events', () => {
+    it('tracks opt-out immediately through Umami when available', () => {
+      setAppVersion('9.9.9')
+      trackOptOut()
+
+      expect(window.umami?.track).toHaveBeenCalledWith('Settings - OptOut', {
+        name: 'analytics',
+        app_version: '9.9.9',
+      })
+    })
+
+    it('tracks consent decline through Umami when available', () => {
+      setAppVersion('4.5.6')
+      trackConsentResponse(false)
+
+      expect(window.umami?.track).toHaveBeenCalledWith('Consent - Decline', {
+        name: 'analytics_banner',
+        app_version: '4.5.6',
+      })
     })
   })
 
