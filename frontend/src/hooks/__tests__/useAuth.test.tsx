@@ -117,8 +117,6 @@ describe('AuthProvider', () => {
 
   it('stores the token and updates auth state after login', async () => {
     const user = userEvent.setup()
-    const loginResultListener = vi.fn()
-    window.addEventListener('auth-login-result', loginResultListener as EventListener)
 
     renderWithProviders(
       <AuthProvider>
@@ -135,8 +133,6 @@ describe('AuthProvider', () => {
       expect(screen.getByText('authenticated:true')).toBeInTheDocument()
       expect(screen.getByText('user:admin')).toBeInTheDocument()
     })
-
-    window.removeEventListener('auth-login-result', loginResultListener as EventListener)
   })
 
   it('clears auth state on logout even when the API call fails', async () => {

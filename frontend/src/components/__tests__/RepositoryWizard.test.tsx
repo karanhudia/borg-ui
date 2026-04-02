@@ -1187,8 +1187,9 @@ describe('RepositoryWizard', () => {
         await user.type(dirInput, '/optional/dir')
         await user.click(screen.getByRole('button', { name: /Add/i }))
 
-        // Should show the added directory
-        expect(screen.getByText('/optional/dir')).toBeInTheDocument()
+        await waitFor(() => {
+          expect(screen.getByText('/optional/dir')).toBeInTheDocument()
+        })
       })
     })
 
@@ -1761,8 +1762,9 @@ describe('RepositoryWizard', () => {
       await user.type(dirInput, '/local/data')
       await user.click(screen.getByRole('button', { name: /Add/i }))
 
-      // Directory should be added
-      expect(screen.getByText('/local/data')).toBeInTheDocument()
+      await waitFor(() => {
+        expect(screen.getByText('/local/data')).toBeInTheDocument()
+      })
 
       // Next button should be enabled
       expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled()
@@ -2220,8 +2222,9 @@ describe('RepositoryWizard', () => {
         expect(screen.getByText('Remove local directories first to switch')).toBeInTheDocument()
       })
 
-      // Verify directory was added
-      expect(screen.getByText('/home/user/data')).toBeInTheDocument()
+      await waitFor(() => {
+        expect(screen.getByText('/home/user/data')).toBeInTheDocument()
+      })
 
       // Find and click delete button (IconButton with DeleteIcon)
       const deleteButtons = screen.getAllByRole('button')

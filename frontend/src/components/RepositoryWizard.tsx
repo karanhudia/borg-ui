@@ -566,7 +566,10 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
                 )
                 handleStateChange({
                   ...updates,
-                  dataSource: detectedSshConnectionId ? 'remote' : updates.dataSource,
+                  dataSource:
+                    detectedSshConnectionId
+                      ? 'remote'
+                      : updates.dataSource ?? wizardState.dataSource,
                   sourceSshConnectionId:
                     detectedSshConnectionId || updates.sourceSshConnectionId || '',
                   sourceDirs: processedPaths,

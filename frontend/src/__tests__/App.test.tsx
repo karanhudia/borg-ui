@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders, screen, waitFor } from '../test/test-utils'
 import App from '../App'
@@ -20,7 +21,7 @@ vi.mock('../utils/analytics', () => ({
 }))
 
 vi.mock('../components/Layout', () => ({
-  default: ({ children }: { children: React.ReactNode }) => <div>Layout{children}</div>,
+  default: ({ children }: { children: ReactNode }) => <div>Layout{children}</div>,
 }))
 
 vi.mock('../components/UmamiTracker', () => ({
@@ -32,7 +33,7 @@ vi.mock('../components/AnnouncementManager', () => ({
 }))
 
 vi.mock('../components/ProtectedRoute', () => ({
-  default: ({ children, requiredTab }: { children: React.ReactNode; requiredTab: string }) => {
+  default: ({ children, requiredTab }: { children: ReactNode; requiredTab: string }) => {
     protectedRouteMock(requiredTab)
     return (
       <div>
