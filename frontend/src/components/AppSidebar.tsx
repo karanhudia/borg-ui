@@ -30,6 +30,7 @@ import {
   Wifi,
 } from 'lucide-react'
 import api, { settingsAPI } from '../services/api'
+import { useAuth } from '../hooks/useAuth'
 import NavItem from './NavItem'
 import NavGroup from './NavGroup'
 import SidebarVersionInfo from './SidebarVersionInfo'
@@ -50,9 +51,10 @@ interface NavigationItem {
   key: 'dashboard' | 'connections' | 'repositories' | 'backups' | 'archives' | 'schedule'
   subItems?: Array<{
     name: string
-    href: string
+    href?: string
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     icon: React.ComponentType<any>
+    disabled?: boolean
   }>
 }
 
@@ -64,6 +66,7 @@ interface AppSidebarProps {
 export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
   const { t } = useTranslation()
   const location = useLocation()
+  const { user, isAdmin, canMutate } = useAuth()
   const { tabEnablement, getTabDisabledReason } = useTabEnablement()
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({})
@@ -84,8 +87,8 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       Advanced: t('navigation.settings.advanced'),
       Account: t('navigation.settings.account'),
       Appearance: t('navigation.settings.appearance'),
-      Notifications: t('navigation.settings.notifications'),
       Preferences: t('navigation.settings.preferences'),
+      Notifications: t('navigation.settings.notifications'),
       MQTT: t('navigation.settings.mqtt'),
       Cache: t('navigation.settings.cache'),
       Logs: t('navigation.settings.logs'),
@@ -95,6 +98,9 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       Users: t('navigation.settings.users'),
       'Export/Import': t('navigation.settings.exportImport'),
       Beta: t('navigation.settings.beta'),
+      Roles: t('navigation.settings.roles'),
+      'Audit Log': t('navigation.settings.auditLog'),
+      SSO: t('navigation.settings.sso'),
     }
     return labels[name] ?? name
   }
@@ -168,43 +174,55 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
             subItems: [
               { name: 'Account', href: '/settings/account', icon: User },
               { name: 'Appearance', href: '/settings/appearance', icon: Palette },
-              { name: 'Notifications', href: '/settings/notifications', icon: Bell },
               { name: 'Preferences', href: '/settings/preferences', icon: Sliders },
+              { name: 'Notifications', href: '/settings/notifications', icon: Bell },
+              ...(isAdmin ? [{ name: 'Users', href: '/settings/users', icon: Users }] : []),
             ],
           },
-          {
-            name: 'System',
-            icon: SettingsIcon,
-            key: 'dashboard' as const,
-            subItems: [
-              { name: 'System', href: '/settings/system', icon: SettingsIcon },
-              ...(showMqttNav ? [{ name: 'MQTT', href: '/settings/mqtt', icon: Wifi }] : []),
-              { name: 'Cache', href: '/settings/cache', icon: Server },
-              { name: 'Logs', href: '/settings/logs', icon: FileText },
-              { name: 'Packages', href: '/settings/packages', icon: Package },
-            ],
-          },
+          ...(isAdmin
+            ? [
+                {
+                  name: 'System',
+                  icon: SettingsIcon,
+                  key: 'dashboard' as const,
+                  subItems: [
+                    { name: 'System', href: '/settings/system', icon: SettingsIcon },
+                    ...(showMqttNav ? [{ name: 'MQTT', href: '/settings/mqtt', icon: Wifi }] : []),
+                    { name: 'Cache', href: '/settings/cache', icon: Server },
+                    { name: 'Logs', href: '/settings/logs', icon: FileText },
+                    { name: 'Packages', href: '/settings/packages', icon: Package },
+                  ],
+                },
+              ]
+            : []),
           {
             name: 'Management',
             icon: HardDrive,
             key: 'dashboard' as const,
             subItems: [
               { name: 'Mounts', href: '/settings/mounts', icon: HardDrive },
-              { name: 'Scripts', href: '/settings/scripts', icon: FileCode },
-              { name: 'Users', href: '/settings/users', icon: Users },
-              { name: 'Export/Import', href: '/settings/export', icon: DownloadIcon },
+              ...(canMutate
+                ? [
+                    { name: 'Scripts', href: '/settings/scripts', icon: FileCode },
+                    { name: 'Export/Import', href: '/settings/export', icon: DownloadIcon },
+                  ]
+                : []),
             ],
           },
-          {
-            name: 'Advanced',
-            icon: Zap,
-            key: 'dashboard' as const,
-            subItems: [{ name: 'Beta', href: '/settings/beta', icon: Zap }],
-          },
+          ...(isAdmin
+            ? [
+                {
+                  name: 'Advanced',
+                  icon: Zap,
+                  key: 'dashboard' as const,
+                  subItems: [{ name: 'Beta', href: '/settings/beta', icon: Zap }],
+                },
+              ]
+            : []),
         ],
       },
     ]
-  }, [showRestoreTab, showMqttNav])
+  }, [showRestoreTab, showMqttNav, user?.role, canMutate])
 
   // Auto-expand menus based on current route
   useEffect(() => {
@@ -213,8 +231,9 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       if (
         path.includes('/account') ||
         path.includes('/appearance') ||
+        path.includes('/preferences') ||
         path.includes('/notifications') ||
-        path.includes('/preferences')
+        path.includes('/users')
       ) {
         setExpandedMenus((prev) => ({ ...prev, Personal: true }))
       } else if (
@@ -228,7 +247,6 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       } else if (
         path.includes('/mounts') ||
         path.includes('/scripts') ||
-        path.includes('/users') ||
         path.includes('/export')
       ) {
         setExpandedMenus((prev) => ({ ...prev, Management: true }))
@@ -276,26 +294,60 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
           >
             <Box
               sx={{
-                width: 32,
-                height: 32,
-                borderRadius: '50%',
-                backgroundColor: '#00dd00',
+                width: 38,
+                height: 38,
+                borderRadius: 2,
+                background: 'linear-gradient(135deg, #065f46 0%, #059669 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                padding: '5px',
+                padding: '6px',
+                boxShadow: '0 4px 14px rgba(5,150,105,0.4)',
+                flexShrink: 0,
               }}
             >
               <Box
                 component="img"
                 src={`${BASE_PATH}/logo.png`}
                 alt={t('layout.logoAlt')}
-                sx={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                sx={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  filter: 'brightness(2.2) contrast(1.1)',
+                }}
               />
             </Box>
-            <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 600 }}>
-              {t('navigation.appName')}
-            </Typography>
+            <Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                <Typography
+                  variant="overline"
+                  noWrap
+                  component="div"
+                  sx={{ fontWeight: 700, letterSpacing: '0.14em', lineHeight: 1.1 }}
+                >
+                  Borg UI
+                </Typography>
+                <Box
+                  component="span"
+                  sx={{
+                    fontSize: '0.6rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.04em',
+                    px: 0.6,
+                    py: 0.2,
+                    borderRadius: 0.75,
+                    bgcolor: 'rgba(5,150,105,0.15)',
+                    border: '1px solid rgba(5,150,105,0.35)',
+                    color: '#34d399',
+                    lineHeight: 1.5,
+                    userSelect: 'none',
+                  }}
+                >
+                  2.0
+                </Box>
+              </Box>
+            </Box>
           </Box>
         </Toolbar>
         <Divider />

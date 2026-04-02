@@ -4,8 +4,12 @@ import { authAPI, setProxyAuthMode } from '../services/api'
 interface User {
   id: number
   username: string
+  full_name?: string | null
+  deployment_type?: 'individual' | 'enterprise' | null
+  enterprise_name?: string | null
   email: string
-  is_admin: boolean
+  role: 'admin' | 'operator' | 'viewer'
+  created_at: string
   must_change_password?: boolean
 }
 
@@ -13,10 +17,13 @@ interface AuthContextType {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
+  isAdmin: boolean
+  canMutate: boolean
   mustChangePassword: boolean
   proxyAuthEnabled: boolean
   login: (username: string, password: string) => Promise<boolean>
   logout: () => Promise<void>
+  refreshUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -25,6 +32,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [proxyAuthEnabled, setProxyAuthEnabled] = useState(false)
+
+  const refreshUser = async () => {
+    const profileResponse = await authAPI.getProfile()
+    setUser(profileResponse.data)
+  }
 
   useEffect(() => {
     const initAuth = async () => {
@@ -43,8 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           while (retries > 0 && !success) {
             try {
-              const profileResponse = await authAPI.getProfile()
-              setUser(profileResponse.data)
+              await refreshUser()
               success = true
             } catch (error) {
               console.error('Failed to get profile in proxy auth mode, retrying...', error)
@@ -63,8 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const token = localStorage.getItem('access_token')
           if (token) {
             try {
-              const profileResponse = await authAPI.getProfile()
-              setUser(profileResponse.data)
+              await refreshUser()
             } catch (error) {
               console.error('Failed to get profile with JWT:', error)
               localStorage.removeItem('access_token')
@@ -78,8 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const token = localStorage.getItem('access_token')
         if (token) {
           try {
-            const profileResponse = await authAPI.getProfile()
-            setUser(profileResponse.data)
+            await refreshUser()
           } catch {
             localStorage.removeItem('access_token')
           }
@@ -97,8 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { access_token, must_change_password } = response.data
     localStorage.setItem('access_token', access_token)
 
-    const profileResponse = await authAPI.getProfile()
-    setUser(profileResponse.data)
+    await refreshUser()
 
     // Return true if user must change password
     return must_change_password || false
@@ -118,10 +126,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     isAuthenticated: !!user,
     isLoading,
+    isAdmin: user?.role === 'admin',
+    canMutate: user?.role === 'admin' || user?.role === 'operator',
     mustChangePassword: user?.must_change_password || false,
     proxyAuthEnabled,
     login,
     logout,
+    refreshUser,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
