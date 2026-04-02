@@ -10,6 +10,7 @@ import {
 } from '../../test/test-utils'
 import Settings from '../Settings'
 import * as apiModule from '../../services/api'
+import { toast } from 'react-hot-toast'
 
 const trackSettings = vi.fn()
 
@@ -123,6 +124,21 @@ describe('Settings users tab', () => {
     vi.mocked(apiModule.settingsAPI.createUser).mockResolvedValue({ data: {} } as never)
     vi.mocked(apiModule.settingsAPI.resetUserPassword).mockResolvedValue({ data: {} } as never)
     vi.mocked(apiModule.settingsAPI.deleteUser).mockResolvedValue({ data: {} } as never)
+  })
+
+  it('tracks the users tab view on render', async () => {
+    renderWithProviders(
+      <ThemeProvider>
+        <Settings />
+      </ThemeProvider>
+    )
+
+    await screen.findByText('User Management')
+
+    expect(trackSettings).toHaveBeenCalledWith('View', {
+      section: 'settings',
+      tab: 'users',
+    })
   })
 
   it('creates, resets password for, and deletes users via settings actions', async () => {
@@ -239,5 +255,64 @@ describe('Settings users tab', () => {
       section: 'users',
       role: 'user',
     })
+  })
+
+  it('shows backend errors when creating a user fails', async () => {
+    const user = userEvent.setup()
+    vi.mocked(apiModule.settingsAPI.createUser).mockRejectedValue({
+      response: { data: { detail: 'settings.toasts.failedToCreateUser' } },
+    } as never)
+
+    renderWithProviders(
+      <ThemeProvider>
+        <Settings />
+      </ThemeProvider>
+    )
+
+    await screen.findByText('User Management')
+
+    await user.click(screen.getByRole('button', { name: /add user/i }))
+    const createDialog = await screen.findByRole('dialog', { name: /create user/i })
+    await user.type(within(createDialog).getByLabelText(/username/i), 'new-user')
+    await user.type(within(createDialog).getByLabelText(/email/i), 'new@example.com')
+    await user.type(within(createDialog).getByLabelText(/password/i), 'strong-password')
+    fireEvent.submit(
+      within(createDialog)
+        .getByRole('button', { name: /^create$/i })
+        .closest('form')!
+    )
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Failed to create user')
+    })
+    expect(trackSettings).not.toHaveBeenCalledWith('Create', {
+      section: 'users',
+      role: 'user',
+    })
+    expect(screen.getByRole('dialog', { name: /create user/i })).toBeInTheDocument()
+  })
+
+  it('shows backend errors when deleting a user fails', async () => {
+    const user = userEvent.setup()
+    vi.mocked(apiModule.settingsAPI.deleteUser).mockRejectedValue({
+      response: { data: { detail: 'Cannot delete the last admin' } },
+    } as never)
+
+    renderWithProviders(
+      <ThemeProvider>
+        <Settings />
+      </ThemeProvider>
+    )
+
+    await screen.findByText('User Management')
+    await user.click(screen.getByRole('button', { name: /delete user/i }))
+    const deleteDialog = await screen.findByRole('dialog', { name: /delete user/i })
+    await user.click(within(deleteDialog).getByRole('button', { name: /^delete$/i }))
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Cannot delete the last admin')
+    })
+    expect(trackSettings).not.toHaveBeenCalledWith('Delete', { section: 'users' })
+    expect(screen.getByRole('dialog', { name: /delete user/i })).toBeInTheDocument()
   })
 })

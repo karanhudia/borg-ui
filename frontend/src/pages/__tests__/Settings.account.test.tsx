@@ -88,6 +88,21 @@ describe('Settings account tab', () => {
     vi.mocked(apiModule.settingsAPI.changePassword).mockResolvedValue({ data: {} } as never)
   })
 
+  it('tracks the account tab view on render', async () => {
+    renderWithProviders(
+      <ThemeProvider>
+        <Settings />
+      </ThemeProvider>
+    )
+
+    await screen.findByRole('heading', { name: 'Change Password' })
+
+    expect(trackSettings).toHaveBeenCalledWith('View', {
+      section: 'settings',
+      tab: 'account',
+    })
+  })
+
   it('changes password and tracks the edit event', async () => {
     const user = userEvent.setup()
 
@@ -135,5 +150,33 @@ describe('Settings account tab', () => {
 
     expect(apiModule.settingsAPI.changePassword).not.toHaveBeenCalled()
     expect(toast.error).toHaveBeenCalled()
+  })
+
+  it('shows translated backend errors when password change fails', async () => {
+    const user = userEvent.setup()
+    vi.mocked(apiModule.settingsAPI.changePassword).mockRejectedValue({
+      response: { data: { detail: 'settings.toasts.failedToChangePassword' } },
+    } as never)
+
+    renderWithProviders(
+      <ThemeProvider>
+        <Settings />
+      </ThemeProvider>
+    )
+
+    await screen.findByRole('heading', { name: 'Change Password' })
+    const newPasswordInput = screen.getAllByLabelText(/new password/i)[0]
+    await user.type(screen.getByLabelText(/current password/i), 'old-password')
+    await user.type(newPasswordInput, 'new-password-123')
+    await user.type(screen.getByLabelText(/confirm new password/i), 'new-password-123')
+    await user.click(screen.getByRole('button', { name: /change password/i }))
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Failed to change password')
+    })
+    expect(trackSettings).not.toHaveBeenCalledWith('Edit', {
+      section: 'account',
+      operation: 'change_password',
+    })
   })
 })
