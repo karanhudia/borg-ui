@@ -12,6 +12,7 @@ interface NavItemProps {
   isEnabled: boolean
   disabledReason?: string
   navLabel: (name: string) => string
+  disabled?: boolean
 }
 
 export default function NavItem({
@@ -35,24 +36,28 @@ export default function NavItem({
         pr: 1.5,
         py: 0.625,
         minHeight: 36,
+        borderLeft: '2px solid transparent',
+        borderRadius: 0,
+        transition: 'background-color 150ms ease, border-color 150ms ease',
         '&.Mui-selected': {
-          backgroundColor: 'primary.main',
-          color: 'white',
-          '&:hover': { backgroundColor: 'primary.dark' },
-          '& .MuiListItemIcon-root': { color: 'white' },
+          backgroundColor: 'rgba(5,150,105,0.08)',
+          borderLeftColor: '#059669',
+          '&:hover': { backgroundColor: 'rgba(5,150,105,0.12)' },
+          '& .MuiListItemIcon-root': { color: '#34d399' },
         },
+        '&:hover': { backgroundColor: 'rgba(255,255,255,0.04)' },
         '&.Mui-disabled': { opacity: 0.5, cursor: 'not-allowed' },
       }}
     >
-      <ListItemIcon sx={{ color: isActive ? 'white' : 'text.secondary', minWidth: 32 }}>
+      <ListItemIcon sx={{ color: isActive ? '#34d399' : 'text.secondary', minWidth: 32 }}>
         {isEnabled ? <Icon size={18} /> : <Lock size={18} />}
       </ListItemIcon>
       <ListItemText
         primary={navLabel(name)}
         primaryTypographyProps={{
           fontSize: '0.8125rem',
-          fontWeight: isActive ? 600 : 400,
-          color: isActive ? 'white' : isEnabled ? 'inherit' : 'text.disabled',
+          fontWeight: isActive ? 500 : 400,
+          color: isActive ? 'text.primary' : isEnabled ? 'text.secondary' : 'text.disabled',
         }}
       />
     </ListItemButton>
