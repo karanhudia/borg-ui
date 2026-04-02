@@ -10,7 +10,7 @@ from typing import List, Dict, Any
 
 from app.database.database import get_db
 from app.database.models import User, Repository, DeleteArchiveJob
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_current_download_user
 from app.core.borg import borg
 from app.services.delete_archive_service import delete_archive_service
 import asyncio
@@ -291,27 +291,10 @@ async def download_file_from_archive(
     repository: str,
     archive: str,
     file_path: str,
-    token: str,
+    current_user: User = Depends(get_current_download_user),
     db: Session = Depends(get_db)
 ):
     """Extract and download a specific file from an archive"""
-    # Authenticate using token from query parameter
-    from app.core.security import verify_token
-    username = verify_token(token)
-    if not username:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"key": "backend.errors.auth.invalidOrExpiredToken"}
-        )
-
-    # Get user from database
-    current_user = db.query(User).filter(User.username == username).first()
-    if not current_user or not current_user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"key": "backend.errors.auth.userNotFound"}
-        )
-
     try:
         # Get repository details for passphrase and remote_path
         repo = db.query(Repository).filter(Repository.path == repository).first()

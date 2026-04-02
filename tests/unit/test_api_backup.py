@@ -343,33 +343,31 @@ class TestBackupLogs:
         assert response.status_code in [404, 405]  # Not found or not implemented
 
     def test_download_backup_logs_success(self, test_client: TestClient, admin_headers, test_db):
-        """Test downloading backup logs without token returns 401"""
+        """Test downloading backup logs accepts standard bearer auth."""
         job = BackupJob(
             repository="/test/repo",
             status="completed",
             started_at=datetime.now(),
             completed_at=datetime.now(),
-            log_file_path="/tmp/backup_1.log"
+            logs="downloadable backup log"
         )
         test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
-        # Download endpoint requires token query parameter
         response = test_client.get(f"/api/backup/logs/{job.id}/download", headers=admin_headers)
 
-        # Returns 401 when token is missing (doesn't use Bearer auth)
-        assert response.status_code == 401
+        assert response.status_code == 200
+        assert "text/plain" in response.headers.get("content-type", "")
 
     def test_download_backup_logs_nonexistent(self, test_client: TestClient, admin_headers):
-        """Test downloading logs for non-existent job returns 401 (token required first)"""
+        """Test downloading logs for non-existent job returns 404 after auth succeeds."""
         response = test_client.get("/api/backup/logs/99999/download", headers=admin_headers)
 
-        # Token is checked before job existence
-        assert response.status_code == 401
+        assert response.status_code == 404
 
     def test_download_backup_logs_no_file(self, test_client: TestClient, admin_headers, test_db):
-        """Test downloading logs when file doesn't exist returns 401 (token required)"""
+        """Test downloading logs with no log content returns 404."""
         job = BackupJob(
             repository="/test/repo",
             status="completed",
@@ -383,15 +381,43 @@ class TestBackupLogs:
 
         response = test_client.get(f"/api/backup/logs/{job.id}/download", headers=admin_headers)
 
-        # Token is checked first
-        assert response.status_code == 401
+        assert response.status_code == 404
 
     def test_download_backup_logs_unauthorized(self, test_client: TestClient):
         """Test downloading logs without token returns 401"""
         response = test_client.get("/api/backup/logs/1/download")
 
-        # Download endpoint requires token query parameter
         assert response.status_code == 401
+
+    def test_download_backup_logs_proxy_auth_without_token(
+        self,
+        test_client: TestClient,
+        test_db,
+        monkeypatch
+    ):
+        """Proxy-auth mode should not require a JWT query token for log downloads."""
+        from app import config
+
+        monkeypatch.setattr(config.settings, "disable_authentication", True)
+
+        job = BackupJob(
+            repository="/test/repo",
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            logs="proxy mode logs"
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(
+            f"/api/backup/logs/{job.id}/download",
+            headers={"X-Forwarded-User": "proxyuser"}
+        )
+
+        assert response.status_code == 200
+        assert "text/plain" in response.headers.get("content-type", "")
 
     def test_stream_backup_logs_success(self, test_client: TestClient, admin_headers, test_db):
         """Test streaming backup logs returns 200"""

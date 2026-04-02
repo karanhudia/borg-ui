@@ -68,31 +68,12 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    # Extract token from Authorization header
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise credentials_exception
 
     token = auth_header.split(" ")[1]
-
-    try:
-        username = verify_token(token)
-        if username is None:
-            raise credentials_exception
-
-        user = db.query(User).filter(User.username == username).first()
-        if user is None:
-            raise credentials_exception
-
-        if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={"key": "backend.errors.auth.inactiveUser"}
-            )
-
-        return user
-    except JWTError:
-        raise credentials_exception
+    return _get_active_user_from_token(token, db, credentials_exception)
 
 
 async def get_current_user_proxy(
@@ -168,6 +149,55 @@ async def get_current_user_proxy(
     db.commit()
 
     return user
+
+
+def _get_active_user_from_token(
+    token: Optional[str],
+    db: Session,
+    invalid_exception: HTTPException
+) -> User:
+    """Resolve an active user from a JWT token."""
+    if not token:
+        raise invalid_exception
+
+    username = verify_token(token)
+    if username is None:
+        raise invalid_exception
+
+    user = db.query(User).filter(User.username == username).first()
+    if user is None:
+        raise invalid_exception
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"key": "backend.errors.auth.inactiveUser"}
+        )
+
+    return user
+
+
+async def get_current_download_user(
+    request: Request,
+    db: Session = Depends(get_db)
+) -> User:
+    """Authenticate download endpoints for both JWT and proxy-auth modes."""
+    if settings.disable_authentication:
+        return await get_current_user_proxy(request, db)
+
+    auth_header = request.headers.get("Authorization")
+    token: Optional[str] = None
+
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+    else:
+        token = request.query_params.get("token")
+
+    invalid_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail={"key": "backend.errors.auth.invalidOrExpiredToken"},
+    )
+    return _get_active_user_from_token(token, db, invalid_exception)
 
 async def get_current_active_user(
     request: Request,

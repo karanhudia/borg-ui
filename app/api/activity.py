@@ -19,6 +19,7 @@ import tempfile
 from app.database.database import get_db
 from app.database.models import BackupJob, RestoreJob, CheckJob, CompactJob, PruneJob, PackageInstallJob, Repository, InstalledPackage, ScheduledJob
 from app.api.auth import get_current_user, User
+from app.core.security import get_current_download_user
 from app.utils.datetime_utils import serialize_datetime
 from app.services.backup_service import backup_service
 
@@ -469,42 +470,10 @@ async def get_job_logs(
 async def download_job_logs(
     job_type: str,
     job_id: int,
-    token: str = None,
+    current_user: User = Depends(get_current_download_user),
     db: Session = Depends(get_db)
 ):
     """Download logs for a specific job as a file."""
-    # Handle authentication from query parameter (for download links)
-    from app.core.security import verify_token
-    from app.database.models import User as UserModel
-
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"key": "backend.errors.auth.authTokenRequired"}
-        )
-
-    try:
-        username = verify_token(token)
-        if not username:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={"key": "backend.errors.auth.invalidToken"}
-            )
-
-        # Get user from database
-        current_user = db.query(UserModel).filter(UserModel.username == username).first()
-        if not current_user or not current_user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={"key": "backend.errors.auth.userNotFound"}
-            )
-    except Exception as e:
-        logger.error("Failed to verify token for log download", error=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"key": "backend.errors.auth.invalidAuthToken"}
-        )
-
     # Map job type to model
     job_models = {
         'backup': BackupJob,

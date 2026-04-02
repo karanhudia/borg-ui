@@ -16,6 +16,7 @@ import DeleteJobDialog from './DeleteJobDialog'
 import LockErrorDialog from './LockErrorDialog'
 import { repositoriesAPI } from '../services/api'
 import { BASE_PATH } from '@/utils/basePath'
+import { buildDownloadUrl } from '@/utils/downloadUrl'
 
 interface EmptyState {
   icon?: React.ReactNode
@@ -183,13 +184,7 @@ export const BackupJobsTable = <T extends Job = Job>({
     } else {
       // Default implementation: use activity API endpoint
       const jobType = job.type || 'backup'
-      const token = localStorage.getItem('access_token')
-      if (!token) {
-        toast.error(t('backupJobsTable.toasts.authRequired'))
-        return
-      }
-
-      const url = `${BASE_PATH}/api/activity/${jobType}/${job.id}/logs/download?token=${token}`
+      const url = buildDownloadUrl(`/activity/${jobType}/${job.id}/logs/download`)
       const a = document.createElement('a')
       a.href = url
       a.download = `${jobType}-${job.id}-logs.txt`

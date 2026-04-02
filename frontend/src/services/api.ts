@@ -1,7 +1,6 @@
 import axios from 'axios'
 import { BASE_PATH } from '@/utils/basePath'
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || `${BASE_PATH}/api`
+import { API_BASE_URL, buildDownloadUrl } from '@/utils/downloadUrl'
 
 // Track if proxy auth is enabled (set during auth config check)
 let proxyAuthMode = false
@@ -168,8 +167,7 @@ export const backupAPI = {
   cancelJob: (jobId: string) => api.post(`/backup/cancel/${jobId}`),
   // Download logs as file (only for failed/cancelled backups)
   downloadLogs: (jobId: string) => {
-    const token = localStorage.getItem('access_token')
-    window.open(`${API_BASE_URL}/backup/logs/${jobId}/download?token=${token}`, '_blank')
+    window.open(buildDownloadUrl(`/backup/logs/${jobId}/download`), '_blank')
   },
 }
 
@@ -184,12 +182,12 @@ export const archivesAPI = {
       `/archives/${encodeURIComponent(archive)}?repository=${encodeURIComponent(repository)}`
     ),
   downloadFile: (repository: string, archive: string, filePath: string) => {
-    const token = localStorage.getItem('access_token')
-    const encodedFilePath = encodeURIComponent(filePath)
-    const encodedRepository = encodeURIComponent(repository)
-    const encodedArchive = encodeURIComponent(archive)
     window.open(
-      `${API_BASE_URL}/archives/download?repository=${encodedRepository}&archive=${encodedArchive}&file_path=${encodedFilePath}&token=${token}`,
+      buildDownloadUrl('/archives/download', {
+        repository,
+        archive,
+        file_path: filePath,
+      }),
       '_blank'
     )
   },
@@ -400,13 +398,8 @@ export const activityAPI = {
   list: (params?: ApiData) => api.get('/activity/recent', { params }),
   getLogs: (jobType: string, jobId: number, offset: number = 0) =>
     api.get(`/activity/${jobType}/${jobId}/logs`, { params: { offset } }),
-  downloadLogs: (jobType: string, jobId: number) => {
-    const token = localStorage.getItem('access_token')
-    window.open(
-      `${API_BASE_URL}/activity/${jobType}/${jobId}/logs/download?token=${token}`,
-      '_blank'
-    )
-  },
+  downloadLogs: (jobType: string, jobId: number) =>
+    window.open(buildDownloadUrl(`/activity/${jobType}/${jobId}/logs/download`), '_blank'),
 }
 
 export const configExportImportAPI = {

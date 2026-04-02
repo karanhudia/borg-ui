@@ -13,6 +13,7 @@ import axios from 'axios'
 import { BASE_PATH } from '@/utils/basePath'
 import type { Repository } from '@/types'
 import { isV2Repo } from '@/utils/repoCapabilities'
+import { buildDownloadUrl } from '@/utils/downloadUrl'
 
 // Re-use the same axios instance (with auth interceptors) from api.ts
 // by importing only the create pattern — auth token injection is handled
@@ -128,15 +129,12 @@ export class BorgApiClient {
     return httpClient.get(`${this.v}/archives/delete-jobs/${jobId}`)
   }
 
-  getDownloadUrl(archiveId: string, filePath: string, token: string) {
-    const base = import.meta.env.VITE_API_URL || `${BASE_PATH}/api`
-    const params = new URLSearchParams({
-      repository: String(this.repoId),
+  getDownloadUrl(archiveId: string, filePath: string) {
+    return buildDownloadUrl(`${this.v}/archives/download`, {
+      repository: this.repoId,
       archive: archiveId,
       file_path: filePath,
-      token,
     })
-    return `${base}${this.v}/archives/download?${params}`
   }
 
   // ── Backup operations ────────────────────────────────────────────────────
