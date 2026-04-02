@@ -24,8 +24,8 @@ trap 'echo "Stopping dev environment..."; docker-compose -p borg-ui-dev -f docke
 # Create local data directory (mounted into Docker as /data)
 mkdir -p .local-data/ssh_keys .local-data/logs .local-data/borg_keys
 
-# Start dev Redis + backend in Docker with hot-reload
-echo "Starting dev Redis and backend (Docker, port $DEV_PORT)..."
+# Start dev backend in Docker with hot-reload
+echo "Starting dev backend (Docker, port $DEV_PORT)..."
 DEV_PORT=$DEV_PORT docker-compose -p borg-ui-dev -f docker-compose.dev.yml up -d
 
 # Wait for backend to be ready
@@ -43,7 +43,6 @@ echo "=========================================="
 echo "  Frontend: http://localhost:7879"
 echo "  Backend:  http://localhost:$DEV_PORT  (dev)"
 echo "  Prod:     http://localhost:8082        (if running)"
-echo "  Redis:    localhost:6380               (dev)"
 echo "=========================================="
 echo ""
 echo "Backend runs in Docker (borg1 + borg2 available)"
