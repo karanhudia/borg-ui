@@ -1,33 +1,12 @@
 import React, { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
-import {
-  Box,
-  Card,
-  Typography,
-  Button,
-  TextField,
-  CircularProgress,
-  Stack,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Chip,
-  FormControlLabel,
-  Checkbox,
-  Tooltip,
-} from '@mui/material'
-import { alpha } from '@mui/material/styles'
-import { Users, Trash2, Plus, Edit, Key, AlertCircle, Moon, Sun, Monitor } from 'lucide-react'
+import { Box } from '@mui/material'
 import { settingsAPI } from '../services/api'
-import { toast } from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
 import { useAnalytics } from '../hooks/useAnalytics'
-import { usePlan } from '../hooks/usePlan'
-import { useTheme } from '../context/ThemeContext'
-import { availableThemes } from '../theme'
+import AccountTab from '../components/AccountTab'
+import AppearanceTab from '../components/AppearanceTab'
 import NotificationsTab from '../components/NotificationsTab'
 import PreferencesTab from '../components/PreferencesTab'
 import PackagesTab from '../components/PackagesTab'
@@ -38,29 +17,14 @@ import MountsManagementTab from '../components/MountsManagementTab'
 import SystemSettingsTab from '../components/SystemSettingsTab'
 import BetaFeaturesTab from '../components/BetaFeaturesTab'
 import MqttSettingsTab from '../components/MqttSettingsTab'
+import UsersTab from '../components/UsersTab'
+import SettingsTabContent from '../components/SettingsTabContent'
 import Scripts from './Scripts'
 import Activity from './Activity'
-import { formatDateShort } from '../utils/dateUtils'
-import { translateBackendKey } from '../utils/translateBackendKey'
-import DataTable, { Column, ActionButton } from '../components/DataTable'
-
-interface UserType {
-  id: number
-  username: string
-  email: string
-  is_active: boolean
-  is_admin: boolean
-  created_at: string
-  last_login: string | null
-}
 
 const Settings: React.FC = () => {
-  const { t } = useTranslation()
-  const { user } = useAuth()
+  const { isAdmin, canMutate } = useAuth()
   const { trackSettings, EventAction } = useAnalytics()
-  const { can } = usePlan()
-  const { mode, effectiveMode, setTheme } = useTheme()
-  const queryClient = useQueryClient()
   const { tab } = useParams<{ tab?: string }>()
   const { data: systemSettingsData } = useQuery({
     queryKey: ['systemSettings'],
@@ -75,7 +39,7 @@ const Settings: React.FC = () => {
   // Get tab order based on user role
   const getTabOrder = React.useCallback(() => {
     const baseTabs = ['account', 'appearance', 'preferences', 'notifications']
-    if (user?.is_admin) {
+    if (isAdmin) {
       return [
         ...baseTabs,
         'system',
@@ -91,8 +55,8 @@ const Settings: React.FC = () => {
         'activity',
       ]
     }
-    return [...baseTabs, 'mounts', 'scripts', 'export', 'activity']
-  }, [user?.is_admin, mqttBetaEnabled])
+    return [...baseTabs, 'mounts', ...(canMutate ? ['scripts', 'export'] : []), 'activity']
+  }, [isAdmin, canMutate, mqttBetaEnabled])
 
   const tabOrder = React.useMemo(() => getTabOrder(), [getTabOrder])
 
@@ -112,9 +76,6 @@ const Settings: React.FC = () => {
     return tabOrder[activeTab] ?? tabOrder[0]
   }, [activeTab, tabOrder])
 
-  const appearanceAccent =
-    effectiveMode === 'dark' ? '#60a5fa' : mode === 'auto' ? '#0891b2' : '#2563eb'
-
   // Update active tab when URL changes
   useEffect(() => {
     setActiveTab(getTabIndexFromPath(tab))
@@ -125,931 +86,109 @@ const Settings: React.FC = () => {
       trackSettings(EventAction.VIEW, { section: 'settings', tab: currentTabId })
     }
   }, [currentTabId, trackSettings, EventAction])
-  const [showCreateUser, setShowCreateUser] = useState(false)
-  const [editingUser, setEditingUser] = useState<UserType | null>(null)
-  const [showPasswordModal, setShowPasswordModal] = useState(false)
-  const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
-  const [deleteConfirmUser, setDeleteConfirmUser] = useState<UserType | null>(null)
-  const [changePasswordForm, setChangePasswordForm] = useState({
-    current_password: '',
-    new_password: '',
-    confirm_password: '',
-  })
-
-  // Change password mutation (for current user)
-  const changePasswordMutation = useMutation({
-    mutationFn: (passwordData: { current_password: string; new_password: string }) =>
-      settingsAPI.changePassword(passwordData),
-    onSuccess: () => {
-      toast.success(t('settings.toasts.passwordChanged'))
-      setChangePasswordForm({ current_password: '', new_password: '', confirm_password: '' })
-      trackSettings(EventAction.EDIT, { section: 'account', operation: 'change_password' })
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onError: (error: any) => {
-      toast.error(
-        translateBackendKey(error.response?.data?.detail) ||
-          t('settings.toasts.failedToChangePassword')
-      )
-    },
-  })
-
-  // Users
-  const { data: usersData, isLoading: loadingUsers } = useQuery({
-    queryKey: ['users'],
-    queryFn: settingsAPI.getUsers,
-    enabled: user?.is_admin === true,
-  })
-
-  const createUserMutation = useMutation({
-    mutationFn: settingsAPI.createUser,
-    onSuccess: () => {
-      toast.success(t('settings.toasts.userCreated'))
-      queryClient.invalidateQueries({ queryKey: ['users'] })
-      setShowCreateUser(false)
-      trackSettings(EventAction.CREATE, {
-        section: 'users',
-        role: userForm.is_admin ? 'admin' : 'user',
-      })
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onError: (error: any) => {
-      toast.error(
-        translateBackendKey(error.response?.data?.detail) || t('settings.toasts.failedToCreateUser')
-      )
-    },
-  })
-
-  const updateUserMutation = useMutation({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mutationFn: ({ userId, userData }: { userId: number; userData: any }) =>
-      settingsAPI.updateUser(userId, userData),
-    onSuccess: () => {
-      toast.success(t('settings.toasts.userUpdated'))
-      queryClient.invalidateQueries({ queryKey: ['users'] })
-      setEditingUser(null)
-      trackSettings(EventAction.EDIT, {
-        section: 'users',
-        role: userForm.is_admin ? 'admin' : 'user',
-      })
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onError: (error: any) => {
-      toast.error(
-        translateBackendKey(error.response?.data?.detail) || t('settings.toasts.failedToUpdateUser')
-      )
-    },
-  })
-
-  const deleteUserMutation = useMutation({
-    mutationFn: settingsAPI.deleteUser,
-    onSuccess: () => {
-      toast.success(t('settings.toasts.userDeleted'))
-      queryClient.invalidateQueries({ queryKey: ['users'] })
-      setDeleteConfirmUser(null)
-      trackSettings(EventAction.DELETE, { section: 'users' })
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onError: (error: any) => {
-      toast.error(
-        translateBackendKey(error.response?.data?.detail) || t('settings.toasts.failedToDeleteUser')
-      )
-    },
-  })
-
-  const resetPasswordMutation = useMutation({
-    mutationFn: ({ userId, newPassword }: { userId: number; newPassword: string }) =>
-      settingsAPI.resetUserPassword(userId, newPassword),
-    onSuccess: () => {
-      toast.success(t('settings.toasts.passwordReset'))
-      setShowPasswordModal(false)
-      setSelectedUserId(null)
-      trackSettings(EventAction.EDIT, { section: 'users', operation: 'reset_password' })
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onError: (error: any) => {
-      toast.error(
-        translateBackendKey(error.response?.data?.detail) ||
-          t('settings.toasts.failedToResetPassword')
-      )
-    },
-  })
-
-  // Form states
-  const [userForm, setUserForm] = useState({
-    username: '',
-    email: '',
-    password: '',
-    is_admin: false,
-  })
-  const [passwordForm, setPasswordForm] = useState({
-    new_password: '',
-  })
-
-  const handleCreateUser = (e: React.FormEvent) => {
-    e.preventDefault()
-    createUserMutation.mutate(userForm)
-  }
-
-  const handleUpdateUser = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (editingUser) {
-      updateUserMutation.mutate({
-        userId: editingUser.id,
-        userData: userForm,
-      })
-    }
-  }
-
-  const handleResetPassword = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (selectedUserId) {
-      resetPasswordMutation.mutate({
-        userId: selectedUserId,
-        newPassword: passwordForm.new_password,
-      })
-    }
-  }
-
-  const handleDeleteUser = () => {
-    if (deleteConfirmUser) {
-      deleteUserMutation.mutate(deleteConfirmUser.id)
-    }
-  }
-
-  const openPasswordModal = (userId: number) => {
-    setSelectedUserId(userId)
-    setShowPasswordModal(true)
-    setPasswordForm({ new_password: '' })
-  }
-
-  const openEditUser = (user: UserType) => {
-    setEditingUser(user)
-    setUserForm({
-      username: user.username,
-      email: user.email,
-      password: '',
-      is_admin: user.is_admin,
-    })
-  }
-
-  const openCreateUser = () => {
-    setShowCreateUser(true)
-    setUserForm({
-      username: '',
-      email: '',
-      password: '',
-      is_admin: false,
-    })
-  }
-
-  // Column definitions for Users table
-  const userColumns: Column<UserType>[] = [
-    {
-      id: 'user',
-      label: t('settings.users.table.user'),
-      render: (user) => (
-        <Box>
-          <Typography variant="body2" fontWeight={500}>
-            {user.username}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {user.email}
-          </Typography>
-        </Box>
-      ),
-    },
-    {
-      id: 'status',
-      label: t('settings.users.table.status'),
-      render: (user) => (
-        <Chip
-          label={
-            user.is_active ? t('settings.users.status.active') : t('settings.users.status.inactive')
-          }
-          color={user.is_active ? 'success' : 'error'}
-          size="small"
-        />
-      ),
-    },
-    {
-      id: 'role',
-      label: t('settings.users.table.role'),
-      render: (user) => (
-        <Chip
-          label={user.is_admin ? t('settings.users.roles.admin') : t('settings.users.roles.user')}
-          color={user.is_admin ? 'secondary' : 'default'}
-          size="small"
-        />
-      ),
-    },
-    {
-      id: 'created_at',
-      label: t('settings.users.table.created'),
-      render: (user) => <Typography variant="body2">{formatDateShort(user.created_at)}</Typography>,
-    },
-    {
-      id: 'last_login',
-      label: t('settings.users.table.lastLogin'),
-      render: (user) => (
-        <Typography variant="body2" color="text.secondary">
-          {formatDateShort(user.last_login)}
-        </Typography>
-      ),
-    },
-  ]
-
-  // Action buttons for Users table
-  const userActions: ActionButton<UserType>[] = [
-    {
-      icon: <Edit size={16} />,
-      label: t('settings.users.actions.edit'),
-      onClick: openEditUser,
-      color: 'primary',
-      tooltip: t('settings.users.actions.edit'),
-    },
-    {
-      icon: <Key size={16} />,
-      label: t('settings.users.actions.resetPassword'),
-      onClick: (user) => openPasswordModal(user.id),
-      color: 'warning',
-      tooltip: t('settings.users.actions.resetPassword'),
-    },
-    {
-      icon: <Trash2 size={16} />,
-      label: t('settings.users.actions.delete'),
-      onClick: setDeleteConfirmUser,
-      color: 'error',
-      tooltip: t('settings.users.actions.delete'),
-    },
-  ]
 
   return (
     <Box>
-      {/* Content is controlled by sidebar navigation */}
-
-      {/* Profile Tab */}
+      {/* Account Tab */}
       {currentTabId === 'account' && (
-        <Box>
-          <Box>
-            <Typography variant="h6" fontWeight={600} gutterBottom>
-              {t('settings.password.title')}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              {t('settings.password.subtitle')}
-            </Typography>
-          </Box>
-          <Card sx={{ maxWidth: 600 }}>
-            <Box sx={{ p: 3 }}>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  if (changePasswordForm.new_password !== changePasswordForm.confirm_password) {
-                    toast.error(t('settings.toasts.passwordsDoNotMatch'))
-                    return
-                  }
-                  changePasswordMutation.mutate({
-                    current_password: changePasswordForm.current_password,
-                    new_password: changePasswordForm.new_password,
-                  })
-                }}
-              >
-                <Stack spacing={3}>
-                  <TextField
-                    label={t('settings.password.current')}
-                    type="password"
-                    value={changePasswordForm.current_password}
-                    onChange={(e) =>
-                      setChangePasswordForm({
-                        ...changePasswordForm,
-                        current_password: e.target.value,
-                      })
-                    }
-                    required
-                    fullWidth
-                  />
-
-                  <TextField
-                    label={t('settings.password.new')}
-                    type="password"
-                    value={changePasswordForm.new_password}
-                    onChange={(e) =>
-                      setChangePasswordForm({ ...changePasswordForm, new_password: e.target.value })
-                    }
-                    required
-                    fullWidth
-                  />
-
-                  <TextField
-                    label={t('settings.password.confirm')}
-                    type="password"
-                    value={changePasswordForm.confirm_password}
-                    onChange={(e) =>
-                      setChangePasswordForm({
-                        ...changePasswordForm,
-                        confirm_password: e.target.value,
-                      })
-                    }
-                    required
-                    fullWidth
-                    error={
-                      changePasswordForm.confirm_password !== '' &&
-                      changePasswordForm.new_password !== changePasswordForm.confirm_password
-                    }
-                    helperText={
-                      changePasswordForm.confirm_password !== '' &&
-                      changePasswordForm.new_password !== changePasswordForm.confirm_password
-                        ? t('settings.password.noMatch')
-                        : ''
-                    }
-                  />
-
-                  <Box>
-                    <Button
-                      type="submit"
-                      variant="contained"
-                      disabled={changePasswordMutation.isPending}
-                      startIcon={
-                        changePasswordMutation.isPending ? <CircularProgress size={16} /> : null
-                      }
-                    >
-                      {changePasswordMutation.isPending
-                        ? t('settings.password.submitting')
-                        : t('settings.password.submit')}
-                    </Button>
-                  </Box>
-                </Stack>
-              </form>
-            </Box>
-          </Card>
-        </Box>
+        <SettingsTabContent>
+          <AccountTab />
+        </SettingsTabContent>
       )}
 
       {/* Appearance Tab */}
-      {currentTabId === 'appearance' && (
-        <Box>
-          <Box>
-            <Typography variant="h6" fontWeight={600} gutterBottom>
-              {t('settings.appearance.title')}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              {t('settings.appearance.subtitle')}
-            </Typography>
-          </Box>
-          <Card sx={{ maxWidth: 600 }}>
-            <Box sx={{ p: 3 }}>
-              <Stack spacing={2.5}>
-                <Box
-                  sx={{
-                    p: 2.25,
-                    borderRadius: 3,
-                    background: (theme) =>
-                      theme.palette.mode === 'dark'
-                        ? `linear-gradient(135deg, ${alpha(appearanceAccent, 0.2)}, rgba(255,255,255,0.02))`
-                        : `linear-gradient(135deg, ${alpha(appearanceAccent, 0.12)}, rgba(255,255,255,0.9))`,
-                    border: `1px solid ${alpha(appearanceAccent, 0.2)}`,
-                  }}
-                >
-                  <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1.5 }}>
-                    <Box
-                      sx={{
-                        width: 42,
-                        height: 42,
-                        borderRadius: 2,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        bgcolor: alpha(appearanceAccent, 0.14),
-                        color: appearanceAccent,
-                      }}
-                    >
-                      {mode === 'auto' ? (
-                        <Monitor size={22} />
-                      ) : effectiveMode === 'dark' ? (
-                        <Moon size={22} />
-                      ) : (
-                        <Sun size={22} />
-                      )}
-                    </Box>
-                    <Box>
-                      <Typography variant="subtitle1" fontWeight={700}>
-                        {t('settings.appearance.theme')}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {t('settings.appearance.chooseTheme')}
-                      </Typography>
-                    </Box>
-                  </Stack>
-
-                  <Chip
-                    size="small"
-                    label={
-                      mode === 'auto'
-                        ? t('settings.appearance.autoStatus', {
-                            theme: t(`settings.appearance.themeOptions.${effectiveMode}`),
-                          })
-                        : t('settings.appearance.activeTheme', {
-                            theme: t(`settings.appearance.themeOptions.${mode}`),
-                          })
-                    }
-                    sx={{
-                      bgcolor: alpha(appearanceAccent, 0.12),
-                      color: appearanceAccent,
-                      border: `1px solid ${alpha(appearanceAccent, 0.24)}`,
-                      fontWeight: 600,
-                    }}
-                  />
-                </Box>
-
-                <Box
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
-                    gap: 1.5,
-                  }}
-                >
-                  {availableThemes.map((themeOption) => {
-                    const isSelected = mode === themeOption.id
-                    const Icon =
-                      themeOption.icon === 'Sun'
-                        ? Sun
-                        : themeOption.icon === 'Moon'
-                          ? Moon
-                          : Monitor
-                    const previewIsDark =
-                      themeOption.id === 'dark' ||
-                      (themeOption.id === 'auto' && effectiveMode === 'dark')
-
-                    return (
-                      <Box
-                        key={themeOption.id}
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`${t('settings.appearance.themeAriaLabel')}: ${t(themeOption.labelKey)}`}
-                        onClick={() => {
-                          const theme = themeOption.id as typeof mode
-                          setTheme(theme)
-                          trackSettings(EventAction.EDIT, {
-                            section: 'appearance',
-                            setting: 'theme',
-                            theme,
-                          })
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault()
-                            const theme = themeOption.id as typeof mode
-                            setTheme(theme)
-                            trackSettings(EventAction.EDIT, {
-                              section: 'appearance',
-                              setting: 'theme',
-                              theme,
-                            })
-                          }
-                        }}
-                        sx={{
-                          p: 1.5,
-                          borderRadius: 3,
-                          border: '1px solid',
-                          borderColor: isSelected ? appearanceAccent : 'divider',
-                          bgcolor: isSelected ? alpha(appearanceAccent, 0.08) : 'background.paper',
-                          cursor: 'pointer',
-                          transition: 'all 0.18s ease',
-                          boxShadow: isSelected
-                            ? `0 10px 24px ${alpha(appearanceAccent, 0.16)}`
-                            : 'none',
-                          '&:hover': {
-                            borderColor: isSelected ? appearanceAccent : 'text.primary',
-                            transform: 'translateY(-1px)',
-                          },
-                          '&:focus-visible': {
-                            outline: `2px solid ${appearanceAccent}`,
-                            outlineOffset: 2,
-                          },
-                        }}
-                      >
-                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.25 }}>
-                          <Box
-                            sx={{
-                              width: 32,
-                              height: 32,
-                              borderRadius: 1.5,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              bgcolor: previewIsDark ? '#0f172a' : alpha(appearanceAccent, 0.12),
-                              color: previewIsDark ? '#cbd5e1' : appearanceAccent,
-                              border: `1px solid ${previewIsDark ? '#334155' : alpha(appearanceAccent, 0.18)}`,
-                            }}
-                          >
-                            <Icon size={16} />
-                          </Box>
-                          <Box sx={{ minWidth: 0 }}>
-                            <Typography variant="subtitle2" fontWeight={700}>
-                              {t(themeOption.labelKey)}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {t(`settings.appearance.themeDescriptions.${themeOption.id}`)}
-                            </Typography>
-                          </Box>
-                        </Stack>
-
-                        <Box
-                          sx={{
-                            p: 1,
-                            borderRadius: 2,
-                            bgcolor: previewIsDark ? '#0f172a' : '#f8fafc',
-                            border: `1px solid ${previewIsDark ? '#1e293b' : '#e2e8f0'}`,
-                          }}
-                        >
-                          <Stack direction="row" spacing={0.75} sx={{ mb: 0.9 }}>
-                            <Box
-                              sx={{
-                                width: 24,
-                                height: 54,
-                                borderRadius: 1.5,
-                                bgcolor: previewIsDark ? '#111827' : '#ffffff',
-                                border: `1px solid ${previewIsDark ? '#1f2937' : '#e2e8f0'}`,
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                gap: 0.4,
-                                py: 0.75,
-                              }}
-                            >
-                              <Box
-                                sx={{
-                                  width: 10,
-                                  height: 10,
-                                  borderRadius: '50%',
-                                  bgcolor: previewIsDark
-                                    ? alpha('#60a5fa', 0.75)
-                                    : alpha(appearanceAccent, 0.75),
-                                }}
-                              />
-                              <Box
-                                sx={{
-                                  width: 8,
-                                  height: 8,
-                                  borderRadius: 1,
-                                  bgcolor: previewIsDark ? '#334155' : '#dbe4ee',
-                                }}
-                              />
-                              <Box
-                                sx={{
-                                  width: 8,
-                                  height: 8,
-                                  borderRadius: 1,
-                                  bgcolor: previewIsDark ? '#334155' : '#dbe4ee',
-                                }}
-                              />
-                            </Box>
-
-                            <Box
-                              sx={{
-                                flex: 1,
-                                minWidth: 0,
-                              }}
-                            >
-                              <Box
-                                sx={{
-                                  height: 12,
-                                  borderRadius: 999,
-                                  mb: 0.8,
-                                  width: '46%',
-                                  bgcolor: previewIsDark ? '#334155' : '#cbd5e1',
-                                }}
-                              />
-
-                              <Stack direction="row" spacing={0.75} sx={{ mb: 0.75 }}>
-                                <Box
-                                  sx={{
-                                    flex: 1.1,
-                                    height: 24,
-                                    borderRadius: 1.5,
-                                    bgcolor: previewIsDark ? '#111827' : '#ffffff',
-                                    border: `1px solid ${previewIsDark ? '#1f2937' : '#dbe4ee'}`,
-                                    boxShadow: previewIsDark
-                                      ? 'none'
-                                      : '0 1px 2px rgba(15, 23, 42, 0.06)',
-                                  }}
-                                />
-                                <Box
-                                  sx={{
-                                    width: 20,
-                                    height: 24,
-                                    borderRadius: 1.5,
-                                    bgcolor: previewIsDark
-                                      ? alpha('#60a5fa', 0.18)
-                                      : alpha(appearanceAccent, 0.14),
-                                    border: `1px solid ${
-                                      previewIsDark
-                                        ? alpha('#60a5fa', 0.16)
-                                        : alpha(appearanceAccent, 0.12)
-                                    }`,
-                                  }}
-                                />
-                              </Stack>
-
-                              <Stack direction="row" spacing={0.6}>
-                                {[0, 1, 2].map((index) => (
-                                  <Box
-                                    key={index}
-                                    sx={{
-                                      flex: 1,
-                                      height: index === 1 ? 16 : 14,
-                                      borderRadius: 1.25,
-                                      bgcolor: previewIsDark ? '#172033' : '#ffffff',
-                                      border: `1px solid ${previewIsDark ? '#1f2937' : '#dbe4ee'}`,
-                                    }}
-                                  />
-                                ))}
-                              </Stack>
-                            </Box>
-                          </Stack>
-
-                          <Box
-                            sx={{
-                              height: 18,
-                              borderRadius: 1.5,
-                              bgcolor: previewIsDark ? '#111827' : '#ffffff',
-                              border: `1px solid ${previewIsDark ? '#1f2937' : '#dbe4ee'}`,
-                              display: 'flex',
-                              alignItems: 'center',
-                              px: 0.9,
-                              gap: 0.5,
-                            }}
-                          >
-                            <Box
-                              sx={{
-                                width: 16,
-                                height: 16,
-                                borderRadius: '50%',
-                                bgcolor: previewIsDark
-                                  ? alpha('#60a5fa', 0.22)
-                                  : alpha(appearanceAccent, 0.18),
-                              }}
-                            />
-                            <Box
-                              sx={{
-                                height: 6,
-                                width: '42%',
-                                borderRadius: 999,
-                                bgcolor: previewIsDark ? '#334155' : '#cbd5e1',
-                              }}
-                            />
-                          </Box>
-                        </Box>
-                      </Box>
-                    )
-                  })}
-                </Box>
-              </Stack>
-            </Box>
-          </Card>
-        </Box>
-      )}
+      {currentTabId === 'appearance' && <AppearanceTab />}
 
       {/* Preferences Tab */}
-      {currentTabId === 'preferences' && <PreferencesTab />}
+      {currentTabId === 'preferences' && (
+        <SettingsTabContent>
+          <PreferencesTab />
+        </SettingsTabContent>
+      )}
 
       {/* Notifications Tab */}
-      {currentTabId === 'notifications' && <NotificationsTab />}
+      {currentTabId === 'notifications' && (
+        <SettingsTabContent>
+          <NotificationsTab />
+        </SettingsTabContent>
+      )}
 
       {/* System Settings Tab - Admin Only */}
-      {currentTabId === 'system' && user?.is_admin && <SystemSettingsTab />}
+      {currentTabId === 'system' && isAdmin && (
+        <SettingsTabContent>
+          <SystemSettingsTab />
+        </SettingsTabContent>
+      )}
 
       {/* MQTT Settings Tab - Admin Only */}
-      {currentTabId === 'mqtt' && user?.is_admin && mqttBetaEnabled && <MqttSettingsTab />}
+      {currentTabId === 'mqtt' && isAdmin && mqttBetaEnabled && (
+        <SettingsTabContent>
+          <MqttSettingsTab />
+        </SettingsTabContent>
+      )}
 
       {/* Beta Features Tab - Admin Only */}
-      {currentTabId === 'beta' && user?.is_admin && <BetaFeaturesTab />}
+      {currentTabId === 'beta' && isAdmin && (
+        <SettingsTabContent>
+          <BetaFeaturesTab />
+        </SettingsTabContent>
+      )}
 
       {/* Cache Management Tab - Admin Only */}
-      {currentTabId === 'cache' && user?.is_admin && <CacheManagementTab />}
+      {currentTabId === 'cache' && isAdmin && (
+        <SettingsTabContent>
+          <CacheManagementTab />
+        </SettingsTabContent>
+      )}
 
       {/* Log Management Tab - Admin Only */}
-      {currentTabId === 'logs' && user?.is_admin && <LogManagementTab />}
+      {currentTabId === 'logs' && isAdmin && (
+        <SettingsTabContent>
+          <LogManagementTab />
+        </SettingsTabContent>
+      )}
 
       {/* Mounts Management Tab */}
-      {currentTabId === 'mounts' && <MountsManagementTab />}
+      {currentTabId === 'mounts' && (
+        <SettingsTabContent>
+          <MountsManagementTab />
+        </SettingsTabContent>
+      )}
 
       {/* System Packages Tab - Admin Only */}
-      {currentTabId === 'packages' && user?.is_admin && <PackagesTab />}
+      {currentTabId === 'packages' && isAdmin && (
+        <SettingsTabContent>
+          <PackagesTab />
+        </SettingsTabContent>
+      )}
 
       {/* Scripts Tab */}
-      {currentTabId === 'scripts' && <Scripts />}
+      {currentTabId === 'scripts' && (
+        <SettingsTabContent>
+          <Scripts />
+        </SettingsTabContent>
+      )}
 
       {/* Export/Import Tab */}
-      {currentTabId === 'export' && <ExportImportTab />}
+      {currentTabId === 'export' && (
+        <SettingsTabContent>
+          <ExportImportTab />
+        </SettingsTabContent>
+      )}
 
       {/* User Management Tab - Admin Only */}
-      {currentTabId === 'users' && user?.is_admin && (
-        <Box>
-          <Box
-            sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}
-          >
-            <Typography variant="h6" fontWeight={600}>
-              {t('settings.users.title')}
-            </Typography>
-            <Tooltip title={!can('multi_user') ? t('settings.users.planCaption') : ''} arrow>
-              <span>
-                <Button
-                  variant="contained"
-                  startIcon={<Plus size={18} />}
-                  onClick={openCreateUser}
-                  disabled={!can('multi_user')}
-                >
-                  {t('settings.users.addUser')}
-                </Button>
-              </span>
-            </Tooltip>
-          </Box>
-
-          <DataTable
-            data={usersData?.data?.users || []}
-            columns={userColumns}
-            actions={userActions}
-            getRowKey={(user) => user.id}
-            loading={loadingUsers}
-            emptyState={{
-              icon: <Users size={48} />,
-              title: t('settings.users.emptyState.title'),
-              description: t('settings.users.emptyState.description'),
-            }}
-            variant="outlined"
-          />
-        </Box>
+      {currentTabId === 'users' && isAdmin && (
+        <SettingsTabContent>
+          <UsersTab />
+        </SettingsTabContent>
       )}
 
       {/* Activity Tab */}
-      {currentTabId === 'activity' && <Activity />}
-
-      {/* Create/Edit User Modal */}
-      <Dialog
-        open={showCreateUser || !!editingUser}
-        onClose={() => {
-          setShowCreateUser(false)
-          setEditingUser(null)
-        }}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>
-          {editingUser
-            ? t('settings.users.editDialog.title')
-            : t('settings.users.createDialog.title')}
-        </DialogTitle>
-        <form onSubmit={editingUser ? handleUpdateUser : handleCreateUser}>
-          <DialogContent>
-            <Stack spacing={3}>
-              <TextField
-                label={t('settings.users.fields.username')}
-                value={userForm.username}
-                onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
-                required
-                fullWidth
-              />
-
-              <TextField
-                label={t('settings.users.fields.email')}
-                type="email"
-                value={userForm.email}
-                onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
-                required
-                fullWidth
-              />
-
-              {!editingUser && (
-                <TextField
-                  label={t('settings.users.fields.password')}
-                  type="password"
-                  value={userForm.password}
-                  onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
-                  required
-                  fullWidth
-                />
-              )}
-
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={userForm.is_admin}
-                    onChange={(e) => setUserForm({ ...userForm, is_admin: e.target.checked })}
-                  />
-                }
-                label={t('settings.users.fields.isAdmin')}
-              />
-            </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button
-              onClick={() => {
-                setShowCreateUser(false)
-                setEditingUser(null)
-              }}
-            >
-              {t('settings.users.buttons.cancel')}
-            </Button>
-            <Button type="submit" variant="contained">
-              {editingUser
-                ? t('settings.users.buttons.update')
-                : t('settings.users.buttons.create')}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
-
-      {/* Password Reset Modal */}
-      <Dialog
-        open={showPasswordModal}
-        onClose={() => {
-          setShowPasswordModal(false)
-          setSelectedUserId(null)
-        }}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>{t('settings.users.resetPasswordDialog.title')}</DialogTitle>
-        <form onSubmit={handleResetPassword}>
-          <DialogContent>
-            <TextField
-              label={t('settings.password.new')}
-              type="password"
-              value={passwordForm.new_password}
-              onChange={(e) => setPasswordForm({ new_password: e.target.value })}
-              required
-              fullWidth
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button
-              onClick={() => {
-                setShowPasswordModal(false)
-                setSelectedUserId(null)
-              }}
-            >
-              {t('settings.users.buttons.cancel')}
-            </Button>
-            <Button type="submit" variant="contained">
-              {t('settings.users.actions.resetPassword')}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
-
-      {/* Delete User Confirmation Dialog */}
-      <Dialog
-        open={!!deleteConfirmUser}
-        onClose={() => setDeleteConfirmUser(null)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>
-          <Stack direction="row" spacing={2} alignItems="center">
-            <Box
-              sx={{
-                width: 48,
-                height: 48,
-                borderRadius: '50%',
-                backgroundColor: 'error.lighter',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <AlertCircle size={24} color="#d32f2f" />
-            </Box>
-            <Typography variant="h6" fontWeight={600}>
-              {t('settings.users.deleteDialog.title')}
-            </Typography>
-          </Stack>
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2">
-            {t('settings.users.deleteDialog.message', { username: deleteConfirmUser?.username })}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            {t('settings.users.deleteDialog.warning')}
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteConfirmUser(null)}>
-            {t('settings.users.buttons.cancel')}
-          </Button>
-          <Button
-            onClick={handleDeleteUser}
-            variant="contained"
-            color="error"
-            disabled={deleteUserMutation.isPending}
-            startIcon={deleteUserMutation.isPending ? <CircularProgress size={16} /> : null}
-          >
-            {deleteUserMutation.isPending
-              ? t('settings.users.deleteDialog.deleting')
-              : t('settings.users.deleteDialog.confirm')}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {currentTabId === 'activity' && (
+        <SettingsTabContent>
+          <Activity />
+        </SettingsTabContent>
+      )}
     </Box>
   )
 }
