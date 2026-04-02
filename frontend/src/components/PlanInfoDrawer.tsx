@@ -13,6 +13,19 @@ interface PlanInfoDrawerProps {
 }
 
 const UPGRADE_PLANS: Plan[] = ['pro', 'enterprise']
+const UPCOMING_FEATURES: Record<Plan, string[]> = {
+  community: [],
+  pro: [
+    'backup_reports',
+    'database_discovery',
+    'container_backups',
+    'alerting_monitoring',
+    'multi_repo_orchestration',
+    'multi_source_policies',
+    'rclone_destinations',
+  ],
+  enterprise: ['compliance_exports', 'centralized_management'],
+}
 
 export default function PlanInfoDrawer({ open, onClose, plan, features }: PlanInfoDrawerProps) {
   const { t } = useTranslation()
@@ -29,6 +42,7 @@ export default function PlanInfoDrawer({ open, onClose, plan, features }: PlanIn
   const visibleFeatures = Object.entries(features ?? {}).filter(
     ([, required]) => required === selectedPlan
   )
+  const upcomingFeatures = UPCOMING_FEATURES[selectedPlan]
 
   return (
     <Drawer
@@ -209,6 +223,92 @@ export default function PlanInfoDrawer({ open, onClose, plan, features }: PlanIn
                     }}
                   >
                     <Check size={10} style={{ color: selectedColor }} strokeWidth={3} />
+                  </Box>
+                  <Box>
+                    <Typography
+                      sx={{
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        color: 'text.primary',
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      {t(`plan.features.${key}.label`)}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: '0.7rem',
+                        color: 'text.secondary',
+                        lineHeight: 1.4,
+                        mt: 0.25,
+                      }}
+                    >
+                      {t(`plan.features.${key}.description`)}
+                    </Typography>
+                  </Box>
+                </Box>
+              ))}
+            </>
+          )}
+
+          {upcomingFeatures.length > 0 && (
+            <>
+              {visibleFeatures.length > 0 && <Divider sx={{ my: 2 }} />}
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  mb: 1.25,
+                }}
+              >
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontWeight: 700,
+                    fontSize: '0.6rem',
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    color: 'text.disabled',
+                  }}
+                >
+                  {t('plan.upcomingFeatures', { plan: PLAN_LABEL[selectedPlan] })}
+                </Typography>
+                <Chip
+                  icon={<Clock size={10} />}
+                  label={t('plan.comingSoon')}
+                  size="small"
+                  sx={{
+                    height: 18,
+                    fontSize: '0.6rem',
+                    fontWeight: 600,
+                    bgcolor: `${selectedColor}14`,
+                    color: selectedColor,
+                    border: '1px solid',
+                    borderColor: `${selectedColor}30`,
+                    '& .MuiChip-icon': { color: selectedColor, ml: 0.5 },
+                    '& .MuiChip-label': { px: 0.75 },
+                  }}
+                />
+              </Box>
+              {upcomingFeatures.map((key) => (
+                <Box key={key} sx={{ display: 'flex', gap: 1.25, mb: 1.5 }}>
+                  <Box
+                    sx={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: '4px',
+                      bgcolor: `${selectedColor}14`,
+                      border: '1px dashed',
+                      borderColor: `${selectedColor}45`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      mt: 0.125,
+                    }}
+                  >
+                    <Clock size={9} style={{ color: selectedColor }} strokeWidth={2.5} />
                   </Box>
                   <Box>
                     <Typography

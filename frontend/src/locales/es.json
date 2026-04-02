@@ -2832,14 +2832,65 @@
       "rbac": {
         "label": "Control de acceso basado en roles",
         "description": "Asigna roles y permisos granulares a cada cuenta de usuario"
+      },
+      "backup_reports": {
+        "label": "Scheduled backup reports",
+        "description": "Generate daily, weekly, and monthly backup summaries with status, size, and job insights"
+      },
+      "database_discovery": {
+        "label": "Database scanning and setup",
+        "description": "Scan the host for common databases and turn them into backup jobs with guided setup"
+      },
+      "container_backups": {
+        "label": "Container backup setup",
+        "description": "Make it easier to back up Docker containers and volumes, including Borg UI itself"
+      },
+      "alerting_monitoring": {
+        "label": "Advanced alerts and monitoring",
+        "description": "Expand health checks, failure alerts, and monitoring views for production backup workflows"
+      },
+      "multi_repo_orchestration": {
+        "label": "Multi-repository backups",
+        "description": "Manage and run backups across multiple repositories with less repetitive setup"
+      },
+      "multi_source_policies": {
+        "label": "Multi-source backups",
+        "description": "Back up multiple source locations in one job with cleaner scheduling and configuration"
+      },
+      "rclone_destinations": {
+        "label": "Rclone destinations",
+        "description": "Connect more cloud and remote storage targets through built-in rclone support"
+      },
+      "compliance_exports": {
+        "label": "Audit and compliance exports",
+        "description": "Export backup history, retention evidence, and operational records for reporting and reviews"
+      },
+      "centralized_management": {
+        "label": "Centralized backup management",
+        "description": "Oversee larger backup environments with stronger controls and a more consolidated workflow"
       }
     },
     "comingSoon": "Próximamente",
-    "planFeatures": "Funciones de {{plan}}"
+    "planFeatures": "Funciones de {{plan}}",
+    "upcomingFeatures": "Próximamente para {{plan}}"
   },
   "upgradePrompt": {
     "featureLabel": "Función de {{plan}}",
     "defaultMessage": "Esta función requiere el plan {{plan}}.",
     "requiresPlan": "Requiere el plan {{plan}}"
+  },
+  "announcements": {
+    "highlights": "What's new",
+    "viewDetails": "View details",
+    "remindLater": "Remind me later",
+    "gotIt": "Got it",
+    "types": {
+      "update_available": "Update available",
+      "release_highlight": "Release highlight",
+      "security_notice": "Security notice",
+      "maintenance_notice": "Maintenance notice",
+      "migration_notice": "Migration notice",
+      "custom_announcement": "Announcement"
+    }
   }
 }

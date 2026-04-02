@@ -1,12 +1,17 @@
 import { describe, it, expect, vi } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, fireEvent } from '@testing-library/react'
 import { renderWithProviders } from '../../test/test-utils'
 import SidebarVersionInfo from '../SidebarVersionInfo'
 
 vi.mock('../../hooks/usePlan', () => ({
   usePlan: () => ({
     plan: 'community',
-    features: {},
+    features: {
+      borg_v2: 'pro',
+      multi_user: 'pro',
+      extra_users: 'enterprise',
+      rbac: 'enterprise',
+    },
     isLoading: false,
     can: () => true,
   }),
@@ -54,5 +59,14 @@ describe('SidebarVersionInfo', () => {
       <SidebarVersionInfo systemInfo={{ ...fullSystemInfo, borg2_version: null }} />
     )
     expect(screen.queryByText('B2')).not.toBeInTheDocument()
+  })
+
+  it('opens the plan drawer and shows upcoming features', () => {
+    renderWithProviders(<SidebarVersionInfo systemInfo={fullSystemInfo} />)
+
+    fireEvent.click(screen.getByText('Community'))
+
+    expect(screen.getByText('Upcoming for Pro')).toBeInTheDocument()
+    expect(screen.getByText('Scheduled backup reports')).toBeInTheDocument()
   })
 })
