@@ -26,11 +26,17 @@ import { settingsAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { useAuthorization } from '../hooks/useAuthorization'
 import { usePlan } from '../hooks/usePlan'
 import { formatDateShort } from '../utils/dateUtils'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import DataTable, { Column, ActionButton } from './DataTable'
 import UserPermissionsPanel from './UserPermissionsPanel'
+
+function formatRoleLabel(role: string) {
+  if (!role) return ''
+  return role.charAt(0).toUpperCase() + role.slice(1)
+}
 
 interface UserType {
   id: number
@@ -39,6 +45,7 @@ interface UserType {
   email: string
   is_active: boolean
   role: string
+  all_repositories_role?: string | null
   created_at: string
   last_login: string | null
   // Legacy fields that may still appear in API responses
@@ -48,10 +55,52 @@ interface UserType {
 
 const UsersTab: React.FC = () => {
   const { t } = useTranslation()
-  const { isAdmin } = useAuth()
+  const { hasGlobalPermission } = useAuth()
+  const { roleHasGlobalPermission } = useAuthorization()
   const { trackSettings, EventAction } = useAnalytics()
   const { can } = usePlan()
   const queryClient = useQueryClient()
+  const canManageUsers = hasGlobalPermission('settings.users.manage')
+
+  const getRolePresentation = (role: string) => {
+    const isAdminRole = roleHasGlobalPermission(role, 'settings.users.manage')
+    const isOperatorRole = !isAdminRole && roleHasGlobalPermission(role, 'settings.mounts.manage')
+
+    if (isAdminRole) {
+      return {
+        label: t('settings.users.roles.admin'),
+        color: 'secondary' as const,
+        isAdminRole: true,
+        isOperatorRole: false,
+      }
+    }
+
+    if (isOperatorRole) {
+      return {
+        label: t('settings.users.roles.operator'),
+        color: 'info' as const,
+        isAdminRole: false,
+        isOperatorRole: true,
+      }
+    }
+
+    return {
+      label: t('settings.users.roles.viewer'),
+      color: 'default' as const,
+      isAdminRole: false,
+      isOperatorRole: false,
+    }
+  }
+
+  const getRepositoryAccessSummary = (user: UserType) => {
+    if (getRolePresentation(user.role).isAdminRole) {
+      return 'Admin role grants full access to all repositories.'
+    }
+    if (user.all_repositories_role) {
+      return `Default access is all repositories as ${formatRoleLabel(user.all_repositories_role)}. Switch to selected repositories only if you want to limit them.`
+    }
+    return 'This user is currently restricted to selected repositories only.'
+  }
 
   const [usersView, setUsersView] = useState<'directory' | 'access'>('directory')
   const [showCreateUser, setShowCreateUser] = useState(false)
@@ -75,13 +124,13 @@ const UsersTab: React.FC = () => {
   const { data: usersData, isLoading: loadingUsers } = useQuery({
     queryKey: ['users'],
     queryFn: settingsAPI.getUsers,
-    enabled: isAdmin,
+    enabled: canManageUsers,
   })
 
   const { data: repositoriesData } = useQuery({
     queryKey: ['repositories'],
     queryFn: repositoriesAPI.getRepositories,
-    enabled: isAdmin,
+    enabled: canManageUsers,
   })
 
   const createUserMutation = useMutation({
@@ -249,19 +298,10 @@ const UsersTab: React.FC = () => {
     {
       id: 'role',
       label: t('settings.users.table.role'),
-      render: (u) => (
-        <Chip
-          label={
-            u.role === 'admin'
-              ? t('settings.users.roles.admin')
-              : u.role === 'operator'
-                ? t('settings.users.roles.operator')
-                : t('settings.users.roles.viewer')
-          }
-          color={u.role === 'admin' ? 'secondary' : u.role === 'operator' ? 'info' : 'default'}
-          size="small"
-        />
-      ),
+      render: (u) => {
+        const rolePresentation = getRolePresentation(u.role)
+        return <Chip label={rolePresentation.label} color={rolePresentation.color} size="small" />
+      },
     },
     {
       id: 'created_at',
@@ -306,11 +346,18 @@ const UsersTab: React.FC = () => {
   const users = usersData?.data?.users || []
   const selectedAccessUser =
     users.find((account: UserType) => account.id === selectedAccessUserId) ?? users[0] ?? null
+  const selectedAccessRolePresentation = selectedAccessUser
+    ? getRolePresentation(selectedAccessUser.role)
+    : null
   const totalUsers = users.length
   const activeUsers = users.filter((account: UserType) => account.is_active).length
-  const adminUsers = users.filter((account: UserType) => account.role === 'admin').length
-  const operatorUsers = users.filter((account: UserType) => account.role === 'operator').length
-  const viewerUsers = users.filter((account: UserType) => account.role === 'viewer').length
+  const adminUsers = users.filter(
+    (account: UserType) => getRolePresentation(account.role).isAdminRole
+  ).length
+  const operatorUsers = users.filter(
+    (account: UserType) => getRolePresentation(account.role).isOperatorRole
+  ).length
+  const viewerUsers = users.length - adminUsers - operatorUsers
 
   useEffect(() => {
     if (!selectedAccessUserId && users.length > 0) {
@@ -558,7 +605,7 @@ const UsersTab: React.FC = () => {
                               noWrap
                               sx={{ fontSize: '0.72rem' }}
                             >
-                              {account.role}
+                              {formatRoleLabel(account.role)}
                             </Typography>
                           </Box>
                         </Stack>
@@ -592,25 +639,27 @@ const UsersTab: React.FC = () => {
                         </Typography>
                         <Chip
                           size="small"
-                          label={selectedAccessUser.role}
+                          label={
+                            selectedAccessRolePresentation?.label ??
+                            formatRoleLabel(selectedAccessUser.role)
+                          }
                           color={
-                            selectedAccessUser.role === 'admin'
+                            selectedAccessRolePresentation?.color === 'secondary'
                               ? 'error'
-                              : selectedAccessUser.role === 'operator'
-                                ? 'info'
-                                : 'default'
+                              : (selectedAccessRolePresentation?.color ?? 'default')
                           }
                           sx={{ ml: 'auto !important', height: 20, fontSize: '0.7rem' }}
                         />
                       </Stack>
                       <Typography variant="caption" color="text.secondary">
-                        {selectedAccessUser.role === 'admin'
-                          ? 'Admin role grants full access to all repositories.'
-                          : 'Assign or remove repository-level access for this user.'}
+                        {getRepositoryAccessSummary(selectedAccessUser)}
                       </Typography>
                     </Box>
                     <Box sx={{ p: 2.5 }}>
-                      {selectedAccessUser.role === 'admin' ? (
+                      {roleHasGlobalPermission(
+                        selectedAccessUser.role,
+                        'repositories.manage_all'
+                      ) ? (
                         <Box
                           sx={{
                             display: 'flex',
@@ -638,7 +687,7 @@ const UsersTab: React.FC = () => {
                       ) : (
                         <UserPermissionsPanel
                           userId={selectedAccessUser.id}
-                          isAdmin={true}
+                          canManageAssignments={true}
                           repositories={repositoriesData?.data?.repositories ?? []}
                           targetUserRole={selectedAccessUser.role}
                         />

@@ -89,6 +89,36 @@ export interface SystemSettings {
   [key: string]: unknown
 }
 
+export interface AuthorizationRoleDefinition {
+  id: string
+  rank: number
+  scope: 'global' | 'repository'
+}
+
+export interface AuthorizationModel {
+  global_roles: AuthorizationRoleDefinition[]
+  repository_roles: AuthorizationRoleDefinition[]
+  global_permission_rules: Record<string, string>
+  repository_action_rules: Record<string, string>
+  assignable_repository_roles_by_global_role: Record<string, string[]>
+}
+
+export interface AuthUserResponse {
+  id: number
+  username: string
+  full_name?: string | null
+  deployment_type?: 'individual' | 'enterprise' | null
+  enterprise_name?: string | null
+  email?: string | null
+  is_active: boolean
+  role: string
+  all_repositories_role?: string | null
+  must_change_password?: boolean
+  last_login?: string | null
+  created_at: string
+  global_permissions: string[]
+}
+
 // Generic type for object data
 type ApiData = Record<string, unknown>
 
@@ -109,6 +139,7 @@ export const authAPI = {
   refresh: () => api.post('/auth/refresh'),
 
   getProfile: () => api.get('/auth/me'),
+  getAuthorizationModel: () => api.get<AuthorizationModel>('/auth/authorization-model'),
 
   changePassword: (currentPassword: string, newPassword: string) =>
     api.post('/auth/change-password', {
@@ -281,6 +312,39 @@ export const settingsAPI = {
     }
     return api.put('/settings/cache/settings', null, { params })
   },
+}
+
+
+interface PermissionResponse {
+  id: number
+  user_id: number
+  repository_id: number
+  repository_name: string
+  role: string
+  created_at: string
+}
+
+export interface PermissionScopeResponse {
+  all_repositories_role: string | null
+}
+
+export const permissionsAPI = {
+  getMyPermissions: () => api.get<PermissionResponse[]>('/settings/permissions/me'),
+  getMyPermissionScope: () => api.get<PermissionScopeResponse>('/settings/permissions/me/scope'),
+  getUserPermissions: (userId: number) =>
+    api.get<PermissionResponse[]>(`/settings/users/${userId}/permissions`),
+  getUserPermissionScope: (userId: number) =>
+    api.get<PermissionScopeResponse>(`/settings/users/${userId}/permissions/scope`),
+  assign: (userId: number, data: { repository_id: number; role: string }) =>
+    api.post<PermissionResponse>(`/settings/users/${userId}/permissions`, data),
+  update: (userId: number, repoId: number, role: string) =>
+    api.put<PermissionResponse>(`/settings/users/${userId}/permissions/${repoId}`, { role }),
+  updateScope: (userId: number, all_repositories_role: string | null) =>
+    api.put<PermissionScopeResponse>(`/settings/users/${userId}/permissions/scope`, {
+      all_repositories_role,
+    }),
+  remove: (userId: number, repoId: number) =>
+    api.delete(`/settings/users/${userId}/permissions/${repoId}`),
 }
 
 // Repositories API
