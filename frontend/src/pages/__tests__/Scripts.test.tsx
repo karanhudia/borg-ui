@@ -26,6 +26,19 @@ vi.mock('../../hooks/useAnalytics', () => ({
   }),
 }))
 
+vi.mock('../../hooks/useAuth', () => ({
+  useAuth: () => ({
+    user: {
+      id: 1,
+      username: 'admin',
+      email: 'admin@example.com',
+      role: 'admin',
+      global_permissions: ['settings.scripts.manage'],
+    },
+    hasGlobalPermission: (permission: string) => permission === 'settings.scripts.manage',
+  }),
+}))
+
 vi.mock('../../components/CodeEditor', () => ({
   default: ({
     label,

@@ -45,6 +45,29 @@ vi.mock('../../context/AppContext', () => ({
   }),
 }))
 
+vi.mock('../../hooks/useAuth', () => ({
+  useAuth: () => ({
+    user: {
+      id: 1,
+      username: 'admin',
+      email: 'admin@example.com',
+      role: 'admin',
+      global_permissions: [
+        'settings.users.manage',
+        'settings.system.manage',
+        'settings.mqtt.manage',
+        'settings.packages.manage',
+        'settings.scripts.manage',
+        'settings.export_import.manage',
+        'settings.beta.manage',
+        'settings.mounts.manage',
+        'settings.ssh.manage',
+      ],
+    },
+    hasGlobalPermission: () => true,
+  }),
+}))
+
 describe('AppSidebar', () => {
   beforeEach(() => {
     vi.clearAllMocks()
