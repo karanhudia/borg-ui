@@ -67,6 +67,7 @@ interface RemoteMachineCardProps {
   onRefreshStorage: (machine: RemoteMachine) => void
   onTestConnection: (machine: RemoteMachine) => void
   onDeployKey: (machine: RemoteMachine) => void
+  canManageConnections?: boolean
 }
 
 export default function RemoteMachineCard({
@@ -76,6 +77,7 @@ export default function RemoteMachineCard({
   onRefreshStorage,
   onTestConnection,
   onDeployKey,
+  canManageConnections = true,
 }: RemoteMachineCardProps) {
   const { t } = useTranslation()
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
@@ -309,17 +311,19 @@ export default function RemoteMachineCard({
           </ListItemIcon>
           <ListItemText>{t('remoteMachine.actions.testConnection')}</ListItemText>
         </MenuItem>
-        <MenuItem
-          onClick={() => {
-            handleMenuClose()
-            onDeployKey(machine)
-          }}
-        >
-          <ListItemIcon>
-            <Key size={18} />
-          </ListItemIcon>
-          <ListItemText>{t('remoteMachineCard.actions.deploy')}</ListItemText>
-        </MenuItem>
+        {canManageConnections && (
+          <MenuItem
+            onClick={() => {
+              handleMenuClose()
+              onDeployKey(machine)
+            }}
+          >
+            <ListItemIcon>
+              <Key size={18} />
+            </ListItemIcon>
+            <ListItemText>{t('remoteMachineCard.actions.deploy')}</ListItemText>
+          </MenuItem>
+        )}
         <MenuItem
           onClick={() => {
             handleMenuClose()
@@ -331,28 +335,32 @@ export default function RemoteMachineCard({
           </ListItemIcon>
           <ListItemText>{t('remoteMachine.actions.refreshStorage')}</ListItemText>
         </MenuItem>
-        <MenuItem
-          onClick={() => {
-            handleMenuClose()
-            onEdit(machine)
-          }}
-        >
-          <ListItemIcon>
-            <Edit size={18} />
-          </ListItemIcon>
-          <ListItemText>{t('remoteMachineCard.actions.edit')}</ListItemText>
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            handleMenuClose()
-            onDelete(machine)
-          }}
-        >
-          <ListItemIcon>
-            <Trash2 size={18} />
-          </ListItemIcon>
-          <ListItemText>{t('remoteMachineCard.actions.delete')}</ListItemText>
-        </MenuItem>
+        {canManageConnections && (
+          <MenuItem
+            onClick={() => {
+              handleMenuClose()
+              onEdit(machine)
+            }}
+          >
+            <ListItemIcon>
+              <Edit size={18} />
+            </ListItemIcon>
+            <ListItemText>{t('remoteMachineCard.actions.edit')}</ListItemText>
+          </MenuItem>
+        )}
+        {canManageConnections && (
+          <MenuItem
+            onClick={() => {
+              handleMenuClose()
+              onDelete(machine)
+            }}
+          >
+            <ListItemIcon>
+              <Trash2 size={18} />
+            </ListItemIcon>
+            <ListItemText>{t('remoteMachineCard.actions.delete')}</ListItemText>
+          </MenuItem>
+        )}
       </Menu>
     </Card>
   )

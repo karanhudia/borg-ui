@@ -79,6 +79,15 @@ export interface DataTableProps<T> {
   sx?: SxProps<Theme>
 }
 
+const ACTION_HOVER_BG_BY_COLOR: Record<string, string> = {
+  primary: 'rgba(59,130,246,0.12)',
+  error: 'rgba(239,68,68,0.12)',
+  warning: 'rgba(245,158,11,0.12)',
+  success: 'rgba(34,197,94,0.12)',
+  info: 'rgba(14,165,233,0.12)',
+  default: 'rgba(255,255,255,0.06)',
+}
+
 export default function DataTable<T>({
   data,
   columns,
@@ -229,7 +238,10 @@ export default function DataTable<T>({
               sx={{
                 ...(enableHover && {
                   '&:hover': {
-                    bgcolor: 'action.hover',
+                    bgcolor: 'rgba(255,255,255,0.03)',
+                    '& .MuiIconButton-root': {
+                      opacity: 0.7,
+                    },
                   },
                 }),
                 ...(enablePointer &&
@@ -239,7 +251,7 @@ export default function DataTable<T>({
                 '&:last-child td': {
                   borderBottom: 0,
                 },
-                transition: 'background-color 0.2s',
+                transition: 'background-color 180ms ease',
               }}
             >
               {columns.map((column) => (
@@ -275,6 +287,8 @@ export default function DataTable<T>({
                           ? action.tooltip(row)
                           : action.tooltip || action.label
 
+                      const hoverBg = ACTION_HOVER_BG_BY_COLOR[action.color || 'default']
+
                       return (
                         <Tooltip key={idx} title={tooltipText} arrow>
                           <span>
@@ -287,6 +301,16 @@ export default function DataTable<T>({
                               }}
                               disabled={isDisabled}
                               aria-label={tooltipText}
+                              sx={{
+                                borderRadius: 1,
+                                opacity: 0.45,
+                                transition: 'opacity 140ms ease, background-color 140ms ease',
+                                '&:hover': {
+                                  opacity: 1,
+                                  bgcolor: hoverBg,
+                                },
+                                '&.Mui-disabled': { opacity: 0.2 },
+                              }}
                             >
                               {action.icon}
                             </IconButton>

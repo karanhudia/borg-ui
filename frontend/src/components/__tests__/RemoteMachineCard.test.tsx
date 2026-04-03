@@ -454,6 +454,32 @@ describe('RemoteMachineCard', () => {
       expect(mockOnDelete).toHaveBeenCalledWith(baseMachine)
     })
 
+    it('hides management actions when connection management is not allowed', async () => {
+      const user = userEvent.setup()
+      render(
+        <RemoteMachineCard
+          machine={baseMachine}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onRefreshStorage={mockOnRefreshStorage}
+          onTestConnection={mockOnTestConnection}
+          onDeployKey={mockOnDeployKey}
+          canManageConnections={false}
+        />
+      )
+
+      const moreButton = screen.getByRole('button', { name: '' })
+      await user.click(moreButton)
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Connection')).toBeInTheDocument()
+        expect(screen.getByText('Refresh Storage')).toBeInTheDocument()
+      })
+      expect(screen.queryByText('Deploy Key')).not.toBeInTheDocument()
+      expect(screen.queryByText('Edit')).not.toBeInTheDocument()
+      expect(screen.queryByText('Delete')).not.toBeInTheDocument()
+    })
+
     it('closes menu after action', async () => {
       const user = userEvent.setup()
       render(
