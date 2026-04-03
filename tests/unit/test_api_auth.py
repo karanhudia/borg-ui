@@ -202,7 +202,7 @@ class TestAuthenticationLogin:
             username="activeuser",
             password_hash=get_password_hash("password123"),
             is_active=True,
-            is_admin=False
+            role='viewer'
         )
         test_db.add(user)
         test_db.commit()
@@ -244,7 +244,7 @@ class TestAuthenticationLogin:
             username="testuser",
             password_hash=get_password_hash("correctpassword"),
             is_active=True,
-            is_admin=False
+            role='viewer'
         )
         test_db.add(user)
         test_db.commit()
@@ -300,7 +300,7 @@ class TestAuthenticationLogin:
             username="inactive_user",
             password_hash=get_password_hash("password123"),
             is_active=False,
-            is_admin=False
+            role='viewer'
         )
         test_db.add(user)
         test_db.commit()
@@ -372,7 +372,7 @@ class TestAuthenticationLogin:
             username="specialuser",
             password_hash=get_password_hash(special_password),
             is_active=True,
-            is_admin=False
+            role='viewer'
         )
         test_db.add(user)
         test_db.commit()
@@ -406,7 +406,7 @@ class TestAuthenticationLogin:
             username="ampersanduser",
             password_hash=get_password_hash(password_with_ampersand),
             is_active=True,
-            is_admin=False
+            role='viewer'
         )
         test_db.add(user)
         test_db.commit()
@@ -617,7 +617,7 @@ class TestProxyAuthentication:
         assert response.status_code == 200
         data = response.json()
         assert data["username"] == "proxyuser"
-        assert data["is_admin"] is False
+        assert data["role"] == "viewer"
 
         # Verify user was created in database
         from app.database.models import User
@@ -725,7 +725,7 @@ class TestProxyAuthentication:
             password_hash=get_password_hash("somepassword"),
             email="existing@example.com",
             is_active=True,
-            is_admin=True
+            role='admin'
         )
         test_db.add(existing_user)
         test_db.commit()
@@ -742,7 +742,7 @@ class TestProxyAuthentication:
         assert response.status_code == 200
         data = response.json()
         assert data["username"] == "existinguser"
-        assert data["is_admin"] is True  # Preserved from original user
+        assert data["role"] == "admin"  # Preserved from original user
         assert data["email"] == "existing@example.com"  # Preserved
 
         # Verify no duplicate was created
@@ -766,7 +766,7 @@ class TestProxyAuthentication:
             password_hash="",
             email="inactive@proxy.local",
             is_active=False,
-            is_admin=False
+            role='viewer'
         )
         test_db.add(inactive_user)
         test_db.commit()

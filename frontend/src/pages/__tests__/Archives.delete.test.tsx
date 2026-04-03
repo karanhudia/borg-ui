@@ -61,7 +61,7 @@ vi.mock('../../hooks/useAnalytics', () => ({
 }))
 
 vi.mock('../../hooks/useAuth', () => ({
-  useAuth: () => ({ user: { is_admin: true } }),
+  useAuth: () => ({ user: { is_admin: true, role: 'admin', created_at: '2024-01-01T00:00:00Z' } }),
 }))
 
 const mockRepository = {

@@ -38,7 +38,7 @@ interface ActivityItem {
 const Activity: React.FC = () => {
   const { t } = useTranslation()
   const { track, EventCategory, EventAction } = useAnalytics()
-  const { user } = useAuth()
+  const { isAdmin } = useAuth()
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
 
@@ -151,7 +151,7 @@ const Activity: React.FC = () => {
             breakLock: true,
             delete: true,
           }}
-          isAdmin={user?.is_admin || false}
+          isAdmin={isAdmin}
           getRowKey={(activity) => `${activity.type}-${activity.id}`}
           headerBgColor="background.default"
           enableHover={true}
@@ -170,7 +170,7 @@ const Activity: React.FC = () => {
             breakLock: true,
             delete: true,
           }}
-          isAdmin={user?.is_admin || false}
+          isAdmin={isAdmin}
           getRowKey={(activity) => `${activity.type}-${activity.id}`}
           headerBgColor="background.default"
           enableHover={true}
