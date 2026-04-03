@@ -68,7 +68,8 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    auth_header = request.headers.get("Authorization")
+    # Extract token from X-Borg-Authorization header, falling back to Authorization
+    auth_header = request.headers.get("X-Borg-Authorization") or request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise credentials_exception
 
@@ -185,7 +186,8 @@ async def get_current_download_user(
     if settings.disable_authentication:
         return await get_current_user_proxy(request, db)
 
-    auth_header = request.headers.get("Authorization")
+	# Extract token from X-Borg-Authorization header, falling back to Authorization
+    auth_header = request.headers.get("X-Borg-Authorization") or request.headers.get("Authorization")
     token: Optional[str] = None
 
     if auth_header and auth_header.startswith("Bearer "):

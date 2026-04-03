@@ -455,7 +455,7 @@ class TestProtectedEndpoints:
         """Test getting current user with invalid token"""
         response = test_client.get(
             "/api/auth/me",
-            headers={"Authorization": "Bearer invalid_token"}
+            headers={"X-Borg-Authorization": "Bearer invalid_token"}
         )
 
         assert response.status_code == 401
@@ -482,7 +482,7 @@ class TestProtectedEndpoints:
         """Test accessing protected endpoint with malformed token"""
         response = test_client.get(
             "/api/auth/me",
-            headers={"Authorization": "Bearer malformed_token"}
+            headers={"X-Borg-Authorization": "Bearer malformed_token"}
         )
 
         assert response.status_code in [401, 403]
@@ -494,7 +494,7 @@ class TestProtectedEndpoints:
         """Should return 401 for invalid JWT token"""
         response = test_client.get(
             "/api/repositories/",
-            headers={"Authorization": "Bearer invalid_token_here"}
+            headers={"X-Borg-Authorization": "Bearer invalid_token_here"}
         )
 
         assert response.status_code == 401
@@ -509,7 +509,7 @@ class TestProtectedEndpoints:
 
         response = test_client.get(
             "/api/auth/me",
-            headers={"Authorization": f"Bearer {expired_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {expired_token}"}
         )
 
         assert response.status_code in [401, 403]
@@ -518,7 +518,7 @@ class TestProtectedEndpoints:
         """Test accessing protected endpoint without Bearer prefix"""
         response = test_client.get(
             "/api/auth/me",
-            headers={"Authorization": auth_token}  # Missing "Bearer" prefix
+            headers={"X-Borg-Authorization": auth_token}  # Missing "Bearer" prefix
         )
 
         assert response.status_code in [401, 403]
@@ -549,7 +549,7 @@ class TestTokenValidation:
 
         response = test_client.get(
             "/api/repositories/",
-            headers={"Authorization": f"Bearer {expired_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {expired_token}"}
         )
 
         assert response.status_code == 401
@@ -558,7 +558,7 @@ class TestTokenValidation:
         """Should return 401 for malformed token"""
         response = test_client.get(
             "/api/repositories/",
-            headers={"Authorization": "Bearer not.a.valid.jwt"}
+            headers={"X-Borg-Authorization": "Bearer not.a.valid.jwt"}
         )
 
         assert response.status_code == 401
@@ -570,7 +570,7 @@ class TestTokenValidation:
         """
         response = test_client.get(
             "/api/repositories/",
-            headers={"Authorization": "InvalidPrefix token_here"}
+            headers={"X-Borg-Authorization": "InvalidPrefix token_here"}
         )
 
         assert response.status_code == 401
@@ -853,3 +853,53 @@ class TestProxyAuthentication:
 
         # Last login should be updated
         assert second_login > first_login
+
+
+@pytest.mark.unit
+class TestDualHeaderFallback:
+    """Test that both X-Borg-Authorization and legacy Authorization headers are accepted"""
+
+    def test_legacy_authorization_header_still_works(
+        self,
+        test_client: TestClient,
+        admin_token
+    ):
+        """Legacy Authorization header should still be accepted for backward compatibility"""
+        response = test_client.get(
+            "/api/repositories/",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+
+        assert response.status_code in [200, 204]
+
+    def test_x_borg_authorization_takes_precedence(
+        self,
+        test_client: TestClient,
+        admin_token
+    ):
+        """X-Borg-Authorization should take precedence over Authorization"""
+        response = test_client.get(
+            "/api/repositories/",
+            headers={
+                "X-Borg-Authorization": f"Bearer {admin_token}",
+                "Authorization": "Bearer invalid_token_here",
+            }
+        )
+
+        assert response.status_code in [200, 204]
+
+    def test_invalid_x_borg_does_not_fall_back_to_valid_authorization(
+        self,
+        test_client: TestClient,
+        admin_token
+    ):
+        """When X-Borg-Authorization is present but invalid, it should NOT fall back to Authorization"""
+        response = test_client.get(
+            "/api/repositories/",
+            headers={
+                "X-Borg-Authorization": "Bearer invalid_token_here",
+                "Authorization": f"Bearer {admin_token}",
+            }
+        )
+
+        assert response.status_code == 401

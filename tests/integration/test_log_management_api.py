@@ -126,7 +126,7 @@ class TestGetSystemSettings:
 
         response = client.get(
             "/api/settings/system",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
         )
 
         assert response.status_code == 200
@@ -153,7 +153,7 @@ class TestGetSystemSettings:
         """Should create default settings if none exist"""
         response = client.get(
             "/api/settings/system",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
         )
 
         assert response.status_code == 200
@@ -179,7 +179,7 @@ class TestUpdateSystemSettings:
         response = client.put(
             "/api/settings/system",
             json={"log_save_policy": "all_jobs"},
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
         )
 
         assert response.status_code == 200
@@ -195,7 +195,7 @@ class TestUpdateSystemSettings:
         response = client.put(
             "/api/settings/system",
             json={"log_max_total_size_mb": 1000},
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
         )
 
         assert response.status_code == 200
@@ -209,7 +209,7 @@ class TestUpdateSystemSettings:
         response = client.put(
             "/api/settings/system",
             json={"log_cleanup_on_startup": False},
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
         )
 
         assert response.status_code == 200
@@ -223,7 +223,7 @@ class TestUpdateSystemSettings:
         response = client.put(
             "/api/settings/system",
             json={"log_save_policy": "invalid_policy"},
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
         )
 
         assert response.status_code == 400
@@ -234,7 +234,7 @@ class TestUpdateSystemSettings:
         response = client.put(
             "/api/settings/system",
             json={"log_max_total_size_mb": 5},  # Below minimum of 10
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
         )
 
         assert response.status_code == 400
@@ -245,7 +245,7 @@ class TestUpdateSystemSettings:
         response = client.put(
             "/api/settings/system",
             json={"log_save_policy": "all_jobs"},
-            headers={"Authorization": f"Bearer {user_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {user_token}"}
         )
 
         assert response.status_code == 403
@@ -270,7 +270,7 @@ class TestUpdateSystemSettings:
         response = client.put(
             "/api/settings/system",
             json={"log_max_total_size_mb": 500},  # Below current usage
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
         )
 
         assert response.status_code == 200
@@ -294,7 +294,7 @@ class TestGetLogStorageStats:
 
         response = client.get(
             "/api/settings/system/logs/storage",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
         )
 
         assert response.status_code == 200
@@ -324,7 +324,7 @@ class TestGetLogStorageStats:
         """Should allow regular users to view log storage stats"""
         response = client.get(
             "/api/settings/system/logs/storage",
-            headers={"Authorization": f"Bearer {user_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {user_token}"}
         )
 
         assert response.status_code == 200
@@ -371,7 +371,7 @@ class TestManualLogCleanup:
 
         response = client.post(
             "/api/settings/system/logs/cleanup",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
         )
 
         assert response.status_code == 200
@@ -390,7 +390,7 @@ class TestManualLogCleanup:
         """Should require admin access"""
         response = client.post(
             "/api/settings/system/logs/cleanup",
-            headers={"Authorization": f"Bearer {user_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {user_token}"}
         )
 
         assert response.status_code == 403
@@ -429,7 +429,7 @@ class TestManualLogCleanup:
 
         response = client.post(
             "/api/settings/system/logs/cleanup",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
         )
 
         assert response.status_code == 200
@@ -448,7 +448,7 @@ class TestLogManagementEndToEnd:
         # Step 1: Get initial settings
         response = client.get(
             "/api/settings/system",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
         )
         assert response.status_code == 200
         initial_settings = response.json()["settings"]
@@ -462,14 +462,14 @@ class TestLogManagementEndToEnd:
                 "log_max_total_size_mb": 250,
                 "log_cleanup_on_startup": False
             },
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
         )
         assert response.status_code == 200
 
         # Step 3: Verify settings were updated
         response = client.get(
             "/api/settings/system",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
         )
         assert response.status_code == 200
         updated_settings = response.json()["settings"]
@@ -482,7 +482,7 @@ class TestLogManagementEndToEnd:
         # Step 4: Get log storage stats
         response = client.get(
             "/api/settings/system/logs/storage",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
         )
         assert response.status_code == 200
         storage_stats = response.json()["storage"]
