@@ -41,9 +41,14 @@ const withAppVersion = (data?: Record<string, unknown>): Record<string, unknown>
   }
 }
 
-const identifyWithAppVersion = (): void => {
-  if (!currentAppVersion || !window.umami?.identify) return
-  window.umami.identify({ app_version: currentAppVersion })
+let currentUserId: string | null = null
+
+const identifySession = (): void => {
+  if (!window.umami?.identify) return
+  const data: Record<string, unknown> = {}
+  if (currentUserId) data.user_id = currentUserId
+  if (currentAppVersion) data.app_version = currentAppVersion
+  if (Object.keys(data).length) window.umami.identify(data)
 }
 
 /**
@@ -66,7 +71,7 @@ const initUmamiScript = (): void => {
   script.setAttribute('data-website-id', UMAMI_WEBSITE_ID)
   // Disable auto page tracking — we handle it via trackPageView so it respects opt-out
   script.setAttribute('data-auto-track', 'false')
-  script.addEventListener('load', identifyWithAppVersion)
+  script.addEventListener('load', identifySession)
   document.head.appendChild(script)
 
   analyticsInitialized = true
@@ -139,31 +144,38 @@ export const arePreferencesLoaded = (): boolean => {
 }
 
 /**
- * Track a page view
- * Umami can auto-track but we call manually to respect the opt-out preference.
+ * Builds a masked base payload — replaces the real hostname/URL with app.borgui
+ * so self-hosted users' private DNS names or IPs are never sent to Umami.
  */
-export const trackPageView = (customTitle?: string): void => {
+const maskedPayload = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+  hostname: 'app.borgui',
+  url: `https://app.borgui${window.location.pathname}${window.location.search}`,
+  ...overrides,
+})
+
+/**
+ * Track a page view.
+ * Umami auto-track is disabled — we fire manually to respect opt-out
+ * and to mask the real hostname.
+ */
+export const trackPageView = (path?: string): void => {
   if (!canTrack()) return
 
-  const pageUrl = customTitle || `${window.location.pathname}${window.location.search}`
-  window.umami?.track((payload: Record<string, unknown>) => {
-    const payloadData =
+  const url = `https://app.borgui${path ?? window.location.pathname + window.location.search}`
+  window.umami?.track((payload: Record<string, unknown>) => ({
+    ...payload,
+    ...maskedPayload({ url }),
+    data: withAppVersion(
       payload.data && typeof payload.data === 'object'
         ? (payload.data as Record<string, unknown>)
         : undefined
-
-    return {
-      ...payload,
-      url: pageUrl,
-      data: withAppVersion(payloadData),
-    }
-  })
+    ),
+  }))
 }
 
 /**
- * Track a custom event
- * Maps the analytics (category, action, name, value) signature to Umami's track API.
- * Events appear in Umami as "Category - Action" with optional name/value properties.
+ * Track a custom event.
+ * Uses the callback form so hostname is masked before the payload leaves the browser.
  */
 export const trackEvent = (
   category: string,
@@ -181,10 +193,12 @@ export const trackEvent = (
   }
   if (value !== undefined) data.value = value
 
-  window.umami?.track(
-    `${category} - ${action}`,
-    withAppVersion(Object.keys(data).length ? data : undefined)
-  )
+  window.umami?.track((payload: Record<string, unknown>) => ({
+    ...payload,
+    ...maskedPayload(),
+    name: `${category} - ${action}`,
+    data: withAppVersion(Object.keys(data).length ? data : undefined),
+  }))
 }
 
 /**
@@ -213,7 +227,18 @@ export const setCustomDimension = (_dimensionId: number, _value: string): void =
 
 export const setAppVersion = (version: string): void => {
   currentAppVersion = version || null
-  identifyWithAppVersion()
+  identifySession()
+}
+
+/**
+ * Set a stable anonymous user ID so Umami counts the same user across sessions.
+ * Pass the username — it's combined with a per-install UUID and hashed before sending.
+ * This mirrors the old Matomo setUserId behaviour.
+ */
+export const identifyUser = (username: string): void => {
+  const installId = getOrCreateInstallId()
+  currentUserId = anonymizeEntityName(installId + username)
+  identifySession()
 }
 
 /**
@@ -248,8 +273,8 @@ const sendManualUmamiEvent = (eventName: string, data?: Record<string, unknown>)
     type: 'event',
     payload: {
       website: UMAMI_WEBSITE_ID,
-      url: `${window.location.origin}${window.location.pathname}${window.location.search}`,
-      hostname: window.location.hostname,
+      url: `https://app.borgui${window.location.pathname}${window.location.search}`,
+      hostname: 'app.borgui',
       language: navigator.language,
       title: document.title,
       name: eventName,
