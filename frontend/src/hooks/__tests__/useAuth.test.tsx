@@ -99,34 +99,36 @@ describe('AuthProvider', () => {
 
   it('retries proxy-auth profile loading and authenticates when a later attempt succeeds', async () => {
     vi.useFakeTimers()
-    getAuthConfigMock.mockResolvedValue({ data: { proxy_auth_enabled: true } })
-    getProfileMock.mockRejectedValueOnce(new Error('temporary failure')).mockResolvedValueOnce({
-      data: {
-        id: 1,
-        username: 'proxy-user',
-        email: 'proxy@example.com',
-        role: 'admin',
-        all_repositories_role: null,
-        global_permissions: ['settings.users.manage'],
-      },
-    })
+    try {
+      getAuthConfigMock.mockResolvedValue({ data: { proxy_auth_enabled: true } })
+      getProfileMock.mockRejectedValueOnce(new Error('temporary failure')).mockResolvedValueOnce({
+        data: {
+          id: 1,
+          username: 'proxy-user',
+          email: 'proxy@example.com',
+          role: 'admin',
+          all_repositories_role: null,
+          global_permissions: ['settings.users.manage'],
+        },
+      })
 
-    renderWithProviders(
-      <AuthProvider>
-        <AuthProbe />
-      </AuthProvider>
-    )
+      renderWithProviders(
+        <AuthProvider>
+          <AuthProbe />
+        </AuthProvider>
+      )
 
-    await vi.advanceTimersByTimeAsync(1000)
+      await vi.runAllTimersAsync()
 
-    await waitFor(() => {
-      expect(setProxyAuthModeMock).toHaveBeenCalledWith(true)
-      expect(screen.getByText('proxy:true')).toBeInTheDocument()
-      expect(screen.getByText('authenticated:true')).toBeInTheDocument()
-      expect(screen.getByText('user:proxy-user')).toBeInTheDocument()
-    })
-
-    vi.useRealTimers()
+      await waitFor(() => {
+        expect(setProxyAuthModeMock).toHaveBeenCalledWith(true)
+        expect(screen.getByText('proxy:true')).toBeInTheDocument()
+        expect(screen.getByText('authenticated:true')).toBeInTheDocument()
+        expect(screen.getByText('user:proxy-user')).toBeInTheDocument()
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('stores the token and updates auth state after login', async () => {
