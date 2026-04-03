@@ -137,6 +137,7 @@ class TestDeleteJobEndpoint:
     def test_delete_backup_job_success_admin(self, test_client, admin_headers, test_db):
         """Test admin can successfully delete a completed backup job"""
         from app.database.models import BackupJob
+        from datetime import datetime
 
         # Create a completed backup job
         job = BackupJob(
@@ -170,6 +171,7 @@ class TestDeleteJobEndpoint:
     def test_delete_job_non_admin_forbidden(self, test_client, auth_headers, test_db):
         """Test non-admin user cannot delete jobs"""
         from app.database.models import BackupJob
+        from datetime import datetime
 
         # Create a completed backup job
         job = BackupJob(
@@ -199,6 +201,7 @@ class TestDeleteJobEndpoint:
     def test_delete_running_job_fails(self, test_client, admin_headers, test_db):
         """Test cannot delete running job"""
         from app.database.models import BackupJob
+        from datetime import datetime
 
         # Create a running backup job
         job = BackupJob(
@@ -227,6 +230,7 @@ class TestDeleteJobEndpoint:
     def test_delete_pending_job_succeeds(self, test_client, admin_headers, test_db):
         """Test can delete pending job (useful for cleaning up stuck jobs)"""
         from app.database.models import BackupJob
+        from datetime import datetime
 
         # Create a pending backup job
         job = BackupJob(
@@ -255,6 +259,7 @@ class TestDeleteJobEndpoint:
     def test_delete_failed_job_success(self, test_client, admin_headers, test_db):
         """Test admin can delete failed job"""
         from app.database.models import BackupJob
+        from datetime import datetime
 
         # Create a failed backup job
         job = BackupJob(
@@ -306,6 +311,7 @@ class TestDeleteJobEndpoint:
     def test_delete_restore_job_success(self, test_client, admin_headers, test_db):
         """Test admin can delete completed restore job"""
         from app.database.models import RestoreJob
+        from datetime import datetime
 
         # Create a completed restore job
         job = RestoreJob(
@@ -336,6 +342,7 @@ class TestDeleteJobEndpoint:
     def test_delete_check_job_success(self, test_client, admin_headers, test_db):
         """Test admin can delete completed check job"""
         from app.database.models import CheckJob
+        from datetime import datetime
 
         # Create a completed check job
         job = CheckJob(
@@ -364,6 +371,7 @@ class TestDeleteJobEndpoint:
     def test_delete_compact_job_success(self, test_client, admin_headers, test_db):
         """Test admin can delete completed compact job"""
         from app.database.models import CompactJob
+        from datetime import datetime
 
         # Create a completed compact job
         job = CompactJob(
@@ -392,6 +400,7 @@ class TestDeleteJobEndpoint:
     def test_delete_prune_job_success(self, test_client, admin_headers, test_db):
         """Test admin can delete completed prune job"""
         from app.database.models import PruneJob
+        from datetime import datetime
 
         # Create a completed prune job
         job = PruneJob(
@@ -420,6 +429,8 @@ class TestDeleteJobEndpoint:
     def test_delete_job_with_log_file(self, test_client, admin_headers, test_db, tmp_path):
         """Test deleting job also deletes log file"""
         from app.database.models import BackupJob
+        from datetime import datetime
+        import os
 
         # Create a temporary log file
         log_file = tmp_path / "test_log.txt"
@@ -457,6 +468,7 @@ class TestDeleteJobEndpoint:
     def test_delete_cancelled_job_success(self, test_client, admin_headers, test_db):
         """Test admin can delete cancelled job"""
         from app.database.models import BackupJob
+        from datetime import datetime
 
         # Create a cancelled backup job
         job = BackupJob(
@@ -485,6 +497,7 @@ class TestDeleteJobEndpoint:
     def test_delete_job_unauthenticated(self, test_client, test_db):
         """Test deleting job without authentication fails"""
         from app.database.models import BackupJob
+        from datetime import datetime
 
         # Create a completed backup job
         job = BackupJob(
@@ -510,10 +523,21 @@ class TestDeleteJobEndpoint:
 class TestGetJobLogsPlaceholderOffset:
     """Test that placeholder lines are only returned when offset=0 for running backup jobs."""
 
+    def _make_running_backup_job(self):
+        """Create a minimal fake job object with status='running'."""
+        class FakeJob:
+            id = 42
+            status = 'running'
+            log_file_path = None
+            logs = None
+
+        return FakeJob()
+
     def test_a_no_buffer_offset_0_returns_placeholder(self, test_client, auth_headers, test_db):
         """Test A: buffer_exists=False, offset=0 -> returns 5-line placeholder."""
         from unittest.mock import patch
         from app.database.models import BackupJob
+        from datetime import datetime
 
         job = BackupJob(
             repository="/test/repo",
@@ -539,6 +563,7 @@ class TestGetJobLogsPlaceholderOffset:
         """Test B: buffer_exists=False, offset=5 -> returns empty response."""
         from unittest.mock import patch
         from app.database.models import BackupJob
+        from datetime import datetime
 
         job = BackupJob(
             repository="/test/repo",
@@ -565,6 +590,7 @@ class TestGetJobLogsPlaceholderOffset:
         """Test C: buffer_exists=True but empty, offset=0 -> returns 5-line placeholder."""
         from unittest.mock import patch
         from app.database.models import BackupJob
+        from datetime import datetime
 
         job = BackupJob(
             repository="/test/repo",
@@ -590,6 +616,7 @@ class TestGetJobLogsPlaceholderOffset:
         """Test D: buffer_exists=True but empty, offset=5 -> returns empty response."""
         from unittest.mock import patch
         from app.database.models import BackupJob
+        from datetime import datetime
 
         job = BackupJob(
             repository="/test/repo",
@@ -616,6 +643,7 @@ class TestGetJobLogsPlaceholderOffset:
         """Test E: buffer_exists=True, buffer has lines, offset=0 -> returns those lines."""
         from unittest.mock import patch
         from app.database.models import BackupJob
+        from datetime import datetime
 
         job = BackupJob(
             repository="/test/repo",
