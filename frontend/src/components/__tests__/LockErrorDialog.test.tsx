@@ -29,7 +29,7 @@ describe('LockErrorDialog', () => {
     repositoryId: 1,
     repositoryName: 'test-repo',
     onLockBroken: mockOnLockBroken,
-    isAdmin: true, // Default to admin for existing tests
+    canBreakLock: true, // Default to admin for existing tests
   }
 
   beforeEach(() => {
@@ -269,7 +269,7 @@ describe('LockErrorDialog', () => {
           onClose={mockOnClose}
           repositoryId={1}
           repositoryName="test-repo"
-          isAdmin={true}
+          canBreakLock={true}
           // No onLockBroken callback
         />
       )
@@ -283,41 +283,41 @@ describe('LockErrorDialog', () => {
     })
   })
 
-  describe('Admin restrictions', () => {
-    it('enables Break Lock button for admin users', () => {
-      render(<LockErrorDialog {...defaultProps} isAdmin={true} />)
+  describe('Break-lock permissions', () => {
+    it('enables Break Lock button when permission is granted', () => {
+      render(<LockErrorDialog {...defaultProps} canBreakLock={true} />)
       const breakLockButton = screen.getByRole('button', { name: /Break Lock/ })
       expect(breakLockButton).not.toBeDisabled()
     })
 
-    it('disables Break Lock button for non-admin users', () => {
-      render(<LockErrorDialog {...defaultProps} isAdmin={false} />)
+    it('disables Break Lock button when permission is not granted', () => {
+      render(<LockErrorDialog {...defaultProps} canBreakLock={false} />)
       const breakLockButton = screen.getByRole('button', { name: /Break Lock/ })
       expect(breakLockButton).toBeDisabled()
     })
 
-    it('disables Break Lock button when isAdmin is undefined (defaults to false)', () => {
+    it('disables Break Lock button when canBreakLock is undefined (defaults to false)', () => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { isAdmin, ...propsWithoutAdmin } = defaultProps
-      render(<LockErrorDialog {...propsWithoutAdmin} />)
+      const { canBreakLock, ...propsWithoutPermission } = defaultProps
+      render(<LockErrorDialog {...propsWithoutPermission} />)
       const breakLockButton = screen.getByRole('button', { name: /Break Lock/ })
       expect(breakLockButton).toBeDisabled()
     })
 
-    it('shows admin warning alert for non-admin users', () => {
-      render(<LockErrorDialog {...defaultProps} isAdmin={false} />)
+    it('shows the warning alert when permission is not granted', () => {
+      render(<LockErrorDialog {...defaultProps} canBreakLock={false} />)
       expect(screen.getByText(/Admin privileges required/)).toBeInTheDocument()
       expect(screen.getByText(/Only administrators can break repository locks/)).toBeInTheDocument()
     })
 
-    it('does not show admin warning alert for admin users', () => {
-      render(<LockErrorDialog {...defaultProps} isAdmin={true} />)
+    it('does not show the warning alert when permission is granted', () => {
+      render(<LockErrorDialog {...defaultProps} canBreakLock={true} />)
       expect(screen.queryByText(/Admin privileges required/)).not.toBeInTheDocument()
     })
 
-    it('does not call API when non-admin clicks disabled Break Lock button', async () => {
+    it('does not call API when the disabled Break Lock button is clicked', async () => {
       mockConfirm.mockReturnValue(true)
-      render(<LockErrorDialog {...defaultProps} isAdmin={false} />)
+      render(<LockErrorDialog {...defaultProps} canBreakLock={false} />)
 
       const breakLockButton = screen.getByRole('button', { name: /Break Lock/ })
       expect(breakLockButton).toBeDisabled()

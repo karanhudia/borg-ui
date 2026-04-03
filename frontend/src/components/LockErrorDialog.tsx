@@ -23,7 +23,7 @@ interface LockErrorDialogProps {
   repositoryName: string
   borgVersion?: 1 | 2
   onLockBroken?: () => void
-  isAdmin?: boolean
+  canBreakLock?: boolean
 }
 
 export default function LockErrorDialog({
@@ -33,7 +33,7 @@ export default function LockErrorDialog({
   repositoryName,
   borgVersion: _borgVersion,
   onLockBroken,
-  isAdmin = false,
+  canBreakLock = false,
 }: LockErrorDialogProps) {
   const { t } = useTranslation()
   const [breaking, setBreaking] = useState(false)
@@ -110,7 +110,7 @@ export default function LockErrorDialog({
           <li>{t('dialogs.lockError.beforeBreakingCheck3')}</li>
         </Typography>
 
-        {!isAdmin && (
+        {!canBreakLock && (
           <Alert severity="info" sx={{ mt: 2 }}>
             <Typography variant="body2">
               <strong>{t('dialogs.lockError.adminRequired')}</strong>{' '}
@@ -128,9 +128,9 @@ export default function LockErrorDialog({
           variant="contained"
           color="warning"
           onClick={handleBreakLock}
-          disabled={breaking || !isAdmin}
+          disabled={breaking || !canBreakLock}
           startIcon={breaking ? <CircularProgress size={16} /> : <Unlock size={16} />}
-          title={!isAdmin ? 'Admin privileges required to break locks' : ''}
+          title={!canBreakLock ? 'Admin privileges required to break locks' : ''}
         >
           {breaking ? t('status.running') : t('dialogs.lockError.breakLock')}
         </Button>

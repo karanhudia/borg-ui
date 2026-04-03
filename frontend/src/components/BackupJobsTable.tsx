@@ -58,7 +58,8 @@ interface BackupJobsTableProps<T extends Job = Job> {
   onDeleteJob?: (job: T) => void | Promise<void>
 
   // User permissions
-  isAdmin?: boolean
+  canBreakLocks?: boolean
+  canDeleteJobs?: boolean
 
   // Table styling
   headerBgColor?: string
@@ -124,7 +125,8 @@ export const BackupJobsTable = <T extends Job = Job>({
   onBreakLock,
   onRunNow,
   onDeleteJob,
-  isAdmin = false,
+  canBreakLocks = false,
+  canDeleteJobs = false,
   headerBgColor = 'background.default',
   enableHover = true,
   getRowKey,
@@ -532,7 +534,7 @@ export const BackupJobsTable = <T extends Job = Job>({
     })
   }
 
-  if (actions.breakLock !== false && isAdmin) {
+  if (actions.breakLock !== false && canBreakLocks) {
     actionButtons.push({
       icon: <Lock size={18} />,
       label: t('backupJobsTable.actions.breakLock'),
@@ -554,7 +556,7 @@ export const BackupJobsTable = <T extends Job = Job>({
     })
   }
 
-  if (actions.delete !== false && isAdmin) {
+  if (actions.delete !== false && canDeleteJobs) {
     actionButtons.push({
       icon: <Trash2 size={18} />,
       label: t('backupJobsTable.actions.delete'),
@@ -641,7 +643,7 @@ export const BackupJobsTable = <T extends Job = Job>({
           repositoryId={lockError.repositoryId}
           repositoryName={lockError.repositoryName}
           borgVersion={lockError.borgVersion}
-          isAdmin={isAdmin}
+          canBreakLock={canBreakLocks}
           onLockBroken={() => {
             setLockError(null)
             queryClient.invalidateQueries({ queryKey: ['activity'] })

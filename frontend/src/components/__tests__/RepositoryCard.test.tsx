@@ -40,6 +40,7 @@ describe('RepositoryCard', () => {
     onBackupNow: vi.fn(),
     onViewArchives: vi.fn(),
     onJobCompleted: vi.fn(),
+    canDo: vi.fn().mockReturnValue(true),
   }
 
   const mockGetCompressionLabel = vi.fn((compression: string) => {
@@ -131,7 +132,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -146,7 +147,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -161,7 +162,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -177,7 +178,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={repoWithoutSize}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -191,7 +192,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -206,7 +207,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -222,7 +223,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -241,7 +242,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={repoWithOneSource}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -259,7 +260,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={repoWithoutSources}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -276,7 +277,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={observeRepo}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -290,7 +291,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -305,7 +306,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={observeRepo}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -319,7 +320,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -334,7 +335,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={observeRepo}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -350,7 +351,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -367,7 +368,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={observeRepo}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -385,7 +386,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -399,7 +400,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={false}
+          canManageRepository={false}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -413,9 +414,10 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={false}
+          canManageRepository={false}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
+          canDo={() => false}
         />
       )
 
@@ -433,7 +435,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -449,7 +451,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -466,7 +468,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -487,7 +489,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -508,7 +510,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -529,7 +531,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -550,7 +552,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -567,7 +569,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -592,7 +594,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -622,7 +624,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -647,7 +649,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -672,7 +674,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -692,7 +694,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={true}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -715,7 +717,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={true}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -734,7 +736,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={repoWithoutBackup}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -753,7 +755,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={repoWithoutCheck}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -772,7 +774,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={repoWithoutCompact}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -805,7 +807,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -832,7 +834,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -851,7 +853,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -868,7 +870,7 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
-          isAdmin={true}
+          canManageRepository={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -905,9 +907,10 @@ describe('RepositoryCard', () => {
         <RepositoryCard
           repository={observeRepo}
           isInJobsSet={false}
-          isAdmin={false}
+          canManageRepository={false}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
+          canDo={() => false}
         />
       )
 

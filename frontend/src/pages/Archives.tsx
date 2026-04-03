@@ -21,6 +21,7 @@ import LockErrorDialog from '../components/LockErrorDialog'
 import { useAnalytics } from '../hooks/useAnalytics'
 import RestoreWizard, { RestoreData } from '../components/RestoreWizard'
 import { getRepoCapabilities, getBorgVersion } from '../utils/repoCapabilities'
+import { usePermissions } from '../hooks/usePermissions'
 
 const Archives: React.FC = () => {
   const { t } = useTranslation()
@@ -43,6 +44,7 @@ const Archives: React.FC = () => {
   const queryClient = useQueryClient()
   const location = useLocation()
   const { trackArchive, EventAction } = useAnalytics()
+  const permissions = usePermissions()
 
   // Get repositories list
   const { data: repositoriesData, isLoading: loadingRepositories } = useQuery({
@@ -428,7 +430,12 @@ const Archives: React.FC = () => {
           onMountArchive={openMountDialog}
           onDeleteArchive={(archiveName) => setShowDeleteConfirm(archiveName)}
           mountDisabled={mountArchiveMutation.isPending}
-          canDelete={getRepoCapabilities({ mode: selectedRepository?.mode }).canDelete}
+          canDelete={
+            getRepoCapabilities({ mode: selectedRepository?.mode }).canDelete &&
+            (selectedRepositoryId
+              ? permissions.canDo(selectedRepositoryId, 'delete_archive')
+              : false)
+          }
         />
       )}
 

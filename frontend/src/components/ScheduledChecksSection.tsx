@@ -32,6 +32,7 @@ import {
 } from '../utils/dateUtils'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
 import CronBuilderDialog from './CronBuilderDialog'
+import { usePermissions } from '../hooks/usePermissions'
 
 interface ScheduledCheck {
   repository_id: number
@@ -54,6 +55,7 @@ export interface ScheduledChecksSectionRef {
 const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref) => {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const { canDo } = usePermissions()
   const [showDialog, setShowDialog] = useState(false)
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(null)
   const [formData, setFormData] = useState({
@@ -68,6 +70,9 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
   })
 
   const repositories = repositoriesData?.data?.repositories || []
+  const manageableRepositories = repositories.filter((repo: { id: number }) =>
+    canDo(repo.id, 'maintenance')
+  )
 
   // Fetch scheduled checks for all repositories
   const { data: scheduledChecks, isLoading } = useQuery({
@@ -243,6 +248,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
       label: t('common.buttons.run'),
       onClick: (check) => runCheckMutation.mutate(check.repository_id),
       color: 'primary',
+      show: (check) => canDo(check.repository_id, 'maintenance'),
       tooltip: t('scheduledChecks.tooltips.runNow'),
     },
     {
@@ -250,6 +256,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
       label: t('common.buttons.edit'),
       onClick: (check) => openEditDialog(check),
       color: 'default',
+      show: (check) => canDo(check.repository_id, 'maintenance'),
       tooltip: t('scheduledChecks.tooltips.editSchedule'),
     },
     {
@@ -257,6 +264,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
       label: t('common.buttons.delete'),
       onClick: (check) => handleDelete(check),
       color: 'error',
+      show: (check) => canDo(check.repository_id, 'maintenance'),
       tooltip: t('scheduledChecks.tooltips.disableSchedule'),
     },
   ]
@@ -264,7 +272,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
   return (
     <Box>
       {/* No repositories warning */}
-      {repositories.length === 0 && (
+      {manageableRepositories.length === 0 && (
         <Alert severity="info" sx={{ mb: 3 }}>
           {t('scheduledChecks.needRepository')}
         </Alert>
@@ -299,13 +307,13 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
         <DialogContent>
           <Stack spacing={3} sx={{ mt: 1 }}>
             <RepoSelect
-              repositories={repositories}
+              repositories={manageableRepositories}
               value={selectedRepositoryId || ''}
               onChange={(v) => setSelectedRepositoryId(v ? Number(v) : null)}
               loading={loadingRepositories}
               valueKey="id"
               label={t('scheduledChecks.repository')}
-              disabled={repositories.length === 0}
+              disabled={manageableRepositories.length === 0}
             />
 
             <TextField

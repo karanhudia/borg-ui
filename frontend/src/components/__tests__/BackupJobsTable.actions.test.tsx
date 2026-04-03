@@ -321,7 +321,8 @@ describe('BackupJobsTable action internals', () => {
             started_at: '2026-04-01T10:00:00Z',
           },
         ]}
-        isAdmin={true}
+        canDeleteJobs={true}
+        canBreakLocks={true}
         actions={{ delete: true }}
       />,
       { queryClient }
@@ -362,7 +363,8 @@ describe('BackupJobsTable action internals', () => {
             error_message: 'LOCK_ERROR::/backup/repo77\n[Exit Code 73] lock failure',
           },
         ]}
-        isAdmin={true}
+        canDeleteJobs={true}
+        canBreakLocks={true}
         actions={{ breakLock: true }}
       />
     )
@@ -394,7 +396,8 @@ describe('BackupJobsTable action internals', () => {
             error_message: 'LOCK_ERROR::/backup/missing\n[Exit Code 73] lock failure',
           },
         ]}
-        isAdmin={true}
+        canDeleteJobs={true}
+        canBreakLocks={true}
         actions={{ breakLock: true }}
       />
     )
@@ -428,7 +431,8 @@ describe('BackupJobsTable action internals', () => {
             error_message: 'LOCK_ERROR::/backup/repo77\n[Exit Code 73] lock failure',
           },
         ]}
-        isAdmin={true}
+        canDeleteJobs={true}
+        canBreakLocks={true}
         actions={{ breakLock: true }}
       />,
       { queryClient }

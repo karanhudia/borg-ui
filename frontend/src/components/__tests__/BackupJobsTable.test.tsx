@@ -400,7 +400,8 @@ describe('BackupJobsTable', () => {
     renderWithProviders(
       <BackupJobsTable
         jobs={jobsWithLockError}
-        isAdmin={true}
+        canDeleteJobs={true}
+        canBreakLocks={true}
         actions={{ breakLock: true }}
         onBreakLock={mockCallbacks.onBreakLock}
       />
@@ -430,7 +431,8 @@ describe('BackupJobsTable', () => {
     renderWithProviders(
       <BackupJobsTable
         jobs={jobsWithLockError}
-        isAdmin={false}
+        canDeleteJobs={false}
+        canBreakLocks={false}
         actions={{ breakLock: true }}
         onBreakLock={mockCallbacks.onBreakLock}
       />
@@ -441,7 +443,7 @@ describe('BackupJobsTable', () => {
     expect(breakLockButtons.length).toBe(0)
   })
 
-  it('does not show Break Lock button when isAdmin is undefined', () => {
+  it('does not show Break Lock button when canBreakLocks is undefined', () => {
     const jobsWithLockError = [
       {
         id: 4,
@@ -634,9 +636,14 @@ describe('BackupJobsTable', () => {
   })
 
   describe('Delete Job Action', () => {
-    it('shows delete button only for admin users', () => {
+    it('shows delete button only when delete permission is granted', () => {
       renderWithProviders(
-        <BackupJobsTable jobs={mockJobs} isAdmin={true} actions={{ delete: true }} />
+        <BackupJobsTable
+          jobs={mockJobs}
+          canDeleteJobs={true}
+          canBreakLocks={true}
+          actions={{ delete: true }}
+        />
       )
 
       // Delete buttons should be visible for completed/failed jobs
@@ -644,9 +651,14 @@ describe('BackupJobsTable', () => {
       expect(deleteButtons.length).toBeGreaterThan(0)
     })
 
-    it('does not show delete button for non-admin users', () => {
+    it('does not show delete button when delete permission is not granted', () => {
       renderWithProviders(
-        <BackupJobsTable jobs={mockJobs} isAdmin={false} actions={{ delete: true }} />
+        <BackupJobsTable
+          jobs={mockJobs}
+          canDeleteJobs={false}
+          canBreakLocks={false}
+          actions={{ delete: true }}
+        />
       )
 
       // Delete buttons should NOT be visible
@@ -654,7 +666,7 @@ describe('BackupJobsTable', () => {
       expect(deleteButtons.length).toBe(0)
     })
 
-    it('does not show delete button when isAdmin is undefined', () => {
+    it('does not show delete button when canDeleteJobs is undefined', () => {
       renderWithProviders(<BackupJobsTable jobs={mockJobs} actions={{ delete: true }} />)
 
       // Delete buttons should NOT be visible (defaults to false)
@@ -678,7 +690,8 @@ describe('BackupJobsTable', () => {
       renderWithProviders(
         <BackupJobsTable
           jobs={runningJobs as MockBackupJob[]}
-          isAdmin={true}
+          canDeleteJobs={true}
+          canBreakLocks={true}
           actions={{ delete: true }}
         />
       )
@@ -704,7 +717,8 @@ describe('BackupJobsTable', () => {
       renderWithProviders(
         <BackupJobsTable
           jobs={pendingJobs as MockBackupJob[]}
-          isAdmin={true}
+          canDeleteJobs={true}
+          canBreakLocks={true}
           actions={{ delete: true }}
         />
       )
@@ -715,7 +729,7 @@ describe('BackupJobsTable', () => {
       expect(deleteButtons.length).toBe(1)
     })
 
-    it('shows delete button for completed jobs (admin only)', () => {
+    it('shows delete button for completed jobs when delete permission is granted', () => {
       const completedJobs: Partial<MockBackupJob>[] = [
         {
           id: 12,
@@ -732,7 +746,8 @@ describe('BackupJobsTable', () => {
       renderWithProviders(
         <BackupJobsTable
           jobs={completedJobs as MockBackupJob[]}
-          isAdmin={true}
+          canDeleteJobs={true}
+          canBreakLocks={true}
           actions={{ delete: true }}
         />
       )
@@ -742,7 +757,7 @@ describe('BackupJobsTable', () => {
       expect(deleteButtons.length).toBeGreaterThan(0)
     })
 
-    it('shows delete button for failed jobs (admin only)', () => {
+    it('shows delete button for failed jobs when delete permission is granted', () => {
       const failedJobs: Partial<MockBackupJob>[] = [
         {
           id: 13,
@@ -760,7 +775,8 @@ describe('BackupJobsTable', () => {
       renderWithProviders(
         <BackupJobsTable
           jobs={failedJobs as MockBackupJob[]}
-          isAdmin={true}
+          canDeleteJobs={true}
+          canBreakLocks={true}
           actions={{ delete: true }}
         />
       )
@@ -774,7 +790,12 @@ describe('BackupJobsTable', () => {
       const user = userEvent.setup()
 
       renderWithProviders(
-        <BackupJobsTable jobs={mockJobs} isAdmin={true} actions={{ delete: true }} />
+        <BackupJobsTable
+          jobs={mockJobs}
+          canDeleteJobs={true}
+          canBreakLocks={true}
+          actions={{ delete: true }}
+        />
       )
 
       // Verify dialog is not initially visible
@@ -799,7 +820,12 @@ describe('BackupJobsTable', () => {
       const user = userEvent.setup()
 
       renderWithProviders(
-        <BackupJobsTable jobs={mockJobs} isAdmin={true} actions={{ delete: true }} />
+        <BackupJobsTable
+          jobs={mockJobs}
+          canDeleteJobs={true}
+          canBreakLocks={true}
+          actions={{ delete: true }}
+        />
       )
 
       // Find delete button - filter to only actual buttons
@@ -823,10 +849,15 @@ describe('BackupJobsTable', () => {
 
     it('respects delete action disabled flag', () => {
       renderWithProviders(
-        <BackupJobsTable jobs={mockJobs} isAdmin={true} actions={{ delete: false }} />
+        <BackupJobsTable
+          jobs={mockJobs}
+          canDeleteJobs={true}
+          canBreakLocks={true}
+          actions={{ delete: false }}
+        />
       )
 
-      // Delete buttons should NOT be visible even for admin
+      // Delete buttons should NOT be visible even with permission
       const deleteButtons = screen.queryAllByLabelText(/delete/i)
       expect(deleteButtons.length).toBe(0)
     })
@@ -838,7 +869,8 @@ describe('BackupJobsTable', () => {
       renderWithProviders(
         <BackupJobsTable
           jobs={mockJobs}
-          isAdmin={true}
+          canDeleteJobs={true}
+          canBreakLocks={true}
           actions={{ delete: true }}
           onDeleteJob={onDeleteJob}
         />

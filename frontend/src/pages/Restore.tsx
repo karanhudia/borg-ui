@@ -30,6 +30,7 @@ import { BorgApiClient } from '../services/borgApi'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { usePermissions } from '../hooks/usePermissions'
 import { formatDate, formatBytes as formatBytesUtil, formatTimeRange } from '../utils/dateUtils'
 import RepositoryInfo from '../components/RepositoryInfo'
 import PathSelectorField from '../components/PathSelectorField'
@@ -65,12 +66,16 @@ interface RestoreJob {
 const Restore: React.FC = () => {
   const { t } = useTranslation()
   const { trackArchive, EventAction } = useAnalytics()
+  const permissions = usePermissions()
   const [selectedRepository, setSelectedRepository] = useState<string>('')
   const [selectedRepoData, setSelectedRepoData] = useState<Repository | null>(null)
   const [restoreArchive, setRestoreArchive] = useState<Archive | null>(null)
   const [destination, setDestination] = useState<string>('')
   const [selectedPaths, setSelectedPaths] = useState<string[]>([])
   const [showBrowser, setShowBrowser] = useState<boolean>(false)
+  const canStartRestore = selectedRepoData
+    ? permissions.canDo(selectedRepoData.id, 'restore')
+    : false
   const [lockError, setLockError] = useState<{
     repositoryId: number
     repositoryName: string
@@ -682,7 +687,7 @@ const Restore: React.FC = () => {
             variant="contained"
             color="primary"
             onClick={handleRestore}
-            disabled={restoreMutation.isPending || !destination}
+            disabled={restoreMutation.isPending || !destination || !canStartRestore}
             startIcon={
               restoreMutation.isPending ? (
                 <CircularProgress size={16} color="inherit" />

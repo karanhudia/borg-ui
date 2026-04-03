@@ -20,6 +20,7 @@ import { toast } from 'react-hot-toast'
 import RepositoryCell from '../components/RepositoryCell'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
+import { usePermissions } from '../hooks/usePermissions'
 import {
   formatDate,
   formatRelativeTime,
@@ -98,7 +99,9 @@ const Schedule: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { track, EventCategory, EventAction } = useAnalytics()
-  const { user } = useAuth()
+  const { hasGlobalPermission } = useAuth()
+  const { canDo } = usePermissions()
+  const canManageRepositoriesGlobally = hasGlobalPermission('repositories.manage_all')
 
   // Determine current tab from URL
   const getCurrentTab = React.useCallback(() => {
@@ -175,6 +178,9 @@ const Schedule: React.FC = () => {
   })
 
   const repositories = repositoriesData?.data?.repositories || []
+  const manageableRepositories = repositories.filter((repo: Repository) =>
+    canDo(repo.id, 'maintenance')
+  )
 
   // Get backup jobs history (scheduled only)
   const { data: backupJobsData, isLoading: loadingBackupJobs } = useQuery({
@@ -378,6 +384,23 @@ const Schedule: React.FC = () => {
     const repo = repositories?.find((r: Repository) => r.path === path)
     return repo?.name || path
   }
+
+  const canManageJob = React.useCallback(
+    (job: ScheduledJob) => {
+      const targetRepoIds = job.repository_ids?.length
+        ? job.repository_ids
+        : job.repository_id
+          ? [job.repository_id]
+          : repositories
+              .filter((repo: Repository) => repo.path === job.repository)
+              .map((repo: Repository) => repo.id)
+      if (targetRepoIds.length === 0) return canManageRepositoriesGlobally
+      return targetRepoIds.every((repoId: number) => canDo(repoId, 'maintenance'))
+    },
+    [canDo, canManageRepositoriesGlobally, repositories]
+  )
+
+  const canCreateSchedule = canManageRepositoriesGlobally || manageableRepositories.length > 0
 
   // Note: Using StatusBadge component for status display instead of individual functions
 
@@ -631,13 +654,17 @@ const Schedule: React.FC = () => {
       width: '7%',
       align: 'center',
       render: (job) => (
-        <Tooltip title={job.enabled ? 'Disable' : 'Enable'} arrow>
+        <Tooltip
+          title={!canManageJob(job) ? 'View only' : job.enabled ? 'Disable' : 'Enable'}
+          arrow
+        >
           <FormControlLabel
             control={
               <Switch
                 checked={job.enabled}
                 onChange={() => handleToggleJob(job)}
                 size="small"
+                disabled={!canManageJob(job)}
                 onClick={(e) => e.stopPropagation()}
               />
             }
@@ -655,7 +682,8 @@ const Schedule: React.FC = () => {
       label: 'Run Now',
       onClick: (job) => handleRunJobNow(job),
       color: 'primary',
-      disabled: (job) => !job.enabled || runJobNowMutation.isPending,
+      disabled: (job) => !job.enabled || runJobNowMutation.isPending || !canManageJob(job),
+      show: (job) => canManageJob(job),
       tooltip: 'Run Now',
     },
     {
@@ -663,6 +691,7 @@ const Schedule: React.FC = () => {
       label: 'Edit',
       onClick: (job) => openEditWizard(job),
       color: 'default',
+      show: (job) => canManageJob(job),
       tooltip: 'Edit',
     },
     {
@@ -670,7 +699,8 @@ const Schedule: React.FC = () => {
       label: 'Duplicate',
       onClick: (job) => handleDuplicateJob(job),
       color: 'default',
-      disabled: () => duplicateJobMutation.isPending,
+      disabled: (job) => duplicateJobMutation.isPending || !canManageJob(job),
+      show: (job) => canManageJob(job),
       tooltip: 'Duplicate',
     },
     {
@@ -678,6 +708,7 @@ const Schedule: React.FC = () => {
       label: 'Delete',
       onClick: (job) => setDeleteConfirmJob(job),
       color: 'error',
+      show: (job) => canManageJob(job),
       tooltip: 'Delete',
     },
   ]
@@ -695,26 +726,27 @@ const Schedule: React.FC = () => {
           </Typography>
         </Box>
 
-        {/* Action Button */}
-        {currentTab === 0 ? (
-          <Button
-            variant="contained"
-            startIcon={<Plus size={18} />}
-            onClick={openCreateWizard}
-            disabled={!repositories || repositories.length === 0}
-          >
-            {t('schedule.createBackup')}
-          </Button>
-        ) : (
-          <Button
-            variant="contained"
-            startIcon={<Plus size={18} />}
-            onClick={() => scheduledChecksSectionRef.current?.openAddDialog()}
-            disabled={!repositories || repositories.length === 0}
-          >
-            {t('schedule.addCheck')}
-          </Button>
-        )}
+        {/* Action Button — hidden for viewers */}
+        {canCreateSchedule &&
+          (currentTab === 0 ? (
+            <Button
+              variant="contained"
+              startIcon={<Plus size={18} />}
+              onClick={openCreateWizard}
+              disabled={!canCreateSchedule}
+            >
+              {t('schedule.createBackup')}
+            </Button>
+          ) : (
+            <Button
+              variant="contained"
+              startIcon={<Plus size={18} />}
+              onClick={() => scheduledChecksSectionRef.current?.openAddDialog()}
+              disabled={!canCreateSchedule}
+            >
+              {t('schedule.addCheck')}
+            </Button>
+          ))}
       </Box>
 
       {/* Tabs */}
@@ -769,7 +801,8 @@ const Schedule: React.FC = () => {
             scheduledJobs={jobs}
             repositories={repositories}
             isLoading={loadingBackupJobs}
-            isAdmin={user?.is_admin || false}
+            canBreakLocks={canManageRepositoriesGlobally}
+            canDeleteJobs={canManageRepositoriesGlobally}
             filterSchedule={filterSchedule}
             filterRepository={filterRepository}
             filterStatus={filterStatus}
@@ -802,7 +835,7 @@ const Schedule: React.FC = () => {
         onClose={() => setShowScheduleWizard(false)}
         mode={wizardMode}
         scheduledJob={editingJobForWizard}
-        repositories={repositories || []}
+        repositories={manageableRepositories || []}
         scripts={scriptsData?.data || []}
         onSubmit={handleWizardSubmit}
       />

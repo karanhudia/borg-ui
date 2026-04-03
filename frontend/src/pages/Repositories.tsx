@@ -24,6 +24,7 @@ import { repositoriesAPI, RepositoryData } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { useAuth } from '../hooks/useAuth'
+import { usePermissions } from '../hooks/usePermissions'
 import { useAppState } from '../context/AppContext'
 import { AxiosResponse } from 'axios'
 import LockErrorDialog from '../components/LockErrorDialog'
@@ -79,7 +80,9 @@ interface PruneForm {
 
 export default function Repositories() {
   const { t } = useTranslation()
-  const { user } = useAuth()
+  const { hasGlobalPermission } = useAuth()
+  const canManageRepositoriesGlobally = hasGlobalPermission('repositories.manage_all')
+  const permissions = usePermissions()
   const queryClient = useQueryClient()
   const appState = useAppState()
   const navigate = useNavigate()
@@ -500,7 +503,7 @@ export default function Repositories() {
               {t('repositories.subtitle')}
             </Typography>
           </Box>
-          {user?.is_admin && (
+          {canManageRepositoriesGlobally && (
             <Stack direction="row" spacing={2}>
               <Button
                 variant="contained"
@@ -606,7 +609,7 @@ export default function Repositories() {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               {t('repositories.empty.hint')}
             </Typography>
-            {user?.is_admin && (
+            {canManageRepositoriesGlobally && (
               <Stack direction="row" spacing={2} justifyContent="center">
                 <Button
                   variant="contained"
@@ -693,7 +696,8 @@ export default function Repositories() {
                     onBackupNow={() => handleBackupNow(repository)}
                     onViewArchives={() => handleViewArchives(repository)}
                     getCompressionLabel={getCompressionLabel}
-                    isAdmin={user?.is_admin || false}
+                    canManageRepository={canManageRepositoriesGlobally}
+                    canDo={(action) => permissions.canDo(repository.id, action)}
                     onJobCompleted={handleJobCompleted}
                   />
                 ))}
@@ -748,6 +752,7 @@ export default function Repositories() {
           repositoryId={lockError.repositoryId}
           repositoryName={lockError.repositoryName}
           borgVersion={lockError.borgVersion}
+          canBreakLock={canManageRepositoriesGlobally}
           onLockBroken={() => {
             queryClient.invalidateQueries({ queryKey: ['repository-info', lockError.repositoryId] })
           }}

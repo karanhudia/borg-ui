@@ -21,7 +21,7 @@ vi.mock('../../hooks/useAnalytics', () => ({
 
 vi.mock('../../hooks/useAuth', () => ({
   useAuth: () => ({
-    user: { is_admin: true },
+    hasGlobalPermission: (permission: string) => permission === 'repositories.manage_all',
   }),
 }))
 
@@ -80,7 +80,8 @@ describe('Activity page', () => {
       expect.objectContaining({
         showTypeColumn: true,
         showTriggerColumn: true,
-        isAdmin: true,
+        canBreakLocks: true,
+        canDeleteJobs: true,
         actions: expect.objectContaining({ delete: true, breakLock: true }),
       })
     )

@@ -30,6 +30,7 @@ import RepoSelect from '../components/RepoSelect'
 import LogViewerDialog from '../components/LogViewerDialog'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
+import { usePermissions } from '../hooks/usePermissions'
 import { getRepoCapabilities } from '../utils/repoCapabilities'
 
 const Backup: React.FC = () => {
@@ -38,7 +39,9 @@ const Backup: React.FC = () => {
   const queryClient = useQueryClient()
   const location = useLocation()
   const { trackBackup, EventAction } = useAnalytics()
-  const { user } = useAuth()
+  const { hasGlobalPermission } = useAuth()
+  const canManageRepositoryOperations = hasGlobalPermission('repositories.manage_all')
+  const permissions = usePermissions()
   const { t } = useTranslation()
 
   // Handle incoming navigation state (from "Backup Now" button)
@@ -72,6 +75,8 @@ const Backup: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return repositoriesData.data.repositories.find((repo: any) => repo.path === selectedRepository)
   }, [selectedRepository, repositoriesData])
+
+  const canStartBackup = selectedRepoData ? permissions.canDo(selectedRepoData.id, 'backup') : false
 
   // Start backup mutation
   const startBackupMutation = useMutation({
@@ -197,7 +202,8 @@ const Backup: React.FC = () => {
             <RepoSelect
               repositories={(repositoriesData?.data?.repositories ?? []).filter(
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (repo: any) => getRepoCapabilities(repo).canBackup
+                (repo: any) =>
+                  getRepoCapabilities(repo).canBackup && permissions.canDo(repo.id, 'backup')
               )}
               value={selectedRepository}
               onChange={(v) => handleRepositoryChange(v as string)}
@@ -221,7 +227,7 @@ const Backup: React.FC = () => {
                 )
               }
               onClick={handleStartBackup}
-              disabled={startBackupMutation.isPending || !selectedRepository}
+              disabled={startBackupMutation.isPending || !selectedRepository || !canStartBackup}
               sx={{
                 minWidth: { xs: '100%', sm: 180 },
                 height: { xs: 48, sm: 56 },
@@ -531,7 +537,8 @@ const Backup: React.FC = () => {
               errorInfo: true,
               delete: true,
             }}
-            isAdmin={user?.is_admin || false}
+            canBreakLocks={canManageRepositoryOperations}
+            canDeleteJobs={canManageRepositoryOperations}
             getRowKey={(job) => String(job.id)}
             headerBgColor="background.default"
             enableHover={true}
