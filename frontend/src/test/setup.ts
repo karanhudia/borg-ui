@@ -47,6 +47,8 @@ borgApiHttpClient.defaults.adapter = testAxiosAdapter
 // Cleanup after each test
 afterEach(() => {
   cleanup()
+  vi.clearAllTimers()
+  vi.useRealTimers()
   defaultFetchMock.mockClear()
   vi.stubGlobal('fetch', defaultFetchMock)
   api.defaults.adapter = testAxiosAdapter

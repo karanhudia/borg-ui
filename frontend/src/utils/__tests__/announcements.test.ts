@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Announcement } from '../../types/announcements'
 import {
   acknowledgeAnnouncement,
@@ -26,6 +26,11 @@ describe('announcements utils', () => {
     localStorage.clear()
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-04-10T12:00:00Z'))
+  })
+
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
   })
 
   it('compares semantic versions numerically', () => {
