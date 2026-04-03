@@ -121,6 +121,10 @@ const renderWizard = (
   }
 }
 
+const setInputValue = (element: HTMLElement, value: string) => {
+  fireEvent.change(element, { target: { value } })
+}
+
 describe('RepositoryWizard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -199,7 +203,7 @@ describe('RepositoryWizard', () => {
           expect(screen.getByLabelText(/Repository Path/i)).toBeInTheDocument()
         })
 
-        await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
+        setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/test')
 
         expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled()
       })
@@ -212,7 +216,7 @@ describe('RepositoryWizard', () => {
           expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
         })
 
-        await user.type(screen.getByLabelText(/Repository Name/i), 'Test Repo')
+        setInputValue(screen.getByLabelText(/Repository Name/i), 'Test Repo')
 
         expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled()
       })
@@ -225,8 +229,8 @@ describe('RepositoryWizard', () => {
           expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
         })
 
-        await user.type(screen.getByLabelText(/Repository Name/i), 'Test Repo')
-        await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
+        setInputValue(screen.getByLabelText(/Repository Name/i), 'Test Repo')
+        setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/test')
 
         expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled()
       })
@@ -259,8 +263,8 @@ describe('RepositoryWizard', () => {
           expect(screen.getByText('Remote Client')).toBeInTheDocument()
         })
 
-        await user.type(screen.getByLabelText(/Repository Name/i), 'Test Repo')
-        await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
+        setInputValue(screen.getByLabelText(/Repository Name/i), 'Test Repo')
+        setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/test')
 
         const remoteCard = screen.getByText('Remote Client').closest('button')
         await user.click(remoteCard!)
@@ -291,8 +295,8 @@ describe('RepositoryWizard', () => {
 
     describe('Step 2: Data Source', () => {
       const goToStep2 = async (user: ReturnType<typeof userEvent.setup>) => {
-        await user.type(screen.getByLabelText(/Repository Name/i), 'Test Repo')
-        await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
+        setInputValue(screen.getByLabelText(/Repository Name/i), 'Test Repo')
+        setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/test')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         await waitFor(() => {
@@ -391,7 +395,7 @@ describe('RepositoryWizard', () => {
         await goToStep2(user)
 
         const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
-        await user.type(dirInput, '/home/user/data')
+        setInputValue(dirInput, '/home/user/data')
         await user.click(screen.getByRole('button', { name: /Add/i }))
 
         expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled()
@@ -420,8 +424,8 @@ describe('RepositoryWizard', () => {
     describe('Step 3: Security', () => {
       const goToStep3 = async (user: ReturnType<typeof userEvent.setup>) => {
         // Step 1: Fill in name and path
-        await user.type(screen.getByLabelText(/Repository Name/i), 'Test Repo')
-        await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
+        setInputValue(screen.getByLabelText(/Repository Name/i), 'Test Repo')
+        setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/test')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         // Step 2: Wait for Data Source step and add source directory
@@ -433,7 +437,7 @@ describe('RepositoryWizard', () => {
         )
 
         const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
-        await user.type(dirInput, '/home/user')
+        setInputValue(dirInput, '/home/user')
         await user.click(screen.getByRole('button', { name: /Add/i }))
 
         await waitFor(() => {
@@ -516,7 +520,7 @@ describe('RepositoryWizard', () => {
 
         // Find and fill the passphrase input
         const passphraseInput = screen.getByLabelText(/^Passphrase/i)
-        await user.type(passphraseInput, 'mysecretpass')
+        setInputValue(passphraseInput, 'mysecretpass')
 
         expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled()
       })
@@ -525,8 +529,8 @@ describe('RepositoryWizard', () => {
     describe('Step 4: Backup Configuration', () => {
       const goToStep4 = async (user: ReturnType<typeof userEvent.setup>) => {
         // Step 1
-        await user.type(screen.getByLabelText(/Repository Name/i), 'Test Repo')
-        await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
+        setInputValue(screen.getByLabelText(/Repository Name/i), 'Test Repo')
+        setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/test')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         // Step 2
@@ -538,7 +542,7 @@ describe('RepositoryWizard', () => {
         )
 
         const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
-        await user.type(dirInput, '/home/user')
+        setInputValue(dirInput, '/home/user')
         await user.click(screen.getByRole('button', { name: /Add/i }))
 
         await waitFor(() => {
@@ -554,7 +558,7 @@ describe('RepositoryWizard', () => {
           { timeout: 5000 }
         )
 
-        await user.type(screen.getByLabelText(/^Passphrase/i), 'testpass123')
+        setInputValue(screen.getByLabelText(/^Passphrase/i), 'testpass123')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         // Step 4
@@ -622,8 +626,8 @@ describe('RepositoryWizard', () => {
     describe('Step 5: Review', () => {
       const goToStep5 = async (user: ReturnType<typeof userEvent.setup>) => {
         // Step 1
-        await user.type(screen.getByLabelText(/Repository Name/i), 'Test Repo')
-        await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
+        setInputValue(screen.getByLabelText(/Repository Name/i), 'Test Repo')
+        setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/test')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         // Step 2
@@ -635,7 +639,7 @@ describe('RepositoryWizard', () => {
         )
 
         const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
-        await user.type(dirInput, '/home/user')
+        setInputValue(dirInput, '/home/user')
         await user.click(screen.getByRole('button', { name: /Add/i }))
 
         await waitFor(() => {
@@ -651,7 +655,7 @@ describe('RepositoryWizard', () => {
           { timeout: 5000 }
         )
 
-        await user.type(screen.getByLabelText(/^Passphrase/i), 'testpass123')
+        setInputValue(screen.getByLabelText(/^Passphrase/i), 'testpass123')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         // Step 4
@@ -784,8 +788,8 @@ describe('RepositoryWizard', () => {
 
     describe('Step 2: Data Source', () => {
       const goToStep2Import = async (user: ReturnType<typeof userEvent.setup>) => {
-        await user.type(screen.getByLabelText(/Repository Name/i), 'Imported Repo')
-        await user.type(screen.getByLabelText(/Repository Path/i), '/existing/repo')
+        setInputValue(screen.getByLabelText(/Repository Name/i), 'Imported Repo')
+        setInputValue(screen.getByLabelText(/Repository Path/i), '/existing/repo')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         await waitFor(() => {
@@ -830,8 +834,8 @@ describe('RepositoryWizard', () => {
         })
 
         // Step 1
-        await user.type(screen.getByLabelText(/Repository Name/i), 'Imported Full Repo')
-        await user.type(screen.getByLabelText(/Repository Path/i), '/existing/backup')
+        setInputValue(screen.getByLabelText(/Repository Name/i), 'Imported Full Repo')
+        setInputValue(screen.getByLabelText(/Repository Path/i), '/existing/backup')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         // Step 2
@@ -839,7 +843,7 @@ describe('RepositoryWizard', () => {
           expect(screen.getByText('Source Directories & Files')).toBeInTheDocument()
         })
         const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
-        await user.type(dirInput, '/data/important')
+        setInputValue(dirInput, '/data/important')
         await user.click(screen.getByRole('button', { name: /Add/i }))
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
@@ -847,7 +851,7 @@ describe('RepositoryWizard', () => {
         await waitFor(() => {
           expect(screen.getByLabelText(/Passphrase/i)).toBeInTheDocument()
         })
-        await user.type(screen.getByLabelText(/Passphrase/i), 'importpass')
+        setInputValue(screen.getByLabelText(/Passphrase/i), 'importpass')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         // Step 4
@@ -883,15 +887,15 @@ describe('RepositoryWizard', () => {
           expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
         })
 
-        await user.type(screen.getByLabelText(/Repository Name/i), 'Imported Keyfile Repo')
-        await user.type(screen.getByLabelText(/Repository Path/i), '/existing/keyfile-repo')
+        setInputValue(screen.getByLabelText(/Repository Name/i), 'Imported Keyfile Repo')
+        setInputValue(screen.getByLabelText(/Repository Path/i), '/existing/keyfile-repo')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         await waitFor(() => {
           expect(screen.getByText('Source Directories & Files')).toBeInTheDocument()
         })
         const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
-        await user.type(dirInput, '/data/keyfile')
+        setInputValue(dirInput, '/data/keyfile')
         await user.click(screen.getByRole('button', { name: /Add/i }))
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
@@ -914,7 +918,7 @@ describe('RepositoryWizard', () => {
         expect(await screen.findByText(/Selected: imported.key/i)).toBeInTheDocument()
         expect(screen.getByText(/Keyfile will be uploaded after import/i)).toBeInTheDocument()
 
-        await user.type(screen.getByLabelText(/Passphrase/i), 'importpass')
+        setInputValue(screen.getByLabelText(/Passphrase/i), 'importpass')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         await waitFor(() => {
@@ -953,15 +957,15 @@ describe('RepositoryWizard', () => {
           expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
         })
 
-        await user.type(screen.getByLabelText(/Repository Name/i), 'Imported Pasted Key Repo')
-        await user.type(screen.getByLabelText(/Repository Path/i), '/existing/pasted-key-repo')
+        setInputValue(screen.getByLabelText(/Repository Name/i), 'Imported Pasted Key Repo')
+        setInputValue(screen.getByLabelText(/Repository Path/i), '/existing/pasted-key-repo')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         await waitFor(() => {
           expect(screen.getByText('Source Directories & Files')).toBeInTheDocument()
         })
         const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
-        await user.type(dirInput, '/data/pasted-key')
+        setInputValue(dirInput, '/data/pasted-key')
         await user.click(screen.getByRole('button', { name: /Add/i }))
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
@@ -975,13 +979,13 @@ describe('RepositoryWizard', () => {
         await user.click(within(listbox).getByText('Key File'))
 
         await user.click(screen.getByRole('button', { name: /Paste Content/i }))
-        await user.type(screen.getByPlaceholderText(/BORG_KEY/i), 'BORG_KEY pasted content')
+        setInputValue(screen.getByPlaceholderText(/BORG_KEY/i), 'BORG_KEY pasted content')
 
         expect(
           await screen.findByText(/Keyfile content will be saved after import/i)
         ).toBeInTheDocument()
 
-        await user.type(screen.getByLabelText(/Passphrase/i), 'pastepass')
+        setInputValue(screen.getByLabelText(/Passphrase/i), 'pastepass')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         await waitFor(() => {
@@ -1135,8 +1139,8 @@ describe('RepositoryWizard', () => {
           { timeout: 5000 }
         )
 
-        await user.type(screen.getByLabelText(/Repository Name/i), 'Observe Repo')
-        await user.type(screen.getByLabelText(/Repository Path/i), '/readonly/repo')
+        setInputValue(screen.getByLabelText(/Repository Name/i), 'Observe Repo')
+        setInputValue(screen.getByLabelText(/Repository Path/i), '/readonly/repo')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         await waitFor(
@@ -1184,7 +1188,7 @@ describe('RepositoryWizard', () => {
         await goToStep2Observe(user)
 
         const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
-        await user.type(dirInput, '/optional/dir')
+        setInputValue(dirInput, '/optional/dir')
         await user.click(screen.getByRole('button', { name: /Add/i }))
 
         await waitFor(() => {
@@ -1212,8 +1216,8 @@ describe('RepositoryWizard', () => {
         )
         await user.click(screen.getByRole('checkbox'))
 
-        await user.type(screen.getByLabelText(/Repository Name/i), 'Read Only Repo')
-        await user.type(screen.getByLabelText(/Repository Path/i), '/backup/readonly')
+        setInputValue(screen.getByLabelText(/Repository Name/i), 'Read Only Repo')
+        setInputValue(screen.getByLabelText(/Repository Path/i), '/backup/readonly')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         // Step 2 - Skip adding source directories (they're optional)
@@ -1232,7 +1236,7 @@ describe('RepositoryWizard', () => {
           },
           { timeout: 5000 }
         )
-        await user.type(screen.getByLabelText(/^Passphrase/i), 'observepass')
+        setInputValue(screen.getByLabelText(/^Passphrase/i), 'observepass')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         // Step 4 - Review and Submit (no Config step in observe mode)
@@ -1273,8 +1277,8 @@ describe('RepositoryWizard', () => {
           { timeout: 5000 }
         )
 
-        await user.type(screen.getByLabelText(/Repository Name/i), 'Observe With Dirs')
-        await user.type(screen.getByLabelText(/Repository Path/i), '/backup/observe')
+        setInputValue(screen.getByLabelText(/Repository Name/i), 'Observe With Dirs')
+        setInputValue(screen.getByLabelText(/Repository Path/i), '/backup/observe')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         // Step 2 - Add optional source directory
@@ -1285,7 +1289,7 @@ describe('RepositoryWizard', () => {
           { timeout: 5000 }
         )
         const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
-        await user.type(dirInput, '/optional/source')
+        setInputValue(dirInput, '/optional/source')
         await user.click(screen.getByRole('button', { name: /Add/i }))
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
@@ -1296,7 +1300,7 @@ describe('RepositoryWizard', () => {
           },
           { timeout: 5000 }
         )
-        await user.type(screen.getByLabelText(/^Passphrase/i), 'pass123')
+        setInputValue(screen.getByLabelText(/^Passphrase/i), 'pass123')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         // Step 4 - Review and Submit (no Config step in observe mode)
@@ -1510,7 +1514,7 @@ describe('RepositoryWizard', () => {
 
       // Add a local source directory
       const input = screen.getByPlaceholderText(/\/home\/user\/documents/i)
-      await user.type(input, '/local/data')
+      setInputValue(input, '/local/data')
       const addButton = screen.getByRole('button', { name: /^Add$/i })
       await user.click(addButton)
 
@@ -1622,8 +1626,8 @@ describe('RepositoryWizard', () => {
       })
 
       // Step 1 - Fill required fields
-      await user.type(screen.getByLabelText(/Repository Name/i), 'Test Repo')
-      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'Test Repo')
+      setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/test')
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
       // Step 2 - Should show Remote Client option
@@ -1646,7 +1650,7 @@ describe('RepositoryWizard', () => {
       })
 
       // Step 1 - Select Remote Client for repository
-      await user.type(screen.getByLabelText(/Repository Name/i), 'Remote Repo')
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'Remote Repo')
 
       const remoteRepoCard = screen.getByText('Remote Client').closest('button')
       await user.click(remoteRepoCard!)
@@ -1667,7 +1671,7 @@ describe('RepositoryWizard', () => {
       await user.click(connectionOption)
 
       // Enter path
-      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
+      setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/test')
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
       // Step 2 - Remote Client should be disabled
@@ -1689,7 +1693,7 @@ describe('RepositoryWizard', () => {
       })
 
       // Step 1 - Select Remote Client for repository
-      await user.type(screen.getByLabelText(/Repository Name/i), 'Remote Repo')
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'Remote Repo')
 
       const remoteRepoCard = screen.getByText('Remote Client').closest('button')
       await user.click(remoteRepoCard!)
@@ -1706,7 +1710,7 @@ describe('RepositoryWizard', () => {
       const connectionOption = within(listbox).getByText(/server1.example.com/i)
       await user.click(connectionOption)
 
-      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
+      setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/test')
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
       // Step 2 - The Remote Client card should be disabled
@@ -1729,7 +1733,7 @@ describe('RepositoryWizard', () => {
       })
 
       // Step 1 - Select Remote Client for repository
-      await user.type(screen.getByLabelText(/Repository Name/i), 'Remote Repo')
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'Remote Repo')
 
       const remoteRepoCard = screen.getByText('Remote Client').closest('button')
       await user.click(remoteRepoCard!)
@@ -1746,7 +1750,7 @@ describe('RepositoryWizard', () => {
       const connectionOption = within(listbox).getByText(/server1.example.com/i)
       await user.click(connectionOption)
 
-      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
+      setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/test')
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
       // Step 2 - Borg UI Server (local) should still be selectable
@@ -1759,7 +1763,7 @@ describe('RepositoryWizard', () => {
 
       // Should be able to add local directories
       const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
-      await user.type(dirInput, '/local/data')
+      setInputValue(dirInput, '/local/data')
       await user.click(screen.getByRole('button', { name: /Add/i }))
 
       await waitFor(() => {
@@ -1784,7 +1788,7 @@ describe('RepositoryWizard', () => {
       })
 
       // Step 1 - Select Remote Client for repository
-      await user.type(screen.getByLabelText(/Repository Name/i), 'Local to Remote Backup')
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'Local to Remote Backup')
 
       const remoteRepoCard = screen.getByText('Remote Client').closest('button')
       await user.click(remoteRepoCard!)
@@ -1805,7 +1809,7 @@ describe('RepositoryWizard', () => {
       // The connection sets default_path of /backups, so we need to clear it first
       const pathInput = screen.getByLabelText(/Repository Path/i)
       await user.clear(pathInput)
-      await user.type(pathInput, '/offsite/repo')
+      setInputValue(pathInput, '/offsite/repo')
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
       // Step 2 - Add local source directories
@@ -1814,7 +1818,7 @@ describe('RepositoryWizard', () => {
       })
 
       const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
-      await user.type(dirInput, '/home/user/important')
+      setInputValue(dirInput, '/home/user/important')
       await user.click(screen.getByRole('button', { name: /Add/i }))
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
@@ -1822,7 +1826,7 @@ describe('RepositoryWizard', () => {
       await waitFor(() => {
         expect(screen.getByLabelText(/Remote Borg Path/i)).toBeInTheDocument()
       })
-      await user.type(screen.getByLabelText(/^Passphrase/i), 'securepass')
+      setInputValue(screen.getByLabelText(/^Passphrase/i), 'securepass')
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
       // Step 4 - Config
@@ -1871,8 +1875,8 @@ describe('RepositoryWizard', () => {
       })
 
       // Step 1 - Keep local repository (default)
-      await user.type(screen.getByLabelText(/Repository Name/i), 'SSHFS Backup')
-      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/sshfs')
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'SSHFS Backup')
+      setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/sshfs')
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
       // Step 2 - Remote Client should be available
@@ -1897,8 +1901,8 @@ describe('RepositoryWizard', () => {
       })
 
       // Step 1 - Local repository
-      await user.type(screen.getByLabelText(/Repository Name/i), 'SSHFS Backup')
-      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/sshfs')
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'SSHFS Backup')
+      setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/sshfs')
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
       // Step 2 - Select Remote Client for data source
@@ -1925,8 +1929,8 @@ describe('RepositoryWizard', () => {
       })
 
       // Step 1 - Local repository
-      await user.type(screen.getByLabelText(/Repository Name/i), 'SSHFS Backup')
-      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/sshfs')
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'SSHFS Backup')
+      setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/sshfs')
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
       // Step 2 - Select Remote Client for data source
@@ -1957,7 +1961,7 @@ describe('RepositoryWizard', () => {
       })
 
       const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
-      await user.type(dirInput, '/remote/data')
+      setInputValue(dirInput, '/remote/data')
       await user.click(screen.getByRole('button', { name: /Add/i }))
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
@@ -1965,7 +1969,7 @@ describe('RepositoryWizard', () => {
       await waitFor(() => {
         expect(screen.getByLabelText(/Remote Borg Path/i)).toBeInTheDocument()
       })
-      await user.type(screen.getByLabelText(/^Passphrase/i), 'sshfspass')
+      setInputValue(screen.getByLabelText(/^Passphrase/i), 'sshfspass')
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
       // Step 4 - Config (exclude patterns hidden for remote source)
@@ -2002,8 +2006,8 @@ describe('RepositoryWizard', () => {
       })
 
       // Step 1 - Local repository
-      await user.type(screen.getByLabelText(/Repository Name/i), 'SSHFS Backup')
-      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/sshfs')
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'SSHFS Backup')
+      setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/sshfs')
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
       // Step 2 - Select Remote Client for data source
@@ -2031,8 +2035,8 @@ describe('RepositoryWizard', () => {
       })
 
       // Step 1 - Local repository
-      await user.type(screen.getByLabelText(/Repository Name/i), 'SSHFS Backup')
-      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/sshfs')
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'SSHFS Backup')
+      setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/sshfs')
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
       // Step 2 - Select Remote Client for data source
@@ -2066,10 +2070,10 @@ describe('RepositoryWizard', () => {
         expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
       })
 
-      await user.type(screen.getByLabelText(/Repository Name/i), 'Typed SSH Repo')
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'Typed SSH Repo')
       const pathInput = screen.getByLabelText(/Repository Path/i)
       await user.clear(pathInput)
-      await user.type(pathInput, 'ssh://backupuser@server1.example.com:22/typed/repo')
+      setInputValue(pathInput, 'ssh://backupuser@server1.example.com:22/typed/repo')
 
       await waitFor(() => {
         expect(screen.getByPlaceholderText(/\/path\/on\/remote\/server/i)).toBeInTheDocument()
@@ -2148,8 +2152,8 @@ describe('RepositoryWizard', () => {
       })
 
       // Step 1 - Fill required fields
-      await user.type(screen.getByLabelText(/Repository Name/i), 'Test Repo')
-      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'Test Repo')
+      setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/test')
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
       // Step 2 - Wait for data source question and verify both cards exist
@@ -2160,7 +2164,7 @@ describe('RepositoryWizard', () => {
 
       // Add a local source directory
       const pathInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
-      await user.type(pathInput, '/home/user/data')
+      setInputValue(pathInput, '/home/user/data')
       await user.click(screen.getByRole('button', { name: /Add/i }))
 
       // Remote Client card should now show the warning message
@@ -2178,8 +2182,8 @@ describe('RepositoryWizard', () => {
       })
 
       // Step 1 - Fill required fields
-      await user.type(screen.getByLabelText(/Repository Name/i), 'Test Repo')
-      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'Test Repo')
+      setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/test')
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
       // Step 2 - Wait for data source question and verify both cards exist
@@ -2204,8 +2208,8 @@ describe('RepositoryWizard', () => {
       })
 
       // Step 1 - Fill required fields
-      await user.type(screen.getByLabelText(/Repository Name/i), 'Test Repo')
-      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/test')
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'Test Repo')
+      setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/test')
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
       // Step 2 - Wait for data source step
@@ -2214,7 +2218,7 @@ describe('RepositoryWizard', () => {
       })
 
       const pathInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
-      await user.type(pathInput, '/home/user/data')
+      setInputValue(pathInput, '/home/user/data')
       await user.click(screen.getByRole('button', { name: /Add/i }))
 
       // Verify Remote is disabled (warning shown)
@@ -2254,8 +2258,8 @@ describe('RepositoryWizard', () => {
         expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
       })
 
-      await user.type(screen.getByLabelText(/Repository Name/i), 'Typed Remote Source')
-      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/typed-remote-source')
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'Typed Remote Source')
+      setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/typed-remote-source')
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
       await waitFor(() => {
@@ -2263,7 +2267,7 @@ describe('RepositoryWizard', () => {
       })
 
       const sourceInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
-      await user.type(sourceInput, 'ssh://backupuser@server1.example.com:22/remote/data')
+      setInputValue(sourceInput, 'ssh://backupuser@server1.example.com:22/remote/data')
       await user.click(screen.getByRole('button', { name: /^Add$/i }))
 
       await waitFor(() => {
@@ -2275,7 +2279,7 @@ describe('RepositoryWizard', () => {
       await waitFor(() => {
         expect(screen.getByLabelText(/Remote Borg Path/i)).toBeInTheDocument()
       })
-      await user.type(screen.getByLabelText(/^Passphrase/i), 'typedpass')
+      setInputValue(screen.getByLabelText(/^Passphrase/i), 'typedpass')
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
       await waitFor(() => {
