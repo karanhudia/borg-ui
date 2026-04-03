@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
+import { renderWithProviders, screen, userEvent, waitFor, within } from '../../test/test-utils'
 import { ThemeProvider } from '../../context/ThemeContext'
 import Settings from '../Settings'
 import * as apiModule from '../../services/api'
@@ -148,12 +148,12 @@ describe('Settings account tab', () => {
     await screen.findByText('Personal profile')
     await user.click(screen.getByRole('tab', { name: /security/i }))
     await user.click(screen.getByText(/account password/i))
-    await screen.findByRole('heading', { name: /change password/i })
-    const newPasswordInput = screen.getByLabelText(/^new password$/i)
-    await user.type(screen.getByLabelText(/current password/i), 'old-password')
+    const dialog = await screen.findByRole('dialog', { name: /change password/i })
+    const newPasswordInput = within(dialog).getByLabelText(/new password/i)
+    await user.type(within(dialog).getByLabelText(/current password/i), 'old-password')
     await user.type(newPasswordInput, 'new-password-123')
-    await user.type(screen.getByLabelText(/confirm password/i), 'new-password-123')
-    await user.click(screen.getByRole('button', { name: /update password/i }))
+    await user.type(within(dialog).getByLabelText(/confirm password/i), 'new-password-123')
+    await user.click(within(dialog).getByRole('button', { name: /update password/i }))
 
     await waitFor(() => {
       expect(apiModule.settingsAPI.changePassword).toHaveBeenCalledWith({
@@ -180,12 +180,12 @@ describe('Settings account tab', () => {
     await screen.findByText('Personal profile')
     await user.click(screen.getByRole('tab', { name: /security/i }))
     await user.click(screen.getByText(/account password/i))
-    await screen.findByRole('heading', { name: /change password/i })
-    const newPasswordInput = screen.getByLabelText(/^new password$/i)
-    await user.type(screen.getByLabelText(/current password/i), 'old-password')
+    const dialog = await screen.findByRole('dialog', { name: /change password/i })
+    const newPasswordInput = within(dialog).getByLabelText(/new password/i)
+    await user.type(within(dialog).getByLabelText(/current password/i), 'old-password')
     await user.type(newPasswordInput, 'new-password-123')
-    await user.type(screen.getByLabelText(/confirm password/i), 'different-password')
-    await user.click(screen.getByRole('button', { name: /update password/i }))
+    await user.type(within(dialog).getByLabelText(/confirm password/i), 'different-password')
+    await user.click(within(dialog).getByRole('button', { name: /update password/i }))
 
     expect(apiModule.settingsAPI.changePassword).not.toHaveBeenCalled()
     expect(toast.error).toHaveBeenCalled()
@@ -206,12 +206,12 @@ describe('Settings account tab', () => {
     await screen.findByText('Personal profile')
     await user.click(screen.getByRole('tab', { name: /security/i }))
     await user.click(screen.getByText(/account password/i))
-    await screen.findByRole('heading', { name: /change password/i })
-    const newPasswordInput = screen.getByLabelText(/^new password$/i)
-    await user.type(screen.getByLabelText(/current password/i), 'old-password')
+    const dialog = await screen.findByRole('dialog', { name: /change password/i })
+    const newPasswordInput = within(dialog).getByLabelText(/new password/i)
+    await user.type(within(dialog).getByLabelText(/current password/i), 'old-password')
     await user.type(newPasswordInput, 'new-password-123')
-    await user.type(screen.getByLabelText(/confirm password/i), 'new-password-123')
-    await user.click(screen.getByRole('button', { name: /update password/i }))
+    await user.type(within(dialog).getByLabelText(/confirm password/i), 'new-password-123')
+    await user.click(within(dialog).getByRole('button', { name: /update password/i }))
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('Failed to change password')
