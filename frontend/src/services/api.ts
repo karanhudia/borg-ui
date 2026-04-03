@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { toast } from 'react-hot-toast'
 import { BASE_PATH } from '@/utils/basePath'
 import { API_BASE_URL, buildDownloadUrl } from '@/utils/downloadUrl'
 
@@ -34,6 +35,9 @@ api.interceptors.response.use(
     // 1. We're trying to login
     // 2. We're checking auth config
     // 3. We're in proxy auth mode (backend handles auth via proxy headers)
+    if (error.response?.status === 403) {
+      toast.error("You don't have permission to perform this action")
+    }
     if (
       error.response?.status === 401 &&
       error.config?.url !== '/auth/login' &&
@@ -197,9 +201,8 @@ export const backupAPI = {
   getScheduledJobs: () => api.get('/backup/jobs?scheduled_only=true'),
   cancelJob: (jobId: string) => api.post(`/backup/cancel/${jobId}`),
   // Download logs as file (only for failed/cancelled backups)
-  downloadLogs: (jobId: string) => {
-    window.open(buildDownloadUrl(`/backup/logs/${jobId}/download`), '_blank')
-  },
+  downloadLogs: (jobId: string) =>
+    window.open(buildDownloadUrl(`/backup/logs/${jobId}/download`), '_blank'),
 }
 
 export const archivesAPI = {
