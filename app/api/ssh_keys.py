@@ -12,13 +12,14 @@ import base64
 
 from app.database.database import get_db
 from app.database.models import User, SSHKey, SSHConnection, Repository, BackupJob, RestoreJob, ScheduledJob
+from app.core.authorization import authorize_request
 from app.core.security import get_current_user
 from app.config import settings
 from app.utils.datetime_utils import serialize_datetime
 import hashlib
 
 logger = structlog.get_logger()
-router = APIRouter(tags=["ssh-keys"])
+router = APIRouter(tags=["ssh-keys"], dependencies=[Depends(authorize_request)])
 
 # Helper functions
 def format_bytes(bytes_size: int) -> str:
@@ -340,9 +341,6 @@ async def create_ssh_key(
     db: Session = Depends(get_db)
 ):
     """Create a new SSH key"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.ssh.adminAccessRequired"})
-
     try:
         # Check if SSH key name already exists
         existing_key = db.query(SSHKey).filter(SSHKey.name == key_data.name).first()
@@ -410,9 +408,6 @@ async def generate_ssh_key(
     db: Session = Depends(get_db)
 ):
     """Generate the system SSH key (one-time only)"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.ssh.adminAccessRequired"})
-
     try:
         # Check if system key already exists
         existing_system_key = db.query(SSHKey).filter(SSHKey.is_system_key == True).first()
@@ -503,9 +498,6 @@ async def import_ssh_key(
     db: Session = Depends(get_db)
 ):
     """Import an existing SSH key from filesystem (e.g., mounted volume)"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.ssh.adminAccessRequired"})
-
     try:
         # Check if system key already exists
         existing_system_key = db.query(SSHKey).filter(SSHKey.is_system_key == True).first()
@@ -637,9 +629,6 @@ async def quick_ssh_setup(
     db: Session = Depends(get_db)
 ):
     """Quick setup: Generate SSH key and optionally deploy to remote server"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.ssh.adminAccessRequired"})
-
     try:
         # Step 1: Generate SSH key
         key_result = await generate_ssh_key_pair(setup_data.key_type)
@@ -753,13 +742,9 @@ async def quick_ssh_setup(
 async def deploy_ssh_key(
     key_id: int,
     connection_data: SSHConnectionCreate,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Deploy SSH key to remote server"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.ssh.adminAccessRequired"})
-
     try:
         # Get SSH key
         ssh_key = db.query(SSHKey).filter(SSHKey.id == key_id).first()
@@ -1354,9 +1339,6 @@ async def update_ssh_key(
     db: Session = Depends(get_db)
 ):
     """Update SSH key"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.ssh.adminAccessRequired"})
-
     try:
         ssh_key = db.query(SSHKey).filter(SSHKey.id == key_id).first()
         if not ssh_key:
@@ -1412,9 +1394,6 @@ async def delete_ssh_key(
     db: Session = Depends(get_db)
 ):
     """Delete SSH key. Connections will be preserved but marked as failed."""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.ssh.adminAccessRequired"})
-
     try:
         ssh_key = db.query(SSHKey).filter(SSHKey.id == key_id).first()
         if not ssh_key:
@@ -1911,13 +1890,9 @@ async def test_ssh_key_connection(ssh_key: SSHKey, host: str, username: str, por
 async def toggle_backup_source(
     connection_id: int,
     enable: bool,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Enable/disable SSH connection as backup source and verify Borg installation"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.ssh.adminAccessRequired"})
-
     try:
         from app.services.remote_backup_service import remote_backup_service
 
@@ -2003,13 +1978,9 @@ async def list_backup_sources(
 @router.post("/connections/{connection_id}/verify-borg")
 async def verify_borg_installation(
     connection_id: int,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Verify Borg is installed on remote host"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.ssh.adminAccessRequired"})
-
     try:
         from app.services.remote_backup_service import remote_backup_service
 

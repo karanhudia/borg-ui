@@ -12,12 +12,13 @@ import structlog
 
 from app.database.database import get_db
 from app.database.models import User
+from app.core.authorization import authorize_request
 from app.core.security import get_current_user
 from app.services.mount_service import mount_service, MountType
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
-router = APIRouter(prefix="/api/mounts", tags=["mounts"])
+router = APIRouter(prefix="/api/mounts", tags=["mounts"], dependencies=[Depends(authorize_request)])
 
 
 # Request/Response models

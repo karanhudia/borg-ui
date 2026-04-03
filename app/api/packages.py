@@ -9,12 +9,13 @@ from pydantic import BaseModel
 from typing import List, Optional
 import structlog
 from sqlalchemy.orm import Session
-from app.api.auth import get_current_user
+from app.core.authorization import authorize_request
+from app.core.security import get_current_user
 from app.database.models import User, InstalledPackage, PackageInstallJob
 from app.database.database import get_db
 from app.services.package_service import package_service
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(authorize_request)])
 logger = structlog.get_logger()
 
 class PackageCreate(BaseModel):
@@ -46,13 +47,9 @@ class PackageInstallResponse(BaseModel):
 
 @router.get("/", response_model=List[PackageResponse])
 async def list_packages(
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """List all installed packages"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
-
     packages = db.query(InstalledPackage).order_by(InstalledPackage.name).all()
     return packages
 
@@ -63,9 +60,6 @@ async def create_package(
     db: Session = Depends(get_db)
 ):
     """Add a new package to install"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
-
     # Check if package already exists
     existing = db.query(InstalledPackage).filter(InstalledPackage.name == package.name).first()
     if existing:
@@ -88,13 +82,9 @@ async def create_package(
 @router.post("/{package_id}/install")
 async def install_package(
     package_id: int,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Start package installation job (non-blocking)"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
-
     package = db.query(InstalledPackage).filter(InstalledPackage.id == package_id).first()
     if not package:
         raise HTTPException(status_code=404, detail={"key": "backend.errors.packages.packageNotFound"})
@@ -140,9 +130,6 @@ async def update_package(
     db: Session = Depends(get_db)
 ):
     """Update package details"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
-
     existing_package = db.query(InstalledPackage).filter(InstalledPackage.id == package_id).first()
     if not existing_package:
         raise HTTPException(status_code=404, detail={"key": "backend.errors.packages.packageNotFound"})
@@ -175,9 +162,6 @@ async def delete_package(
     db: Session = Depends(get_db)
 ):
     """Remove a package from the list (does not uninstall from system)"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
-
     package = db.query(InstalledPackage).filter(InstalledPackage.id == package_id).first()
     if not package:
         raise HTTPException(status_code=404, detail={"key": "backend.errors.packages.packageNotFound"})
@@ -196,9 +180,6 @@ async def reinstall_package(
     db: Session = Depends(get_db)
 ):
     """Reinstall a package"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
-
     package = db.query(InstalledPackage).filter(InstalledPackage.id == package_id).first()
     if not package:
         raise HTTPException(status_code=404, detail={"key": "backend.errors.packages.packageNotFound"})
@@ -215,13 +196,9 @@ async def reinstall_package(
 @router.get("/jobs/{job_id}")
 async def get_job_status(
     job_id: int,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get the status of a package installation job"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
-
     job = db.query(PackageInstallJob).filter(PackageInstallJob.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail={"key": "backend.errors.packages.jobNotFound"})
@@ -240,13 +217,9 @@ async def get_job_status(
 
 @router.get("/jobs")
 async def list_jobs(
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """List all package installation jobs"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
-
     jobs = db.query(PackageInstallJob).order_by(PackageInstallJob.created_at.desc()).limit(50).all()
 
     return [{
