@@ -53,6 +53,15 @@ def get_connection_details(connection_id: int, db: Session) -> Dict[str, Any]:
 def _require_repository_access(db: Session, user: User, repository: Repository, required_role: str) -> None:
     check_repo_access(db, user, repository, required_role)
 
+
+def _empty_running_jobs_response() -> Dict[str, Any]:
+    return {
+        "has_running_jobs": False,
+        "check_job": None,
+        "compact_job": None,
+        "prune_job": None,
+    }
+
 # Helper function to get standard SSH options
 def _borg_keyfile_name(repo_path: str) -> str:
     """Derive a keyfile filename from the repository path.
@@ -2943,7 +2952,7 @@ async def get_repository_check_jobs(
     try:
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
-            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
+            return {"jobs": []}
         _require_repository_access(db, current_user, repository, "viewer")
         jobs = db.query(CheckJob).filter(
             CheckJob.repository_id == repo_id
@@ -2965,6 +2974,8 @@ async def get_repository_check_jobs(
                 for job in jobs
             ]
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to get check jobs", error=str(e), repository_id=repo_id)
         raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetCheckJobs"})
@@ -3014,7 +3025,7 @@ async def get_repository_compact_jobs(
     try:
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
-            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
+            return {"jobs": []}
         _require_repository_access(db, current_user, repository, "viewer")
         jobs = db.query(CompactJob).filter(
             CompactJob.repository_id == repo_id
@@ -3035,6 +3046,8 @@ async def get_repository_compact_jobs(
                 for job in jobs
             ]
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to get compact jobs", error=str(e), repository_id=repo_id)
         raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetCompactJobs"})
@@ -3050,7 +3063,7 @@ async def get_running_jobs(
     try:
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
-            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
+            return _empty_running_jobs_response()
         _require_repository_access(db, current_user, repository, "viewer")
         # Force refresh from database to get latest values
         db.expire_all()
@@ -3093,6 +3106,8 @@ async def get_running_jobs(
         logger.info("Running jobs API response", repository_id=repo_id, result=result)
 
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to get running jobs", error=str(e), repository_id=repo_id)
         raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetRunningJobs"})

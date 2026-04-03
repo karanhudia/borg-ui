@@ -13,7 +13,6 @@ from app.core.security import (
     get_current_user,
     get_current_download_user,
     check_repo_access,
-    require_repository_access_by_path,
 )
 from app.services.backup_service import backup_service
 from app.utils.datetime_utils import serialize_datetime
@@ -44,13 +43,14 @@ async def start_backup(
 ):
     """Start a manual backup operation"""
     try:
-        # Get repository record to copy remote source settings
-        repo_record = require_repository_access_by_path(
-            db,
-            current_user,
-            backup_request.repository,
-            'operator',
-        )
+        # Preserve legacy behavior for manual backups: the repository field is
+        # optional, and unknown paths are accepted so the job can fail later in
+        # the background worker rather than at request validation time.
+        repo_record = None
+        if backup_request.repository:
+            repo_record = _get_job_repository(db, backup_request.repository)
+            if repo_record is not None:
+                check_repo_access(db, current_user, repo_record, 'operator')
 
         # Create backup job record
         backup_job = BackupJob(

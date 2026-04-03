@@ -58,7 +58,7 @@ ENDPOINT_POLICIES: Dict[Tuple[str, str], EndpointPolicy] = {
     ("PATCH", "/api/ssh-keys/connections/{connection_id}/backup-source"): EndpointPolicy(("admin",), "backend.errors.ssh.adminAccessRequired"),
     ("POST", "/api/ssh-keys/connections/{connection_id}/verify-borg"): EndpointPolicy(("admin",), "backend.errors.ssh.adminAccessRequired"),
     ("POST", "/api/mounts/borg"): EndpointPolicy(("admin", "operator"), "backend.errors.mounts.operatorAccessRequired"),
-    ("DELETE", "/api/mounts/borg/{mount_id}"): EndpointPolicy(("admin", "operator"), "backend.errors.mounts.operatorAccessRequired"),
+    ("POST", "/api/mounts/borg/unmount/{mount_id}"): EndpointPolicy(("admin", "operator"), "backend.errors.mounts.operatorAccessRequired"),
     ("POST", "/api/schedule"): EndpointPolicy(("admin", "operator"), "backend.errors.schedule.operatorAccessRequired"),
     ("PUT", "/api/schedule/{job_id}"): EndpointPolicy(("admin", "operator"), "backend.errors.schedule.operatorAccessRequired"),
     ("DELETE", "/api/schedule/{job_id}"): EndpointPolicy(("admin", "operator"), "backend.errors.schedule.operatorAccessRequired"),

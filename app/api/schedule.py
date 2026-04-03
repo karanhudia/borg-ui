@@ -118,7 +118,7 @@ def _get_schedule_target_repositories(
         single_repo = db.query(Repository).filter(Repository.id == repository_id).first()
         if single_repo is None:
             raise HTTPException(
-                status_code=400,
+                status_code=404,
                 detail={"key": "backend.errors.schedule.repositoryNotFound", "params": {"id": repository_id}},
             )
         _ensure_schedule_repository_allowed(single_repo)
@@ -129,7 +129,7 @@ def _get_schedule_target_repositories(
         repo = db.query(Repository).filter_by(id=repo_id).first()
         if not repo:
             raise HTTPException(
-                status_code=400,
+                status_code=404,
                 detail={"key": "backend.errors.schedule.repositoryNotFound", "params": {"id": repo_id}},
             )
         _ensure_schedule_repository_allowed(repo)
