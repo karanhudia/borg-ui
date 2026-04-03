@@ -36,11 +36,13 @@ class UserCreate(BaseModel):
     password: str
     email: Optional[str] = None
     is_admin: bool = False
+    role: Optional[str] = None
 
 class UserUpdate(BaseModel):
     email: Optional[str] = None
     is_active: Optional[bool] = None
     is_admin: Optional[bool] = None
+    role: Optional[str] = None
 
 class PasswordChange(BaseModel):
     current_password: str
@@ -87,6 +89,17 @@ def _build_user_response(user: User) -> dict:
         "created_at": user.created_at,
         "global_permissions": get_global_permissions_for_role(user.role),
     }
+
+
+def _resolve_legacy_role(
+    role: Optional[str],
+    is_admin: Optional[bool],
+) -> str:
+    if role:
+        return role
+    if is_admin is not None:
+        return "admin" if is_admin else "viewer"
+    return "viewer"
 
 
 @router.get("/config", response_model=AuthConfig)
@@ -202,12 +215,14 @@ async def create_new_user(
                 detail={"key": "backend.errors.auth.emailAlreadyRegistered"}
             )
     
+    resolved_role = _resolve_legacy_role(user_data.role, user_data.is_admin)
+
     user = create_user(
         db=db,
         username=user_data.username,
         password=user_data.password,
         email=user_data.email,
-        is_admin=user_data.is_admin
+        role=resolved_role,
     )
     
     logger.info("User created", username=user.username, created_by=current_user.username)
@@ -246,8 +261,9 @@ async def update_user(
     if user_data.is_active is not None:
         user.is_active = user_data.is_active
     
-    if user_data.is_admin is not None:
-        user.is_admin = user_data.is_admin
+    next_role = _resolve_legacy_role(user_data.role, user_data.is_admin)
+    if user_data.role is not None or user_data.is_admin is not None:
+        user.role = next_role
     
     db.commit()
     db.refresh(user)
