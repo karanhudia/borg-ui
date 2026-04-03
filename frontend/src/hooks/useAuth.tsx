@@ -1,24 +1,15 @@
 import React, { useState, useEffect, createContext, useContext } from 'react'
-import { authAPI, setProxyAuthMode } from '../services/api'
+import { authAPI, setProxyAuthMode, AuthUserResponse } from '../services/api'
 
-interface User {
+interface User extends AuthUserResponse {
   id: number
-  username: string
-  full_name?: string | null
-  deployment_type?: 'individual' | 'enterprise' | null
-  enterprise_name?: string | null
-  email: string
-  role: 'admin' | 'operator' | 'viewer'
-  created_at: string
-  must_change_password?: boolean
 }
 
 interface AuthContextType {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
-  isAdmin: boolean
-  canMutate: boolean
+  hasGlobalPermission: (permission: string) => boolean
   mustChangePassword: boolean
   proxyAuthEnabled: boolean
   login: (username: string, password: string) => Promise<boolean>
@@ -122,12 +113,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null)
   }
 
+  const hasGlobalPermission = (permission: string) => {
+    return !!user?.global_permissions?.includes(permission)
+  }
+
   const value = {
     user,
     isAuthenticated: !!user,
     isLoading,
-    isAdmin: user?.role === 'admin',
-    canMutate: user?.role === 'admin' || user?.role === 'operator',
+    hasGlobalPermission,
     mustChangePassword: user?.must_change_password || false,
     proxyAuthEnabled,
     login,

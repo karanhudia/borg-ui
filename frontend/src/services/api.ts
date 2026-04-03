@@ -314,6 +314,24 @@ export const settingsAPI = {
   },
 }
 
+export const tokensAPI = {
+  list: () =>
+    api.get<
+      {
+        id: number
+        name: string
+        prefix: string
+        created_at: string
+        last_used_at: string | null
+      }[]
+    >('/settings/tokens'),
+  generate: (name: string) =>
+    api.post<{ id: number; name: string; token: string; prefix: string; created_at: string }>(
+      '/settings/tokens',
+      { name }
+    ),
+  revoke: (id: number) => api.delete(`/settings/tokens/${id}`),
+}
 
 interface PermissionResponse {
   id: number

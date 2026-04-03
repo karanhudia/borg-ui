@@ -7,12 +7,17 @@ from pydantic import BaseModel
 import structlog
 
 from app.database.database import get_db
-from app.database.models import User
+from app.database.models import User, SystemSettings
 from app.core.security import (
     authenticate_user, create_access_token, get_current_user,
     get_current_admin_user, create_user, update_user_password
 )
-from app.core.permissions import get_global_permissions_for_role, serialize_authorization_model
+from app.core.permissions import (
+    get_global_permissions_for_role,
+    serialize_authorization_model,
+    default_repository_role_for_global_role,
+    normalize_repository_role_for_global_role,
+)
 from app.config import settings
 
 logger = structlog.get_logger()
@@ -57,6 +62,7 @@ class UserResponse(BaseModel):
     email: Optional[str] = None
     is_active: bool
     role: str
+    all_repositories_role: Optional[str] = None
     must_change_password: bool = False
     last_login: Optional[datetime] = None
     created_at: datetime
@@ -74,16 +80,21 @@ class AuthorizationModelResponse(BaseModel):
     assignable_repository_roles_by_global_role: dict[str, list[str]]
 
 
-def _build_user_response(user: User) -> dict:
+def _build_user_response(
+    user: User,
+    deployment_type: Optional[str] = None,
+    enterprise_name: Optional[str] = None,
+) -> dict:
     return {
         "id": user.id,
         "username": user.username,
         "full_name": getattr(user, "full_name", None),
-        "deployment_type": getattr(user, "deployment_type", None),
-        "enterprise_name": getattr(user, "enterprise_name", None),
+        "deployment_type": deployment_type,
+        "enterprise_name": enterprise_name,
         "email": getattr(user, "email", None),
         "is_active": user.is_active,
         "role": user.role,
+        "all_repositories_role": getattr(user, "all_repositories_role", None),
         "must_change_password": getattr(user, "must_change_password", False),
         "last_login": getattr(user, "last_login", None),
         "created_at": user.created_at,
@@ -164,9 +175,15 @@ async def logout(current_user: User = Depends(get_current_user)):
     return {"message": "backend.success.auth.loggedOut"}
 
 @router.get("/me", response_model=UserResponse)
-async def get_current_user_info(current_user: User = Depends(get_current_user)):
+async def get_current_user_info(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Get current user information"""
-    return _build_user_response(current_user)
+    settings_row = db.query(SystemSettings).first()
+    deployment_type = settings_row.deployment_type if settings_row else "individual"
+    enterprise_name = settings_row.enterprise_name if settings_row else None
+    return _build_user_response(current_user, deployment_type, enterprise_name)
 
 @router.post("/refresh", response_model=Token)
 async def refresh_token(current_user: User = Depends(get_current_user)):
@@ -224,6 +241,9 @@ async def create_new_user(
         email=user_data.email,
         role=resolved_role,
     )
+    user.all_repositories_role = default_repository_role_for_global_role(resolved_role)
+    db.commit()
+    db.refresh(user)
     
     logger.info("User created", username=user.username, created_by=current_user.username)
     return user
@@ -264,6 +284,10 @@ async def update_user(
     next_role = _resolve_legacy_role(user_data.role, user_data.is_admin)
     if user_data.role is not None or user_data.is_admin is not None:
         user.role = next_role
+        user.all_repositories_role = normalize_repository_role_for_global_role(
+            user.role,
+            user.all_repositories_role,
+        )
     
     db.commit()
     db.refresh(user)

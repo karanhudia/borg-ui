@@ -9,7 +9,40 @@ const trackSettings = vi.fn()
 
 vi.mock('../../hooks/useAuth', () => ({
   useAuth: () => ({
-    user: { id: 1, username: 'admin', email: 'admin@example.com', is_admin: true },
+    user: {
+      id: 1,
+      username: 'admin',
+      full_name: 'Admin User',
+      email: 'admin@example.com',
+      role: 'admin',
+      created_at: '2024-01-01T00:00:00Z',
+      deployment_type: 'enterprise',
+      enterprise_name: 'NullCode AI',
+      global_permissions: [
+        'settings.users.manage',
+        'settings.system.manage',
+        'repositories.manage_all',
+      ],
+    },
+    hasGlobalPermission: (permission: string) =>
+      ['settings.users.manage', 'settings.system.manage', 'repositories.manage_all'].includes(
+        permission
+      ),
+    refreshUser: vi.fn(),
+  }),
+}))
+
+vi.mock('../../hooks/useAuthorization', () => ({
+  useAuthorization: () => ({
+    roleHasGlobalPermission: (role: string, permission: string) => {
+      if (role !== 'admin') return false
+      return [
+        'settings.users.manage',
+        'settings.system.manage',
+        'repositories.manage_all',
+        'settings.mounts.manage',
+      ].includes(permission)
+    },
   }),
 }))
 
@@ -95,7 +128,7 @@ describe('Settings account tab', () => {
       </ThemeProvider>
     )
 
-    await screen.findByRole('heading', { name: 'Change Password' })
+    await screen.findByText('Personal profile')
 
     expect(trackSettings).toHaveBeenCalledWith('View', {
       section: 'settings',
@@ -112,12 +145,15 @@ describe('Settings account tab', () => {
       </ThemeProvider>
     )
 
-    await screen.findByRole('heading', { name: 'Change Password' })
-    const newPasswordInput = screen.getAllByLabelText(/new password/i)[0]
+    await screen.findByText('Personal profile')
+    await user.click(screen.getByRole('tab', { name: /security/i }))
+    await user.click(screen.getByText(/account password/i))
+    await screen.findByRole('heading', { name: /change password/i })
+    const newPasswordInput = screen.getByLabelText(/^new password$/i)
     await user.type(screen.getByLabelText(/current password/i), 'old-password')
     await user.type(newPasswordInput, 'new-password-123')
-    await user.type(screen.getByLabelText(/confirm new password/i), 'new-password-123')
-    await user.click(screen.getByRole('button', { name: /change password/i }))
+    await user.type(screen.getByLabelText(/confirm password/i), 'new-password-123')
+    await user.click(screen.getByRole('button', { name: /update password/i }))
 
     await waitFor(() => {
       expect(apiModule.settingsAPI.changePassword).toHaveBeenCalledWith({
@@ -141,12 +177,15 @@ describe('Settings account tab', () => {
       </ThemeProvider>
     )
 
-    await screen.findByRole('heading', { name: 'Change Password' })
-    const newPasswordInput = screen.getAllByLabelText(/new password/i)[0]
+    await screen.findByText('Personal profile')
+    await user.click(screen.getByRole('tab', { name: /security/i }))
+    await user.click(screen.getByText(/account password/i))
+    await screen.findByRole('heading', { name: /change password/i })
+    const newPasswordInput = screen.getByLabelText(/^new password$/i)
     await user.type(screen.getByLabelText(/current password/i), 'old-password')
     await user.type(newPasswordInput, 'new-password-123')
-    await user.type(screen.getByLabelText(/confirm new password/i), 'different-password')
-    await user.click(screen.getByRole('button', { name: /change password/i }))
+    await user.type(screen.getByLabelText(/confirm password/i), 'different-password')
+    await user.click(screen.getByRole('button', { name: /update password/i }))
 
     expect(apiModule.settingsAPI.changePassword).not.toHaveBeenCalled()
     expect(toast.error).toHaveBeenCalled()
@@ -164,12 +203,15 @@ describe('Settings account tab', () => {
       </ThemeProvider>
     )
 
-    await screen.findByRole('heading', { name: 'Change Password' })
-    const newPasswordInput = screen.getAllByLabelText(/new password/i)[0]
+    await screen.findByText('Personal profile')
+    await user.click(screen.getByRole('tab', { name: /security/i }))
+    await user.click(screen.getByText(/account password/i))
+    await screen.findByRole('heading', { name: /change password/i })
+    const newPasswordInput = screen.getByLabelText(/^new password$/i)
     await user.type(screen.getByLabelText(/current password/i), 'old-password')
     await user.type(newPasswordInput, 'new-password-123')
-    await user.type(screen.getByLabelText(/confirm new password/i), 'new-password-123')
-    await user.click(screen.getByRole('button', { name: /change password/i }))
+    await user.type(screen.getByLabelText(/confirm password/i), 'new-password-123')
+    await user.click(screen.getByRole('button', { name: /update password/i }))
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('Failed to change password')
