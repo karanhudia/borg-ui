@@ -66,7 +66,16 @@ interface AppSidebarProps {
 export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
   const { t } = useTranslation()
   const location = useLocation()
-  const { user, isAdmin, canMutate } = useAuth()
+  const { hasGlobalPermission } = useAuth()
+  const canManageUsers = hasGlobalPermission('settings.users.manage')
+  const canManageSystemSettings = hasGlobalPermission('settings.system.manage')
+  const canManageMqtt = hasGlobalPermission('settings.mqtt.manage')
+  const canManagePackages = hasGlobalPermission('settings.packages.manage')
+  const canManageScripts = hasGlobalPermission('settings.scripts.manage')
+  const canManageExportImport = hasGlobalPermission('settings.export_import.manage')
+  const canManageBeta = hasGlobalPermission('settings.beta.manage')
+  const canManageMounts = hasGlobalPermission('settings.mounts.manage')
+  const canManageSsh = hasGlobalPermission('settings.ssh.manage')
   const { tabEnablement, getTabDisabledReason } = useTabEnablement()
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({})
@@ -98,9 +107,6 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       Users: t('navigation.settings.users'),
       'Export/Import': t('navigation.settings.exportImport'),
       Beta: t('navigation.settings.beta'),
-      Roles: t('navigation.settings.roles'),
-      'Audit Log': t('navigation.settings.auditLog'),
-      SSO: t('navigation.settings.sso'),
     }
     return labels[name] ?? name
   }
@@ -130,12 +136,16 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       icon: React.ComponentType<any>
       key: 'connections' | 'repositories' | 'backups' | 'archives' | 'schedule'
     }> = [
-      {
-        name: 'Remote Machines',
-        href: '/ssh-connections',
-        icon: Computer,
-        key: 'connections' as const,
-      },
+      ...(canManageSsh
+        ? [
+            {
+              name: 'Remote Machines',
+              href: '/ssh-connections',
+              icon: Computer,
+              key: 'connections' as const,
+            },
+          ]
+        : []),
       { name: 'Repositories', href: '/repositories', icon: Database, key: 'repositories' as const },
       { name: 'Backup', href: '/backup', icon: FileText, key: 'backups' as const },
       { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },
@@ -176,10 +186,10 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
               { name: 'Appearance', href: '/settings/appearance', icon: Palette },
               { name: 'Preferences', href: '/settings/preferences', icon: Sliders },
               { name: 'Notifications', href: '/settings/notifications', icon: Bell },
-              ...(isAdmin ? [{ name: 'Users', href: '/settings/users', icon: Users }] : []),
+              ...(canManageUsers ? [{ name: 'Users', href: '/settings/users', icon: Users }] : []),
             ],
           },
-          ...(isAdmin
+          ...(canManageSystemSettings
             ? [
                 {
                   name: 'System',
@@ -187,10 +197,14 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
                   key: 'dashboard' as const,
                   subItems: [
                     { name: 'System', href: '/settings/system', icon: SettingsIcon },
-                    ...(showMqttNav ? [{ name: 'MQTT', href: '/settings/mqtt', icon: Wifi }] : []),
+                    ...(showMqttNav && canManageMqtt
+                      ? [{ name: 'MQTT', href: '/settings/mqtt', icon: Wifi }]
+                      : []),
                     { name: 'Cache', href: '/settings/cache', icon: Server },
                     { name: 'Logs', href: '/settings/logs', icon: FileText },
-                    { name: 'Packages', href: '/settings/packages', icon: Package },
+                    ...(canManagePackages
+                      ? [{ name: 'Packages', href: '/settings/packages', icon: Package }]
+                      : []),
                   ],
                 },
               ]
@@ -200,16 +214,22 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
             icon: HardDrive,
             key: 'dashboard' as const,
             subItems: [
-              { name: 'Mounts', href: '/settings/mounts', icon: HardDrive },
-              ...(canMutate
+              ...(canManageMounts
+                ? [{ name: 'Mounts', href: '/settings/mounts', icon: HardDrive }]
+                : []),
+              ...(canManageScripts || canManageExportImport
                 ? [
-                    { name: 'Scripts', href: '/settings/scripts', icon: FileCode },
-                    { name: 'Export/Import', href: '/settings/export', icon: DownloadIcon },
+                    ...(canManageScripts
+                      ? [{ name: 'Scripts', href: '/settings/scripts', icon: FileCode }]
+                      : []),
+                    ...(canManageExportImport
+                      ? [{ name: 'Export/Import', href: '/settings/export', icon: DownloadIcon }]
+                      : []),
                   ]
                 : []),
             ],
           },
-          ...(isAdmin
+          ...(canManageBeta
             ? [
                 {
                   name: 'Advanced',
@@ -222,7 +242,19 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
         ],
       },
     ]
-  }, [showRestoreTab, showMqttNav, user?.role, canMutate])
+  }, [
+    showRestoreTab,
+    showMqttNav,
+    canManageUsers,
+    canManageSystemSettings,
+    canManageMqtt,
+    canManagePackages,
+    canManageScripts,
+    canManageExportImport,
+    canManageBeta,
+    canManageMounts,
+    canManageSsh,
+  ])
 
   // Auto-expand menus based on current route
   useEffect(() => {

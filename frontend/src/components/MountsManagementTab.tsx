@@ -17,6 +17,7 @@ import { translateBackendKey } from '../utils/translateBackendKey'
 import { formatDate } from '../utils/dateUtils'
 import DataTable, { Column, ActionButton } from './DataTable'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { useAuth } from '../hooks/useAuth'
 
 interface Mount {
   mount_id: string
@@ -33,6 +34,12 @@ export default function MountsManagementTab() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { track, EventCategory, EventAction } = useAnalytics()
+  const { hasGlobalPermission } = useAuth()
+  const canManageMounts = hasGlobalPermission('settings.mounts.manage')
+
+  if (!canManageMounts) {
+    return null
+  }
 
   // Fetch active mounts
   const { data: mountsData, isLoading } = useQuery({

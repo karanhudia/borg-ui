@@ -23,7 +23,17 @@ import Scripts from './Scripts'
 import Activity from './Activity'
 
 const Settings: React.FC = () => {
-  const { isAdmin, canMutate } = useAuth()
+  const { hasGlobalPermission } = useAuth()
+  const canManageSystem = hasGlobalPermission('settings.system.manage')
+  const canManageMqtt = hasGlobalPermission('settings.mqtt.manage')
+  const canManageBeta = hasGlobalPermission('settings.beta.manage')
+  const canManageCache = hasGlobalPermission('settings.cache.manage')
+  const canManageLogs = hasGlobalPermission('settings.logs.manage')
+  const canManagePackages = hasGlobalPermission('settings.packages.manage')
+  const canManageUsers = hasGlobalPermission('settings.users.manage')
+  const canManageMounts = hasGlobalPermission('settings.mounts.manage')
+  const canManageScripts = hasGlobalPermission('settings.scripts.manage')
+  const canManageExportImport = hasGlobalPermission('settings.export_import.manage')
   const { trackSettings, EventAction } = useAnalytics()
   const { tab } = useParams<{ tab?: string }>()
   const { data: systemSettingsData } = useQuery({
@@ -39,24 +49,36 @@ const Settings: React.FC = () => {
   // Get tab order based on user role
   const getTabOrder = React.useCallback(() => {
     const baseTabs = ['account', 'appearance', 'preferences', 'notifications']
-    if (isAdmin) {
+    if (canManageSystem) {
       return [
         ...baseTabs,
         'system',
-        ...(mqttBetaEnabled ? ['mqtt'] : []),
-        'beta',
-        'cache',
-        'logs',
-        'mounts',
-        'packages',
-        'scripts',
-        'export',
-        'users',
+        ...(mqttBetaEnabled && canManageMqtt ? ['mqtt'] : []),
+        ...(canManageBeta ? ['beta'] : []),
+        ...(canManageCache ? ['cache'] : []),
+        ...(canManageLogs ? ['logs'] : []),
+        ...(canManageMounts ? ['mounts'] : []),
+        ...(canManagePackages ? ['packages'] : []),
+        ...(canManageScripts ? ['scripts'] : []),
+        ...(canManageExportImport ? ['export'] : []),
+        ...(canManageUsers ? ['users'] : []),
         'activity',
       ]
     }
-    return [...baseTabs, 'mounts', ...(canMutate ? ['scripts', 'export'] : []), 'activity']
-  }, [isAdmin, canMutate, mqttBetaEnabled])
+    return [...baseTabs, ...(canManageMounts ? ['mounts'] : []), 'activity']
+  }, [
+    canManageSystem,
+    canManageMqtt,
+    canManageBeta,
+    canManageCache,
+    canManageLogs,
+    canManagePackages,
+    canManageUsers,
+    canManageMounts,
+    canManageScripts,
+    canManageExportImport,
+    mqttBetaEnabled,
+  ])
 
   const tabOrder = React.useMemo(() => getTabOrder(), [getTabOrder])
 
@@ -114,70 +136,70 @@ const Settings: React.FC = () => {
       )}
 
       {/* System Settings Tab - Admin Only */}
-      {currentTabId === 'system' && isAdmin && (
+      {currentTabId === 'system' && canManageSystem && (
         <SettingsTabContent>
           <SystemSettingsTab />
         </SettingsTabContent>
       )}
 
       {/* MQTT Settings Tab - Admin Only */}
-      {currentTabId === 'mqtt' && isAdmin && mqttBetaEnabled && (
+      {currentTabId === 'mqtt' && canManageMqtt && mqttBetaEnabled && (
         <SettingsTabContent>
           <MqttSettingsTab />
         </SettingsTabContent>
       )}
 
       {/* Beta Features Tab - Admin Only */}
-      {currentTabId === 'beta' && isAdmin && (
+      {currentTabId === 'beta' && canManageBeta && (
         <SettingsTabContent>
           <BetaFeaturesTab />
         </SettingsTabContent>
       )}
 
       {/* Cache Management Tab - Admin Only */}
-      {currentTabId === 'cache' && isAdmin && (
+      {currentTabId === 'cache' && canManageCache && (
         <SettingsTabContent>
           <CacheManagementTab />
         </SettingsTabContent>
       )}
 
       {/* Log Management Tab - Admin Only */}
-      {currentTabId === 'logs' && isAdmin && (
+      {currentTabId === 'logs' && canManageLogs && (
         <SettingsTabContent>
           <LogManagementTab />
         </SettingsTabContent>
       )}
 
       {/* Mounts Management Tab */}
-      {currentTabId === 'mounts' && (
+      {currentTabId === 'mounts' && canManageMounts && (
         <SettingsTabContent>
           <MountsManagementTab />
         </SettingsTabContent>
       )}
 
       {/* System Packages Tab - Admin Only */}
-      {currentTabId === 'packages' && isAdmin && (
+      {currentTabId === 'packages' && canManagePackages && (
         <SettingsTabContent>
           <PackagesTab />
         </SettingsTabContent>
       )}
 
       {/* Scripts Tab */}
-      {currentTabId === 'scripts' && (
+      {currentTabId === 'scripts' && canManageScripts && (
         <SettingsTabContent>
           <Scripts />
         </SettingsTabContent>
       )}
 
       {/* Export/Import Tab */}
-      {currentTabId === 'export' && (
+      {currentTabId === 'export' && canManageExportImport && (
         <SettingsTabContent>
           <ExportImportTab />
         </SettingsTabContent>
       )}
 
       {/* User Management Tab - Admin Only */}
-      {currentTabId === 'users' && isAdmin && (
+      {currentTabId === 'users' && canManageUsers && (
         <SettingsTabContent>
           <UsersTab />
         </SettingsTabContent>

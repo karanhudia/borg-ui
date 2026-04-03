@@ -33,6 +33,7 @@ import api from '../services/api'
 import CodeEditor from '../components/CodeEditor'
 import ScriptParameterInputs, { ScriptParameter } from '../components/ScriptParameterInputs'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { useAuth } from '../hooks/useAuth'
 
 interface Script {
   id: number
@@ -77,6 +78,8 @@ interface TestResult {
 
 export default function Scripts() {
   const { t } = useTranslation()
+  const { hasGlobalPermission } = useAuth()
+  const canManageScripts = hasGlobalPermission('settings.scripts.manage')
   const { trackScripts, EventAction } = useAnalytics()
   const [scripts, setScripts] = useState<Script[]>([])
   const [loading, setLoading] = useState(true)
@@ -329,6 +332,10 @@ export default function Scripts() {
 
   const getCategoryColor = (category: string) => {
     return category === 'template' ? 'secondary' : 'default'
+  }
+
+  if (!canManageScripts) {
+    return null
   }
 
   if (loading) {

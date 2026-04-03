@@ -577,8 +577,7 @@
       "fields": {
         "username": "Username",
         "email": "Email",
-        "password": "Password",
-        "isAdmin": "Admin User"
+        "password": "Password"
       },
       "buttons": {
         "cancel": "Cancel",

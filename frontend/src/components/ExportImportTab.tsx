@@ -28,6 +28,7 @@ import { configExportImportAPI } from '../services/api'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { Repository } from '../types'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { useAuth } from '../hooks/useAuth'
 
 interface ImportResult {
   success: boolean
@@ -42,6 +43,8 @@ interface ImportResult {
 
 const ExportImportTab: React.FC = () => {
   const { t } = useTranslation()
+  const { hasGlobalPermission } = useAuth()
+  const canManageExportImport = hasGlobalPermission('settings.export_import.manage')
   const { trackSystem, EventAction } = useAnalytics()
   // Export state
   const [selectedRepos, setSelectedRepos] = useState<number[]>([])
@@ -186,6 +189,10 @@ const ExportImportTab: React.FC = () => {
 
   const clearSelection = () => {
     setSelectedRepos([])
+  }
+
+  if (!canManageExportImport) {
+    return null
   }
 
   return (

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Navigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { sshKeysAPI } from '../services/api'
@@ -42,6 +43,7 @@ import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import RemoteMachineCard from '../components/RemoteMachineCard'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { useAuth } from '../hooks/useAuth'
 
 interface StorageInfo {
   total: number
@@ -78,6 +80,12 @@ export default function SSHConnectionsSingleKey() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { track, EventCategory, EventAction } = useAnalytics()
+  const { hasGlobalPermission } = useAuth()
+  const canManageSsh = hasGlobalPermission('settings.ssh.manage')
+
+  if (!canManageSsh) {
+    return <Navigate to="/dashboard" replace />
+  }
 
   // State
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false)
@@ -821,6 +829,7 @@ export default function SSHConnectionsSingleKey() {
                   onRefreshStorage={(machine) => refreshStorageMutation.mutate(machine.id)}
                   onTestConnection={handleTestConnection}
                   onDeployKey={handleDeployKeyToConnection}
+                  canManageConnections={canManageSsh}
                 />
               ))}
             </Box>
