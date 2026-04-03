@@ -12,6 +12,7 @@ from app.core.security import (
     authenticate_user, create_access_token, get_current_user,
     get_current_admin_user, create_user, update_user_password
 )
+from app.core.permissions import get_global_permissions_for_role, serialize_authorization_model
 from app.config import settings
 
 logger = structlog.get_logger()
@@ -48,15 +49,44 @@ class PasswordChange(BaseModel):
 class UserResponse(BaseModel):
     id: int
     username: str
+    full_name: Optional[str] = None
+    deployment_type: Optional[str] = None
+    enterprise_name: Optional[str] = None
     email: Optional[str] = None
     is_active: bool
-    is_admin: bool
+    role: str
     must_change_password: bool = False
     last_login: Optional[datetime] = None
     created_at: datetime
+    global_permissions: list[str] = []
 
-    class Config:
+class Config:
         from_attributes = True
+
+
+class AuthorizationModelResponse(BaseModel):
+    global_roles: list[dict]
+    repository_roles: list[dict]
+    global_permission_rules: dict[str, str]
+    repository_action_rules: dict[str, str]
+    assignable_repository_roles_by_global_role: dict[str, list[str]]
+
+
+def _build_user_response(user: User) -> dict:
+    return {
+        "id": user.id,
+        "username": user.username,
+        "full_name": user.full_name,
+        "deployment_type": user.deployment_type,
+        "enterprise_name": user.enterprise_name,
+        "email": user.email,
+        "is_active": user.is_active,
+        "role": user.role,
+        "must_change_password": user.must_change_password,
+        "last_login": user.last_login,
+        "created_at": user.created_at,
+        "global_permissions": get_global_permissions_for_role(user.role),
+    }
 
 
 @router.get("/config", response_model=AuthConfig)
@@ -66,6 +96,12 @@ async def get_auth_config():
         "proxy_auth_enabled": settings.disable_authentication,
         "authentication_required": not settings.disable_authentication
     }
+
+
+@router.get("/authorization-model", response_model=AuthorizationModelResponse)
+async def get_authorization_model():
+    """Expose the backend authorization model as the source of truth for the frontend."""
+    return serialize_authorization_model()
 
 
 @router.post("/login", response_model=Token)
@@ -117,7 +153,7 @@ async def logout(current_user: User = Depends(get_current_user)):
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current user information"""
-    return current_user
+    return _build_user_response(current_user)
 
 @router.post("/refresh", response_model=Token)
 async def refresh_token(current_user: User = Depends(get_current_user)):
