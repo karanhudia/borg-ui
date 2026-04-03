@@ -378,7 +378,7 @@ class TestDownloadFileIntegration:
     def test_download_file_from_real_archive(
         self,
         test_client: TestClient,
-        admin_token,
+        admin_headers,
         db_borg_repo_with_archives,
         test_db
     ):
@@ -390,7 +390,8 @@ class TestDownloadFileIntegration:
         file_path = f"{test_data_path}/file1.txt"
 
         response = test_client.get(
-            f"/api/archives/download?repository={repo.path}&archive={archive_names[0]}&file_path={file_path}&token={admin_token}"
+            f"/api/archives/download?repository={repo.path}&archive={archive_names[0]}&file_path={file_path}",
+            headers=admin_headers
         )
 
         # This should succeed or fail with 500 (extraction issues)

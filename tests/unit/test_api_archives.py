@@ -129,15 +129,48 @@ class TestDownloadFileEndpoint:
         # Should fail with invalid token
         assert response.status_code == 401
 
+    def test_download_file_authorized_with_bearer_header(
+        self,
+        test_client: TestClient,
+        admin_headers
+    ):
+        """Download endpoint should accept standard bearer auth without query token."""
+        response = test_client.get(
+            "/api/archives/download?repository=/nonexistent&archive=test-archive&file_path=/test.txt",
+            headers=admin_headers
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"]["key"] == "backend.errors.archives.repositoryNotFound"
+
+    def test_download_file_proxy_auth_without_token(
+        self,
+        test_client: TestClient,
+        monkeypatch
+    ):
+        """Proxy-auth mode should not require a JWT query token for downloads."""
+        from app import config
+
+        monkeypatch.setattr(config.settings, "disable_authentication", True)
+
+        response = test_client.get(
+            "/api/archives/download?repository=/nonexistent&archive=test-archive&file_path=/test.txt",
+            headers={"X-Forwarded-User": "proxyuser"}
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"]["key"] == "backend.errors.archives.repositoryNotFound"
+
     def test_download_file_repository_not_found(
         self,
         test_client: TestClient,
         test_db,
-        admin_token
+        admin_headers
     ):
         """Test download from non-existent repository"""
         response = test_client.get(
-            f"/api/archives/download?repository=/nonexistent&archive=test-archive&file_path=/test.txt&token={admin_token}"
+            "/api/archives/download?repository=/nonexistent&archive=test-archive&file_path=/test.txt",
+            headers=admin_headers
         )
 
         assert response.status_code == 404

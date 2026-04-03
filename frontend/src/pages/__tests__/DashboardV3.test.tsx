@@ -11,7 +11,7 @@ vi.mock('react-router-dom', () => ({
 }))
 
 vi.mock('../../context/ThemeContext', () => ({
-  useTheme: () => ({ mode: 'dark' }),
+  useTheme: () => ({ mode: 'dark', effectiveMode: 'dark' }),
 }))
 
 vi.mock('../../utils/basePath', () => ({

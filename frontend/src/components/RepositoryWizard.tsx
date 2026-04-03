@@ -264,8 +264,8 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   // Handle path change with SSH URL detection
   const handlePathChange = (newPath: string) => {
     if (newPath.startsWith('ssh://')) {
-      const matchWithPort = newPath.match(/^ssh:\/\/([^@]+)@([^:/]+):(\d+)(.*)$/)
-      const matchWithoutPort = newPath.match(/^ssh:\/\/([^@]+)@([^/]+)(.*)$/)
+      const matchWithPort = newPath.match(/^ssh:\/\/([^@]+)@([^:/]+):(\d+)(\/.*)$/)
+      const matchWithoutPort = newPath.match(/^ssh:\/\/([^@]+)@([^/]+)(\/.*)$/)
 
       if (matchWithPort) {
         const [, parsedUsername, parsedHost, parsedPort, remotePath] = matchWithPort
@@ -300,15 +300,16 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     handleStateChange({ path: newPath })
   }
 
-  // Handle source directories change with SSH URL detection
-  const handleSourceDirsChange = (paths: string[]) => {
+  const normalizeSourceDirs = (
+    paths: string[]
+  ): { processedPaths: string[]; detectedSshConnectionId: number | '' } => {
     const processedPaths: string[] = []
     let detectedSshConnection: SSHConnection | null = null
 
     for (const p of paths) {
       if (p.startsWith('ssh://')) {
-        const matchWithPort = p.match(/^ssh:\/\/([^@]+)@([^:/]+):(\d+)(.*)$/)
-        const matchWithoutPort = p.match(/^ssh:\/\/([^@]+)@([^/]+)(.*)$/)
+        const matchWithPort = p.match(/^ssh:\/\/([^@]+)@([^:/]+):(\d+)(\/.*)$/)
+        const matchWithoutPort = p.match(/^ssh:\/\/([^@]+)@([^/]+)(\/.*)$/)
 
         if (matchWithPort) {
           const [, parsedUsername, parsedHost, parsedPort, remotePath] = matchWithPort
@@ -339,17 +340,28 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       }
     }
 
-    if (detectedSshConnection) {
+    return {
+      processedPaths,
+      detectedSshConnectionId: detectedSshConnection?.id ?? '',
+    }
+  }
+
+  // Handle source directories change with SSH URL detection
+  const handleSourceDirsChange = (paths: string[]) => {
+    const { processedPaths, detectedSshConnectionId } = normalizeSourceDirs(paths)
+
+    if (detectedSshConnectionId) {
       handleStateChange({
         dataSource: 'remote',
-        sourceSshConnectionId: detectedSshConnection.id,
+        sourceSshConnectionId: detectedSshConnectionId,
         sourceDirs: [...wizardState.sourceDirs, ...processedPaths],
       })
-    } else {
-      handleStateChange({
-        sourceDirs: [...wizardState.sourceDirs, ...processedPaths],
-      })
+      return
     }
+
+    handleStateChange({
+      sourceDirs: [...wizardState.sourceDirs, ...processedPaths],
+    })
   }
 
   // Initialize on dialog open
@@ -516,6 +528,11 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
             dataSource={wizardState.dataSource}
             sourceSshConnectionId={wizardState.sourceSshConnectionId}
             onChange={(updates) => {
+              if (typeof updates.path === 'string') {
+                handlePathChange(updates.path)
+                return
+              }
+
               // Handle SSH connection selection
               if (
                 updates.repoSshConnectionId &&
@@ -542,7 +559,26 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               sourceDirs: wizardState.sourceDirs,
             }}
             sshConnections={sshConnections}
-            onChange={handleStateChange}
+            onChange={(updates) => {
+              if (updates.sourceDirs) {
+                const { processedPaths, detectedSshConnectionId } = normalizeSourceDirs(
+                  updates.sourceDirs
+                )
+                handleStateChange({
+                  ...updates,
+                  dataSource:
+                    detectedSshConnectionId
+                      ? 'remote'
+                      : updates.dataSource ?? wizardState.dataSource,
+                  sourceSshConnectionId:
+                    detectedSshConnectionId || updates.sourceSshConnectionId || '',
+                  sourceDirs: processedPaths,
+                })
+                return
+              }
+
+              handleStateChange(updates)
+            }}
             onBrowseSource={() => setShowSourceExplorer(true)}
             onBrowseRemoteSource={() => setShowRemoteSourceExplorer(true)}
           />

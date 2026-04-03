@@ -66,10 +66,8 @@ export function renderWithProviders(
   ui: ReactElement,
   { queryClient, initialRoute = '/', ...renderOptions }: CustomRenderOptions = {}
 ) {
-  // Set initial route if provided
-  if (initialRoute !== '/') {
-    window.history.pushState({}, 'Test page', initialRoute)
-  }
+  // Always reset the browser history so route state cannot leak between tests.
+  window.history.pushState({}, 'Test page', initialRoute)
 
   const Wrapper = ({ children }: { children: ReactNode }) => (
     <AllProviders queryClient={queryClient}>{children}</AllProviders>

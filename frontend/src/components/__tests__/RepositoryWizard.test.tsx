@@ -1,9 +1,14 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, Mock, vi } from 'vitest'
 import RepositoryWizard from '../RepositoryWizard'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { sshKeysAPI } from '../../services/api'
+
+const { mockTrack, mockTrackRepository } = vi.hoisted(() => ({
+  mockTrack: vi.fn(),
+  mockTrackRepository: vi.fn(),
+}))
 
 // Mock the API
 vi.mock('../../services/api', () => ({
@@ -15,8 +20,8 @@ vi.mock('../../services/api', () => ({
 // Mock analytics hook
 vi.mock('../../hooks/useAnalytics', () => ({
   useAnalytics: () => ({
-    track: vi.fn(),
-    trackRepository: vi.fn(),
+    track: mockTrack,
+    trackRepository: mockTrackRepository,
     EventCategory: { REPOSITORY: 'repository' },
     EventAction: { CREATE: 'create', EDIT: 'edit', UPLOAD: 'upload' },
   }),
@@ -662,7 +667,7 @@ describe('RepositoryWizard', () => {
         // Step 5
         await waitFor(
           () => {
-            expect(screen.getByTestId('command-preview')).toBeInTheDocument()
+            expect(screen.getByRole('button', { name: /Create Repository/i })).toBeInTheDocument()
           },
           { timeout: 5000 }
         )
@@ -678,7 +683,8 @@ describe('RepositoryWizard', () => {
 
         await goToStep5(user)
 
-        expect(screen.getByTestId('command-preview')).toBeInTheDocument()
+        expect(screen.getByText(/Configuration Summary/i)).toBeInTheDocument()
+        expect(screen.getByText('Test Repo')).toBeInTheDocument()
       })
 
       it('shows Create Repository button (not Next)', async () => {
@@ -868,6 +874,132 @@ describe('RepositoryWizard', () => {
           null // keyfile parameter (null when no keyfile selected)
         )
       })
+
+      it('submits an uploaded keyfile for keyfile-based imports and tracks upload analytics', async () => {
+        const user = userEvent.setup()
+        const { onSubmit } = renderWizard('import')
+
+        await waitFor(() => {
+          expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
+        })
+
+        await user.type(screen.getByLabelText(/Repository Name/i), 'Imported Keyfile Repo')
+        await user.type(screen.getByLabelText(/Repository Path/i), '/existing/keyfile-repo')
+        await user.click(screen.getByRole('button', { name: /Next/i }))
+
+        await waitFor(() => {
+          expect(screen.getByText('Source Directories & Files')).toBeInTheDocument()
+        })
+        const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
+        await user.type(dirInput, '/data/keyfile')
+        await user.click(screen.getByRole('button', { name: /Add/i }))
+        await user.click(screen.getByRole('button', { name: /Next/i }))
+
+        await waitFor(() => {
+          expect(screen.getByLabelText(/Passphrase/i)).toBeInTheDocument()
+          expect(screen.getByRole('combobox')).toBeInTheDocument()
+        })
+
+        await user.click(screen.getByRole('combobox'))
+        const listbox = await screen.findByRole('listbox')
+        await user.click(within(listbox).getByText('Key File'))
+
+        const uploadedKeyfile = new File(['BORG_KEY test'], 'imported.key', {
+          type: 'application/octet-stream',
+        })
+        const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+        expect(fileInput).toBeTruthy()
+        fireEvent.change(fileInput, { target: { files: [uploadedKeyfile] } })
+
+        expect(await screen.findByText(/Selected: imported.key/i)).toBeInTheDocument()
+        expect(screen.getByText(/Keyfile will be uploaded after import/i)).toBeInTheDocument()
+
+        await user.type(screen.getByLabelText(/Passphrase/i), 'importpass')
+        await user.click(screen.getByRole('button', { name: /Next/i }))
+
+        await waitFor(() => {
+          expect(screen.getByTestId('compression-settings')).toBeInTheDocument()
+        })
+        await user.click(screen.getByRole('button', { name: /Next/i }))
+
+        await waitFor(() => {
+          expect(screen.getByRole('button', { name: /Import Repository/i })).toBeInTheDocument()
+        })
+        await user.click(screen.getByRole('button', { name: /Import Repository/i }))
+
+        expect(onSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: 'Imported Keyfile Repo',
+            encryption: 'keyfile',
+            source_directories: ['/data/keyfile'],
+            passphrase: 'importpass',
+          }),
+          uploadedKeyfile
+        )
+        expect(mockTrack).toHaveBeenCalledWith('repository', 'upload', {
+          source: 'wizard',
+          mode: 'import',
+        })
+        expect(mockTrackRepository).toHaveBeenCalledWith('upload', {
+          name: 'Imported Keyfile Repo',
+        })
+      })
+
+      it('submits a pasted keyfile as a generated file for import mode', async () => {
+        const user = userEvent.setup()
+        const { onSubmit } = renderWizard('import')
+
+        await waitFor(() => {
+          expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
+        })
+
+        await user.type(screen.getByLabelText(/Repository Name/i), 'Imported Pasted Key Repo')
+        await user.type(screen.getByLabelText(/Repository Path/i), '/existing/pasted-key-repo')
+        await user.click(screen.getByRole('button', { name: /Next/i }))
+
+        await waitFor(() => {
+          expect(screen.getByText('Source Directories & Files')).toBeInTheDocument()
+        })
+        const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
+        await user.type(dirInput, '/data/pasted-key')
+        await user.click(screen.getByRole('button', { name: /Add/i }))
+        await user.click(screen.getByRole('button', { name: /Next/i }))
+
+        await waitFor(() => {
+          expect(screen.getByLabelText(/Passphrase/i)).toBeInTheDocument()
+          expect(screen.getByRole('combobox')).toBeInTheDocument()
+        })
+
+        await user.click(screen.getByRole('combobox'))
+        const listbox = await screen.findByRole('listbox')
+        await user.click(within(listbox).getByText('Key File'))
+
+        await user.click(screen.getByRole('button', { name: /Paste Content/i }))
+        await user.type(screen.getByPlaceholderText(/BORG_KEY/i), 'BORG_KEY pasted content')
+
+        expect(
+          await screen.findByText(/Keyfile content will be saved after import/i)
+        ).toBeInTheDocument()
+
+        await user.type(screen.getByLabelText(/Passphrase/i), 'pastepass')
+        await user.click(screen.getByRole('button', { name: /Next/i }))
+
+        await waitFor(() => {
+          expect(screen.getByTestId('compression-settings')).toBeInTheDocument()
+        })
+        await user.click(screen.getByRole('button', { name: /Next/i }))
+
+        await waitFor(() => {
+          expect(screen.getByRole('button', { name: /Import Repository/i })).toBeInTheDocument()
+        })
+        await user.click(screen.getByRole('button', { name: /Import Repository/i }))
+
+        expect(onSubmit).toHaveBeenCalled()
+        const submittedKeyfile = onSubmit.mock.calls[0][1]
+        expect(submittedKeyfile).toBeInstanceOf(File)
+        expect(submittedKeyfile.name).toBe('borg_keyfile')
+        await expect(submittedKeyfile.text()).resolves.toBe('BORG_KEY pasted content')
+      })
     })
   })
 
@@ -1055,8 +1187,9 @@ describe('RepositoryWizard', () => {
         await user.type(dirInput, '/optional/dir')
         await user.click(screen.getByRole('button', { name: /Add/i }))
 
-        // Should show the added directory
-        expect(screen.getByText('/optional/dir')).toBeInTheDocument()
+        await waitFor(() => {
+          expect(screen.getByText('/optional/dir')).toBeInTheDocument()
+        })
       })
     })
 
@@ -1629,8 +1762,9 @@ describe('RepositoryWizard', () => {
       await user.type(dirInput, '/local/data')
       await user.click(screen.getByRole('button', { name: /Add/i }))
 
-      // Directory should be added
-      expect(screen.getByText('/local/data')).toBeInTheDocument()
+      await waitFor(() => {
+        expect(screen.getByText('/local/data')).toBeInTheDocument()
+      })
 
       // Next button should be enabled
       expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled()
@@ -1924,6 +2058,27 @@ describe('RepositoryWizard', () => {
   // SSH URL AUTO-DETECTION - Tests for automatic SSH URL parsing
   // ============================================================
   describe('SSH URL Auto-Detection', () => {
+    it('switches to SSH repository mode when a create-mode path is typed as an SSH URL', async () => {
+      const user = userEvent.setup()
+      renderWizard('create')
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
+      })
+
+      await user.type(screen.getByLabelText(/Repository Name/i), 'Typed SSH Repo')
+      const pathInput = screen.getByLabelText(/Repository Path/i)
+      await user.clear(pathInput)
+      await user.type(pathInput, 'ssh://backupuser@server1.example.com:22/typed/repo')
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/\/path\/on\/remote\/server/i)).toBeInTheDocument()
+        expect(screen.getByLabelText(/Repository Path/i)).toHaveValue('/typed/repo')
+      })
+
+      expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled()
+    })
+
     it('parses SSH URL in edit mode and extracts path correctly', async () => {
       // Test that SSH URL format is parsed correctly when loading existing repo
       const existingRepo = {
@@ -2067,8 +2222,9 @@ describe('RepositoryWizard', () => {
         expect(screen.getByText('Remove local directories first to switch')).toBeInTheDocument()
       })
 
-      // Verify directory was added
-      expect(screen.getByText('/home/user/data')).toBeInTheDocument()
+      await waitFor(() => {
+        expect(screen.getByText('/home/user/data')).toBeInTheDocument()
+      })
 
       // Find and click delete button (IconButton with DeleteIcon)
       const deleteButtons = screen.getAllByRole('button')
@@ -2086,6 +2242,62 @@ describe('RepositoryWizard', () => {
           ).not.toBeInTheDocument()
         })
       }
+    })
+  })
+
+  describe('Typed SSH Source Input', () => {
+    it('switches to remote source when a source directory is typed as an SSH URL', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('create', undefined, vi.fn())
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
+      })
+
+      await user.type(screen.getByLabelText(/Repository Name/i), 'Typed Remote Source')
+      await user.type(screen.getByLabelText(/Repository Path/i), '/backups/typed-remote-source')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText(/Where is the data you want to back up/i)).toBeInTheDocument()
+      })
+
+      const sourceInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
+      await user.type(sourceInput, 'ssh://backupuser@server1.example.com:22/remote/data')
+      await user.click(screen.getByRole('button', { name: /^Add$/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('/remote/data')).toBeInTheDocument()
+        expect(screen.getByText('Remote Client')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Remote Borg Path/i)).toBeInTheDocument()
+      })
+      await user.type(screen.getByLabelText(/^Passphrase/i), 'typedpass')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('compression-settings')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Create Repository/i })).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Create Repository/i }))
+
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: '/backups/typed-remote-source',
+          connection_id: null,
+          source_connection_id: 1,
+          source_directories: ['/remote/data'],
+          passphrase: 'typedpass',
+        }),
+        null
+      )
     })
   })
 })

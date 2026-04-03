@@ -530,7 +530,19 @@
       "subtitle": "Passe das Aussehen und das Gefühl der Anwendung an",
       "theme": "Design",
       "chooseTheme": "Design auswählen",
-      "themeAriaLabel": "Design-Modus"
+      "themeAriaLabel": "Design-Modus",
+      "activeTheme": "{{theme}} ausgewählt",
+      "autoStatus": "Folgt der Geräteeinstellung: {{theme}}",
+      "themeOptions": {
+        "auto": "Automatisch",
+        "light": "Hell",
+        "dark": "Dunkel"
+      },
+      "themeDescriptions": {
+        "auto": "Passt sich automatisch dem Gerät an",
+        "light": "Heller Arbeitsbereich für den Tag",
+        "dark": "Blendärmeres Design für dunklere Umgebungen"
+      }
     },
     "users": {
       "title": "Benutzerverwaltung",

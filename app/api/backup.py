@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 from app.database.database import get_db
 from app.database.models import User, BackupJob, Repository
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_current_download_user
 from app.services.backup_service import backup_service
 from app.utils.datetime_utils import serialize_datetime
 
@@ -228,43 +228,10 @@ async def cancel_backup(
 @router.get("/logs/{job_id}/download")
 async def download_backup_logs(
     job_id: int,
-    token: str = None,
+    current_user: User = Depends(get_current_download_user),
     db: Session = Depends(get_db)
 ):
     """Download backup job logs as a file (only for failed/cancelled backups)"""
-    # Handle authentication from query parameter (for download links)
-    from app.core.security import verify_token
-    from app.database.models import User as UserModel
-
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"key": "backend.errors.auth.authTokenRequired"}
-        )
-
-    try:
-        username = verify_token(token)
-        if not username:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={"key": "backend.errors.auth.invalidToken"}
-            )
-
-        # Get user from database
-        current_user = db.query(UserModel).filter(UserModel.username == username).first()
-        if not current_user or not current_user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={"key": "backend.errors.auth.userNotFound"}
-            )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Token verification failed", error=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"key": "backend.errors.auth.invalidAuthentication"}
-        )
     try:
         from fastapi.responses import FileResponse
         from pathlib import Path

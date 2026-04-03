@@ -16,7 +16,7 @@ import structlog
 
 from app.database.database import get_db
 from app.database.models import User, Repository, DeleteArchiveJob
-from app.core.security import get_current_user, verify_token
+from app.core.security import get_current_user, get_current_download_user
 from app.core.features import require_feature
 from app.core.borg2 import borg2
 
@@ -354,23 +354,10 @@ async def download_file_from_archive(
     repository: str,
     archive: str,
     file_path: str,
-    token: str,
+    current_user: User = Depends(get_current_download_user),
     db: Session = Depends(get_db),
 ):
     """Extract and download a specific file from a Borg 2 archive."""
-    username = verify_token(token)
-    if not username:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"key": "backend.errors.auth.invalidOrExpiredToken"},
-        )
-    current_user = db.query(User).filter(User.username == username).first()
-    if not current_user or not current_user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"key": "backend.errors.auth.userNotFound"},
-        )
-
     repo = _get_v2_repo(repository, db)
     temp_dir = tempfile.mkdtemp()
     try:

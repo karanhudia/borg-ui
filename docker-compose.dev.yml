@@ -5,8 +5,6 @@
 # Separate container names + ports so prod (docker-compose.yml) can run alongside:
 #   Prod backend:  borg-web-ui   on PORT     (default 8082)
 #   Dev backend:   borg-web-ui-dev on DEV_PORT (default 8083)
-#   Prod redis:    borg-redis    on 6379
-#   Dev redis:     borg-redis-dev on 6380
 
 services:
   app:
@@ -33,39 +31,46 @@ services:
       - SECRET_KEY=dev-secret-key-not-for-production
       - ENVIRONMENT=development
       - LOG_LEVEL=DEBUG
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
       - LOCAL_MOUNT_POINTS=${LOCAL_MOUNT_POINTS:-/local}
       - CACHE_TTL_SECONDS=7200
       - CACHE_MAX_SIZE_MB=2048
+      # To enable Redis caching in dev, uncomment the two lines below
+      # and uncomment the redis service + depends_on section at the bottom
+      # - REDIS_HOST=redis
+      # - REDIS_PORT=6379
     entrypoint: ["/bin/sh", "-c"]
-    command: ["python -m uvicorn app.main:app --reload --host 0.0.0.0 --port ${DEV_PORT:-8083}"]
-    depends_on:
-      redis:
-        condition: service_healthy
+    command: ["python -m uvicorn app.main:app --reload --reload-dir /app/app --host 0.0.0.0 --port ${DEV_PORT:-8083}"]
+    # Uncomment to require Redis before starting:
+    # depends_on:
+    #   redis:
+    #     condition: service_healthy
     networks:
       - borg_dev_network
 
-  redis:
-    image: redis:7-alpine
-    container_name: borg-redis-dev
-    restart: unless-stopped
-    command: >
-      redis-server
-      --maxmemory 512mb
-      --maxmemory-policy allkeys-lru
-      --save ""
-      --appendonly no
-    ports:
-      - "6380:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
-    networks:
-      - borg_dev_network
+  # --- Optional: Redis for dev ---
+  # Uncomment below to run Redis in dev (e.g. for testing cache features).
+  # Also uncomment REDIS_HOST/REDIS_PORT env vars and depends_on above.
+  #
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: borg-redis-dev
+  #   restart: unless-stopped
+  #   command: >
+  #     redis-server
+  #     --maxmemory 512mb
+  #     --maxmemory-policy allkeys-lru
+  #     --save ""
+  #     --appendonly no
+  #   ports:
+  #     - "6380:6379"
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 3s
+  #     retries: 3
+  #     start_period: 10s
+  #   networks:
+  #     - borg_dev_network
 
 networks:
   borg_dev_network:

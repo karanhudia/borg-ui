@@ -1,11 +1,26 @@
-import { describe, it, expect, vi } from 'vitest'
-import { screen, waitFor } from '@testing-library/react'
-import { renderWithProviders } from '../../test/test-utils'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { renderWithProviders, screen, waitFor, userEvent } from '../../test/test-utils'
 import AppSidebar from '../AppSidebar'
 
-const { mockApiGet, mockGetSystemSettings } = vi.hoisted(() => ({
+const {
+  mockApiGet,
+  mockGetSystemSettings,
+  mockSetAppVersion,
+  mockTabEnablement,
+  mockGetTabDisabledReason,
+} = vi.hoisted(() => ({
   mockApiGet: vi.fn().mockResolvedValue({ data: {} }),
   mockGetSystemSettings: vi.fn().mockResolvedValue({ data: { settings: {} } }),
+  mockSetAppVersion: vi.fn(),
+  mockTabEnablement: {
+    dashboard: true,
+    connections: true,
+    repositories: true,
+    backups: true,
+    archives: true,
+    schedule: true,
+  },
+  mockGetTabDisabledReason: vi.fn<(key: string) => string | null>(() => null),
 }))
 
 vi.mock('../../services/api', () => ({
@@ -15,21 +30,39 @@ vi.mock('../../services/api', () => ({
   },
 }))
 
+vi.mock('../../utils/analytics', () => ({
+  setAppVersion: mockSetAppVersion,
+}))
+
+vi.mock('../SidebarVersionInfo', () => ({
+  default: () => <div>Sidebar Version Info</div>,
+}))
+
 vi.mock('../../context/AppContext', () => ({
   useTabEnablement: () => ({
-    tabEnablement: {
+    tabEnablement: mockTabEnablement,
+    getTabDisabledReason: mockGetTabDisabledReason,
+  }),
+}))
+
+describe('AppSidebar', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    Object.assign(mockTabEnablement, {
       dashboard: true,
       connections: true,
       repositories: true,
       backups: true,
       archives: true,
       schedule: true,
-    },
-    getTabDisabledReason: () => null,
-  }),
-}))
+    })
+    mockGetTabDisabledReason.mockReturnValue(null)
+    mockGetSystemSettings.mockResolvedValue({ data: { settings: {} } })
+    mockApiGet.mockResolvedValue({
+      data: { app_version: '1.78.0', borg_version: 'borg 1.4.0', borg2_version: 'borg2 2.0.0' },
+    })
+  })
 
-describe('AppSidebar', () => {
   it('renders the app name', async () => {
     renderWithProviders(<AppSidebar mobileOpen={false} onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getAllByText('Borg UI').length).toBeGreaterThan(0))
@@ -53,8 +86,62 @@ describe('AppSidebar', () => {
     })
   })
 
-  it('shows version info loading state when system info not yet loaded', async () => {
+  it('renders the version info section', async () => {
     renderWithProviders(<AppSidebar mobileOpen={false} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getAllByText('Loading...').length).toBeGreaterThan(0))
+    await waitFor(() =>
+      expect(screen.getAllByText('Sidebar Version Info').length).toBeGreaterThan(0)
+    )
+  })
+
+  it('fetches system info and forwards the app version to analytics', async () => {
+    renderWithProviders(<AppSidebar mobileOpen={false} onClose={vi.fn()} />)
+
+    await waitFor(() => {
+      expect(mockApiGet).toHaveBeenCalledWith('/system/info')
+      expect(mockSetAppVersion).toHaveBeenCalledWith('1.78.0')
+    })
+  })
+
+  it('shows restore navigation when enabled in system settings', async () => {
+    mockGetSystemSettings.mockResolvedValue({
+      data: { settings: { show_restore_tab: true } },
+    })
+
+    renderWithProviders(<AppSidebar mobileOpen={false} onClose={vi.fn()} />)
+
+    expect(await screen.findAllByRole('link', { name: /restore/i })).not.toHaveLength(0)
+  })
+
+  it('shows MQTT settings navigation when enabled', async () => {
+    const user = userEvent.setup()
+    mockGetSystemSettings.mockResolvedValue({
+      data: { settings: { mqtt_beta_enabled: true } },
+    })
+
+    renderWithProviders(<AppSidebar mobileOpen={false} onClose={vi.fn()} />)
+
+    await user.click(await screen.findAllByText('System').then((items) => items[0]))
+
+    expect(await screen.findAllByRole('link', { name: 'MQTT' })).not.toHaveLength(0)
+  })
+
+  it('auto-expands the matching settings group for the current route', async () => {
+    renderWithProviders(<AppSidebar mobileOpen={false} onClose={vi.fn()} />, {
+      initialRoute: '/settings/appearance',
+    })
+
+    expect(await screen.findAllByRole('link', { name: /appearance/i })).not.toHaveLength(0)
+  })
+
+  it('renders disabled tabs without navigation links when the tab is unavailable', async () => {
+    mockTabEnablement.repositories = false
+    mockGetTabDisabledReason.mockReturnValue('Requires upgrade')
+
+    renderWithProviders(<AppSidebar mobileOpen={false} onClose={vi.fn()} />)
+
+    await waitFor(() => {
+      expect(screen.queryAllByRole('link', { name: /repositories/i })).toHaveLength(0)
+      expect(screen.getAllByText('Repositories').length).toBeGreaterThan(0)
+    })
   })
 })
