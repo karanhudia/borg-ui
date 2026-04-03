@@ -17,6 +17,7 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     is_active = Column(Boolean, default=True)
     role = Column(String, default='viewer', nullable=False)
+    all_repositories_role = Column(String, nullable=True)
 
     @property
     def is_admin(self) -> bool:

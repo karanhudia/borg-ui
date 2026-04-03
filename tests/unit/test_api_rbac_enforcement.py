@@ -57,6 +57,13 @@ class TestCheckRepoAccess:
         _grant(test_db, user, repo, 'operator')
         check_repo_access(test_db, user, repo, 'operator')  # must not raise
 
+    def test_wildcard_repository_role_grants_future_repo_access(self, test_db):
+        user = _make_user(test_db, 'wildcard_op1', role='viewer')
+        user.all_repositories_role = 'operator'
+        test_db.commit()
+        repo = _make_repo(test_db, 'wildcard-repo1')
+        check_repo_access(test_db, user, repo, 'operator')  # must not raise
+
     def test_user_with_no_permission_blocked(self, test_db):
         """No permission row at all → 403 even for viewer-level action."""
         user = _make_user(test_db, 'np_e1', role='viewer')
@@ -105,6 +112,20 @@ class TestRepositoriesFilter:
         response = test_client.get('/api/repositories/', headers=headers)
         assert response.status_code == 200
         assert response.json()['repositories'] == []
+
+    def test_user_with_wildcard_role_sees_new_repositories(self, test_client, test_db):
+        from app.core.security import create_access_token
+        user = _make_user(test_db, 'filter-vwr3', role='viewer')
+        user.all_repositories_role = 'viewer'
+        test_db.commit()
+        _make_repo(test_db, 'filter-wildcard-visible')
+
+        token = create_access_token(data={"sub": user.username})
+        headers = {"Authorization": f"Bearer {token}"}
+        response = test_client.get('/api/repositories/', headers=headers)
+        assert response.status_code == 200
+        names = [r['name'] for r in response.json()['repositories']]
+        assert 'filter-wildcard-visible' in names
 
 
 @pytest.mark.unit

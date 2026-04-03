@@ -13,6 +13,10 @@ from app.core.security import (
     verify_password,
 )
 from app.core.features import get_current_plan, USER_LIMITS
+from app.core.permissions import (
+    default_repository_role_for_global_role,
+    normalize_repository_role_for_global_role,
+)
 from sqlalchemy import text
 from app.core.borg import BorgInterface
 from app.config import settings as app_settings
@@ -76,6 +80,7 @@ class UserUpdate(BaseModel):
     email: Optional[str] = None
     is_active: Optional[bool] = None
     role: Optional[str] = None
+
 
 class PasswordChange(BaseModel):
     current_password: str
@@ -555,6 +560,7 @@ async def get_users(
                     "email": user.email,
                     "is_active": user.is_active,
                     "role": user.role,
+                    "all_repositories_role": user.all_repositories_role,
                     "created_at": user.created_at,
                     "last_login": user.last_login
                 }
@@ -605,6 +611,7 @@ async def create_user(
             email=user_data.email,
             password_hash=hashed_password,
             role=user_data.role,
+            all_repositories_role=default_repository_role_for_global_role(user_data.role),
             is_active=True,
         )
 
@@ -623,7 +630,8 @@ async def create_user(
                 "full_name": new_user.full_name,
                 "email": new_user.email,
                 "is_active": new_user.is_active,
-                "role": new_user.role
+                "role": new_user.role,
+                "all_repositories_role": new_user.all_repositories_role,
             }
         }
     except HTTPException:
@@ -674,6 +682,10 @@ async def update_user(
 
         if user_data.role is not None:
             user.role = user_data.role
+            user.all_repositories_role = normalize_repository_role_for_global_role(
+                user.role,
+                user.all_repositories_role,
+            )
 
         user.updated_at = datetime.utcnow()
         db.commit()

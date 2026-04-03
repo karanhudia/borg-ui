@@ -38,6 +38,11 @@ class TestPermissions:
         assert response.status_code == 200
         assert response.json() == []
 
+    def test_get_my_permission_scope_defaults_to_none(self, test_client: TestClient, admin_headers):
+        response = test_client.get("/api/settings/permissions/me/scope", headers=admin_headers)
+        assert response.status_code == 200
+        assert response.json()["all_repositories_role"] is None
+
     def test_assign_permission(self, test_client: TestClient, test_db, admin_headers):
         """Admin can assign a role to a user for a repository"""
         user = _make_user(test_db, "viewer1")
@@ -140,3 +145,49 @@ class TestPermissions:
         assert len(perms) == 1
         assert perms[0]["repository_name"] == "my-repo"
         assert perms[0]["role"] == "operator"
+
+    def test_admin_can_set_user_wildcard_repository_role(self, test_client: TestClient, test_db, admin_headers):
+        user = _make_user(test_db, "viewer7")
+
+        response = test_client.put(
+            f"/api/settings/users/{user.id}/permissions/scope",
+            json={"all_repositories_role": "viewer"},
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["all_repositories_role"] == "viewer"
+
+    def test_admin_can_clear_user_wildcard_repository_role(self, test_client: TestClient, test_db, admin_headers):
+        user = _make_user(test_db, "viewer8")
+        user.all_repositories_role = "operator"
+        test_db.commit()
+
+        response = test_client.put(
+            f"/api/settings/users/{user.id}/permissions/scope",
+            json={"all_repositories_role": None},
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["all_repositories_role"] is None
+
+    def test_admin_can_get_user_wildcard_repository_role(self, test_client: TestClient, test_db, admin_headers):
+        user = _make_user(test_db, "viewer9")
+        user.all_repositories_role = "operator"
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/settings/users/{user.id}/permissions/scope",
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["all_repositories_role"] == "operator"
+
+    def test_admin_cannot_set_user_wildcard_role_above_global_role(self, test_client: TestClient, test_db, admin_headers):
+        user = _make_user(test_db, "viewer10", role="viewer")
+
+        response = test_client.put(
+            f"/api/settings/users/{user.id}/permissions/scope",
+            json={"all_repositories_role": "operator"},
+            headers=admin_headers,
+        )
+        assert response.status_code == 422

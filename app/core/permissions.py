@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 
 GLOBAL_ROLES: List[dict[str, object]] = [
@@ -50,6 +50,36 @@ ASSIGNABLE_REPOSITORY_ROLES_BY_GLOBAL_ROLE: Dict[str, List[str]] = {
     "operator": ["viewer", "operator"],
     "admin": ["viewer", "operator"],
 }
+
+
+def default_repository_role_for_global_role(role: str) -> Optional[str]:
+    if role == "admin":
+        return None
+    if role in ASSIGNABLE_REPOSITORY_ROLES_BY_GLOBAL_ROLE:
+        return role
+    return None
+
+
+def normalize_repository_role_for_global_role(
+    global_role: str,
+    repository_role: Optional[str],
+) -> Optional[str]:
+    if repository_role is None:
+        return None
+    allowed_roles = ASSIGNABLE_REPOSITORY_ROLES_BY_GLOBAL_ROLE.get(global_role, [])
+    if repository_role in allowed_roles:
+        return repository_role
+    return default_repository_role_for_global_role(global_role)
+
+
+def is_repository_role_assignable_to_global_role(
+    global_role: str,
+    repository_role: Optional[str],
+) -> bool:
+    if repository_role is None:
+        return True
+    allowed_roles = ASSIGNABLE_REPOSITORY_ROLES_BY_GLOBAL_ROLE.get(global_role, [])
+    return repository_role in allowed_roles
 
 
 def has_global_permission(role: str, permission: str) -> bool:

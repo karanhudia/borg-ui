@@ -392,8 +392,8 @@ async def get_repositories(
 ):
     """Get all repositories"""
     try:
-        # Admins see all repos; operators/viewers see only explicitly permitted repos
-        if current_user.role == 'admin':
+        # Admins and wildcard-assigned users see all repos.
+        if current_user.role == 'admin' or current_user.all_repositories_role:
             repositories = db.query(Repository).all()
         else:
             permitted_ids = {

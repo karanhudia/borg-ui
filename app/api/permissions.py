@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -6,7 +7,10 @@ import structlog
 
 from app.database.database import get_db
 from app.database.models import User, Repository, UserRepositoryPermission
-from app.core.permissions import REPOSITORY_ROLES
+from app.core.permissions import (
+    REPOSITORY_ROLES,
+    is_repository_role_assignable_to_global_role,
+)
 from app.core.security import get_current_user, get_current_admin_user
 
 logger = structlog.get_logger()
@@ -36,6 +40,14 @@ class PermissionResponse(BaseModel):
         from_attributes = True
 
 
+class PermissionScopeResponse(BaseModel):
+    all_repositories_role: Optional[str]
+
+
+class PermissionScopeUpdate(BaseModel):
+    all_repositories_role: Optional[str] = None
+
+
 def _validate_role(role: str) -> None:
     if role not in VALID_REPOSITORY_ROLES:
         raise HTTPException(
@@ -45,6 +57,25 @@ def _validate_role(role: str) -> None:
                 "params": {"roles": ", ".join(sorted(VALID_REPOSITORY_ROLES))},
             },
         )
+
+
+def _validate_optional_role(role: Optional[str]) -> None:
+    if role is None:
+        return
+    _validate_role(role)
+
+
+def _resolve_permission_scope_role(user: User, role: Optional[str]) -> Optional[str]:
+    _validate_optional_role(role)
+    if not is_repository_role_assignable_to_global_role(user.role, role):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "key": "backend.errors.permissions.invalidRole",
+                "params": {"roles": ", ".join(sorted(VALID_REPOSITORY_ROLES))},
+            },
+        )
+    return role
 
 
 def _get_user_or_404(db: Session, user_id: int) -> User:
@@ -113,6 +144,13 @@ async def get_my_permissions(
     return _list_permission_rows(db, current_user.id)
 
 
+@router.get("/settings/permissions/me/scope", response_model=PermissionScopeResponse)
+async def get_my_permission_scope(
+    current_user: User = Depends(get_current_user),
+):
+    return PermissionScopeResponse(all_repositories_role=current_user.all_repositories_role)
+
+
 @router.get(
     "/settings/users/{user_id}/permissions",
     response_model=list[PermissionResponse],
@@ -124,6 +162,39 @@ async def get_user_permissions(
 ):
     _get_user_or_404(db, user_id)
     return _list_permission_rows(db, user_id)
+
+
+@router.get(
+    "/settings/users/{user_id}/permissions/scope",
+    response_model=PermissionScopeResponse,
+    dependencies=[Depends(get_current_admin_user)],
+)
+async def get_user_permission_scope(
+    user_id: int,
+    db: Session = Depends(get_db),
+):
+    user = _get_user_or_404(db, user_id)
+    return PermissionScopeResponse(all_repositories_role=user.all_repositories_role)
+
+
+@router.put(
+    "/settings/users/{user_id}/permissions/scope",
+    response_model=PermissionScopeResponse,
+    dependencies=[Depends(get_current_admin_user)],
+)
+async def update_user_permission_scope(
+    user_id: int,
+    payload: PermissionScopeUpdate,
+    db: Session = Depends(get_db),
+):
+    user = _get_user_or_404(db, user_id)
+    user.all_repositories_role = _resolve_permission_scope_role(
+        user,
+        payload.all_repositories_role,
+    )
+    db.commit()
+    db.refresh(user)
+    return PermissionScopeResponse(all_repositories_role=user.all_repositories_role)
 
 
 @router.post(

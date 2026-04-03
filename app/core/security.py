@@ -11,13 +11,14 @@ from cryptography.fernet import Fernet
 import base64
 
 from app.config import settings
-from app.core.permissions import GLOBAL_ROLE_RANK
+from app.core.permissions import GLOBAL_ROLE_RANK, REPOSITORY_ROLE_RANK
 from app.database.database import get_db
 from app.database.models import Repository, User, UserRepositoryPermission
 
 logger = structlog.get_logger()
 
 ROLE_RANK = GLOBAL_ROLE_RANK
+REPO_ROLE_RANK = REPOSITORY_ROLE_RANK
 
 # JWT token security
 security = HTTPBearer()
@@ -265,10 +266,18 @@ def check_repo_access(db: Session, user: User, repo, required_role: str) -> None
     """
     if user.role == 'admin':
         return
+
+    effective_role = getattr(user, "all_repositories_role", None)
     perm = db.query(UserRepositoryPermission).filter_by(
         user_id=user.id, repository_id=repo.id
     ).first()
-    if not perm or ROLE_RANK.get(perm.role, 0) < ROLE_RANK.get(required_role, 0):
+    if perm and (
+        effective_role is None
+        or REPO_ROLE_RANK.get(perm.role, 0) > REPO_ROLE_RANK.get(effective_role, 0)
+    ):
+        effective_role = perm.role
+
+    if effective_role is None or REPO_ROLE_RANK.get(effective_role, 0) < REPO_ROLE_RANK.get(required_role, 0):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"key": "backend.errors.auth.notEnoughPermissions"}
