@@ -196,7 +196,6 @@ describe('RepositoryWizard', () => {
       })
 
       it('Next button is disabled when name is empty', async () => {
-        const user = userEvent.setup()
         renderWizard('create')
 
         await waitFor(() => {
@@ -209,7 +208,6 @@ describe('RepositoryWizard', () => {
       })
 
       it('Next button is disabled when path is empty', async () => {
-        const user = userEvent.setup()
         renderWizard('create')
 
         await waitFor(() => {
@@ -222,7 +220,6 @@ describe('RepositoryWizard', () => {
       })
 
       it('Next button is enabled when name and path are filled', async () => {
-        const user = userEvent.setup()
         renderWizard('create')
 
         await waitFor(() => {
