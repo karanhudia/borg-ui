@@ -556,7 +556,8 @@
       },
       "roles": {
         "admin": "Administrador",
-        "user": "Usuario"
+        "operator": "Operador",
+        "viewer": "Visualizador"
       },
       "status": {
         "active": "Activo",
@@ -2522,6 +2523,7 @@
       },
       "schedule": {
         "adminAccessRequired": "Se requiere acceso de administrador",
+        "operatorAccessRequired": "Se requiere acceso de operador o administrador",
         "invalidCronExpression": "Expresión cron no válida",
         "jobNameExists": "El nombre del trabajo ya existe",
         "noRepositoriesConfigured": "El trabajo programado no tiene repositorios configurados",
@@ -2589,6 +2591,7 @@
         "cannotDeleteOwnAccount": "No puedes eliminar tu propia cuenta",
         "emailAlreadyExists": "El correo electrónico ya existe",
         "failedConnectRedis": "Error al conectar a Redis: {{error}}",
+        "invalidDeploymentType": "deployment_type debe ser 'individual' o 'enterprise'",
         "invalidLogSavePolicy": "Política log_save_policy no válida. Debe ser una de: {{policies}}",
         "logSizeTooSmall": "log_max_total_size_mb debe ser al menos 10 MB",
         "userNotFound": "Usuario no encontrado",
@@ -2668,7 +2671,8 @@
         "failedMountArchive": "Error al montar el archivo",
         "failedUnmount": "Error al desmontar",
         "failedListMounts": "Error al listar los puntos de montaje",
-        "failedGetMountInfo": "Error al obtener información del punto de montaje"
+        "failedGetMountInfo": "Error al obtener información del punto de montaje",
+        "operatorAccessRequired": "Se requiere acceso de operador o administrador"
       },
       "notifications": {
         "settingNotFound": "Configuración de notificación no encontrada"

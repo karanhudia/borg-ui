@@ -556,7 +556,8 @@
       },
       "roles": {
         "admin": "Admin",
-        "user": "User"
+        "operator": "Operator",
+        "viewer": "Viewer"
       },
       "status": {
         "active": "Active",
@@ -2522,6 +2523,7 @@
       },
       "schedule": {
         "adminAccessRequired": "Admin access required",
+        "operatorAccessRequired": "Operator or admin access required",
         "invalidCronExpression": "Invalid cron expression",
         "jobNameExists": "Job name already exists",
         "noRepositoriesConfigured": "Scheduled job has no repositories configured",
@@ -2589,6 +2591,7 @@
         "cannotDeleteOwnAccount": "Cannot delete your own account",
         "emailAlreadyExists": "Email already exists",
         "failedConnectRedis": "Failed to connect to Redis: {{error}}",
+        "invalidDeploymentType": "deployment_type must be 'individual' or 'enterprise'",
         "invalidLogSavePolicy": "Invalid log_save_policy. Must be one of: {{policies}}",
         "logSizeTooSmall": "log_max_total_size_mb must be at least 10 MB",
         "userNotFound": "User not found",
@@ -2668,7 +2671,8 @@
         "failedMountArchive": "Failed to mount archive",
         "failedUnmount": "Failed to unmount",
         "failedListMounts": "Failed to list mounts",
-        "failedGetMountInfo": "Failed to get mount info"
+        "failedGetMountInfo": "Failed to get mount info",
+        "operatorAccessRequired": "Operator or admin access required"
       },
       "notifications": {
         "settingNotFound": "Notification setting not found"

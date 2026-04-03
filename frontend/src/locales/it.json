@@ -556,7 +556,8 @@
       },
       "roles": {
         "admin": "Amministratore",
-        "user": "Utente"
+        "operator": "Operatore",
+        "viewer": "Visualizzatore"
       },
       "status": {
         "active": "Attivo",
@@ -2522,6 +2523,7 @@
       },
       "schedule": {
         "adminAccessRequired": "Accesso amministratore richiesto",
+        "operatorAccessRequired": "È richiesto l'accesso come operatore o amministratore",
         "invalidCronExpression": "Espressione cron non valida",
         "jobNameExists": "Nome job già esistente",
         "noRepositoriesConfigured": "Il job pianificato non ha repository configurati",
@@ -2589,6 +2591,7 @@
         "cannotDeleteOwnAccount": "Impossibile eliminare il proprio account",
         "emailAlreadyExists": "Email già esistente",
         "failedConnectRedis": "Impossibile connettersi a Redis: {{error}}",
+        "invalidDeploymentType": "deployment_type deve essere 'individual' o 'enterprise'",
         "invalidLogSavePolicy": "log_save_policy non valido. Deve essere uno di: {{policies}}",
         "logSizeTooSmall": "log_max_total_size_mb deve essere almeno 10 MB",
         "userNotFound": "Utente non trovato",
@@ -2668,7 +2671,8 @@
         "failedMountArchive": "Impossibile montare l'archivio",
         "failedUnmount": "Impossibile smontare",
         "failedListMounts": "Impossibile elencare i mount",
-        "failedGetMountInfo": "Impossibile ottenere informazioni sul mount"
+        "failedGetMountInfo": "Impossibile ottenere informazioni sul mount",
+        "operatorAccessRequired": "È richiesto l'accesso come operatore o amministratore"
       },
       "notifications": {
         "settingNotFound": "Impostazione notifica non trovata"
