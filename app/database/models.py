@@ -12,16 +12,47 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True)
+    full_name = Column(String, nullable=True)
     password_hash = Column(String)
     email = Column(String, unique=True, index=True)
     is_active = Column(Boolean, default=True)
-    is_admin = Column(Boolean, default=False)
+    role = Column(String, default='viewer', nullable=False)
+
+    @property
+    def is_admin(self) -> bool:
+        """Backward-compat property — all existing guards continue to work."""
+        return self.role == 'admin'
+
     must_change_password = Column(Boolean, default=False)  # Force password change on next login
     analytics_enabled = Column(Boolean, default=True)  # User's analytics preference
     analytics_consent_given = Column(Boolean, default=False) # Whether user has responded to consent banner
     last_login = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+
+class ApiToken(Base):
+    __tablename__ = "api_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String, nullable=False)
+    token_hash = Column(String, nullable=False)
+    prefix = Column(String(12), nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    last_used_at = Column(DateTime, nullable=True)
+
+
+class UserRepositoryPermission(Base):
+    __tablename__ = "user_repository_permissions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    repository_id = Column(Integer, ForeignKey("repositories.id", ondelete="CASCADE"), nullable=False)
+    role = Column(String, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+
+    __table_args__ = (UniqueConstraint("user_id", "repository_id"),)
+
 
 class Repository(Base):
     __tablename__ = "repositories"
@@ -426,6 +457,10 @@ class SystemSettings(Base):
 
     # Plan / feature gating
     plan = Column(String, default="pro", nullable=False)
+
+    # Deployment profile
+    deployment_type = Column(String, default='individual', nullable=False)
+    enterprise_name = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)

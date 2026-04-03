@@ -187,7 +187,7 @@ class TestUserManagement:
     def test_update_user_success(self, test_client: TestClient, admin_headers, test_db):
         """Test updating user returns 200"""
         # Create a test user
-        user = User(username="testuser", email="test@example.com", is_admin=False, password_hash="fakehash")
+        user = User(username="testuser", email="test@example.com", role='viewer', password_hash="fakehash")
         test_db.add(user)
         test_db.commit()
         test_db.refresh(user)
@@ -212,7 +212,7 @@ class TestUserManagement:
 
     def test_delete_user_success(self, test_client: TestClient, admin_headers, test_db):
         """Test deleting user returns 200"""
-        user = User(username="todelete", email="delete@example.com", is_admin=False, password_hash="fakehash")
+        user = User(username="todelete", email="delete@example.com", role='viewer', password_hash="fakehash")
         test_db.add(user)
         test_db.commit()
         test_db.refresh(user)
@@ -288,7 +288,7 @@ class TestPasswordManagement:
 
     def test_reset_user_password_success(self, test_client: TestClient, admin_headers, test_db):
         """Test admin resetting user password returns 200"""
-        user = User(username="resetuser", email="reset@example.com", is_admin=False, password_hash="fakehash")
+        user = User(username="resetuser", email="reset@example.com", role='viewer', password_hash="fakehash")
         test_db.add(user)
         test_db.commit()
         test_db.refresh(user)
@@ -365,7 +365,7 @@ class TestSettingsValidation:
     def test_create_user_duplicate_username(self, test_client: TestClient, admin_headers, test_db):
         """Test creating user with duplicate username returns 409"""
         # Create first user
-        user = User(username="duplicate", email="first@example.com", is_admin=False, password_hash="fakehash")
+        user = User(username="duplicate", email="first@example.com", role='viewer', password_hash="fakehash")
         test_db.add(user)
         test_db.commit()
 
@@ -384,7 +384,7 @@ class TestSettingsValidation:
 
     def test_update_user_invalid_role(self, test_client: TestClient, admin_headers, test_db):
         """Test updating user with invalid role returns 422"""
-        user = User(username="testuser", email="test@example.com", is_admin=False, password_hash="fakehash")
+        user = User(username="testuser", email="test@example.com", role='viewer', password_hash="fakehash")
         test_db.add(user)
         test_db.commit()
         test_db.refresh(user)
@@ -396,3 +396,58 @@ class TestSettingsValidation:
         )
 
         assert response.status_code in [200, 403, 422]
+
+
+@pytest.mark.unit
+class TestDeploymentProfile:
+
+    def test_update_system_settings_deployment_type(self, test_client, admin_headers, test_db):
+        """Admin can set deployment_type on system settings."""
+        response = test_client.put(
+            "/api/settings/system",
+            json={"deployment_type": "enterprise", "enterprise_name": "Acme Corp"},
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+
+    def test_update_system_settings_invalid_deployment_type(self, test_client, admin_headers):
+        """Invalid deployment_type returns 400."""
+        response = test_client.put(
+            "/api/settings/system",
+            json={"deployment_type": "bogus"},
+            headers=admin_headers,
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"]["key"] == "backend.errors.settings.invalidDeploymentType"
+
+    def test_get_profile_returns_deployment_context(self, test_client, admin_headers, test_db):
+        """GET /settings/profile includes deployment_type and enterprise_name."""
+        from app.database.models import SystemSettings
+        sys = SystemSettings(deployment_type='enterprise', enterprise_name='Acme Corp')
+        test_db.add(sys)
+        test_db.commit()
+
+        response = test_client.get("/api/settings/profile", headers=admin_headers)
+        assert response.status_code == 200
+        profile = response.json()["profile"]
+        assert profile["deployment_type"] == "enterprise"
+        assert profile["enterprise_name"] == "Acme Corp"
+
+    def test_get_profile_defaults_to_individual_when_no_settings(
+        self, test_client, admin_headers
+    ):
+        """GET /settings/profile returns 'individual' when no SystemSettings row exists."""
+        response = test_client.get("/api/settings/profile", headers=admin_headers)
+        assert response.status_code == 200
+        profile = response.json()["profile"]
+        assert profile["deployment_type"] == "individual"
+        assert profile["enterprise_name"] is None
+
+    def test_non_admin_cannot_update_deployment_type(self, test_client, auth_headers):
+        """Non-admin cannot update system settings."""
+        response = test_client.put(
+            "/api/settings/system",
+            json={"deployment_type": "enterprise"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 403

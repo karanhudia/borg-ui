@@ -6,7 +6,12 @@ import structlog
 
 from app.database.database import get_db, engine
 from app.database.models import User, SSHKey, SSHConnection, Repository, BackupJob, SystemSettings
-from app.core.security import get_current_user, get_password_hash, verify_password
+from app.core.authorization import authorize_request
+from app.core.security import (
+    get_current_user,
+    get_password_hash,
+    verify_password,
+)
 from app.core.features import get_current_plan, USER_LIMITS
 from sqlalchemy import text
 from app.core.borg import BorgInterface
@@ -15,7 +20,7 @@ from app.services.cache_service import archive_cache
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
-router = APIRouter(tags=["settings"])
+router = APIRouter(tags=["settings"], dependencies=[Depends(authorize_request)])
 
 # Initialize Borg interface
 borg = BorgInterface()
@@ -60,15 +65,17 @@ from pydantic import BaseModel
 
 class UserCreate(BaseModel):
     username: str
-    email: str
     password: str
-    is_admin: bool = False
+    email: Optional[str] = None
+    role: str = 'viewer'
+    full_name: Optional[str] = None
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None
+    full_name: Optional[str] = None
     email: Optional[str] = None
     is_active: Optional[bool] = None
-    is_admin: Optional[bool] = None
+    role: Optional[str] = None
 
 class PasswordChange(BaseModel):
     current_password: str
@@ -119,6 +126,10 @@ class SystemSettingsUpdate(BaseModel):
     mqtt_tls_client_cert: Optional[str] = None
     mqtt_tls_client_key: Optional[str] = None
     mqtt_beta_enabled: Optional[bool] = None
+
+    # Deployment profile
+    deployment_type: Optional[str] = None
+    enterprise_name: Optional[str] = None
 
 @router.get("/system")
 async def get_system_settings(
@@ -271,9 +282,6 @@ async def update_system_settings(
     db: Session = Depends(get_db)
 ):
     """Update system settings (admin only)"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
-
     try:
         # Validate log management settings
         warnings = []
@@ -404,6 +412,17 @@ async def update_system_settings(
         if settings_update.mqtt_tls_client_key is not None:
             settings.mqtt_tls_client_key = settings_update.mqtt_tls_client_key
 
+        if settings_update.deployment_type is not None:
+            if settings_update.deployment_type not in ('individual', 'enterprise'):
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.settings.invalidDeploymentType"}
+                )
+            settings.deployment_type = settings_update.deployment_type
+
+        if settings_update.enterprise_name is not None:
+            settings.enterprise_name = settings_update.enterprise_name.strip() or None
+
         settings.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(settings)
@@ -491,9 +510,6 @@ async def refresh_all_stats(
     Runs in the background and returns immediately.
     Check last_stats_refresh timestamp to know when it completed.
     """
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
-
     try:
         import asyncio
 
@@ -524,13 +540,9 @@ async def refresh_all_stats(
 
 @router.get("/users")
 async def get_users(
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get all users (admin only)"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
-
     try:
         users = db.query(User).all()
         return {
@@ -539,9 +551,10 @@ async def get_users(
                 {
                     "id": user.id,
                     "username": user.username,
+                    "full_name": user.full_name,
                     "email": user.email,
                     "is_active": user.is_active,
-                    "is_admin": user.is_admin,
+                    "role": user.role,
                     "created_at": user.created_at,
                     "last_login": user.last_login
                 }
@@ -559,9 +572,6 @@ async def create_user(
     db: Session = Depends(get_db)
 ):
     """Create a new user (admin only)"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
-
     try:
         # Check user limit by plan
         current_plan = get_current_plan(db)
@@ -591,10 +601,11 @@ async def create_user(
         hashed_password = get_password_hash(user_data.password)
         new_user = User(
             username=user_data.username,
+            full_name=user_data.full_name,
             email=user_data.email,
             password_hash=hashed_password,
+            role=user_data.role,
             is_active=True,
-            is_admin=user_data.is_admin
         )
 
         db.add(new_user)
@@ -609,9 +620,10 @@ async def create_user(
             "user": {
                 "id": new_user.id,
                 "username": new_user.username,
+                "full_name": new_user.full_name,
                 "email": new_user.email,
                 "is_active": new_user.is_active,
-                "is_admin": new_user.is_admin
+                "role": new_user.role
             }
         }
     except HTTPException:
@@ -628,9 +640,6 @@ async def update_user(
     db: Session = Depends(get_db)
 ):
     """Update user (admin only)"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
-
     try:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
@@ -647,6 +656,9 @@ async def update_user(
                 raise HTTPException(status_code=400, detail={"key": "backend.errors.settings.usernameAlreadyExists"})
             user.username = user_data.username
 
+        if user_data.full_name is not None:
+            user.full_name = user_data.full_name.strip() or None
+
         if user_data.email is not None:
             # Check if email already exists
             existing_email = db.query(User).filter(
@@ -660,8 +672,8 @@ async def update_user(
         if user_data.is_active is not None:
             user.is_active = user_data.is_active
 
-        if user_data.is_admin is not None:
-            user.is_admin = user_data.is_admin
+        if user_data.role is not None:
+            user.role = user_data.role
 
         user.updated_at = datetime.utcnow()
         db.commit()
@@ -685,9 +697,6 @@ async def delete_user(
     db: Session = Depends(get_db)
 ):
     """Delete user (admin only)"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
-
     try:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
@@ -695,7 +704,7 @@ async def delete_user(
 
         # Prevent deleting the last admin user
         if user.is_admin:
-            admin_count = db.query(User).filter(User.is_admin == True).count()
+            admin_count = db.query(User).filter(User.role == 'admin').count()
             if admin_count <= 1:
                 raise HTTPException(status_code=400, detail={"key": "backend.errors.settings.cannotDeleteLastAdmin"})
 
@@ -726,9 +735,6 @@ async def reset_user_password(
     db: Session = Depends(get_db)
 ):
     """Reset user password (admin only)"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
-
     try:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
@@ -783,18 +789,30 @@ async def change_password(
         raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedChangePassword", "params": {"error": str(e)}})
 
 @router.get("/profile")
-async def get_profile(current_user: User = Depends(get_current_user)):
+async def get_profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Get current user's profile"""
+    settings = db.query(SystemSettings).first()
+    deployment_type = settings.deployment_type if settings else 'individual'
+    enterprise_name = settings.enterprise_name if settings else None
+
     return {
         "success": True,
         "profile": {
             "id": current_user.id,
             "username": current_user.username,
+            "full_name": current_user.full_name,
             "email": current_user.email,
             "is_active": current_user.is_active,
             "is_admin": current_user.is_admin,
+            "role": current_user.role,
+            "must_change_password": current_user.must_change_password,
             "created_at": current_user.created_at,
-            "last_login": current_user.last_login
+            "last_login": current_user.last_login,
+            "deployment_type": deployment_type,
+            "enterprise_name": enterprise_name,
         }
     }
 
@@ -816,6 +834,9 @@ async def update_profile(
             if existing_user:
                 raise HTTPException(status_code=400, detail={"key": "backend.errors.settings.usernameAlreadyExists"})
             current_user.username = profile_data.username
+
+        if profile_data.full_name is not None:
+            current_user.full_name = profile_data.full_name.strip() or None
 
         if profile_data.email is not None:
             # Check if email already exists
@@ -887,9 +908,6 @@ async def cleanup_system(
     db: Session = Depends(get_db)
 ):
     """Run system cleanup (admin only)"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
-
     try:
         # Get system settings
         settings = db.query(SystemSettings).first()
@@ -997,9 +1015,6 @@ async def manual_log_cleanup(
     - Performs age-based cleanup first, then size-based cleanup
     - Returns detailed cleanup statistics
     """
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
-
     try:
         from app.services.log_manager import log_manager
 
@@ -1125,9 +1140,6 @@ async def clear_cache(
     Returns:
     - Number of cache entries cleared
     """
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
-
     try:
         if repository_id is not None:
             # Validate repository exists
@@ -1199,9 +1211,6 @@ async def update_cache_settings(
     - Updated settings
     - Redis connection result if redis_url was changed
     """
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.settings.adminAccessRequired"})
-
     if cache_ttl_minutes is None and cache_max_size_mb is None and redis_url is None and browse_max_items is None and browse_max_memory_mb is None:
         raise HTTPException(status_code=400, detail={"key": "backend.errors.settings.atLeastOneSettingRequired"})
 
