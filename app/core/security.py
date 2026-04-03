@@ -11,10 +11,13 @@ from cryptography.fernet import Fernet
 import base64
 
 from app.config import settings
+from app.core.permissions import GLOBAL_ROLE_RANK
 from app.database.database import get_db
-from app.database.models import User
+from app.database.models import User, UserRepositoryPermission
 
 logger = structlog.get_logger()
+
+ROLE_RANK = GLOBAL_ROLE_RANK
 
 # JWT token security
 security = HTTPBearer()
@@ -55,11 +58,16 @@ async def get_current_user(
     db: Session = Depends(get_db)
 ) -> User:
     """Get the current authenticated user (supports both JWT and proxy auth)"""
+    cached_user = getattr(request.state, "current_user", None)
+    if cached_user is not None:
+        return cached_user
 
     # Check if proxy authentication is enabled
     if settings.disable_authentication:
         # Use proxy authentication
-        return await get_current_user_proxy(request, db)
+        user = await get_current_user_proxy(request, db)
+        request.state.current_user = user
+        return user
 
     # Use JWT authentication
     credentials_exception = HTTPException(
@@ -73,7 +81,9 @@ async def get_current_user(
         raise credentials_exception
 
     token = auth_header.split(" ")[1]
-    return _get_active_user_from_token(token, db, credentials_exception)
+    user = _get_active_user_from_token(token, db, credentials_exception)
+    request.state.current_user = user
+    return user
 
 
 async def get_current_user_proxy(
@@ -126,7 +136,7 @@ async def get_current_user_proxy(
             username=username,
             password_hash="",  # No password for proxy auth users
             email=f"{username}@proxy.local",
-            is_admin=False,
+            role='viewer',
             is_active=True,
             must_change_password=False
         )
@@ -149,7 +159,6 @@ async def get_current_user_proxy(
     db.commit()
 
     return user
-
 
 def _get_active_user_from_token(
     token: Optional[str],
@@ -216,12 +225,55 @@ async def get_current_admin_user(
 ) -> User:
     """Get the current admin user"""
     current_user = await get_current_user(request, db)
-    if not current_user.is_admin:
+    require_any_role(current_user, "admin")
+    return current_user
+
+def require_any_role(
+    user: User,
+    *allowed_roles: str,
+    detail_key: str = "backend.errors.auth.notEnoughPermissions"
+) -> User:
+    """Raise HTTP 403 unless the user has one of the allowed roles."""
+    if user.role not in allowed_roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"key": detail_key}
+        )
+    return user
+
+
+def require_role_dependency(
+    *allowed_roles: str,
+    detail_key: str = "backend.errors.auth.notEnoughPermissions"
+):
+    """Create a FastAPI dependency that resolves the user and enforces role membership."""
+    async def dependency(
+        request: Request,
+        db: Session = Depends(get_db)
+    ) -> User:
+        current_user = await get_current_user(request, db)
+        return require_any_role(current_user, *allowed_roles, detail_key=detail_key)
+
+    return dependency
+
+
+def check_repo_access(db: Session, user: User, repo, required_role: str) -> None:
+    """Raise HTTP 403 if user lacks required_role on the given repository.
+
+    Admin users always pass. For operator/viewer, checks UserRepositoryPermission.
+    required_role is 'viewer' or 'operator'.
+    """
+    if user.role == 'admin':
+        return
+    perm = db.query(UserRepositoryPermission).filter_by(
+        user_id=user.id, repository_id=repo.id
+    ).first()
+    if not perm or ROLE_RANK.get(perm.role, 0) < ROLE_RANK.get(required_role, 0):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"key": "backend.errors.auth.notEnoughPermissions"}
         )
-    return current_user
+
 
 async def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
     """Authenticate a user with username and password"""
@@ -256,7 +308,7 @@ async def create_first_user():
                 password_hash=hashed_password,
                 email="admin@borg.local",
                 is_active=True,
-                is_admin=True,
+                role='admin',
                 must_change_password=True  # Force password change on first login
             )
             
@@ -285,14 +337,14 @@ async def create_first_user():
     finally:
         db.close()
 
-def create_user(db: Session, username: str, password: str, email: str = None, is_admin: bool = False) -> User:
+def create_user(db: Session, username: str, password: str, email: str = None, role: str = 'viewer') -> User:
     """Create a new user"""
     hashed_password = get_password_hash(password)
     user = User(
         username=username,
         password_hash=hashed_password,
         email=email,
-        is_admin=is_admin
+        role=role,
     )
     db.add(user)
     db.commit()
@@ -356,4 +408,3 @@ def decrypt_secret(encrypted_value: str) -> str:
     cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
     decrypted_value = cipher.decrypt(encrypted_value.encode()).decode()
     return decrypted_value
- 
