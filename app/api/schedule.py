@@ -10,14 +10,15 @@ import asyncio
 
 from app.database.database import get_db, SessionLocal
 from app.database.models import User, ScheduledJob, ScheduledJobRepository, CompactJob, PruneJob, Repository, BackupJob, Script, RepositoryScript
-from app.core.security import get_current_user
+from app.core.authorization import authorize_request
+from app.core.security import get_current_user, check_repo_access
 from app.config import settings
 from app.services.notification_service import notification_service
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.archive_names import build_archive_name
 
 logger = structlog.get_logger()
-router = APIRouter(tags=["schedule"])
+router = APIRouter(tags=["schedule"], dependencies=[Depends(authorize_request)])
 
 # Pydantic models
 from pydantic import BaseModel
@@ -79,6 +80,132 @@ class CronExpression(BaseModel):
     month: str = "*"
     day_of_week: str = "*"
 
+
+def _dedupe_repository_ids(repository_ids: Optional[List[int]]) -> List[int]:
+    if not repository_ids:
+        return []
+
+    seen: set[int] = set()
+    unique_repo_ids: List[int] = []
+    for repo_id in repository_ids:
+        if repo_id not in seen:
+            seen.add(repo_id)
+            unique_repo_ids.append(repo_id)
+    return unique_repo_ids
+
+
+def _ensure_schedule_repository_allowed(repo: Optional[Repository]) -> None:
+    if repo and repo.mode == "observe":
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.schedule.observabilityOnlyRepo", "params": {"name": repo.name}},
+        )
+
+
+def _get_schedule_target_repositories(
+    db: Session,
+    repository_path: Optional[str],
+    repository_id: Optional[int],
+    repository_ids: Optional[List[int]],
+) -> tuple[Optional[Repository], Optional[Repository], List[Repository], List[int]]:
+    legacy_repo = None
+    if repository_path:
+        legacy_repo = db.query(Repository).filter(Repository.path == repository_path).first()
+        _ensure_schedule_repository_allowed(legacy_repo)
+
+    single_repo = None
+    if repository_id:
+        single_repo = db.query(Repository).filter(Repository.id == repository_id).first()
+        if single_repo is None:
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.schedule.repositoryNotFound", "params": {"id": repository_id}},
+            )
+        _ensure_schedule_repository_allowed(single_repo)
+
+    unique_repo_ids = _dedupe_repository_ids(repository_ids)
+    multi_repos: List[Repository] = []
+    for repo_id in unique_repo_ids:
+        repo = db.query(Repository).filter_by(id=repo_id).first()
+        if not repo:
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.schedule.repositoryNotFound", "params": {"id": repo_id}},
+            )
+        _ensure_schedule_repository_allowed(repo)
+        multi_repos.append(repo)
+
+    return legacy_repo, single_repo, multi_repos, unique_repo_ids
+
+
+def _require_schedule_payload_access(
+    db: Session,
+    current_user: User,
+    repository_path: Optional[str],
+    repository_id: Optional[int],
+    repository_ids: Optional[List[int]],
+    required_role: str,
+) -> tuple[Optional[Repository], Optional[Repository], List[Repository], List[int]]:
+    legacy_repo, single_repo, multi_repos, unique_repo_ids = _get_schedule_target_repositories(
+        db,
+        repository_path,
+        repository_id,
+        repository_ids,
+    )
+
+    for repo in [legacy_repo, single_repo, *multi_repos]:
+        if repo:
+            check_repo_access(db, current_user, repo, required_role)
+
+    return legacy_repo, single_repo, multi_repos, unique_repo_ids
+
+
+def _get_schedule_repositories(db: Session, job: ScheduledJob) -> List[Repository]:
+    repositories: List[Repository] = []
+    seen_ids: set[int] = set()
+
+    if job.repository_id:
+        repo = db.query(Repository).filter(Repository.id == job.repository_id).first()
+        if repo and repo.id not in seen_ids:
+            repositories.append(repo)
+            seen_ids.add(repo.id)
+
+    if job.repository:
+        repo = db.query(Repository).filter(Repository.path == job.repository).first()
+        if repo and repo.id not in seen_ids:
+            repositories.append(repo)
+            seen_ids.add(repo.id)
+
+    repo_links = (
+        db.query(ScheduledJobRepository)
+        .filter_by(scheduled_job_id=job.id)
+        .order_by(ScheduledJobRepository.execution_order)
+        .all()
+    )
+    for link in repo_links:
+        if link.repository_id in seen_ids:
+            continue
+        repo = db.query(Repository).filter(Repository.id == link.repository_id).first()
+        if repo:
+            repositories.append(repo)
+            seen_ids.add(repo.id)
+
+    return repositories
+
+
+def _require_schedule_access(
+    db: Session, current_user: User, job: ScheduledJob, required_role: str
+) -> List[Repository]:
+    repositories = _get_schedule_repositories(db, job)
+
+    if not repositories and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail={"key": "backend.errors.auth.insufficientPermissions"})
+
+    for repo in repositories:
+        check_repo_access(db, current_user, repo, required_role)
+
+    return repositories
+
 @router.get("/")
 async def get_scheduled_jobs(
     current_user: User = Depends(get_current_user),
@@ -90,6 +217,10 @@ async def get_scheduled_jobs(
         result_jobs = []
 
         for job in jobs:
+            try:
+                _require_schedule_access(db, current_user, job, "viewer")
+            except HTTPException:
+                continue
             # Get repository_ids from junction table
             repo_links = db.query(ScheduledJobRepository)\
                 .filter_by(scheduled_job_id=job.id)\
@@ -162,10 +293,15 @@ async def create_scheduled_job(
     db: Session = Depends(get_db)
 ):
     """Create a new scheduled job"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.schedule.adminAccessRequired"})
-
     try:
+        _, _, _, unique_repo_ids = _require_schedule_payload_access(
+            db,
+            current_user,
+            job_data.repository,
+            job_data.repository_id,
+            job_data.repository_ids,
+            "operator",
+        )
         logger.info("STEP 0: Schedule creation request received",
                    job_name=job_data.name,
                    user=current_user.username,
@@ -251,37 +387,11 @@ async def create_scheduled_job(
         if existing_job:
             raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.jobNameExists"})
 
-        # Validate repositories are not in observability-only mode
-        from app.database.models import Repository
-
-        # Check single repo (legacy by path or new by ID)
-        if job_data.repository:
-            repo = db.query(Repository).filter(Repository.path == job_data.repository).first()
-            if repo and repo.mode == "observe":
-                raise HTTPException(
-                    status_code=400,
-                    detail={"key": "backend.errors.schedule.observabilityOnlyRepo"}
-                )
-        elif job_data.repository_id:
-            repo = db.query(Repository).filter_by(id=job_data.repository_id).first()
-            if repo and repo.mode == "observe":
-                raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.observabilityOnlyRepo", "params": {"name": repo.name}})
-
-        # Check multi-repo and deduplicate
-        unique_repo_ids = None
         if job_data.repository_ids:
             logger.info("STEP 1: Received repository_ids from frontend",
                        repository_ids=job_data.repository_ids,
                        count=len(job_data.repository_ids),
                        job_name=job_data.name)
-
-            # Remove duplicates while preserving order
-            seen = set()
-            unique_repo_ids = []
-            for repo_id in job_data.repository_ids:
-                if repo_id not in seen:
-                    seen.add(repo_id)
-                    unique_repo_ids.append(repo_id)
 
             # Log deduplication results
             if len(unique_repo_ids) != len(job_data.repository_ids):
@@ -292,14 +402,6 @@ async def create_scheduled_job(
             else:
                 logger.info("STEP 2: No duplicates found, using all repository IDs",
                           unique_repo_ids=unique_repo_ids)
-
-            # Validate repositories
-            for repo_id in unique_repo_ids:
-                repo = db.query(Repository).filter_by(id=repo_id).first()
-                if not repo:
-                    raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.repositoryNotFound", "params": {"id": repo_id}})
-                if repo.mode == "observe":
-                    raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.observabilityOnlyRepo", "params": {"name": repo.name}})
 
         # Create scheduled job
         scheduled_job = ScheduledJob(
@@ -538,6 +640,7 @@ async def get_upcoming_jobs(
 
         for job in jobs:
             try:
+                _require_schedule_access(db, current_user, job, "viewer")
                 cron = croniter.croniter(job.cron_expression, datetime.now(timezone.utc))
                 next_run = cron.get_next(datetime)
                 
@@ -575,6 +678,7 @@ async def get_scheduled_job(
         job = db.query(ScheduledJob).filter(ScheduledJob.id == job_id).first()
         if not job:
             raise HTTPException(status_code=404, detail={"key": "backend.errors.schedule.scheduledJobNotFound"})
+        _require_schedule_access(db, current_user, job, "viewer")
 
         # Calculate next run times
         try:
@@ -628,13 +732,20 @@ async def update_scheduled_job(
     db: Session = Depends(get_db)
 ):
     """Update scheduled job"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.schedule.adminAccessRequired"})
-
     try:
         job = db.query(ScheduledJob).filter(ScheduledJob.id == job_id).first()
         if not job:
             raise HTTPException(status_code=404, detail={"key": "backend.errors.schedule.scheduledJobNotFound"})
+        _require_schedule_access(db, current_user, job, "operator")
+
+        _, _, _, unique_repo_ids = _require_schedule_payload_access(
+            db,
+            current_user,
+            job_data.repository,
+            job_data.repository_id,
+            job_data.repository_ids,
+            "operator",
+        )
 
         # Update fields
         if job_data.name is not None:
@@ -657,14 +768,6 @@ async def update_scheduled_job(
                 raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.invalidCronExpression", "params": {"error": str(e)}})
 
         if job_data.repository is not None:
-            # Validate repository is not in observability-only mode
-            from app.database.models import Repository
-            repo = db.query(Repository).filter(Repository.path == job_data.repository).first()
-            if repo and repo.mode == "observe":
-                raise HTTPException(
-                    status_code=400,
-                    detail={"key": "backend.errors.schedule.observabilityOnlyRepo"}
-                )
             job.repository = job_data.repository
 
         if job_data.enabled is not None:
@@ -703,10 +806,6 @@ async def update_scheduled_job(
 
         # Update multi-repo settings
         if job_data.repository_id is not None:
-            from app.database.models import Repository
-            repo = db.query(Repository).filter_by(id=job_data.repository_id).first()
-            if repo and repo.mode == "observe":
-                raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.observabilityOnlyRepo", "params": {"name": repo.name}})
             job.repository_id = job_data.repository_id
 
         if job_data.run_repository_scripts is not None:
@@ -726,29 +825,11 @@ async def update_scheduled_job(
 
         # Handle repository_ids update (multi-repo)
         if job_data.repository_ids is not None:
-            from app.database.models import Repository
-
-            # Remove duplicates while preserving order
-            seen = set()
-            unique_repo_ids = []
-            for repo_id in job_data.repository_ids:
-                if repo_id not in seen:
-                    seen.add(repo_id)
-                    unique_repo_ids.append(repo_id)
-
             # Log if duplicates were found
             if len(unique_repo_ids) != len(job_data.repository_ids):
                 logger.warning("Removed duplicate repository IDs from request",
                              original=job_data.repository_ids,
                              cleaned=unique_repo_ids)
-
-            # Validate all repositories
-            for repo_id in unique_repo_ids:
-                repo = db.query(Repository).filter_by(id=repo_id).first()
-                if not repo:
-                    raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.repositoryNotFound", "params": {"id": repo_id}})
-                if repo.mode == "observe":
-                    raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.observabilityOnlyRepo", "params": {"name": repo.name}})
 
             # Delete existing junction table entries
             db.query(ScheduledJobRepository).filter_by(scheduled_job_id=job_id).delete()
@@ -787,14 +868,12 @@ async def delete_scheduled_job(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Delete scheduled job (admin only)"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.schedule.adminAccessRequired"})
-
+    """Delete scheduled job (operator or admin only)"""
     try:
         job = db.query(ScheduledJob).filter(ScheduledJob.id == job_id).first()
         if not job:
             raise HTTPException(status_code=404, detail={"key": "backend.errors.schedule.scheduledJobNotFound"})
+        _require_schedule_access(db, current_user, job, "operator")
 
         # Step 1: Set scheduled_job_id to NULL for all backup jobs linked to this schedule
         # This preserves backup history while breaking the link
@@ -833,13 +912,11 @@ async def toggle_scheduled_job(
     db: Session = Depends(get_db)
 ):
     """Toggle scheduled job enabled/disabled state"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.schedule.adminAccessRequired"})
-
     try:
         job = db.query(ScheduledJob).filter(ScheduledJob.id == job_id).first()
         if not job:
             raise HTTPException(status_code=404, detail={"key": "backend.errors.schedule.scheduledJobNotFound"})
+        _require_schedule_access(db, current_user, job, "operator")
 
         job.enabled = not job.enabled
         job.updated_at = datetime.now(timezone.utc)
@@ -866,14 +943,12 @@ async def duplicate_scheduled_job(
     db: Session = Depends(get_db)
 ):
     """Duplicate a scheduled job with a new name"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.schedule.adminAccessRequired"})
-
     try:
         # Get the original job
         original_job = db.query(ScheduledJob).filter(ScheduledJob.id == job_id).first()
         if not original_job:
             raise HTTPException(status_code=404, detail={"key": "backend.errors.schedule.scheduledJobNotFound"})
+        _require_schedule_access(db, current_user, original_job, "operator")
 
         # Generate a unique name for the copy
         base_name = f"Copy of {original_job.name}"
@@ -991,9 +1066,6 @@ async def run_scheduled_job_now(
     db: Session = Depends(get_db)
 ):
     """Run a scheduled job immediately"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.schedule.adminAccessRequired"})
-
     try:
         from app.database.models import BackupJob, Repository
         from app.services.backup_service import backup_service
@@ -1006,6 +1078,7 @@ async def run_scheduled_job_now(
         repo_links = db.query(ScheduledJobRepository)\
             .filter_by(scheduled_job_id=job.id)\
             .all()
+        _require_schedule_access(db, current_user, job, "operator")
 
         if repo_links:
             # Multi-repository schedule

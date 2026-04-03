@@ -390,3 +390,72 @@ class TestScheduleHelpers:
         response = test_client.get("/api/schedule/upcoming-jobs")
 
         assert response.status_code == 401
+
+
+@pytest.mark.unit
+class TestScheduleRoleGuard:
+    """Viewers must be blocked from all mutating schedule endpoints."""
+
+    def test_viewer_cannot_create_schedule(self, test_client, auth_headers):
+        response = test_client.post(
+            "/api/schedule/",
+            json={"name": "x", "cron_expression": "0 * * * *", "repository_ids": []},
+            headers=auth_headers,
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"]["key"] == "backend.errors.schedule.operatorAccessRequired"
+
+    def test_viewer_cannot_update_schedule(self, test_client, auth_headers):
+        response = test_client.put(
+            "/api/schedule/1",
+            json={"name": "y"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"]["key"] == "backend.errors.schedule.operatorAccessRequired"
+
+    def test_viewer_cannot_delete_schedule(self, test_client, auth_headers):
+        response = test_client.delete("/api/schedule/1", headers=auth_headers)
+        assert response.status_code == 403
+        assert response.json()["detail"]["key"] == "backend.errors.schedule.operatorAccessRequired"
+
+    def test_viewer_cannot_toggle_schedule(self, test_client, auth_headers):
+        response = test_client.post("/api/schedule/1/toggle", headers=auth_headers)
+        assert response.status_code == 403
+        assert response.json()["detail"]["key"] == "backend.errors.schedule.operatorAccessRequired"
+
+    def test_viewer_cannot_duplicate_schedule(self, test_client, auth_headers):
+        response = test_client.post("/api/schedule/1/duplicate", headers=auth_headers)
+        assert response.status_code == 403
+        assert response.json()["detail"]["key"] == "backend.errors.schedule.operatorAccessRequired"
+
+    def test_viewer_cannot_run_schedule_now(self, test_client, auth_headers):
+        response = test_client.post("/api/schedule/1/run-now", headers=auth_headers)
+        assert response.status_code == 403
+        assert response.json()["detail"]["key"] == "backend.errors.schedule.operatorAccessRequired"
+
+    def test_viewer_can_list_schedules(self, test_client, auth_headers):
+        """Read endpoints must remain accessible to viewers."""
+        response = test_client.get("/api/schedule/", headers=auth_headers)
+        assert response.status_code == 200
+
+    def test_operator_no_repo_permission_blocked_on_create(
+        self, test_client, operator_headers, test_db
+    ):
+        """Operator passes global check but fails per-repo check if no explicit permission."""
+        from app.database.models import Repository
+        repo = Repository(name="op-test-repo", path="/backup/op-test", encryption="none")
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.post(
+            "/api/schedule/",
+            json={
+                "name": "op-sched",
+                "cron_expression": "0 * * * *",
+                "repository_ids": [repo.id],
+            },
+            headers=operator_headers,
+        )
+        assert response.status_code == 403

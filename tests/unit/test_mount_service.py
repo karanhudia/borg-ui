@@ -385,3 +385,38 @@ class TestMountInfo:
         assert info.temp_key_file is None
         assert info.connection_id is None
         assert info.repository_id is None
+
+
+@pytest.mark.unit
+class TestMountRoleGuard:
+    """Viewers must be blocked from all mutating mount endpoints."""
+
+    def test_viewer_cannot_mount(self, test_client, auth_headers):
+        response = test_client.post(
+            "/api/mounts/borg",
+            json={"repository_id": 1},
+            headers=auth_headers,
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"]["key"] == "backend.errors.mounts.operatorAccessRequired"
+
+    def test_viewer_cannot_unmount(self, test_client, auth_headers):
+        response = test_client.post(
+            "/api/mounts/borg/unmount/fake-mount-id",
+            headers=auth_headers,
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"]["key"] == "backend.errors.mounts.operatorAccessRequired"
+
+    def test_viewer_cannot_force_unmount(self, test_client, auth_headers):
+        response = test_client.post(
+            "/api/mounts/borg/unmount/fake-mount-id?force=true",
+            headers=auth_headers,
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"]["key"] == "backend.errors.mounts.operatorAccessRequired"
+
+    def test_viewer_can_list_mounts(self, test_client, auth_headers):
+        """Read endpoints must remain accessible to viewers."""
+        response = test_client.get("/api/mounts", headers=auth_headers)
+        assert response.status_code == 200

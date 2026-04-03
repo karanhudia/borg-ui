@@ -109,7 +109,8 @@ def test_user(test_db):
     user = User(
         username="testuser",
         password_hash=get_password_hash("testpass123"),
-        is_active=True
+        is_active=True,
+        role='viewer'
     )
     test_db.add(user)
     test_db.commit()
@@ -124,7 +125,7 @@ def admin_user(test_db):
         username="admin",
         password_hash=get_password_hash("admin123"),
         is_active=True,
-        is_admin=True  # CRITICAL: Admin user must have admin privileges!
+        role='admin'
     )
     test_db.add(user)
     test_db.commit()
@@ -154,3 +155,28 @@ def auth_headers(auth_token):
 def admin_headers(admin_token):
     """Create authorization headers with admin token"""
     return {"Authorization": f"Bearer {admin_token}"}
+
+
+@pytest.fixture
+def operator_user(test_db):
+    """Create an operator user in the database"""
+    user = User(
+        username="operator",
+        password_hash=get_password_hash("operator123"),
+        is_active=True,
+        role='operator'
+    )
+    test_db.add(user)
+    test_db.commit()
+    test_db.refresh(user)
+    return user
+
+
+@pytest.fixture
+def operator_token(operator_user):
+    return create_access_token(data={"sub": operator_user.username})
+
+
+@pytest.fixture
+def operator_headers(operator_token):
+    return {"Authorization": f"Bearer {operator_token}"}
