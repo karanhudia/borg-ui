@@ -16,7 +16,29 @@ const trackSettings = vi.fn()
 
 vi.mock('../../hooks/useAuth', () => ({
   useAuth: () => ({
-    user: { id: 1, username: 'admin', email: 'admin@example.com', is_admin: true },
+    user: {
+      id: 1,
+      username: 'admin',
+      email: 'admin@example.com',
+      role: 'admin',
+      global_permissions: ['settings.users.manage'],
+    },
+    hasGlobalPermission: (permission: string) => permission === 'settings.users.manage',
+  }),
+}))
+
+vi.mock('../../hooks/useAuthorization', () => ({
+  useAuthorization: () => ({
+    roleHasGlobalPermission: (role: string, permission: string) =>
+      role === 'admin' && permission === 'settings.users.manage',
+    assignableRepositoryRolesFor: () => ['viewer', 'operator'],
+  }),
+}))
+
+vi.mock('../../hooks/useAuthorization', () => ({
+  useAuthorization: () => ({
+    roleHasGlobalPermission: (role: string, permission: string) =>
+      role === 'admin' && permission === 'settings.users.manage',
   }),
 }))
 
@@ -48,6 +70,7 @@ vi.mock('../../components/MountsManagementTab', () => ({ default: () => null }))
 vi.mock('../../components/SystemSettingsTab', () => ({ default: () => null }))
 vi.mock('../../components/BetaFeaturesTab', () => ({ default: () => null }))
 vi.mock('../../components/MqttSettingsTab', () => ({ default: () => null }))
+vi.mock('../../components/UserPermissionsPanel', () => ({ default: () => null }))
 vi.mock('../Scripts', () => ({ default: () => null }))
 vi.mock('../Activity', () => ({ default: () => null }))
 
@@ -78,6 +101,9 @@ vi.mock('../../services/api', () => ({
     updateUser: vi.fn(),
     deleteUser: vi.fn(),
     resetUserPassword: vi.fn(),
+  },
+  repositoriesAPI: {
+    getRepositories: vi.fn().mockResolvedValue({ data: [] }),
   },
 }))
 
@@ -114,7 +140,9 @@ describe('Settings users tab', () => {
             username: 'existing',
             email: 'existing@example.com',
             is_active: true,
-            is_admin: false,
+            role: 'viewer',
+            full_name: null,
+            all_repositories_role: 'viewer',
             created_at: '2026-01-01T00:00:00Z',
             last_login: null,
           },
@@ -176,11 +204,11 @@ describe('Settings users tab', () => {
       username: 'new-user',
       email: 'new@example.com',
       password: 'strong-password',
-      is_admin: false,
+      role: 'viewer',
     })
     expect(trackSettings).toHaveBeenCalledWith('Create', {
       section: 'users',
-      role: 'user',
+      role: 'viewer',
     })
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: /create user/i })).not.toBeInTheDocument()
@@ -247,13 +275,13 @@ describe('Settings users tab', () => {
         expect.objectContaining({
           username: 'existing',
           email: 'updated@example.com',
-          is_admin: false,
+          role: 'viewer',
         })
       )
     })
     expect(trackSettings).toHaveBeenCalledWith('Edit', {
       section: 'users',
-      role: 'user',
+      role: 'viewer',
     })
   })
 

@@ -5,8 +5,8 @@ import { Box, Card, Stack } from '@mui/material'
 import { settingsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
-import { useAuthorization } from '../hooks/useAuthorization'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { getGlobalRolePresentation } from '../utils/rolePresentation'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import AccountTabHeader from './AccountTabHeader'
 import AccountProfileSection, {
@@ -21,9 +21,7 @@ import AccountTabNavigation, { AccountView } from './AccountTabNavigation'
 const AccountTab: React.FC = () => {
   const { t } = useTranslation()
   const { user, hasGlobalPermission, refreshUser } = useAuth()
-  const { roleHasGlobalPermission } = useAuthorization()
   const { trackSettings, EventAction } = useAnalytics()
-  const canManageUsers = hasGlobalPermission('settings.users.manage')
   const canManageSystem = hasGlobalPermission('settings.system.manage')
   const hasGlobalRepositoryAccess = hasGlobalPermission('repositories.manage_all')
 
@@ -135,16 +133,7 @@ const AccountTab: React.FC = () => {
     user?.deployment_type === 'enterprise'
       ? user.enterprise_name || 'Enterprise deployment'
       : 'Individual deployment'
-  const currentUserRoleLabel = canManageUsers
-    ? t('settings.users.roles.admin')
-    : user?.role && roleHasGlobalPermission(user.role, 'settings.mounts.manage')
-      ? t('settings.users.roles.operator')
-      : t('settings.users.roles.viewer')
-  const currentUserRoleColor = canManageUsers
-    ? 'secondary'
-    : user?.role && roleHasGlobalPermission(user.role, 'settings.mounts.manage')
-      ? 'info'
-      : 'default'
+  const currentUserRolePresentation = getGlobalRolePresentation(user?.role, t)
 
   return (
     <>
@@ -158,8 +147,8 @@ const AccountTab: React.FC = () => {
                 ? 'Your personal profile is separate from the system-wide deployment identity.'
                 : 'Your personal account settings, security, and access are managed here.'
             }
-            roleLabel={currentUserRoleLabel}
-            roleColor={currentUserRoleColor}
+            roleLabel={currentUserRolePresentation.label}
+            roleColor={currentUserRolePresentation.color}
             createdAt={user.created_at}
             deploymentLabel={deploymentLabel}
           />

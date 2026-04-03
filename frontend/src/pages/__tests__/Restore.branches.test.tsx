@@ -69,6 +69,15 @@ vi.mock('../../services/api', () => ({
   },
 }))
 
+vi.mock('../../hooks/usePermissions', () => ({
+  usePermissions: () => ({
+    canAccess: (repoId: number) => repoId === 1,
+    roleFor: (repoId: number) => (repoId === 1 ? 'viewer' : null),
+    canDo: () => true,
+    isLoading: false,
+  }),
+}))
+
 vi.mock('../../hooks/useAnalytics', () => ({
   useAnalytics: () => ({
     trackArchive: vi.fn(),

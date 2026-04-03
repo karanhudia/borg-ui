@@ -29,14 +29,10 @@ import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuthorization } from '../hooks/useAuthorization'
 import { usePlan } from '../hooks/usePlan'
 import { formatDateShort } from '../utils/dateUtils'
+import { formatRoleLabel, getGlobalRolePresentation } from '../utils/rolePresentation'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import DataTable, { Column, ActionButton } from './DataTable'
 import UserPermissionsPanel from './UserPermissionsPanel'
-
-function formatRoleLabel(role: string) {
-  if (!role) return ''
-  return role.charAt(0).toUpperCase() + role.slice(1)
-}
 
 interface UserType {
   id: number
@@ -63,33 +59,7 @@ const UsersTab: React.FC = () => {
   const canManageUsers = hasGlobalPermission('settings.users.manage')
 
   const getRolePresentation = (role: string) => {
-    const isAdminRole = roleHasGlobalPermission(role, 'settings.users.manage')
-    const isOperatorRole = !isAdminRole && roleHasGlobalPermission(role, 'settings.mounts.manage')
-
-    if (isAdminRole) {
-      return {
-        label: t('settings.users.roles.admin'),
-        color: 'secondary' as const,
-        isAdminRole: true,
-        isOperatorRole: false,
-      }
-    }
-
-    if (isOperatorRole) {
-      return {
-        label: t('settings.users.roles.operator'),
-        color: 'info' as const,
-        isAdminRole: false,
-        isOperatorRole: true,
-      }
-    }
-
-    return {
-      label: t('settings.users.roles.viewer'),
-      color: 'default' as const,
-      isAdminRole: false,
-      isOperatorRole: false,
-    }
+    return getGlobalRolePresentation(role, t)
   }
 
   const getRepositoryAccessSummary = (user: UserType) => {

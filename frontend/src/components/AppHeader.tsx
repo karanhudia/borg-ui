@@ -13,24 +13,13 @@ import { alpha, useTheme as useMuiTheme } from '@mui/material/styles'
 import { ChevronDown, LogOut, Menu, Shield } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../hooks/useAuth'
-import { useAuthorization } from '../hooks/useAuthorization'
+import { formatRoleLabel } from '../utils/rolePresentation'
 
 const drawerWidth = 240
 const headerHeight = 64
 
 interface AppHeaderProps {
   onToggleMobileMenu: () => void
-}
-
-function getRoleLabel(
-  role: string | null | undefined,
-  canManageUsers: boolean,
-  canManageMounts: boolean
-) {
-  if (!role) return ''
-  if (canManageUsers) return 'Admin'
-  if (canManageMounts) return 'Operator'
-  return 'Viewer'
 }
 
 function getRoleBadgeStyles(roleLabel: string, isDark: boolean) {
@@ -57,17 +46,13 @@ function getRoleBadgeStyles(roleLabel: string, isDark: boolean) {
 export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
   const { t } = useTranslation()
   const { user, logout } = useAuth()
-  const { roleHasGlobalPermission } = useAuthorization()
   const muiTheme = useMuiTheme()
   const isDark = muiTheme.palette.mode === 'dark'
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const open = Boolean(anchorEl)
-  const canManageUsers = !!user?.role && roleHasGlobalPermission(user.role, 'settings.users.manage')
-  const canManageMounts =
-    !!user?.role && roleHasGlobalPermission(user.role, 'settings.mounts.manage')
 
   const displayName = user?.full_name?.trim() || user?.username || user?.email || ''
-  const roleLabel = getRoleLabel(user?.role, canManageUsers, canManageMounts)
+  const roleLabel = formatRoleLabel(user?.role)
   const roleBadgeStyles = getRoleBadgeStyles(roleLabel, isDark)
   const companyLabel =
     user?.deployment_type === 'enterprise'

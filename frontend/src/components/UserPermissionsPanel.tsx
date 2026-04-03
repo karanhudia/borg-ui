@@ -20,7 +20,9 @@ import { Trash2, Plus, Database, ShieldOff } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { permissionsAPI } from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { useAuth } from '../hooks/useAuth'
 import { useAuthorization } from '../hooks/useAuthorization'
+import { formatRoleLabel } from '../utils/rolePresentation'
 
 interface Permission {
   id: number
@@ -57,11 +59,6 @@ const ROLE_COLOR: Record<string, 'error' | 'info' | 'default'> = {
   viewer: 'default',
 }
 
-function formatRoleLabel(role: string | null | undefined) {
-  if (!role) return ''
-  return role.charAt(0).toUpperCase() + role.slice(1)
-}
-
 export default function UserPermissionsPanel({
   userId,
   canManageAssignments = false,
@@ -71,6 +68,7 @@ export default function UserPermissionsPanel({
   subtitle,
 }: UserPermissionsPanelProps) {
   const { assignableRepositoryRolesFor } = useAuthorization()
+  const { user: currentUser, refreshUser } = useAuth()
   const availableRoles = assignableRepositoryRolesFor(targetUserRole)
   const queryClient = useQueryClient()
   const { trackSettings, EventAction } = useAnalytics()
@@ -81,6 +79,15 @@ export default function UserPermissionsPanel({
 
   const queryKey = userId ? ['user-permissions', userId] : ['my-permissions']
   const scopeQueryKey = userId ? ['user-permission-scope', userId] : ['my-permission-scope']
+  const isCurrentUserTarget = userId == null || userId === currentUser?.id
+
+  const syncCurrentUserPermissions = async () => {
+    if (!isCurrentUserTarget) return
+    queryClient.invalidateQueries({ queryKey: ['my-permissions'] })
+    queryClient.invalidateQueries({ queryKey: ['my-permission-scope'] })
+    await refreshUser()
+  }
+
   const { data: permissions = [], isLoading } = useQuery<Permission[]>({
     queryKey,
     queryFn: () =>
@@ -99,10 +106,11 @@ export default function UserPermissionsPanel({
   const assignMutation = useMutation({
     mutationFn: ({ repoId, role }: { repoId: number; role: string }) =>
       permissionsAPI.assign(userId!, { repository_id: repoId, role }),
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey })
       setAddRepoId('')
       setAddRole('viewer')
+      await syncCurrentUserPermissions()
       toast.success('Permission assigned')
       trackSettings(EventAction.EDIT, {
         section: 'users',
@@ -118,8 +126,9 @@ export default function UserPermissionsPanel({
 
   const removeMutation = useMutation({
     mutationFn: (repoId: number) => permissionsAPI.remove(userId!, repoId),
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey })
+      await syncCurrentUserPermissions()
       toast.success('Permission removed')
       trackSettings(EventAction.DELETE, {
         section: 'users',
@@ -135,8 +144,9 @@ export default function UserPermissionsPanel({
   const updateMutation = useMutation({
     mutationFn: ({ repoId, role }: { repoId: number; role: string }) =>
       permissionsAPI.update(userId!, repoId, role),
-    onSuccess: (_, variables) => {
+    onSuccess: async (_, variables) => {
       queryClient.invalidateQueries({ queryKey })
+      await syncCurrentUserPermissions()
       toast.success('Permission updated')
       trackSettings(EventAction.EDIT, {
         section: 'users',
@@ -152,9 +162,10 @@ export default function UserPermissionsPanel({
 
   const updateScopeMutation = useMutation({
     mutationFn: (role: string | null) => permissionsAPI.updateScope(userId!, role),
-    onSuccess: (_, nextRole) => {
+    onSuccess: async (_, nextRole) => {
       queryClient.invalidateQueries({ queryKey: scopeQueryKey })
       setWildcardRole(nextRole ?? '')
+      await syncCurrentUserPermissions()
       toast.success(nextRole ? 'Automatic access updated' : 'Automatic access cleared')
       trackSettings(EventAction.EDIT, {
         section: 'users',
@@ -339,13 +350,20 @@ export default function UserPermissionsPanel({
       </Box>
 
       {/* Assigned permissions */}
-      {scopeMode === 'all' && canManageAssignments ? (
+      {scopeMode === 'all' ? (
         <Box sx={{ px: 2.5, py: 2.5 }}>
-          <Alert severity="info" variant="outlined">
-            This user currently has access to all repositories as{' '}
-            <strong>{effectiveWildcardRole}</strong>. Switch to selected repositories only if you
-            want to restrict them.
-          </Alert>
+          {canManageAssignments ? (
+            <Alert severity="info" variant="outlined">
+              This user currently has access to all repositories as{' '}
+              <strong>{effectiveWildcardRole}</strong>. Switch to selected repositories only if you
+              want to restrict them.
+            </Alert>
+          ) : (
+            <Alert severity="info" variant="outlined">
+              This account currently has automatic access to all repositories as{' '}
+              <strong>{formatRoleLabel(wildcardValue)}</strong>.
+            </Alert>
+          )}
         </Box>
       ) : permissions.length === 0 ? (
         <Box sx={{ px: 2.5, py: 2.5, display: 'flex', alignItems: 'center', gap: 1.5 }}>

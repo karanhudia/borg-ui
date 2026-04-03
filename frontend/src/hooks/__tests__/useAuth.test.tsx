@@ -48,7 +48,14 @@ describe('AuthProvider', () => {
     localStorage.clear()
     getAuthConfigMock.mockResolvedValue({ data: { proxy_auth_enabled: false } })
     getProfileMock.mockResolvedValue({
-      data: { id: 1, username: 'admin', email: 'admin@example.com', is_admin: true },
+      data: {
+        id: 1,
+        username: 'admin',
+        email: 'admin@example.com',
+        role: 'admin',
+        all_repositories_role: null,
+        global_permissions: ['settings.users.manage'],
+      },
     })
     loginApiMock.mockResolvedValue({
       data: { access_token: 'jwt-token', must_change_password: false },
@@ -94,7 +101,14 @@ describe('AuthProvider', () => {
     vi.useFakeTimers()
     getAuthConfigMock.mockResolvedValue({ data: { proxy_auth_enabled: true } })
     getProfileMock.mockRejectedValueOnce(new Error('temporary failure')).mockResolvedValueOnce({
-      data: { id: 1, username: 'proxy-user', email: 'proxy@example.com', is_admin: true },
+      data: {
+        id: 1,
+        username: 'proxy-user',
+        email: 'proxy@example.com',
+        role: 'admin',
+        all_repositories_role: null,
+        global_permissions: ['settings.users.manage'],
+      },
     })
 
     renderWithProviders(

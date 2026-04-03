@@ -10,8 +10,15 @@ const { logoutMock, hasConsentBeenGivenMock, loadUserPreferenceMock } = vi.hoist
 
 vi.mock('../../hooks/useAuth.tsx', () => ({
   useAuth: () => ({
-    user: { username: 'admin', email: 'admin@example.com' },
+    user: { username: 'admin', email: 'admin@example.com', role: 'admin' },
     logout: logoutMock,
+  }),
+}))
+
+vi.mock('../../hooks/useAuthorization', () => ({
+  useAuthorization: () => ({
+    roleHasGlobalPermission: (role: string, permission: string) =>
+      role === 'admin' && permission === 'settings.users.manage',
   }),
 }))
 
@@ -79,8 +86,9 @@ describe('Layout', () => {
       </Layout>
     )
 
-    expect(screen.getByText('admin@example.com')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /logout/i }))
+    expect(screen.getByText('admin')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /user menu/i }))
+    await user.click(await screen.findByRole('button', { name: /logout/i }))
 
     expect(logoutMock).toHaveBeenCalledTimes(1)
   })

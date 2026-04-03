@@ -7,7 +7,14 @@ const trackSettings = vi.fn()
 
 vi.mock('../../hooks/useAuth', () => ({
   useAuth: () => ({
-    user: { id: 1, username: 'test', email: 'test@example.com', is_admin: false },
+    user: {
+      id: 1,
+      username: 'test',
+      email: 'test@example.com',
+      role: 'viewer',
+      global_permissions: [],
+    },
+    hasGlobalPermission: () => false,
   }),
 }))
 

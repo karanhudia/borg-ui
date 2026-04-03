@@ -61,7 +61,14 @@ vi.mock('../../hooks/useAnalytics', () => ({
 }))
 
 vi.mock('../../hooks/useAuth', () => ({
-  useAuth: () => ({ user: { is_admin: true, role: 'admin', created_at: '2024-01-01T00:00:00Z' } }),
+  useAuth: () => ({
+    user: {
+      role: 'admin',
+      created_at: '2024-01-01T00:00:00Z',
+      global_permissions: ['repositories.manage_all'],
+    },
+    hasGlobalPermission: (permission: string) => permission === 'repositories.manage_all',
+  }),
 }))
 
 const mockRepository = {

@@ -101,6 +101,15 @@ vi.mock('../../hooks/useRepositoryStats', () => ({
   useRepositoryStats: () => ({ totalSize: 1 }),
 }))
 
+vi.mock('../../hooks/usePermissions', () => ({
+  usePermissions: () => ({
+    canAccess: (repoId: number) => repoId === 1,
+    roleFor: (repoId: number) => (repoId === 1 ? 'operator' : null),
+    canDo: () => true,
+    isLoading: false,
+  }),
+}))
+
 vi.mock('../../services/borgApi', () => ({
   BorgApiClient: vi.fn().mockImplementation(() => ({
     listArchives: borgListArchivesMock,

@@ -49,23 +49,20 @@ const Settings: React.FC = () => {
   // Get tab order based on user role
   const getTabOrder = React.useCallback(() => {
     const baseTabs = ['account', 'appearance', 'preferences', 'notifications']
-    if (canManageSystem) {
-      return [
-        ...baseTabs,
-        'system',
-        ...(mqttBetaEnabled && canManageMqtt ? ['mqtt'] : []),
-        ...(canManageBeta ? ['beta'] : []),
-        ...(canManageCache ? ['cache'] : []),
-        ...(canManageLogs ? ['logs'] : []),
-        ...(canManageMounts ? ['mounts'] : []),
-        ...(canManagePackages ? ['packages'] : []),
-        ...(canManageScripts ? ['scripts'] : []),
-        ...(canManageExportImport ? ['export'] : []),
-        ...(canManageUsers ? ['users'] : []),
-        'activity',
-      ]
-    }
-    return [...baseTabs, ...(canManageMounts ? ['mounts'] : []), 'activity']
+    return [
+      ...baseTabs,
+      ...(canManageSystem ? ['system'] : []),
+      ...(mqttBetaEnabled && canManageMqtt ? ['mqtt'] : []),
+      ...(canManageBeta ? ['beta'] : []),
+      ...(canManageCache ? ['cache'] : []),
+      ...(canManageLogs ? ['logs'] : []),
+      ...(canManageMounts ? ['mounts'] : []),
+      ...(canManagePackages ? ['packages'] : []),
+      ...(canManageScripts ? ['scripts'] : []),
+      ...(canManageExportImport ? ['export'] : []),
+      ...(canManageUsers ? ['users'] : []),
+      'activity',
+    ]
   }, [
     canManageSystem,
     canManageMqtt,
