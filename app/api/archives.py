@@ -10,7 +10,12 @@ from typing import List, Dict, Any
 
 from app.database.database import get_db
 from app.database.models import User, Repository, DeleteArchiveJob
-from app.core.security import get_current_user, get_current_download_user
+from app.core.security import (
+    get_current_user,
+    get_current_download_user,
+    check_repo_access,
+    require_repository_access_by_path,
+)
 from app.core.borg import borg
 from app.services.delete_archive_service import delete_archive_service
 import asyncio
@@ -27,12 +32,7 @@ async def list_archives(
     """List archives in a repository"""
     try:
         # Validate repository exists
-        repo = db.query(Repository).filter(Repository.path == repository).first()
-        if not repo:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"key": "backend.errors.restore.repositoryNotFound"}
-            )
+        repo = require_repository_access_by_path(db, current_user, repository, 'viewer')
         result = await borg.list_archives(
             repository,
             remote_path=repo.remote_path,
@@ -67,12 +67,7 @@ async def get_archive_info(
     """Get detailed information about a specific archive including command line, metadata, and optionally file listing"""
     try:
         # Validate repository exists
-        repo = db.query(Repository).filter(Repository.path == repository).first()
-        if not repo:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"key": "backend.errors.restore.repositoryNotFound"}
-            )
+        repo = require_repository_access_by_path(db, current_user, repository, 'viewer')
         result = await borg.info_archive(
             repository,
             archive_id,
@@ -187,12 +182,7 @@ async def get_archive_contents(
     """Get contents of an archive"""
     try:
         # Validate repository exists
-        repo = db.query(Repository).filter(Repository.path == repository).first()
-        if not repo:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"key": "backend.errors.restore.repositoryNotFound"}
-            )
+        repo = require_repository_access_by_path(db, current_user, repository, 'viewer')
         result = await borg.list_archive_contents(
             repository,
             archive_id,
@@ -225,17 +215,9 @@ async def delete_archive(
     db: Session = Depends(get_db)
 ):
     """Delete an archive in the background (non-blocking)"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.archives.adminAccessRequired"})
-
     try:
         # Validate repository exists first
-        repo = db.query(Repository).filter(Repository.path == repository).first()
-        if not repo:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"key": "backend.errors.restore.repositoryNotFound"}
-            )
+        repo = require_repository_access_by_path(db, current_user, repository, 'operator')
         # Check if there's already a running delete job for this archive
         running_job = db.query(DeleteArchiveJob).filter(
             DeleteArchiveJob.repository_id == repo.id,
@@ -297,12 +279,13 @@ async def download_file_from_archive(
     """Extract and download a specific file from an archive"""
     try:
         # Get repository details for passphrase and remote_path
-        repo = db.query(Repository).filter(Repository.path == repository).first()
-        if not repo:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"key": "backend.errors.archives.repositoryNotFound"}
-            )
+        repo = require_repository_access_by_path(
+            db,
+            current_user,
+            repository,
+            'viewer',
+            detail_key="backend.errors.archives.repositoryNotFound",
+        )
         # Create a temporary directory for extraction
         temp_dir = tempfile.mkdtemp()
 
@@ -379,6 +362,9 @@ async def get_delete_job_status(
         job = db.query(DeleteArchiveJob).filter(DeleteArchiveJob.id == job_id).first()
         if not job:
             raise HTTPException(status_code=404, detail={"key": "backend.errors.archives.deleteJobNotFound"})
+        repo = db.query(Repository).filter(Repository.id == job.repository_id).first()
+        if repo:
+            check_repo_access(db, current_user, repo, 'viewer')
 
         # Read log file if it exists
         logs = None
@@ -415,10 +401,13 @@ async def cancel_delete_job(
     db: Session = Depends(get_db)
 ):
     """Cancel a running delete job"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.archives.adminAccessRequired"})
-
     try:
+        job = db.query(DeleteArchiveJob).filter(DeleteArchiveJob.id == job_id).first()
+        if not job:
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.archives.deleteJobNotFound"})
+        repo = db.query(Repository).filter(Repository.id == job.repository_id).first()
+        if repo:
+            check_repo_access(db, current_user, repo, 'operator')
         await delete_archive_service.cancel_delete(job_id, db)
         return {"message": "backend.success.archives.deletionCancelled"}
     except ValueError as e:

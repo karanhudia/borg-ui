@@ -13,7 +13,7 @@ import base64
 from app.config import settings
 from app.core.permissions import GLOBAL_ROLE_RANK
 from app.database.database import get_db
-from app.database.models import User, UserRepositoryPermission
+from app.database.models import Repository, User, UserRepositoryPermission
 
 logger = structlog.get_logger()
 
@@ -273,6 +273,38 @@ def check_repo_access(db: Session, user: User, repo, required_role: str) -> None
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"key": "backend.errors.auth.notEnoughPermissions"}
         )
+
+
+def get_repository_by_path_or_404(
+    db: Session,
+    repository_path: Optional[str],
+    *,
+    detail_key: str = "backend.errors.restore.repositoryNotFound",
+) -> Repository:
+    """Resolve a repository by path or raise a standardized 404."""
+    repo = None
+    if repository_path:
+        repo = db.query(Repository).filter(Repository.path == repository_path).first()
+    if repo is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"key": detail_key},
+        )
+    return repo
+
+
+def require_repository_access_by_path(
+    db: Session,
+    user: User,
+    repository_path: Optional[str],
+    required_role: str,
+    *,
+    detail_key: str = "backend.errors.restore.repositoryNotFound",
+) -> Repository:
+    """Resolve a repository by path and enforce repo-scoped access."""
+    repo = get_repository_by_path_or_404(db, repository_path, detail_key=detail_key)
+    check_repo_access(db, user, repo, required_role)
+    return repo
 
 
 async def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:

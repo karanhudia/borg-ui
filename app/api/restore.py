@@ -9,7 +9,11 @@ import asyncio
 
 from app.database.models import User, Repository, RestoreJob
 from app.database.database import get_db
-from app.core.security import get_current_user
+from app.core.security import (
+    get_current_user,
+    check_repo_access,
+    require_repository_access_by_path,
+)
 from app.core.borg import borg
 from app.services.restore_service import restore_service
 from app.services.cache_service import archive_cache
@@ -17,6 +21,12 @@ from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter()
+
+
+def _get_restore_job_repository(db: Session, repository_path: Optional[str]) -> Optional[Repository]:
+    if not repository_path:
+        return None
+    return db.query(Repository).filter(Repository.path == repository_path).first()
 
 class RestoreRequest(BaseModel):
     repository: str
@@ -37,7 +47,12 @@ async def preview_restore(
     """Preview a restore operation"""
     try:
         # Get repository details for bypass_lock flag
-        repo = db.query(Repository).filter(Repository.path == restore_request.repository).first()
+        repo = require_repository_access_by_path(
+            db,
+            current_user,
+            restore_request.repository,
+            'viewer',
+        )
 
         result = await borg.extract_archive(
             restore_request.repository,
@@ -50,6 +65,8 @@ async def preview_restore(
             bypass_lock=repo.bypass_lock if repo else False
         )
         return {"preview": result["stdout"]}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to preview restore", error=str(e))
         raise HTTPException(
@@ -69,6 +86,7 @@ async def start_restore(
         repository = db.query(Repository).filter(Repository.id == restore_request.repository_id).first()
         if not repository:
             raise HTTPException(status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"})
+        check_repo_access(db, current_user, repository, 'viewer')
 
         # Validate scenario: SSH repository → SSH destination is not supported
         if repository.repository_type == 'ssh' and restore_request.destination_type == 'ssh':
@@ -150,6 +168,13 @@ async def get_repositories(
     """Get all repositories available for restore"""
     try:
         repositories = db.query(Repository).all()
+        visible_repositories = []
+        for repo in repositories:
+            try:
+                check_repo_access(db, current_user, repo, 'viewer')
+                visible_repositories.append(repo)
+            except HTTPException:
+                continue
         return {
             "repositories": [
                 {
@@ -158,7 +183,7 @@ async def get_repositories(
                     "path": repo.path,
                     "repository_type": repo.repository_type
                 }
-                for repo in repositories
+                for repo in visible_repositories
             ]
         }
     except Exception as e:
@@ -201,6 +226,7 @@ async def get_archive_contents(
         repository = db.query(Repository).filter(Repository.id == repository_id).first()
         if not repository:
             raise HTTPException(status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"})
+        check_repo_access(db, current_user, repository, 'viewer')
 
         # Check cache first
         all_items = await archive_cache.get(repository_id, archive_name)
@@ -380,6 +406,18 @@ async def get_restore_jobs(
     """Get all restore jobs (most recent first)"""
     try:
         jobs = db.query(RestoreJob).order_by(RestoreJob.id.desc()).limit(limit).all()
+        visible_jobs = []
+        for job in jobs:
+            repo = _get_restore_job_repository(db, job.repository)
+            if repo is None:
+                if current_user.role == "admin":
+                    visible_jobs.append(job)
+                continue
+            try:
+                check_repo_access(db, current_user, repo, 'viewer')
+                visible_jobs.append(job)
+            except HTTPException:
+                continue
 
         return {
             "jobs": [
@@ -402,7 +440,7 @@ async def get_restore_jobs(
                         "estimated_time_remaining": job.estimated_time_remaining or 0,
                     }
                 }
-                for job in jobs
+                for job in visible_jobs
             ]
         }
     except Exception as e:
@@ -426,6 +464,9 @@ async def get_restore_status(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"key": "backend.errors.restore.restoreJobNotFound"}
             )
+        repo = _get_restore_job_repository(db, job.repository)
+        if repo:
+            check_repo_access(db, current_user, repo, 'operator')
 
         return {
             "id": job.id,
@@ -469,6 +510,9 @@ async def cancel_restore(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"key": "backend.errors.restore.restoreJobNotFound"}
             )
+        repo = _get_restore_job_repository(db, job.repository)
+        if repo:
+            check_repo_access(db, current_user, repo, 'viewer')
 
         if job.status != "running":
             raise HTTPException(

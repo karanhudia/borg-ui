@@ -4,17 +4,28 @@ from pydantic import BaseModel
 import structlog
 import asyncio
 import os
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 
 from app.database.database import get_db
 from app.database.models import User, BackupJob, Repository
-from app.core.security import get_current_user, get_current_download_user
+from app.core.security import (
+    get_current_user,
+    get_current_download_user,
+    check_repo_access,
+    require_repository_access_by_path,
+)
 from app.services.backup_service import backup_service
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter()
+
+
+def _get_job_repository(db: Session, repository_path: Optional[str]) -> Optional[Repository]:
+    if not repository_path:
+        return None
+    return db.query(Repository).filter(Repository.path == repository_path).first()
 
 # Pydantic models
 class BackupRequest(BaseModel):
@@ -34,9 +45,12 @@ async def start_backup(
     """Start a manual backup operation"""
     try:
         # Get repository record to copy remote source settings
-        repo_record = db.query(Repository).filter(
-            Repository.path == backup_request.repository
-        ).first()
+        repo_record = require_repository_access_by_path(
+            db,
+            current_user,
+            backup_request.repository,
+            'operator',
+        )
 
         # Create backup job record
         backup_job = BackupJob(
@@ -64,6 +78,8 @@ async def start_backup(
             status="pending",
             message="Backup job started"
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to start backup", error=str(e))
         raise HTTPException(
@@ -96,6 +112,18 @@ async def get_all_backup_jobs(
             query = query.filter(BackupJob.scheduled_job_id.is_(None))
 
         jobs = query.order_by(BackupJob.id.desc()).limit(limit).all()
+        visible_jobs = []
+        for job in jobs:
+            repo = _get_job_repository(db, job.repository)
+            if repo is None:
+                if current_user.role == "admin":
+                    visible_jobs.append(job)
+                continue
+            try:
+                check_repo_access(db, current_user, repo, 'viewer')
+                visible_jobs.append(job)
+            except HTTPException:
+                continue
 
         return {
             "jobs": [
@@ -122,7 +150,7 @@ async def get_all_backup_jobs(
                         "estimated_time_remaining": job.estimated_time_remaining or 0
                     }
                 }
-                for job in jobs
+                for job in visible_jobs
             ]
         }
     except Exception as e:
@@ -146,6 +174,9 @@ async def get_backup_status(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"key": "backend.errors.backup.backupJobNotFound"}
             )
+        repo = _get_job_repository(db, job.repository)
+        if repo:
+            check_repo_access(db, current_user, repo, 'viewer')
 
         return {
             "id": job.id,
@@ -191,6 +222,9 @@ async def cancel_backup(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"key": "backend.errors.backup.backupJobNotFound"}
             )
+        repo = _get_job_repository(db, job.repository)
+        if repo:
+            check_repo_access(db, current_user, repo, 'operator')
 
         if job.status != "running":
             raise HTTPException(
@@ -242,6 +276,9 @@ async def download_backup_logs(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"key": "backend.errors.backup.backupJobNotFound"}
             )
+        repo = _get_job_repository(db, job.repository)
+        if repo:
+            check_repo_access(db, current_user, repo, 'viewer')
 
         # Only allow download for completed failed/cancelled backups
         if job.status == "running":
@@ -311,6 +348,9 @@ async def stream_backup_logs(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"key": "backend.errors.backup.backupJobNotFound"}
             )
+        repo = _get_job_repository(db, job.repository)
+        if repo:
+            check_repo_access(db, current_user, repo, 'viewer')
 
         # Check if logs are available
         if not job.logs:
