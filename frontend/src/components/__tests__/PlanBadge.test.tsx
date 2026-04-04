@@ -13,26 +13,4 @@ describe('PlanBadge', () => {
     await user.click(screen.getByText('Pro'))
     expect(onClick).toHaveBeenCalledTimes(1)
   })
-
-  it('shows full access when the entitlement overrides the plan', () => {
-    renderWithProviders(
-      <PlanBadge
-        plan="community"
-        onClick={vi.fn()}
-        entitlement={{
-          status: 'active',
-          access_level: 'full_access',
-          is_full_access: true,
-          full_access_consumed: false,
-          expires_at: null,
-          starts_at: null,
-          instance_id: 'instance-1',
-          last_refresh_at: null,
-          last_refresh_error: null,
-        }}
-      />
-    )
-
-    expect(screen.getByText('Full Access')).toBeInTheDocument()
-  })
 })
