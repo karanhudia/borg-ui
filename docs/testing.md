@@ -32,6 +32,7 @@ Extended smoke covers slower Borg-heavy black-box checks:
 
 - Encrypted repositories, keyfile upload/download, and restore
 - Maintenance APIs: check, compact, prune, break-lock, restore cancel, and archive delete cancel
+- Localhost SSH repository smoke when the environment provides an SSH server and Borg remotely
 - Multi-source backup correctness
 - Archive contents parity between Borg CLI and the API
 - Deep archive directory browsing behavior

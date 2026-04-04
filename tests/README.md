@@ -141,6 +141,7 @@ python3 tests/manual/test_app.py --output results.json
   - restore cancel
   - archive delete cancel
   - mount and unmount where the runner supports it
+  - localhost SSH repository smoke when the environment provides an SSH server
   - multi-source backup regression
   - archive contents parity
   - archive directory browsing parity

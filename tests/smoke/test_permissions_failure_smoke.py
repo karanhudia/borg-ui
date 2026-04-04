@@ -72,16 +72,18 @@ def main() -> int:
         if download_bytes != b"viewer-visible\n":
             raise SmokeFailure(f"Viewer archive download returned wrong content: {download_bytes!r}")
 
-        for method, path, payload in [
-            ("POST", "/api/backup/start", {"repository": repo_path}),
-            ("DELETE", f"/api/archives/{archive_name}", None),
-            ("POST", "/api/repositories/{repo_id}/compact".format(repo_id=repo_id), None),
-            ("POST", "/api/repositories/{repo_id}/check".format(repo_id=repo_id), {"max_duration": 60}),
+        for method, path, payload, params in [
+            ("POST", "/api/backup/start", {"repository": repo_path}, None),
+            ("DELETE", f"/api/archives/{archive_name}", None, {"repository": repo_path}),
+            ("POST", f"/api/repositories/{repo_id}/compact", None, None),
+            ("POST", f"/api/repositories/{repo_id}/check", {"max_duration": 60}, None),
         ]:
             kwargs = {"token": viewer_token}
             if payload is not None:
                 kwargs["headers"] = client._headers(token=viewer_token, json_body=True)
                 kwargs["json"] = payload
+            if params is not None:
+                kwargs["params"] = params
             response = client.request(method, path, **kwargs)
             if response.status_code != 403:
                 raise SmokeFailure(f"Viewer mutation {method} {path} should return 403, got {response.status_code}: {response.text}")
