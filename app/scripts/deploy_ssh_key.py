@@ -7,6 +7,7 @@ import os
 import stat
 import sqlite3
 import base64
+import hashlib
 import sys
 import pwd
 import grp
@@ -29,8 +30,8 @@ def deploy_ssh_keys():
             return
 
         secret_key = secret_key_file.read_text().strip()
-        encryption_key = secret_key.encode()[:32]
-        fernet = Fernet(base64.urlsafe_b64encode(encryption_key))
+        digest = hashlib.sha256(secret_key.encode("utf-8")).digest()
+        fernet = Fernet(base64.urlsafe_b64encode(digest))
 
         # Get SSH keys from database
         conn = sqlite3.connect("/data/borg.db")
@@ -44,7 +45,14 @@ def deploy_ssh_keys():
             return
 
         encrypted_key, key_type, public_key = row
-        private_key = fernet.decrypt(encrypted_key.encode()).decode()
+        try:
+            private_key = fernet.decrypt(encrypted_key.encode()).decode()
+        except Exception:
+            legacy_key = secret_key.encode("utf-8")[:32]
+            if len(legacy_key) != 32:
+                raise
+            legacy_fernet = Fernet(base64.urlsafe_b64encode(legacy_key))
+            private_key = legacy_fernet.decrypt(encrypted_key.encode()).decode()
 
         # Write private key
         key_file = ssh_dir / f"id_{key_type}"

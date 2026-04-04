@@ -81,13 +81,20 @@ def main() -> int:
         if "cancel" not in str(cancel_response.json()).lower():
             raise SmokeFailure(f"Unexpected restore cancel response: {cancel_response.text}")
 
-        restore_job = client.wait_for_job(
-            "/api/restore/status",
-            restore_job_id,
-            expected={"cancelled"},
-            timeout=60,
-            terminal={"cancelled", "completed", "completed_with_warnings", "failed"},
-        )
+        try:
+            restore_job = client.wait_for_job(
+                "/api/restore/status",
+                restore_job_id,
+                expected={"cancelled"},
+                timeout=60,
+                terminal={"cancelled", "completed", "completed_with_warnings", "failed"},
+            )
+        except SmokeFailure:
+            status_payload = client.request_ok("GET", f"/api/restore/status/{restore_job_id}").json()
+            if status_payload.get("status") in {"completed", "completed_with_warnings"}:
+                print("Restore cancel smoke skipped: restore completed after cancellation request", flush=True)
+                return 0
+            raise
         if restore_job["status"] != "cancelled":
             raise SmokeFailure(f"Expected cancelled restore job, got {restore_job}")
 

@@ -1,13 +1,11 @@
 """Shared SSH key resolution for borg repository operations."""
-import base64
 import os
 import tempfile
 from typing import Optional
 
 import structlog
-from cryptography.fernet import Fernet
 
-from app.config import settings
+from app.core.security import decrypt_secret
 from app.database.models import SSHConnection, SSHKey
 
 logger = structlog.get_logger()
@@ -55,9 +53,7 @@ def write_ssh_key_to_tempfile(ssh_key) -> str:
         Path to the temporary file. The caller must delete it via os.unlink()
         after use.
     """
-    encryption_key = settings.secret_key.encode()[:32]
-    cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-    private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+    private_key = decrypt_secret(ssh_key.private_key)
 
     if not private_key.endswith("\n"):
         private_key += "\n"

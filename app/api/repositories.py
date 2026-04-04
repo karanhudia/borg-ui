@@ -12,7 +12,7 @@ import json
 from app.database.database import get_db, SessionLocal
 from app.database.models import User, Repository, CheckJob, CompactJob, PruneJob, SystemSettings, UserRepositoryPermission
 from app.core.authorization import authorize_request
-from app.core.security import get_current_user, check_repo_access
+from app.core.security import get_current_user, check_repo_access, decrypt_secret
 from app.core.borg import BorgInterface
 from app.core.borg_errors import is_lock_error
 from app.config import settings
@@ -1792,9 +1792,7 @@ async def check_remote_borg_installation(host: str, username: str, port: int, ss
             }
 
         # Decrypt private key
-        encryption_key = settings.secret_key.encode()[:32]
-        cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-        private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+        private_key = decrypt_secret(ssh_key.private_key)
 
         # Ensure private key ends with newline
         if not private_key.endswith('\n'):
@@ -1900,9 +1898,7 @@ async def verify_existing_repository(path: str, passphrase: str = None, ssh_key_
                 }
 
             # Decrypt private key
-            encryption_key = settings.secret_key.encode()[:32]
-            cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-            private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+            private_key = decrypt_secret(ssh_key.private_key)
 
             # Create temporary key file
             with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
@@ -2052,9 +2048,7 @@ async def initialize_borg_repository(path: str, encryption: str, passphrase: str
             logger.info("SSH key found", name=ssh_key.name, fingerprint=ssh_key.fingerprint[:20] + "...")
 
             # Decrypt private key
-            encryption_key = settings.secret_key.encode()[:32]
-            cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-            private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+            private_key = decrypt_secret(ssh_key.private_key)
             logger.info("SSH private key decrypted successfully")
 
             # Create temporary key file

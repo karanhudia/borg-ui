@@ -3,11 +3,13 @@ from typing import Optional
 import jwt
 from jwt.exceptions import PyJWTError as JWTError
 import bcrypt
+import hashlib
 from fastapi import HTTPException, status, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 import structlog
 from cryptography.fernet import Fernet
+from cryptography.fernet import InvalidToken
 import base64
 
 from app.config import settings
@@ -406,6 +408,24 @@ def update_user_password(db: Session, user_id: int, new_password: str) -> bool:
 # Secret encryption/decryption utilities
 # Uses Fernet symmetric encryption (same mechanism as SSH keys)
 
+def _build_fernet_from_secret(secret: str) -> Fernet:
+    """Build a stable Fernet instance from any SECRET_KEY length."""
+    digest = hashlib.sha256(secret.encode("utf-8")).digest()
+    return Fernet(base64.urlsafe_b64encode(digest))
+
+
+def _build_legacy_fernet_from_secret(secret: str) -> Optional[Fernet]:
+    """Backward-compatible Fernet derivation used by older releases."""
+    encryption_key = secret.encode("utf-8")[:32]
+    if len(encryption_key) != 32:
+        return None
+    return Fernet(base64.urlsafe_b64encode(encryption_key))
+
+
+def get_secret_fernet() -> Fernet:
+    """Return the current Fernet cipher for app secret encryption."""
+    return _build_fernet_from_secret(settings.secret_key)
+
 def encrypt_secret(value: str) -> str:
     """
     Encrypt a secret value (e.g., password, token, API key).
@@ -422,8 +442,7 @@ def encrypt_secret(value: str) -> str:
     if not value:
         raise ValueError("Cannot encrypt empty or None value")
     
-    encryption_key = settings.secret_key.encode()[:32]
-    cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
+    cipher = get_secret_fernet()
     encrypted_value = cipher.encrypt(value.encode()).decode()
     return encrypted_value
 
@@ -445,7 +464,13 @@ def decrypt_secret(encrypted_value: str) -> str:
     if not encrypted_value:
         raise ValueError("Cannot decrypt empty or None value")
     
-    encryption_key = settings.secret_key.encode()[:32]
-    cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-    decrypted_value = cipher.decrypt(encrypted_value.encode()).decode()
-    return decrypted_value
+    cipher = get_secret_fernet()
+    try:
+        decrypted_value = cipher.decrypt(encrypted_value.encode()).decode()
+        return decrypted_value
+    except InvalidToken:
+        legacy_cipher = _build_legacy_fernet_from_secret(settings.secret_key)
+        if legacy_cipher is None:
+            raise
+        decrypted_value = legacy_cipher.decrypt(encrypted_value.encode()).decode()
+        return decrypted_value

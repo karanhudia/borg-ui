@@ -8,7 +8,6 @@ import asyncio
 import json
 import os
 import tempfile
-import base64
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from pydantic import BaseModel
@@ -18,7 +17,7 @@ import structlog
 
 from app.database.database import get_db, SessionLocal
 from app.database.models import User, Repository, SystemSettings
-from app.core.security import get_current_user
+from app.core.security import get_current_user, decrypt_secret
 from app.core.features import require_feature
 from app.core.borg2 import borg2, BORG2_ENCRYPTION_MODES
 from app.config import settings
@@ -91,7 +90,6 @@ def _get_ssh_key_rsh(ssh_key_id: int, path: str) -> Optional[str]:
         return None, None
 
     from app.database.models import SSHKey
-    from cryptography.fernet import Fernet
 
     db = SessionLocal()
     try:
@@ -99,9 +97,7 @@ def _get_ssh_key_rsh(ssh_key_id: int, path: str) -> Optional[str]:
         if not ssh_key:
             raise ValueError(f"SSH key {ssh_key_id} not found")
 
-        encryption_key = settings.secret_key.encode()[:32]
-        cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-        private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+        private_key = decrypt_secret(ssh_key.private_key)
     finally:
         db.close()
 

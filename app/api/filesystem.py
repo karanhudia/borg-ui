@@ -12,7 +12,7 @@ import base64
 from datetime import datetime, timezone
 from cryptography.fernet import Fernet
 
-from app.core.security import get_current_user
+from app.core.security import get_current_user, decrypt_secret
 from app.database.database import get_db
 from sqlalchemy.orm import Session
 from app.database.models import SSHKey
@@ -272,9 +272,7 @@ async def browse_ssh_filesystem(
         raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.sshKeyNotFound"})
 
     # Decrypt private key
-    encryption_key = settings.secret_key.encode()[:32]
-    cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-    private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+    private_key = decrypt_secret(ssh_key.private_key)
 
     # Ensure private key ends with newline
     if not private_key.endswith('\n'):
@@ -497,9 +495,7 @@ async def validate_path(
                 raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.sshKeyNotFound"})
 
             # Decrypt private key
-            encryption_key = settings.secret_key.encode()[:32]
-            cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-            private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+            private_key = decrypt_secret(ssh_key.private_key)
 
             # Ensure private key ends with newline
             if not private_key.endswith('\n'):
@@ -620,9 +616,7 @@ async def create_folder(
                 raise HTTPException(status_code=404, detail={"key": "backend.errors.ssh.sshKeyNotFound"})
 
             # Decrypt private key
-            encryption_key = settings.secret_key.encode()[:32]
-            cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-            private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+            private_key = decrypt_secret(ssh_key.private_key)
 
             # Ensure private key ends with newline
             if not private_key.endswith('\n'):

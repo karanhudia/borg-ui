@@ -13,7 +13,7 @@ import base64
 from app.database.database import get_db
 from app.database.models import User, SSHKey, SSHConnection, Repository, BackupJob, RestoreJob, ScheduledJob
 from app.core.authorization import authorize_request
-from app.core.security import get_current_user
+from app.core.security import get_current_user, encrypt_secret, decrypt_secret
 from app.config import settings
 from app.utils.datetime_utils import serialize_datetime
 import hashlib
@@ -120,9 +120,7 @@ async def collect_storage_info(connection: SSHConnection, ssh_key: SSHKey) -> Op
     """
     try:
         # Decrypt private key
-        encryption_key = settings.secret_key.encode()[:32]
-        cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-        private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+        private_key = decrypt_secret(ssh_key.private_key)
 
         if not private_key.endswith('\n'):
             private_key += '\n'
@@ -352,9 +350,7 @@ async def create_ssh_key(
             raise HTTPException(status_code=400, detail={"key": "backend.errors.ssh.invalidPublicKeyFormat"})
         
         # Encrypt private key
-        encryption_key = settings.secret_key.encode()[:32]
-        cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-        encrypted_private_key = cipher.encrypt(key_data.private_key.encode()).decode()
+        encrypted_private_key = encrypt_secret(key_data.private_key)
         
         # Create SSH key record
         ssh_key = SSHKey(
@@ -432,9 +428,7 @@ async def generate_ssh_key(
         fingerprint = await generate_ssh_key_fingerprint(key_result["public_key"])
 
         # Encrypt private key
-        encryption_key = settings.secret_key.encode()[:32]
-        cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-        encrypted_private_key = cipher.encrypt(key_result["private_key"].encode()).decode()
+        encrypted_private_key = encrypt_secret(key_result["private_key"])
 
         # Create system SSH key record
         ssh_key = SSHKey(
@@ -558,9 +552,7 @@ async def import_ssh_key(
         fingerprint = await generate_ssh_key_fingerprint(public_key)
 
         # Encrypt private key
-        encryption_key = settings.secret_key.encode()[:32]
-        cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-        encrypted_private_key = cipher.encrypt(private_key.encode()).decode()
+        encrypted_private_key = encrypt_secret(private_key)
 
         # Create system SSH key record
         ssh_key = SSHKey(
@@ -636,9 +628,7 @@ async def quick_ssh_setup(
             raise HTTPException(status_code=500, detail={"key": "backend.errors.ssh.failedGenerateKey", "params": {"error": key_result['error']}})
 
         # Encrypt private key
-        encryption_key = settings.secret_key.encode()[:32]
-        cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-        encrypted_private_key = cipher.encrypt(key_result["private_key"].encode()).decode()
+        encrypted_private_key = encrypt_secret(key_result["private_key"])
 
         # Create SSH key record
         ssh_key = SSHKey(
@@ -1568,9 +1558,7 @@ async def deploy_ssh_key_with_copy_id(
     """Deploy SSH key using ssh-copy-id"""
     try:
         # Decrypt private key
-        encryption_key = settings.secret_key.encode()[:32]
-        cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-        private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+        private_key = decrypt_secret(ssh_key.private_key)
 
         # Ensure private key ends with newline (required by SSH)
         if not private_key.endswith('\n'):
@@ -1724,9 +1712,7 @@ async def test_ssh_key_connection(ssh_key: SSHKey, host: str, username: str, por
     """Test SSH connection using the specified key"""
     try:
         # Decrypt private key
-        encryption_key = settings.secret_key.encode()[:32]
-        cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
-        private_key = cipher.decrypt(ssh_key.private_key.encode()).decode()
+        private_key = decrypt_secret(ssh_key.private_key)
 
         # Ensure private key ends with newline (required by SSH)
         if not private_key.endswith('\n'):
