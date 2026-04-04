@@ -6,7 +6,7 @@ import { useAnalytics } from '../hooks/useAnalytics'
 import { useTheme } from '../context/ThemeContext'
 import { availableThemes } from '../theme'
 
-const AppearanceTab: React.FC = () => {
+export default function AppearanceTab() {
   const { t } = useTranslation()
   const { trackSettings, EventAction } = useAnalytics()
   const { mode, effectiveMode, setTheme } = useTheme()
@@ -329,5 +329,3 @@ const AppearanceTab: React.FC = () => {
     </Box>
   )
 }
-
-export default AppearanceTab

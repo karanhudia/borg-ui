@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { type MouseEvent, useState } from 'react'
 import {
   AppBar,
   Avatar,
@@ -99,7 +99,7 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
 
         <Box
           component="button"
-          onClick={(e: React.MouseEvent<HTMLButtonElement>) => setAnchorEl(e.currentTarget)}
+          onClick={(e: MouseEvent<HTMLButtonElement>) => setAnchorEl(e.currentTarget)}
           aria-label="User menu"
           aria-haspopup="true"
           aria-expanded={open}

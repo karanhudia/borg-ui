@@ -177,7 +177,10 @@ const Schedule: React.FC = () => {
     queryFn: repositoriesAPI.getRepositories,
   })
 
-  const repositories = repositoriesData?.data?.repositories || []
+  const repositories = React.useMemo<Repository[]>(
+    () => repositoriesData?.data?.repositories ?? [],
+    [repositoriesData?.data?.repositories]
+  )
   const manageableRepositories = repositories.filter((repo: Repository) =>
     canDo(repo.id, 'maintenance')
   )

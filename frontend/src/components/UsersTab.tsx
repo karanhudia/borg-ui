@@ -313,7 +313,10 @@ const UsersTab: React.FC = () => {
     },
   ]
 
-  const users = usersData?.data?.users || []
+  const users = React.useMemo<UserType[]>(
+    () => usersData?.data?.users ?? [],
+    [usersData?.data?.users]
+  )
   const selectedAccessUser =
     users.find((account: UserType) => account.id === selectedAccessUserId) ?? users[0] ?? null
   const selectedAccessRolePresentation = selectedAccessUser

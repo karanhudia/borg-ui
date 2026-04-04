@@ -114,7 +114,7 @@ const AccountTab: React.FC = () => {
       deployment_type: user.deployment_type === 'enterprise' ? 'enterprise' : 'individual',
       enterprise_name: user.enterprise_name || '',
     })
-  }, [user?.username, user?.email, user?.full_name, user?.deployment_type, user?.enterprise_name])
+  }, [user])
 
   useEffect(() => {
     if (user?.must_change_password) {

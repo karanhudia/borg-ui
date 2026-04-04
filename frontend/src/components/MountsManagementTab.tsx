@@ -30,16 +30,31 @@ interface Mount {
   connection_id: number | null
 }
 
+function getErrorDetail(error: unknown): string | undefined {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'response' in error &&
+    typeof error.response === 'object' &&
+    error.response !== null &&
+    'data' in error.response &&
+    typeof error.response.data === 'object' &&
+    error.response.data !== null &&
+    'detail' in error.response.data &&
+    typeof error.response.data.detail === 'string'
+  ) {
+    return error.response.data.detail
+  }
+
+  return undefined
+}
+
 export default function MountsManagementTab() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { track, EventCategory, EventAction } = useAnalytics()
   const { hasGlobalPermission } = useAuth()
   const canManageMounts = hasGlobalPermission('settings.mounts.manage')
-
-  if (!canManageMounts) {
-    return null
-  }
 
   // Fetch active mounts
   const { data: mountsData, isLoading } = useQuery({
@@ -48,6 +63,7 @@ export default function MountsManagementTab() {
       const response = await mountsAPI.listMounts()
       return response.data
     },
+    enabled: canManageMounts,
     refetchInterval: 10000, // Refresh every 10 seconds
   })
 
@@ -59,10 +75,9 @@ export default function MountsManagementTab() {
       toast.success(t('mountsManagement.unmountedSuccessfully'))
       queryClient.invalidateQueries({ queryKey: ['mounts'] })
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast.error(
-        translateBackendKey(error.response?.data?.detail) || t('mountsManagement.failedToUnmount')
+        translateBackendKey(getErrorDetail(error)) || t('mountsManagement.failedToUnmount')
       )
     },
   })
@@ -172,6 +187,10 @@ export default function MountsManagementTab() {
       tooltip: t('mounts.actions.forceUnmountTooltip'),
     },
   ]
+
+  if (!canManageMounts) {
+    return null
+  }
 
   if (isLoading) {
     return (

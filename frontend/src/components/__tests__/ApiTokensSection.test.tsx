@@ -1,8 +1,27 @@
+import type { AxiosResponse } from 'axios'
 import { describe, it, expect, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../../test/test-utils'
 import ApiTokensSection from '../ApiTokensSection'
+
+interface MockToken {
+  id: number
+  name: string
+  prefix: string
+  created_at: string
+  last_used_at: string | null
+}
+
+function createTokensResponse(data: MockToken[]): AxiosResponse<MockToken[]> {
+  return {
+    data,
+    status: 200,
+    statusText: 'OK',
+    headers: {},
+    config: { headers: {} as AxiosResponse<MockToken[]>['config']['headers'] },
+  }
+}
 
 vi.mock('../../services/api', () => ({
   tokensAPI: {
@@ -38,8 +57,8 @@ describe('ApiTokensSection', () => {
 
   it('shows token list when tokens exist', async () => {
     const { tokensAPI } = await import('../../services/api')
-    vi.mocked(tokensAPI.list).mockResolvedValueOnce({
-      data: [
+    vi.mocked(tokensAPI.list).mockResolvedValueOnce(
+      createTokensResponse([
         {
           id: 1,
           name: 'CI token',
@@ -47,8 +66,8 @@ describe('ApiTokensSection', () => {
           created_at: '2024-01-01T00:00:00Z',
           last_used_at: null,
         },
-      ],
-    } as any)
+      ])
+    )
 
     renderWithProviders(<ApiTokensSection />)
     await waitFor(() => {
