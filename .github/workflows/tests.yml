@@ -271,11 +271,22 @@ jobs:
             exit 1
           fi
 
+      - name: Upload frontend build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build-output
+          path: |
+            frontend/build/
+            frontend/dist/
+          if-no-files-found: error
+          retention-days: 7
+
   smoke-borg-core:
     name: Borg Smoke Core
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    needs: [frontend-build]
 
     services:
       redis:
@@ -298,13 +309,6 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
-      - name: Set up Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -315,18 +319,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: npm ci
-
-      - name: Build frontend
-        working-directory: frontend
-        run: npm run build
+      - name: Download frontend build artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: frontend-build-output
+          path: frontend-artifact
 
       - name: Copy frontend build to static directory
         run: |
           mkdir -p app/static
-          cp -r frontend/build/* app/static/
+          if [ -d "frontend-artifact/frontend/build" ]; then
+            cp -r frontend-artifact/frontend/build/* app/static/
+          elif [ -d "frontend-artifact/frontend/dist" ]; then
+            cp -r frontend-artifact/frontend/dist/* app/static/
+          else
+            echo "Frontend build artifact did not contain build output"
+            find frontend-artifact -maxdepth 4 -type d | sort
+            exit 1
+          fi
 
       - name: Create smoke test data
         run: |
@@ -376,6 +386,7 @@ jobs:
     name: Borg Smoke Extended
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    needs: [frontend-build]
 
     services:
       redis:
@@ -398,13 +409,6 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
-      - name: Set up Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -415,18 +419,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: npm ci
-
-      - name: Build frontend
-        working-directory: frontend
-        run: npm run build
+      - name: Download frontend build artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: frontend-build-output
+          path: frontend-artifact
 
       - name: Copy frontend build to static directory
         run: |
           mkdir -p app/static
-          cp -r frontend/build/* app/static/
+          if [ -d "frontend-artifact/frontend/build" ]; then
+            cp -r frontend-artifact/frontend/build/* app/static/
+          elif [ -d "frontend-artifact/frontend/dist" ]; then
+            cp -r frontend-artifact/frontend/dist/* app/static/
+          else
+            echo "Frontend build artifact did not contain build output"
+            find frontend-artifact -maxdepth 4 -type d | sort
+            exit 1
+          fi
 
       - name: Create smoke test data
         run: |
@@ -476,6 +486,7 @@ jobs:
     name: Borg Smoke SSH Localhost
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: [frontend-build]
 
     services:
       redis:
@@ -497,13 +508,6 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-
-      - name: Set up Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
 
       - name: Install system dependencies
         run: |
@@ -530,18 +534,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: npm ci
-
-      - name: Build frontend
-        working-directory: frontend
-        run: npm run build
+      - name: Download frontend build artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: frontend-build-output
+          path: frontend-artifact
 
       - name: Copy frontend build to static directory
         run: |
           mkdir -p app/static
-          cp -r frontend/build/* app/static/
+          if [ -d "frontend-artifact/frontend/build" ]; then
+            cp -r frontend-artifact/frontend/build/* app/static/
+          elif [ -d "frontend-artifact/frontend/dist" ]; then
+            cp -r frontend-artifact/frontend/dist/* app/static/
+          else
+            echo "Frontend build artifact did not contain build output"
+            find frontend-artifact -maxdepth 4 -type d | sort
+            exit 1
+          fi
 
       - name: Start Borg UI backend
         run: |
