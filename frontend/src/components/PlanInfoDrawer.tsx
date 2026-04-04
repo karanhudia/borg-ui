@@ -17,6 +17,7 @@ const UPCOMING_FEATURES: Record<Plan, string[]> = {
   community: [],
   pro: [
     'backup_reports',
+    'dashboard_analytics',
     'database_discovery',
     'container_backups',
     'alerting_monitoring',

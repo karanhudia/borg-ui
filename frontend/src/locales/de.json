@@ -2852,6 +2852,10 @@
         "label": "Scheduled backup reports",
         "description": "Generate daily, weekly, and monthly backup summaries with status, size, and job insights"
       },
+      "dashboard_analytics": {
+        "label": "Erweiterte Dashboard-Analysen",
+        "description": "Mehr Diagramme und Trendansichten im Dashboard für Backup-Zustand, Aktivität und Speicherüberwachung"
+      },
       "database_discovery": {
         "label": "Database scanning and setup",
         "description": "Scan the host for common databases and turn them into backup jobs with guided setup"
