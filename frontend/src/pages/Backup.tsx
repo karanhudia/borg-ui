@@ -72,8 +72,7 @@ const Backup: React.FC = () => {
   // Get selected repository details
   const selectedRepoData = useMemo(() => {
     if (!selectedRepository || !repositoriesData?.data?.repositories) return null
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return repositoriesData.data.repositories.find((repo: any) => repo.path === selectedRepository)
+    return repositoriesData.data.repositories.find((repo) => repo.path === selectedRepository)
   }, [selectedRepository, repositoriesData])
 
   const canStartBackup = selectedRepoData ? permissions.canDo(selectedRepoData.id, 'backup') : false
@@ -122,8 +121,7 @@ const Backup: React.FC = () => {
   // Handle repository selection
   const handleRepositoryChange = (repoPath: string) => {
     setSelectedRepository(repoPath)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const repo = repositoriesData?.data?.repositories?.find((r: any) => r.path === repoPath)
+    const repo = repositoriesData?.data?.repositories?.find((r) => r.path === repoPath)
     if (repo) {
       trackBackup(EventAction.FILTER, undefined, repo)
     }
@@ -240,20 +238,17 @@ const Backup: React.FC = () => {
             </Button>
           </Stack>
 
-          {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            repositoriesData?.data?.repositories?.some(
-              (repo: any) => !getRepoCapabilities(repo).canBackup
-            ) &&
-              !loadingRepositories && (
-                <Alert severity="info" sx={{ mt: 2 }}>
-                  <Typography variant="body2">
-                    {t('backup.manualBackup.observeOnlyHidden')}
-                    To create backups, switch them to full mode in Repository settings.
-                  </Typography>
-                </Alert>
-              )
-          }
+          {repositoriesData?.data?.repositories?.some(
+            (repo) => !getRepoCapabilities(repo).canBackup
+          ) &&
+            !loadingRepositories && (
+              <Alert severity="info" sx={{ mt: 2 }}>
+                <Typography variant="body2">
+                  {t('backup.manualBackup.observeOnlyHidden')}
+                  To create backups, switch them to full mode in Repository settings.
+                </Typography>
+              </Alert>
+            )}
 
           {repositoriesData?.data?.repositories?.length === 0 && !loadingRepositories && (
             <Alert severity="warning" sx={{ mt: 2 }}>

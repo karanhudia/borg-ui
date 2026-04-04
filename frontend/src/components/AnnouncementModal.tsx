@@ -45,11 +45,11 @@ function getAnnouncementIcon(type: Announcement['type']) {
   switch (type) {
     case 'security_notice':
     case 'migration_notice':
-      return ShieldAlert
+      return <ShieldAlert size={20} />
     case 'maintenance_notice':
-      return Wrench
+      return <Wrench size={20} />
     default:
-      return BellRing
+      return <BellRing size={20} />
   }
 }
 
@@ -65,7 +65,7 @@ export default function AnnouncementModal({
   if (!announcement) return null
 
   const tone = getAnnouncementTone(announcement.type)
-  const Icon = getAnnouncementIcon(announcement.type)
+  const icon = getAnnouncementIcon(announcement.type)
   const accentColor =
     tone === 'warning'
       ? theme.palette.warning.main
@@ -109,7 +109,7 @@ export default function AnnouncementModal({
               boxShadow: `inset 0 1px 0 ${alpha('#ffffff', 0.08)}`,
             }}
           >
-            <Icon size={20} />
+            {icon}
           </Box>
 
           <Box sx={{ flex: 1, minWidth: 0 }}>

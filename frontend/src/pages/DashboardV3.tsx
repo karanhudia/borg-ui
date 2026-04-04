@@ -232,14 +232,24 @@ function StorageDonut({
     r = (size - sw) / 2
   const circ = 2 * Math.PI * r
   const slices = breakdown.slice(0, 5)
-
-  let offset = 0
-  const segments = slices.map((s, i) => {
+  const segments = slices.reduce<
+    Array<{
+      s: (typeof slices)[number]
+      arc: number
+      offset: number
+      color: string
+    }>
+  >((acc, s, i) => {
+    const previous = acc[acc.length - 1]
     const arc = (s.percentage / 100) * circ
-    const seg = { s, arc, offset, color: SEG_COLORS[i] }
-    offset += arc
-    return seg
-  })
+    acc.push({
+      s,
+      arc,
+      offset: previous ? previous.offset + previous.arc : 0,
+      color: SEG_COLORS[i],
+    })
+    return acc
+  }, [])
 
   return (
     <Box>
@@ -573,11 +583,13 @@ function ScheduleBadge({
   hasSchedule,
   scheduleEnabled,
   scheduleName,
+  nowMs,
 }: {
   nextRun: string | null
   hasSchedule: boolean
   scheduleEnabled: boolean
   scheduleName: string | null
+  nowMs: number
 }) {
   const T = useT()
   const { t } = useTranslation()
@@ -672,7 +684,7 @@ function ScheduleBadge({
   }
 
   // ── Active schedule with a known next run ───────────────────────────
-  const msAway = new Date(nextRun).getTime() - Date.now()
+  const msAway = new Date(nextRun).getTime() - nowMs
   const hoursAway = msAway / 1000 / 60 / 60
   const isImminent = hoursAway > 0 && hoursAway < 1
 
@@ -924,6 +936,7 @@ export default function DashboardV3() {
   const { t } = useTranslation()
   const { trackNavigation, EventAction } = useAnalytics()
   const T = makeT(effectiveMode === 'dark')
+  const [nowMs] = React.useState(() => Date.now())
 
   const glass = {
     bgcolor: T.bgCard,
@@ -1423,6 +1436,7 @@ export default function DashboardV3() {
                           hasSchedule={repo.has_schedule}
                           scheduleEnabled={repo.schedule_enabled}
                           scheduleName={repo.schedule_name}
+                          nowMs={nowMs}
                         />
                       </Stack>
 

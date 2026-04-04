@@ -222,7 +222,6 @@ export const trackSiteSearch = (
  * No-op — Umami does not use custom dimensions.
  * Kept for API compatibility.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const setCustomDimension = (_dimensionId: number, _value: string): void => {}
 
 export const setAppVersion = (version: string): void => {
@@ -245,7 +244,6 @@ export const identifyUser = (username: string): void => {
  * No-op — Umami tracks unique visitors without user IDs.
  * Kept for API compatibility.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const setUserId = (_userId: string): void => {}
 
 /**
